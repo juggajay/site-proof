@@ -1,8 +1,18 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken } from '@/lib/auth'
+
+// Tab types for lot detail page
+type LotTab = 'itp' | 'tests' | 'photos' | 'documents'
+
+const tabs: { id: LotTab; label: string }[] = [
+  { id: 'itp', label: 'ITP Checklist' },
+  { id: 'tests', label: 'Test Results' },
+  { id: 'photos', label: 'Photos' },
+  { id: 'documents', label: 'Documents' },
+]
 
 interface QualityAccess {
   role: string
@@ -38,6 +48,7 @@ const statusColors: Record<string, string> = {
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { canViewBudgets } = useCommercialAccess()
   const { canCreate: canEdit } = useViewerAccess()
   const [lot, setLot] = useState<Lot | null>(null)
@@ -45,6 +56,14 @@ export function LotDetailPage() {
   const [error, setError] = useState<{ type: 'not_found' | 'forbidden' | 'error'; message: string } | null>(null)
   const [conforming, setConforming] = useState(false)
   const [qualityAccess, setQualityAccess] = useState<QualityAccess | null>(null)
+
+  // Get current tab from URL or default to 'itp'
+  const currentTab = (searchParams.get('tab') as LotTab) || 'itp'
+
+  // Handle tab change
+  const handleTabChange = (tabId: LotTab) => {
+    setSearchParams({ tab: tabId })
+  }
 
   // Fetch quality access permissions for this project
   useEffect(() => {
@@ -182,99 +201,132 @@ export function LotDetailPage() {
         </div>
       </div>
 
-      {/* Lot Details Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Location Info */}
+      {/* Lot Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-lg border p-4">
-          <h2 className="text-lg font-semibold mb-4">Location</h2>
-          <div className="space-y-3">
-            <div>
-              <span className="text-sm text-muted-foreground">Chainage</span>
-              <p className="font-medium">
-                {lot.chainageStart != null && lot.chainageEnd != null
-                  ? `${lot.chainageStart} - ${lot.chainageEnd}`
-                  : lot.chainageStart ?? lot.chainageEnd ?? '—'}
+          <span className="text-sm text-muted-foreground">Chainage</span>
+          <p className="font-medium text-lg">
+            {lot.chainageStart != null && lot.chainageEnd != null
+              ? `${lot.chainageStart} - ${lot.chainageEnd}`
+              : lot.chainageStart ?? lot.chainageEnd ?? '—'}
+          </p>
+        </div>
+        <div className="rounded-lg border p-4">
+          <span className="text-sm text-muted-foreground">Activity Type</span>
+          <p className="font-medium text-lg capitalize">{lot.activityType || '—'}</p>
+        </div>
+        <div className="rounded-lg border p-4">
+          <span className="text-sm text-muted-foreground">Layer</span>
+          <p className="font-medium text-lg">{lot.layer || '—'}</p>
+        </div>
+        <div className="rounded-lg border p-4">
+          <span className="text-sm text-muted-foreground">Area/Zone</span>
+          <p className="font-medium text-lg">{lot.areaZone || '—'}</p>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="border-b">
+        <nav className="flex gap-4" aria-label="Lot detail tabs">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                currentTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+              }`}
+              aria-selected={currentTab === tab.id}
+              role="tab"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      <div className="min-h-[300px]" role="tabpanel">
+        {/* ITP Checklist Tab */}
+        {currentTab === 'itp' && (
+          <div className="space-y-4">
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-4">ITP Progress</h2>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="bg-primary h-2.5 rounded-full" style={{ width: '0%' }}></div>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">0 of 0 checklist items completed</p>
+            </div>
+            <div className="rounded-lg border p-6 text-center">
+              <div className="text-4xl mb-2">📋</div>
+              <h3 className="text-lg font-semibold mb-2">ITP Checklist</h3>
+              <p className="text-muted-foreground mb-4">
+                No ITP template assigned to this lot yet. Assign an ITP template to track quality checkpoints.
               </p>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">Offset</span>
-              <p className="font-medium">{lot.offset || '—'}</p>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">Layer</span>
-              <p className="font-medium">{lot.layer || '—'}</p>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">Area/Zone</span>
-              <p className="font-medium">{lot.areaZone || '—'}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Activity Info */}
-        <div className="rounded-lg border p-4">
-          <h2 className="text-lg font-semibold mb-4">Activity</h2>
-          <div className="space-y-3">
-            <div>
-              <span className="text-sm text-muted-foreground">Activity Type</span>
-              <p className="font-medium capitalize">{lot.activityType || '—'}</p>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">ITP Template</span>
-              <p className="font-medium">—</p>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">Assigned Subcontractor</span>
-              <p className="font-medium">—</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Commercial Info - Only visible to users with commercial access */}
-        {canViewBudgets && (
-          <div className="rounded-lg border p-4">
-            <h2 className="text-lg font-semibold mb-4">Commercial</h2>
-            <div className="space-y-3">
-              <div>
-                <span className="text-sm text-muted-foreground">Budget Amount</span>
-                <p className="font-medium text-lg">—</p>
-              </div>
-              <div>
-                <span className="text-sm text-muted-foreground">Cost to Date</span>
-                <p className="font-medium">—</p>
-              </div>
-              <div>
-                <span className="text-sm text-muted-foreground">Variance</span>
-                <p className="font-medium">—</p>
-              </div>
+              <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
+                Assign ITP Template
+              </button>
             </div>
           </div>
         )}
-      </div>
 
-      {/* ITP Progress */}
-      <div className="rounded-lg border p-4">
-        <h2 className="text-lg font-semibold mb-4">ITP Progress</h2>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
-          <div className="bg-primary h-2.5 rounded-full" style={{ width: '0%' }}></div>
-        </div>
-        <p className="text-sm text-muted-foreground mt-2">0 of 0 checklist items completed</p>
-      </div>
+        {/* Test Results Tab */}
+        {currentTab === 'tests' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Test Results</h2>
+              <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
+                Link Test Result
+              </button>
+            </div>
+            <div className="rounded-lg border p-6 text-center">
+              <div className="text-4xl mb-2">🧪</div>
+              <h3 className="text-lg font-semibold mb-2">No Test Results</h3>
+              <p className="text-muted-foreground">
+                No test results have been linked to this lot yet. Link test results to verify quality compliance.
+              </p>
+            </div>
+          </div>
+        )}
 
-      {/* Quick Actions */}
-      <div className="flex flex-wrap gap-4">
-        <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
-          Complete ITP Item
-        </button>
-        <button className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">
-          Add Photo
-        </button>
-        <button className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">
-          Link Test Result
-        </button>
-        <button className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">
-          View Documents
-        </button>
+        {/* Photos Tab */}
+        {currentTab === 'photos' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Photos</h2>
+              <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
+                Upload Photo
+              </button>
+            </div>
+            <div className="rounded-lg border p-6 text-center">
+              <div className="text-4xl mb-2">📷</div>
+              <h3 className="text-lg font-semibold mb-2">No Photos</h3>
+              <p className="text-muted-foreground">
+                No photos have been uploaded for this lot yet. Add photos to document work progress.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Documents Tab */}
+        {currentTab === 'documents' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Documents</h2>
+              <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
+                Upload Document
+              </button>
+            </div>
+            <div className="rounded-lg border p-6 text-center">
+              <div className="text-4xl mb-2">📄</div>
+              <h3 className="text-lg font-semibold mb-2">No Documents</h3>
+              <p className="text-muted-foreground">
+                No documents have been attached to this lot yet. Upload drawings, specifications, or other documents.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quality Management Actions */}
