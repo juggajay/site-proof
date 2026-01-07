@@ -551,6 +551,37 @@ Date: 2026-01-08
 - In Progress: 0
 - Pending: 1007
 
+### Feature #33: Subcontractor user limited access
+- VERIFIED: Regular subcontractor users have correct limited access
+- Implementation changes:
+  1. Updated MyCompanyPage.tsx to check `canManageRoster` based on role
+  2. Only `subcontractor_admin` can see Add Employee/Add Plant buttons
+  3. Only `subcontractor_admin` can see Actions column (delete buttons)
+  4. Regular subcontractors see "View your company's..." instead of "Manage..."
+  5. Empty state messages differ based on role
+
+### Testing Performed with Browser Automation
+- Logged in as subcontractorA@test.com (subcontractor role - NOT admin)
+- Verified My Company page shows VIEW-only mode:
+  - No Add Employee button
+  - No Add Plant button
+  - No Actions column
+  - Message says "View your company's..." not "Manage..."
+- Verified data isolation: Only sees SUB-A-LOT-001 and SUB-A-LOT-002
+- Verified can access ITP, Dockets, Documents pages
+
+## FILES MODIFIED THIS SESSION
+- frontend/src/pages/subcontractors/MyCompanyPage.tsx - Added canManageRoster check
+
+## SCREENSHOTS CAPTURED
+- subcontractor-user-view-only-my-company.png - Regular subcontractor view-only My Company page
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 29 (2.8%)
+- In Progress: 0
+- Pending: 1006
+
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
 2. Continue implementing subcontractor and access control features

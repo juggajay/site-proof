@@ -43,6 +43,9 @@ export function MyCompanyPage() {
   const [plantForm, setPlantForm] = useState({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
   const [saving, setSaving] = useState(false)
 
+  // Only subcontractor_admin can manage roster - regular subcontractor users can only view
+  const canManageRoster = user?.roleInCompany === 'subcontractor_admin'
+
   useEffect(() => {
     fetchCompanyData()
   }, [])
@@ -252,7 +255,9 @@ export function MyCompanyPage() {
       <div>
         <h1 className="text-3xl font-bold">My Company</h1>
         <p className="text-muted-foreground mt-1">
-          Manage your company's employee roster and plant register
+          {canManageRoster
+            ? "Manage your company's employee roster and plant register"
+            : "View your company's employee roster and plant register"}
         </p>
       </div>
 
@@ -304,13 +309,15 @@ export function MyCompanyPage() {
             <h3 className="font-semibold">Employee Roster</h3>
             <span className="text-sm text-muted-foreground">({companyData.employees.length})</span>
           </div>
-          <button
-            onClick={() => setShowAddEmployeeModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Add Employee
-          </button>
+          {canManageRoster && (
+            <button
+              onClick={() => setShowAddEmployeeModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Employee
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -321,14 +328,14 @@ export function MyCompanyPage() {
                 <th className="text-left p-3 text-sm font-medium">Role</th>
                 <th className="text-right p-3 text-sm font-medium">Hourly Rate</th>
                 <th className="text-center p-3 text-sm font-medium">Status</th>
-                <th className="text-right p-3 text-sm font-medium">Actions</th>
+                {canManageRoster && <th className="text-right p-3 text-sm font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {companyData.employees.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-6 text-center text-muted-foreground">
-                    No employees added yet. Click "Add Employee" to get started.
+                  <td colSpan={canManageRoster ? 6 : 5} className="p-6 text-center text-muted-foreground">
+                    {canManageRoster ? 'No employees added yet. Click "Add Employee" to get started.' : 'No employees registered yet.'}
                   </td>
                 </tr>
               ) : (
@@ -339,17 +346,19 @@ export function MyCompanyPage() {
                     <td className="p-3">{emp.role}</td>
                     <td className="p-3 text-right font-semibold">{formatCurrency(emp.hourlyRate)}/hr</td>
                     <td className="p-3 text-center">{getStatusBadge(emp.status)}</td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => deleteEmployee(emp.id)}
-                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {canManageRoster && (
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => deleteEmployee(emp.id)}
+                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -366,13 +375,15 @@ export function MyCompanyPage() {
             <h3 className="font-semibold">Plant Register</h3>
             <span className="text-sm text-muted-foreground">({companyData.plant.length})</span>
           </div>
-          <button
-            onClick={() => setShowAddPlantModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Add Plant
-          </button>
+          {canManageRoster && (
+            <button
+              onClick={() => setShowAddPlantModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Plant
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -384,14 +395,14 @@ export function MyCompanyPage() {
                 <th className="text-right p-3 text-sm font-medium">Dry Rate</th>
                 <th className="text-right p-3 text-sm font-medium">Wet Rate</th>
                 <th className="text-center p-3 text-sm font-medium">Status</th>
-                <th className="text-right p-3 text-sm font-medium">Actions</th>
+                {canManageRoster && <th className="text-right p-3 text-sm font-medium">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {companyData.plant.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                    No plant registered yet. Click "Add Plant" to get started.
+                  <td colSpan={canManageRoster ? 7 : 6} className="p-6 text-center text-muted-foreground">
+                    {canManageRoster ? 'No plant registered yet. Click "Add Plant" to get started.' : 'No plant registered yet.'}
                   </td>
                 </tr>
               ) : (
@@ -403,17 +414,19 @@ export function MyCompanyPage() {
                     <td className="p-3 text-right font-semibold">{formatCurrency(p.dryRate)}/hr</td>
                     <td className="p-3 text-right font-semibold">{p.wetRate > 0 ? `${formatCurrency(p.wetRate)}/hr` : '-'}</td>
                     <td className="p-3 text-center">{getStatusBadge(p.status)}</td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => deletePlant(p.id)}
-                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {canManageRoster && (
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => deletePlant(p.id)}
+                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
