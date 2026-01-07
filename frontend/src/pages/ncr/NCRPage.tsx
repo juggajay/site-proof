@@ -436,6 +436,7 @@ export function NCRPage() {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateNcr}
           loading={actionLoading}
+          projectId={projectId}
         />
       )}
 
@@ -460,19 +461,51 @@ function CreateNCRModal({
   onClose,
   onSubmit,
   loading,
+  projectId,
 }: {
   onClose: () => void
-  onSubmit: (data: { description: string; category: string; severity: string; specificationReference?: string }) => void
+  onSubmit: (data: { description: string; category: string; severity: string; specificationReference?: string; lotId?: string }) => void
   loading: boolean
+  projectId?: string
 }) {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
   const [severity, setSeverity] = useState('minor')
   const [specificationReference, setSpecificationReference] = useState('')
+  const [lotId, setLotId] = useState('')
+  const [lots, setLots] = useState<Array<{ id: string; lotNumber: string; description: string }>>([])
+  const [lotsLoading, setLotsLoading] = useState(true)
+  const token = getAuthToken()
+
+  // Fetch lots for this project
+  useEffect(() => {
+    const fetchLots = async () => {
+      if (!projectId) {
+        setLotsLoading(false)
+        return
+      }
+      try {
+        const response = await fetch(`${API_URL}/api/lots?projectId=${projectId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setLots(data.lots || [])
+        }
+      } catch (err) {
+        console.error('Failed to fetch lots:', err)
+      } finally {
+        setLotsLoading(false)
+      }
+    }
+    fetchLots()
+  }, [projectId, token])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit({ description, category, severity, specificationReference })
+    onSubmit({ description, category, severity, specificationReference, lotId: lotId || undefined })
   }
 
   return (
@@ -506,6 +539,23 @@ function CreateNCRModal({
               <option value="design">Design</option>
               <option value="other">Other</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Related Lot</label>
+            <select
+              value={lotId}
+              onChange={(e) => setLotId(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+              disabled={lotsLoading}
+            >
+              <option value="">Select lot (optional)</option>
+              {lots.map((lot) => (
+                <option key={lot.id} value={lot.id}>
+                  {lot.lotNumber} - {lot.description || 'No description'}
+                </option>
+              ))}
+            </select>
+            {lotsLoading && <p className="text-sm text-muted-foreground mt-1">Loading lots...</p>}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Severity *</label>
