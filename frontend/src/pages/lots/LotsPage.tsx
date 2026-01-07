@@ -49,6 +49,17 @@ export function LotsPage() {
   const [lotToDelete, setLotToDelete] = useState<Lot | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Create lot modal state
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newLot, setNewLot] = useState({
+    lotNumber: '',
+    description: '',
+    activityType: 'Earthworks',
+    chainageStart: '',
+    chainageEnd: '',
+  })
+
   // Get filter and pagination from URL
   const currentPage = parseInt(searchParams.get('page') || '1', 10)
   const statusFilter = searchParams.get('status') || ''
@@ -154,6 +165,97 @@ export function LotsPage() {
     return lot.chainageStart ?? lot.chainageEnd ?? '—'
   }
 
+  // Open/close create lot modal
+  const handleOpenCreateModal = () => {
+    setNewLot({
+      lotNumber: '',
+      description: '',
+      activityType: 'Earthworks',
+      chainageStart: '',
+      chainageEnd: '',
+    })
+    setCreateModalOpen(true)
+  }
+
+  const handleCloseCreateModal = () => {
+    setCreateModalOpen(false)
+  }
+
+  // Handle clicking outside modal (on backdrop)
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      setCreateModalOpen(false)
+    }
+  }
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscapeKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (createModalOpen) {
+          setCreateModalOpen(false)
+        }
+        if (deleteModalOpen) {
+          setDeleteModalOpen(false)
+          setLotToDelete(null)
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleEscapeKey)
+    return () => document.removeEventListener('keydown', handleEscapeKey)
+  }, [createModalOpen, deleteModalOpen])
+
+  // Handle create lot submission
+  const handleCreateLot = async () => {
+    if (!newLot.lotNumber.trim()) {
+      setError('Lot number is required')
+      return
+    }
+
+    setCreating(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/lots`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          lotNumber: newLot.lotNumber,
+          description: newLot.description || null,
+          activityType: newLot.activityType,
+          chainageStart: newLot.chainageStart ? parseInt(newLot.chainageStart) : null,
+          chainageEnd: newLot.chainageEnd ? parseInt(newLot.chainageEnd) : null,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to create lot')
+      }
+
+      const data = await response.json()
+
+      // Add new lot to the list
+      setLots((prev) => [...prev, {
+        ...data.lot,
+        activityType: newLot.activityType,
+        chainageStart: newLot.chainageStart ? parseInt(newLot.chainageStart) : null,
+        chainageEnd: newLot.chainageEnd ? parseInt(newLot.chainageEnd) : null,
+      }])
+      setCreateModalOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create lot')
+    } finally {
+      setCreating(false)
+    }
+  }
+
   // Open delete confirmation modal
   const handleDeleteClick = (lot: Lot) => {
     setLotToDelete(lot)
@@ -203,7 +305,10 @@ export function LotsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Lot Register</h1>
         {!isSubcontractor && canCreate && (
-          <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
+          <button
+            onClick={handleOpenCreateModal}
+            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+          >
             Create Lot
           </button>
         )}
@@ -433,6 +538,124 @@ export function LotsPage() {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {deleting ? 'Deleting...' : 'Delete Lot'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Lot Modal */}
+      {createModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={handleBackdropClick}
+        >
+          <div className="mx-4 w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Create New Lot</h2>
+              <button
+                onClick={handleCloseCreateModal}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close modal"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="lot-number" className="block text-sm font-medium text-gray-700">
+                  Lot Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="lot-number"
+                  type="text"
+                  value={newLot.lotNumber}
+                  onChange={(e) => setNewLot((prev) => ({ ...prev, lotNumber: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="e.g., LOT-001"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="lot-description" className="block text-sm font-medium text-gray-700">
+                  Description
+                </label>
+                <input
+                  id="lot-description"
+                  type="text"
+                  value={newLot.description}
+                  onChange={(e) => setNewLot((prev) => ({ ...prev, description: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="Optional description"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="lot-activity" className="block text-sm font-medium text-gray-700">
+                  Activity Type
+                </label>
+                <select
+                  id="lot-activity"
+                  value={newLot.activityType}
+                  onChange={(e) => setNewLot((prev) => ({ ...prev, activityType: e.target.value }))}
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="Earthworks">Earthworks</option>
+                  <option value="Concrete">Concrete</option>
+                  <option value="Drainage">Drainage</option>
+                  <option value="Pavement">Pavement</option>
+                  <option value="Structures">Structures</option>
+                  <option value="Utilities">Utilities</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="chainage-start" className="block text-sm font-medium text-gray-700">
+                    Chainage Start
+                  </label>
+                  <input
+                    id="chainage-start"
+                    type="number"
+                    value={newLot.chainageStart}
+                    onChange={(e) => setNewLot((prev) => ({ ...prev, chainageStart: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="e.g., 0"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="chainage-end" className="block text-sm font-medium text-gray-700">
+                    Chainage End
+                  </label>
+                  <input
+                    id="chainage-end"
+                    type="number"
+                    value={newLot.chainageEnd}
+                    onChange={(e) => setNewLot((prev) => ({ ...prev, chainageEnd: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="e.g., 100"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={handleCloseCreateModal}
+                disabled={creating}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateLot}
+                disabled={creating || !newLot.lotNumber.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {creating ? 'Creating...' : 'Create Lot'}
               </button>
             </div>
           </div>
