@@ -303,5 +303,122 @@ Date: 2026-01-08
 3. Build out remaining module functionality
 
 ================================================================================
+Session: 4 (Coding Agent)
+Date: 2026-01-08
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #18: Multi-tenancy strict company isolation
+- VERIFIED: Users from different companies cannot access each other's data
+- Fixed GET /api/projects/:id endpoint which had incorrect schema fields
+- Added proper access control checks for company isolation
+
+### Feature #19: Project isolation users only see invited projects
+- VERIFIED: Within the same company, users only see projects they're explicitly invited to
+- Created test data:
+  * Isolation Test Company with two projects (A and B)
+  * User A (member role): Assigned to Project A only
+  * User B (admin role): Assigned to both projects
+- Testing performed:
+  1. User A sees only Project A in project list (1 project)
+  2. User A gets 403 Forbidden when accessing Project B directly via URL
+  3. User B (admin) sees both projects (2 projects)
+- Backend enforces access via ProjectUser table + admin role check
+
+### Test Data Created
+- Isolation Test Company
+- isolation-user-a@test.com (member, Project A only)
+- isolation-user-b@test.com (admin, both projects)
+- Isolation Test Project A (ISO-A-001)
+- Isolation Test Project B (ISO-B-001)
+
+## FILES MODIFIED/CREATED THIS SESSION
+- backend/src/routes/projects.ts - Fixed GET /:id endpoint with correct schema fields
+- backend/scripts/setup-project-isolation-test.js - Test data setup script
+- backend/scripts/test-project-isolation-specific.js - API test script
+
+## SCREENSHOTS CAPTURED
+- project-isolation-user-a-sees-only-project-a.png - User A sees 1 project
+- project-isolation-user-a-direct-url-access.png - User A at Project B URL
+- project-isolation-user-b-sees-both-projects.png - User B (admin) sees 2 projects
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 19 (1.8%)
+- In Progress: 0
+- Pending: 1016
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing security and access control features
+3. Build out remaining module functionality
+
+================================================================================
+Session: 5 (Coding Agent)
+Date: 2026-01-08
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #21: Commercial isolation from non-PM roles
+- VERIFIED: Cost data correctly hidden from non-PM roles (site_engineer, foreman, viewer)
+- Testing performed with browser automation:
+
+**Lot Register Page:**
+- Site Engineer: Budget column NOT visible
+- Project Manager: Budget column IS visible ($45,000, $32,000, $78,000, $125,000)
+
+**Docket Approvals Page:**
+- Site Engineer: Only sees operational data (Labour Hrs, Plant Hrs)
+  - NO Labour Rate column
+  - NO Plant Rate column
+  - NO Total column
+  - Only "Operational Summary" (hours-based)
+- Project Manager: Sees all cost data
+  - Labour Rate ($85/hr, $95/hr, $90/hr)
+  - Plant Rate ($150/hr, $200/hr)
+  - Total ($3,740, $4,820, $2,880)
+  - "Pending Summary" with total amounts
+
+**Sidebar Navigation:**
+- Site Engineer: Does NOT see "Progress Claims", "Costs", "Subcontractors" links
+- Project Manager: DOES see these commercial links
+
+**Implementation Details:**
+- `useCommercialAccess()` hook correctly limits access to `owner`, `admin`, `project_manager`
+- Lot Register conditionally renders Budget column based on `canViewBudgets`
+- Docket Approvals conditionally renders rate/total columns and summary sections
+- Sidebar conditionally renders commercial navigation items
+
+### Test Data Created
+- Commercial Test Company
+- commercial-engineer@test.com (site_engineer - NO cost visibility)
+- commercial-pm@test.com (project_manager - HAS cost visibility)
+- Commercial Isolation Test Project (CIT-001)
+- LOT-CIT-001 with $25,000 budget
+- LOT-CIT-002 with $45,000 budget
+
+## FILES CREATED THIS SESSION
+- backend/scripts/setup-commercial-isolation-test.js - Test data setup script
+- backend/scripts/check-user-password.js - Password verification utility
+
+## SCREENSHOTS CAPTURED
+- commercial-isolation-engineer-no-budget-column.png - Site engineer lot register (no budget)
+- commercial-isolation-pm-sees-budget-column.png - PM lot register (budget visible)
+- commercial-isolation-engineer-no-docket-costs.png - Site engineer dockets (no costs)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 21 (2.0%)
+- In Progress: 0
+- Pending: 1014
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing security and access control features
+3. Build out remaining module functionality
+
+================================================================================
 END OF SESSION SUMMARY
 ================================================================================
