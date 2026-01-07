@@ -1,5 +1,5 @@
 import { useAuth, getAuthToken } from '@/lib/auth'
-import { Bell, LogOut, User, ChevronDown, FolderKanban } from 'lucide-react'
+import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, X } from 'lucide-react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Breadcrumbs } from './Breadcrumbs'
@@ -8,6 +8,15 @@ interface Project {
   id: string
   name: string
   projectNumber: string
+}
+
+interface Notification {
+  id: string
+  type: 'info' | 'warning' | 'success'
+  title: string
+  message: string
+  timestamp: string
+  read: boolean
 }
 
 export function Header() {
@@ -19,8 +28,16 @@ export function Header() {
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false)
   const projectSelectorRef = useRef<HTMLDivElement>(null)
 
+  // Notification state
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false)
+  const notificationRef = useRef<HTMLDivElement>(null)
+
   // Find the current project from the list
   const currentProject = projects.find(p => p.id === projectId)
+
+  // Calculate unread count
+  const unreadCount = notifications.filter(n => !n.read).length
 
   // Fetch user's projects
   useEffect(() => {
@@ -46,22 +63,58 @@ export function Header() {
     fetchProjects()
   }, [])
 
-  // Close dropdown when clicking outside
+  // Fetch notifications (mock data for now - will be replaced with API)
+  useEffect(() => {
+    // Mock notifications for demonstration
+    const mockNotifications: Notification[] = [
+      {
+        id: '1',
+        type: 'warning',
+        title: 'Hold Point Pending',
+        message: 'LOT-001 requires inspector sign-off',
+        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
+        read: false,
+      },
+      {
+        id: '2',
+        type: 'success',
+        title: 'Test Results Uploaded',
+        message: 'Compaction test results for LOT-003 uploaded',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
+        read: false,
+      },
+      {
+        id: '3',
+        type: 'info',
+        title: 'NCR Assigned',
+        message: 'NCR-2024-001 has been assigned to you',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
+        read: true,
+      },
+    ]
+    setNotifications(mockNotifications)
+  }, [])
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (projectSelectorRef.current && !projectSelectorRef.current.contains(event.target as Node)) {
         setIsProjectSelectorOpen(false)
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setIsNotificationOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Close dropdown on Escape key
+  // Close dropdowns on Escape key
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsProjectSelectorOpen(false)
+        setIsNotificationOpen(false)
       }
     }
     document.addEventListener('keydown', handleEscape)
@@ -87,6 +140,45 @@ export function Header() {
     }
 
     navigate(targetPath)
+  }
+
+  // Mark notification as read
+  const markAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    )
+  }
+
+  // Mark all as read
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  }
+
+  // Format relative time
+  const formatRelativeTime = (timestamp: string) => {
+    const now = new Date()
+    const date = new Date(timestamp)
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    return `${diffDays}d ago`
+  }
+
+  // Get notification icon by type
+  const getNotificationIcon = (type: Notification['type']) => {
+    switch (type) {
+      case 'warning':
+        return <AlertCircle className="h-4 w-4 text-amber-500" />
+      case 'success':
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      default:
+        return <Clock className="h-4 w-4 text-blue-500" />
+    }
   }
 
   return (
@@ -149,12 +241,83 @@ export function Header() {
           </div>
         )}
 
-        <button
-          className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-        </button>
+        {/* Notification Bell */}
+        <div ref={notificationRef} className="relative">
+          <button
+            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+            className="relative rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Notifications"
+            aria-expanded={isNotificationOpen}
+            aria-haspopup="true"
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {isNotificationOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card shadow-lg">
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <h3 className="font-semibold">Notifications</h3>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Mark all as read
+                  </button>
+                )}
+              </div>
+              <div className="max-h-[400px] overflow-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-muted-foreground">
+                    No notifications
+                  </div>
+                ) : (
+                  <ul>
+                    {notifications.map((notification) => (
+                      <li
+                        key={notification.id}
+                        className={`border-b last:border-0 ${!notification.read ? 'bg-primary/5' : ''}`}
+                      >
+                        <button
+                          onClick={() => markAsRead(notification.id)}
+                          className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/50"
+                        >
+                          <div className="mt-0.5 flex-shrink-0">
+                            {getNotificationIcon(notification.type)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">{notification.title}</span>
+                              {!notification.read && (
+                                <span className="h-2 w-2 rounded-full bg-primary" />
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                              {notification.message}
+                            </p>
+                            <span className="mt-1 text-xs text-muted-foreground">
+                              {formatRelativeTime(notification.timestamp)}
+                            </span>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="border-t p-2">
+                <button className="w-full rounded px-3 py-2 text-sm text-primary hover:bg-muted">
+                  View all notifications
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <User className="h-4 w-4" />
