@@ -34,6 +34,7 @@ import { SubcontractorsPage } from '@/pages/subcontractors/SubcontractorsPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { CostsPage } from '@/pages/costs/CostsPage'
 
 // Admin-only roles
 const ADMIN_ROLES = ['owner', 'admin', 'project_manager']
@@ -126,7 +127,7 @@ function App() {
             path="/projects/:projectId/costs"
             element={
               <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
-                <div className="p-6"><h1 className="text-2xl font-bold">Project Costs</h1><p className="text-muted-foreground mt-2">Cost tracking coming soon...</p></div>
+                <CostsPage />
               </RoleProtectedRoute>
             }
           />
