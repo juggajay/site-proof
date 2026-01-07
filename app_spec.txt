@@ -1,0 +1,2142 @@
+<project_specification>
+  <project_name>SiteProof v2</project_name>
+
+  <overview>
+    SiteProof v2 is a Civil Execution and Conformance Platform purpose-built for Australian Tier 2-3 civil contractors handling $10M-$100M projects. The platform eliminates the "Excel Parallel Universe" by making the Lot the atomic unit of the system - every photo, test result, checklist, docket, and claimed dollar traces back to a spatial container defined by chainage, offset, and layer. The system provides lot-centric quality management, ITP workflows, hold point tracking, NCR lifecycle management, daily diaries, progress claims with SOPA evidence, subcontractor portal with cost tracking, and comprehensive reporting dashboards.
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>React 18+ with TypeScript</framework>
+      <styling>Tailwind CSS with shadcn/ui components</styling>
+      <state_management>TanStack Query (React Query) for server state, Zustand for client state</state_management>
+      <forms>React Hook Form with Zod validation</forms>
+      <routing>React Router v6</routing>
+      <mobile>Progressive Web App (PWA) with offline support, React Native for native apps (Phase 3)</mobile>
+      <charts>Recharts for dashboards and analytics</charts>
+      <pdf>React-PDF for document viewing, jsPDF for generation</pdf>
+    </frontend>
+    <backend>
+      <runtime>Node.js 20+ with TypeScript</runtime>
+      <framework>Express.js with tRPC for type-safe APIs</framework>
+      <database>PostgreSQL via Supabase</database>
+      <orm>Prisma ORM</orm>
+      <auth>Supabase Auth (email/password, OAuth, magic link)</auth>
+      <storage>Supabase Storage for files and photos</storage>
+      <realtime>Supabase Realtime for live updates</realtime>
+      <email>Resend for transactional emails</email>
+      <ai>Anthropic Claude API for document parsing and AI features</ai>
+    </backend>
+    <communication>
+      <api>tRPC for type-safe client-server communication</api>
+      <rest>REST endpoints for external integrations and webhooks</rest>
+      <realtime>Supabase Realtime subscriptions</realtime>
+    </communication>
+    <offline>
+      <web>IndexedDB via Dexie.js for PWA offline storage</web>
+      <mobile>SQLite for React Native offline storage</mobile>
+      <sync>Custom sync engine with conflict resolution</sync>
+    </offline>
+  </technology_stack>
+
+  <prerequisites>
+    <environment_setup>
+      Node.js 20+, npm or pnpm, PostgreSQL (via Supabase), Supabase CLI for local development, Git
+    </environment_setup>
+    <external_services>
+      Supabase project (auth, database, storage), Resend account for emails, Anthropic API key for AI features, BOM API access for weather data
+    </external_services>
+  </prerequisites>
+
+  <feature_count>1035</feature_count>
+
+  <security_and_access_control>
+    <user_roles>
+      <role name="owner">
+        <description>Company owner with full access to all company data and settings</description>
+        <permissions>
+          - Full access to all projects in company
+          - Manage company settings and billing
+          - Create and delete projects
+          - Manage all users and roles
+          - View all commercial data
+          - Access portfolio dashboard
+        </permissions>
+        <protected_routes>
+          - /company/* (company settings)
+          - /portfolio/* (multi-project view)
+        </protected_routes>
+      </role>
+      <role name="admin">
+        <description>Project administrator with full project access</description>
+        <permissions>
+          - Full access to assigned projects
+          - Create projects
+          - Manage project users
+          - Configure project settings
+          - View commercial data
+          - All operational permissions
+        </permissions>
+        <protected_routes>
+          - /project/:id/settings/*
+          - /project/:id/users/*
+        </protected_routes>
+      </role>
+      <role name="project_manager">
+        <description>Project manager with full project access and commercial visibility</description>
+        <permissions>
+          - Full project access
+          - Manage team members
+          - Configure project settings
+          - View and manage commercial data (costs, claims)
+          - Approve subcontractor rates
+          - Create and submit progress claims
+          - All quality management permissions
+        </permissions>
+        <protected_routes>
+          - /project/:id/claims/*
+          - /project/:id/costs/*
+          - /project/:id/settings/*
+        </protected_routes>
+      </role>
+      <role name="site_engineer">
+        <description>Site engineer with full operational access but no commercial visibility</description>
+        <permissions>
+          - Create, edit, view lots
+          - Complete ITP checklists
+          - Request hold point releases
+          - Enter and verify test results
+          - Raise and manage NCRs
+          - Create daily diary entries
+          - Upload documents and photos
+          - Invite subcontractors
+          - Assign work to subcontractors
+          - Approve dockets (operational only, no cost view)
+          - Generate conformance reports
+        </permissions>
+        <hidden_data>
+          - Contract value
+          - Lot budgets
+          - Subcontractor rates
+          - Progress claim amounts
+          - Cost reports
+        </hidden_data>
+      </role>
+      <role name="quality_manager">
+        <description>Quality manager focused on compliance and NCR management</description>
+        <permissions>
+          - Full quality data access
+          - Manage ITP templates
+          - Verify test results
+          - Close NCRs
+          - Conform lots
+          - Generate conformance reports
+          - View quality dashboards
+          - Audit preparation
+        </permissions>
+        <hidden_data>
+          - Commercial data (same as site engineer)
+        </hidden_data>
+      </role>
+      <role name="foreman">
+        <description>Site foreman with limited access focused on daily operations</description>
+        <permissions>
+          - View assigned lots
+          - Complete assigned ITP items
+          - Sign operational hold points
+          - Create and submit daily diary
+          - Approve subcontractor dockets
+          - Quick photo capture
+          - Raise NCRs
+          - View (not edit) lot register
+        </permissions>
+        <hidden_data>
+          - Commercial data
+          - May or may not see docket dollar amounts (configurable)
+        </hidden_data>
+      </role>
+      <role name="viewer">
+        <description>Read-only access for office staff or occasional reviewers</description>
+        <permissions>
+          - View lot register
+          - View ITP checklists
+          - View test results
+          - View daily diary history
+          - View documents
+          - View quality reports
+        </permissions>
+        <hidden_data>
+          - All commercial data
+          - Cannot create, edit, or delete anything
+        </hidden_data>
+      </role>
+      <role name="subcontractor_admin">
+        <description>Subcontractor company administrator</description>
+        <permissions>
+          - Manage their company's employee roster
+          - Manage their company's plant register
+          - View all their company's assigned work
+          - Submit and view dockets
+          - Complete assigned ITP items
+          - Respond to NCRs against their work
+          - View their own rates (not others)
+        </permissions>
+        <data_isolation>
+          - Can ONLY see lots assigned to their company
+          - Cannot see other subcontractors
+          - Cannot see head contractor lot register
+          - Cannot see progress claims or costs
+        </data_isolation>
+      </role>
+      <role name="subcontractor_user">
+        <description>Subcontractor worker/supervisor</description>
+        <permissions>
+          - View assigned lots
+          - Complete assigned ITP items
+          - Submit daily dockets
+          - Respond to NCRs
+          - Upload photos
+        </permissions>
+        <data_isolation>
+          - Same isolation as subcontractor_admin
+        </data_isolation>
+      </role>
+      <role name="superintendent">
+        <description>External client representative (read-only + hold point release)</description>
+        <permissions>
+          - Optional read-only dashboard access
+          - Release hold points via secure email link
+          - View evidence packages
+        </permissions>
+        <notes>
+          - Does not require full account
+          - Hold point release via time-limited secure link
+          - Receives PDF packages via email
+        </notes>
+      </role>
+    </user_roles>
+    <authentication>
+      <method>Email/password with optional OAuth (Google) and magic link</method>
+      <session_timeout>24 hours (configurable per project)</session_timeout>
+      <password_requirements>Minimum 12 characters, complexity optional</password_requirements>
+      <mfa>Optional two-factor authentication</mfa>
+    </authentication>
+    <sensitive_operations>
+      - Delete project requires password confirmation
+      - Delete lot requires confirmation dialog
+      - Conform lot requires all prerequisites met
+      - Submit claim requires review confirmation
+      - Major NCR closure requires QM approval
+    </sensitive_operations>
+    <data_isolation>
+      <multi_tenancy>Strict company isolation via Supabase RLS</multi_tenancy>
+      <project_isolation>Users only see projects they are invited to</project_isolation>
+      <subcontractor_isolation>Subbies only see their assigned work</subcontractor_isolation>
+      <commercial_isolation>Cost data hidden from non-PM roles</commercial_isolation>
+    </data_isolation>
+  </security_and_access_control>
+
+  <core_features>
+    <module_1_project_setup>
+      <description>Project creation, configuration, team management, and ITP template setup</description>
+      <features>
+        - Create project with name, number, client, state, specification set
+        - Configure lot numbering convention (prefix + auto-increment)
+        - Configure NCR numbering convention
+        - Set default hold point notification recipients
+        - Configure hold point approval requirements (superintendent vs internal)
+        - Set working hours for notification timing
+        - Enable/disable optional modules (cost tracking, claims)
+        - Import existing lot data from Excel
+        - Download Excel template for lot import
+        - Validate imported data with error/warning display
+        - Invite team members via email
+        - Assign roles to team members
+        - Manage team roles (change, remove)
+        - Activity log for all user management changes
+        - Define project areas/zones with chainage ranges
+        - Colour coding for areas
+        - Select specification set (TMR MRTS, TfNSW Q6, VicRoads, Custom)
+        - View included ITP templates for specification set
+        - Enable/disable individual ITP templates
+        - Create custom ITP templates
+        - Add checklist items with description, criteria, point type, evidence required
+        - Drag-and-drop reorder checklist items
+        - Copy from existing template
+        - Import ITP templates from another project
+      </features>
+    </module_1_project_setup>
+
+    <module_2_lot_management>
+      <description>Core lot register functionality - the heart of the system</description>
+      <features>
+        - Create single lot with auto-generated number
+        - Select lot type: chainage-based, area-based, or structure-based
+        - Chainage lot: start/end chainage, offset (left/right/full/custom), layer
+        - Area lot: zone name, layer
+        - Structure lot: structure ID, element description
+        - Select activity type (earthworks, drainage, pavement, concrete, etc.)
+        - Auto-suggest ITP template based on activity type
+        - Optionally assign lot to subcontractor at creation
+        - Set lot budget (optional, PM only visible)
+        - Bulk create lots with pattern definition
+        - Define chainage range, lot length, offset, layers for bulk
+        - Preview lots before bulk creation
+        - Clone existing lot for adjacent sections
+        - Import lots from Excel with validation
+        - View lot register in list/table format
+        - Columns: Lot Number, Location, Activity, Status, ITP Progress, Actions
+        - Sort by any column
+        - Filter by status (multi-select)
+        - Filter by activity type
+        - Filter by chainage range
+        - Filter by assigned subcontractor
+        - Filter by area/zone
+        - Search by lot number or description
+        - Pagination for large registers
+        - Quick actions: View, Edit, Open ITP
+        - Status colour coding (grey, blue, amber, red, green)
+        - View lot register in linear map visualization
+        - Horizontal chainage representation
+        - Lots as coloured blocks by status
+        - Layers as separate rows
+        - Zoom in/out of chainage range
+        - Click lot block for summary popup
+        - Status legend
+        - Print/export linear map view
+        - View lot detail page
+        - Lot header: Number, Location, Activity, Status
+        - ITP completion progress bar
+        - Tabs: ITP Checklist, Test Results, Photos, Documents, NCRs, Hold Points, Costs, History
+        - Automatic lot status progression based on workflow
+        - Status transitions: Not Started → In Progress → Awaiting Test → Hold Point → Conformed → Claimed
+        - NCR status override when NCR raised
+        - Manual status override with reason
+        - Cannot skip statuses
+        - Conform lot when all requirements met
+        - Conformance prerequisites check (ITP complete, tests passed, HP released, no open NCRs)
+        - Show missing requirements if conform blocked
+        - Record conformance timestamp and user
+        - Generate conformance report PDF
+        - Assign lot to subcontractor
+        - Select specific ITP items as subcontractor responsibility
+        - Subcontractor notification on assignment
+        - Export lot register to Excel/CSV
+        - Select columns for export
+        - Apply filters before export
+        - Generate lot conformance report PDF
+        - Include ITP checklist, test summary, HP releases, photos, NCR summary
+        - Format per state specification requirements
+        - Store generated report as document
+      </features>
+      <lot_status_lifecycle>
+        - NOT_STARTED (Grey): Lot created, no work commenced
+        - IN_PROGRESS (Blue): Work underway, checklists being completed
+        - AWAITING_TEST (Amber): Work complete, waiting for test results
+        - HOLD_POINT (Amber): Ready for Superintendent release
+        - NCR_RAISED (Red): Non-conformance identified, work blocked
+        - CONFORMED (Green): All tests passed, HP released, documentation complete
+        - CLAIMED (Green+): Included in a progress claim
+      </lot_status_lifecycle>
+    </module_2_lot_management>
+
+    <module_3_itp_inspections>
+      <description>Inspection and Test Plan templates and completion workflow</description>
+      <features>
+        - View all ITP templates (global + project-specific)
+        - Template list shows: Name, Activity Type, Spec Reference, Item Count
+        - Filter templates by activity type
+        - Show active/inactive templates
+        - Create custom ITP template
+        - Enter template name, description, activity type, spec reference
+        - Add checklist items with:
+          - Sequence number (auto-increment)
+          - Description
+          - Acceptance criteria
+          - Point type (Standard / Witness / Hold)
+          - Responsible party (Contractor / Subcontractor / Superintendent)
+          - Evidence required (None / Photo / Document / Test)
+          - Linked test type (if test required)
+        - Drag-and-drop reorder items
+        - Edit existing ITP template
+        - Changes apply to new lot ITPs only (snapshot at creation)
+        - Option to apply changes to in-progress lots
+        - View lot ITP checklist
+        - All items in sequence with status
+        - Status indicators: Pending, Complete, N/A, Failed
+        - Point type indicators (Standard, W for Witness, H for Hold)
+        - Evidence required indicator
+        - Completion details (who, when, notes)
+        - Evidence thumbnails/links
+        - Progress bar for overall completion
+        - Filter by status (show incomplete only)
+        - Complete standard checklist item
+        - Options: Complete / N/A / Failed
+        - Add notes (optional)
+        - Add photo (if required or optional)
+        - Add signature (if required)
+        - Auto-capture timestamp
+        - Auto-capture GPS location (mobile)
+        - Record completing user
+        - If N/A: Require reason
+        - If Failed: Trigger NCR creation flow
+        - ITP progress recalculates on completion
+        - Complete witness point item
+        - Same as standard completion
+        - Additional: Was client witness present? (Yes/No)
+        - If Yes: Record witness name, company
+        - If No: Note client notified and declined/unavailable
+        - Auto-notification to client before witness point work
+        - Request hold point release
+        - System checks prerequisites
+        - Prerequisites: All preceding items complete, required tests passed, no open NCRs
+        - If prerequisites not met: Show what's missing, block request
+        - If met: Generate evidence package PDF
+        - Preview evidence package
+        - Enter preferred inspection date/time
+        - Enter notes for Superintendent
+        - Submit request
+        - Email sent to Superintendent with package
+        - Status changes to "Awaiting Release"
+        - Hold Point record created
+        - Offline checklist completion (mobile)
+        - Full offline functionality
+        - View cached ITP checklist
+        - Mark items complete with notes and photos
+        - Photos stored locally
+        - Data queued for sync
+        - Visual indicator "pending sync"
+        - Auto-sync when connectivity restored
+        - Conflict handling if edited elsewhere
+        - Touch targets 48px minimum for gloved hands
+        - Subcontractor view assigned items
+        - See only items assigned to their company
+        - See requirements and status
+        - Cannot see head contractor items
+        - Subcontractor complete checklist item
+        - Same completion flow as head contractor
+        - Status becomes "Pending Verification"
+        - Head contractor notified
+        - Head contractor can Accept or Reject
+        - If Rejected: Subbie receives feedback, can resubmit
+      </features>
+    </module_3_itp_inspections>
+
+    <module_4_hold_points>
+      <description>Hold point notification, tracking, and release workflow</description>
+      <features>
+        - Send hold point notification to Superintendent
+        - Validate all prerequisites met
+        - Auto-generate evidence package PDF including:
+          - Hold point identification
+          - Lot details and location
+          - Completed checklist items
+          - Test certificates
+          - Photos
+          - Survey conformance (if applicable)
+        - Set requested inspection date/time
+        - Enforce minimum notice period (project configurable, default 1 working day)
+        - Warning if date doesn't meet minimum notice
+        - Override with reason if needed
+        - Enter Superintendent email(s)
+        - Send notification email with package attached
+        - Record sent timestamp
+        - Status changes to "Notified"
+        - Chase hold point release
+        - "Chase" button for notified but unreleased HPs
+        - Show time since notification
+        - Generate follow-up email with original package
+        - Record chase attempts and timestamps
+        - Option to call Superintendent (show phone)
+        - Option to escalate to QM/PM
+        - Record digital hold point release
+        - Enter releaser name and organisation
+        - Enter release date/time
+        - Capture digital signature (if available)
+        - Add release notes
+        - Upload release documentation
+        - Status changes to "Released"
+        - Notification sent to team
+        - Lot status can progress
+        - Locked ITP items become completable
+        - Record email release
+        - Enter releaser details
+        - Upload email or attachment as evidence
+        - Release recorded with method = "Email"
+        - Record paper release
+        - Enter releaser details
+        - Photograph signed paper form
+        - Upload photo/scan
+        - Release recorded with method = "Paper"
+        - External Superintendent release (no login)
+        - Superintendent receives email with HP package
+        - "Release Now" secure time-limited link
+        - Simple release form: Review package, notes, signature, confirm
+        - No account required
+        - Release recorded automatically in SiteProof
+        - Confirmation email to both parties
+        - View hold point register
+        - List/table view of all hold points
+        - Columns: HP ID, Lot, Description, Status, Notified Date, Scheduled Date, Released Date
+        - Filter by status (Pending/Notified/Released)
+        - Filter by date range
+        - Sort by any column
+        - Highlight overdue (notified > X days without release)
+        - Export to Excel
+        - Hold point dashboard
+        - Summary cards: Total HPs, Pending, Notified, Released This Week
+        - Chart: HP releases over time
+        - Chart: Average time from notification to release
+        - List: Upcoming scheduled HPs
+        - List: Overdue HPs
+        - Click through to HP register
+      </features>
+    </module_4_hold_points>
+
+    <module_5_test_results>
+      <description>Test result entry, AI extraction, verification, and tracking</description>
+      <features>
+        - Create test request
+        - Select lot(s) for testing
+        - Select test type: Compaction, Concrete strength, Moisture content, CBR, Grading/PI, Other
+        - Enter sample details: date, location (chainage/offset/depth), sample ID
+        - Select laboratory
+        - Enter number of samples
+        - Generate test request number
+        - Print/email request form to lab
+        - Track test status
+        - View all test requests with status
+        - Status options: Requested, At Lab, Results Received, Verified
+        - Filter by status, test type, lot, date range
+        - Days since sample date
+        - Highlight overdue tests
+        - Notification when results received
+        - Enter test result manually
+        - Select test request or create new entry
+        - Enter: Lab name, report number, test date, result date
+        - Enter: Test type, result value and unit
+        - Specification min/max auto-populated from spec
+        - System calculates Pass/Fail
+        - Link to lot(s)
+        - Link to ITP checklist item (if applicable)
+        - Upload certificate PDF
+        - Status: "Pending Verification"
+        - AI test certificate extraction
+        - Upload PDF file
+        - Queue for AI processing
+        - AI extracts: Lab name, report number, sample ID, test date, result values with units, location
+        - Present extracted data with confidence levels (High/Medium/Low)
+        - Side-by-side view: PDF and extracted data
+        - User confirms or corrects each field
+        - Suggest lot based on extracted location
+        - Pass/Fail calculated against spec
+        - Link to lot and ITP item
+        - Status: "Pending Verification"
+        - Batch upload test certificates
+        - Select multiple PDF files
+        - Process each in parallel
+        - Show progress indicator
+        - Present extraction results in queue
+        - Review and confirm each
+        - Skip or flag problematic extractions
+        - Batch save confirmed results
+        - Verify test result
+        - View test result details
+        - Compare to certificate PDF (side-by-side)
+        - Check pass/fail calculation
+        - Approve verification: Status → "Verified", timestamp recorded
+        - Reject verification: Add reason, status → "Pending", engineer notified
+        - View test register
+        - Table view of all test results
+        - Columns: Test ID, Lot, Type, Result, Spec, Pass/Fail, Status, Date
+        - Filter by: Test type, Pass/Fail, Lot, Date range, Status
+        - Sort by any column
+        - Search by report number or lot
+        - Export to Excel
+        - Summary stats: Total tests, Pass rate, Pending verification
+        - View test results by lot
+        - From lot detail "Tests" tab
+        - All linked test results
+        - Type, Result, Pass/Fail, Certificate link
+        - Overall summary: X of Y tests passed
+        - Highlight failures or pending
+        - Link to add new test result
+        - Generate test summary report
+        - Select lots or date range
+        - Select test types to include
+        - Generate PDF: Test summary table, pass/fail statistics, individual results
+        - Include certificate references
+        - Option to attach actual certificates
+      </features>
+    </module_5_test_results>
+
+    <module_6_ncr_lifecycle>
+      <description>Non-conformance report creation, workflow, and closure</description>
+      <features>
+        - Raise NCR from inspection
+        - Initiate from ITP item (Failed) or standalone
+        - Enter: Description, specification reference, affected lot(s) (multi-select), category (Minor/Major)
+        - Assign responsible party (person or subcontractor)
+        - Set due date for response
+        - Attach photos as evidence
+        - System generates NCR number
+        - Status: "Open"
+        - Affected lots status → "NCR Raised"
+        - Notification sent to responsible party
+        - If Major: Flag for client notification
+        - Raise NCR from failed test
+        - When test marked as FAIL, prompt to raise NCR
+        - NCR pre-populated with: Description, linked lot, test result reference
+        - User adds additional details
+        - Complete NCR creation flow
+        - Subcontractor raise NCR
+        - Limited creation for issues affecting their scope
+        - Cannot raise against other subbies
+        - Auto-notify head contractor QM
+        - Head contractor can accept or redirect
+        - Respond to NCR
+        - View NCR details and evidence
+        - Enter root cause category (from predefined list)
+        - Enter root cause description
+        - Enter proposed corrective action
+        - Enter estimated completion date
+        - Attach supporting documents
+        - Submit response
+        - Status: "Investigating" → "Rectification"
+        - QM notified
+        - Review NCR response
+        - View NCR with response
+        - Options: Accept response, Request revision, Escalate
+        - Add comments
+        - If accepted: Proceed to rectification
+        - If revision needed: Notify responsible party
+        - Submit rectification evidence
+        - Access NCR in "Rectification" status
+        - Upload evidence: Photos, re-test certificates, documents
+        - Add notes describing action taken
+        - Submit for verification
+        - Status: "Verification"
+        - QM notified
+        - Verify NCR rectification
+        - View NCR with rectification evidence
+        - Verify: Re-test results pass, photos acceptable, action matches plan
+        - If satisfactory: Status → "Closed", lot status reverts/progresses
+        - If not satisfactory: Return to "Rectification" with feedback
+        - Close NCR with concession
+        - Option for "use as-is" when full rectification not possible
+        - Requires justification and risk assessment
+        - Client approval if Major NCR
+        - Upload approval documentation
+        - NCR closed with "Concession" flag
+        - Concession recorded in lot history
+        - Notify client of major NCR
+        - Major NCRs flagged for notification
+        - Generate notification package
+        - Send to Superintendent email
+        - Record notification timestamp
+        - Track client response
+        - View NCR register
+        - Table view of all NCRs
+        - Columns: NCR #, Lots, Description, Category, Status, Responsible, Due, Age
+        - Filter by: Status, Category, Responsible party, Date range
+        - Sort by any column
+        - Colour coding by status/priority
+        - Highlight overdue NCRs
+        - Export to Excel
+        - NCR analytics
+        - Summary metrics: Open, Closed this month, Average closure time
+        - Charts: NCRs by category over time, by root cause, by responsible party
+        - Average time to closure trend
+        - Identify repeat issues
+        - Drill down to individual NCRs
+      </features>
+      <ncr_status_lifecycle>
+        - OPEN: Raised, awaiting response
+        - INVESTIGATING: Response submitted, under review
+        - RECTIFICATION: Approved, corrective action in progress
+        - VERIFICATION: Evidence submitted, awaiting QM verification
+        - CLOSED: Rectification verified and accepted
+        - CLOSED_CONCESSION: Closed with use-as-is concession
+      </ncr_status_lifecycle>
+    </module_6_ncr_lifecycle>
+
+    <module_7_daily_diary>
+      <description>Daily site diary with weather, personnel, plant, activities, and delays</description>
+      <features>
+        - Create daily diary entry
+        - Select date (defaults to today)
+        - If diary exists, open for editing
+        - Weather auto-populated from BOM API
+        - Previous day's personnel pre-loaded
+        - Sections: Weather, Personnel, Plant, Activities, Visitors, Delays, Notes
+        - Save as draft at any time
+        - Auto-save every 60 seconds
+        - Works fully offline
+        - Record weather
+        - Fetch from BOM API for project location
+        - Auto-populate: Conditions, Temperature min/max, Rainfall mm
+        - Can override any value
+        - Add weather notes
+        - Record weather source (API/Manual)
+        - Record personnel on site
+        - Add entries: Name, Company, Role, Start time, Finish time
+        - Hours auto-calculated
+        - Copy from previous day (one-click)
+        - Add multiple entries quickly
+        - Subtotals: Head contractor hours, Subbie hours by company
+        - Running total visible
+        - Record plant and equipment
+        - Add entries: Equipment type/description, ID/Rego, Company, Hours operated, Notes
+        - Select from recently used plant
+        - Add new equipment on the fly
+        - Link to subbie plant register if applicable
+        - Record work activities
+        - Add entries: Description, Location (free text or lot link), Quantity, Unit
+        - Link activity to lot(s) for traceability
+        - Suggest common activities from ITP templates
+        - Voice-to-text input option
+        - Attach photos to activities
+        - Record delays and issues
+        - Add entries: Delay type, Start time, End time, Description, Impact
+        - Duration auto-calculated
+        - Delay types: Weather, Client, RFI, Design, Access, Supply, Other
+        - Attach photos
+        - Delay types map to claim categories
+        - Voice-to-text for diary
+        - Microphone button on text fields
+        - Speak in natural language
+        - AI transcribes speech to text
+        - Review and edit transcription
+        - Works offline (queued for transcription)
+        - Submit daily diary
+        - "Submit" button when complete
+        - Validation warnings if key sections empty
+        - Can submit with warnings (acknowledged)
+        - Status: "Submitted"
+        - Timestamp recorded
+        - Diary locked, no longer editable
+        - Notification to PM/QM
+        - Lock diary after submission
+        - Submitted diaries are read-only
+        - Can add "Addendum" with timestamp for corrections
+        - Addendums clearly marked
+        - Original content preserved
+        - Audit trail shows submit time vs actual date
+        - Late diary warning
+        - If submitted after date + 1 day: Warning displayed
+        - Late flag recorded
+        - Dashboard shows diaries pending submission
+        - PM alerted if consistently late
+        - View diary history
+        - Calendar view with diary status by date
+        - Green: Submitted, Yellow: Draft, Red: Missing
+        - Click date to view diary
+        - Search diaries by content
+        - Filter by date range, author, contains delays
+        - Generate diary report
+        - Select date range
+        - Select sections to include
+        - Generate PDF with all diaries
+        - Options: Full detail, Summary only, Delays only
+        - Include photos or exclude
+        - Export delay register
+        - Extract all delay entries from diaries
+        - Table format: Date, Type, Duration, Description, Impact
+        - Filter by delay type
+        - Sum by category
+        - Export to Excel
+        - Link back to source diary
+      </features>
+    </module_7_daily_diary>
+
+    <module_8_progress_claims>
+      <description>Progress claim preparation, evidence packages, and SOPA compliance</description>
+      <features>
+        - Create progress claim
+        - Create claim with number (auto-increment) and period (start/end dates)
+        - System identifies claimable lots: Conformed and unclaimed, partially claimed with additional progress
+        - Show summary: X lots ready, estimated value
+        - Adjust which lots to include
+        - Draft status until submitted
+        - Select lots for claim
+        - See all conformed, unclaimed lots
+        - For each lot: Number, description, activity, estimated value, conformance date, evidence completeness
+        - Select/deselect lots
+        - Bulk select by chainage range or activity
+        - Running total of claim value
+        - Review lot evidence package
+        - For each lot, view evidence summary
+        - ITP completion status
+        - Test results (pass/fail count)
+        - Hold point releases
+        - NCR status
+        - Photo count
+        - Evidence completeness score
+        - Flag any gaps
+        - Generate lot evidence package preview
+        - Enter claim quantities and values
+        - For each lot/line: Quantity, unit, rate, line total
+        - Group lots by activity type
+        - Running claim total
+        - Compare to previous claims
+        - Notes/comments per line
+        - Generate evidence package
+        - Generate PDF including:
+          - Claim cover sheet
+          - Claim schedule (all line items)
+          - Per lot: Conformance certificate, ITP record, test summary, HP releases, photos, NCR closures
+        - Package structured per client requirements
+        - Customise included documents
+        - Generate in less than 60 seconds
+        - Package stored against claim
+        - Submit progress claim
+        - Validate claim complete
+        - Submit options: Email to client, Download, Upload to portal
+        - Status: "Submitted"
+        - Submitted timestamp recorded
+        - Lots marked as "Claimed"
+        - Payment due date calculated (SOPA timeframes)
+        - Cannot edit after submission
+        - Track claim status
+        - View all claims with status: Draft, Submitted, Certified, Paid, Disputed
+        - Show: Claim amount, Certified amount, Paid amount
+        - Days since submission
+        - Payment due date
+        - Highlight overdue certifications
+        - Record certification
+        - Enter certified amount and date
+        - Upload certification document
+        - Note variations from claimed
+        - Status: "Certified"
+        - Payment due date updates
+        - Record payment
+        - Enter payment amount, date, reference
+        - Status: "Paid"
+        - If partial, note outstanding
+        - Claim cycle complete
+        - Claim dashboard
+        - Summary cards: Total claimed, certified, paid, outstanding
+        - Chart: Cumulative claims over time
+        - Chart: Monthly claim amounts
+        - List: Active claims with status
+        - Days cash flow: Claimed → Certified → Paid
+        - Generate claim history report
+        - Table of all claims
+        - Export to Excel
+        - Include lot-level detail option
+        - Filter by date range
+      </features>
+    </module_8_progress_claims>
+
+    <module_9_documents_photos>
+      <description>Document and photo storage, organization, and retrieval</description>
+      <features>
+        - Quick photo capture
+        - "Quick Photo" button always accessible
+        - Opens camera immediately
+        - Auto-capture: GPS coordinates, timestamp, device info
+        - Quick tag options: Select lot, ITP item, caption
+        - Save with single tap
+        - Upload in background
+        - Works offline (queues for upload)
+        - Touch target 56px minimum
+        - Batch photo upload
+        - Select multiple photos from device
+        - Extract metadata (date, GPS)
+        - Bulk assign to lot(s)
+        - Individual or batch captioning
+        - Upload progress shown
+        - Continue working during upload
+        - View photo gallery
+        - Gallery view with thumbnails
+        - Tap to view full size
+        - Show caption and metadata
+        - Filter by date, ITP item
+        - Select photos for evidence package
+        - Delete with confirmation
+        - Add to ITP item
+        - AI photo classification
+        - Analyse uploaded photos
+        - Suggest classification: Survey, Compaction, Material delivery, Excavation, Formwork, Concrete pour, Pipe laying, General progress
+        - User accepts or changes
+        - Classification aids evidence assembly
+        - Upload document
+        - Upload: PDF, Word, Excel, Image
+        - Enter: Document type, category, description
+        - Link to lot(s) optional
+        - File stored securely
+        - Version tracked
+        - Search documents
+        - Search by: Filename, description, type, date range, lot, uploader
+        - Results: Thumbnail/icon, name, type, date
+        - Click to view/download
+        - Includes photos and documents
+        - Manage drawing register
+        - Dedicated drawing section
+        - Upload with: Drawing number, title, revision, issue date, status
+        - Status: Preliminary, For Construction, As-Built
+        - Track revisions
+        - Highlight superseded drawings
+        - Current revision clearly marked
+        - Download current set
+        - View document from anywhere
+        - Integrated document viewer
+        - PDF viewing with zoom/pan
+        - Image viewing with zoom
+        - Access from: Lot detail, ITP item, NCR, Document library
+        - Works offline for cached documents
+        - Mark favourites for quick access
+      </features>
+    </module_9_documents_photos>
+
+    <module_10_subcontractor_portal>
+      <description>Subcontractor onboarding, docket submission, and cost tracking</description>
+      <features>
+        - Invite subcontractor to project
+        - Enter: Company name, ABN, primary contact, email, phone
+        - Send invitation email
+        - Subcontractor creates account or links existing
+        - Status: "Pending Rate Approval"
+        - Set up employee roster
+        - Add employees: Name, phone, role, proposed hourly rate
+        - Standard roles pre-populated
+        - Save roster for approval
+        - Add employees later (requires approval)
+        - Set up plant register
+        - Add plant: Type, description, ID/Rego, dry rate, wet rate
+        - Standard types pre-populated
+        - Save for approval
+        - Review subcontractor rates (PM)
+        - View submitted roster and rates
+        - View plant register and rates
+        - Approve, counter-propose, or reject each item
+        - Send response to subcontractor
+        - Negotiate if counter-proposal
+        - Rates locked when approved
+        - Status: "Approved"
+        - Add new employee/plant after approval
+        - Add to roster
+        - Status: "Pending Approval"
+        - Cannot use until approved
+        - PM notification
+        - Create daily docket
+        - Select date (defaults to today)
+        - Select lot(s) worked on
+        - Status: "Draft"
+        - Works fully offline
+        - Record labour hours
+        - Add entry: Select employee, start/finish time
+        - Hours auto-calculated
+        - Cost auto-calculated (hours x approved rate)
+        - Allocate hours to lots if multiple
+        - Add notes
+        - Running total
+        - Record plant hours
+        - Add entry: Select plant, hours, wet/dry
+        - Rate auto-selected
+        - Cost auto-calculated
+        - Allocate to lots
+        - Add notes
+        - Add docket notes
+        - Free text notes
+        - Voice-to-text option
+        - Describe work performed
+        - Note issues or variations
+        - Submit docket for approval
+        - Review summary: Date, lots, labour total, plant total, grand total
+        - Submit
+        - Timestamp recorded
+        - Status: "Pending Approval"
+        - Foreman notification
+        - Cannot edit after submission
+        - Offline docket submission
+        - Full creation offline
+        - Photos stored locally
+        - "Submit" queues for upload
+        - Visual indicator "Pending sync"
+        - Auto-sync when online
+        - View pending docket approvals (Foreman)
+        - Dashboard shows pending dockets
+        - Subbie name, date, total amount, submitted time
+        - Sort by date or age
+        - Filter by subcontractor
+        - Alert if dockets older than 48 hours
+        - Review docket details (Foreman)
+        - View full docket
+        - Compare to foreman's daily diary for same date
+        - Highlight discrepancies
+        - Approve docket
+        - "Approve" button
+        - Add foreman notes (optional)
+        - Status: "Approved"
+        - Costs visible in reports
+        - Costs linked to lots
+        - Subbie notified
+        - Adjust and approve docket
+        - "Adjust" option
+        - Modify hours for any entry
+        - Original submitted hours preserved
+        - Enter reason for each adjustment (required)
+        - Approve adjusted docket
+        - Subbie notified with adjustment details
+        - Audit trail maintained
+        - Query docket
+        - "Query" option
+        - Enter questions or issues
+        - Status: "Queried"
+        - Subbie notified
+        - Subbie responds or amends
+        - Reject docket
+        - "Reject" option
+        - Enter rejection reason (required)
+        - Status: "Rejected"
+        - Subbie notified
+        - Subbie creates new docket
+        - Rejected docket retained
+        - Subcontractor view assigned work
+        - See assigned lots only
+        - For each: Location, activity, ITP requirements, status
+        - Cannot see other subbies or head contractor register
+        - Complete assigned checklist items (Subbie)
+        - View assigned ITP items
+        - Complete same as head contractor
+        - Status: "Pending Verification"
+        - Head contractor verifies
+        - Respond to NCR (Subbie)
+        - See NCRs where responsible
+        - View details
+        - Submit response
+        - Upload rectification evidence
+        - Cannot see NCRs against others
+        - View costs by subcontractor (PM)
+        - Table: Each subbie with labour, plant, total
+        - Filter by date range
+        - Drill down to daily breakdown
+        - Compare to budget
+        - Export to Excel
+        - View costs by lot (PM)
+        - For each lot: Subbie labour, plant, total
+        - Compare to lot budget
+        - Highlight over-budget
+        - Include in conformance package
+        - Daily cost trend (PM)
+        - Chart: Daily costs over time
+        - Split by labour vs plant
+        - Filter by subcontractor
+        - Compare to running average
+        - Annotate with events
+        - Pending approvals dashboard (PM)
+        - Total value of pending dockets
+        - Count and oldest age
+        - List by foreman responsibility
+        - Alert if significant backlog
+        - Remind foreman
+      </features>
+    </module_10_subcontractor_portal>
+
+    <module_11_reporting_dashboards>
+      <description>Role-based dashboards, reports, and notifications</description>
+      <features>
+        - Site Engineer dashboard
+        - My lots summary by status
+        - ITPs in progress with completion %
+        - Tests pending results
+        - Hold points pending release
+        - NCRs assigned to me
+        - Recent activity feed
+        - Quick actions: Add test, Quick photo, Create lot
+        - Foreman dashboard (simplified)
+        - Today's diary status
+        - Dockets pending approval (count + total)
+        - My inspections due today
+        - Weather conditions
+        - Quick actions: Create diary, Approve dockets, Quick photo
+        - Quality Manager dashboard
+        - Lot conformance rate
+        - Open NCRs by category, age
+        - Pending verifications
+        - Hold point release rate
+        - ITP completion trends
+        - Audit readiness indicator
+        - Project Manager dashboard
+        - Lot progress (visual linear map)
+        - Open NCRs (critical highlighted)
+        - Hold point pipeline
+        - Claim status (current + outstanding)
+        - Cost tracking (budget vs actual)
+        - Schedule indicators
+        - Items requiring attention
+        - Director/Owner dashboard (portfolio)
+        - All projects with status indicators
+        - Total outstanding claims value
+        - Critical NCRs across projects
+        - Cash flow summary
+        - Projects at risk (red flags)
+        - Click through to project detail
+        - Generate lot status report
+        - Select date/period
+        - Include: Lot summary by status, conformed this period, open NCRs, test summary, HP releases
+        - Export PDF or Excel
+        - Schedule regular generation
+        - Generate NCR report
+        - Filter by date, status, category
+        - Include: NCR register, by root cause, by responsible party, closure time, repeat issues
+        - Charts and tables
+        - Export PDF or Excel
+        - Generate test report
+        - Filter by date, type, lot
+        - Include: Test register, pass/fail rates, by spec, trend
+        - Certificates or summary
+        - Export PDF or Excel
+        - Generate cost report (PM only)
+        - Filter by date, subcontractor, lot
+        - Include: Cost by subbie, by lot, trend, budget vs actual, labour vs plant
+        - Export PDF or Excel
+        - Generate conformance package
+        - Select lot(s)
+        - Generate comprehensive PDF
+        - Formatted per client requirements
+        - Store for records
+        - Configure notifications
+        - Notification types: HP released, NCR assigned, Docket pending, Test received, Diary reminder, Claim certified
+        - Channels: In-app, Email, Push (mobile)
+        - Frequency: Immediate, Daily digest, Never
+        - View notification centre
+        - Notification bell with count
+        - List with type, description, timestamp, unread indicator
+        - Click to navigate to item
+        - Mark as read
+        - Clear all
+        - System alerts for critical issues
+        - NCR overdue (not responded within due)
+        - Hold point stale (notified > 5 days)
+        - Diary missing (workday + 24 hrs)
+        - Docket backlog (> 48 hrs pending)
+        - Test failure (prompt NCR)
+        - Route to responsible user
+        - Escalate if not resolved
+        - Dashboard warning indicators
+      </features>
+    </module_11_reporting_dashboards>
+
+    <cross_cutting_features>
+      <description>Features that span multiple modules</description>
+      <features>
+        - User authentication (email/password, OAuth, magic link)
+        - Password reset flow
+        - Session management with timeout
+        - Multi-factor authentication (optional)
+        - Role-based access control enforcement
+        - Row-level security (Supabase RLS)
+        - Audit logging for all data changes
+        - Activity history on all entities
+        - Offline-first architecture
+        - Local data caching (IndexedDB/SQLite)
+        - Sync queue for offline changes
+        - Conflict resolution (last-write-wins with notification)
+        - Sync status indicators
+        - Background sync when online
+        - Photo compression and background upload
+        - Responsive design (desktop, tablet, mobile)
+        - Touch-optimised UI for field use
+        - High contrast for outdoor visibility
+        - Large touch targets (48-56px)
+        - Loading states and progress indicators
+        - Error handling with user-friendly messages
+        - Form validation (client and server)
+        - Search and filter across all lists
+        - Pagination and infinite scroll
+        - Export to Excel/CSV/PDF
+        - Print-friendly views
+        - Keyboard navigation
+        - Screen reader compatibility
+        - Colour-blind safe palette (Okabe-Ito)
+      </features>
+    </cross_cutting_features>
+
+    <ai_features>
+      <description>AI-powered assistance features</description>
+      <features>
+        - NATA PDF parser for test certificates
+        - Extract: Lab name, report number, sample details, test type, results
+        - Confidence scoring per field
+        - Side-by-side verification view
+        - Batch processing support
+        - Daily diary voice-to-text
+        - Speech transcription
+        - Natural language to structured data
+        - Entity extraction (lots, personnel, quantities)
+        - Offline queue for transcription
+        - Claim completeness checker
+        - Validate evidence packages
+        - Flag missing tests, unreleased HPs
+        - Suggest exclusions for incomplete lots
+        - Photo auto-classification
+        - Classify by evidence type
+        - Multi-label classification
+        - User confirmation of suggestions
+        - Specification query bot (Phase 2)
+        - Answer spec questions with citations
+        - Index project specifications
+        - NCR root cause suggester (Phase 2)
+        - Suggest categories based on description
+        - Show similar historical NCRs
+        - Hold point readiness monitor (Phase 2)
+        - Auto-notify when prerequisites complete
+        - One-click HP notification
+      </features>
+    </ai_features>
+  </core_features>
+
+  <database_schema>
+    <tables>
+      <company>
+        - id (uuid, primary key)
+        - name (text, not null)
+        - abn (text)
+        - address (text)
+        - logo_url (text)
+        - subscription_tier (enum)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </company>
+      <user>
+        - id (uuid, primary key, from Supabase Auth)
+        - email (text, unique, not null)
+        - full_name (text)
+        - phone (text)
+        - avatar_url (text)
+        - company_id (uuid, foreign key)
+        - role_in_company (enum: owner, member)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </user>
+      <project>
+        - id (uuid, primary key)
+        - company_id (uuid, foreign key, not null)
+        - name (text, not null)
+        - project_number (text, not null)
+        - client_name (text)
+        - contract_value (decimal)
+        - start_date (date)
+        - target_completion (date)
+        - status (enum: active, completed, archived)
+        - state (enum: QLD, NSW, VIC, WA, SA, TAS, NT, ACT)
+        - specification_set (enum: TMR, TfNSW, VicRoads, Custom)
+        - chainage_start (decimal)
+        - chainage_end (decimal)
+        - settings (jsonb)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </project>
+      <project_user>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - user_id (uuid, foreign key, not null)
+        - role (enum: admin, project_manager, site_engineer, quality_manager, foreman, viewer)
+        - invited_at (timestamp)
+        - accepted_at (timestamp)
+        - status (enum: pending, active, removed)
+        - unique constraint (project_id, user_id)
+      </project_user>
+      <project_area>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - name (text, not null)
+        - chainage_start (decimal)
+        - chainage_end (decimal)
+        - colour (text)
+        - created_at (timestamp)
+      </project_area>
+      <lot>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - lot_number (text, not null)
+        - lot_type (enum: chainage, area, structure)
+        - description (text)
+        - chainage_start (decimal)
+        - chainage_end (decimal)
+        - offset (enum: left, right, full, custom)
+        - offset_custom (text)
+        - layer (text)
+        - area_zone (text)
+        - structure_id (text)
+        - structure_element (text)
+        - activity_type (text, not null)
+        - status (enum: not_started, in_progress, awaiting_test, hold_point, ncr_raised, conformed, claimed)
+        - itp_template_id (uuid, foreign key)
+        - assigned_subcontractor_id (uuid, foreign key)
+        - budget_amount (decimal)
+        - created_by (uuid, foreign key)
+        - conformed_at (timestamp)
+        - conformed_by (uuid, foreign key)
+        - claimed_in_id (uuid, foreign key)
+        - notes (text)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+        - unique constraint (project_id, lot_number)
+      </lot>
+      <itp_template>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, nullable for global)
+        - name (text, not null)
+        - description (text)
+        - activity_type (text)
+        - specification_reference (text)
+        - state_spec (enum)
+        - version (integer)
+        - is_active (boolean)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </itp_template>
+      <itp_checklist_item>
+        - id (uuid, primary key)
+        - template_id (uuid, foreign key, not null)
+        - sequence_number (integer, not null)
+        - description (text, not null)
+        - acceptance_criteria (text)
+        - point_type (enum: standard, witness, hold)
+        - responsible_party (enum: contractor, subcontractor, superintendent)
+        - evidence_required (enum: none, photo, document, test)
+        - test_type (text)
+        - notes (text)
+      </itp_checklist_item>
+      <itp_instance>
+        - id (uuid, primary key)
+        - lot_id (uuid, foreign key, not null)
+        - template_id (uuid, foreign key, not null)
+        - status (enum: not_started, in_progress, complete)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </itp_instance>
+      <itp_completion>
+        - id (uuid, primary key)
+        - itp_instance_id (uuid, foreign key, not null)
+        - checklist_item_id (uuid, foreign key, not null)
+        - status (enum: pending, complete, na, failed)
+        - completed_by (uuid, foreign key)
+        - completed_at (timestamp)
+        - notes (text)
+        - signature_url (text)
+        - witness_present (boolean)
+        - witness_name (text)
+        - witness_company (text)
+        - verification_status (enum: none, pending, accepted, rejected)
+        - verified_by (uuid, foreign key)
+        - verified_at (timestamp)
+        - verification_notes (text)
+        - gps_latitude (decimal)
+        - gps_longitude (decimal)
+      </itp_completion>
+      <itp_completion_attachment>
+        - id (uuid, primary key)
+        - completion_id (uuid, foreign key, not null)
+        - document_id (uuid, foreign key, not null)
+      </itp_completion_attachment>
+      <test_result>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - lot_id (uuid, foreign key)
+        - itp_checklist_item_id (uuid, foreign key)
+        - test_type (text, not null)
+        - test_request_number (text)
+        - laboratory_name (text)
+        - laboratory_report_number (text)
+        - sample_date (date)
+        - sample_location (text)
+        - test_date (date)
+        - result_date (date)
+        - result_value (decimal)
+        - result_unit (text)
+        - specification_min (decimal)
+        - specification_max (decimal)
+        - pass_fail (enum: pass, fail, pending)
+        - certificate_document_id (uuid, foreign key)
+        - status (enum: requested, at_lab, received, pending_verification, verified)
+        - entered_by (uuid, foreign key)
+        - entered_at (timestamp)
+        - verified_by (uuid, foreign key)
+        - verified_at (timestamp)
+        - ai_extracted (boolean)
+        - ai_confidence (jsonb)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </test_result>
+      <hold_point>
+        - id (uuid, primary key)
+        - lot_id (uuid, foreign key, not null)
+        - itp_checklist_item_id (uuid, foreign key, not null)
+        - point_type (enum: hold, witness)
+        - description (text)
+        - status (enum: pending, notified, released, expired)
+        - notification_sent_at (timestamp)
+        - notification_sent_to (text)
+        - scheduled_date (timestamp)
+        - scheduled_time (time)
+        - released_by_name (text)
+        - released_by_organisation (text)
+        - released_at (timestamp)
+        - release_method (enum: digital, email, paper)
+        - release_signature_url (text)
+        - release_notes (text)
+        - evidence_package_url (text)
+        - chase_count (integer, default 0)
+        - last_chased_at (timestamp)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </hold_point>
+      <ncr>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - ncr_number (text, not null)
+        - description (text, not null)
+        - specification_reference (text)
+        - category (enum: minor, major)
+        - status (enum: open, investigating, rectification, verification, closed, closed_concession)
+        - raised_by (uuid, foreign key, not null)
+        - raised_at (timestamp, not null)
+        - responsible_user_id (uuid, foreign key)
+        - responsible_subcontractor_id (uuid, foreign key)
+        - due_date (date)
+        - root_cause_category (text)
+        - root_cause_description (text)
+        - proposed_corrective_action (text)
+        - response_submitted_at (timestamp)
+        - rectification_notes (text)
+        - rectification_submitted_at (timestamp)
+        - verified_by (uuid, foreign key)
+        - verified_at (timestamp)
+        - verification_notes (text)
+        - closed_by (uuid, foreign key)
+        - closed_at (timestamp)
+        - concession_justification (text)
+        - concession_risk_assessment (text)
+        - client_notification_required (boolean)
+        - client_notified_at (timestamp)
+        - lessons_learned (text)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+        - unique constraint (project_id, ncr_number)
+      </ncr>
+      <ncr_lot>
+        - id (uuid, primary key)
+        - ncr_id (uuid, foreign key, not null)
+        - lot_id (uuid, foreign key, not null)
+        - unique constraint (ncr_id, lot_id)
+      </ncr_lot>
+      <ncr_evidence>
+        - id (uuid, primary key)
+        - ncr_id (uuid, foreign key, not null)
+        - document_id (uuid, foreign key, not null)
+        - evidence_type (enum: initial, response, rectification, verification)
+        - uploaded_at (timestamp)
+      </ncr_evidence>
+      <daily_diary>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - date (date, not null)
+        - status (enum: draft, submitted, locked)
+        - submitted_by (uuid, foreign key)
+        - submitted_at (timestamp)
+        - locked_at (timestamp)
+        - is_late (boolean, default false)
+        - weather_source (enum: api, manual)
+        - weather_conditions (enum: fine, overcast, showers, rain, storm)
+        - temperature_min (decimal)
+        - temperature_max (decimal)
+        - rainfall_mm (decimal)
+        - weather_notes (text)
+        - general_notes (text)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+        - unique constraint (project_id, date)
+      </daily_diary>
+      <diary_personnel>
+        - id (uuid, primary key)
+        - diary_id (uuid, foreign key, not null)
+        - name (text, not null)
+        - company (text)
+        - role (text)
+        - start_time (time)
+        - finish_time (time)
+        - hours (decimal)
+      </diary_personnel>
+      <diary_plant>
+        - id (uuid, primary key)
+        - diary_id (uuid, foreign key, not null)
+        - description (text, not null)
+        - id_rego (text)
+        - company (text)
+        - hours_operated (decimal)
+        - notes (text)
+      </diary_plant>
+      <diary_activity>
+        - id (uuid, primary key)
+        - diary_id (uuid, foreign key, not null)
+        - lot_id (uuid, foreign key)
+        - description (text, not null)
+        - quantity (decimal)
+        - unit (text)
+        - notes (text)
+      </diary_activity>
+      <diary_visitor>
+        - id (uuid, primary key)
+        - diary_id (uuid, foreign key, not null)
+        - name (text, not null)
+        - company (text)
+        - purpose (text)
+        - time_in_out (text)
+      </diary_visitor>
+      <diary_delay>
+        - id (uuid, primary key)
+        - diary_id (uuid, foreign key, not null)
+        - delay_type (enum: weather, client, rfi, design, access, supply, other)
+        - start_time (time)
+        - end_time (time)
+        - duration_hours (decimal)
+        - description (text, not null)
+        - impact (text)
+      </diary_delay>
+      <diary_addendum>
+        - id (uuid, primary key)
+        - diary_id (uuid, foreign key, not null)
+        - content (text, not null)
+        - added_by (uuid, foreign key, not null)
+        - added_at (timestamp, not null)
+      </diary_addendum>
+      <subcontractor_company>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - company_name (text, not null)
+        - abn (text)
+        - primary_contact_name (text)
+        - primary_contact_email (text)
+        - primary_contact_phone (text)
+        - status (enum: pending_approval, approved, suspended)
+        - approved_by (uuid, foreign key)
+        - approved_at (timestamp)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </subcontractor_company>
+      <subcontractor_user>
+        - id (uuid, primary key)
+        - subcontractor_company_id (uuid, foreign key, not null)
+        - user_id (uuid, foreign key, not null)
+        - role (enum: admin, user)
+        - created_at (timestamp)
+      </subcontractor_user>
+      <employee_roster>
+        - id (uuid, primary key)
+        - subcontractor_company_id (uuid, foreign key, not null)
+        - name (text, not null)
+        - phone (text)
+        - role (text)
+        - hourly_rate (decimal, not null)
+        - status (enum: pending, approved, inactive)
+        - approved_by (uuid, foreign key)
+        - approved_at (timestamp)
+        - created_at (timestamp)
+      </employee_roster>
+      <plant_register>
+        - id (uuid, primary key)
+        - subcontractor_company_id (uuid, foreign key, not null)
+        - type (text, not null)
+        - description (text)
+        - id_rego (text)
+        - dry_rate (decimal)
+        - wet_rate (decimal)
+        - status (enum: pending, approved, inactive)
+        - approved_by (uuid, foreign key)
+        - approved_at (timestamp)
+        - created_at (timestamp)
+      </plant_register>
+      <daily_docket>
+        - id (uuid, primary key)
+        - subcontractor_company_id (uuid, foreign key, not null)
+        - project_id (uuid, foreign key, not null)
+        - date (date, not null)
+        - status (enum: draft, submitted, queried, approved, rejected)
+        - submitted_by (uuid, foreign key)
+        - submitted_at (timestamp)
+        - approved_by (uuid, foreign key)
+        - approved_at (timestamp)
+        - foreman_notes (text)
+        - adjustment_reason (text)
+        - notes (text)
+        - total_labour_submitted (decimal)
+        - total_labour_approved (decimal)
+        - total_plant_submitted (decimal)
+        - total_plant_approved (decimal)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </daily_docket>
+      <docket_labour>
+        - id (uuid, primary key)
+        - docket_id (uuid, foreign key, not null)
+        - employee_id (uuid, foreign key, not null)
+        - start_time (time)
+        - finish_time (time)
+        - submitted_hours (decimal)
+        - approved_hours (decimal)
+        - hourly_rate (decimal)
+        - submitted_cost (decimal)
+        - approved_cost (decimal)
+        - adjustment_reason (text)
+      </docket_labour>
+      <docket_labour_lot>
+        - id (uuid, primary key)
+        - docket_labour_id (uuid, foreign key, not null)
+        - lot_id (uuid, foreign key, not null)
+        - hours (decimal)
+      </docket_labour_lot>
+      <docket_plant>
+        - id (uuid, primary key)
+        - docket_id (uuid, foreign key, not null)
+        - plant_id (uuid, foreign key, not null)
+        - hours_operated (decimal)
+        - wet_or_dry (enum: wet, dry)
+        - hourly_rate (decimal)
+        - submitted_cost (decimal)
+        - approved_cost (decimal)
+        - adjustment_reason (text)
+      </docket_plant>
+      <docket_plant_lot>
+        - id (uuid, primary key)
+        - docket_plant_id (uuid, foreign key, not null)
+        - lot_id (uuid, foreign key, not null)
+        - hours (decimal)
+      </docket_plant_lot>
+      <progress_claim>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - claim_number (integer, not null)
+        - claim_period_start (date, not null)
+        - claim_period_end (date, not null)
+        - status (enum: draft, submitted, certified, paid, disputed)
+        - prepared_by (uuid, foreign key)
+        - prepared_at (timestamp)
+        - submitted_at (timestamp)
+        - submitted_to (text)
+        - total_claimed_amount (decimal)
+        - certified_amount (decimal)
+        - certified_at (timestamp)
+        - paid_amount (decimal)
+        - paid_at (timestamp)
+        - payment_reference (text)
+        - evidence_package_url (text)
+        - sopa_statement_generated (boolean)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+        - unique constraint (project_id, claim_number)
+      </progress_claim>
+      <claimed_lot>
+        - id (uuid, primary key)
+        - claim_id (uuid, foreign key, not null)
+        - lot_id (uuid, foreign key, not null)
+        - quantity (decimal)
+        - unit (text)
+        - rate (decimal)
+        - amount_claimed (decimal)
+        - percentage_complete (decimal)
+        - evidence_package_url (text)
+        - notes (text)
+      </claimed_lot>
+      <document>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - lot_id (uuid, foreign key)
+        - document_type (enum: photo, certificate, docket, drawing, report, other)
+        - category (enum: evidence, reference, submission)
+        - filename (text, not null)
+        - file_url (text, not null)
+        - file_size (integer)
+        - mime_type (text)
+        - uploaded_by (uuid, foreign key)
+        - uploaded_at (timestamp)
+        - gps_latitude (decimal)
+        - gps_longitude (decimal)
+        - capture_timestamp (timestamp)
+        - ai_classification (text)
+        - caption (text)
+        - tags (text[])
+        - is_favourite (boolean, default false)
+        - created_at (timestamp)
+      </document>
+      <drawing>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key, not null)
+        - drawing_number (text, not null)
+        - title (text)
+        - revision (text)
+        - issue_date (date)
+        - status (enum: preliminary, for_construction, as_built)
+        - document_id (uuid, foreign key, not null)
+        - superseded_by_id (uuid, foreign key)
+        - created_at (timestamp)
+        - updated_at (timestamp)
+      </drawing>
+      <notification>
+        - id (uuid, primary key)
+        - user_id (uuid, foreign key, not null)
+        - project_id (uuid, foreign key)
+        - type (enum: hp_released, ncr_assigned, docket_pending, test_received, diary_reminder, claim_certified, system_alert)
+        - title (text, not null)
+        - message (text)
+        - link_url (text)
+        - is_read (boolean, default false)
+        - created_at (timestamp)
+      </notification>
+      <audit_log>
+        - id (uuid, primary key)
+        - project_id (uuid, foreign key)
+        - user_id (uuid, foreign key)
+        - entity_type (text, not null)
+        - entity_id (uuid, not null)
+        - action (enum: create, update, delete)
+        - changes (jsonb)
+        - ip_address (text)
+        - user_agent (text)
+        - created_at (timestamp)
+      </audit_log>
+      <sync_queue>
+        - id (uuid, primary key)
+        - user_id (uuid, foreign key, not null)
+        - device_id (text)
+        - entity_type (text, not null)
+        - entity_id (uuid)
+        - action (enum: create, update, delete)
+        - payload (jsonb, not null)
+        - status (enum: pending, synced, conflict, failed)
+        - created_at (timestamp)
+        - synced_at (timestamp)
+        - conflict_resolution (text)
+      </sync_queue>
+    </tables>
+  </database_schema>
+
+  <api_endpoints_summary>
+    <auth>
+      - POST /api/auth/register - Register new user
+      - POST /api/auth/login - Login with email/password
+      - POST /api/auth/logout - Logout
+      - POST /api/auth/forgot-password - Request password reset
+      - POST /api/auth/reset-password - Reset password with token
+      - GET /api/auth/me - Get current user
+    </auth>
+    <companies>
+      - GET /api/companies/:id - Get company details
+      - PATCH /api/companies/:id - Update company
+      - GET /api/companies/:id/users - List company users
+    </companies>
+    <projects>
+      - GET /api/projects - List user's projects
+      - POST /api/projects - Create project
+      - GET /api/projects/:id - Get project details
+      - PATCH /api/projects/:id - Update project
+      - DELETE /api/projects/:id - Delete project
+      - GET /api/projects/:id/settings - Get project settings
+      - PATCH /api/projects/:id/settings - Update project settings
+      - GET /api/projects/:id/users - List project team
+      - POST /api/projects/:id/users/invite - Invite user
+      - PATCH /api/projects/:id/users/:userId - Update user role
+      - DELETE /api/projects/:id/users/:userId - Remove user
+      - GET /api/projects/:id/areas - List project areas
+      - POST /api/projects/:id/areas - Create area
+    </projects>
+    <lots>
+      - GET /api/projects/:id/lots - List lots (with filters)
+      - POST /api/projects/:id/lots - Create lot
+      - POST /api/projects/:id/lots/bulk - Bulk create lots
+      - POST /api/projects/:id/lots/import - Import from Excel
+      - GET /api/lots/:id - Get lot details
+      - PATCH /api/lots/:id - Update lot
+      - DELETE /api/lots/:id - Delete lot
+      - POST /api/lots/:id/clone - Clone lot
+      - POST /api/lots/:id/conform - Conform lot
+      - POST /api/lots/:id/assign - Assign to subcontractor
+      - GET /api/lots/:id/history - Get lot audit history
+    </lots>
+    <itps>
+      - GET /api/projects/:id/itp-templates - List ITP templates
+      - POST /api/projects/:id/itp-templates - Create template
+      - GET /api/itp-templates/:id - Get template details
+      - PATCH /api/itp-templates/:id - Update template
+      - DELETE /api/itp-templates/:id - Delete template
+      - POST /api/itp-templates/:id/clone - Clone template
+      - GET /api/lots/:id/itp - Get lot ITP instance
+      - PATCH /api/itp-completions/:id - Update completion
+      - POST /api/itp-completions/:id/complete - Complete item
+    </itps>
+    <hold_points>
+      - GET /api/projects/:id/hold-points - List hold points
+      - GET /api/hold-points/:id - Get hold point details
+      - POST /api/hold-points/:id/notify - Send notification
+      - POST /api/hold-points/:id/chase - Chase release
+      - POST /api/hold-points/:id/release - Record release
+      - GET /api/hold-points/release/:token - External release page
+      - POST /api/hold-points/release/:token - External release submit
+    </hold_points>
+    <tests>
+      - GET /api/projects/:id/tests - List test results
+      - POST /api/projects/:id/tests - Create test result
+      - GET /api/tests/:id - Get test details
+      - PATCH /api/tests/:id - Update test
+      - POST /api/tests/:id/verify - Verify test result
+      - POST /api/tests/extract - AI extract from PDF
+      - POST /api/tests/extract/batch - Batch AI extraction
+    </tests>
+    <ncrs>
+      - GET /api/projects/:id/ncrs - List NCRs
+      - POST /api/projects/:id/ncrs - Create NCR
+      - GET /api/ncrs/:id - Get NCR details
+      - PATCH /api/ncrs/:id - Update NCR
+      - POST /api/ncrs/:id/respond - Submit response
+      - POST /api/ncrs/:id/rectify - Submit rectification
+      - POST /api/ncrs/:id/verify - Verify and close
+      - POST /api/ncrs/:id/notify-client - Notify client
+    </ncrs>
+    <diaries>
+      - GET /api/projects/:id/diaries - List diaries
+      - POST /api/projects/:id/diaries - Create/update diary
+      - GET /api/diaries/:id - Get diary details
+      - PATCH /api/diaries/:id - Update diary
+      - POST /api/diaries/:id/submit - Submit diary
+      - POST /api/diaries/:id/addendum - Add addendum
+      - GET /api/projects/:id/delays - Export delays
+    </diaries>
+    <subcontractors>
+      - GET /api/projects/:id/subcontractors - List subcontractors
+      - POST /api/projects/:id/subcontractors/invite - Invite subcontractor
+      - GET /api/subcontractors/:id - Get subcontractor details
+      - PATCH /api/subcontractors/:id - Update subcontractor
+      - GET /api/subcontractors/:id/roster - Get employee roster
+      - POST /api/subcontractors/:id/roster - Add employee
+      - PATCH /api/subcontractors/:id/roster/:employeeId - Approve/update employee
+      - GET /api/subcontractors/:id/plant - Get plant register
+      - POST /api/subcontractors/:id/plant - Add plant
+      - PATCH /api/subcontractors/:id/plant/:plantId - Approve/update plant
+    </subcontractors>
+    <dockets>
+      - GET /api/projects/:id/dockets - List dockets
+      - POST /api/projects/:id/dockets - Create docket
+      - GET /api/dockets/:id - Get docket details
+      - PATCH /api/dockets/:id - Update docket
+      - POST /api/dockets/:id/submit - Submit docket
+      - POST /api/dockets/:id/approve - Approve docket
+      - POST /api/dockets/:id/adjust - Adjust and approve
+      - POST /api/dockets/:id/query - Query docket
+      - POST /api/dockets/:id/reject - Reject docket
+    </dockets>
+    <claims>
+      - GET /api/projects/:id/claims - List claims
+      - POST /api/projects/:id/claims - Create claim
+      - GET /api/claims/:id - Get claim details
+      - PATCH /api/claims/:id - Update claim
+      - POST /api/claims/:id/generate-package - Generate evidence package
+      - POST /api/claims/:id/submit - Submit claim
+      - POST /api/claims/:id/certify - Record certification
+      - POST /api/claims/:id/payment - Record payment
+    </claims>
+    <documents>
+      - GET /api/projects/:id/documents - List documents
+      - POST /api/projects/:id/documents - Upload document
+      - POST /api/projects/:id/documents/batch - Batch upload
+      - GET /api/documents/:id - Get document details
+      - DELETE /api/documents/:id - Delete document
+      - GET /api/projects/:id/drawings - List drawings
+      - POST /api/projects/:id/drawings - Add drawing
+    </documents>
+    <reports>
+      - GET /api/projects/:id/reports/lot-status - Lot status report
+      - GET /api/projects/:id/reports/ncr - NCR report
+      - GET /api/projects/:id/reports/tests - Test report
+      - GET /api/projects/:id/reports/costs - Cost report
+      - POST /api/projects/:id/reports/conformance - Generate conformance package
+      - POST /api/projects/:id/reports/diary - Generate diary report
+    </reports>
+    <notifications>
+      - GET /api/notifications - List user notifications
+      - PATCH /api/notifications/:id/read - Mark as read
+      - POST /api/notifications/read-all - Mark all as read
+      - GET /api/notifications/settings - Get notification settings
+      - PATCH /api/notifications/settings - Update settings
+    </notifications>
+    <sync>
+      - POST /api/sync/push - Push offline changes
+      - POST /api/sync/pull - Pull remote changes
+      - GET /api/sync/status - Get sync status
+    </sync>
+  </api_endpoints_summary>
+
+  <ui_layout>
+    <main_structure>
+      Desktop: Collapsible sidebar navigation (280px) + main content area
+      Tablet: Collapsible sidebar (icon mode) + full-width content
+      Mobile: Bottom navigation bar + full-width content with hamburger menu for secondary nav
+    </main_structure>
+    <navigation_structure>
+      Primary: Dashboard, Lot Register, ITPs, Hold Points, Tests, NCRs, Daily Diary, Claims, Subcontractors, Documents, Reports
+      Secondary (header): Notifications, User profile, Project selector, Settings
+      Role-based: Navigation items shown/hidden based on user role permissions
+    </navigation_structure>
+    <key_pages>
+      - Dashboard (role-specific)
+      - Lot Register (list and linear map views)
+      - Lot Detail (tabbed interface)
+      - ITP Checklist (step-by-step completion)
+      - Hold Point Register and Detail
+      - Test Result Register and Entry
+      - NCR Register and Workflow
+      - Daily Diary Editor
+      - Progress Claim Builder
+      - Subcontractor Portal
+      - Document Library
+      - Report Generator
+      - Settings (Project and User)
+    </key_pages>
+  </ui_layout>
+
+  <design_system>
+    <color_palette>
+      Primary: Blue (#2563EB) - actions, links, primary buttons
+      Success: Green (#16A34A) - conformed lots, passed tests, approvals
+      Warning: Amber (#D97706) - awaiting states, hold points, pending
+      Danger: Red (#DC2626) - NCRs, failures, errors, rejections
+      Neutral: Grey scale for text, backgrounds, borders
+      Status colours follow Okabe-Ito colour-blind safe palette
+    </color_palette>
+    <typography>
+      Font family: Inter (primary), system fonts fallback
+      Headings: Semi-bold, sizes from 24px (h1) to 14px (h6)
+      Body: Regular 16px, line height 1.5
+      Small text: 14px for labels, 12px for captions
+      Mobile: Minimum 16px for body text
+    </typography>
+    <spacing>
+      Base unit: 4px
+      Component padding: 16px (desktop), 12px (mobile)
+      Card margins: 24px (desktop), 16px (mobile)
+      Touch targets: Minimum 48px, preferred 56px for field use
+    </spacing>
+    <components>
+      Buttons: Primary (filled), Secondary (outlined), Ghost (text only), Danger (red)
+      Cards: White background, subtle shadow, rounded corners (8px)
+      Forms: Clear labels, inline validation, helper text
+      Tables: Sortable headers, row hover, action menus
+      Modals: Centered, max-width 640px, overlay backdrop
+      Toasts: Bottom-right positioning, auto-dismiss after 5s
+    </components>
+  </design_system>
+
+  <implementation_steps>
+    <step number="1">
+      <title>Foundation and Authentication</title>
+      <tasks>
+        - Set up project structure (monorepo with frontend/backend)
+        - Configure Supabase project (auth, database, storage)
+        - Implement Prisma schema and migrations
+        - Build authentication flows (register, login, password reset)
+        - Implement role-based access control
+        - Create base UI components and layout
+        - Set up routing with protected routes
+      </tasks>
+    </step>
+    <step number="2">
+      <title>Project and Team Management</title>
+      <tasks>
+        - Project CRUD operations
+        - Project settings configuration
+        - Team invitation and management
+        - Project area/zone management
+        - ITP template CRUD
+        - Excel import for lots
+      </tasks>
+    </step>
+    <step number="3">
+      <title>Lot Management Core</title>
+      <tasks>
+        - Lot CRUD operations
+        - Lot register list view with filters
+        - Lot detail page with tabs
+        - Lot status lifecycle management
+        - Linear map visualization
+        - Bulk lot creation
+        - Lot cloning
+      </tasks>
+    </step>
+    <step number="4">
+      <title>ITP and Inspection System</title>
+      <tasks>
+        - ITP instance creation from template
+        - Checklist completion workflow
+        - Evidence attachment
+        - Witness point workflow
+        - Hold point prerequisites check
+        - Progress calculation
+      </tasks>
+    </step>
+    <step number="5">
+      <title>Hold Point Workflow</title>
+      <tasks>
+        - Hold point notification system
+        - Evidence package PDF generation
+        - Email notifications
+        - External release flow (no login)
+        - Release recording (digital, email, paper)
+        - Hold point register and dashboard
+      </tasks>
+    </step>
+    <step number="6">
+      <title>Test Results and NCR</title>
+      <tasks>
+        - Manual test result entry
+        - Test register and verification
+        - NCR creation workflow
+        - NCR response and rectification
+        - NCR verification and closure
+        - NCR register and analytics
+      </tasks>
+    </step>
+    <step number="7">
+      <title>Daily Diary</title>
+      <tasks>
+        - Diary editor with all sections
+        - Weather API integration
+        - Copy from previous day
+        - Diary submission and locking
+        - Diary history and calendar view
+        - Delay register export
+      </tasks>
+    </step>
+    <step number="8">
+      <title>Documents and Photos</title>
+      <tasks>
+        - Photo capture with GPS and timestamp
+        - Batch upload
+        - Photo gallery
+        - Document upload and search
+        - Drawing register
+        - Document viewer integration
+      </tasks>
+    </step>
+    <step number="9">
+      <title>Subcontractor Portal</title>
+      <tasks>
+        - Subcontractor invitation flow
+        - Employee roster management
+        - Plant register management
+        - Rate approval workflow
+        - Daily docket creation
+        - Docket approval workflow
+        - Cost tracking dashboards
+      </tasks>
+    </step>
+    <step number="10">
+      <title>Progress Claims</title>
+      <tasks>
+        - Claim creation and lot selection
+        - Evidence completeness check
+        - Claim schedule entry
+        - Evidence package generation
+        - Claim submission and tracking
+        - Certification and payment recording
+      </tasks>
+    </step>
+    <step number="11">
+      <title>Lot Conformance</title>
+      <tasks>
+        - Conformance prerequisites validation
+        - Conformance action and recording
+        - Conformance report PDF generation
+        - Integration with claims
+      </tasks>
+    </step>
+    <step number="12">
+      <title>Reporting and Dashboards</title>
+      <tasks>
+        - Role-based dashboards
+        - Lot status reports
+        - NCR reports and analytics
+        - Test reports
+        - Cost reports (PM only)
+        - Conformance packages
+      </tasks>
+    </step>
+    <step number="13">
+      <title>Notifications System</title>
+      <tasks>
+        - In-app notifications
+        - Email notification integration
+        - Notification preferences
+        - System alerts for critical issues
+        - Push notifications (mobile)
+      </tasks>
+    </step>
+    <step number="14">
+      <title>Offline Capability</title>
+      <tasks>
+        - IndexedDB/SQLite local storage
+        - Sync queue implementation
+        - Conflict resolution
+        - Offline status indicators
+        - Background sync
+        - Photo compression and queuing
+      </tasks>
+    </step>
+    <step number="15">
+      <title>AI Features</title>
+      <tasks>
+        - Test certificate PDF parsing
+        - AI extraction verification UI
+        - Batch processing
+        - Photo auto-classification
+        - Voice-to-text integration
+        - Claim completeness checker
+      </tasks>
+    </step>
+    <step number="16">
+      <title>Polish and Optimization</title>
+      <tasks>
+        - Performance optimization
+        - Accessibility compliance
+        - Cross-browser testing
+        - Mobile responsiveness refinement
+        - Error handling improvements
+        - Loading states and feedback
+        - Final security audit
+      </tasks>
+    </step>
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>
+      - All 150 user stories implemented and tested
+      - All 11 modules fully functional
+      - Offline capability for core workflows
+      - AI features operational with good accuracy
+      - All role-based permissions enforced correctly
+    </functionality>
+    <user_experience>
+      - Page load times under 2 seconds
+      - Mobile-friendly interface with large touch targets
+      - Intuitive navigation requiring minimal training
+      - Clear feedback for all user actions
+      - Works in low-connectivity field conditions
+    </user_experience>
+    <technical_quality>
+      - All API endpoints documented and tested
+      - Database schema properly normalized with indexes
+      - Row-level security enforced
+      - Audit logging for compliance
+      - Error handling comprehensive
+      - No console errors in production
+    </technical_quality>
+    <design_polish>
+      - Consistent visual design throughout
+      - Responsive across desktop, tablet, mobile
+      - WCAG 2.1 AA accessibility compliance
+      - Colour-blind safe palette
+      - Professional PDF report formatting
+    </design_polish>
+  </success_criteria>
+</project_specification>
