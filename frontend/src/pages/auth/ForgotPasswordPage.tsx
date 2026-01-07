@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '@/lib/auth'
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -14,8 +13,18 @@ export function ForgotPasswordPage() {
     setLoading(true)
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email)
-      if (error) throw error
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+      const response = await fetch(`${apiUrl}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to send reset email')
+      }
+
       setSent(true)
     } catch (err) {
       setError('Failed to send reset email. Please try again.')

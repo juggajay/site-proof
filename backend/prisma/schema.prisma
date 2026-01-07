@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -33,6 +33,7 @@ model Company {
 model User {
   id            String   @id @default(uuid())
   email         String   @unique
+  passwordHash  String?  @map("password_hash")
   fullName      String?  @map("full_name")
   phone         String?
   avatarUrl     String?  @map("avatar_url")
@@ -60,6 +61,7 @@ model User {
   auditLogs       AuditLog[]
   syncQueues      SyncQueue[]
   preparedClaims  ProgressClaim[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -78,7 +80,7 @@ model Project {
   specificationSet  String   @map("specification_set")
   chainageStart     Decimal? @map("chainage_start")
   chainageEnd       Decimal? @map("chainage_end")
-  settings          Json?
+  settings          String?   // Stored as JSON string for SQLite
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -346,7 +348,7 @@ model TestResult {
   verifiedById          String?   @map("verified_by")
   verifiedAt            DateTime? @map("verified_at")
   aiExtracted           Boolean   @default(false) @map("ai_extracted")
-  aiConfidence          Json?     @map("ai_confidence")
+  aiConfidence          String?   @map("ai_confidence")  // Stored as JSON string for SQLite
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
@@ -442,7 +444,7 @@ model NCREvidence {
 model DailyDiary {
   id                String    @id @default(uuid())
   projectId         String    @map("project_id")
-  date              DateTime  @db.Date
+  date              DateTime
   status            String    @default("draft")
   submittedById     String?   @map("submitted_by")
   submittedAt       DateTime? @map("submitted_at")
@@ -639,7 +641,7 @@ model DailyDocket {
   id                    String    @id @default(uuid())
   subcontractorCompanyId String   @map("subcontractor_company_id")
   projectId             String    @map("project_id")
-  date                  DateTime  @db.Date
+  date                  DateTime
   status                String    @default("draft")
   submittedById         String?   @map("submitted_by")
   submittedAt           DateTime? @map("submitted_at")
@@ -736,8 +738,8 @@ model ProgressClaim {
   id                    String    @id @default(uuid())
   projectId             String    @map("project_id")
   claimNumber           Int       @map("claim_number")
-  claimPeriodStart      DateTime  @map("claim_period_start") @db.Date
-  claimPeriodEnd        DateTime  @map("claim_period_end") @db.Date
+  claimPeriodStart      DateTime  @map("claim_period_start")
+  claimPeriodEnd        DateTime  @map("claim_period_end")
   status                String    @default("draft")
   preparedById          String?   @map("prepared_by")
   preparedAt            DateTime? @map("prepared_at")
@@ -803,7 +805,7 @@ model Document {
   captureTimestamp DateTime? @map("capture_timestamp")
   aiClassification String?   @map("ai_classification")
   caption          String?
-  tags             String[]
+  tags             String?   // Stored as JSON string for SQLite
   isFavourite      Boolean   @default(false) @map("is_favourite")
   createdAt        DateTime  @default(now()) @map("created_at")
 
@@ -825,7 +827,7 @@ model Drawing {
   drawingNumber  String    @map("drawing_number")
   title          String?
   revision       String?
-  issueDate      DateTime? @map("issue_date") @db.Date
+  issueDate      DateTime? @map("issue_date")
   status         String    @default("preliminary")
   documentId     String    @map("document_id")
   supersededById String?   @map("superseded_by_id")
@@ -868,7 +870,7 @@ model AuditLog {
   entityType String   @map("entity_type")
   entityId   String   @map("entity_id")
   action     String
-  changes    Json?
+  changes    String?  // Stored as JSON string for SQLite
   ipAddress  String?  @map("ip_address")
   userAgent  String?  @map("user_agent")
   createdAt  DateTime @default(now()) @map("created_at")
@@ -886,7 +888,7 @@ model SyncQueue {
   entityType         String    @map("entity_type")
   entityId           String?   @map("entity_id")
   action             String
-  payload            Json
+  payload            String  // Stored as JSON string for SQLite
   status             String    @default("pending")
   createdAt          DateTime  @default(now()) @map("created_at")
   syncedAt           DateTime? @map("synced_at")
@@ -895,4 +897,21 @@ model SyncQueue {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sync_queue")
+}
+
+// ============================================================================
+// Password Reset Tokens
+// ============================================================================
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
 }

@@ -7,6 +7,9 @@ import { createContext } from './trpc/context.js'
 import { appRouter } from './trpc/router.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestLogger } from './middleware/requestLogger.js'
+import { authRouter } from './routes/auth.js'
+import { projectsRouter } from './routes/projects.js'
+import { lotsRouter } from './routes/lots.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -14,7 +17,12 @@ const PORT = process.env.PORT || 3001
 // Security middleware
 app.use(helmet())
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    process.env.FRONTEND_URL || ''
+  ].filter(Boolean),
   credentials: true
 }))
 
@@ -29,6 +37,11 @@ app.use(requestLogger)
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
+
+// REST API routes
+app.use('/api/auth', authRouter)
+app.use('/api/projects', projectsRouter)
+app.use('/api/lots', lotsRouter)
 
 // tRPC
 app.use(
@@ -46,6 +59,7 @@ app.use(errorHandler)
 app.listen(PORT, () => {
   console.log(`🚀 SiteProof API server running on http://localhost:${PORT}`)
   console.log(`📊 tRPC endpoint: http://localhost:${PORT}/trpc`)
+  console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`)
   console.log(`❤️  Health check: http://localhost:${PORT}/health`)
 })
 
