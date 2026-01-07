@@ -1,9 +1,15 @@
-import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useState, useMemo } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
-import { getAuthToken } from '@/lib/auth'
+import { getAuthToken, useAuth } from '@/lib/auth'
+
+// Roles that can delete lots
+const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager']
+
+// Pagination settings
+const PAGE_SIZE = 5
 
 interface Lot {
   id: string
@@ -31,12 +37,76 @@ const statusColors: Record<string, string> = {
 export function LotsPage() {
   const { projectId } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { user } = useAuth()
   const { canViewBudgets } = useCommercialAccess()
   const { isSubcontractor } = useSubcontractorAccess()
   const { canCreate } = useViewerAccess()
   const [lots, setLots] = useState<Lot[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [lotToDelete, setLotToDelete] = useState<Lot | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Get filter and pagination from URL
+  const currentPage = parseInt(searchParams.get('page') || '1', 10)
+  const statusFilter = searchParams.get('status') || ''
+  const activityFilter = searchParams.get('activity') || ''
+
+  // Check if user can delete lots
+  const canDelete = user?.role ? LOT_DELETE_ROLES.includes(user.role) : false
+
+  // Get unique activity types for filter dropdown
+  const activityTypes = useMemo(() => {
+    const types = new Set(lots.map((l) => l.activityType).filter(Boolean))
+    return Array.from(types).sort()
+  }, [lots])
+
+  // Filter lots based on current filters
+  const filteredLots = useMemo(() => {
+    return lots.filter((lot) => {
+      if (statusFilter && lot.status !== statusFilter) return false
+      if (activityFilter && lot.activityType !== activityFilter) return false
+      return true
+    })
+  }, [lots, statusFilter, activityFilter])
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredLots.length / PAGE_SIZE)
+  const paginatedLots = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return filteredLots.slice(start, start + PAGE_SIZE)
+  }, [filteredLots, currentPage])
+
+  // Update URL params
+  const updateFilters = (newParams: Record<string, string>) => {
+    const params = new URLSearchParams(searchParams)
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value)
+      } else {
+        params.delete(key)
+      }
+    })
+    // Reset to page 1 when filters change (unless page is being set)
+    if (!('page' in newParams)) {
+      params.set('page', '1')
+    }
+    setSearchParams(params)
+  }
+
+  const handleStatusFilter = (status: string) => {
+    updateFilters({ status })
+  }
+
+  const handleActivityFilter = (activity: string) => {
+    updateFilters({ activity })
+  }
+
+  const handlePageChange = (page: number) => {
+    updateFilters({ page: page.toString() })
+  }
 
   useEffect(() => {
     async function fetchLots() {
@@ -84,6 +154,50 @@ export function LotsPage() {
     return lot.chainageStart ?? lot.chainageEnd ?? '—'
   }
 
+  // Open delete confirmation modal
+  const handleDeleteClick = (lot: Lot) => {
+    setLotToDelete(lot)
+    setDeleteModalOpen(true)
+  }
+
+  // Cancel deletion
+  const handleCancelDelete = () => {
+    setDeleteModalOpen(false)
+    setLotToDelete(null)
+  }
+
+  // Confirm and execute deletion
+  const handleConfirmDelete = async () => {
+    if (!lotToDelete) return
+
+    setDeleting(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/lots/${lotToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to delete lot')
+      }
+
+      // Remove lot from list
+      setLots((prev) => prev.filter((l) => l.id !== lotToDelete.id))
+      setDeleteModalOpen(false)
+      setLotToDelete(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete lot')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -99,6 +213,61 @@ export function LotsPage() {
           ? `Viewing lots assigned to your company for project ${projectId}.`
           : `Manage lots for project ${projectId}. The lot is the atomic unit of the system.`}
       </p>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label htmlFor="status-filter" className="text-sm font-medium">
+            Status:
+          </label>
+          <select
+            id="status-filter"
+            value={statusFilter}
+            onChange={(e) => handleStatusFilter(e.target.value)}
+            className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+          >
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="awaiting_test">Awaiting Test</option>
+            <option value="hold_point">Hold Point</option>
+            <option value="completed">Completed</option>
+            <option value="conformed">Conformed</option>
+            <option value="claimed">Claimed</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label htmlFor="activity-filter" className="text-sm font-medium">
+            Activity:
+          </label>
+          <select
+            id="activity-filter"
+            value={activityFilter}
+            onChange={(e) => handleActivityFilter(e.target.value)}
+            className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+          >
+            <option value="">All Activities</option>
+            {activityTypes.map((type) => (
+              <option key={type} value={type as string}>
+                {(type as string).charAt(0).toUpperCase() + (type as string).slice(1)}
+              </option>
+            ))}
+          </select>
+        </div>
+        {(statusFilter || activityFilter) && (
+          <button
+            onClick={() => {
+              updateFilters({ status: '', activity: '' })
+            }}
+            className="text-sm text-primary hover:underline"
+          >
+            Clear Filters
+          </button>
+        )}
+        <span className="text-sm text-muted-foreground">
+          Showing {filteredLots.length} of {lots.length} lots
+        </span>
+      </div>
 
       {/* Loading State */}
       {loading && (
@@ -135,14 +304,16 @@ export function LotsPage() {
               </tr>
             </thead>
             <tbody>
-              {lots.length === 0 ? (
+              {paginatedLots.length === 0 ? (
                 <tr>
                   <td colSpan={isSubcontractor ? 6 : 8} className="p-6 text-center text-muted-foreground">
-                    {isSubcontractor ? 'No lots assigned to your company yet.' : 'No lots created yet.'}
+                    {lots.length === 0
+                      ? (isSubcontractor ? 'No lots assigned to your company yet.' : 'No lots created yet.')
+                      : 'No lots match the current filters.'}
                   </td>
                 </tr>
               ) : (
-                lots.map((lot) => (
+                paginatedLots.map((lot) => (
                   <tr key={lot.id} className="border-b hover:bg-muted/25">
                     <td className="p-3 font-medium">{lot.lotNumber}</td>
                     <td className="p-3">{lot.description || '—'}</td>
@@ -175,6 +346,14 @@ export function LotsPage() {
                             Edit
                           </button>
                         )}
+                        {canDelete && lot.status !== 'conformed' && lot.status !== 'claimed' && (
+                          <button
+                            className="text-sm text-red-600 hover:underline"
+                            onClick={() => handleDeleteClick(lot)}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -182,6 +361,81 @@ export function LotsPage() {
               )}
             </tbody>
           </table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t p-4">
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="rounded-lg border px-3 py-1 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page)}
+                    className={`rounded-lg px-3 py-1 text-sm ${
+                      page === currentPage
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border hover:bg-muted'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="rounded-lg border px-3 py-1 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && lotToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Confirm Deletion</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Are you sure you want to delete lot{' '}
+              <span className="font-semibold text-gray-900">{lotToDelete.lotNumber}</span>?
+            </p>
+            {lotToDelete.description && (
+              <p className="mt-1 text-sm text-gray-500">
+                "{lotToDelete.description}"
+              </p>
+            )}
+            <p className="mt-3 text-sm text-red-600">
+              This action cannot be undone. All associated data will be permanently deleted.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={handleCancelDelete}
+                disabled={deleting}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting...' : 'Delete Lot'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

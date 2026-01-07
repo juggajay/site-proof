@@ -157,7 +157,7 @@ lotsRouter.get('/:id', async (req, res) => {
 // POST /api/lots - Create a new lot (requires creator role)
 lotsRouter.post('/', requireRole(LOT_CREATORS), async (req, res) => {
   try {
-    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd } = req.body
+    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType } = req.body
 
     if (!projectId || !lotNumber) {
       return res.status(400).json({
@@ -171,7 +171,8 @@ lotsRouter.post('/', requireRole(LOT_CREATORS), async (req, res) => {
         projectId,
         lotNumber,
         description,
-        activityType,
+        activityType: activityType || 'Earthworks',
+        lotType: lotType || 'chainage',
         chainageStart,
         chainageEnd,
       },

@@ -1,13 +1,21 @@
 import { useAuth } from '@/lib/auth'
 import { Bell, LogOut, User } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Breadcrumbs } from './Breadcrumbs'
 
 export function Header() {
   const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-6">
       <div>
-        {/* Breadcrumbs or page title can go here */}
+        <Breadcrumbs />
       </div>
       <div className="flex items-center gap-4">
         <button
@@ -23,7 +31,7 @@ export function Header() {
           <span className="text-sm font-medium">{user?.email}</span>
         </div>
         <button
-          onClick={() => signOut()}
+          onClick={handleSignOut}
           className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Sign out"
         >
