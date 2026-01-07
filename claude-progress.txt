@@ -250,5 +250,58 @@ Date: 2026-01-07
 4. Implement ITP checklist workflows
 
 ================================================================================
+Session: 3 (Coding Agent)
+Date: 2026-01-08
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #17: Major NCR closure requires QM approval
+- VERIFIED: Complete end-to-end workflow for major NCR QM approval requirement
+- Testing performed:
+  1. Site engineer cannot close major NCR (Close button disabled, API returns 403)
+  2. Quality Manager can approve the NCR
+  3. After QM approval, NCR can be closed successfully
+- UI correctly shows:
+  - "Required" status with amber warning icon when QM approval needed
+  - "Approved" status with green checkmark after QM approval
+  - Close button disabled/grayed out until QM approval granted
+- Backend correctly enforces:
+  - Returns 403 with message "Major NCRs require Quality Manager approval before closure"
+  - QM approval endpoint only accessible to quality_manager, project_manager, or admin roles
+
+### Environment Fix
+- Changed backend port from 3004 to 3005 (conflict with another application)
+- Updated frontend/.env and backend/.env with new port
+- Added port 5176 to CORS whitelist for future flexibility
+
+### Test Data Used
+- engineer@test.com (site_engineer role) - cannot close major NCR
+- qm@test.com (quality_manager role) - can approve and close major NCR
+- NCR Test Project with both users assigned
+
+## FILES MODIFIED/CREATED THIS SESSION
+- backend/.env - Changed PORT to 3005
+- frontend/.env - Changed VITE_API_URL to 3005
+- backend/src/index.ts - Added port 5176 to CORS
+- backend/scripts/test-close-ncr.js - End-to-end test script for NCR workflow
+- backend/scripts/create-major-ncr.js - Updated API_URL to 3005
+
+## SCREENSHOTS CAPTURED
+- ncr-page-as-engineer.png - Shows NCR with disabled Close button
+- ncr-closed-after-qm-approval.png - Shows NCR closed with Approved status
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 17 (1.6%)
+- In Progress: 0
+- Pending: 1018
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing NCR and workflow features
+3. Build out remaining module functionality
+
+================================================================================
 END OF SESSION SUMMARY
 ================================================================================
