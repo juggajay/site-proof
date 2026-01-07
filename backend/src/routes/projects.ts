@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 
 export const projectsRouter = Router()
 
@@ -146,12 +147,29 @@ projectsRouter.get('/:id', async (req, res) => {
 projectsRouter.post('/', async (req, res) => {
   try {
     const user = req.user!
-    const { name, projectNumber, clientName, startDate, targetCompletion } = req.body
+    const { name, projectNumber, clientName, startDate, targetCompletion, state, specificationSet } = req.body
 
     if (!name) {
       return res.status(400).json({
         error: 'Bad Request',
         message: 'Name is required'
+      })
+    }
+
+    // Create company for user if they don't have one
+    let companyId = user.companyId
+    if (!companyId) {
+      const company = await prisma.company.create({
+        data: {
+          name: `${user.fullName || user.email}'s Company`,
+          abn: '',
+        }
+      })
+      companyId = company.id
+      // Update user's company
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { companyId: company.id }
       })
     }
 
@@ -165,7 +183,9 @@ projectsRouter.post('/', async (req, res) => {
         clientName,
         startDate: startDate ? new Date(startDate) : null,
         targetCompletion: targetCompletion ? new Date(targetCompletion) : null,
-        companyId: user.companyId,
+        companyId: companyId,
+        state: state || 'NSW',
+        specificationSet: specificationSet || 'MRTS',
       },
       select: {
         id: true,
@@ -273,6 +293,339 @@ projectsRouter.delete('/:id', async (req, res) => {
     })
   } catch (error) {
     console.error('Delete project error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ==================== User Management Routes ====================
+
+// GET /api/projects/:id/users - Get all users in a project
+projectsRouter.get('/:id/users', async (req, res) => {
+  try {
+    const { id: projectId } = req.params
+    const user = req.user!
+
+    // Verify access to the project
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: user.id }
+    })
+
+    if (!projectUser && user.roleInCompany !== 'admin' && user.roleInCompany !== 'owner') {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    const projectUsers = await prisma.projectUser.findMany({
+      where: { projectId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    res.json({
+      users: projectUsers.map(pu => ({
+        id: pu.id,
+        userId: pu.userId,
+        email: pu.user.email,
+        fullName: pu.user.fullName,
+        role: pu.role,
+        status: pu.status,
+        invitedAt: pu.createdAt,
+        acceptedAt: pu.acceptedAt
+      }))
+    })
+  } catch (error) {
+    console.error('Get project users error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/projects/:id/users - Invite a user to a project
+projectsRouter.post('/:id/users', async (req, res) => {
+  try {
+    const { id: projectId } = req.params
+    const { email, role } = req.body
+    const currentUser = req.user!
+
+    if (!email || !role) {
+      return res.status(400).json({ error: 'Email and role are required' })
+    }
+
+    // Check current user has admin access to project
+    const currentProjectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: currentUser.id }
+    })
+
+    const isAdmin = currentProjectUser?.role === 'admin' ||
+                   currentProjectUser?.role === 'project_manager' ||
+                   currentUser.roleInCompany === 'admin' ||
+                   currentUser.roleInCompany === 'owner'
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only admins can invite users' })
+    }
+
+    // Find the user to invite
+    const invitedUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, fullName: true }
+    })
+
+    if (!invitedUser) {
+      return res.status(404).json({ error: 'User not found. They must register first.' })
+    }
+
+    // Check if already a member
+    const existingMember = await prisma.projectUser.findFirst({
+      where: { projectId, userId: invitedUser.id }
+    })
+
+    if (existingMember) {
+      return res.status(400).json({ error: 'User is already a member of this project' })
+    }
+
+    // Create project user
+    const newProjectUser = await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: invitedUser.id,
+        role,
+        status: 'active',
+        acceptedAt: new Date() // Auto-accept for now
+      }
+    })
+
+    // Audit log
+    await createAuditLog({
+      projectId,
+      userId: currentUser.id,
+      entityType: 'project_user',
+      entityId: newProjectUser.id,
+      action: AuditAction.USER_INVITED,
+      changes: {
+        invitedUserId: invitedUser.id,
+        invitedUserEmail: invitedUser.email,
+        role
+      },
+      req
+    })
+
+    res.status(201).json({
+      message: 'User invited successfully',
+      projectUser: {
+        id: newProjectUser.id,
+        userId: invitedUser.id,
+        email: invitedUser.email,
+        fullName: invitedUser.fullName,
+        role
+      }
+    })
+  } catch (error) {
+    console.error('Invite user error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PATCH /api/projects/:id/users/:userId - Update user role in project
+projectsRouter.patch('/:id/users/:userId', async (req, res) => {
+  try {
+    const { id: projectId, userId: targetUserId } = req.params
+    const { role } = req.body
+    const currentUser = req.user!
+
+    if (!role) {
+      return res.status(400).json({ error: 'Role is required' })
+    }
+
+    // Check current user has admin access
+    const currentProjectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: currentUser.id }
+    })
+
+    const isAdmin = currentProjectUser?.role === 'admin' ||
+                   currentProjectUser?.role === 'project_manager' ||
+                   currentUser.roleInCompany === 'admin' ||
+                   currentUser.roleInCompany === 'owner'
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only admins can change user roles' })
+    }
+
+    // Find the target project user
+    const targetProjectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: targetUserId },
+      include: {
+        user: { select: { email: true, fullName: true } }
+      }
+    })
+
+    if (!targetProjectUser) {
+      return res.status(404).json({ error: 'User not found in project' })
+    }
+
+    const oldRole = targetProjectUser.role
+
+    // Update role
+    const updated = await prisma.projectUser.update({
+      where: { id: targetProjectUser.id },
+      data: { role }
+    })
+
+    // Audit log
+    await createAuditLog({
+      projectId,
+      userId: currentUser.id,
+      entityType: 'project_user',
+      entityId: targetProjectUser.id,
+      action: AuditAction.USER_ROLE_CHANGED,
+      changes: {
+        targetUserId,
+        targetUserEmail: targetProjectUser.user.email,
+        oldRole,
+        newRole: role
+      },
+      req
+    })
+
+    res.json({
+      message: 'User role updated successfully',
+      projectUser: {
+        id: updated.id,
+        userId: targetUserId,
+        email: targetProjectUser.user.email,
+        role: updated.role
+      }
+    })
+  } catch (error) {
+    console.error('Update user role error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/projects/:id/users/:userId - Remove user from project
+projectsRouter.delete('/:id/users/:userId', async (req, res) => {
+  try {
+    const { id: projectId, userId: targetUserId } = req.params
+    const currentUser = req.user!
+
+    // Check current user has admin access
+    const currentProjectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: currentUser.id }
+    })
+
+    const isAdmin = currentProjectUser?.role === 'admin' ||
+                   currentProjectUser?.role === 'project_manager' ||
+                   currentUser.roleInCompany === 'admin' ||
+                   currentUser.roleInCompany === 'owner'
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only admins can remove users' })
+    }
+
+    // Find the target project user
+    const targetProjectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: targetUserId },
+      include: {
+        user: { select: { email: true, fullName: true } }
+      }
+    })
+
+    if (!targetProjectUser) {
+      return res.status(404).json({ error: 'User not found in project' })
+    }
+
+    // Can't remove yourself
+    if (targetUserId === currentUser.id) {
+      return res.status(400).json({ error: 'You cannot remove yourself from the project' })
+    }
+
+    // Delete the project user
+    await prisma.projectUser.delete({
+      where: { id: targetProjectUser.id }
+    })
+
+    // Audit log
+    await createAuditLog({
+      projectId,
+      userId: currentUser.id,
+      entityType: 'project_user',
+      entityId: targetProjectUser.id,
+      action: AuditAction.USER_REMOVED,
+      changes: {
+        removedUserId: targetUserId,
+        removedUserEmail: targetProjectUser.user.email,
+        removedUserRole: targetProjectUser.role
+      },
+      req
+    })
+
+    res.json({
+      message: 'User removed successfully',
+      removedUser: {
+        userId: targetUserId,
+        email: targetProjectUser.user.email
+      }
+    })
+  } catch (error) {
+    console.error('Remove user error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/projects/:id/audit-logs - Get audit logs for a project
+projectsRouter.get('/:id/audit-logs', async (req, res) => {
+  try {
+    const { id: projectId } = req.params
+    const user = req.user!
+
+    // Check user has admin access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: user.id }
+    })
+
+    const isAdmin = projectUser?.role === 'admin' ||
+                   projectUser?.role === 'project_manager' ||
+                   user.roleInCompany === 'admin' ||
+                   user.roleInCompany === 'owner'
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only admins can view audit logs' })
+    }
+
+    const auditLogs = await prisma.auditLog.findMany({
+      where: { projectId },
+      include: {
+        user: {
+          select: { email: true, fullName: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100 // Limit to last 100 entries
+    })
+
+    res.json({
+      auditLogs: auditLogs.map(log => ({
+        id: log.id,
+        action: log.action,
+        entityType: log.entityType,
+        entityId: log.entityId,
+        changes: log.changes ? JSON.parse(log.changes) : null,
+        performedBy: log.user ? {
+          email: log.user.email,
+          fullName: log.user.fullName
+        } : null,
+        ipAddress: log.ipAddress,
+        createdAt: log.createdAt
+      }))
+    })
+  } catch (error) {
+    console.error('Get audit logs error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

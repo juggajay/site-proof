@@ -191,6 +191,111 @@ lotsRouter.post('/', requireRole(LOT_CREATORS), async (req, res) => {
   }
 })
 
+// Roles that can edit lots
+const LOT_EDITORS = ['owner', 'admin', 'project_manager', 'site_engineer', 'quality_manager', 'foreman']
+
+// PATCH /api/lots/:id - Update a lot
+lotsRouter.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        projectId: true,
+        status: true,
+      },
+    })
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Get user's role on this project
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: lot.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const userProjectRole = projectUser?.role || user.roleInCompany
+
+    // Check if user has permission to edit lots
+    if (!LOT_EDITORS.includes(userProjectRole)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to edit lots'
+      })
+    }
+
+    // Don't allow editing conformed or claimed lots (without special override)
+    if (lot.status === 'conformed' || lot.status === 'claimed') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Cannot edit a ${lot.status} lot`
+      })
+    }
+
+    // Extract allowed fields from request body
+    const {
+      lotNumber,
+      description,
+      activityType,
+      chainageStart,
+      chainageEnd,
+      offset,
+      layer,
+      areaZone,
+      status,
+      budgetAmount,
+    } = req.body
+
+    // Build update data - only include fields that were provided
+    const updateData: any = {}
+    if (lotNumber !== undefined) updateData.lotNumber = lotNumber
+    if (description !== undefined) updateData.description = description
+    if (activityType !== undefined) updateData.activityType = activityType
+    if (chainageStart !== undefined) updateData.chainageStart = chainageStart
+    if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd
+    if (offset !== undefined) updateData.offset = offset
+    if (layer !== undefined) updateData.layer = layer
+    if (areaZone !== undefined) updateData.areaZone = areaZone
+    if (status !== undefined) updateData.status = status
+    // Only PMs and above can set budget
+    if (budgetAmount !== undefined && ['owner', 'admin', 'project_manager'].includes(userProjectRole)) {
+      updateData.budgetAmount = budgetAmount
+    }
+
+    const updatedLot = await prisma.lot.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        lotNumber: true,
+        description: true,
+        status: true,
+        activityType: true,
+        chainageStart: true,
+        chainageEnd: true,
+        offset: true,
+        layer: true,
+        areaZone: true,
+        budgetAmount: true,
+        updatedAt: true,
+      },
+    })
+
+    res.json({ lot: updatedLot })
+  } catch (error) {
+    console.error('Update lot error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // DELETE /api/lots/:id - Delete a lot (requires deleter role)
 lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
   try {

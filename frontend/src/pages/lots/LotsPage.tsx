@@ -160,12 +160,22 @@ export function LotsPage() {
                       <td className="p-3">{lot.budgetAmount ? `$${lot.budgetAmount.toLocaleString()}` : '—'}</td>
                     )}
                     <td className="p-3">
-                      <button
-                        className="text-sm text-primary hover:underline"
-                        onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
-                      >
-                        View
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="text-sm text-primary hover:underline"
+                          onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
+                        >
+                          View
+                        </button>
+                        {canCreate && lot.status !== 'conformed' && lot.status !== 'claimed' && (
+                          <button
+                            className="text-sm text-amber-600 hover:underline"
+                            onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}/edit`)}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

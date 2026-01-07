@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const user = await prisma.user.findFirst({
-    where: { email: 'viewer@test.com' },
+    where: { email: 'admin@test.com' },
     select: { email: true, passwordHash: true }
   });
 

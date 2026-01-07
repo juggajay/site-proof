@@ -22,6 +22,7 @@ import { ProjectSettingsPage } from '@/pages/projects/settings/ProjectSettingsPa
 import { ProjectUsersPage } from '@/pages/projects/settings/ProjectUsersPage'
 import { LotsPage } from '@/pages/lots/LotsPage'
 import { LotDetailPage } from '@/pages/lots/LotDetailPage'
+import { LotEditPage } from '@/pages/lots/LotEditPage'
 import { ITPPage } from '@/pages/itp/ITPPage'
 import { HoldPointsPage } from '@/pages/holdpoints/HoldPointsPage'
 import { TestResultsPage } from '@/pages/tests/TestResultsPage'
@@ -97,6 +98,7 @@ function App() {
           {/* Lots */}
           <Route path="/projects/:projectId/lots" element={<LotsPage />} />
           <Route path="/projects/:projectId/lots/:lotId" element={<LotDetailPage />} />
+          <Route path="/projects/:projectId/lots/:lotId/edit" element={<LotEditPage />} />
 
           {/* ITP */}
           <Route path="/projects/:projectId/itp" element={<ITPPage />} />

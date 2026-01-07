@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
+import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken } from '@/lib/auth'
 
 interface QualityAccess {
@@ -38,6 +39,7 @@ export function LotDetailPage() {
   const { projectId, lotId } = useParams()
   const navigate = useNavigate()
   const { canViewBudgets } = useCommercialAccess()
+  const { canCreate: canEdit } = useViewerAccess()
   const [lot, setLot] = useState<Lot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<{ type: 'not_found' | 'forbidden' | 'error'; message: string } | null>(null)
@@ -154,6 +156,9 @@ export function LotDetailPage() {
     return null
   }
 
+  // Check if lot can be edited
+  const isEditable = lot.status !== 'conformed' && lot.status !== 'claimed'
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -162,9 +167,19 @@ export function LotDetailPage() {
           <h1 className="text-2xl font-bold">{lot.lotNumber}</h1>
           <p className="text-sm text-muted-foreground">{lot.description || 'No description'}</p>
         </div>
-        <span className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
-          {lot.status.replace('_', ' ')}
-        </span>
+        <div className="flex items-center gap-3">
+          {canEdit && isEditable && (
+            <button
+              onClick={() => navigate(`/projects/${projectId}/lots/${lotId}/edit`)}
+              className="rounded-lg border border-amber-500 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50"
+            >
+              Edit Lot
+            </button>
+          )}
+          <span className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
+            {lot.status.replace('_', ' ')}
+          </span>
+        </div>
       </div>
 
       {/* Lot Details Grid */}

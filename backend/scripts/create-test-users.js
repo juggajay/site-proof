@@ -45,6 +45,7 @@ async function main() {
     where: { email: 'admin@test.com' },
     update: {
       roleInCompany: 'admin',
+      passwordHash: hashPassword('password123'),
     },
     create: {
       email: 'admin@test.com',
