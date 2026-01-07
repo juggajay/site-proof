@@ -420,5 +420,75 @@ Date: 2026-01-08
 3. Build out remaining module functionality
 
 ================================================================================
+Session: 6 (Coding Agent)
+Date: 2026-01-08
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #28: Project manager commercial visibility
+- VERIFIED: Project manager can view and manage all commercial data
+- Implementation:
+  1. Created CostsPage component with:
+     - Cost summary cards (Total Cost, Budget Status, Labour Cost, Plant Cost)
+     - Docket status display (Approved/Pending counts)
+     - Tabbed views: Summary, By Subcontractor, By Lot
+     - Cost breakdown visualization with progress bars
+     - Budget vs Actual comparison
+  2. Enhanced ClaimsPage with:
+     - Claims list with status badges (Draft, Submitted, Certified, Paid, Disputed)
+     - Summary cards (Total Claimed, Certified, Paid, Outstanding)
+     - Create Claim modal with lot selection
+     - Period date selection
+     - Dynamic total calculation
+  3. Enhanced SubcontractorsPage with:
+     - Subcontractor list with expandable details
+     - Employee roster with hourly rates and approval status
+     - Plant register with dry/wet rates
+     - "Approve Rate" buttons for pending rates
+     - Pending approvals alert banner
+
+### Testing Performed
+- Logged in as commercial-pm@test.com (project_manager role)
+- Navigated to Costs page - verified cost data displays correctly
+- Navigated to Claims page - verified claim list and summary
+- Created new claim (Claim #3) with 2 lots totaling $57,000
+- Navigated to Subcontractors page
+- Expanded ABC Earthworks to view employee/plant rates
+- Approved Dave Williams' rate ($65/hr) - status changed to Approved
+
+### Bug Fix
+- Fixed auth token usage in CostsPage, ClaimsPage, SubcontractorsPage
+- Was using `const { token } = useAuth()` but token property doesn't exist
+- Changed to use `getAuthToken()` function from auth.tsx
+
+## FILES CREATED/MODIFIED THIS SESSION
+- frontend/src/pages/costs/CostsPage.tsx (NEW)
+- frontend/src/App.tsx - Added CostsPage import and route
+- frontend/src/pages/claims/ClaimsPage.tsx - Enhanced with full functionality
+- frontend/src/pages/subcontractors/SubcontractorsPage.tsx - Enhanced with rate approval
+
+## SCREENSHOTS CAPTURED
+- pm-costs-page-with-data.png - Cost dashboard with summary cards
+- pm-claims-page.png - Claims list with status badges
+- pm-create-claim-modal.png - Create claim modal
+- pm-create-claim-with-lots-selected.png - Lots selected for claim
+- pm-claim-created.png - New claim added to list
+- pm-subcontractors-page.png - Subcontractor list
+- pm-subcontractor-expanded-with-rates.png - Employee/plant rates
+- pm-rate-approved.png - Rate approval verified
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 24 (2.3%)
+- In Progress: 0
+- Pending: 1011
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing commercial and access control features
+3. Build out remaining module functionality
+
+================================================================================
 END OF SESSION SUMMARY
 ================================================================================
