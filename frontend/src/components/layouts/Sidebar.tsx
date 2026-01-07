@@ -64,6 +64,7 @@ const projectNavigation: NavigationItem[] = [
   { name: 'Documents', href: 'documents', icon: FileText },
   { name: 'Subcontractors', href: 'subcontractors', icon: Users, requiresManagement: true },
   { name: 'Reports', href: 'reports', icon: BarChart3 },
+  { name: 'Project Settings', href: 'settings', icon: Settings, requiresManagement: true },
 ]
 
 // Settings navigation items

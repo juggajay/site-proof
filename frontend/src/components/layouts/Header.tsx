@@ -1,5 +1,5 @@
 import { useAuth, getAuthToken } from '@/lib/auth'
-import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, X } from 'lucide-react'
+import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, Settings, UserCircle } from 'lucide-react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Breadcrumbs } from './Breadcrumbs'
@@ -32,6 +32,10 @@ export function Header() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const notificationRef = useRef<HTMLDivElement>(null)
+
+  // User menu state
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   // Find the current project from the list
   const currentProject = projects.find(p => p.id === projectId)
@@ -104,6 +108,9 @@ export function Header() {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setIsNotificationOpen(false)
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -115,6 +122,7 @@ export function Header() {
       if (event.key === 'Escape') {
         setIsProjectSelectorOpen(false)
         setIsNotificationOpen(false)
+        setIsUserMenuOpen(false)
       }
     }
     document.addEventListener('keydown', handleEscape)
@@ -318,19 +326,68 @@ export function Header() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <User className="h-4 w-4" />
-          </div>
-          <span className="text-sm font-medium">{user?.email}</span>
+        {/* User Profile Menu */}
+        <div ref={userMenuRef} className="relative">
+          <button
+            onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted"
+            aria-label="User menu"
+            aria-expanded={isUserMenuOpen}
+            aria-haspopup="menu"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <User className="h-4 w-4" />
+            </div>
+            <span className="text-sm font-medium max-w-[150px] truncate hidden sm:block">{user?.email}</span>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform hidden sm:block ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isUserMenuOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border bg-card shadow-lg">
+              <div className="border-b px-4 py-3">
+                <p className="text-sm font-medium">{user?.name || user?.email?.split('@')[0]}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+              <div className="p-1">
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false)
+                    navigate('/profile')
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                  role="menuitem"
+                >
+                  <UserCircle className="h-4 w-4" />
+                  Profile
+                </button>
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false)
+                    navigate('/settings')
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                  role="menuitem"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </button>
+              </div>
+              <div className="border-t p-1">
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false)
+                    handleSignOut()
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  role="menuitem"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <button
-          onClick={handleSignOut}
-          className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Sign out"
-        >
-          <LogOut className="h-5 w-5" />
-        </button>
       </div>
     </header>
   )

@@ -35,6 +35,7 @@ import { SubcontractorsPage } from '@/pages/subcontractors/SubcontractorsPage'
 import { MyCompanyPage } from '@/pages/subcontractors/MyCompanyPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
+import { ProfilePage } from '@/pages/profile/ProfilePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { CostsPage } from '@/pages/costs/CostsPage'
 
@@ -156,6 +157,9 @@ function App() {
 
           {/* Settings */}
           <Route path="/settings" element={<SettingsPage />} />
+
+          {/* Profile */}
+          <Route path="/profile" element={<ProfilePage />} />
 
           {/* My Company - Subcontractor admins only */}
           <Route
