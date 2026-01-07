@@ -13,29 +13,120 @@ import {
   Users,
   BarChart3,
   Settings,
+  FileCheck,
+  Building2,
+  PieChart,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth'
 
-const navigation = [
+// Role-based access definitions
+const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
+const ADMIN_ROLES = ['owner', 'admin']
+const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
+const FIELD_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'site_engineer', 'foreman']
+
+// Roles that can only view (read-only access)
+const VIEW_ONLY_ROLES = ['viewer']
+
+// Foreman simplified menu - only sees essential field items
+const FOREMAN_MENU_ITEMS = ['Lots', 'ITPs', 'Hold Points', 'Test Results', 'NCRs', 'Daily Diary', 'Docket Approvals']
+
+interface NavigationItem {
+  name: string
+  href: string
+  icon: typeof LayoutDashboard
+  requiresProject?: boolean
+  requiresCommercialAccess?: boolean
+  requiresAdmin?: boolean
+  requiresManagement?: boolean
+  allowedRoles?: string[]
+  excludeRoles?: string[]
+}
+
+const navigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false },
+  { name: 'Portfolio', href: '/portfolio', icon: PieChart, requiresProject: false, requiresAdmin: true },
   { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false },
 ]
 
-const projectNavigation = [
+const projectNavigation: NavigationItem[] = [
   { name: 'Lots', href: 'lots', icon: MapPin },
   { name: 'ITPs', href: 'itp', icon: ClipboardCheck },
   { name: 'Hold Points', href: 'hold-points', icon: AlertTriangle },
   { name: 'Test Results', href: 'tests', icon: TestTube },
   { name: 'NCRs', href: 'ncr', icon: FileWarning },
   { name: 'Daily Diary', href: 'diary', icon: Calendar },
-  { name: 'Progress Claims', href: 'claims', icon: DollarSign },
+  { name: 'Docket Approvals', href: 'dockets', icon: FileCheck },
+  { name: 'Progress Claims', href: 'claims', icon: DollarSign, requiresCommercialAccess: true },
+  { name: 'Costs', href: 'costs', icon: DollarSign, requiresCommercialAccess: true },
   { name: 'Documents', href: 'documents', icon: FileText },
-  { name: 'Subcontractors', href: 'subcontractors', icon: Users },
+  { name: 'Subcontractors', href: 'subcontractors', icon: Users, requiresManagement: true },
   { name: 'Reports', href: 'reports', icon: BarChart3 },
+]
+
+// Settings navigation items
+const settingsNavigation: NavigationItem[] = [
+  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
 ]
 
 export function Sidebar() {
   const { projectId } = useParams()
+  const { user } = useAuth()
+
+  const userRole = user?.role || ''
+
+  // Role-based access checks
+  const hasCommercialAccess = COMMERCIAL_ROLES.includes(userRole)
+  const hasAdminAccess = ADMIN_ROLES.includes(userRole)
+  const hasManagementAccess = MANAGEMENT_ROLES.includes(userRole)
+  const isForeman = userRole === 'foreman'
+  const isViewer = VIEW_ONLY_ROLES.includes(userRole)
+
+  // Helper function to check if a menu item should be visible
+  const shouldShowItem = (item: NavigationItem): boolean => {
+    // Check commercial access requirement
+    if (item.requiresCommercialAccess && !hasCommercialAccess) {
+      return false
+    }
+    // Check admin access requirement
+    if (item.requiresAdmin && !hasAdminAccess) {
+      return false
+    }
+    // Check management access requirement
+    if (item.requiresManagement && !hasManagementAccess) {
+      return false
+    }
+    // Check allowed roles
+    if (item.allowedRoles && !item.allowedRoles.includes(userRole)) {
+      return false
+    }
+    // Check excluded roles
+    if (item.excludeRoles && item.excludeRoles.includes(userRole)) {
+      return false
+    }
+    return true
+  }
+
+  // Filter main navigation
+  const filteredNavigation = navigation.filter(shouldShowItem)
+
+  // Filter project navigation based on user role
+  let filteredProjectNavigation = projectNavigation.filter(shouldShowItem)
+
+  // Foreman gets simplified menu
+  if (isForeman) {
+    filteredProjectNavigation = filteredProjectNavigation.filter(
+      (item) => FOREMAN_MENU_ITEMS.includes(item.name)
+    )
+  }
+
+  // Viewer gets read-only items (no create/edit features - just viewing)
+  // For now, viewers can see most items but actions will be disabled elsewhere
+
+  // Filter settings navigation
+  const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem)
 
   return (
     <aside className="flex w-64 flex-col border-r bg-card">
@@ -43,7 +134,7 @@ export function Sidebar() {
         <span className="text-xl font-bold text-primary">SiteProof</span>
       </div>
       <nav className="flex-1 space-y-1 p-4">
-        {navigation.map((item) => (
+        {filteredNavigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.href}
@@ -68,7 +159,7 @@ export function Sidebar() {
                 Project
               </p>
             </div>
-            {projectNavigation.map((item) => (
+            {filteredProjectNavigation.map((item) => (
               <NavLink
                 key={item.name}
                 to={`/projects/${projectId}/${item.href}`}
@@ -88,21 +179,24 @@ export function Sidebar() {
           </>
         )}
       </nav>
-      <div className="border-t p-4">
-        <NavLink
-          to="/settings"
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              isActive
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )
-          }
-        >
-          <Settings className="h-5 w-5" />
-          Settings
-        </NavLink>
+      <div className="border-t p-4 space-y-1">
+        {filteredSettingsNavigation.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.href}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                isActive
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )
+            }
+          >
+            <item.icon className="h-5 w-5" />
+            {item.name}
+          </NavLink>
+        ))}
       </div>
     </aside>
   )

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 
 export function LoginPage() {
@@ -9,6 +9,10 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const { signIn } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Check if session expired
+  const sessionExpired = location.state?.sessionExpired === true
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -17,7 +21,9 @@ export function LoginPage() {
 
     try {
       await signIn(email, password)
-      navigate('/dashboard')
+      // Navigate to the original destination or dashboard
+      const from = location.state?.from?.pathname || '/dashboard'
+      navigate(from, { replace: true })
     } catch (err) {
       setError('Invalid email or password')
     } finally {
@@ -28,6 +34,12 @@ export function LoginPage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <h2 className="text-2xl font-bold">Sign In</h2>
+
+      {sessionExpired && (
+        <div className="rounded-lg bg-yellow-100 p-3 text-sm text-yellow-800">
+          Your session has expired. Please sign in again.
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">

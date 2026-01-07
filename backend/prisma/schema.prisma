@@ -50,6 +50,7 @@ model User {
   responsibleNCRs NCR[]             @relation("ResponsibleUser")
   verifiedNCRs    NCR[]             @relation("VerifiedByUser")
   closedNCRs      NCR[]             @relation("ClosedByUser")
+  qmApprovedNCRs  NCR[]             @relation("QMApprovedByUser")
   submittedDiaries DailyDiary[]
   diaryAddendums  DiaryAddendum[]
   itpCompletions  ITPCompletion[]   @relation("CompletedByUser")
@@ -373,7 +374,11 @@ model NCR {
   description               String
   specificationReference    String?   @map("specification_reference")
   category                  String
+  severity                  String    @default("minor") // minor, major
   status                    String    @default("open")
+  qmApprovalRequired        Boolean   @default(false) @map("qm_approval_required")
+  qmApprovedById            String?   @map("qm_approved_by")
+  qmApprovedAt              DateTime? @map("qm_approved_at")
   raisedById                String    @map("raised_by")
   raisedAt                  DateTime  @default(now()) @map("raised_at")
   responsibleUserId         String?   @map("responsible_user_id")
@@ -404,6 +409,7 @@ model NCR {
   responsibleSubcontractor SubcontractorCompany? @relation(fields: [responsibleSubcontractorId], references: [id])
   verifiedBy               User?                 @relation("VerifiedByUser", fields: [verifiedById], references: [id])
   closedBy                 User?                 @relation("ClosedByUser", fields: [closedById], references: [id])
+  qmApprovedBy             User?                 @relation("QMApprovedByUser", fields: [qmApprovedById], references: [id])
 
   ncrLots   NCRLot[]
   ncrEvidence NCREvidence[]

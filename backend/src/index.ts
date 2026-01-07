@@ -10,6 +10,7 @@ import { requestLogger } from './middleware/requestLogger.js'
 import { authRouter } from './routes/auth.js'
 import { projectsRouter } from './routes/projects.js'
 import { lotsRouter } from './routes/lots.js'
+import { ncrsRouter } from './routes/ncrs.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -21,6 +22,7 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:5175',
+    'http://localhost:5176',
     process.env.FRONTEND_URL || ''
   ].filter(Boolean),
   credentials: true
@@ -42,6 +44,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRouter)
 app.use('/api/projects', projectsRouter)
 app.use('/api/lots', lotsRouter)
+app.use('/api/ncrs', ncrsRouter)
 
 // tRPC
 app.use(

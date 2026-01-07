@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, sessionExpired } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -19,7 +19,14 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    // Pass sessionExpired state so LoginPage can show appropriate message
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location, sessionExpired }}
+        replace
+      />
+    )
   }
 
   return <>{children}</>

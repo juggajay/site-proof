@@ -12,18 +12,30 @@ projectsRouter.get('/', async (req, res) => {
   try {
     const user = req.user!
 
-    // Get projects associated with user's company or all for admin
+    // Get projects the user has access to via ProjectUser table
+    const projectUsers = await prisma.projectUser.findMany({
+      where: { userId: user.id },
+      select: { projectId: true },
+    })
+    const projectIds = projectUsers.map(pu => pu.projectId)
+
+    // Also include projects from user's company for company admins/owners
+    const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
+
     const projects = await prisma.project.findMany({
-      where: user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
-        ? {}
-        : { companyId: user.companyId || undefined },
+      where: {
+        OR: [
+          { id: { in: projectIds } },
+          ...(isCompanyAdmin && user.companyId ? [{ companyId: user.companyId }] : [])
+        ]
+      },
       select: {
         id: true,
         name: true,
-        code: true,
+        projectNumber: true,
         status: true,
         startDate: true,
-        endDate: true,
+        targetCompletion: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
