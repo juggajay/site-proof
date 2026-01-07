@@ -52,18 +52,29 @@ projectsRouter.get('/', async (req, res) => {
 projectsRouter.get('/:id', async (req, res) => {
   try {
     const { id } = req.params
+    const user = req.user!
 
+    // Check access - user must have access to the project
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: id,
+        userId: user.id,
+      },
+    })
+
+    // Also allow company admins/owners to access company projects
     const project = await prisma.project.findUnique({
       where: { id },
       select: {
         id: true,
         name: true,
-        code: true,
-        description: true,
+        projectNumber: true,
+        clientName: true,
         status: true,
         startDate: true,
-        endDate: true,
+        targetCompletion: true,
         contractValue: true,
+        companyId: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -71,6 +82,14 @@ projectsRouter.get('/:id', async (req, res) => {
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' })
+    }
+
+    // Check if user has access via ProjectUser or is company admin/owner
+    const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
+    const isCompanyProject = project.companyId === user.companyId
+
+    if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
+      return res.status(403).json({ error: 'Access denied to this project' })
     }
 
     res.json({ project })
@@ -84,30 +103,44 @@ projectsRouter.get('/:id', async (req, res) => {
 projectsRouter.post('/', async (req, res) => {
   try {
     const user = req.user!
-    const { name, code, description, startDate, endDate } = req.body
+    const { name, projectNumber, clientName, startDate, targetCompletion } = req.body
 
-    if (!name || !code) {
+    if (!name) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'Name and code are required'
+        message: 'Name is required'
       })
     }
+
+    // Generate project number if not provided
+    const generatedProjectNumber = projectNumber || `PRJ-${Date.now().toString(36).toUpperCase()}`
 
     const project = await prisma.project.create({
       data: {
         name,
-        code,
-        description,
+        projectNumber: generatedProjectNumber,
+        clientName,
         startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
+        targetCompletion: targetCompletion ? new Date(targetCompletion) : null,
         companyId: user.companyId,
       },
       select: {
         id: true,
         name: true,
-        code: true,
+        projectNumber: true,
         status: true,
         createdAt: true,
+      },
+    })
+
+    // Add the creating user to the project
+    await prisma.projectUser.create({
+      data: {
+        projectId: project.id,
+        userId: user.id,
+        role: 'admin',
+        status: 'active',
+        acceptedAt: new Date(),
       },
     })
 
