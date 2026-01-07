@@ -25,6 +25,7 @@ const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
 const ADMIN_ROLES = ['owner', 'admin']
 const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
 const FIELD_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'site_engineer', 'foreman']
+const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
 
 // Roles that can only view (read-only access)
 const VIEW_ONLY_ROLES = ['viewer']
@@ -71,6 +72,11 @@ const settingsNavigation: NavigationItem[] = [
   { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
 ]
 
+// Subcontractor-specific navigation
+const subcontractorNavigation: NavigationItem[] = [
+  { name: 'My Company', href: '/my-company', icon: Building2, allowedRoles: SUBCONTRACTOR_ROLES },
+]
+
 export function Sidebar() {
   const { projectId } = useParams()
   const { user } = useAuth()
@@ -83,6 +89,7 @@ export function Sidebar() {
   const hasManagementAccess = MANAGEMENT_ROLES.includes(userRole)
   const isForeman = userRole === 'foreman'
   const isViewer = VIEW_ONLY_ROLES.includes(userRole)
+  const isSubcontractor = SUBCONTRACTOR_ROLES.includes(userRole)
 
   // Helper function to check if a menu item should be visible
   const shouldShowItem = (item: NavigationItem): boolean => {
@@ -128,6 +135,11 @@ export function Sidebar() {
   // Filter settings navigation
   const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem)
 
+  // Filter subcontractor navigation (only for subcontractors)
+  const filteredSubcontractorNavigation = isSubcontractor
+    ? subcontractorNavigation.filter(shouldShowItem)
+    : []
+
   return (
     <aside className="flex w-64 flex-col border-r bg-card">
       <div className="flex h-16 items-center border-b px-6">
@@ -151,6 +163,34 @@ export function Sidebar() {
             {item.name}
           </NavLink>
         ))}
+
+        {/* Subcontractor Navigation */}
+        {filteredSubcontractorNavigation.length > 0 && (
+          <>
+            <div className="my-4 border-t pt-4">
+              <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                My Company
+              </p>
+            </div>
+            {filteredSubcontractorNavigation.map((item) => (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )
+                }
+              >
+                <item.icon className="h-5 w-5" />
+                {item.name}
+              </NavLink>
+            ))}
+          </>
+        )}
 
         {projectId && (
           <>

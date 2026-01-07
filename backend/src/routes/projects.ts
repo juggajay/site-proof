@@ -22,10 +22,31 @@ projectsRouter.get('/', async (req, res) => {
     // Also include projects from user's company for company admins/owners
     const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
 
+    // For subcontractor users, get projects via SubcontractorUser -> SubcontractorCompany
+    const isSubcontractor = user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin'
+    let subcontractorProjectIds: string[] = []
+
+    if (isSubcontractor) {
+      // Get the subcontractor company the user belongs to
+      const subcontractorUser = await prisma.subcontractorUser.findFirst({
+        where: { userId: user.id },
+        include: {
+          subcontractorCompany: {
+            select: { projectId: true }
+          }
+        }
+      })
+
+      if (subcontractorUser?.subcontractorCompany?.projectId) {
+        subcontractorProjectIds = [subcontractorUser.subcontractorCompany.projectId]
+      }
+    }
+
     const projects = await prisma.project.findMany({
       where: {
         OR: [
           { id: { in: projectIds } },
+          { id: { in: subcontractorProjectIds } },
           ...(isCompanyAdmin && user.companyId ? [{ companyId: user.companyId }] : [])
         ]
       },
@@ -62,6 +83,23 @@ projectsRouter.get('/:id', async (req, res) => {
       },
     })
 
+    // Check subcontractor access
+    const isSubcontractor = user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin'
+    let hasSubcontractorAccess = false
+
+    if (isSubcontractor) {
+      const subcontractorUser = await prisma.subcontractorUser.findFirst({
+        where: { userId: user.id },
+        include: {
+          subcontractorCompany: {
+            select: { projectId: true }
+          }
+        }
+      })
+
+      hasSubcontractorAccess = subcontractorUser?.subcontractorCompany?.projectId === id
+    }
+
     // Also allow company admins/owners to access company projects
     const project = await prisma.project.findUnique({
       where: { id },
@@ -84,12 +122,17 @@ projectsRouter.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    // Check if user has access via ProjectUser or is company admin/owner
+    // Check if user has access via ProjectUser, subcontractor, or is company admin/owner
     const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
     const isCompanyProject = project.companyId === user.companyId
 
-    if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
+    if (!projectUser && !hasSubcontractorAccess && !(isCompanyAdmin && isCompanyProject)) {
       return res.status(403).json({ error: 'Access denied to this project' })
+    }
+
+    // Hide contract value from subcontractors (commercial isolation)
+    if (isSubcontractor) {
+      project.contractValue = null
     }
 
     res.json({ project })

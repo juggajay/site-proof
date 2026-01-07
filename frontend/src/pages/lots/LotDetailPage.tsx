@@ -3,6 +3,15 @@ import { useEffect, useState } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { getAuthToken } from '@/lib/auth'
 
+interface QualityAccess {
+  role: string
+  isQualityManager: boolean
+  canConformLots: boolean
+  canVerifyTestResults: boolean
+  canCloseNCRs: boolean
+  canManageITPTemplates: boolean
+}
+
 interface Lot {
   id: string
   lotNumber: string
@@ -32,6 +41,37 @@ export function LotDetailPage() {
   const [lot, setLot] = useState<Lot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<{ type: 'not_found' | 'forbidden' | 'error'; message: string } | null>(null)
+  const [conforming, setConforming] = useState(false)
+  const [qualityAccess, setQualityAccess] = useState<QualityAccess | null>(null)
+
+  // Fetch quality access permissions for this project
+  useEffect(() => {
+    async function fetchQualityAccess() {
+      if (!projectId) return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/lots/check-role/${projectId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setQualityAccess(data)
+        }
+      } catch (err) {
+        console.error('Failed to fetch quality access:', err)
+      }
+    }
+
+    fetchQualityAccess()
+  }, [projectId])
 
   useEffect(() => {
     async function fetchLot() {
@@ -79,6 +119,10 @@ export function LotDetailPage() {
 
     fetchLot()
   }, [lotId, navigate])
+
+  // Extract quality access permissions
+  const canConformLots = qualityAccess?.canConformLots || false
+  const canVerifyTestResults = qualityAccess?.canVerifyTestResults || false
 
   if (loading) {
     return (
@@ -203,7 +247,7 @@ export function LotDetailPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4">
         <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
           Complete ITP Item
         </button>
@@ -217,6 +261,72 @@ export function LotDetailPage() {
           View Documents
         </button>
       </div>
+
+      {/* Quality Management Actions */}
+      {canConformLots && lot.status !== 'conformed' && lot.status !== 'claimed' && (
+        <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4">
+          <h2 className="text-lg font-semibold text-green-800 mb-2">Quality Management</h2>
+          <p className="text-sm text-green-700 mb-4">
+            As a quality manager, you can conform this lot once all requirements are met.
+          </p>
+          <div className="flex gap-4">
+            <button
+              onClick={async () => {
+                if (!confirm('Are you sure you want to conform this lot? This action marks the lot as quality-approved.')) {
+                  return
+                }
+                setConforming(true)
+                const token = getAuthToken()
+                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+                try {
+                  const response = await fetch(`${apiUrl}/api/lots/${lotId}/conform`, {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                  })
+                  if (response.ok) {
+                    setLot((prev) => prev ? { ...prev, status: 'conformed' } : null)
+                    alert('Lot conformed successfully!')
+                  } else {
+                    const data = await response.json()
+                    alert(data.error || 'Failed to conform lot')
+                  }
+                } catch (err) {
+                  alert('Failed to conform lot')
+                } finally {
+                  setConforming(false)
+                }
+              }}
+              disabled={conforming}
+              className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {conforming ? 'Conforming...' : 'Conform Lot'}
+            </button>
+            {canVerifyTestResults && (
+              <button className="rounded-lg border border-green-600 px-4 py-2 text-sm text-green-600 hover:bg-green-100">
+                Verify Test Results
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Conformed Status Display */}
+      {lot.status === 'conformed' && (
+        <div className="mt-6 rounded-lg border border-green-400 bg-green-100 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">✅</span>
+            <div>
+              <h2 className="text-lg font-semibold text-green-800">Lot Conformed</h2>
+              <p className="text-sm text-green-700">
+                This lot has been quality-approved and is ready for claiming.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

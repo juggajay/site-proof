@@ -31,6 +31,7 @@ import { DocketApprovalsPage } from '@/pages/dockets/DocketApprovalsPage'
 import { ClaimsPage } from '@/pages/claims/ClaimsPage'
 import { DocumentsPage } from '@/pages/documents/DocumentsPage'
 import { SubcontractorsPage } from '@/pages/subcontractors/SubcontractorsPage'
+import { MyCompanyPage } from '@/pages/subcontractors/MyCompanyPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -44,6 +45,9 @@ const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
 
 // Management roles (can manage subcontractors)
 const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
+
+// Subcontractor roles
+const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
 
 function App() {
   return (
@@ -150,6 +154,16 @@ function App() {
 
           {/* Settings */}
           <Route path="/settings" element={<SettingsPage />} />
+
+          {/* My Company - Subcontractor admins only */}
+          <Route
+            path="/my-company"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <MyCompanyPage />
+              </RoleProtectedRoute>
+            }
+          />
         </Route>
 
         {/* 404 */}

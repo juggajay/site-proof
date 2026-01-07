@@ -490,5 +490,72 @@ Date: 2026-01-08
 3. Build out remaining module functionality
 
 ================================================================================
+Session: 7 (Coding Agent)
+Date: 2026-01-08
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #32: Subcontractor admin can manage roster
+- IMPLEMENTED: Complete subcontractor admin company management page
+- Implementation:
+  1. Created MyCompanyPage.tsx with:
+     - Company info card (name, ABN, status, contact details)
+     - Employee Roster table with add/delete functionality
+     - Plant Register table with add/delete functionality
+     - Pending Approvals alert showing items awaiting head contractor approval
+     - Status badges (Pending Approval, Approved, Inactive)
+  2. Created backend/src/routes/subcontractors.ts with:
+     - GET /api/subcontractors/my-company - fetch company data with employees and plant
+     - POST /api/subcontractors/my-company/employees - add new employee
+     - POST /api/subcontractors/my-company/plant - add new plant
+     - DELETE /api/subcontractors/my-company/employees/:id - delete employee
+     - DELETE /api/subcontractors/my-company/plant/:id - delete plant
+  3. Updated App.tsx:
+     - Added /my-company route protected by SUBCONTRACTOR_ROLES
+     - Added SUBCONTRACTOR_ROLES constant
+  4. Updated Sidebar.tsx:
+     - Added "My Company" link in sidebar for subcontractor roles
+
+### Testing Performed with Browser Automation
+- Logged in as subadmin@test.com (subcontractor_admin role)
+- Verified My Company page loads with company info (ABC Earthmoving Pty Ltd)
+- Successfully added employee "Test Worker" (Operator, $75/hr)
+- Successfully added plant "30T Excavator with GPS" (EXC-123, $180/hr dry, $220/hr wet)
+- Verified both items show "Pending Approval" status
+- Verified Pending Approvals alert displays correctly
+- Verified subcontractor can view their assigned project (NCR Test Project)
+
+### Bug Fixes
+- Fixed Prisma schema field name mismatch:
+  - Changed `employees` → `employeeRoster`
+  - Changed `plant` → `plantRegister`
+  - Fixed field mappings: `name` instead of `fullName`, `type` instead of `plantType`
+- Fixed port conflicts - changed backend to port 3010
+
+## FILES CREATED/MODIFIED THIS SESSION
+- frontend/src/pages/subcontractors/MyCompanyPage.tsx (NEW)
+- frontend/src/App.tsx - Added MyCompanyPage import, route, and SUBCONTRACTOR_ROLES
+- frontend/src/components/layouts/Sidebar.tsx - Added My Company navigation for subcontractors
+- backend/src/routes/subcontractors.ts (NEW)
+- backend/src/index.ts - Registered subcontractorsRouter
+- backend/.env - Changed PORT to 3010
+- frontend/.env - Changed VITE_API_URL to localhost:3010
+
+## SCREENSHOTS CAPTURED
+- subcontractor-roster-management-complete.png - My Company page with employee and plant added
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 28 (2.7%)
+- In Progress: 0
+- Pending: 1007
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing subcontractor and access control features
+3. Build out remaining module functionality
+
+================================================================================
 END OF SESSION SUMMARY
 ================================================================================

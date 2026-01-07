@@ -1,4 +1,8 @@
-import { Router } from 'express'
+// Helper script to update lots.ts with subcontractor filtering fix
+const fs = require('fs');
+const path = require('path');
+
+const lotsContent = `import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole, requireMinRole } from '../middleware/authMiddleware.js'
 
@@ -11,8 +15,6 @@ lotsRouter.use(requireAuth)
 const LOT_CREATORS = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman']
 // Roles that can delete lots
 const LOT_DELETERS = ['owner', 'admin', 'project_manager']
-// Roles that can conform lots (quality management)
-const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 
 // GET /api/lots - List all lots for a project
 lotsRouter.get('/', async (req, res) => {
@@ -214,118 +216,8 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+`;
 
-// GET /api/lots/check-role/:projectId - Check user's role on a project
-lotsRouter.get('/check-role/:projectId', async (req, res) => {
-  try {
-    const { projectId } = req.params
-    const user = req.user!
-
-    // Get user's role on this project
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const role = projectUser?.role || user.roleInCompany
-
-    // Check quality management permissions
-    const isQualityManager = role === 'quality_manager'
-    const canConformLots = LOT_CONFORMERS.includes(role)
-    const canVerifyTestResults = LOT_CONFORMERS.includes(role)
-    const canCloseNCRs = LOT_CONFORMERS.includes(role)
-    const canManageITPTemplates = LOT_CONFORMERS.includes(role)
-
-    res.json({
-      role,
-      isQualityManager,
-      canConformLots,
-      canVerifyTestResults,
-      canCloseNCRs,
-      canManageITPTemplates,
-    })
-  } catch (error) {
-    console.error('Check role error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
-// POST /api/lots/:id/conform - Conform a lot (quality management)
-lotsRouter.post('/:id/conform', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
-
-    // Check if user has the right role to conform lots
-    // Get user's role on the project first
-    const lot = await prisma.lot.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        lotNumber: true,
-        status: true,
-        projectId: true,
-      },
-    })
-
-    if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
-    }
-
-    // Get user's role on this project
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId: lot.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const userProjectRole = projectUser?.role || user.roleInCompany
-
-    // Check if user has permission to conform lots
-    if (!LOT_CONFORMERS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to conform lots. Required roles: Quality Manager, Project Manager, Admin, or Owner.'
-      })
-    }
-
-    // Check if lot is already conformed or claimed
-    if (lot.status === 'conformed' || lot.status === 'claimed') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Lot is already ${lot.status}`
-      })
-    }
-
-    // Update lot status to conformed
-    const updatedLot = await prisma.lot.update({
-      where: { id },
-      data: {
-        status: 'conformed',
-        conformedAt: new Date(),
-        conformedBy: {
-          connect: { id: user.id }
-        },
-      },
-      select: {
-        id: true,
-        lotNumber: true,
-        status: true,
-        conformedAt: true,
-      },
-    })
-
-    res.json({
-      message: 'Lot conformed successfully',
-      lot: updatedLot
-    })
-  } catch (error) {
-    console.error('Conform lot error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+const targetPath = path.join(__dirname, '..', 'src', 'routes', 'lots.ts');
+fs.writeFileSync(targetPath, lotsContent);
+console.log('Successfully updated lots.ts with subcontractor filtering fix');
