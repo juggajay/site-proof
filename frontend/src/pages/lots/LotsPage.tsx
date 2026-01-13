@@ -63,6 +63,25 @@ export function LotsPage() {
   })
   const [chainageError, setChainageError] = useState<string | null>(null)
   const [lotNumberTouched, setLotNumberTouched] = useState(false)
+  const [lotNumberError, setLotNumberError] = useState<string | null>(null)
+
+  // Lot number length constraints
+  const LOT_NUMBER_MIN_LENGTH = 3
+  const LOT_NUMBER_MAX_LENGTH = 50
+
+  // Validate lot number length
+  const validateLotNumber = (value: string): string | null => {
+    if (!value.trim()) {
+      return 'Lot Number is required'
+    }
+    if (value.trim().length < LOT_NUMBER_MIN_LENGTH) {
+      return `Lot Number must be at least ${LOT_NUMBER_MIN_LENGTH} characters`
+    }
+    if (value.length > LOT_NUMBER_MAX_LENGTH) {
+      return `Lot Number must be at most ${LOT_NUMBER_MAX_LENGTH} characters`
+    }
+    return null
+  }
 
   // Bulk create wizard state
   const [bulkWizardOpen, setBulkWizardOpen] = useState(false)
@@ -255,8 +274,37 @@ export function LotsPage() {
     return lot.chainageStart ?? lot.chainageEnd ?? '—'
   }
 
+  // Chainage min/max constraints
+  const CHAINAGE_MIN = 0
+  const CHAINAGE_MAX = 999999
+
   // Validate chainage values
   const validateChainage = (start: string, end: string) => {
+    // Check min/max for start value
+    if (start) {
+      const startNum = parseInt(start)
+      if (!isNaN(startNum)) {
+        if (startNum < CHAINAGE_MIN) {
+          return `Chainage Start must be at least ${CHAINAGE_MIN}`
+        }
+        if (startNum > CHAINAGE_MAX) {
+          return `Chainage Start must be at most ${CHAINAGE_MAX}`
+        }
+      }
+    }
+    // Check min/max for end value
+    if (end) {
+      const endNum = parseInt(end)
+      if (!isNaN(endNum)) {
+        if (endNum < CHAINAGE_MIN) {
+          return `Chainage End must be at least ${CHAINAGE_MIN}`
+        }
+        if (endNum > CHAINAGE_MAX) {
+          return `Chainage End must be at most ${CHAINAGE_MAX}`
+        }
+      }
+    }
+    // Check start <= end
     if (start && end) {
       const startNum = parseInt(start)
       const endNum = parseInt(end)
@@ -1011,22 +1059,32 @@ export function LotsPage() {
               <div>
                 <label htmlFor="lot-number" className="block text-sm font-medium text-gray-700">
                   Lot Number <span className="text-red-500">*</span>
+                  <span className="text-xs text-gray-500 ml-2">({LOT_NUMBER_MIN_LENGTH}-{LOT_NUMBER_MAX_LENGTH} chars)</span>
                 </label>
                 <input
                   id="lot-number"
                   type="text"
                   value={newLot.lotNumber}
-                  onChange={(e) => setNewLot((prev) => ({ ...prev, lotNumber: e.target.value }))}
-                  onBlur={() => setLotNumberTouched(true)}
+                  onChange={(e) => {
+                    setNewLot((prev) => ({ ...prev, lotNumber: e.target.value }))
+                    if (lotNumberTouched) {
+                      setLotNumberError(validateLotNumber(e.target.value))
+                    }
+                  }}
+                  onBlur={() => {
+                    setLotNumberTouched(true)
+                    setLotNumberError(validateLotNumber(newLot.lotNumber))
+                  }}
+                  maxLength={LOT_NUMBER_MAX_LENGTH}
                   className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
-                    lotNumberTouched && !newLot.lotNumber.trim()
+                    lotNumberTouched && lotNumberError
                       ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
                       : 'focus:border-primary focus:ring-primary'
                   }`}
                   placeholder="e.g., LOT-001"
                 />
-                {lotNumberTouched && !newLot.lotNumber.trim() && (
-                  <p className="text-sm text-red-600 mt-1">Lot Number is required</p>
+                {lotNumberTouched && lotNumberError && (
+                  <p className="text-sm text-red-600 mt-1">{lotNumberError}</p>
                 )}
               </div>
 
@@ -1073,6 +1131,8 @@ export function LotsPage() {
                     type="number"
                     value={newLot.chainageStart}
                     onChange={(e) => handleChainageStartChange(e.target.value)}
+                    min={CHAINAGE_MIN}
+                    max={CHAINAGE_MAX}
                     className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
                       chainageError
                         ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
@@ -1090,6 +1150,8 @@ export function LotsPage() {
                     type="number"
                     value={newLot.chainageEnd}
                     onChange={(e) => handleChainageEndChange(e.target.value)}
+                    min={CHAINAGE_MIN}
+                    max={CHAINAGE_MAX}
                     className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
                       chainageError
                         ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
