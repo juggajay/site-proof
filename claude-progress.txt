@@ -1348,5 +1348,86 @@ Date: 2026-01-14
 3. Build out remaining module functionality
 
 ================================================================================
+END OF SESSION 17 SUMMARY
+================================================================================
+
+================================================================================
+SITEPROOF V2 - CODING AGENT SESSION SUMMARY
+================================================================================
+Session: 18 (Coding Agent)
+Date: 2026-01-14
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #224: Subcontractor raise NCR
+- VERIFIED: Subcontractor can raise NCRs with limited scope (only for assigned lots)
+- Testing performed (all 5 feature steps verified):
+
+**Step 1: Login as subcontractor**
+- Logged in as subcontractorA@test.com
+- Role displayed as "subcontractor" in NCR page
+- "My Company" link visible in sidebar (subcontractor-specific feature)
+
+**Step 2: Navigate to NCR creation**
+- Navigated to Projects → Subcontractor Test Project → NCRs
+- "Raise NCR" button visible and clickable
+- Modal opens with full NCR creation form
+
+**Step 3: Verify can only raise for own scope (CRITICAL SECURITY)**
+- "Affected Lots" dropdown showed ONLY 2 lots:
+  - SUB-A-LOT-001 - "Lot assigned to Subcontractor A"
+  - SUB-A-LOT-002 - "Another lot assigned to Subcontractor A"
+- Subcontractor CANNOT see lots assigned to other subcontractors (SubcontractorCompany B)
+- Subcontractor CANNOT see unassigned project lots
+- Backend filters lots by user's SubcontractorUser → SubcontractorCompany → assignedLots
+
+**Step 4: Create NCR**
+- Created NCR-0003 with:
+  - Description: "SUBCONTRACTOR_NCR_TEST_224 - Testing subcontractor NCR creation with limited scope"
+  - Category: Workmanship
+  - Lot: SUB-A-LOT-001
+  - Severity: Minor
+- Success message: "NCR created successfully"
+- NCR appeared in table immediately
+
+**Step 5: Verify head contractor notified (VERIFIED VIA DATABASE)**
+- Backend creates notification when subcontractor raises NCR (ncrs.ts lines 223-257)
+- Notification created with type 'ncr_raised'
+- Recipient: "Subtest PM User" (project manager on the project)
+- Message: "SubA User raised NCR-0003 for SUB-A-LOT-001: SUBCONTRACTOR_NCR_TEST_224..."
+- Notification correctly marked as unread
+
+### Implementation Details (Already Existed)
+- Backend lot filtering: lots.ts lines 44-58 filter lots by subcontractor company
+- Backend notification: ncrs.ts lines 223-257 notify head contractor users
+- Roles notified: project_manager, quality_manager, admin, owner, site_manager
+
+### Environment Configuration
+- Backend port: 3036 (already running)
+- Frontend port: 5176
+
+### Database Verification Script
+- Created backend/scripts/check-ncr-notification.js to verify notification creation
+
+## FILES CREATED THIS SESSION
+- backend/scripts/check-ncr-notification.js - Script to verify NCR notifications in database
+
+## SCREENSHOTS CAPTURED
+- feature-224-subcontractor-ncr-created.png - NCR page showing new NCR-0003 created by subcontractor
+- feature-224-head-contractor-notification-panel.png - PM logged in (notification exists in DB)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 144 (13.9%)
+- In Progress: 0
+- Pending: 891
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next() - Feature #225: Subcontractor respond to NCR
+2. Continue implementing subcontractor portal functionality
+3. Build out remaining module functionality
+
+================================================================================
 END OF SESSION SUMMARY
 ================================================================================
