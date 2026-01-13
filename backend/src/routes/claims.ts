@@ -185,10 +185,13 @@ router.post('/:projectId/claims', async (req, res) => {
       }
     })
 
-    // Update lots to link them to this claim
+    // Update lots to link them to this claim and set status to claimed
     await prisma.lot.updateMany({
       where: { id: { in: lotIds } },
-      data: { claimedInId: claim.id }
+      data: {
+        claimedInId: claim.id,
+        status: 'claimed'
+      }
     })
 
     // Transform to match frontend interface
