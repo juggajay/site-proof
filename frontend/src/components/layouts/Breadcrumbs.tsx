@@ -239,11 +239,11 @@ export function Breadcrumbs() {
         className="text-muted-foreground hover:text-foreground transition-colors"
         aria-label="Home"
       >
-        <Home className="h-4 w-4" />
+        <Home className="h-4 w-4" aria-hidden="true" />
       </Link>
       {breadcrumbs.slice(1).map((item, index) => (
         <div key={item.path} className="flex items-center gap-1">
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           {item.isLast ? (
             <span className="font-medium text-foreground">{item.label}</span>
           ) : (

@@ -205,11 +205,11 @@ export function Header() {
               aria-expanded={isProjectSelectorOpen}
               aria-haspopup="listbox"
             >
-              <FolderKanban className="h-4 w-4 text-muted-foreground" />
+              <FolderKanban className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               <span className="max-w-[150px] truncate font-medium">
                 {currentProject?.name || 'Select Project'}
               </span>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isProjectSelectorOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isProjectSelectorOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
 
             {isProjectSelectorOpen && (
@@ -229,7 +229,7 @@ export function Header() {
                           role="option"
                           aria-selected={project.id === projectId}
                         >
-                          <FolderKanban className="h-4 w-4 flex-shrink-0" />
+                          <FolderKanban className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-medium">{project.name}</div>
                             <div className="truncate text-xs text-muted-foreground">
@@ -258,7 +258,7 @@ export function Header() {
             aria-expanded={isNotificationOpen}
             aria-haspopup="true"
           >
-            <Bell className="h-5 w-5" />
+            <Bell className="h-5 w-5" aria-hidden="true" />
             {unreadCount > 0 && (
               <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-medium text-white">
                 {unreadCount > 9 ? '9+' : unreadCount}
@@ -336,10 +336,10 @@ export function Header() {
             aria-haspopup="menu"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <User className="h-4 w-4" />
+              <User className="h-4 w-4" aria-hidden="true" />
             </div>
             <span className="text-sm font-medium max-w-[150px] truncate hidden sm:block">{user?.email}</span>
-            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform hidden sm:block ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform hidden sm:block ${isUserMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
 
           {isUserMenuOpen && (
@@ -357,7 +357,7 @@ export function Header() {
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
                   role="menuitem"
                 >
-                  <UserCircle className="h-4 w-4" />
+                  <UserCircle className="h-4 w-4" aria-hidden="true" />
                   Profile
                 </button>
                 <button
@@ -368,7 +368,7 @@ export function Header() {
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
                   role="menuitem"
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings className="h-4 w-4" aria-hidden="true" />
                   Settings
                 </button>
               </div>
@@ -381,7 +381,7 @@ export function Header() {
                   className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                   role="menuitem"
                 >
-                  <LogOut className="h-4 w-4" />
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
                   Sign out
                 </button>
               </div>

@@ -160,7 +160,7 @@ export function Sidebar() {
               )
             }
           >
-            <item.icon className="h-5 w-5" />
+            <item.icon className="h-5 w-5" aria-hidden="true" />
             {item.name}
           </NavLink>
         ))}
@@ -186,7 +186,7 @@ export function Sidebar() {
                   )
                 }
               >
-                <item.icon className="h-5 w-5" />
+                <item.icon className="h-5 w-5" aria-hidden="true" />
                 {item.name}
               </NavLink>
             ))}
@@ -213,7 +213,7 @@ export function Sidebar() {
                   )
                 }
               >
-                <item.icon className="h-5 w-5" />
+                <item.icon className="h-5 w-5" aria-hidden="true" />
                 {item.name}
               </NavLink>
             ))}
@@ -234,7 +234,7 @@ export function Sidebar() {
               )
             }
           >
-            <item.icon className="h-5 w-5" />
+            <item.icon className="h-5 w-5" aria-hidden="true" />
             {item.name}
           </NavLink>
         ))}
