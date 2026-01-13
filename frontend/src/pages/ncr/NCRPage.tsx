@@ -103,6 +103,7 @@ export function NCRPage() {
     category: string
     severity: string
     specificationReference?: string
+    lotIds?: string[]
   }) => {
     if (!projectId) return
 
@@ -464,7 +465,7 @@ function CreateNCRModal({
   projectId,
 }: {
   onClose: () => void
-  onSubmit: (data: { description: string; category: string; severity: string; specificationReference?: string; lotId?: string }) => void
+  onSubmit: (data: { description: string; category: string; severity: string; specificationReference?: string; lotIds?: string[] }) => void
   loading: boolean
   projectId?: string
 }) {
@@ -472,7 +473,7 @@ function CreateNCRModal({
   const [category, setCategory] = useState('')
   const [severity, setSeverity] = useState('minor')
   const [specificationReference, setSpecificationReference] = useState('')
-  const [lotId, setLotId] = useState('')
+  const [selectedLotIds, setSelectedLotIds] = useState<string[]>([])
   const [lots, setLots] = useState<Array<{ id: string; lotNumber: string; description: string }>>([])
   const [lotsLoading, setLotsLoading] = useState(true)
   const token = getAuthToken()
@@ -503,9 +504,17 @@ function CreateNCRModal({
     fetchLots()
   }, [projectId, token])
 
+  const handleLotToggle = (lotId: string) => {
+    setSelectedLotIds(prev =>
+      prev.includes(lotId)
+        ? prev.filter(id => id !== lotId)
+        : [...prev, lotId]
+    )
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit({ description, category, severity, specificationReference, lotId: lotId || undefined })
+    onSubmit({ description, category, severity, specificationReference, lotIds: selectedLotIds.length > 0 ? selectedLotIds : undefined })
   }
 
   return (
@@ -541,21 +550,34 @@ function CreateNCRModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Related Lot</label>
-            <select
-              value={lotId}
-              onChange={(e) => setLotId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
-              disabled={lotsLoading}
-            >
-              <option value="">Select lot (optional)</option>
-              {lots.map((lot) => (
-                <option key={lot.id} value={lot.id}>
-                  {lot.lotNumber} - {lot.description || 'No description'}
-                </option>
-              ))}
-            </select>
-            {lotsLoading && <p className="text-sm text-muted-foreground mt-1">Loading lots...</p>}
+            <label className="block text-sm font-medium mb-1">Affected Lots</label>
+            {lotsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading lots...</p>
+            ) : lots.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No lots available</p>
+            ) : (
+              <div className="border rounded-lg max-h-40 overflow-y-auto p-2 space-y-1">
+                {lots.map((lot) => (
+                  <label key={lot.id} className="flex items-center gap-2 p-1 hover:bg-muted/50 rounded cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedLotIds.includes(lot.id)}
+                      onChange={() => handleLotToggle(lot.id)}
+                      className="rounded"
+                    />
+                    <span className="text-sm">
+                      <span className="font-medium">{lot.lotNumber}</span>
+                      {lot.description && <span className="text-muted-foreground"> - {lot.description}</span>}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            {selectedLotIds.length > 0 && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {selectedLotIds.length} lot{selectedLotIds.length > 1 ? 's' : ''} selected
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Severity *</label>

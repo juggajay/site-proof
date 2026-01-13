@@ -5,11 +5,12 @@ import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken } from '@/lib/auth'
 
 // Tab types for lot detail page
-type LotTab = 'itp' | 'tests' | 'photos' | 'documents'
+type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents'
 
 const tabs: { id: LotTab; label: string }[] = [
   { id: 'itp', label: 'ITP Checklist' },
   { id: 'tests', label: 'Test Results' },
+  { id: 'ncrs', label: 'NCRs' },
   { id: 'photos', label: 'Photos' },
   { id: 'documents', label: 'Documents' },
 ]
@@ -50,6 +51,17 @@ interface TestResult {
   createdAt: string
 }
 
+interface NCR {
+  id: string
+  ncrNumber: string
+  description: string
+  category: string
+  severity: 'minor' | 'major'
+  status: string
+  raisedBy: { fullName: string; email: string }
+  createdAt: string
+}
+
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   in_progress: 'bg-blue-100 text-blue-800',
@@ -69,6 +81,20 @@ const testStatusColors: Record<string, string> = {
   verified: 'bg-green-100 text-green-800',
 }
 
+const ncrStatusColors: Record<string, string> = {
+  open: 'bg-red-100 text-red-800',
+  investigating: 'bg-yellow-100 text-yellow-800',
+  rectification: 'bg-orange-100 text-orange-800',
+  verification: 'bg-blue-100 text-blue-800',
+  closed: 'bg-green-100 text-green-800',
+  closed_concession: 'bg-green-100 text-green-700',
+}
+
+const severityColors: Record<string, string> = {
+  minor: 'bg-yellow-100 text-yellow-800',
+  major: 'bg-red-500 text-white',
+}
+
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
   const navigate = useNavigate()
@@ -82,6 +108,8 @@ export function LotDetailPage() {
   const [qualityAccess, setQualityAccess] = useState<QualityAccess | null>(null)
   const [testResults, setTestResults] = useState<TestResult[]>([])
   const [loadingTests, setLoadingTests] = useState(false)
+  const [ncrs, setNcrs] = useState<NCR[]>([])
+  const [loadingNcrs, setLoadingNcrs] = useState(false)
 
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp'
@@ -197,6 +225,38 @@ export function LotDetailPage() {
     }
 
     fetchTestResults()
+  }, [projectId, lotId, currentTab])
+
+  // Fetch NCRs when NCRs tab is selected
+  useEffect(() => {
+    async function fetchNcrs() {
+      if (!projectId || !lotId || currentTab !== 'ncrs') return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      setLoadingNcrs(true)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setNcrs(data.ncrs || [])
+        }
+      } catch (err) {
+        console.error('Failed to fetch NCRs:', err)
+      } finally {
+        setLoadingNcrs(false)
+      }
+    }
+
+    fetchNcrs()
   }, [projectId, lotId, currentTab])
 
   // Extract quality access permissions
@@ -415,6 +475,75 @@ export function LotDetailPage() {
                             {test.status}
                           </span>
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* NCRs Tab */}
+        {currentTab === 'ncrs' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Non-Conformance Reports</h2>
+              <button
+                onClick={() => navigate(`/projects/${projectId}/ncr`)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                View All NCRs
+              </button>
+            </div>
+            {loadingNcrs ? (
+              <div className="flex justify-center p-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              </div>
+            ) : ncrs.length === 0 ? (
+              <div className="rounded-lg border p-6 text-center">
+                <div className="text-4xl mb-2">✅</div>
+                <h3 className="text-lg font-semibold mb-2">No NCRs</h3>
+                <p className="text-muted-foreground mb-4">
+                  No non-conformance reports have been raised for this lot.
+                </p>
+                <button
+                  onClick={() => navigate(`/projects/${projectId}/ncr`)}
+                  className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+                >
+                  Go to NCR Register
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium">NCR #</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Description</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Category</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Severity</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Raised By</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {ncrs.map((ncr) => (
+                      <tr key={ncr.id} className="hover:bg-muted/30">
+                        <td className="px-4 py-3 text-sm font-mono">{ncr.ncrNumber}</td>
+                        <td className="px-4 py-3 text-sm max-w-xs truncate">{ncr.description}</td>
+                        <td className="px-4 py-3 text-sm capitalize">{ncr.category}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${severityColors[ncr.severity] || 'bg-gray-100'}`}>
+                            {ncr.severity.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${ncrStatusColors[ncr.status] || 'bg-gray-100'}`}>
+                            {ncr.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{ncr.raisedBy?.fullName || ncr.raisedBy?.email || '—'}</td>
                       </tr>
                     ))}
                   </tbody>

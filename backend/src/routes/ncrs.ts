@@ -31,7 +31,7 @@ const requireAuth = async (req: any, res: any, next: any) => {
 ncrsRouter.get('/', requireAuth, async (req: any, res) => {
   try {
     const user = req.user as AuthUser
-    const { projectId, status, severity } = req.query
+    const { projectId, status, severity, lotId } = req.query
 
     // Get projects the user has access to
     const projectAccess = await prisma.projectUser.findMany({
@@ -56,6 +56,15 @@ ncrsRouter.get('/', requireAuth, async (req: any, res) => {
 
     if (severity) {
       where.severity = severity
+    }
+
+    // Filter by lotId - find NCRs linked to this lot
+    if (lotId) {
+      where.ncrLots = {
+        some: {
+          lotId: lotId as string,
+        },
+      }
     }
 
     const ncrs = await prisma.nCR.findMany({
