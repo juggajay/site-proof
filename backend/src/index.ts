@@ -14,6 +14,7 @@ import { ncrsRouter } from './routes/ncrs.js'
 import { subcontractorsRouter } from './routes/subcontractors.js'
 import { reportsRouter } from './routes/reports.js'
 import { testResultsRouter } from './routes/testResults.js'
+import { itpRouter } from './routes/itp.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -55,6 +56,7 @@ app.use('/api/ncrs', ncrsRouter)
 app.use('/api/subcontractors', subcontractorsRouter)
 app.use('/api/reports', reportsRouter)
 app.use('/api/test-results', testResultsRouter)
+app.use('/api/itp', itpRouter)
 
 // tRPC
 app.use(

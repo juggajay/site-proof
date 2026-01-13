@@ -62,6 +62,43 @@ interface NCR {
   createdAt: string
 }
 
+interface ITPChecklistItem {
+  id: string
+  description: string
+  category: string
+  isHoldPoint: boolean
+  order: number
+}
+
+interface ITPCompletion {
+  id: string
+  checklistItemId: string
+  isCompleted: boolean
+  notes: string | null
+  completedAt: string | null
+  completedBy: { id: string; fullName: string; email: string } | null
+  isVerified: boolean
+  verifiedAt: string | null
+  verifiedBy: { id: string; fullName: string; email: string } | null
+}
+
+interface ITPInstance {
+  id: string
+  template: {
+    id: string
+    name: string
+    checklistItems: ITPChecklistItem[]
+  }
+  completions: ITPCompletion[]
+}
+
+interface ITPTemplate {
+  id: string
+  name: string
+  activityType: string
+  checklistItems: ITPChecklistItem[]
+}
+
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   in_progress: 'bg-blue-100 text-blue-800',
@@ -110,6 +147,12 @@ export function LotDetailPage() {
   const [loadingTests, setLoadingTests] = useState(false)
   const [ncrs, setNcrs] = useState<NCR[]>([])
   const [loadingNcrs, setLoadingNcrs] = useState(false)
+  const [itpInstance, setItpInstance] = useState<ITPInstance | null>(null)
+  const [loadingItp, setLoadingItp] = useState(false)
+  const [templates, setTemplates] = useState<ITPTemplate[]>([])
+  const [showAssignModal, setShowAssignModal] = useState(false)
+  const [assigningTemplate, setAssigningTemplate] = useState(false)
+  const [updatingCompletion, setUpdatingCompletion] = useState<string | null>(null)
 
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp'
@@ -259,6 +302,47 @@ export function LotDetailPage() {
     fetchNcrs()
   }, [projectId, lotId, currentTab])
 
+  // Fetch ITP instance when ITP tab is selected
+  useEffect(() => {
+    async function fetchItpInstance() {
+      if (!projectId || !lotId || currentTab !== 'itp') return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      setLoadingItp(true)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setItpInstance(data.instance)
+        } else if (response.status === 404) {
+          // No ITP assigned - fetch available templates
+          const templatesResponse = await fetch(`${apiUrl}/api/itp/templates?projectId=${projectId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (templatesResponse.ok) {
+            const templatesData = await templatesResponse.json()
+            setTemplates(templatesData.templates || [])
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch ITP instance:', err)
+      } finally {
+        setLoadingItp(false)
+      }
+    }
+
+    fetchItpInstance()
+  }, [projectId, lotId, currentTab])
+
   // Extract quality access permissions
   const canConformLots = qualityAccess?.canConformLots || false
   const canVerifyTestResults = qualityAccess?.canVerifyTestResults || false
@@ -295,6 +379,126 @@ export function LotDetailPage() {
 
   // Check if lot can be edited
   const isEditable = lot.status !== 'conformed' && lot.status !== 'claimed'
+
+  const handleAssignTemplate = async (templateId: string) => {
+    if (!lotId) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    setAssigningTemplate(true)
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/itp/instances`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ lotId, templateId }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setItpInstance(data.instance)
+        setShowAssignModal(false)
+      }
+    } catch (err) {
+      console.error('Failed to assign template:', err)
+    } finally {
+      setAssigningTemplate(false)
+    }
+  }
+
+  const handleToggleCompletion = async (checklistItemId: string, currentlyCompleted: boolean, existingNotes: string | null) => {
+    if (!itpInstance) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    setUpdatingCompletion(checklistItemId)
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          isCompleted: !currentlyCompleted,
+          notes: existingNotes,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Update the completions in state
+        setItpInstance(prev => {
+          if (!prev) return prev
+          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+          const newCompletions = [...prev.completions]
+          if (existingIndex >= 0) {
+            newCompletions[existingIndex] = data.completion
+          } else {
+            newCompletions.push(data.completion)
+          }
+          return { ...prev, completions: newCompletions }
+        })
+      }
+    } catch (err) {
+      console.error('Failed to update completion:', err)
+    } finally {
+      setUpdatingCompletion(null)
+    }
+  }
+
+  const handleUpdateNotes = async (checklistItemId: string, notes: string) => {
+    if (!itpInstance) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    const existingCompletion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
+
+    try {
+      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          isCompleted: existingCompletion?.isCompleted || false,
+          notes,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setItpInstance(prev => {
+          if (!prev) return prev
+          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+          const newCompletions = [...prev.completions]
+          if (existingIndex >= 0) {
+            newCompletions[existingIndex] = data.completion
+          } else {
+            newCompletions.push(data.completion)
+          }
+          return { ...prev, completions: newCompletions }
+        })
+      }
+    } catch (err) {
+      console.error('Failed to update notes:', err)
+    }
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -391,23 +595,166 @@ export function LotDetailPage() {
         {/* ITP Checklist Tab */}
         {currentTab === 'itp' && (
           <div className="space-y-4">
-            <div className="rounded-lg border p-4">
-              <h2 className="text-lg font-semibold mb-4">ITP Progress</h2>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-primary h-2.5 rounded-full" style={{ width: '0%' }}></div>
+            {loadingItp ? (
+              <div className="flex justify-center p-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
               </div>
-              <p className="text-sm text-muted-foreground mt-2">0 of 0 checklist items completed</p>
-            </div>
-            <div className="rounded-lg border p-6 text-center">
-              <div className="text-4xl mb-2">📋</div>
-              <h3 className="text-lg font-semibold mb-2">ITP Checklist</h3>
-              <p className="text-muted-foreground mb-4">
-                No ITP template assigned to this lot yet. Assign an ITP template to track quality checkpoints.
-              </p>
-              <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
-                Assign ITP Template
-              </button>
-            </div>
+            ) : itpInstance ? (
+              <>
+                <div className="rounded-lg border p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold">ITP Progress</h2>
+                    <span className="text-sm text-muted-foreground">{itpInstance.template.name}</span>
+                  </div>
+                  {(() => {
+                    const totalItems = itpInstance.template.checklistItems.length
+                    const completedItems = itpInstance.completions.filter(c => c.isCompleted).length
+                    const percentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
+                    return (
+                      <>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div className="bg-primary h-2.5 rounded-full transition-all" style={{ width: `${percentage}%` }}></div>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-2">{completedItems} of {totalItems} checklist items completed ({percentage}%)</p>
+                      </>
+                    )
+                  })()}
+                </div>
+                <div className="rounded-lg border">
+                  <div className="divide-y">
+                    {itpInstance.template.checklistItems.map((item) => {
+                      const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
+                      const isCompleted = completion?.isCompleted || false
+                      const notes = completion?.notes || ''
+
+                      return (
+                        <div key={item.id} className="p-4">
+                          <div className="flex items-start gap-3">
+                            <button
+                              onClick={() => handleToggleCompletion(item.id, isCompleted, notes)}
+                              disabled={updatingCompletion === item.id}
+                              className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                isCompleted
+                                  ? 'bg-green-500 border-green-500 text-white'
+                                  : 'border-gray-300 hover:border-primary'
+                              } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
+                            >
+                              {isCompleted && <span className="text-xs">&#10003;</span>}
+                            </button>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-medium ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
+                                  {item.description}
+                                </span>
+                                {item.isHoldPoint && (
+                                  <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Hold Point</span>
+                                )}
+                                <span className="text-xs bg-muted px-2 py-0.5 rounded capitalize">{item.category}</span>
+                              </div>
+                              <div className="mt-2">
+                                <input
+                                  type="text"
+                                  placeholder="Add notes..."
+                                  value={notes}
+                                  onChange={(e) => {
+                                    // Optimistic update
+                                    setItpInstance(prev => {
+                                      if (!prev) return prev
+                                      const existingIndex = prev.completions.findIndex(c => c.checklistItemId === item.id)
+                                      const newCompletions = [...prev.completions]
+                                      if (existingIndex >= 0) {
+                                        newCompletions[existingIndex] = { ...newCompletions[existingIndex], notes: e.target.value }
+                                      } else {
+                                        newCompletions.push({
+                                          id: '',
+                                          checklistItemId: item.id,
+                                          isCompleted: false,
+                                          notes: e.target.value,
+                                          completedAt: null,
+                                          completedBy: null,
+                                          isVerified: false,
+                                          verifiedAt: null,
+                                          verifiedBy: null
+                                        })
+                                      }
+                                      return { ...prev, completions: newCompletions }
+                                    })
+                                  }}
+                                  onBlur={(e) => handleUpdateNotes(item.id, e.target.value)}
+                                  className="w-full px-2 py-1 text-sm border rounded bg-transparent"
+                                />
+                              </div>
+                              {completion?.completedBy && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Completed by {completion.completedBy.fullName || completion.completedBy.email}
+                                  {completion.completedAt && ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-lg border p-6 text-center">
+                <div className="text-4xl mb-2">📋</div>
+                <h3 className="text-lg font-semibold mb-2">ITP Checklist</h3>
+                <p className="text-muted-foreground mb-4">
+                  No ITP template assigned to this lot yet. Assign an ITP template to track quality checkpoints.
+                </p>
+                {templates.length > 0 ? (
+                  <button
+                    onClick={() => setShowAssignModal(true)}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+                  >
+                    Assign ITP Template
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate(`/projects/${projectId}/itp`)}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+                  >
+                    Create ITP Template First
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Assign Template Modal */}
+            {showAssignModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-background rounded-lg p-6 w-full max-w-md">
+                  <h2 className="text-xl font-semibold mb-4">Assign ITP Template</h2>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {templates.map((template) => (
+                      <button
+                        key={template.id}
+                        onClick={() => handleAssignTemplate(template.id)}
+                        disabled={assigningTemplate}
+                        className="w-full text-left p-3 border rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50"
+                      >
+                        <div className="font-medium">{template.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {template.activityType} - {template.checklistItems.length} items
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <button
+                      onClick={() => setShowAssignModal(false)}
+                      className="px-4 py-2 border rounded-lg hover:bg-muted"
+                      disabled={assigningTemplate}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
