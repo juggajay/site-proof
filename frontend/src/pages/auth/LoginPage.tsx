@@ -36,13 +36,13 @@ export function LoginPage() {
       <h2 className="text-2xl font-bold">Sign In</h2>
 
       {sessionExpired && (
-        <div className="rounded-lg bg-yellow-100 p-3 text-sm text-yellow-800">
+        <div className="rounded-lg bg-yellow-100 p-3 text-sm text-yellow-800" role="alert" aria-live="polite">
           Your session has expired. Please sign in again.
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert" aria-live="assertive">
           {error}
         </div>
       )}

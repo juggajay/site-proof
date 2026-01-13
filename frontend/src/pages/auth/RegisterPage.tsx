@@ -77,7 +77,7 @@ export function RegisterPage() {
       <h2 className="text-2xl font-bold">Create Account</h2>
 
       {error && (
-        <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert" aria-live="assertive">
           {error}
         </div>
       )}
@@ -127,7 +127,7 @@ export function RegisterPage() {
           required
         />
         {emailTouched && !isEmailValid && emailValidation.error && (
-          <p className="mt-1 text-sm text-destructive">{emailValidation.error}</p>
+          <p className="mt-1 text-sm text-destructive" role="alert" aria-live="assertive">{emailValidation.error}</p>
         )}
       </div>
 
