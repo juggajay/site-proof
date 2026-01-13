@@ -18,7 +18,7 @@ const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 lotsRouter.get('/', async (req, res) => {
   try {
     const user = req.user!
-    const { projectId } = req.query
+    const { projectId, status, unclaimed } = req.query
 
     if (!projectId) {
       return res.status(400).json({
@@ -29,6 +29,16 @@ lotsRouter.get('/', async (req, res) => {
 
     // Build where clause based on user role
     const whereClause: any = { projectId: projectId as string }
+
+    // Filter by status if provided
+    if (status) {
+      whereClause.status = status as string
+    }
+
+    // Filter for unclaimed lots (no claimedInId)
+    if (unclaimed === 'true') {
+      whereClause.claimedInId = null
+    }
 
     // Subcontractors can only see lots assigned to their company
     if (user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin') {
@@ -59,6 +69,13 @@ lotsRouter.get('/', async (req, res) => {
         offset: true,
         layer: true,
         areaZone: true,
+        budgetAmount: true,
+        assignedSubcontractorId: true,
+        assignedSubcontractor: {
+          select: {
+            companyName: true,
+          }
+        },
         createdAt: true,
       },
       orderBy: { lotNumber: 'asc' },
@@ -253,6 +270,7 @@ lotsRouter.patch('/:id', async (req, res) => {
       areaZone,
       status,
       budgetAmount,
+      assignedSubcontractorId,
     } = req.body
 
     // Build update data - only include fields that were provided
@@ -270,6 +288,10 @@ lotsRouter.patch('/:id', async (req, res) => {
     if (budgetAmount !== undefined && ['owner', 'admin', 'project_manager'].includes(userProjectRole)) {
       updateData.budgetAmount = budgetAmount
     }
+    // Only PMs and above can assign subcontractors
+    if (assignedSubcontractorId !== undefined && ['owner', 'admin', 'project_manager'].includes(userProjectRole)) {
+      updateData.assignedSubcontractorId = assignedSubcontractorId || null
+    }
 
     const updatedLot = await prisma.lot.update({
       where: { id },
@@ -286,6 +308,7 @@ lotsRouter.patch('/:id', async (req, res) => {
         layer: true,
         areaZone: true,
         budgetAmount: true,
+        assignedSubcontractorId: true,
         updatedAt: true,
       },
     })
