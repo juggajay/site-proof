@@ -597,6 +597,85 @@ router.post('/:diaryId/submit', async (req: Request, res: Response) => {
   }
 })
 
+// GET /api/diary/:projectId/:date/previous-personnel - Get personnel from previous day's diary
+router.get('/:projectId/:date/previous-personnel', async (req: Request, res: Response) => {
+  try {
+    const { projectId, date } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied to this project' })
+    }
+
+    // First, find the current diary entry to get its actual stored date
+    const currentDate = new Date(date)
+    const startOfDay = new Date(currentDate)
+    startOfDay.setUTCHours(0, 0, 0, 0)
+    const endOfDay = new Date(currentDate)
+    endOfDay.setUTCHours(23, 59, 59, 999)
+
+    const currentDiary = await prisma.dailyDiary.findFirst({
+      where: {
+        projectId,
+        date: {
+          gte: startOfDay,
+          lte: endOfDay,
+        }
+      }
+    })
+
+    // Find the most recent diary BEFORE the current one that has personnel
+    // Use the actual stored date if available, otherwise use the input date
+    const referenceDate = currentDiary?.date || endOfDay
+
+    const previousDiary = await prisma.dailyDiary.findFirst({
+      where: {
+        projectId,
+        date: {
+          lt: referenceDate,
+        },
+        personnel: {
+          some: {} // Only find diaries that have at least one personnel entry
+        }
+      },
+      include: {
+        personnel: true,
+      },
+      orderBy: {
+        date: 'desc'
+      }
+    })
+
+    if (!previousDiary || previousDiary.personnel.length === 0) {
+      return res.json({ personnel: [], message: 'No personnel from previous day' })
+    }
+
+    // Return personnel without IDs (so they can be added as new entries)
+    const personnelToCopy = previousDiary.personnel.map(p => ({
+      name: p.name,
+      company: p.company,
+      role: p.role,
+      startTime: p.startTime,
+      finishTime: p.finishTime,
+      hours: p.hours,
+    }))
+
+    res.json({
+      personnel: personnelToCopy,
+      previousDate: previousDiary.date.toISOString().split('T')[0],
+      message: `Copied ${personnelToCopy.length} personnel from previous diary`
+    })
+  } catch (error) {
+    console.error('Error fetching previous personnel:', error)
+    res.status(500).json({ error: 'Failed to fetch previous day personnel' })
+  }
+})
+
 // GET /api/diary/:diaryId - Get diary by ID
 router.get('/entry/:diaryId', async (req: Request, res: Response) => {
   try {

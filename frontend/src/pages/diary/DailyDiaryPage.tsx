@@ -104,6 +104,61 @@ export function DailyDiaryPage() {
     hours: '',
   })
 
+  // Calculate hours from start and finish time
+  const calculateHours = (startTime: string, finishTime: string): number | null => {
+    if (!startTime || !finishTime) return null
+    const [startH, startM] = startTime.split(':').map(Number)
+    const [endH, endM] = finishTime.split(':').map(Number)
+    const startMinutes = startH * 60 + startM
+    const endMinutes = endH * 60 + endM
+    const diffMinutes = endMinutes - startMinutes
+    if (diffMinutes <= 0) return null
+    return Math.round((diffMinutes / 60) * 10) / 10 // Round to 1 decimal
+  }
+
+  // Handle start time change with auto-calculation
+  const handlePersonnelStartTimeChange = (value: string) => {
+    const hours = calculateHours(value, personnelForm.finishTime)
+    setPersonnelForm({
+      ...personnelForm,
+      startTime: value,
+      hours: hours !== null ? hours.toString() : '',
+    })
+  }
+
+  // Handle finish time change with auto-calculation
+  const handlePersonnelFinishTimeChange = (value: string) => {
+    const hours = calculateHours(personnelForm.startTime, value)
+    setPersonnelForm({
+      ...personnelForm,
+      finishTime: value,
+      hours: hours !== null ? hours.toString() : '',
+    })
+  }
+
+  // Calculate personnel subtotals by company
+  const getPersonnelSubtotalsByCompany = () => {
+    if (!diary) return []
+    const companyTotals: Record<string, { count: number; hours: number }> = {}
+
+    for (const p of diary.personnel) {
+      const company = p.company || 'Unspecified'
+      if (!companyTotals[company]) {
+        companyTotals[company] = { count: 0, hours: 0 }
+      }
+      companyTotals[company].count++
+      // Ensure hours is a number (might come as string from API)
+      const hours = typeof p.hours === 'number' ? p.hours : (parseFloat(String(p.hours)) || 0)
+      companyTotals[company].hours += hours
+    }
+
+    return Object.entries(companyTotals).map(([company, data]) => ({
+      company,
+      count: data.count,
+      hours: data.hours,
+    }))
+  }
+
   const [plantForm, setPlantForm] = useState({
     description: '',
     idRego: '',
@@ -128,6 +183,10 @@ export function DailyDiaryPage() {
     description: '',
     impact: '',
   })
+
+  // Submit confirmation state
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
+  const [submitWarnings, setSubmitWarnings] = useState<string[]>([])
 
   // Fetch diaries list
   useEffect(() => {
@@ -304,6 +363,58 @@ export function DailyDiaryPage() {
     }
   }
 
+  const copyPersonnelFromPreviousDay = async () => {
+    if (!diary || !projectId) return
+    setSaving(true)
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary/${projectId}/${selectedDate}/previous-personnel`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        if (data.personnel && data.personnel.length > 0) {
+          // Add each personnel from previous day to current diary
+          let addedCount = 0
+          for (const person of data.personnel) {
+            // Filter out null/undefined values to avoid validation errors
+            const cleanPerson: Record<string, unknown> = { name: person.name }
+            if (person.company) cleanPerson.company = person.company
+            if (person.role) cleanPerson.role = person.role
+            if (person.startTime) cleanPerson.startTime = person.startTime
+            if (person.finishTime) cleanPerson.finishTime = person.finishTime
+            if (person.hours !== null && person.hours !== undefined) cleanPerson.hours = person.hours
+
+            const addRes = await fetch(`${API_URL}/api/diary/${diary.id}/personnel`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(cleanPerson),
+            })
+            if (addRes.ok) {
+              const newPerson = await addRes.json()
+              setDiary(prev => prev ? { ...prev, personnel: [...prev.personnel, newPerson] } : null)
+              addedCount++
+            }
+          }
+          alert(`Copied ${addedCount} personnel from previous day`)
+        } else {
+          alert('No personnel found from previous day')
+        }
+      } else {
+        alert('Failed to fetch previous day personnel')
+      }
+    } catch (err) {
+      console.error('Error copying personnel:', err)
+      alert('Error copying personnel from previous day')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const addPlant = async () => {
     if (!diary || !plantForm.description) return
     setSaving(true)
@@ -449,6 +560,58 @@ export function DailyDiaryPage() {
       }
     } catch (err) {
       console.error('Error removing delay:', err)
+    }
+  }
+
+  // Check for empty sections and generate warnings
+  const getSubmitWarnings = (): string[] => {
+    if (!diary) return []
+    const warnings: string[] = []
+
+    if (!diary.weatherConditions) {
+      warnings.push('Weather conditions not recorded')
+    }
+    if (diary.personnel.length === 0) {
+      warnings.push('No personnel recorded')
+    }
+    if (diary.activities.length === 0) {
+      warnings.push('No activities recorded')
+    }
+    if (!diary.generalNotes && diary.delays.length === 0 && diary.plant.length === 0) {
+      warnings.push('No general notes, plant, or delays recorded')
+    }
+
+    return warnings
+  }
+
+  // Handle submit button click - show warnings if any
+  const handleSubmitClick = () => {
+    const warnings = getSubmitWarnings()
+    setSubmitWarnings(warnings)
+    setShowSubmitConfirm(true)
+  }
+
+  // Confirm and actually submit the diary
+  const confirmSubmitDiary = async () => {
+    if (!diary) return
+    setSaving(true)
+    setShowSubmitConfirm(false)
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary/${diary.id}/submit`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setDiary(data)
+        fetchDiaries()
+      }
+    } catch (err) {
+      console.error('Error submitting diary:', err)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -676,7 +839,21 @@ export function DailyDiaryPage() {
           {/* Personnel Tab */}
           {activeTab === 'personnel' && diary && (
             <div className="rounded-lg border bg-card p-6">
-              <h3 className="mb-4 text-lg font-semibold">Personnel on Site</h3>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Personnel on Site</h3>
+                {diary.status !== 'submitted' && (
+                  <button
+                    onClick={copyPersonnelFromPreviousDay}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy from Previous Day
+                  </button>
+                )}
+              </div>
 
               {/* Personnel List */}
               {diary.personnel.length > 0 && (
@@ -721,6 +898,36 @@ export function DailyDiaryPage() {
                 </div>
               )}
 
+              {/* Subtotals by Company */}
+              {diary.personnel.length > 0 && (
+                <div className="mb-6 rounded-lg border bg-muted/30 p-4">
+                  <h4 className="mb-3 font-medium">Subtotals by Company</h4>
+                  <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+                    {getPersonnelSubtotalsByCompany().map((item) => (
+                      <div key={item.company} className="rounded-lg border bg-background p-3">
+                        <div className="font-medium">{item.company}</div>
+                        <div className="mt-1 flex items-center justify-between text-sm text-muted-foreground">
+                          <span>{item.count} {item.count === 1 ? 'person' : 'people'}</span>
+                          <span className="font-medium text-foreground">{item.hours.toFixed(1)} hrs</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex justify-end border-t pt-3">
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Total: </span>
+                      <span className="font-semibold">{diary.personnel.length} people, </span>
+                      <span className="font-semibold">
+                        {diary.personnel.reduce((sum, p) => {
+                          const hours = typeof p.hours === 'number' ? p.hours : (parseFloat(String(p.hours)) || 0)
+                          return sum + hours
+                        }, 0).toFixed(1)} hrs
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Add Personnel Form */}
               {diary.status !== 'submitted' && (
                 <div className="rounded-lg border bg-muted/30 p-4">
@@ -750,22 +957,33 @@ export function DailyDiaryPage() {
                     <input
                       type="time"
                       value={personnelForm.startTime}
-                      onChange={(e) => setPersonnelForm({ ...personnelForm, startTime: e.target.value })}
+                      onChange={(e) => handlePersonnelStartTimeChange(e.target.value)}
+                      placeholder="Start"
                       className="rounded-md border border-input bg-background px-3 py-2"
                     />
                     <input
                       type="time"
                       value={personnelForm.finishTime}
-                      onChange={(e) => setPersonnelForm({ ...personnelForm, finishTime: e.target.value })}
+                      onChange={(e) => handlePersonnelFinishTimeChange(e.target.value)}
+                      placeholder="Finish"
                       className="rounded-md border border-input bg-background px-3 py-2"
                     />
-                    <button
-                      onClick={addPersonnel}
-                      disabled={!personnelForm.name || saving}
-                      className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                    >
-                      Add
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={personnelForm.hours ? `${personnelForm.hours}h` : ''}
+                        readOnly
+                        placeholder="Hours"
+                        className="w-16 rounded-md border border-input bg-muted px-3 py-2 text-center text-sm"
+                      />
+                      <button
+                        onClick={addPersonnel}
+                        disabled={!personnelForm.name || saving}
+                        className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        Add
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1071,12 +1289,53 @@ export function DailyDiaryPage() {
           {diary && diary.status === 'draft' && (
             <div className="flex justify-end gap-4">
               <button
-                onClick={submitDiary}
+                onClick={handleSubmitClick}
                 disabled={saving}
                 className="rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
               >
                 {saving ? 'Submitting...' : 'Submit Diary'}
               </button>
+            </div>
+          )}
+
+          {/* Submit Confirmation Modal */}
+          {showSubmitConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+                <h3 className="text-lg font-semibold mb-4">Submit Daily Diary?</h3>
+
+                {submitWarnings.length > 0 && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="font-medium text-yellow-800 mb-2">⚠️ Warnings:</p>
+                    <ul className="list-disc pl-5 text-sm text-yellow-700 space-y-1">
+                      {submitWarnings.map((warning, idx) => (
+                        <li key={idx}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <p className="text-muted-foreground mb-4">
+                  {submitWarnings.length > 0
+                    ? 'Do you want to submit the diary with the above warnings?'
+                    : 'Once submitted, this diary entry cannot be edited.'}
+                </p>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowSubmitConfirm(false)}
+                    className="px-4 py-2 rounded-lg border hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmSubmitDiary}
+                    className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700"
+                  >
+                    Confirm Submit
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

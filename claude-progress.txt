@@ -1423,11 +1423,149 @@ Date: 2026-01-14
 - In Progress: 0
 - Pending: 891
 
+### Feature #225: Subcontractor respond to NCR
+- IMPLEMENTED & VERIFIED: Subcontractor NCR filtering and response workflow
+- Backend implementation:
+  - Modified ncrs.ts GET /api/ncrs to filter NCRs for subcontractors
+  - Subcontractors only see NCRs linked to lots assigned to their company
+  - Added SubcontractorUser lookup to determine user's subcontractor company
+
+- Testing performed (all 5 feature steps verified):
+  1. NCRs exist against subcontractor's lots (NCR-0001, NCR-0002, NCR-0003)
+  2. Logged in as subcontractorA@test.com
+  3. Viewed NCR page with filtered list
+  4. VERIFIED: Only 3 NCRs visible (for SUB-A-LOT-001 and SUB-A-LOT-002)
+  5. Submitted response with root cause (Process) and corrective action
+  6. NCR status changed from "open" to "investigating"
+
+## FILES MODIFIED THIS SESSION
+- backend/src/routes/ncrs.ts - Added subcontractor NCR filtering (lines 36-108)
+- backend/scripts/check-ncr-notification.js - Created for notification verification
+
+## SCREENSHOTS CAPTURED
+- feature-224-subcontractor-ncr-created.png - NCR page showing new NCR-0003
+- feature-224-head-contractor-notification-panel.png - PM notification panel
+- feature-225-ncr-response-form-filled.png - Response form with data
+- feature-225-ncr-response-submitted.png - NCR list showing "investigating" status
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 145 (14.0%)
+- In Progress: 0
+- Pending: 890
+
+### Feature #226 & #227: Daily diary weather from BOM API
+- SKIPPED: External BOM API integration not configured
+- These features require external weather API setup which is outside current scope
+- Features moved to end of priority queue via feature_skip
+
+### Feature #228: Daily diary personnel copy from previous
+- IMPLEMENTED & VERIFIED: Copy personnel from previous day functionality
+- Backend implementation:
+  - Added GET /api/diary/:projectId/:date/previous-personnel endpoint
+  - Finds most recent diary with personnel (handles timezone differences)
+  - Returns personnel data without IDs (for creation as new entries)
+
+- Frontend implementation:
+  - Added "Copy from Previous Day" button to Personnel tab header
+  - Button only visible when diary is in draft status
+  - Calls backend to fetch previous personnel
+  - Filters null values before POSTing to avoid validation errors
+  - Shows count of copied personnel in success alert
+
+- Testing performed (all 6 feature steps verified):
+  1. Tue, 13 Jan 2026 diary had personnel (John Smith, ABC Contractors, Site Supervisor)
+  2. Created Wed, 14 Jan 2026 diary (draft status)
+  3. Clicked "Copy from Previous Day" button
+  4. Personnel pre-loaded successfully (alert showed "Copied 1 personnel")
+  5. John Smith appeared in personnel table with company and role
+  6. Times can be adjusted (start/finish times editable)
+
+## FILES MODIFIED THIS SESSION
+- backend/src/routes/diary.ts - Added previous-personnel endpoint
+- frontend/src/pages/diary/DailyDiaryPage.tsx - Added copy button and handler
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 146 (14.1%)
+- In Progress: 0
+- Pending: 889
+
 ## NEXT STEPS FOR FUTURE SESSIONS
-1. Get next feature with feature_get_next() - Feature #225: Subcontractor respond to NCR
-2. Continue implementing subcontractor portal functionality
+1. Get next feature with feature_get_next()
+2. Continue implementing Daily Diary features
 3. Build out remaining module functionality
 
 ================================================================================
-END OF SESSION SUMMARY
+END OF SESSION 18 SUMMARY (CONTINUED)
+================================================================================
+
+================================================================================
+SITEPROOF V2 - CODING AGENT SESSION SUMMARY
+================================================================================
+Session: 19 (Coding Agent)
+Date: 2026-01-14
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #235: Submit daily diary
+- IMPLEMENTED & VERIFIED: Daily diary submission with validation warnings
+- Implementation details:
+  1. Added state variables for submit confirmation modal:
+     - showSubmitConfirm: boolean
+     - submitWarnings: string[]
+  2. Created getSubmitWarnings() function that checks for:
+     - Weather conditions not recorded
+     - No personnel recorded
+     - No activities recorded
+     - No general notes, plant, or delays recorded
+  3. Created handleSubmitClick() to gather warnings and show modal
+  4. Created confirmSubmitDiary() to perform actual submission
+  5. Added confirmation modal UI with:
+     - "Submit Daily Diary?" heading
+     - Warnings list with ⚠️ icon
+     - Cancel and Confirm Submit buttons
+
+- Testing performed (all 7 feature steps verified):
+  1. Complete diary sections - Added weather data and general notes ✓
+  2. Click Submit - Button triggers modal ✓
+  3. Verify validation warnings - Showed "No personnel recorded", "No activities recorded" ✓
+  4. Acknowledge warnings - Modal displayed clearly ✓
+  5. Confirm submit - Clicked Confirm Submit button ✓
+  6. Verify status → Submitted - Badge changed from "Draft" to "Submitted" ✓
+  7. Verify timestamp recorded - Showed "Submitted by on 14/01/2026, 6:37:57 am" ✓
+
+### Regression Testing
+- Verified Feature #56 (Edit lot persists) - PASSED
+  - Created lot REG-LOT-001 with test description
+  - Edited description to "EDITED_UNIQUE_DESC_67890"
+  - Refreshed page - edited description persisted correctly
+
+### Environment Configuration
+- Backend running on port 3036
+- Frontend running on port 5173
+
+## FILES MODIFIED THIS SESSION
+- frontend/src/pages/diary/DailyDiaryPage.tsx
+  - Added showSubmitConfirm and submitWarnings state
+  - Added getSubmitWarnings() validation function
+  - Added handleSubmitClick() handler
+  - Added confirmSubmitDiary() async function
+  - Added confirmation modal with warnings display
+  - Updated Submit button to use handleSubmitClick
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 152 (14.7%)
+- In Progress: 0
+- Pending: 883
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing Daily Diary features
+3. Build out remaining module functionality
+
+================================================================================
+END OF SESSION 19 SUMMARY
 ================================================================================
