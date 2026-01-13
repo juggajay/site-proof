@@ -1038,10 +1038,10 @@ export function LotsPage() {
       {/* Create Lot Modal */}
       {createModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
           onClick={handleBackdropClick}
         >
-          <div className="mx-4 w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Create New Lot</h2>
               <button

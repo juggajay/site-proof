@@ -836,8 +836,8 @@ function CreateNCRModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Raise Non-Conformance Report</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -988,8 +988,8 @@ function CloseNCRModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Close NCR {ncr.ncrNumber}</h2>
 
         {ncr.severity === 'major' && ncr.qmApprovedAt && (
@@ -1053,8 +1053,8 @@ function RespondNCRModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Respond to NCR {ncr.ncrNumber}</h2>
 
         <div className="mb-4 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm">
