@@ -7,6 +7,7 @@ const MIN_PASSWORD_LENGTH = 12
 
 export function RegisterPage() {
   const [email, setEmail] = useState('')
+  const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -15,6 +16,22 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const { signUp } = useAuth()
   const navigate = useNavigate()
+
+  // Email validation
+  const validateEmail = (email: string): { valid: boolean; error: string | null } => {
+    if (!email) {
+      return { valid: false, error: 'Email is required' }
+    }
+    // Check for basic email format: something@something.something
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return { valid: false, error: 'Please enter a valid email address' }
+    }
+    return { valid: true, error: null }
+  }
+
+  const emailValidation = useMemo(() => validateEmail(email), [email])
+  const isEmailValid = emailValidation.valid
 
   // Password validation rules
   const passwordValidation = useMemo(() => ({
@@ -103,9 +120,15 @@ export function RegisterPage() {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
+          onBlur={() => setEmailTouched(true)}
+          className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
+            emailTouched && !isEmailValid ? 'border-destructive' : ''
+          }`}
           required
         />
+        {emailTouched && !isEmailValid && emailValidation.error && (
+          <p className="mt-1 text-sm text-destructive">{emailValidation.error}</p>
+        )}
       </div>
 
       <div>
@@ -160,7 +183,7 @@ export function RegisterPage() {
 
       <button
         type="submit"
-        disabled={loading || (password.length > 0 && !isPasswordValid)}
+        disabled={loading || (email.length > 0 && !isEmailValid) || (password.length > 0 && !isPasswordValid)}
         className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
         {loading ? 'Creating account...' : 'Create Account'}

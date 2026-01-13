@@ -62,6 +62,7 @@ export function LotsPage() {
     chainageEnd: '',
   })
   const [chainageError, setChainageError] = useState<string | null>(null)
+  const [lotNumberTouched, setLotNumberTouched] = useState(false)
 
   // Bulk create wizard state
   const [bulkWizardOpen, setBulkWizardOpen] = useState(false)
@@ -294,6 +295,14 @@ export function LotsPage() {
 
   const handleCloseCreateModal = () => {
     setCreateModalOpen(false)
+    setLotNumberTouched(false)
+    setNewLot({
+      lotNumber: '',
+      description: '',
+      activityType: 'Earthworks',
+      chainageStart: '',
+      chainageEnd: '',
+    })
   }
 
   // Handle clicking outside modal (on backdrop)
@@ -1008,9 +1017,17 @@ export function LotsPage() {
                   type="text"
                   value={newLot.lotNumber}
                   onChange={(e) => setNewLot((prev) => ({ ...prev, lotNumber: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  onBlur={() => setLotNumberTouched(true)}
+                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
+                    lotNumberTouched && !newLot.lotNumber.trim()
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                      : 'focus:border-primary focus:ring-primary'
+                  }`}
                   placeholder="e.g., LOT-001"
                 />
+                {lotNumberTouched && !newLot.lotNumber.trim() && (
+                  <p className="text-sm text-red-600 mt-1">Lot Number is required</p>
+                )}
               </div>
 
               <div>

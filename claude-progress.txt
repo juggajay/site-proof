@@ -1629,3 +1629,61 @@ Features #239-301 skipped (calendar, search, PDF, camera, offline)
 ================================================================================
 END OF SESSION 19 CONTINUATION SUMMARY
 ================================================================================
+
+================================================================================
+Session: 20 (Coding Agent)
+Date: 2026-01-14
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### TypeScript Build Fixes
+- Fixed 22 TypeScript errors preventing backend from compiling:
+  - authMiddleware.ts: Fixed user object construction with all required fields
+  - diary.ts: Changed `user.role` to `user.roleInCompany`
+  - projects.ts: Changed `createdAt` to `invitedAt` for ProjectUser ordering
+  - testResults.ts: Changed `name` to `fullName` for User model
+  - conformancePrerequisites.ts: Changed `category` to `pointType` for ITPChecklistItem
+  - dockets.ts: Removed unused `DOCKET_CREATORS` constant
+  - ncrs.ts: Removed unused `user` variable in respond endpoint
+  - trpc/router.ts: Removed unused `hasRole` middleware, prefixed unused params
+  - reports.ts: Removed duplicate Express Request type declaration
+  - lots.ts: Removed unused `requireMinRole` import
+
+### Feature #349: Clear Individual Filter Works
+- IMPLEMENTED: Individual clear (X) buttons next to each active filter dropdown
+- Added individual clear buttons for Status and Activity filters
+- Changed "Clear Filters" to "Clear All Filters"
+- Testing: Applied Status="In Progress" AND Activity="Earthworks", cleared only Activity, verified Status remained
+
+### Feature #350: Search is Case-Insensitive
+- IMPLEMENTED: Search textbox with case-insensitive matching
+- Added `searchQuery` URL parameter
+- Added search handler and filter logic
+- Testing: Searched "lot-cit" (lowercase) found 12 lots, "LOT-CIT" (uppercase) found same 12 lots
+
+### Git Commit
+- Committed: "feat: Add search and individual filter clear for lot register - Features #349, #350"
+
+## FILES MODIFIED THIS SESSION
+- backend/src/middleware/authMiddleware.ts
+- backend/src/routes/diary.ts
+- backend/src/routes/projects.ts
+- backend/src/routes/testResults.ts
+- backend/src/lib/conformancePrerequisites.ts
+- backend/src/routes/dockets.ts
+- backend/src/routes/ncrs.ts
+- backend/src/trpc/router.ts
+- backend/src/routes/reports.ts
+- backend/src/routes/lots.ts
+- frontend/src/pages/lots/LotsPage.tsx
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 188 (18.2%)
+- In Progress: 0
+- Pending: 847
+
+================================================================================
+END OF SESSION 20 SUMMARY (IN PROGRESS)
+================================================================================
