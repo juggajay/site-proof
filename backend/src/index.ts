@@ -13,6 +13,7 @@ import { lotsRouter } from './routes/lots.js'
 import { ncrsRouter } from './routes/ncrs.js'
 import { subcontractorsRouter } from './routes/subcontractors.js'
 import { reportsRouter } from './routes/reports.js'
+import { testResultsRouter } from './routes/testResults.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -25,7 +26,10 @@ app.use(cors({
     'http://localhost:5174',
     'http://localhost:5175',
     'http://localhost:5176',
+    'http://localhost:5177',
+    'http://localhost:5178',
     'http://127.0.0.1:5173',
+    'http://127.0.0.1:5177',
     process.env.FRONTEND_URL || ''
   ].filter(Boolean),
   credentials: true
@@ -50,6 +54,7 @@ app.use('/api/lots', lotsRouter)
 app.use('/api/ncrs', ncrsRouter)
 app.use('/api/subcontractors', subcontractorsRouter)
 app.use('/api/reports', reportsRouter)
+app.use('/api/test-results', testResultsRouter)
 
 // tRPC
 app.use(

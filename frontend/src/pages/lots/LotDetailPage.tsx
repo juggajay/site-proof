@@ -38,11 +38,35 @@ interface Lot {
   updatedAt: string
 }
 
+interface TestResult {
+  id: string
+  testType: string
+  testRequestNumber: string | null
+  laboratoryName: string | null
+  resultValue: number | null
+  resultUnit: string | null
+  passFail: string
+  status: string
+  createdAt: string
+}
+
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   in_progress: 'bg-blue-100 text-blue-800',
   completed: 'bg-green-100 text-green-800',
   on_hold: 'bg-red-100 text-red-800',
+}
+
+const testPassFailColors: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  pass: 'bg-green-100 text-green-800',
+  fail: 'bg-red-100 text-red-800',
+}
+
+const testStatusColors: Record<string, string> = {
+  requested: 'bg-gray-100 text-gray-800',
+  entered: 'bg-blue-100 text-blue-800',
+  verified: 'bg-green-100 text-green-800',
 }
 
 export function LotDetailPage() {
@@ -56,6 +80,8 @@ export function LotDetailPage() {
   const [error, setError] = useState<{ type: 'not_found' | 'forbidden' | 'error'; message: string } | null>(null)
   const [conforming, setConforming] = useState(false)
   const [qualityAccess, setQualityAccess] = useState<QualityAccess | null>(null)
+  const [testResults, setTestResults] = useState<TestResult[]>([])
+  const [loadingTests, setLoadingTests] = useState(false)
 
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp'
@@ -140,6 +166,38 @@ export function LotDetailPage() {
 
     fetchLot()
   }, [lotId, navigate])
+
+  // Fetch test results when Tests tab is selected
+  useEffect(() => {
+    async function fetchTestResults() {
+      if (!projectId || !lotId || currentTab !== 'tests') return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      setLoadingTests(true)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}&lotId=${lotId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setTestResults(data.testResults || [])
+        }
+      } catch (err) {
+        console.error('Failed to fetch test results:', err)
+      } finally {
+        setLoadingTests(false)
+      }
+    }
+
+    fetchTestResults()
+  }, [projectId, lotId, currentTab])
 
   // Extract quality access permissions
   const canConformLots = qualityAccess?.canConformLots || false
@@ -298,17 +356,71 @@ export function LotDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Test Results</h2>
-              <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
-                Link Test Result
+              <button
+                onClick={() => navigate(`/projects/${projectId}/tests`)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                View All Tests
               </button>
             </div>
-            <div className="rounded-lg border p-6 text-center">
-              <div className="text-4xl mb-2">🧪</div>
-              <h3 className="text-lg font-semibold mb-2">No Test Results</h3>
-              <p className="text-muted-foreground">
-                No test results have been linked to this lot yet. Link test results to verify quality compliance.
-              </p>
-            </div>
+            {loadingTests ? (
+              <div className="flex justify-center p-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              </div>
+            ) : testResults.length === 0 ? (
+              <div className="rounded-lg border p-6 text-center">
+                <div className="text-4xl mb-2">🧪</div>
+                <h3 className="text-lg font-semibold mb-2">No Test Results</h3>
+                <p className="text-muted-foreground mb-4">
+                  No test results have been linked to this lot yet. Link test results to verify quality compliance.
+                </p>
+                <button
+                  onClick={() => navigate(`/projects/${projectId}/tests`)}
+                  className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+                >
+                  Go to Test Results
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Test Type</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Request #</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Laboratory</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Result</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Pass/Fail</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {testResults.map((test) => (
+                      <tr key={test.id} className="hover:bg-muted/30">
+                        <td className="px-4 py-3 text-sm font-medium">{test.testType}</td>
+                        <td className="px-4 py-3 text-sm">{test.testRequestNumber || '—'}</td>
+                        <td className="px-4 py-3 text-sm">{test.laboratoryName || '—'}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {test.resultValue != null
+                            ? `${test.resultValue}${test.resultUnit ? ` ${test.resultUnit}` : ''}`
+                            : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${testPassFailColors[test.passFail] || 'bg-gray-100'}`}>
+                            {test.passFail}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-gray-100'}`}>
+                            {test.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
