@@ -878,7 +878,14 @@ export function LotsPage() {
                       </td>
                     )}
                     <td className="p-3 font-medium">{lot.lotNumber}</td>
-                    <td className="p-3">{lot.description || '—'}</td>
+                    <td className="p-3 max-w-xs">
+                      <span
+                        className="block truncate"
+                        title={lot.description || ''}
+                      >
+                        {lot.description || '—'}
+                      </span>
+                    </td>
                     <td className="p-3">{formatChainage(lot)}</td>
                     <td className="p-3 capitalize">{lot.activityType || '—'}</td>
                     <td className="p-3">

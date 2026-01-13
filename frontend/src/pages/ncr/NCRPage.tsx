@@ -604,7 +604,7 @@ export function NCRPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="max-w-xs truncate">{ncr.description}</div>
+                    <div className="max-w-xs truncate" title={ncr.description}>{ncr.description}</div>
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className="capitalize">{ncr.category.replace(/_/g, ' ')}</span>
