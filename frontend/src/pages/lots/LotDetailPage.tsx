@@ -733,13 +733,14 @@ export function LotDetailPage() {
                             <button
                               onClick={() => handleToggleCompletion(item.id, isCompleted, notes)}
                               disabled={updatingCompletion === item.id}
+                              aria-label={isCompleted ? `Mark "${item.description}" as incomplete` : `Mark "${item.description}" as complete`}
                               className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                                 isCompleted
                                   ? 'bg-green-500 border-green-500 text-white'
                                   : 'border-gray-300 hover:border-primary'
                               } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
                             >
-                              {isCompleted && <span className="text-xs">&#10003;</span>}
+                              {isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
                             </button>
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
@@ -1058,7 +1059,7 @@ export function LotDetailPage() {
               <h3 className="text-sm font-medium text-green-800 mb-2">Prerequisites:</h3>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-600' : 'text-red-600'}>
+                  <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-600'}>
                     {conformStatus.prerequisites.itpAssigned ? '✓' : '✗'}
                   </span>
                   <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-700'}>
@@ -1066,7 +1067,7 @@ export function LotDetailPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-600' : 'text-red-600'}>
+                  <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-600'}>
                     {conformStatus.prerequisites.itpCompleted ? '✓' : '✗'}
                   </span>
                   <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-700'}>
@@ -1074,7 +1075,7 @@ export function LotDetailPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-600' : 'text-red-600'}>
+                  <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-600'}>
                     {conformStatus.prerequisites.hasPassingTest ? '✓' : '✗'}
                   </span>
                   <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-700'}>
@@ -1082,7 +1083,7 @@ export function LotDetailPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-600' : 'text-red-600'}>
+                  <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-600'}>
                     {conformStatus.prerequisites.noOpenNcrs ? '✓' : '✗'}
                   </span>
                   <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-700'}>
@@ -1121,7 +1122,7 @@ export function LotDetailPage() {
               {conforming ? 'Conforming...' : 'Conform Lot'}
             </button>
             {canVerifyTestResults && (
-              <button className="rounded-lg border border-green-600 px-4 py-2 text-sm text-green-600 hover:bg-green-100">
+              <button className="rounded-lg border border-green-700 px-4 py-2 text-sm text-green-700 hover:bg-green-100">
                 Verify Test Results
               </button>
             )}
