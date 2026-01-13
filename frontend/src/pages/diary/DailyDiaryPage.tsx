@@ -741,11 +741,13 @@ export function DailyDiaryPage() {
 
       {/* Date Selector */}
       <div className="flex items-center gap-4">
-        <label className="font-medium">Select Date:</label>
+        <label htmlFor="diary-date" className="font-medium">Select Date:</label>
         <input
+          id="diary-date"
           type="date"
           value={selectedDate}
           onChange={(e) => setSelectedDate(e.target.value)}
+          max={new Date().toISOString().split('T')[0]}
           className="rounded-md border border-input bg-background px-3 py-2"
         />
         {diary && (
