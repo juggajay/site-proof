@@ -253,7 +253,7 @@ export function Header() {
         <div ref={notificationRef} className="relative">
           <button
             onClick={() => setIsNotificationOpen(!isNotificationOpen)}
-            className="relative rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="relative rounded-full p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground touch-manipulation"
             aria-label="Notifications"
             aria-expanded={isNotificationOpen}
             aria-haspopup="true"

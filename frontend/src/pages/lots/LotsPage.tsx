@@ -893,9 +893,9 @@ export function LotsPage() {
                       <td className="p-3">{lot.budgetAmount ? `$${lot.budgetAmount.toLocaleString()}` : '—'}</td>
                     )}
                     <td className="p-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <button
-                          className="text-sm text-primary hover:underline"
+                          className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
                           onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`, {
                             state: { returnFilters: searchParams.toString() }
                           })}
@@ -904,7 +904,7 @@ export function LotsPage() {
                         </button>
                         {canCreate && lot.status !== 'conformed' && lot.status !== 'claimed' && (
                           <button
-                            className="text-sm text-amber-600 hover:underline"
+                            className="text-sm text-amber-600 hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
                             onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}/edit`)}
                           >
                             Edit
@@ -912,7 +912,7 @@ export function LotsPage() {
                         )}
                         {canDelete && lot.status !== 'conformed' && lot.status !== 'claimed' && (
                           <button
-                            className="text-sm text-red-600 hover:underline"
+                            className="text-sm text-red-600 hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
                             onClick={() => handleDeleteClick(lot)}
                           >
                             Delete
@@ -932,11 +932,11 @@ export function LotsPage() {
               <span className="text-sm text-muted-foreground">
                 Page {currentPage} of {totalPages}
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="rounded-lg border px-3 py-1 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-lg border px-3 py-2 min-h-[44px] text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                 >
                   Previous
                 </button>
@@ -944,7 +944,7 @@ export function LotsPage() {
                   <button
                     key={page}
                     onClick={() => handlePageChange(page)}
-                    className={`rounded-lg px-3 py-1 text-sm ${
+                    className={`rounded-lg px-3 py-2 min-h-[44px] min-w-[44px] text-sm touch-manipulation ${
                       page === currentPage
                         ? 'bg-primary text-primary-foreground'
                         : 'border hover:bg-muted'
@@ -956,7 +956,7 @@ export function LotsPage() {
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="rounded-lg border px-3 py-1 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="rounded-lg border px-3 py-2 min-h-[44px] text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                 >
                   Next
                 </button>

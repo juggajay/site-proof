@@ -142,7 +142,7 @@ export function Sidebar() {
     : []
 
   return (
-    <aside className="flex w-64 flex-col border-r bg-card">
+    <aside className="hidden md:flex w-64 flex-col border-r bg-card">
       <div className="flex h-16 items-center border-b px-6">
         <span className="text-xl font-bold text-primary">SiteProof</span>
       </div>
