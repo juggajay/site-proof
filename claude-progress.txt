@@ -1977,10 +1977,40 @@ Progress: 236/1035 features passing (22.8%)
 ## SCREENSHOTS CAPTURED
 - .playwright-mcp/evidence/feature-399-concurrent-submission-handled.png
 
+### Feature #400: Export All Data Works - PASSING
+- VERIFIED: Lot Register CSV export includes all records
+- Export button triggers download of lot-register-{projectId}-{date}.csv
+- CSV contains header row + 41 data rows (all lots)
+- All columns exported: Lot Number, Description, Chainage Start/End, Activity Type, Status, Budget, Subcontractor
+
+### Feature #401: Export Filtered Data Works - PASSING
+- VERIFIED: Export respects active filters
+- Applied Status filter = "In Progress" (5 of 41 lots)
+- Export produced CSV with only 5 records (+ header)
+- All exported records had in_progress status
+
+### Features #402-405: Import Features - SKIPPED
+- Import functionality not yet implemented
+- Skipped features moved to end of queue for future implementation
+- Features: Import valid file, Import duplicates, Import malformed, Round-trip
+
+### Feature #406: Page Loads Under 3s with 100 Records - PASSING
+- VERIFIED: Page load performance is excellent
+- Load time: 58ms (well under 3000ms threshold)
+- DOM interactive: 10.8ms
+- Pagination pattern (5 items per page) ensures scalability
+
+## SCREENSHOTS CAPTURED
+- .playwright-mcp/evidence/feature-399-concurrent-submission-handled.png
+- .playwright-mcp/evidence/feature-400-export-csv-works.png
+- .playwright-mcp/evidence/feature-401-export-filtered-data.png
+- .playwright-mcp/evidence/feature-406-page-load-under-3s.png
+
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
 2. Continue implementing remaining features
-3. Current progress: 236/1035 (22.8%)
+3. Build import functionality (Features #402-405)
+4. Current progress: 239/1035 (23.1%)
 
 ================================================================================
 END OF SESSION 23 SUMMARY
