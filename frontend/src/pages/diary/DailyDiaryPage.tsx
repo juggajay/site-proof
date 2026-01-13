@@ -295,6 +295,9 @@ export function DailyDiaryPage() {
   }
 
   const createOrUpdateDiary = async () => {
+    // Prevent concurrent submissions (double-click protection)
+    if (saving) return
+
     setSaving(true)
     setError(null)
     try {
@@ -615,6 +618,10 @@ export function DailyDiaryPage() {
   // Confirm and actually submit the diary
   const confirmSubmitDiary = async () => {
     if (!diary) return
+
+    // Prevent concurrent submissions (double-click protection)
+    if (saving) return
+
     setSaving(true)
     setShowSubmitConfirm(false)
     try {

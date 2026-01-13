@@ -156,6 +156,9 @@ export function NCRPage() {
   }) => {
     if (!projectId) return
 
+    // Prevent concurrent submissions (double-click protection)
+    if (actionLoading) return
+
     setActionLoading(true)
     try {
       const response = await fetch(`${API_URL}/api/ncrs`, {
@@ -192,6 +195,9 @@ export function NCRPage() {
     rootCauseDescription: string
     proposedCorrectiveAction: string
   }) => {
+    // Prevent concurrent submissions (double-click protection)
+    if (actionLoading) return
+
     setActionLoading(true)
     try {
       const response = await fetch(`${API_URL}/api/ncrs/${ncrId}/respond`, {

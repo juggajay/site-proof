@@ -386,6 +386,11 @@ export function LotsPage() {
 
   // Handle create lot submission
   const handleCreateLot = async () => {
+    // Prevent concurrent submissions (double-click protection)
+    if (creating) {
+      return
+    }
+
     if (!newLot.lotNumber.trim()) {
       setError('Lot number is required')
       return
@@ -456,6 +461,11 @@ export function LotsPage() {
   // Confirm and execute deletion
   const handleConfirmDelete = async () => {
     if (!lotToDelete) return
+
+    // Prevent concurrent submissions (double-click protection)
+    if (deleting) {
+      return
+    }
 
     setDeleting(true)
     const token = getAuthToken()
@@ -584,6 +594,11 @@ export function LotsPage() {
   // Bulk delete handler
   const handleBulkDelete = async () => {
     if (selectedLots.size === 0) return
+
+    // Prevent concurrent submissions (double-click protection)
+    if (bulkDeleting) {
+      return
+    }
 
     setBulkDeleting(true)
     const token = getAuthToken()
@@ -795,7 +810,7 @@ export function LotsPage() {
 
       {/* Error State */}
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert" aria-live="assertive">
           {error}
         </div>
       )}
@@ -1091,7 +1106,7 @@ export function LotsPage() {
                   placeholder="e.g., LOT-001"
                 />
                 {lotNumberTouched && lotNumberError && (
-                  <p className="text-sm text-red-600 mt-1">{lotNumberError}</p>
+                  <p className="text-sm text-red-600 mt-1" role="alert" aria-live="assertive">{lotNumberError}</p>
                 )}
               </div>
 
@@ -1169,7 +1184,7 @@ export function LotsPage() {
                 </div>
               </div>
               {chainageError && (
-                <p className="text-sm text-red-600 mt-1">{chainageError}</p>
+                <p className="text-sm text-red-600 mt-1" role="alert" aria-live="assertive">{chainageError}</p>
               )}
             </div>
 
