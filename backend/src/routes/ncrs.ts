@@ -33,6 +33,12 @@ ncrsRouter.get('/', requireAuth, async (req: any, res) => {
     const user = req.user as AuthUser
     const { projectId, status, severity, lotId } = req.query
 
+    // Get user details to check role
+    const userDetails = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { roleInCompany: true },
+    })
+
     // Get projects the user has access to
     const projectAccess = await prisma.projectUser.findMany({
       where: { userId: user.userId },
@@ -64,6 +70,40 @@ ncrsRouter.get('/', requireAuth, async (req: any, res) => {
         some: {
           lotId: lotId as string,
         },
+      }
+    }
+
+    // Subcontractors can only see NCRs linked to lots assigned to their company
+    if (userDetails?.roleInCompany === 'subcontractor' || userDetails?.roleInCompany === 'subcontractor_admin') {
+      // Find the user's subcontractor company
+      const subcontractorUser = await prisma.subcontractorUser.findFirst({
+        where: { userId: user.userId },
+        include: { subcontractorCompany: true },
+      })
+
+      if (subcontractorUser) {
+        // Get lots assigned to this subcontractor company
+        const assignedLots = await prisma.lot.findMany({
+          where: { assignedSubcontractorId: subcontractorUser.subcontractorCompanyId },
+          select: { id: true },
+        })
+
+        const assignedLotIds = assignedLots.map(l => l.id)
+
+        if (assignedLotIds.length > 0) {
+          // Filter NCRs to only those linked to assigned lots
+          where.ncrLots = {
+            some: {
+              lotId: { in: assignedLotIds },
+            },
+          }
+        } else {
+          // No assigned lots, return empty result
+          return res.json({ ncrs: [] })
+        }
+      } else {
+        // No subcontractor company found, return empty result
+        return res.json({ ncrs: [] })
       }
     }
 
