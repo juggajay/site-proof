@@ -4,6 +4,7 @@ import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken, useAuth } from '@/lib/auth'
+import { toast } from '@/components/ui/toaster'
 
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager']
@@ -276,6 +277,13 @@ export function LotsPage() {
         chainageEnd: newLot.chainageEnd ? parseInt(newLot.chainageEnd) : null,
       }])
       setCreateModalOpen(false)
+
+      // Show success toast with specific lot number
+      toast({
+        title: 'Lot Created',
+        description: `Lot ${newLot.lotNumber} has been created successfully`,
+        variant: 'success',
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create lot')
     } finally {
