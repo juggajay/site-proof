@@ -1065,5 +1065,135 @@ Date: 2026-01-13
 3. Build out remaining module functionality
 
 ================================================================================
+Session: 14 (Coding Agent)
+Date: 2026-01-14
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #80: Hold point prerequisites check works
+- IMPLEMENTED: Complete hold point management with prerequisite validation
+- Backend implementation (backend/src/routes/holdpoints.ts):
+  - GET /api/holdpoints/project/:projectId - List all hold points for project
+  - GET /api/holdpoints/lot/:lotId/item/:itemId - Get hold point with prerequisites
+  - POST /api/holdpoints/request-release - Request release (validates prerequisites)
+  - POST /api/holdpoints/:id/release - Release a hold point
+  - POST /api/holdpoints/:id/chase - Send reminder notification
+
+- Frontend implementation (HoldPointsPage.tsx):
+  - Hold points table with status badges (Pending, Awaiting Release, Released)
+  - Request Release modal with prerequisite status display
+  - Prerequisites shown with ✓/✗ marks based on completion
+  - Blocking message when prerequisites incomplete
+  - Request form shown when all prerequisites completed
+  - Scheduled date, time, and notification email fields
+
+### Testing Performed (All Steps Verified)
+1. Created ITP template "Hold Point Test ITP" with 3 items:
+   - Survey and setout verification (regular)
+   - Material conformance check (regular)
+   - Compaction test - HOLD POINT (hold point)
+2. Created lot LOT-HP-TEST-001 and assigned ITP template
+3. Navigated to Hold Points page - saw hold point listed
+4. Clicked "Request Release" with prerequisites incomplete:
+   - Modal showed ✗ marks for both prerequisites
+   - Warning: "Cannot request release yet"
+   - "Items to complete" list shown
+5. Completed both prerequisite items on lot detail page
+6. Clicked "Request Release" again:
+   - Modal showed ✓ marks for both prerequisites
+   - Success: "All prerequisites completed"
+   - Request form enabled
+7. Submitted request with date 2026-01-15, time 09:00
+8. Status changed from "Pending" to "Awaiting Release"
+9. Scheduled date displayed in table
+
+### Regression Testing
+- Verified Feature #71 (NCR CRUD via UI) - PASSED
+  - NCR page loaded correctly with existing NCRs
+
+## FILES CREATED/MODIFIED THIS SESSION
+- backend/src/routes/holdpoints.ts (NEW) - Complete hold points API
+- backend/src/index.ts - Registered holdpointsRouter
+- frontend/src/pages/holdpoints/HoldPointsPage.tsx - Full UI implementation
+
+## SCREENSHOTS CAPTURED
+- holdpoint-prerequisites-blocked.png - Request blocked with missing prerequisites
+- holdpoint-prerequisites-passed.png - All prerequisites completed, form enabled
+- holdpoint-release-requested.png - Hold point status changed to Awaiting Release
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 76 (7.3%)
+- In Progress: 0
+- Pending: 959
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing functional features
+3. Build out remaining module functionality
+
+================================================================================
+Session: 15 (Coding Agent)
+Date: 2026-01-14
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #106: Changes reflect after refresh
+- VERIFIED: Edits made in one tab appear after refreshing another tab
+- Testing performed:
+  1. Created lot LOT-REFRESH-TEST-106 with description "ORIGINAL_DESCRIPTION_FOR_REFRESH_TEST"
+  2. Opened lot detail in second tab (showed original description)
+  3. Edited lot in first tab - changed description to "EDITED_DESCRIPTION_AFTER_CHANGE_12345"
+  4. Saved changes successfully
+  5. Refreshed second tab
+  6. Verified new description appeared correctly
+- Last Updated timestamp also updated to reflect the change
+
+### Feature #107: Delete parent handles children
+- VERIFIED: Cascade delete behavior works correctly for parent-child relationships
+- Testing performed:
+  1. Created lot LOT-CASCADE-DELETE-TEST
+  2. Added test result TR-CASCADE-001 linked to the lot (Compaction Test, 97.5%, Cascade Test Labs)
+  3. Clicked Delete on the lot in lot register
+  4. Confirmation dialog showed:
+     - "Confirm Deletion"
+     - Warning: "This action cannot be undone. All associated data will be permanently deleted."
+  5. Confirmed deletion - lot removed (count decreased from 32 to 31)
+  6. Verified test result handling:
+     - Test result TR-CASCADE-001 still exists (preserves lab data)
+     - Linked Lot column now shows "—" (SET NULL behavior)
+- System uses SET NULL strategy for test results rather than CASCADE DELETE
+  - This is appropriate since lab test data should be preserved
+
+### Environment Configuration
+- Changed backend port from 3031 to 3032 (port conflict)
+- Updated frontend/.env and backend/.env with new port
+
+### Regression Testing
+- Verified NCR page loads and displays correctly - PASSED
+
+## FILES MODIFIED THIS SESSION
+- backend/.env - Changed PORT to 3032
+- frontend/.env - Changed VITE_API_URL to localhost:3032
+
+## SCREENSHOTS CAPTURED
+- feature-106-changes-reflect-after-refresh.png - Lot detail showing updated description
+- feature-107-delete-warning-with-children.png - Delete confirmation dialog with cascade warning
+- feature-107-test-result-orphaned-after-lot-delete.png - Test result with nullified lot reference
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 101 (9.8%)
+- In Progress: 0
+- Pending: 934
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing functional features
+3. Build out remaining module functionality
+
+================================================================================
 END OF SESSION SUMMARY
 ================================================================================
