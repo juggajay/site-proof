@@ -24,7 +24,7 @@ interface Lot {
   areaZone: string | null
   budgetAmount?: number | null
   assignedSubcontractorId?: string | null
-  assignedSubcontractorName?: string | null
+  assignedSubcontractor?: { companyName: string } | null
 }
 
 const statusColors: Record<string, string> = {
@@ -300,18 +300,82 @@ export function LotsPage() {
     }
   }
 
+  // Export lots to CSV
+  const handleExportCSV = () => {
+    // Define CSV headers
+    const headers = ['Lot Number', 'Description', 'Chainage Start', 'Chainage End', 'Activity Type', 'Status']
+    if (canViewBudgets) {
+      headers.push('Budget')
+    }
+    if (!isSubcontractor) {
+      headers.push('Subcontractor')
+    }
+
+    // Convert lots to CSV rows
+    const rows = filteredLots.map((lot) => {
+      const row = [
+        lot.lotNumber,
+        lot.description || '',
+        lot.chainageStart?.toString() || '',
+        lot.chainageEnd?.toString() || '',
+        lot.activityType || '',
+        lot.status,
+      ]
+      if (canViewBudgets) {
+        row.push(lot.budgetAmount?.toString() || '')
+      }
+      if (!isSubcontractor) {
+        row.push(lot.assignedSubcontractor?.companyName || '')
+      }
+      return row
+    })
+
+    // Escape CSV values (handle commas, quotes, newlines)
+    const escapeCSV = (value: string) => {
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`
+      }
+      return value
+    }
+
+    // Build CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map(escapeCSV).join(','))
+    ].join('\n')
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `lot-register-${projectId}-${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Lot Register</h1>
-        {!isSubcontractor && canCreate && (
+        <div className="flex items-center gap-3">
           <button
-            onClick={handleOpenCreateModal}
-            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+            onClick={handleExportCSV}
+            className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
           >
-            Create Lot
+            Export CSV
           </button>
-        )}
+          {!isSubcontractor && canCreate && (
+            <button
+              onClick={handleOpenCreateModal}
+              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+            >
+              Create Lot
+            </button>
+          )}
+        </div>
       </div>
       <p className="text-sm text-muted-foreground">
         {isSubcontractor
@@ -411,10 +475,32 @@ export function LotsPage() {
             <tbody>
               {paginatedLots.length === 0 ? (
                 <tr>
-                  <td colSpan={isSubcontractor ? 6 : 8} className="p-6 text-center text-muted-foreground">
-                    {lots.length === 0
-                      ? (isSubcontractor ? 'No lots assigned to your company yet.' : 'No lots created yet.')
-                      : 'No lots match the current filters.'}
+                  <td colSpan={isSubcontractor ? 6 : 8} className="p-12 text-center">
+                    {lots.length === 0 ? (
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="text-5xl">📋</div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {isSubcontractor ? 'No lots assigned yet' : 'No lots yet'}
+                          </h3>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {isSubcontractor
+                              ? 'No lots have been assigned to your company for this project.'
+                              : 'Get started by creating your first lot for this project.'}
+                          </p>
+                        </div>
+                        {!isSubcontractor && canCreate && (
+                          <button
+                            onClick={handleOpenCreateModal}
+                            className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+                          >
+                            Create your first lot
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">No lots match the current filters.</span>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -430,7 +516,7 @@ export function LotsPage() {
                       </span>
                     </td>
                     {!isSubcontractor && (
-                      <td className="p-3">{lot.assignedSubcontractorName || '—'}</td>
+                      <td className="p-3">{lot.assignedSubcontractor?.companyName || '—'}</td>
                     )}
                     {canViewBudgets && (
                       <td className="p-3">{lot.budgetAmount ? `$${lot.budgetAmount.toLocaleString()}` : '—'}</td>
