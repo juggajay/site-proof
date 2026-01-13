@@ -1874,12 +1874,55 @@ Date: 2026-01-14
 
 ## FEATURE STATISTICS
 - Total Features: 1035
-- Passing: 226 (21.8%)
+- Passing: 229 (22.1%)
 - In Progress: 0
-- Pending: 809
+- Pending: 806
 
 ## GIT COMMITS
 - 4e0d212: feat: Improve accessibility with aria-hidden on decorative icons - Features #386-389
+- afdc194: feat: Add date picker constraints for valid date ranges - Feature #390
+
+## SESSION CONTINUATION - Features #390-392
+
+### Feature #390: Date Picker Valid Ranges Only
+- IMPLEMENTED: Date picker constraints for valid ranges
+- Daily Diary date picker: max attribute set to today's date
+  - Prevents selection of future dates
+  - Code: max={new Date().toISOString().split('T')[0]}
+- Hold Point scheduled date picker: min attribute set to today's date
+  - Prevents selection of past dates for scheduling
+  - Code: min={new Date().toISOString().split('T')[0]}
+- Both use dynamic JavaScript date for proper timezone handling
+
+### Feature #391: Overdue Items Identified Correctly
+- VERIFIED: Overdue detection working on NCR page
+- NCR-0007 with due date 1/13/2026 shows red styling (text-red-600)
+- Overdue logic: new Date(ncr.dueDate) < new Date() && status not closed
+- Daily Diary late entry detection:
+  - Created diary for past date (2026-01-10)
+  - Submitted diary marked as "Late Entry" with orange badge
+  - isLate flag set when diary.date < today at submission time
+- Timezone-aware comparisons using JavaScript Date objects
+
+### Feature #392: Today/This Week Filters Work Correctly
+- VERIFIED: Date range filters on NCR page
+- Date From filter: filters NCRs created on or after specified date
+- Date To filter: includes entire day (sets time to 23:59:59.999)
+- Test: Filtering 2026-01-13 to 2026-01-13 shows 2 of 7 NCRs
+- Timezone-aware using JavaScript Date objects
+
+## ADDITIONAL FILES MODIFIED
+- frontend/src/pages/diary/DailyDiaryPage.tsx
+  - Added max attribute to diary date picker
+- frontend/src/pages/holdpoints/HoldPointsPage.tsx
+  - Added min attribute to scheduled date picker
+
+## SCREENSHOTS CAPTURED
+- .playwright-mcp/date-picker-diary-max-constraint.png
+- .playwright-mcp/date-picker-holdpoint-min-constraint.png
+- .playwright-mcp/ncr-overdue-detection.png
+- .playwright-mcp/diary-late-entry-complete.png
+- .playwright-mcp/ncr-date-filters.png
 
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
@@ -1887,5 +1930,5 @@ Date: 2026-01-14
 3. Consider performance and export features
 
 ================================================================================
-END OF SESSION 22 SUMMARY
+END OF SESSION 22 SUMMARY (CONTINUED)
 ================================================================================
