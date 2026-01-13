@@ -225,6 +225,28 @@ export function LotDetailPage() {
         </div>
       </div>
 
+      {/* Timestamps */}
+      <div className="flex flex-wrap gap-6 text-sm text-muted-foreground border-t pt-4">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">Created:</span>
+          <time dateTime={lot.createdAt} title={new Date(lot.createdAt).toISOString()}>
+            {new Date(lot.createdAt).toLocaleString('en-AU', {
+              dateStyle: 'medium',
+              timeStyle: 'medium',
+            })}
+          </time>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">Last Updated:</span>
+          <time dateTime={lot.updatedAt} title={new Date(lot.updatedAt).toISOString()}>
+            {new Date(lot.updatedAt).toLocaleString('en-AU', {
+              dateStyle: 'medium',
+              timeStyle: 'medium',
+            })}
+          </time>
+        </div>
+      </div>
+
       {/* Tab Navigation */}
       <div className="border-b">
         <nav className="flex gap-4" aria-label="Lot detail tabs">
