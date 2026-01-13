@@ -1811,3 +1811,81 @@ Date: 2026-01-14
 ================================================================================
 END OF SESSION 21 SUMMARY
 ================================================================================
+
+================================================================================
+Session: 22 (Coding Agent)
+Date: 2026-01-14
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #386: Error Messages Announced to Screen Reader
+- VERIFIED: Error messages have role="alert" and aria-live="assertive"
+- Tested in Create Lot modal:
+  - Lot Number validation error displays with alert role
+  - Chainage validation error displays with alert role
+- Screen readers will announce errors when they appear
+- Tab navigation allows users to reach error fields
+
+### Feature #387: Images Have Alt Text
+- IMPLEMENTED: aria-hidden="true" on decorative icons
+- Icons are Lucide React SVG components, not <img> tags
+- All sidebar navigation icons marked with aria-hidden="true"
+- Header icons marked with aria-hidden="true":
+  - FolderKanban, ChevronDown, Bell, User icons
+  - UserCircle, Settings, LogOut in user menu
+- Breadcrumb icons marked with aria-hidden="true":
+  - Home icon, ChevronRight separator icons
+- Decorative icons should be hidden from screen readers per WCAG guidelines
+- Buttons with icon-only have proper aria-label attributes
+
+### Feature #388: Dates Display in Local Timezone
+- VERIFIED: Application uses toLocaleString() and toLocaleDateString() with 'en-AU' locale
+- Browser timezone: Australia/Sydney (AEDT)
+- Dates display correctly in local format:
+  - Example: "14 Jan 2026, 12:44:40 am" (not UTC)
+- JavaScript's built-in timezone handling works correctly
+
+### Feature #389: Created/Updated Timestamps Accurate
+- VERIFIED: Timestamps are accurate to within seconds
+- Test performed:
+  - Noted time: 9:12:31 am
+  - Created lot TIMESTAMP-TEST-389
+  - Created timestamp: 9:12:57 am (26 sec form fill time)
+  - Updated at 9:13:24 am
+  - Updated timestamp: 9:13:41 am (17 sec form fill time)
+- created_at remains unchanged after updates
+- updated_at changes when lot is edited
+
+## FILES MODIFIED THIS SESSION
+- frontend/src/components/layouts/Sidebar.tsx
+  - Added aria-hidden="true" to all navigation item icons (4 locations)
+- frontend/src/components/layouts/Header.tsx
+  - Added aria-hidden="true" to FolderKanban, ChevronDown, Bell, User icons
+  - Added aria-hidden="true" to menu item icons (UserCircle, Settings, LogOut)
+- frontend/src/components/layouts/Breadcrumbs.tsx
+  - Added aria-hidden="true" to Home and ChevronRight icons
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-386-error-messages-with-alert-role.png
+- evidence/feature-387-images-have-aria-hidden.png
+- evidence/feature-388-dates-local-timezone.png
+- evidence/feature-389-timestamp-accuracy.png
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 226 (21.8%)
+- In Progress: 0
+- Pending: 809
+
+## GIT COMMITS
+- 4e0d212: feat: Improve accessibility with aria-hidden on decorative icons - Features #386-389
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining accessibility features
+3. Consider performance and export features
+
+================================================================================
+END OF SESSION 22 SUMMARY
+================================================================================
