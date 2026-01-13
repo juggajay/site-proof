@@ -17,6 +17,7 @@ import { testResultsRouter } from './routes/testResults.js'
 import { itpRouter } from './routes/itp.js'
 import diaryRouter from './routes/diary.js'
 import claimsRouter from './routes/claims.js'
+import { holdpointsRouter } from './routes/holdpoints.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -61,6 +62,7 @@ app.use('/api/test-results', testResultsRouter)
 app.use('/api/itp', itpRouter)
 app.use('/api/diary', diaryRouter)
 app.use('/api/projects', claimsRouter)
+app.use('/api/holdpoints', holdpointsRouter)
 
 // tRPC
 app.use(
