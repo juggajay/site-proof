@@ -99,6 +99,20 @@ interface ITPTemplate {
   checklistItems: ITPChecklistItem[]
 }
 
+interface ConformStatus {
+  canConform: boolean
+  blockingReasons: string[]
+  prerequisites: {
+    itpAssigned: boolean
+    itpCompleted: boolean
+    itpCompletedCount: number
+    itpTotalCount: number
+    hasPassingTest: boolean
+    noOpenNcrs: boolean
+    openNcrs: { id: string; ncrNumber: string; status: string }[]
+  }
+}
+
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   in_progress: 'bg-blue-100 text-blue-800',
@@ -153,6 +167,8 @@ export function LotDetailPage() {
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [assigningTemplate, setAssigningTemplate] = useState(false)
   const [updatingCompletion, setUpdatingCompletion] = useState<string | null>(null)
+  const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null)
+  const [loadingConformStatus, setLoadingConformStatus] = useState(false)
 
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp'
@@ -237,6 +253,38 @@ export function LotDetailPage() {
 
     fetchLot()
   }, [lotId, navigate])
+
+  // Fetch conformance status when lot is loaded and not yet conformed
+  useEffect(() => {
+    async function fetchConformStatus() {
+      if (!lotId || !lot || lot.status === 'conformed' || lot.status === 'claimed') return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      setLoadingConformStatus(true)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/lots/${lotId}/conform-status`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setConformStatus(data)
+        }
+      } catch (err) {
+        console.error('Failed to fetch conform status:', err)
+      } finally {
+        setLoadingConformStatus(false)
+      }
+    }
+
+    fetchConformStatus()
+  }, [lotId, lot])
 
   // Fetch test results when Tests tab is selected
   useEffect(() => {
@@ -497,6 +545,39 @@ export function LotDetailPage() {
       }
     } catch (err) {
       console.error('Failed to update notes:', err)
+    }
+  }
+
+  const handleConformLot = async () => {
+    if (!confirm('Are you sure you want to conform this lot? This action marks the lot as quality-approved.')) {
+      return
+    }
+    setConforming(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    try {
+      const response = await fetch(`${apiUrl}/api/lots/${lotId}/conform`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      if (response.ok) {
+        setLot((prev) => prev ? { ...prev, status: 'conformed' } : null)
+        alert('Lot conformed successfully!')
+      } else {
+        const data = await response.json()
+        if (data.blockingReasons) {
+          alert(`Cannot conform lot:\n\n${data.blockingReasons.join('\n')}`)
+        } else {
+          alert(data.message || data.error || 'Failed to conform lot')
+        }
+      }
+    } catch (err) {
+      alert('Failed to conform lot')
+    } finally {
+      setConforming(false)
     }
   }
 
@@ -946,38 +1027,77 @@ export function LotDetailPage() {
           <p className="text-sm text-green-700 mb-4">
             As a quality manager, you can conform this lot once all requirements are met.
           </p>
+
+          {/* Conformance Prerequisites Checklist */}
+          {loadingConformStatus ? (
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
+              <span className="text-sm text-green-700">Loading prerequisites...</span>
+            </div>
+          ) : conformStatus ? (
+            <div className="mb-4 space-y-2">
+              <h3 className="text-sm font-medium text-green-800 mb-2">Prerequisites:</h3>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-600' : 'text-red-600'}>
+                    {conformStatus.prerequisites.itpAssigned ? '✓' : '✗'}
+                  </span>
+                  <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-700'}>
+                    ITP Assigned
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-600' : 'text-red-600'}>
+                    {conformStatus.prerequisites.itpCompleted ? '✓' : '✗'}
+                  </span>
+                  <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-700'}>
+                    ITP Completed ({conformStatus.prerequisites.itpCompletedCount}/{conformStatus.prerequisites.itpTotalCount} items)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-600' : 'text-red-600'}>
+                    {conformStatus.prerequisites.hasPassingTest ? '✓' : '✗'}
+                  </span>
+                  <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-700'}>
+                    Passing Verified Test Result
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-600' : 'text-red-600'}>
+                    {conformStatus.prerequisites.noOpenNcrs ? '✓' : '✗'}
+                  </span>
+                  <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-700'}>
+                    No Open NCRs
+                    {!conformStatus.prerequisites.noOpenNcrs && conformStatus.prerequisites.openNcrs.length > 0 && (
+                      <span className="text-red-600 ml-1">
+                        ({conformStatus.prerequisites.openNcrs.map(n => n.ncrNumber).join(', ')})
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+              {!conformStatus.canConform && conformStatus.blockingReasons.length > 0 && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm font-medium text-red-800 mb-1">Cannot conform lot:</p>
+                  <ul className="list-disc list-inside text-sm text-red-700">
+                    {conformStatus.blockingReasons.map((reason, i) => (
+                      <li key={i}>{reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : null}
+
           <div className="flex gap-4">
             <button
-              onClick={async () => {
-                if (!confirm('Are you sure you want to conform this lot? This action marks the lot as quality-approved.')) {
-                  return
-                }
-                setConforming(true)
-                const token = getAuthToken()
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-                try {
-                  const response = await fetch(`${apiUrl}/api/lots/${lotId}/conform`, {
-                    method: 'POST',
-                    headers: {
-                      Authorization: `Bearer ${token}`,
-                      'Content-Type': 'application/json',
-                    },
-                  })
-                  if (response.ok) {
-                    setLot((prev) => prev ? { ...prev, status: 'conformed' } : null)
-                    alert('Lot conformed successfully!')
-                  } else {
-                    const data = await response.json()
-                    alert(data.error || 'Failed to conform lot')
-                  }
-                } catch (err) {
-                  alert('Failed to conform lot')
-                } finally {
-                  setConforming(false)
-                }
-              }}
-              disabled={conforming}
-              className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+              onClick={handleConformLot}
+              disabled={conforming || (conformStatus !== null && !conformStatus.canConform)}
+              className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${
+                conformStatus?.canConform
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
             >
               {conforming ? 'Conforming...' : 'Conform Lot'}
             </button>

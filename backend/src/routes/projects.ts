@@ -114,6 +114,10 @@ projectsRouter.get('/:id', async (req, res) => {
         targetCompletion: true,
         contractValue: true,
         companyId: true,
+        lotPrefix: true,
+        lotStartingNumber: true,
+        ncrPrefix: true,
+        ncrStartingNumber: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -136,7 +140,13 @@ projectsRouter.get('/:id', async (req, res) => {
       project.contractValue = null
     }
 
-    res.json({ project })
+    // Map projectNumber to code for frontend consistency
+    res.json({
+      project: {
+        ...project,
+        code: project.projectNumber,
+      }
+    })
   } catch (error) {
     console.error('Get project error:', error)
     res.status(500).json({ error: 'Internal server error' })
@@ -214,6 +224,80 @@ projectsRouter.post('/', async (req, res) => {
   }
 })
 
+
+// PATCH /api/projects/:id - Update project settings
+projectsRouter.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { name, code, lotPrefix, lotStartingNumber, ncrPrefix, ncrStartingNumber } = req.body
+
+    // Check access - user must be admin or project admin
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: id,
+        userId: user.id,
+      },
+    })
+
+    const isProjectAdmin = projectUser?.role === 'admin' || projectUser?.role === 'project_manager'
+    const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
+
+    // Get the project to check company ownership
+    const project = await prisma.project.findUnique({
+      where: { id },
+      select: { id: true, companyId: true }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    const isCompanyProject = project.companyId === user.companyId
+
+    if (!isProjectAdmin && !(isCompanyAdmin && isCompanyProject)) {
+      return res.status(403).json({ error: 'Access denied. Only project admins can update settings.' })
+    }
+
+    // Build update data
+    const updateData: Record<string, unknown> = {}
+    if (name !== undefined) updateData.name = name
+    if (code !== undefined) updateData.projectNumber = code
+    if (lotPrefix !== undefined) updateData.lotPrefix = lotPrefix
+    if (lotStartingNumber !== undefined) updateData.lotStartingNumber = lotStartingNumber
+    if (ncrPrefix !== undefined) updateData.ncrPrefix = ncrPrefix
+    if (ncrStartingNumber !== undefined) updateData.ncrStartingNumber = ncrStartingNumber
+
+    // Update the project
+    const updatedProject = await prisma.project.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        projectNumber: true,
+        lotPrefix: true,
+        lotStartingNumber: true,
+        ncrPrefix: true,
+        ncrStartingNumber: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
+
+    // Map projectNumber to code for frontend consistency
+    res.json({
+      project: {
+        ...updatedProject,
+        code: updatedProject.projectNumber,
+      }
+    })
+  } catch (error) {
+    console.error('Update project error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
 
 // DELETE /api/projects/:id - Delete a project (requires password confirmation)
 projectsRouter.delete('/:id', async (req, res) => {

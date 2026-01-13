@@ -153,6 +153,48 @@ reportsRouter.get('/ncr', async (req, res) => {
       !['closed', 'closed_concession'].includes(ncr.status || '')
     ).length
 
+    // Calculate closed this month
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    const closedThisMonth = ncrs.filter(ncr =>
+      ncr.closedAt &&
+      new Date(ncr.closedAt) >= startOfMonth &&
+      ['closed', 'closed_concession'].includes(ncr.status || '')
+    ).length
+
+    // Calculate average closure time (in days)
+    const closedNcrs = ncrs.filter(ncr => ncr.closedAt && ncr.raisedAt)
+    let averageClosureTime = 0
+    if (closedNcrs.length > 0) {
+      const totalClosureTime = closedNcrs.reduce((sum, ncr) => {
+        const raisedDate = new Date(ncr.raisedAt)
+        const closedDate = new Date(ncr.closedAt!)
+        const diffDays = Math.ceil((closedDate.getTime() - raisedDate.getTime()) / (1000 * 60 * 60 * 24))
+        return sum + diffDays
+      }, 0)
+      averageClosureTime = Math.round(totalClosureTime / closedNcrs.length)
+    }
+
+    // Get NCRs with responsible user info for responsible party breakdown
+    const ncrsWithResponsible = await prisma.nCR.findMany({
+      where: { projectId: projectId as string },
+      select: {
+        id: true,
+        responsibleUser: {
+          select: {
+            fullName: true,
+            email: true,
+          }
+        }
+      },
+    })
+
+    // Calculate responsible party counts
+    const responsiblePartyCounts = ncrsWithResponsible.reduce((acc: Record<string, number>, ncr) => {
+      const responsible = ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned'
+      acc[responsible] = (acc[responsible] || 0) + 1
+      return acc
+    }, {})
+
     const report = {
       generatedAt: new Date().toISOString(),
       projectId,
@@ -160,7 +202,10 @@ reportsRouter.get('/ncr', async (req, res) => {
       statusCounts,
       categoryCounts,
       rootCauseCounts,
+      responsiblePartyCounts,
       overdueCount,
+      closedThisMonth,
+      averageClosureTime,
       ncrs,
       summary: {
         open: statusCounts['open'] || 0,

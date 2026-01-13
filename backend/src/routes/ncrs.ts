@@ -220,6 +220,42 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
       })
     }
 
+    // Notify head contractor users when a subcontractor raises an NCR
+    // Check if the user is a subcontractor
+    const raisedByUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { roleInCompany: true, fullName: true, email: true }
+    })
+
+    if (raisedByUser && ['subcontractor', 'subcontractor_admin'].includes(raisedByUser.roleInCompany || '')) {
+      // Get head contractor users (project managers, quality managers, admins) on this project
+      const headContractorUsers = await prisma.projectUser.findMany({
+        where: {
+          projectId,
+          role: { in: ['project_manager', 'quality_manager', 'admin', 'owner', 'site_manager'] },
+          status: 'active',
+        },
+        select: { userId: true }
+      })
+
+      // Create notifications for head contractor users
+      if (headContractorUsers.length > 0) {
+        const raisedByName = raisedByUser.fullName || raisedByUser.email || 'A subcontractor'
+        const lotNumbers = ncr.ncrLots.map(nl => nl.lot.lotNumber).join(', ') || 'No lots'
+
+        await prisma.notification.createMany({
+          data: headContractorUsers.map(pu => ({
+            userId: pu.userId,
+            projectId,
+            type: 'ncr_raised',
+            title: `NCR Raised by Subcontractor`,
+            message: `${raisedByName} raised ${ncrNumber} for ${lotNumbers}: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
+            linkUrl: `/projects/${projectId}/ncr`,
+          }))
+        })
+      }
+    }
+
     res.status(201).json({ ncr })
   } catch (error) {
     console.error('Create NCR error:', error)

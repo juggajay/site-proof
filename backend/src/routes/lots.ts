@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole, requireMinRole } from '../middleware/authMiddleware.js'
+import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js'
 
 export const lotsRouter = Router()
 
@@ -203,8 +204,79 @@ lotsRouter.post('/', requireRole(LOT_CREATORS), async (req, res) => {
     })
 
     res.status(201).json({ lot })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create lot error:', error)
+
+    // Handle Prisma unique constraint violation
+    if (error?.code === 'P2002') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'A lot with this number already exists in this project',
+        code: 'DUPLICATE_LOT_NUMBER'
+      })
+    }
+
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/lots/bulk - Bulk create lots (requires creator role)
+lotsRouter.post('/bulk', requireRole(LOT_CREATORS), async (req, res) => {
+  try {
+    const { projectId, lots: lotsData } = req.body
+
+    if (!projectId || !lotsData || !Array.isArray(lotsData) || lotsData.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'projectId and lots array are required'
+      })
+    }
+
+    // Validate all lots have required fields
+    for (const lot of lotsData) {
+      if (!lot.lotNumber) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Each lot must have a lotNumber'
+        })
+      }
+    }
+
+    // Create all lots in a transaction
+    const createdLots = await prisma.$transaction(
+      lotsData.map((lot: any) =>
+        prisma.lot.create({
+          data: {
+            projectId,
+            lotNumber: lot.lotNumber,
+            description: lot.description || null,
+            activityType: lot.activityType || 'Earthworks',
+            lotType: lot.lotType || 'chainage',
+            chainageStart: lot.chainageStart ?? null,
+            chainageEnd: lot.chainageEnd ?? null,
+            layer: lot.layer || null,
+          },
+          select: {
+            id: true,
+            lotNumber: true,
+            description: true,
+            status: true,
+            activityType: true,
+            chainageStart: true,
+            chainageEnd: true,
+            createdAt: true,
+          },
+        })
+      )
+    )
+
+    res.status(201).json({
+      message: `Successfully created ${createdLots.length} lots`,
+      lots: createdLots,
+      count: createdLots.length
+    })
+  } catch (error) {
+    console.error('Bulk create lots error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
@@ -344,6 +416,60 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
   }
 })
 
+
+// POST /api/lots/bulk-delete - Bulk delete lots (requires deleter role)
+lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
+  try {
+    const { lotIds } = req.body
+
+    if (!lotIds || !Array.isArray(lotIds) || lotIds.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'lotIds array is required and must not be empty'
+      })
+    }
+
+    // Check that lots exist and can be deleted (not conformed or claimed)
+    const lotsToDelete = await prisma.lot.findMany({
+      where: {
+        id: { in: lotIds },
+      },
+      select: {
+        id: true,
+        lotNumber: true,
+        status: true,
+      },
+    })
+
+    // Check for lots that cannot be deleted
+    const undeletableLots = lotsToDelete.filter(
+      lot => lot.status === 'conformed' || lot.status === 'claimed'
+    )
+
+    if (undeletableLots.length > 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Cannot delete ${undeletableLots.length} lot(s) that are conformed or claimed: ${undeletableLots.map(l => l.lotNumber).join(', ')}`
+      })
+    }
+
+    // Delete all lots in a transaction
+    const result = await prisma.lot.deleteMany({
+      where: {
+        id: { in: lotIds },
+        status: { notIn: ['conformed', 'claimed'] },
+      },
+    })
+
+    res.json({
+      message: `Successfully deleted ${result.count} lot(s)`,
+      count: result.count,
+    })
+  } catch (error) {
+    console.error('Bulk delete lots error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
 // GET /api/lots/check-role/:projectId - Check user's role on a project
 lotsRouter.get('/check-role/:projectId', async (req, res) => {
   try {
@@ -382,27 +508,63 @@ lotsRouter.get('/check-role/:projectId', async (req, res) => {
   }
 })
 
+// GET /api/lots/:id/conform-status - Get lot conformance prerequisites status
+lotsRouter.get('/:id/conform-status', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+
+    const result = await checkConformancePrerequisites(id)
+
+    if (result.error) {
+      return res.status(404).json({ error: result.error })
+    }
+
+    // Check if user has access to this lot's project
+    const projectAccess = await prisma.projectUser.findFirst({
+      where: {
+        projectId: result.lot!.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const projectCompanyAccess = await prisma.project.findFirst({
+      where: {
+        id: result.lot!.projectId,
+        companyId: user.companyId || undefined,
+      },
+    })
+
+    if (!projectAccess && !projectCompanyAccess) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this lot'
+      })
+    }
+
+    res.json(result)
+  } catch (error) {
+    console.error('Get conform status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // POST /api/lots/:id/conform - Conform a lot (quality management)
 lotsRouter.post('/:id/conform', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
+    const { force } = req.body // Optional force parameter to skip prerequisite check
 
-    // Check if user has the right role to conform lots
-    // Get user's role on the project first
-    const lot = await prisma.lot.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        lotNumber: true,
-        status: true,
-        projectId: true,
-      },
-    })
+    // Check conformance prerequisites first
+    const conformStatus = await checkConformancePrerequisites(id)
 
-    if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+    if (conformStatus.error) {
+      return res.status(404).json({ error: conformStatus.error })
     }
+
+    const lot = conformStatus.lot!
 
     // Get user's role on this project
     const projectUser = await prisma.projectUser.findFirst({
@@ -428,6 +590,16 @@ lotsRouter.post('/:id/conform', async (req, res) => {
       return res.status(400).json({
         error: 'Bad Request',
         message: `Lot is already ${lot.status}`
+      })
+    }
+
+    // Check prerequisites unless force flag is provided (only for admins)
+    if (!conformStatus.canConform && !force) {
+      return res.status(400).json({
+        error: 'Prerequisites not met',
+        message: 'Cannot conform lot - prerequisites not met',
+        blockingReasons: conformStatus.blockingReasons,
+        prerequisites: conformStatus.prerequisites
       })
     }
 

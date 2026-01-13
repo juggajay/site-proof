@@ -1262,5 +1262,91 @@ Date: 2026-01-14
 3. Build out remaining module functionality
 
 ================================================================================
+END OF SESSION 16 SUMMARY
+================================================================================
+
+================================================================================
+SITEPROOF V2 - CODING AGENT SESSION SUMMARY
+================================================================================
+Session: 17 (Coding Agent)
+Date: 2026-01-14
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #220: NCR register displays correctly
+- Added missing columns to NCR register table:
+  - Lots (moved from combined description cell to separate column)
+  - Category (shows workmanship, materials, etc.)
+  - Responsible (shows assigned user or "Unassigned")
+  - Due (shows due date or "-" if not set, red text if overdue)
+  - Age (shows days since NCR creation, amber if > 14 days)
+- Removed Severity and QM Approval columns (replaced with required columns)
+- All 9 columns now displayed: NCR #, Lots, Description, Category, Status, Responsible, Due, Age, Actions
+
+### Feature #221: NCR register filtering
+- Implemented comprehensive filter system with:
+  - Status filter dropdown (All Statuses, open, closed, closed_concession)
+  - Category filter dropdown (All Categories, workmanship, materials, etc.)
+  - Responsible filter dropdown (All Responsible, Unassigned, assigned users)
+  - Date From / Date To filter inputs for date range filtering
+  - Clear Filters button (appears when any filter is active)
+  - Filter results summary showing "X of Y NCRs"
+- All filters work independently and can be combined
+
+### Feature #222: NCR register overdue highlighting
+- Added dueDate field to CreateNCRModal form
+- Due dates in the past are highlighted in red for open NCRs
+- Created test NCR-0007 with past due date (2026-01-13)
+- Verified red highlighting appears for overdue, unresolved NCRs
+- Closed NCRs with past due dates are NOT highlighted
+
+### Feature #223: NCR analytics metrics
+- Enhanced NCR Report page in Reports & Analytics:
+  - Summary Cards:
+    - Total NCRs
+    - Open NCRs (red)
+    - Closed This Month (green)
+    - Average Closure Time (blue)
+    - Overdue (amber)
+    - Total Closed (purple)
+  - Charts with progress bars:
+    - NCRs by Category (materials, workmanship, etc.)
+    - NCRs by Root Cause (process, workmanship, materials, not specified)
+    - NCRs by Responsible Party (Unassigned, assigned users)
+  - Updated backend to calculate closedThisMonth, averageClosureTime, responsiblePartyCounts
+  - Full NCR details table at bottom
+
+## FILES MODIFIED THIS SESSION
+- frontend/src/pages/ncr/NCRPage.tsx
+  - Updated table columns (added Lots, Category, Responsible, Due, Age)
+  - Added filter state and UI components
+  - Added dueDate field to CreateNCRModal
+  - Implemented overdue highlighting logic
+- backend/src/routes/reports.ts
+  - Added closedThisMonth calculation
+  - Added averageClosureTime calculation
+  - Added responsiblePartyCounts calculation
+- frontend/src/pages/reports/ReportsPage.tsx
+  - Updated NCRReport interface with new fields
+  - Added summary cards for new metrics
+  - Added progress bar charts for category, root cause, responsible party
+
+## SCREENSHOTS CAPTURED
+- feature-222-overdue-ncr-highlighting.png - NCR list with overdue NCR highlighted in red
+- feature-223-ncr-analytics.png - Full NCR analytics dashboard with metrics and charts
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 143 (13.8%)
+- In Progress: 0
+- Pending: 892
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing functional features
+3. Build out remaining module functionality
+
+================================================================================
 END OF SESSION SUMMARY
 ================================================================================

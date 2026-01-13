@@ -81,6 +81,10 @@ model Project {
   specificationSet  String   @map("specification_set")
   chainageStart     Decimal? @map("chainage_start")
   chainageEnd       Decimal? @map("chainage_end")
+  lotPrefix         String?  @default("LOT-") @map("lot_prefix")
+  lotStartingNumber Int?     @default(1) @map("lot_starting_number")
+  ncrPrefix         String?  @default("NCR-") @map("ncr_prefix")
+  ncrStartingNumber Int?     @default(1) @map("ncr_starting_number")
   settings          String?   // Stored as JSON string for SQLite
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")

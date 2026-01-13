@@ -5,6 +5,7 @@ import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
+import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
 
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager']
@@ -62,10 +63,20 @@ export function LotsPage() {
   })
   const [chainageError, setChainageError] = useState<string | null>(null)
 
-  // Get filter and pagination from URL
+  // Bulk create wizard state
+  const [bulkWizardOpen, setBulkWizardOpen] = useState(false)
+
+  // Bulk delete state
+  const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set())
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // Get filter, sort, and pagination from URL
   const currentPage = parseInt(searchParams.get('page') || '1', 10)
   const statusFilter = searchParams.get('status') || ''
   const activityFilter = searchParams.get('activity') || ''
+  const sortField = searchParams.get('sort') || 'lotNumber'
+  const sortDirection = (searchParams.get('dir') || 'asc') as 'asc' | 'desc'
 
   // Check if user can delete lots
   const canDelete = user?.role ? LOT_DELETE_ROLES.includes(user.role) : false
@@ -76,14 +87,49 @@ export function LotsPage() {
     return Array.from(types).sort()
   }, [lots])
 
-  // Filter lots based on current filters
+  // Filter and sort lots based on current filters and sort order
   const filteredLots = useMemo(() => {
-    return lots.filter((lot) => {
+    const filtered = lots.filter((lot) => {
       if (statusFilter && lot.status !== statusFilter) return false
       if (activityFilter && lot.activityType !== activityFilter) return false
       return true
     })
-  }, [lots, statusFilter, activityFilter])
+
+    // Sort the filtered lots
+    return filtered.sort((a, b) => {
+      let aVal: string | number | null = null
+      let bVal: string | number | null = null
+
+      switch (sortField) {
+        case 'lotNumber':
+          aVal = a.lotNumber.toLowerCase()
+          bVal = b.lotNumber.toLowerCase()
+          break
+        case 'description':
+          aVal = (a.description || '').toLowerCase()
+          bVal = (b.description || '').toLowerCase()
+          break
+        case 'chainage':
+          aVal = a.chainageStart ?? Number.MAX_SAFE_INTEGER
+          bVal = b.chainageStart ?? Number.MAX_SAFE_INTEGER
+          break
+        case 'activityType':
+          aVal = (a.activityType || '').toLowerCase()
+          bVal = (b.activityType || '').toLowerCase()
+          break
+        case 'status':
+          aVal = a.status.toLowerCase()
+          bVal = b.status.toLowerCase()
+          break
+        default:
+          return 0
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [lots, statusFilter, activityFilter, sortField, sortDirection])
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredLots.length / PAGE_SIZE)
@@ -121,39 +167,68 @@ export function LotsPage() {
     updateFilters({ page: page.toString() })
   }
 
-  useEffect(() => {
-    async function fetchLots() {
-      if (!projectId) return
+  const handleSort = (field: string) => {
+    // If clicking the same field, toggle direction; otherwise sort ascending
+    if (field === sortField) {
+      updateFilters({ dir: sortDirection === 'asc' ? 'desc' : 'asc', sort: field })
+    } else {
+      updateFilters({ sort: field, dir: 'asc' })
+    }
+  }
 
-      const token = getAuthToken()
-      if (!token) {
-        navigate('/login')
-        return
-      }
+  // Sortable column header component
+  const SortableHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
+    <th
+      className="text-left p-3 font-medium cursor-pointer hover:bg-muted/70 select-none"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <span className="text-muted-foreground">
+          {sortField === field ? (
+            sortDirection === 'asc' ? '↑' : '↓'
+          ) : (
+            <span className="opacity-0 group-hover:opacity-50">↕</span>
+          )}
+        </span>
+      </div>
+    </th>
+  )
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+  const fetchLots = async () => {
+    if (!projectId) return
 
-      try {
-        const response = await fetch(`${apiUrl}/api/lots?projectId=${projectId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch lots')
-        }
-
-        const data = await response.json()
-        setLots(data.lots || [])
-      } catch (err) {
-        setError('Failed to load lots')
-        console.error('Fetch lots error:', err)
-      } finally {
-        setLoading(false)
-      }
+    const token = getAuthToken()
+    if (!token) {
+      navigate('/login')
+      return
     }
 
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      setLoading(true)
+      const response = await fetch(`${apiUrl}/api/lots?projectId=${projectId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch lots')
+      }
+
+      const data = await response.json()
+      setLots(data.lots || [])
+    } catch (err) {
+      setError('Failed to load lots')
+      console.error('Fetch lots error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchLots()
   }, [projectId, navigate])
 
@@ -227,12 +302,18 @@ export function LotsPage() {
           setDeleteModalOpen(false)
           setLotToDelete(null)
         }
+        if (bulkWizardOpen) {
+          setBulkWizardOpen(false)
+        }
+        if (bulkDeleteModalOpen) {
+          setBulkDeleteModalOpen(false)
+        }
       }
     }
 
     document.addEventListener('keydown', handleEscapeKey)
     return () => document.removeEventListener('keydown', handleEscapeKey)
-  }, [createModalOpen, deleteModalOpen])
+  }, [createModalOpen, deleteModalOpen, bulkWizardOpen, bulkDeleteModalOpen])
 
   // Handle create lot submission
   const handleCreateLot = async () => {
@@ -391,6 +472,94 @@ export function LotsPage() {
     URL.revokeObjectURL(url)
   }
 
+  // Handle bulk wizard success
+  const handleBulkCreateSuccess = () => {
+    setBulkWizardOpen(false)
+    fetchLots() // Refresh the lot list
+  }
+
+  // Get deletable lots from current page (not conformed or claimed)
+  const deletableLots = useMemo(() => {
+    return paginatedLots.filter(lot => lot.status !== 'conformed' && lot.status !== 'claimed')
+  }, [paginatedLots])
+
+  // Check if all deletable lots on current page are selected
+  const allDeletableSelected = deletableLots.length > 0 && deletableLots.every(lot => selectedLots.has(lot.id))
+
+  // Toggle select all for current page
+  const handleSelectAll = () => {
+    if (allDeletableSelected) {
+      // Deselect all on current page
+      const newSelected = new Set(selectedLots)
+      deletableLots.forEach(lot => newSelected.delete(lot.id))
+      setSelectedLots(newSelected)
+    } else {
+      // Select all deletable on current page
+      const newSelected = new Set(selectedLots)
+      deletableLots.forEach(lot => newSelected.add(lot.id))
+      setSelectedLots(newSelected)
+    }
+  }
+
+  // Toggle single lot selection
+  const handleSelectLot = (lotId: string) => {
+    const newSelected = new Set(selectedLots)
+    if (newSelected.has(lotId)) {
+      newSelected.delete(lotId)
+    } else {
+      newSelected.add(lotId)
+    }
+    setSelectedLots(newSelected)
+  }
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (selectedLots.size === 0) return
+
+    setBulkDeleting(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/lots/bulk-delete`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lotIds: Array.from(selectedLots),
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to delete lots')
+      }
+
+      const data = await response.json()
+
+      // Remove deleted lots from list
+      setLots((prev) => prev.filter((l) => !selectedLots.has(l.id)))
+      setSelectedLots(new Set())
+      setBulkDeleteModalOpen(false)
+
+      toast({
+        title: 'Lots Deleted',
+        description: data.message,
+        variant: 'success',
+      })
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete lots',
+        variant: 'error',
+      })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -402,13 +571,29 @@ export function LotsPage() {
           >
             Export CSV
           </button>
-          {!isSubcontractor && canCreate && (
+          {canDelete && selectedLots.size > 0 && (
             <button
-              onClick={handleOpenCreateModal}
-              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              onClick={() => setBulkDeleteModalOpen(true)}
+              className="rounded-lg border border-red-500 px-4 py-2 text-sm text-red-500 hover:bg-red-50"
             >
-              Create Lot
+              Delete Selected ({selectedLots.size})
             </button>
+          )}
+          {!isSubcontractor && canCreate && (
+            <>
+              <button
+                onClick={() => setBulkWizardOpen(true)}
+                className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+              >
+                Bulk Create Lots
+              </button>
+              <button
+                onClick={handleOpenCreateModal}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                Create Lot
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -431,10 +616,11 @@ export function LotsPage() {
             className="rounded-lg border bg-background px-3 py-1.5 text-sm"
           >
             <option value="">All Statuses</option>
-            <option value="pending">Pending</option>
+            <option value="not_started">Not Started</option>
             <option value="in_progress">In Progress</option>
             <option value="awaiting_test">Awaiting Test</option>
             <option value="hold_point">Hold Point</option>
+            <option value="ncr_raised">NCR Raised</option>
             <option value="completed">Completed</option>
             <option value="conformed">Conformed</option>
             <option value="claimed">Claimed</option>
@@ -493,11 +679,22 @@ export function LotsPage() {
           <table className="w-full">
             <thead className="border-b bg-muted/50">
               <tr>
-                <th className="text-left p-3 font-medium">Lot Number</th>
-                <th className="text-left p-3 font-medium">Description</th>
-                <th className="text-left p-3 font-medium">Chainage</th>
-                <th className="text-left p-3 font-medium">Activity Type</th>
-                <th className="text-left p-3 font-medium">Status</th>
+                {canDelete && (
+                  <th className="p-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allDeletableSelected}
+                      onChange={handleSelectAll}
+                      className="h-4 w-4 rounded border-gray-300"
+                      title="Select all"
+                    />
+                  </th>
+                )}
+                <SortableHeader field="lotNumber">Lot Number</SortableHeader>
+                <SortableHeader field="description">Description</SortableHeader>
+                <SortableHeader field="chainage">Chainage</SortableHeader>
+                <SortableHeader field="activityType">Activity Type</SortableHeader>
+                <SortableHeader field="status">Status</SortableHeader>
                 {!isSubcontractor && (
                   <th className="text-left p-3 font-medium">Subcontractor</th>
                 )}
@@ -510,7 +707,7 @@ export function LotsPage() {
             <tbody>
               {paginatedLots.length === 0 ? (
                 <tr>
-                  <td colSpan={isSubcontractor ? 6 : 8} className="p-12 text-center">
+                  <td colSpan={canDelete ? (isSubcontractor ? 7 : 9) : (isSubcontractor ? 6 : 8)} className="p-12 text-center">
                     {lots.length === 0 ? (
                       <div className="flex flex-col items-center gap-4">
                         <div className="text-5xl">📋</div>
@@ -541,6 +738,18 @@ export function LotsPage() {
               ) : (
                 paginatedLots.map((lot) => (
                   <tr key={lot.id} className="border-b hover:bg-muted/25">
+                    {canDelete && (
+                      <td className="p-3">
+                        {lot.status !== 'conformed' && lot.status !== 'claimed' && (
+                          <input
+                            type="checkbox"
+                            checked={selectedLots.has(lot.id)}
+                            onChange={() => handleSelectLot(lot.id)}
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                        )}
+                      </td>
+                    )}
                     <td className="p-3 font-medium">{lot.lotNumber}</td>
                     <td className="p-3">{lot.description || '—'}</td>
                     <td className="p-3">{formatChainage(lot)}</td>
@@ -659,6 +868,38 @@ export function LotsPage() {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {deleting ? 'Deleting...' : 'Delete Lot'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {bulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Confirm Bulk Deletion</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-gray-900">{selectedLots.size} lot(s)</span>?
+            </p>
+            <p className="mt-3 text-sm text-red-600">
+              This action cannot be undone. All associated data will be permanently deleted.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setBulkDeleteModalOpen(false)}
+                disabled={bulkDeleting}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {bulkDeleting ? 'Deleting...' : `Delete ${selectedLots.size} Lot(s)`}
               </button>
             </div>
           </div>
@@ -792,6 +1033,15 @@ export function LotsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Bulk Create Lots Wizard */}
+      {bulkWizardOpen && projectId && (
+        <BulkCreateLotsWizard
+          projectId={projectId}
+          onClose={() => setBulkWizardOpen(false)}
+          onSuccess={handleBulkCreateSuccess}
+        />
       )}
     </div>
   )

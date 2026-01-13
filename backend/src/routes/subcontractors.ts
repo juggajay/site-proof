@@ -7,6 +7,31 @@ export const subcontractorsRouter = Router()
 // Apply authentication middleware to all routes
 subcontractorsRouter.use(requireAuth)
 
+// GET /api/subcontractors/for-project/:projectId - Get subcontractors for a project
+subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params
+
+    // Get all subcontractor companies associated with this project
+    const subcontractors = await prisma.subcontractorCompany.findMany({
+      where: {
+        projectId: projectId
+      },
+      select: {
+        id: true,
+        companyName: true,
+        status: true,
+      },
+      orderBy: { companyName: 'asc' }
+    })
+
+    res.json({ subcontractors })
+  } catch (error) {
+    console.error('Get subcontractors for project error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/subcontractors/my-company - Get the current user's subcontractor company
 subcontractorsRouter.get('/my-company', async (req, res) => {
   try {

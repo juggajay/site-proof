@@ -1,15 +1,39 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
-import { Settings, Users, ClipboardList, Bell, AlertTriangle } from 'lucide-react'
+import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus } from 'lucide-react'
 
 interface Project {
   id: string
   name: string
   code: string
+  lotPrefix?: string
+  lotStartingNumber?: number
+  ncrPrefix?: string
+  ncrStartingNumber?: number
+}
+
+interface TeamMember {
+  id: string
+  userId: string
+  email: string
+  fullName?: string
+  role: string
+  status: string
+  invitedAt: string
+  acceptedAt?: string
 }
 
 type SettingsTab = 'general' | 'team' | 'itp-templates' | 'notifications'
+
+const ROLE_OPTIONS = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'project_manager', label: 'Project Manager' },
+  { value: 'site_engineer', label: 'Site Engineer' },
+  { value: 'quality_manager', label: 'Quality Manager' },
+  { value: 'foreman', label: 'Foreman' },
+  { value: 'viewer', label: 'Viewer' },
+]
 
 export function ProjectSettingsPage() {
   const { projectId } = useParams()
@@ -21,11 +45,34 @@ export function ProjectSettingsPage() {
   // Get active tab from URL or default to 'general'
   const activeTab = (searchParams.get('tab') as SettingsTab) || 'general'
 
+  // Form state for General settings
+  const [formData, setFormData] = useState({
+    name: '',
+    code: '',
+    lotPrefix: 'LOT-',
+    lotStartingNumber: 1,
+    ncrPrefix: 'NCR-',
+    ncrStartingNumber: 1,
+  })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState(false)
+
   // Delete dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
+
+  // Team state
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [loadingTeam, setLoadingTeam] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('site_engineer')
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState('')
+  const [inviteSuccess, setInviteSuccess] = useState('')
 
   const setActiveTab = (tab: SettingsTab) => {
     setSearchParams({ tab })
@@ -46,6 +93,15 @@ export function ProjectSettingsPage() {
         if (response.ok) {
           const data = await response.json()
           setProject(data.project)
+          // Initialize form data from project
+          setFormData({
+            name: data.project.name || '',
+            code: data.project.code || '',
+            lotPrefix: data.project.lotPrefix || 'LOT-',
+            lotStartingNumber: data.project.lotStartingNumber || 1,
+            ncrPrefix: data.project.ncrPrefix || 'NCR-',
+            ncrStartingNumber: data.project.ncrStartingNumber || 1,
+          })
         }
       } catch (error) {
         console.error('Failed to fetch project:', error)
@@ -56,6 +112,39 @@ export function ProjectSettingsPage() {
 
     fetchProject()
   }, [projectId])
+
+  // Fetch team members when team tab is active
+  useEffect(() => {
+    async function fetchTeamMembers() {
+      if (activeTab !== 'team' || !projectId) return
+
+      setLoadingTeam(true)
+      const token = getAuthToken()
+      if (!token) {
+        setLoadingTeam(false)
+        return
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/projects/${projectId}/users`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setTeamMembers(data.users || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch team members:', error)
+      } finally {
+        setLoadingTeam(false)
+      }
+    }
+
+    fetchTeamMembers()
+  }, [activeTab, projectId])
 
   const handleDeleteClick = () => {
     setShowDeleteDialog(true)
@@ -111,6 +200,119 @@ export function ProjectSettingsPage() {
     }
   }
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'number' ? parseInt(value, 10) || 0 : value,
+    }))
+    // Clear success message when user starts typing
+    if (saveSuccess) setSaveSuccess(false)
+  }
+
+  const handleSaveSettings = async () => {
+    setSaving(true)
+    setSaveError('')
+    setSaveSuccess(false)
+
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          code: formData.code,
+          lotPrefix: formData.lotPrefix,
+          lotStartingNumber: formData.lotStartingNumber,
+          ncrPrefix: formData.ncrPrefix,
+          ncrStartingNumber: formData.ncrStartingNumber,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to save settings')
+      }
+
+      const data = await response.json()
+      setProject(data.project)
+      setSaveSuccess(true)
+      // Auto-hide success message after 3 seconds
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save settings')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleOpenInviteModal = () => {
+    setShowInviteModal(true)
+    setInviteEmail('')
+    setInviteRole('site_engineer')
+    setInviteError('')
+    setInviteSuccess('')
+  }
+
+  const handleInviteTeamMember = async () => {
+    if (!inviteEmail.trim()) {
+      setInviteError('Email is required')
+      return
+    }
+
+    setInviting(true)
+    setInviteError('')
+    setInviteSuccess('')
+
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/projects/${projectId}/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          email: inviteEmail,
+          role: inviteRole,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to invite team member')
+      }
+
+      setInviteSuccess(`Invitation sent to ${inviteEmail}`)
+      // Refresh team members list
+      const refreshResponse = await fetch(`${apiUrl}/api/projects/${projectId}/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json()
+        setTeamMembers(refreshData.users || [])
+      }
+      // Close modal after short delay
+      setTimeout(() => {
+        setShowInviteModal(false)
+        setInviteSuccess('')
+      }, 2000)
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : 'Failed to invite team member')
+    } finally {
+      setInviting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center p-6">
@@ -163,6 +365,18 @@ export function ProjectSettingsPage() {
       <div className="space-y-6" role="tabpanel">
         {activeTab === 'general' && (
           <>
+            {/* Save Status Messages */}
+            {saveError && (
+              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4">
+                {saveError}
+              </div>
+            )}
+            {saveSuccess && (
+              <div className="rounded-lg bg-green-100 p-3 text-sm text-green-700 mb-4">
+                Settings saved successfully!
+              </div>
+            )}
+
             <div className="rounded-lg border p-4">
               <h2 className="text-lg font-semibold mb-2">General Settings</h2>
               <p className="text-sm text-muted-foreground mb-4">
@@ -173,7 +387,9 @@ export function ProjectSettingsPage() {
                   <label className="block text-sm font-medium mb-1">Project Name</label>
                   <input
                     type="text"
-                    defaultValue={project?.name || ''}
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                     placeholder="Project name"
                   />
@@ -182,7 +398,9 @@ export function ProjectSettingsPage() {
                   <label className="block text-sm font-medium mb-1">Project Code</label>
                   <input
                     type="text"
-                    defaultValue={project?.code || ''}
+                    name="code"
+                    value={formData.code}
+                    onChange={handleInputChange}
                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                     placeholder="PRJ-001"
                   />
@@ -199,7 +417,9 @@ export function ProjectSettingsPage() {
                   <label className="block text-sm font-medium mb-1">Lot Prefix</label>
                   <input
                     type="text"
-                    defaultValue="LOT-"
+                    name="lotPrefix"
+                    value={formData.lotPrefix}
+                    onChange={handleInputChange}
                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                     placeholder="LOT-"
                   />
@@ -208,12 +428,56 @@ export function ProjectSettingsPage() {
                   <label className="block text-sm font-medium mb-1">Starting Number</label>
                   <input
                     type="number"
-                    defaultValue={1}
+                    name="lotStartingNumber"
+                    value={formData.lotStartingNumber}
+                    onChange={handleInputChange}
                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                     placeholder="1"
                   />
                 </div>
               </div>
+            </div>
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">NCR Numbering</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure non-conformance report numbering convention.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">NCR Prefix</label>
+                  <input
+                    type="text"
+                    name="ncrPrefix"
+                    value={formData.ncrPrefix}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                    placeholder="NCR-"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Starting Number</label>
+                  <input
+                    type="number"
+                    name="ncrStartingNumber"
+                    value={formData.ncrStartingNumber}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                    placeholder="1"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? 'Saving...' : 'Save Settings'}
+              </button>
             </div>
 
             {/* Danger Zone */}
@@ -242,34 +506,51 @@ export function ProjectSettingsPage() {
               <p className="text-sm text-muted-foreground mb-4">
                 Manage team members and their roles on this project.
               </p>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Project Manager</p>
-                      <p className="text-sm text-muted-foreground">pm@example.com</p>
-                    </div>
-                  </div>
-                  <span className="px-2 py-1 text-xs rounded-full bg-primary/10 text-primary">Admin</span>
+              {loadingTeam ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Site Engineer</p>
-                      <p className="text-sm text-muted-foreground">engineer@example.com</p>
-                    </div>
-                  </div>
-                  <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Site Engineer</span>
+              ) : (
+                <div className="space-y-3">
+                  {teamMembers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">No team members yet.</p>
+                  ) : (
+                    teamMembers.map((member) => (
+                      <div key={member.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                            member.role === 'admin' ? 'bg-primary/20' : 'bg-green-100'
+                          }`}>
+                            <Users className={`h-5 w-5 ${
+                              member.role === 'admin' ? 'text-primary' : 'text-green-600'
+                            }`} />
+                          </div>
+                          <div>
+                            <p className="font-medium">{member.fullName || 'Team Member'}</p>
+                            <p className="text-sm text-muted-foreground">{member.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {member.status === 'pending' && (
+                            <span className="px-2 py-1 text-xs rounded-full bg-amber-100 text-amber-700">Pending</span>
+                          )}
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            member.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-green-100 text-green-700'
+                          }`}>
+                            {ROLE_OPTIONS.find(r => r.value === member.role)?.label || member.role}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-              </div>
-              <button className="mt-4 rounded-lg border px-4 py-2 text-sm hover:bg-muted">
-                + Invite Team Member
+              )}
+              <button
+                onClick={handleOpenInviteModal}
+                className="mt-4 flex items-center gap-2 rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+              >
+                <UserPlus className="h-4 w-4" />
+                Invite Team Member
               </button>
             </div>
             <div className="rounded-lg border p-4">
@@ -393,6 +674,83 @@ export function ProjectSettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Invite Team Member Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">Invite Team Member</h3>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="p-1 hover:bg-muted rounded"
+                aria-label="Close modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {inviteError && (
+              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4">
+                {inviteError}
+              </div>
+            )}
+
+            {inviteSuccess && (
+              <div className="rounded-lg bg-green-100 p-3 text-sm text-green-700 mb-4">
+                {inviteSuccess}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="team.member@example.com"
+                  className="w-full rounded-lg border bg-background px-3 py-2"
+                  disabled={inviting}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Role</label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="w-full rounded-lg border bg-background px-3 py-2"
+                  disabled={inviting}
+                >
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => setShowInviteModal(false)}
+                disabled={inviting}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInviteTeamMember}
+                disabled={inviting || !inviteEmail.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {inviting ? 'Sending...' : 'Send Invitation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Dialog */}
       {showDeleteDialog && (

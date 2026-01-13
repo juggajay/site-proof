@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { getAuthToken } from '@/lib/auth'
 
@@ -15,6 +15,13 @@ interface Lot {
   layer: string | null
   areaZone: string | null
   budgetAmount?: number | null
+  assignedSubcontractorId?: string | null
+}
+
+interface Subcontractor {
+  id: string
+  companyName: string
+  status: string
 }
 
 const ACTIVITY_TYPES = [
@@ -47,6 +54,7 @@ export function LotEditPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([])
 
   // Form state
   const [formData, setFormData] = useState({
@@ -60,7 +68,52 @@ export function LotEditPage() {
     areaZone: '',
     status: '',
     budgetAmount: '',
+    assignedSubcontractorId: '',
   })
+
+  // Track if form has unsaved changes
+  const [isDirty, setIsDirty] = useState(false)
+  const initialFormData = useRef<typeof formData | null>(null)
+
+  // State for showing unsaved changes dialog
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const pendingNavigationRef = useRef<string | null>(null)
+
+  // Handle browser refresh/close
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
+  // Safe navigation function that checks for unsaved changes
+  const safeNavigate = useCallback((path: string) => {
+    if (isDirty) {
+      pendingNavigationRef.current = path
+      setShowUnsavedDialog(true)
+    } else {
+      navigate(path)
+    }
+  }, [isDirty, navigate])
+
+  // Handle dialog confirmation
+  const handleConfirmLeave = () => {
+    setShowUnsavedDialog(false)
+    setIsDirty(false)
+    if (pendingNavigationRef.current) {
+      navigate(pendingNavigationRef.current)
+    }
+  }
+
+  const handleCancelLeave = () => {
+    setShowUnsavedDialog(false)
+    pendingNavigationRef.current = null
+  }
 
   useEffect(() => {
     async function fetchLot() {
@@ -101,7 +154,7 @@ export function LotEditPage() {
         setLot(data.lot)
 
         // Populate form with lot data
-        setFormData({
+        const initialData = {
           lotNumber: data.lot.lotNumber || '',
           description: data.lot.description || '',
           activityType: data.lot.activityType || '',
@@ -112,7 +165,10 @@ export function LotEditPage() {
           areaZone: data.lot.areaZone || '',
           status: data.lot.status || '',
           budgetAmount: data.lot.budgetAmount?.toString() || '',
-        })
+          assignedSubcontractorId: data.lot.assignedSubcontractorId || '',
+        }
+        setFormData(initialData)
+        initialFormData.current = initialData
       } catch (err) {
         setError('Failed to load lot')
       } finally {
@@ -123,9 +179,48 @@ export function LotEditPage() {
     fetchLot()
   }, [lotId, navigate])
 
+  // Fetch subcontractors for this project
+  useEffect(() => {
+    async function fetchSubcontractors() {
+      if (!projectId) return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/subcontractors/for-project/${projectId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setSubcontractors(data.subcontractors || [])
+        }
+      } catch (err) {
+        console.error('Failed to fetch subcontractors:', err)
+      }
+    }
+
+    fetchSubcontractors()
+  }, [projectId])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => {
+      const newData = { ...prev, [name]: value }
+      // Check if form is dirty by comparing to initial data
+      if (initialFormData.current) {
+        const hasChanges = Object.keys(newData).some(
+          (key) => newData[key as keyof typeof newData] !== initialFormData.current![key as keyof typeof newData]
+        )
+        setIsDirty(hasChanges)
+      }
+      return newData
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -159,6 +254,11 @@ export function LotEditPage() {
       updatePayload.budgetAmount = parseFloat(formData.budgetAmount)
     }
 
+    // Include subcontractor assignment (can be null to unassign)
+    if (canViewBudgets) {
+      updatePayload.assignedSubcontractorId = formData.assignedSubcontractorId || null
+    }
+
     try {
       const response = await fetch(`${apiUrl}/api/lots/${lotId}`, {
         method: 'PATCH',
@@ -174,6 +274,8 @@ export function LotEditPage() {
         throw new Error(data.message || 'Failed to update lot')
       }
 
+      // Clear dirty state before navigating
+      setIsDirty(false)
       // Navigate back to lot detail page
       navigate(`/projects/${projectId}/lots/${lotId}`)
     } catch (err) {
@@ -225,7 +327,7 @@ export function LotEditPage() {
           </p>
         </div>
         <button
-          onClick={() => navigate(`/projects/${projectId}/lots/${lotId}`)}
+          onClick={() => safeNavigate(`/projects/${projectId}/lots/${lotId}`)}
           className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
         >
           Cancel
@@ -243,6 +345,32 @@ export function LotEditPage() {
       {saveError && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
           {saveError}
+        </div>
+      )}
+
+      {/* Unsaved Changes Dialog */}
+      {showUnsavedDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold mb-2">Unsaved Changes</h3>
+            <p className="text-muted-foreground mb-6">
+              You have unsaved changes. Are you sure you want to leave this page? Your changes will be lost.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleCancelLeave}
+                className="px-4 py-2 rounded-lg border hover:bg-muted"
+              >
+                Stay on Page
+              </button>
+              <button
+                onClick={handleConfirmLeave}
+                className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Leave Page
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -423,20 +551,43 @@ export function LotEditPage() {
           <div className="rounded-lg border p-6 space-y-4">
             <h2 className="text-lg font-semibold">Commercial</h2>
 
-            <div>
-              <label htmlFor="budgetAmount" className="block text-sm font-medium mb-1">
-                Budget Amount ($)
-              </label>
-              <input
-                type="number"
-                id="budgetAmount"
-                name="budgetAmount"
-                value={formData.budgetAmount}
-                onChange={handleInputChange}
-                disabled={isLocked}
-                step="0.01"
-                className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="budgetAmount" className="block text-sm font-medium mb-1">
+                  Budget Amount ($)
+                </label>
+                <input
+                  type="number"
+                  id="budgetAmount"
+                  name="budgetAmount"
+                  value={formData.budgetAmount}
+                  onChange={handleInputChange}
+                  disabled={isLocked}
+                  step="0.01"
+                  className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="assignedSubcontractorId" className="block text-sm font-medium mb-1">
+                  Assigned Subcontractor
+                </label>
+                <select
+                  id="assignedSubcontractorId"
+                  name="assignedSubcontractorId"
+                  value={formData.assignedSubcontractorId}
+                  onChange={handleInputChange}
+                  disabled={isLocked}
+                  className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+                >
+                  <option value="">No subcontractor assigned</option>
+                  {subcontractors.map((sub) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.companyName} {sub.status === 'pending' ? '(Pending)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         )}
@@ -445,7 +596,7 @@ export function LotEditPage() {
         <div className="flex justify-end gap-4">
           <button
             type="button"
-            onClick={() => navigate(`/projects/${projectId}/lots/${lotId}`)}
+            onClick={() => safeNavigate(`/projects/${projectId}/lots/${lotId}`)}
             className="rounded-lg border px-6 py-2 hover:bg-muted"
           >
             Cancel
