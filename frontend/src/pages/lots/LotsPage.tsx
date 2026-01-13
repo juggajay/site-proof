@@ -59,6 +59,7 @@ export function LotsPage() {
     chainageStart: '',
     chainageEnd: '',
   })
+  const [chainageError, setChainageError] = useState<string | null>(null)
 
   // Get filter and pagination from URL
   const currentPage = parseInt(searchParams.get('page') || '1', 10)
@@ -165,6 +166,31 @@ export function LotsPage() {
     return lot.chainageStart ?? lot.chainageEnd ?? '—'
   }
 
+  // Validate chainage values
+  const validateChainage = (start: string, end: string) => {
+    if (start && end) {
+      const startNum = parseInt(start)
+      const endNum = parseInt(end)
+      if (!isNaN(startNum) && !isNaN(endNum) && endNum < startNum) {
+        return 'Chainage End must be greater than or equal to Chainage Start'
+      }
+    }
+    return null
+  }
+
+  // Handle chainage change with validation
+  const handleChainageStartChange = (value: string) => {
+    setNewLot((prev) => ({ ...prev, chainageStart: value }))
+    const error = validateChainage(value, newLot.chainageEnd)
+    setChainageError(error)
+  }
+
+  const handleChainageEndChange = (value: string) => {
+    setNewLot((prev) => ({ ...prev, chainageEnd: value }))
+    const error = validateChainage(newLot.chainageStart, value)
+    setChainageError(error)
+  }
+
   // Open/close create lot modal
   const handleOpenCreateModal = () => {
     setNewLot({
@@ -174,6 +200,7 @@ export function LotsPage() {
       chainageStart: '',
       chainageEnd: '',
     })
+    setChainageError(null)
     setCreateModalOpen(true)
   }
 
@@ -707,8 +734,12 @@ export function LotsPage() {
                     id="chainage-start"
                     type="number"
                     value={newLot.chainageStart}
-                    onChange={(e) => setNewLot((prev) => ({ ...prev, chainageStart: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    onChange={(e) => handleChainageStartChange(e.target.value)}
+                    className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
+                      chainageError
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                        : 'focus:border-primary focus:ring-primary'
+                    }`}
                     placeholder="e.g., 0"
                   />
                 </div>
@@ -720,12 +751,19 @@ export function LotsPage() {
                     id="chainage-end"
                     type="number"
                     value={newLot.chainageEnd}
-                    onChange={(e) => setNewLot((prev) => ({ ...prev, chainageEnd: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    onChange={(e) => handleChainageEndChange(e.target.value)}
+                    className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
+                      chainageError
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                        : 'focus:border-primary focus:ring-primary'
+                    }`}
                     placeholder="e.g., 100"
                   />
                 </div>
               </div>
+              {chainageError && (
+                <p className="text-sm text-red-600 mt-1">{chainageError}</p>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
@@ -738,8 +776,8 @@ export function LotsPage() {
               </button>
               <button
                 onClick={handleCreateLot}
-                disabled={creating || !newLot.lotNumber.trim()}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                disabled={creating || !newLot.lotNumber.trim() || !!chainageError}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {creating ? 'Creating...' : 'Create Lot'}
               </button>
