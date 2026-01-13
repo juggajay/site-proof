@@ -2,19 +2,6 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 
-// Extend Express Request type to include user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string
-        companyId: string | null
-        roleInCompany: string
-      }
-    }
-  }
-}
-
 export const reportsRouter = Router()
 
 // Apply authentication middleware to all report routes

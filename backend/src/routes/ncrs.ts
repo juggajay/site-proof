@@ -306,7 +306,7 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
 // POST /api/ncrs/:id/respond - Submit response to NCR
 ncrsRouter.post('/:id/respond', requireAuth, async (req: any, res) => {
   try {
-    const user = req.user as AuthUser
+    // Note: user authenticated via requireAuth middleware
     const { id } = req.params
     const { rootCauseCategory, rootCauseDescription, proposedCorrectiveAction } = req.body
 

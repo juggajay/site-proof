@@ -23,23 +23,6 @@ const isAuthed = middleware(({ ctx, next }) => {
 
 export const protectedProcedure = t.procedure.use(isAuthed)
 
-// Role-based middleware factory
-const hasRole = (...roles: string[]) =>
-  middleware(({ ctx, next }) => {
-    if (!ctx.user) {
-      throw new TRPCError({ code: 'UNAUTHORIZED' })
-    }
-    if (!roles.includes(ctx.user.role)) {
-      throw new TRPCError({ code: 'FORBIDDEN', message: 'Insufficient permissions' })
-    }
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
-    })
-  })
-
 // Routers for each module will be added here
 const authRouter = router({
   me: protectedProcedure.query(({ ctx }) => {
@@ -48,13 +31,13 @@ const authRouter = router({
 })
 
 const projectRouter = router({
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: protectedProcedure.query(async ({ ctx: _ctx }) => {
     // TODO: Implement project list with role-based filtering
     return []
   }),
   getById: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx: _ctx, input: _input }) => {
       // TODO: Implement get project by ID
       return null
     }),
@@ -63,7 +46,7 @@ const projectRouter = router({
 const lotRouter = router({
   list: protectedProcedure
     .input(z.object({ projectId: z.string().uuid() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx: _ctx, input: _input }) => {
       // TODO: Implement lot list
       return []
     }),

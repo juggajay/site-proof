@@ -7,8 +7,6 @@ export const docketsRouter = Router()
 // Apply authentication middleware to all docket routes
 docketsRouter.use(requireAuth)
 
-// Roles that can create dockets
-const DOCKET_CREATORS = ['subcontractor', 'subcontractor_admin']
 // Roles that can approve dockets
 const DOCKET_APPROVERS = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman']
 

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
-import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
 
 export const testResultsRouter = Router()
 
@@ -113,14 +113,14 @@ testResultsRouter.get('/:id', async (req, res) => {
         enteredBy: {
           select: {
             id: true,
-            name: true,
+            fullName: true,
             email: true,
           }
         },
         verifiedBy: {
           select: {
             id: true,
-            name: true,
+            fullName: true,
             email: true,
           }
         },
@@ -452,7 +452,7 @@ testResultsRouter.post('/:id/verify', async (req, res) => {
         verifiedAt: true,
         verifiedBy: {
           select: {
-            name: true,
+            fullName: true,
             email: true,
           }
         },

@@ -5,7 +5,7 @@ interface ConformancePrerequisites {
   itpCompleted: boolean
   itpCompletedCount: number
   itpTotalCount: number
-  itpIncompleteItems: { id: string; description: string; category: string }[]
+  itpIncompleteItems: { id: string; description: string; pointType: string }[]
   hasPassingTest: boolean
   testResults: { id: string; testType: string; passFail: string; status: string }[]
   noOpenNcrs: boolean
@@ -84,7 +84,7 @@ export async function checkConformancePrerequisites(lotId: string): Promise<Conf
       .map(item => ({
         id: item.id,
         description: item.description,
-        category: item.category
+        pointType: item.pointType
       }))
   }
 

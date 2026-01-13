@@ -46,9 +46,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // Attach user to request for use in route handlers
     // Map userId to id for consistency with some routes
     req.user = {
-      ...user,
       id: user.userId,
+      userId: user.userId,
+      email: user.email,
+      fullName: user.fullName || null,
       roleInCompany: user.role,
+      role: user.role,
+      companyId: user.companyId || null,
     }
 
     next()
@@ -65,7 +69,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
  * Optional middleware that attaches user if token is provided
  * Does not reject requests without token
  */
-export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization
 
@@ -73,12 +77,20 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
       const token = authHeader.substring(7)
       const user = await verifyToken(token)
       if (user) {
-        req.user = user
+        req.user = {
+          id: user.userId,
+          userId: user.userId,
+          email: user.email,
+          fullName: user.fullName || null,
+          roleInCompany: user.role,
+          role: user.role,
+          companyId: user.companyId || null,
+        }
       }
     }
 
     next()
-  } catch (error) {
+  } catch {
     // Silently continue without auth
     next()
   }

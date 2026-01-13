@@ -409,7 +409,7 @@ projectsRouter.get('/:id/users', async (req, res) => {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { invitedAt: 'desc' }
     })
 
     res.json({
@@ -420,7 +420,7 @@ projectsRouter.get('/:id/users', async (req, res) => {
         fullName: pu.user.fullName,
         role: pu.role,
         status: pu.status,
-        invitedAt: pu.createdAt,
+        invitedAt: pu.invitedAt,
         acceptedAt: pu.acceptedAt
       }))
     })

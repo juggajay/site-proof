@@ -9,11 +9,19 @@ interface BreadcrumbItem {
   isLast: boolean
 }
 
+interface LocationState {
+  returnFilters?: string
+}
+
 export function Breadcrumbs() {
   const location = useLocation()
   const { projectId, lotId } = useParams()
   const [lotNumber, setLotNumber] = useState<string | null>(null)
   const [projectName, setProjectName] = useState<string | null>(null)
+
+  // Get return filters from navigation state (passed from LotsPage)
+  const locationState = location.state as LocationState | null
+  const returnFilters = locationState?.returnFilters || ''
 
   // Fetch lot number if we're on a lot detail page
   useEffect(() => {
@@ -100,9 +108,13 @@ export function Breadcrumbs() {
 
       // Project-level navigation items
       if (subPage === 'lots') {
+        // Include returnFilters in Lots path if we're on a lot detail page
+        const lotsPath = returnFilters && lotId
+          ? `/projects/${projectId}/lots?${returnFilters}`
+          : `/projects/${projectId}/lots`
         breadcrumbs.push({
           label: 'Lots',
-          path: `/projects/${projectId}/lots`,
+          path: lotsPath,
           isLast: pathSegments.length === 3,
         })
 

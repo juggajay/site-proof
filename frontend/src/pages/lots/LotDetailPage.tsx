@@ -1,4 +1,4 @@
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
@@ -146,10 +146,29 @@ const severityColors: Record<string, string> = {
   major: 'bg-red-500 text-white',
 }
 
+interface LocationState {
+  returnFilters?: string
+}
+
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
+
+  // Get return filters from navigation state (passed from LotsPage)
+  const locationState = location.state as LocationState | null
+  const returnFilters = locationState?.returnFilters || ''
+
+  // Navigate back to lot register with preserved filters
+  const navigateToLotRegister = () => {
+    const basePath = `/projects/${projectId}/lots`
+    if (returnFilters) {
+      navigate(`${basePath}?${returnFilters}`)
+    } else {
+      navigate(basePath)
+    }
+  }
   const { canViewBudgets } = useCommercialAccess()
   const { canCreate: canEdit } = useViewerAccess()
   const [lot, setLot] = useState<Lot | null>(null)
@@ -412,7 +431,7 @@ export function LotDetailPage() {
         </h1>
         <p className="text-muted-foreground text-center max-w-md">{error.message}</p>
         <button
-          onClick={() => navigate(-1)}
+          onClick={navigateToLotRegister}
           className="mt-4 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
         >
           Go Back

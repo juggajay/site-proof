@@ -61,7 +61,7 @@ async function checkProjectAccess(userId: string, projectId: string): Promise<bo
   if (!user) return false
 
   // Admins and owners can access all projects in their company
-  if (user.role === 'admin' || user.role === 'owner') {
+  if (user.roleInCompany === 'admin' || user.roleInCompany === 'owner') {
     const project = await prisma.project.findUnique({ where: { id: projectId } })
     return project?.companyId === user.companyId
   }

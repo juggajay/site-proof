@@ -75,6 +75,7 @@ export function LotsPage() {
   const currentPage = parseInt(searchParams.get('page') || '1', 10)
   const statusFilter = searchParams.get('status') || ''
   const activityFilter = searchParams.get('activity') || ''
+  const searchQuery = searchParams.get('search') || ''
   const sortField = searchParams.get('sort') || 'lotNumber'
   const sortDirection = (searchParams.get('dir') || 'asc') as 'asc' | 'desc'
 
@@ -92,6 +93,13 @@ export function LotsPage() {
     const filtered = lots.filter((lot) => {
       if (statusFilter && lot.status !== statusFilter) return false
       if (activityFilter && lot.activityType !== activityFilter) return false
+      // Case-insensitive search on lot number and description
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        const matchesLotNumber = lot.lotNumber.toLowerCase().includes(query)
+        const matchesDescription = (lot.description || '').toLowerCase().includes(query)
+        if (!matchesLotNumber && !matchesDescription) return false
+      }
       return true
     })
 
@@ -129,7 +137,7 @@ export function LotsPage() {
       if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
       return 0
     })
-  }, [lots, statusFilter, activityFilter, sortField, sortDirection])
+  }, [lots, statusFilter, activityFilter, searchQuery, sortField, sortDirection])
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredLots.length / PAGE_SIZE)
@@ -161,6 +169,10 @@ export function LotsPage() {
 
   const handleActivityFilter = (activity: string) => {
     updateFilters({ activity })
+  }
+
+  const handleSearch = (query: string) => {
+    updateFilters({ search: query })
   }
 
   const handlePageChange = (page: number) => {
@@ -606,52 +618,110 @@ export function LotsPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
+          <label htmlFor="search-input" className="text-sm font-medium">
+            Search:
+          </label>
+          <div className="flex items-center">
+            <input
+              id="search-input"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Lot # or description..."
+              className="rounded-lg border bg-background px-3 py-1.5 text-sm w-48"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => handleSearch('')}
+                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
           <label htmlFor="status-filter" className="text-sm font-medium">
             Status:
           </label>
-          <select
-            id="status-filter"
-            value={statusFilter}
-            onChange={(e) => handleStatusFilter(e.target.value)}
-            className="rounded-lg border bg-background px-3 py-1.5 text-sm"
-          >
-            <option value="">All Statuses</option>
-            <option value="not_started">Not Started</option>
-            <option value="in_progress">In Progress</option>
-            <option value="awaiting_test">Awaiting Test</option>
-            <option value="hold_point">Hold Point</option>
-            <option value="ncr_raised">NCR Raised</option>
-            <option value="completed">Completed</option>
-            <option value="conformed">Conformed</option>
-            <option value="claimed">Claimed</option>
-          </select>
+          <div className="flex items-center">
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => handleStatusFilter(e.target.value)}
+              className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+            >
+              <option value="">All Statuses</option>
+              <option value="not_started">Not Started</option>
+              <option value="in_progress">In Progress</option>
+              <option value="awaiting_test">Awaiting Test</option>
+              <option value="hold_point">Hold Point</option>
+              <option value="ncr_raised">NCR Raised</option>
+              <option value="completed">Completed</option>
+              <option value="conformed">Conformed</option>
+              <option value="claimed">Claimed</option>
+            </select>
+            {statusFilter && (
+              <button
+                onClick={() => handleStatusFilter('')}
+                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                title="Clear status filter"
+                aria-label="Clear status filter"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="activity-filter" className="text-sm font-medium">
             Activity:
           </label>
-          <select
-            id="activity-filter"
-            value={activityFilter}
-            onChange={(e) => handleActivityFilter(e.target.value)}
-            className="rounded-lg border bg-background px-3 py-1.5 text-sm"
-          >
-            <option value="">All Activities</option>
-            {activityTypes.map((type) => (
-              <option key={type} value={type as string}>
-                {(type as string).charAt(0).toUpperCase() + (type as string).slice(1)}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center">
+            <select
+              id="activity-filter"
+              value={activityFilter}
+              onChange={(e) => handleActivityFilter(e.target.value)}
+              className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+            >
+              <option value="">All Activities</option>
+              {activityTypes.map((type) => (
+                <option key={type} value={type as string}>
+                  {(type as string).charAt(0).toUpperCase() + (type as string).slice(1)}
+                </option>
+              ))}
+            </select>
+            {activityFilter && (
+              <button
+                onClick={() => handleActivityFilter('')}
+                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                title="Clear activity filter"
+                aria-label="Clear activity filter"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
-        {(statusFilter || activityFilter) && (
+        {(statusFilter || activityFilter || searchQuery) && (
           <button
             onClick={() => {
-              updateFilters({ status: '', activity: '' })
+              updateFilters({ status: '', activity: '', search: '' })
             }}
             className="text-sm text-primary hover:underline"
           >
-            Clear Filters
+            Clear All Filters
           </button>
         )}
         <span className="text-sm text-muted-foreground">
@@ -769,7 +839,9 @@ export function LotsPage() {
                       <div className="flex items-center gap-2">
                         <button
                           className="text-sm text-primary hover:underline"
-                          onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
+                          onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`, {
+                            state: { returnFilters: searchParams.toString() }
+                          })}
                         >
                           View
                         </button>

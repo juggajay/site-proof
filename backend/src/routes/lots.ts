@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
-import { requireAuth, requireRole, requireMinRole } from '../middleware/authMiddleware.js'
+import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js'
 
 export const lotsRouter = Router()
