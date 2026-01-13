@@ -841,8 +841,9 @@ function CreateNCRModal({
         <h2 className="text-xl font-bold mb-4">Raise Non-Conformance Report</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Description *</label>
+            <label htmlFor="ncr-description" className="block text-sm font-medium mb-1">Description *</label>
             <textarea
+              id="ncr-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg"
@@ -851,8 +852,9 @@ function CreateNCRModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Category *</label>
+            <label htmlFor="ncr-category" className="block text-sm font-medium mb-1">Category *</label>
             <select
+              id="ncr-category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg"
@@ -928,8 +930,9 @@ function CreateNCRModal({
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Specification Reference</label>
+            <label htmlFor="ncr-spec-reference" className="block text-sm font-medium mb-1">Specification Reference</label>
             <input
+              id="ncr-spec-reference"
               type="text"
               value={specificationReference}
               onChange={(e) => setSpecificationReference(e.target.value)}
@@ -938,8 +941,9 @@ function CreateNCRModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Due Date</label>
+            <label htmlFor="ncr-due-date" className="block text-sm font-medium mb-1">Due Date</label>
             <input
+              id="ncr-due-date"
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
@@ -1063,8 +1067,9 @@ function RespondNCRModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Root Cause Category *</label>
+            <label htmlFor="root-cause-category" className="block text-sm font-medium mb-1">Root Cause Category *</label>
             <select
+              id="root-cause-category"
               value={rootCauseCategory}
               onChange={(e) => setRootCauseCategory(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg"
@@ -1080,8 +1085,9 @@ function RespondNCRModal({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Root Cause Description *</label>
+            <label htmlFor="root-cause-description" className="block text-sm font-medium mb-1">Root Cause Description *</label>
             <textarea
+              id="root-cause-description"
               value={rootCauseDescription}
               onChange={(e) => setRootCauseDescription(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg"
@@ -1091,8 +1097,9 @@ function RespondNCRModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Proposed Corrective Action *</label>
+            <label htmlFor="proposed-corrective-action" className="block text-sm font-medium mb-1">Proposed Corrective Action *</label>
             <textarea
+              id="proposed-corrective-action"
               value={proposedCorrectiveAction}
               onChange={(e) => setProposedCorrectiveAction(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg"
