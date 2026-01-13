@@ -802,8 +802,8 @@ export function LotsPage() {
 
       {/* Lot Table */}
       {!loading && !error && (
-        <div className="rounded-lg border">
-          <table className="w-full">
+        <div className="rounded-lg border overflow-x-auto">
+          <table className="w-full min-w-[900px]">
             <thead className="border-b bg-muted/50">
               <tr>
                 {canDelete && (

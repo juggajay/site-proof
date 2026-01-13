@@ -570,8 +570,8 @@ export function NCRPage() {
           </p>
         </div>
       ) : (
-        <div className="bg-card rounded-lg border overflow-hidden">
-          <table className="w-full">
+        <div className="bg-card rounded-lg border overflow-x-auto">
+          <table className="w-full min-w-[800px]">
             <thead className="bg-muted/50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium">NCR #</th>
