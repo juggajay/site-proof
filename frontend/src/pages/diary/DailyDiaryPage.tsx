@@ -41,6 +41,13 @@ interface Delay {
   impact?: string
 }
 
+interface Addendum {
+  id: string
+  content: string
+  addedBy: { id: string; fullName: string; email: string }
+  addedAt: string
+}
+
 interface DailyDiary {
   id: string
   projectId: string
@@ -84,6 +91,11 @@ export function DailyDiaryPage() {
   const [showNewEntry, setShowNewEntry] = useState(false)
   const [activeTab, setActiveTab] = useState<'weather' | 'personnel' | 'plant' | 'activities' | 'delays'>('weather')
   const [error, setError] = useState<string | null>(null)
+
+  // Addendum state
+  const [addendums, setAddendums] = useState<Addendum[]>([])
+  const [addendumContent, setAddendumContent] = useState('')
+  const [addingAddendum, setAddingAddendum] = useState(false)
 
   // Form states
   const [weatherForm, setWeatherForm] = useState({
@@ -202,6 +214,15 @@ export function DailyDiaryPage() {
       fetchDiaryForDate(selectedDate)
     }
   }, [projectId, selectedDate])
+
+  // Fetch addendums when diary loads and is submitted
+  useEffect(() => {
+    if (diary && diary.status === 'submitted') {
+      fetchAddendums(diary.id)
+    } else {
+      setAddendums([])
+    }
+  }, [diary?.id, diary?.status])
 
   const fetchDiaries = async () => {
     try {
@@ -634,6 +655,49 @@ export function DailyDiaryPage() {
       console.error('Error submitting diary:', err)
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Fetch addendums when diary changes
+  const fetchAddendums = async (diaryId: string) => {
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary/${diaryId}/addendums`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAddendums(data)
+      }
+    } catch (err) {
+      console.error('Error fetching addendums:', err)
+    }
+  }
+
+  // Add addendum to submitted diary
+  const addAddendum = async () => {
+    if (!diary || !addendumContent.trim()) return
+    setAddingAddendum(true)
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary/${diary.id}/addendum`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: addendumContent.trim() }),
+      })
+
+      if (res.ok) {
+        const newAddendum = await res.json()
+        setAddendums([...addendums, newAddendum])
+        setAddendumContent('')
+      }
+    } catch (err) {
+      console.error('Error adding addendum:', err)
+    } finally {
+      setAddingAddendum(false)
     }
   }
 
@@ -1347,6 +1411,53 @@ export function DailyDiaryPage() {
                 {diary.submittedAt && new Date(diary.submittedAt).toLocaleString('en-AU')}
                 {diary.isLate && <span className="ml-2 text-orange-600">(Late Entry)</span>}
               </p>
+            </div>
+          )}
+
+          {/* Addendums Section - Only for submitted diaries */}
+          {diary && diary.status === 'submitted' && (
+            <div className="rounded-lg border bg-card p-6 mt-4">
+              <h3 className="text-lg font-semibold mb-4">Addendums</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Addendums allow you to add notes to a submitted diary without modifying the original record.
+              </p>
+
+              {/* Existing Addendums */}
+              {addendums.length > 0 && (
+                <div className="space-y-3 mb-6">
+                  {addendums.map((addendum) => (
+                    <div key={addendum.id} className="rounded-lg border bg-muted/30 p-4">
+                      <p className="text-sm whitespace-pre-wrap">{addendum.content}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Added by {addendum.addedBy.fullName} on{' '}
+                        {new Date(addendum.addedAt).toLocaleString('en-AU')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {addendums.length === 0 && (
+                <p className="text-sm text-muted-foreground mb-4">No addendums added yet.</p>
+              )}
+
+              {/* Add Addendum Form */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium">Add Addendum</label>
+                <textarea
+                  value={addendumContent}
+                  onChange={(e) => setAddendumContent(e.target.value)}
+                  placeholder="Enter addendum notes..."
+                  className="w-full rounded-lg border bg-background px-4 py-2 text-sm min-h-[100px]"
+                />
+                <button
+                  onClick={addAddendum}
+                  disabled={!addendumContent.trim() || addingAddendum}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {addingAddendum ? 'Adding...' : 'Add Addendum'}
+                </button>
+              </div>
             </div>
           )}
         </div>

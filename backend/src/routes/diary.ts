@@ -714,4 +714,99 @@ router.get('/entry/:diaryId', async (req: Request, res: Response) => {
   }
 })
 
+// POST /api/diary/:diaryId/addendum - Add addendum to submitted diary
+router.post('/:diaryId/addendum', async (req: Request, res: Response) => {
+  try {
+    const { diaryId } = req.params
+    const { content } = req.body
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ error: 'Addendum content is required' })
+    }
+
+    // Find the diary
+    const diary = await prisma.dailyDiary.findUnique({
+      where: { id: diaryId }
+    })
+
+    if (!diary) {
+      return res.status(404).json({ error: 'Diary not found' })
+    }
+
+    // Check access
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    // Verify diary is submitted
+    if (diary.status !== 'submitted') {
+      return res.status(400).json({ error: 'Addendums can only be added to submitted diaries' })
+    }
+
+    // Create the addendum
+    const addendum = await prisma.diaryAddendum.create({
+      data: {
+        diaryId,
+        content: content.trim(),
+        addedById: userId,
+      },
+      include: {
+        addedBy: { select: { id: true, fullName: true, email: true } }
+      }
+    })
+
+    res.status(201).json(addendum)
+  } catch (error) {
+    console.error('Error adding addendum:', error)
+    res.status(500).json({ error: 'Failed to add addendum' })
+  }
+})
+
+// GET /api/diary/:diaryId/addendums - Get addendums for a diary
+router.get('/:diaryId/addendums', async (req: Request, res: Response) => {
+  try {
+    const { diaryId } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // Find the diary
+    const diary = await prisma.dailyDiary.findUnique({
+      where: { id: diaryId }
+    })
+
+    if (!diary) {
+      return res.status(404).json({ error: 'Diary not found' })
+    }
+
+    // Check access
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    // Get addendums
+    const addendums = await prisma.diaryAddendum.findMany({
+      where: { diaryId },
+      include: {
+        addedBy: { select: { id: true, fullName: true, email: true } }
+      },
+      orderBy: { addedAt: 'asc' }
+    })
+
+    res.json(addendums)
+  } catch (error) {
+    console.error('Error fetching addendums:', error)
+    res.status(500).json({ error: 'Failed to fetch addendums' })
+  }
+})
+
 export default router
