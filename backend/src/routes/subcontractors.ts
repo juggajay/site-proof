@@ -7,6 +7,91 @@ export const subcontractorsRouter = Router()
 // Apply authentication middleware to all routes
 subcontractorsRouter.use(requireAuth)
 
+// POST /api/subcontractors/invite - Invite/create a new subcontractor company for a project
+subcontractorsRouter.post('/invite', async (req, res) => {
+  try {
+    const user = req.user!
+    const { projectId, companyName, abn, primaryContactName, primaryContactEmail, primaryContactPhone } = req.body
+
+    // Only allow head contractor roles to invite subcontractors
+    const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
+    if (!allowedRoles.includes(user.roleInCompany || '')) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Only project managers or higher can invite subcontractors'
+      })
+    }
+
+    // Validate required fields
+    if (!projectId || !companyName || !primaryContactName || !primaryContactEmail) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'projectId, companyName, primaryContactName, and primaryContactEmail are required'
+      })
+    }
+
+    // Verify project exists and user has access
+    const project = await prisma.project.findUnique({
+      where: { id: projectId }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    // Check if a subcontractor with same name already exists for this project
+    const existingSubcontractor = await prisma.subcontractorCompany.findFirst({
+      where: {
+        projectId,
+        companyName: companyName
+      }
+    })
+
+    if (existingSubcontractor) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'A subcontractor with this company name already exists for this project'
+      })
+    }
+
+    // Create the subcontractor company
+    const subcontractor = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName,
+        abn: abn || null,
+        primaryContactName,
+        primaryContactEmail,
+        primaryContactPhone: primaryContactPhone || null,
+        status: 'pending_approval'
+      }
+    })
+
+    console.log(`Subcontractor ${companyName} invited to project ${project.name} by ${user.email}`)
+
+    res.status(201).json({
+      message: 'Subcontractor invited successfully',
+      subcontractor: {
+        id: subcontractor.id,
+        companyName: subcontractor.companyName,
+        abn: subcontractor.abn || '',
+        primaryContact: subcontractor.primaryContactName || '',
+        email: subcontractor.primaryContactEmail || '',
+        phone: subcontractor.primaryContactPhone || '',
+        status: subcontractor.status,
+        employees: [],
+        plant: [],
+        totalApprovedDockets: 0,
+        totalCost: 0,
+        assignedLotCount: 0
+      }
+    })
+  } catch (error) {
+    console.error('Invite subcontractor error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/subcontractors/for-project/:projectId - Get subcontractors for a project
 subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
   try {
@@ -279,6 +364,176 @@ subcontractorsRouter.delete('/my-company/plant/:id', async (req, res) => {
     res.json({ message: 'Plant deleted successfully' })
   } catch (error) {
     console.error('Delete plant error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PATCH /api/subcontractors/:id/status - Update subcontractor status (suspend/remove)
+// Only project managers, admins, or owners can suspend subcontractors
+subcontractorsRouter.patch('/:id/status', async (req, res) => {
+  try {
+    const user = req.user!
+    const { id } = req.params
+    const { status } = req.body
+
+    // Only allow head contractor roles to change status
+    const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
+    if (!allowedRoles.includes(user.roleInCompany || '')) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Only project managers or higher can update subcontractor status'
+      })
+    }
+
+    // Validate status
+    const validStatuses = ['pending_approval', 'approved', 'suspended', 'removed']
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Status must be one of: ${validStatuses.join(', ')}`
+      })
+    }
+
+    // Find the subcontractor company
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      include: { project: true }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Subcontractor company not found' })
+    }
+
+    // Verify user has access to this project (company-based access or ProjectUser)
+    const projectUser = await prisma.projectUser.findUnique({
+      where: {
+        projectId_userId: {
+          projectId: subcontractor.projectId,
+          userId: user.id
+        }
+      }
+    })
+
+    const isCompanyAdmin = ['owner', 'admin'].includes(user.roleInCompany || '')
+    const project = await prisma.project.findUnique({
+      where: { id: subcontractor.projectId }
+    })
+    const isCompanyProject = project?.companyId === user.companyId
+
+    if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this project'
+      })
+    }
+
+    // Update the status
+    const updatedSubcontractor = await prisma.subcontractorCompany.update({
+      where: { id },
+      data: {
+        status,
+        // If approving, record who approved
+        ...(status === 'approved' && {
+          approvedById: user.id,
+          approvedAt: new Date()
+        })
+      },
+      select: {
+        id: true,
+        companyName: true,
+        status: true,
+        approvedAt: true,
+      }
+    })
+
+    // Log the action
+    console.log(`Subcontractor ${updatedSubcontractor.companyName} status changed to ${status} by ${user.email}`)
+
+    res.json({
+      message: `Subcontractor status updated to ${status}`,
+      subcontractor: updatedSubcontractor
+    })
+  } catch (error) {
+    console.error('Update subcontractor status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/subcontractors/project/:projectId - Get all subcontractors for a project (head contractor view)
+subcontractorsRouter.get('/project/:projectId', async (req, res) => {
+  try {
+    const user = req.user!
+    const { projectId } = req.params
+    const { includeRemoved } = req.query
+
+    // Get subcontractors for this project
+    const whereClause: any = { projectId }
+
+    // By default, exclude removed subcontractors unless specifically requested
+    if (includeRemoved !== 'true') {
+      whereClause.status = { not: 'removed' }
+    }
+
+    const subcontractors = await prisma.subcontractorCompany.findMany({
+      where: whereClause,
+      include: {
+        employeeRoster: true,
+        plantRegister: true,
+        dailyDockets: {
+          where: { status: 'approved' },
+          select: {
+            id: true,
+            totalLabourApproved: true,
+            totalPlantApproved: true,
+          }
+        },
+        assignedLots: {
+          select: { id: true }
+        }
+      },
+      orderBy: { companyName: 'asc' }
+    })
+
+    // Calculate totals for each subcontractor
+    const formattedSubcontractors = subcontractors.map(sub => {
+      const totalApprovedDockets = sub.dailyDockets.length
+      const totalCost = sub.dailyDockets.reduce((sum, docket) => {
+        return sum + (Number(docket.totalLabourApproved) || 0) + (Number(docket.totalPlantApproved) || 0)
+      }, 0)
+
+      return {
+        id: sub.id,
+        companyName: sub.companyName,
+        abn: sub.abn || '',
+        primaryContact: sub.primaryContactName || '',
+        email: sub.primaryContactEmail || '',
+        phone: sub.primaryContactPhone || '',
+        status: sub.status,
+        employees: sub.employeeRoster.map(e => ({
+          id: e.id,
+          name: e.name,
+          role: e.role || '',
+          hourlyRate: Number(e.hourlyRate) || 0,
+          status: e.status
+        })),
+        plant: sub.plantRegister.map(p => ({
+          id: p.id,
+          type: p.type,
+          description: p.description || '',
+          idRego: p.idRego || '',
+          dryRate: Number(p.dryRate) || 0,
+          wetRate: Number(p.wetRate) || 0,
+          status: p.status
+        })),
+        totalApprovedDockets,
+        totalCost,
+        assignedLotCount: sub.assignedLots.length
+      }
+    })
+
+    res.json({ subcontractors: formattedSubcontractors })
+  } catch (error) {
+    console.error('Get project subcontractors error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

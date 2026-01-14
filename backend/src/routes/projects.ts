@@ -87,18 +87,27 @@ projectsRouter.get('/:id', async (req, res) => {
     // Check subcontractor access
     const isSubcontractor = user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin'
     let hasSubcontractorAccess = false
+    let subcontractorSuspended = false
 
     if (isSubcontractor) {
       const subcontractorUser = await prisma.subcontractorUser.findFirst({
         where: { userId: user.id },
         include: {
           subcontractorCompany: {
-            select: { projectId: true }
+            select: { projectId: true, status: true }
           }
         }
       })
 
-      hasSubcontractorAccess = subcontractorUser?.subcontractorCompany?.projectId === id
+      // Check if subcontractor has access to this project
+      const companyProjectMatch = subcontractorUser?.subcontractorCompany?.projectId === id
+
+      // Check if subcontractor is suspended or removed
+      const companyStatus = subcontractorUser?.subcontractorCompany?.status
+      subcontractorSuspended = companyStatus === 'suspended' || companyStatus === 'removed'
+
+      // Only grant access if project matches AND company is not suspended/removed
+      hasSubcontractorAccess = companyProjectMatch && !subcontractorSuspended
     }
 
     // Also allow company admins/owners to access company projects
@@ -130,6 +139,14 @@ projectsRouter.get('/:id', async (req, res) => {
     // Check if user has access via ProjectUser, subcontractor, or is company admin/owner
     const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
     const isCompanyProject = project.companyId === user.companyId
+
+    // Provide specific error message for suspended subcontractors
+    if (isSubcontractor && subcontractorSuspended) {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'Your company has been suspended from this project. Please contact the project manager.'
+      })
+    }
 
     if (!projectUser && !hasSubcontractorAccess && !(isCompanyAdmin && isCompanyProject)) {
       return res.status(403).json({ error: 'Access denied to this project' })

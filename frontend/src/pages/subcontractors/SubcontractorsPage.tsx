@@ -60,8 +60,8 @@ export function SubcontractorsPage() {
     const token = getAuthToken()
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005'
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/subcontractors`, {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+      const response = await fetch(`${API_URL}/api/subcontractors/project/${projectId}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
 
@@ -165,31 +165,91 @@ export function SubcontractorsPage() {
   }
 
   const approveSubcontractor = async (subId: string) => {
-    setSubcontractors(subs => subs.map(sub =>
-      sub.id === subId ? { ...sub, status: 'approved' as const } : sub
-    ))
+    await updateSubcontractorStatus(subId, 'approved')
+  }
+
+  const suspendSubcontractor = async (subId: string) => {
+    if (!confirm('Are you sure you want to suspend this subcontractor? They will lose access to the project but their historical data will be preserved.')) {
+      return
+    }
+    await updateSubcontractorStatus(subId, 'suspended')
+  }
+
+  const removeSubcontractor = async (subId: string) => {
+    if (!confirm('Are you sure you want to remove this subcontractor from the project? This will revoke their access but preserve all historical dockets and work records.')) {
+      return
+    }
+    await updateSubcontractorStatus(subId, 'removed')
+  }
+
+  const reinstateSubcontractor = async (subId: string) => {
+    await updateSubcontractorStatus(subId, 'approved')
+  }
+
+  const updateSubcontractorStatus = async (subId: string, status: string) => {
+    const token = getAuthToken()
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+
+    try {
+      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ status })
+      })
+
+      if (response.ok) {
+        // Update local state
+        setSubcontractors(subs => subs.map(sub =>
+          sub.id === subId ? { ...sub, status: status as any } : sub
+        ))
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Failed to update subcontractor status')
+      }
+    } catch (error) {
+      console.error('Update subcontractor status error:', error)
+      alert('Failed to update subcontractor status')
+    }
   }
 
   const inviteSubcontractor = async () => {
     setInviting(true)
+    const token = getAuthToken()
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+
     try {
-      // Demo mode - add to local state
-      const newSub: Subcontractor = {
-        id: String(Date.now()),
-        companyName: inviteData.companyName,
-        abn: inviteData.abn,
-        primaryContact: inviteData.contactName,
-        email: inviteData.email,
-        phone: inviteData.phone,
-        status: 'pending_approval',
-        employees: [],
-        plant: [],
-        totalApprovedDockets: 0,
-        totalCost: 0
+      const response = await fetch(`${API_URL}/api/subcontractors/invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          projectId,
+          companyName: inviteData.companyName,
+          abn: inviteData.abn,
+          primaryContactName: inviteData.contactName,
+          primaryContactEmail: inviteData.email,
+          primaryContactPhone: inviteData.phone
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Add the new subcontractor to local state
+        setSubcontractors(prev => [...prev, data.subcontractor])
+        setShowInviteModal(false)
+        setInviteData({ companyName: '', abn: '', contactName: '', email: '', phone: '' })
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Failed to invite subcontractor')
       }
-      setSubcontractors(prev => [...prev, newSub])
-      setShowInviteModal(false)
-      setInviteData({ companyName: '', abn: '', contactName: '', email: '', phone: '' })
+    } catch (error) {
+      console.error('Invite subcontractor error:', error)
+      alert('Failed to invite subcontractor')
     } finally {
       setInviting(false)
     }
@@ -211,8 +271,10 @@ export function SubcontractorsPage() {
       case 'approved':
         return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700"><CheckCircle className="h-3 w-3" /> Approved</span>
       case 'suspended':
+        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800"><Clock className="h-3 w-3" /> Suspended</span>
+      case 'removed':
       case 'inactive':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><X className="h-3 w-3" /> Suspended</span>
+        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><X className="h-3 w-3" /> Removed</span>
       default:
         return <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status}</span>
     }
@@ -317,9 +379,9 @@ export function SubcontractorsPage() {
             {/* Expanded Content */}
             {expandedId === sub.id && (
               <div className="border-t p-4 space-y-4">
-                {/* Approve Company Button */}
-                {sub.status === 'pending_approval' && (
-                  <div className="flex justify-end">
+                {/* Status Management Buttons */}
+                <div className="flex justify-end gap-2">
+                  {sub.status === 'pending_approval' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); approveSubcontractor(sub.id); }}
                       className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
@@ -327,8 +389,35 @@ export function SubcontractorsPage() {
                       <CheckCircle className="h-4 w-4" />
                       Approve Company
                     </button>
-                  </div>
-                )}
+                  )}
+                  {sub.status === 'approved' && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); suspendSubcontractor(sub.id); }}
+                        className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-white hover:bg-amber-600"
+                      >
+                        <Clock className="h-4 w-4" />
+                        Suspend
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeSubcontractor(sub.id); }}
+                        className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                        Remove from Project
+                      </button>
+                    </>
+                  )}
+                  {(sub.status === 'suspended' || sub.status === 'removed') && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); reinstateSubcontractor(sub.id); }}
+                      className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Reinstate
+                    </button>
+                  )}
+                </div>
 
                 {/* Employee Roster */}
                 <div>
