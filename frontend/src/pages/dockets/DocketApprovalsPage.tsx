@@ -262,6 +262,31 @@ export function DocketApprovalsPage() {
     fetchDockets()
   }, [projectId])
 
+  // Export dockets to CSV
+  const handleExportCSV = () => {
+    const headers = ['Docket #', 'Subcontractor', 'Date', 'Notes', 'Labour Hours', 'Plant Hours', 'Status', 'Submitted At', 'Approved At']
+    const rows = filteredDockets.map(docket => [
+      docket.docketNumber,
+      docket.subcontractor,
+      docket.date,
+      docket.notes ? `"${docket.notes.replace(/"/g, '""')}"` : '-',
+      docket.labourHours,
+      docket.plantHours,
+      statusLabels[docket.status] || docket.status,
+      docket.submittedAt ? new Date(docket.submittedAt).toLocaleDateString() : '-',
+      docket.approvedAt ? new Date(docket.approvedAt).toLocaleDateString() : '-'
+    ])
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.setAttribute('download', `dockets-${projectId}-${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -273,6 +298,14 @@ export function DocketApprovalsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {dockets.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Export CSV
+            </button>
+          )}
           {isSubcontractor && (
             <button
               onClick={() => setCreateModalOpen(true)}
