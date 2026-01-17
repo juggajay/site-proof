@@ -390,6 +390,72 @@ router.delete('/:diaryId/plant/:plantId', async (req: Request, res: Response) =>
   }
 })
 
+// GET /api/diary/project/:projectId/recent-plant - Get recently used plant for a project
+router.get('/project/:projectId/recent-plant', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    // Get plant from recent diaries (last 30 days)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const recentDiaries = await prisma.dailyDiary.findMany({
+      where: {
+        projectId,
+        date: { gte: thirtyDaysAgo }
+      },
+      include: {
+        plant: true
+      },
+      orderBy: { date: 'desc' },
+      take: 10
+    })
+
+    // Collect unique plant items by description + company
+    const plantMap = new Map<string, any>()
+    for (const diary of recentDiaries) {
+      for (const plant of diary.plant) {
+        const key = `${plant.description}|${plant.company || ''}|${plant.idRego || ''}`
+        if (!plantMap.has(key)) {
+          plantMap.set(key, {
+            description: plant.description,
+            idRego: plant.idRego,
+            company: plant.company,
+            lastUsed: diary.date,
+            usageCount: 1
+          })
+        } else {
+          const existing = plantMap.get(key)!
+          existing.usageCount += 1
+        }
+      }
+    }
+
+    // Convert to array and sort by usage count (most used first)
+    const recentPlant = Array.from(plantMap.values())
+      .sort((a, b) => b.usageCount - a.usageCount)
+      .slice(0, 20) // Limit to top 20
+
+    res.json({
+      recentPlant,
+      count: recentPlant.length
+    })
+  } catch (error) {
+    console.error('Error getting recent plant:', error)
+    res.status(500).json({ error: 'Failed to get recent plant' })
+  }
+})
+
 // POST /api/diary/:diaryId/activities - Add activity to diary
 router.post('/:diaryId/activities', async (req: Request, res: Response) => {
   try {
