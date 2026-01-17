@@ -181,6 +181,30 @@ export function HoldPointsPage() {
     return labels[status] || status
   }
 
+  // Export hold points to CSV
+  const handleExportCSV = () => {
+    const headers = ['Lot', 'Description', 'Point Type', 'Status', 'Scheduled Date', 'Released At', 'Released By', 'Release Notes']
+    const rows = holdPoints.map(hp => [
+      hp.lotNumber,
+      `"${hp.description.replace(/"/g, '""')}"`,
+      hp.pointType || '-',
+      getStatusLabel(hp.status),
+      hp.scheduledDate ? new Date(hp.scheduledDate).toLocaleDateString() : '-',
+      hp.releasedAt ? new Date(hp.releasedAt).toLocaleDateString() : '-',
+      hp.releasedByName || '-',
+      hp.releaseNotes ? `"${hp.releaseNotes.replace(/"/g, '""')}"` : '-'
+    ])
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.setAttribute('download', `hold-points-${projectId}-${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -190,6 +214,14 @@ export function HoldPointsPage() {
             Track and release hold points requiring third-party inspection
           </p>
         </div>
+        {holdPoints.length > 0 && (
+          <button
+            onClick={handleExportCSV}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+          >
+            Export CSV
+          </button>
+        )}
       </div>
 
       {loading ? (
