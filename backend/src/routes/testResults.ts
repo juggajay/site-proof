@@ -1109,6 +1109,50 @@ testResultsRouter.get('/:id/verification-view', async (req, res) => {
           aiConfidence: testResult.aiConfidence ? JSON.parse(testResult.aiConfidence as string) : null,
         },
 
+        // Confidence highlighting for AI-extracted fields
+        confidenceHighlights: (() => {
+          if (!testResult.aiExtracted || !testResult.aiConfidence) {
+            return { hasLowConfidence: false, lowConfidenceFields: [], fieldStatus: {} }
+          }
+
+          const confidence = JSON.parse(testResult.aiConfidence as string)
+          const LOW_CONFIDENCE_THRESHOLD = 0.80 // Fields below 80% get highlighted
+          const MEDIUM_CONFIDENCE_THRESHOLD = 0.90 // Fields below 90% get warning
+
+          const fieldStatus: Record<string, { confidence: number; status: 'high' | 'medium' | 'low'; needsReview: boolean }> = {}
+          const lowConfidenceFields: string[] = []
+
+          for (const [field, conf] of Object.entries(confidence)) {
+            const confValue = conf as number
+            let status: 'high' | 'medium' | 'low' = 'high'
+            let needsReview = false
+
+            if (confValue < LOW_CONFIDENCE_THRESHOLD) {
+              status = 'low'
+              needsReview = true
+              lowConfidenceFields.push(field)
+            } else if (confValue < MEDIUM_CONFIDENCE_THRESHOLD) {
+              status = 'medium'
+              needsReview = false
+            }
+
+            fieldStatus[field] = { confidence: confValue, status, needsReview }
+          }
+
+          return {
+            hasLowConfidence: lowConfidenceFields.length > 0,
+            lowConfidenceFields,
+            fieldStatus,
+            thresholds: {
+              low: LOW_CONFIDENCE_THRESHOLD,
+              medium: MEDIUM_CONFIDENCE_THRESHOLD
+            },
+            reviewMessage: lowConfidenceFields.length > 0
+              ? `${lowConfidenceFields.length} field(s) have low AI confidence and require manual verification: ${lowConfidenceFields.join(', ')}`
+              : 'All AI-extracted fields have acceptable confidence levels'
+          }
+        })(),
+
         // Specification comparison
         specification: {
           min: testResult.specificationMin,
