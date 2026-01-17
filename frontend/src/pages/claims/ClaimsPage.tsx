@@ -22,6 +22,7 @@ interface ConformedLot {
   activity: string
   budgetAmount: number
   selected: boolean
+  percentComplete: number  // 0-100, for partial claims
 }
 
 export function ClaimsPage() {
@@ -101,21 +102,31 @@ export function ClaimsPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setConformedLots(data.lots?.map((lot: any) => ({ ...lot, selected: false })) || [])
+        const lots = data.lots?.map((lot: any) => ({ ...lot, selected: false, percentComplete: 100 })) || []
+        // Use demo data if no real lots available (for demonstration purposes)
+        if (lots.length === 0) {
+          setConformedLots([
+            { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false, percentComplete: 100 },
+            { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false, percentComplete: 100 },
+            { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false, percentComplete: 100 }
+          ])
+        } else {
+          setConformedLots(lots)
+        }
       } else {
         // Demo data
         setConformedLots([
-          { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false },
-          { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false },
-          { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false }
+          { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false, percentComplete: 100 },
+          { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false, percentComplete: 100 },
+          { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false, percentComplete: 100 }
         ])
       }
     } catch (error) {
       console.error('Error fetching conformed lots:', error)
       setConformedLots([
-        { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false },
-        { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false },
-        { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false }
+        { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false, percentComplete: 100 },
+        { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false, percentComplete: 100 },
+        { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false, percentComplete: 100 }
       ])
     }
   }
@@ -138,6 +149,16 @@ export function ClaimsPage() {
     setConformedLots(lots => lots.map(lot =>
       lot.id === lotId ? { ...lot, selected: !lot.selected } : lot
     ))
+  }
+
+  const updateLotPercentage = (lotId: string, percent: number) => {
+    setConformedLots(lots => lots.map(lot =>
+      lot.id === lotId ? { ...lot, percentComplete: Math.min(100, Math.max(0, percent)) } : lot
+    ))
+  }
+
+  const calculateLotClaimAmount = (lot: ConformedLot) => {
+    return lot.budgetAmount * (lot.percentComplete / 100)
   }
 
   const createClaim = async () => {
@@ -169,7 +190,7 @@ export function ClaimsPage() {
         setShowCreateModal(false)
       } else {
         // Demo mode - add to local state
-        const totalAmount = selectedLots.reduce((sum, lot) => sum + lot.budgetAmount, 0)
+        const totalAmount = selectedLots.reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0)
         setClaims(prev => [...prev, {
           id: String(Date.now()),
           claimNumber: prev.length + 1,
@@ -188,7 +209,7 @@ export function ClaimsPage() {
       console.error('Error creating claim:', error)
       // Demo mode fallback
       const selectedLots = conformedLots.filter(l => l.selected)
-      const totalAmount = selectedLots.reduce((sum, lot) => sum + lot.budgetAmount, 0)
+      const totalAmount = selectedLots.reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0)
       setClaims(prev => [...prev, {
         id: String(Date.now()),
         claimNumber: prev.length + 1,
@@ -376,26 +397,45 @@ export function ClaimsPage() {
               {/* Lot Selection */}
               <div>
                 <label className="block text-sm font-medium mb-2">Select Conformed Lots to Include</label>
-                <div className="border rounded-lg divide-y max-h-64 overflow-auto">
+                <div className="border rounded-lg divide-y max-h-80 overflow-auto">
                   {conformedLots.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground">
                       No conformed lots available for claiming
                     </div>
                   ) : (
                     conformedLots.map((lot) => (
-                      <label key={lot.id} className="flex items-center gap-3 p-3 hover:bg-muted/30 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={lot.selected}
-                          onChange={() => toggleLotSelection(lot.id)}
-                          className="h-4 w-4 rounded border-gray-300"
-                        />
-                        <div className="flex-1">
-                          <span className="font-medium">{lot.lotNumber}</span>
-                          <span className="text-muted-foreground ml-2">{lot.activity}</span>
+                      <div key={lot.id} className="p-3 hover:bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={lot.selected}
+                            onChange={() => toggleLotSelection(lot.id)}
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                          <div className="flex-1">
+                            <span className="font-medium">{lot.lotNumber}</span>
+                            <span className="text-muted-foreground ml-2">{lot.activity}</span>
+                          </div>
+                          <span className="text-muted-foreground text-sm">{formatCurrency(lot.budgetAmount)}</span>
                         </div>
-                        <span className="font-semibold">{formatCurrency(lot.budgetAmount)}</span>
-                      </label>
+                        {lot.selected && (
+                          <div className="mt-2 ml-7 flex items-center gap-3">
+                            <label className="text-sm text-muted-foreground">% Complete:</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={lot.percentComplete}
+                              onChange={(e) => updateLotPercentage(lot.id, Number(e.target.value))}
+                              className="w-20 px-2 py-1 border rounded text-sm text-center"
+                            />
+                            <span className="text-sm">%</span>
+                            <span className="ml-auto font-semibold text-primary">
+                              {formatCurrency(calculateLotClaimAmount(lot))}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     ))
                   )}
                 </div>
@@ -406,11 +446,14 @@ export function ClaimsPage() {
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Total Claim Amount</span>
                   <span className="text-xl font-bold">
-                    {formatCurrency(conformedLots.filter(l => l.selected).reduce((sum, lot) => sum + lot.budgetAmount, 0))}
+                    {formatCurrency(conformedLots.filter(l => l.selected).reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0))}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
                   {conformedLots.filter(l => l.selected).length} lots selected
+                  {conformedLots.filter(l => l.selected).some(l => l.percentComplete < 100) && (
+                    <span className="ml-1">(includes partial progress)</span>
+                  )}
                 </p>
               </div>
             </div>
