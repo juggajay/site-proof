@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 
 interface Personnel {
@@ -1178,7 +1178,16 @@ export function DailyDiaryPage() {
                       {diary.activities.map((a) => (
                         <tr key={a.id} className="border-b">
                           <td className="py-2 font-medium">{a.description}</td>
-                          <td className="py-2">{a.lot?.lotNumber || '-'}</td>
+                          <td className="py-2">
+                            {a.lot ? (
+                              <Link
+                                to={`/projects/${projectId}/lots/${a.lot.id}`}
+                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                              >
+                                {a.lot.lotNumber}
+                              </Link>
+                            ) : '-'}
+                          </td>
                           <td className="py-2">{a.quantity || '-'}</td>
                           <td className="py-2">{a.unit || '-'}</td>
                           <td className="py-2">{a.notes || '-'}</td>
