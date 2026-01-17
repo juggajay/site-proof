@@ -79,6 +79,8 @@ router.get('/:projectId/claims', async (req, res) => {
       certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
       paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
       submittedAt: claim.submittedAt ? claim.submittedAt.toISOString().split('T')[0] : null,
+      disputeNotes: claim.disputeNotes || null,
+      disputedAt: claim.disputedAt ? claim.disputedAt.toISOString().split('T')[0] : null,
       lotCount: claim._count.claimedLots
     }))
 
@@ -219,7 +221,7 @@ router.post('/:projectId/claims', async (req, res) => {
 router.put('/:projectId/claims/:claimId', async (req, res) => {
   try {
     const { projectId, claimId } = req.params
-    const { status, certifiedAmount, paidAmount, paymentReference } = req.body
+    const { status, certifiedAmount, paidAmount, paymentReference, disputeNotes } = req.body
 
     const claim = await prisma.progressClaim.findFirst({
       where: { id: claimId, projectId }
@@ -249,6 +251,10 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
         updateData.paidAmount = paidAmount
         updateData.paidAt = new Date()
         updateData.paymentReference = paymentReference || null
+      }
+      if (status === 'disputed') {
+        updateData.disputedAt = new Date()
+        updateData.disputeNotes = disputeNotes || null
       }
     }
 

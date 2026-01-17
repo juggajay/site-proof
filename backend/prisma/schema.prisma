@@ -803,6 +803,8 @@ model ProgressClaim {
   paymentReference      String?   @map("payment_reference")
   evidencePackageUrl    String?   @map("evidence_package_url")
   sopaStatementGenerated Boolean  @default(false) @map("sopa_statement_generated")
+  disputedAt            DateTime? @map("disputed_at")
+  disputeNotes          String?   @map("dispute_notes")
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 

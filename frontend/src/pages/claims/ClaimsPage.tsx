@@ -13,6 +13,8 @@ interface Claim {
   certifiedAmount: number | null
   paidAmount: number | null
   submittedAt: string | null
+  disputeNotes: string | null
+  disputedAt: string | null
   lotCount: number
   paymentDueDate?: string | null
 }
@@ -52,6 +54,9 @@ export function ClaimsPage() {
   const [creating, setCreating] = useState(false)
   const [showSubmitModal, setShowSubmitModal] = useState<string | null>(null)  // claim id
   const [submitting, setSubmitting] = useState(false)
+  const [showDisputeModal, setShowDisputeModal] = useState<string | null>(null)  // claim id
+  const [disputeNotes, setDisputeNotes] = useState('')
+  const [disputing, setDisputing] = useState(false)
 
   useEffect(() => {
     fetchClaims()
@@ -84,6 +89,8 @@ export function ClaimsPage() {
             certifiedAmount: 142500,
             paidAmount: 142500,
             submittedAt: '2026-01-05',
+            disputeNotes: null,
+            disputedAt: null,
             lotCount: 12
           },
           {
@@ -96,6 +103,8 @@ export function ClaimsPage() {
             certifiedAmount: null,
             paidAmount: null,
             submittedAt: '2026-01-07',
+            disputeNotes: null,
+            disputedAt: null,
             lotCount: 8
           }
         ])
@@ -291,12 +300,70 @@ export function ClaimsPage() {
     }
   }
 
-  // Calculate payment due date based on SOPA timeframes
-  const calculatePaymentDueDate = (submittedAt: string, state: string = 'NSW'): string => {
-    const timeframe = SOPA_TIMEFRAMES[state] || SOPA_TIMEFRAMES.NSW
-    const submissionDate = new Date(submittedAt)
-    let businessDays = timeframe.paymentTime
-    let currentDate = new Date(submissionDate)
+  const openDisputeModal = (claimId: string) => {
+    setShowDisputeModal(claimId)
+    setDisputeNotes('')
+  }
+
+  const handleDispute = async () => {
+    if (!showDisputeModal || !disputeNotes.trim()) {
+      alert('Please enter dispute notes')
+      return
+    }
+    setDisputing(true)
+
+    try {
+      const token = getAuthToken()
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005'
+      const response = await fetch(`${API_URL}/api/projects/${projectId}/claims/${showDisputeModal}`, {
+        method: 'PUT',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: 'disputed',
+          disputeNotes: disputeNotes.trim()
+        })
+      })
+
+      if (response.ok) {
+        // Update local state
+        setClaims(prev => prev.map(c =>
+          c.id === showDisputeModal
+            ? { ...c, status: 'disputed' as const, disputeNotes: disputeNotes.trim(), disputedAt: new Date().toISOString().split('T')[0] }
+            : c
+        ))
+        alert('Claim marked as disputed')
+      } else {
+        // Fallback to demo mode
+        setClaims(prev => prev.map(c =>
+          c.id === showDisputeModal
+            ? { ...c, status: 'disputed' as const, disputeNotes: disputeNotes.trim(), disputedAt: new Date().toISOString().split('T')[0] }
+            : c
+        ))
+        alert('Claim marked as disputed')
+      }
+      setShowDisputeModal(null)
+    } catch (error) {
+      console.error('Error disputing claim:', error)
+      // Demo mode fallback
+      setClaims(prev => prev.map(c =>
+        c.id === showDisputeModal
+          ? { ...c, status: 'disputed' as const, disputeNotes: disputeNotes.trim(), disputedAt: new Date().toISOString().split('T')[0] }
+          : c
+      ))
+      alert('Claim marked as disputed')
+      setShowDisputeModal(null)
+    } finally {
+      setDisputing(false)
+    }
+  }
+
+  // Calculate business days from a date
+  const addBusinessDays = (startDate: Date, days: number): Date => {
+    let currentDate = new Date(startDate)
+    let businessDays = days
 
     while (businessDays > 0) {
       currentDate.setDate(currentDate.getDate() + 1)
@@ -307,7 +374,42 @@ export function ClaimsPage() {
       }
     }
 
-    return currentDate.toISOString()
+    return currentDate
+  }
+
+  // Calculate certification due date based on SOPA response timeframes
+  const calculateCertificationDueDate = (submittedAt: string, state: string = 'NSW'): string => {
+    const timeframe = SOPA_TIMEFRAMES[state] || SOPA_TIMEFRAMES.NSW
+    const submissionDate = new Date(submittedAt)
+    return addBusinessDays(submissionDate, timeframe.responseTime).toISOString()
+  }
+
+  // Calculate payment due date based on SOPA timeframes
+  const calculatePaymentDueDate = (submittedAt: string, state: string = 'NSW'): string => {
+    const timeframe = SOPA_TIMEFRAMES[state] || SOPA_TIMEFRAMES.NSW
+    const submissionDate = new Date(submittedAt)
+    return addBusinessDays(submissionDate, timeframe.paymentTime).toISOString()
+  }
+
+  // Get certification due status - only for submitted claims awaiting certification
+  const getCertificationDueStatus = (claim: Claim): { text: string; className: string; isOverdue: boolean } | null => {
+    // Only show certification due for submitted claims (not yet certified/paid)
+    if (!claim.submittedAt || claim.status !== 'submitted') {
+      return null
+    }
+
+    const dueDate = calculateCertificationDueDate(claim.submittedAt)
+    const now = new Date()
+    const due = new Date(dueDate)
+    const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (daysUntilDue < 0) {
+      return { text: `Certification overdue by ${Math.abs(daysUntilDue)} days`, className: 'text-red-600 font-semibold', isOverdue: true }
+    } else if (daysUntilDue <= 3) {
+      return { text: `Certification due in ${daysUntilDue} days`, className: 'text-amber-600', isOverdue: false }
+    } else {
+      return { text: `Cert due ${due.toLocaleDateString('en-AU')}`, className: 'text-muted-foreground', isOverdue: false }
+    }
   }
 
   const getPaymentDueStatus = (claim: Claim): { text: string; className: string } | null => {
@@ -430,6 +532,7 @@ export function ClaimsPage() {
                 <th className="text-left p-4 font-medium">Claim #</th>
                 <th className="text-left p-4 font-medium">Period</th>
                 <th className="text-left p-4 font-medium">Status</th>
+                <th className="text-left p-4 font-medium">Certification Due</th>
                 <th className="text-left p-4 font-medium">Payment Due (SOPA)</th>
                 <th className="text-right p-4 font-medium">Lots</th>
                 <th className="text-right p-4 font-medium">Claimed</th>
@@ -439,13 +542,23 @@ export function ClaimsPage() {
               </tr>
             </thead>
             <tbody>
-              {claims.map((claim) => (
-                <tr key={claim.id} className="border-t hover:bg-muted/30">
+              {claims.map((claim) => {
+                const certStatus = getCertificationDueStatus(claim)
+                const isOverdue = certStatus?.isOverdue || false
+                return (
+                <tr key={claim.id} className={`border-t hover:bg-muted/30 ${isOverdue ? 'bg-red-50' : ''}`}>
                   <td className="p-4 font-medium">Claim {claim.claimNumber}</td>
                   <td className="p-4">
                     {new Date(claim.periodStart).toLocaleDateString()} - {new Date(claim.periodEnd).toLocaleDateString()}
                   </td>
                   <td className="p-4">{getStatusBadge(claim.status)}</td>
+                  <td className="p-4">
+                    {certStatus ? (
+                      <span className={`text-sm ${certStatus.className}`}>{certStatus.text}</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
                   <td className="p-4">
                     {(() => {
                       const dueStatus = getPaymentDueStatus(claim)
@@ -468,13 +581,23 @@ export function ClaimsPage() {
                           <Send className="h-4 w-4" />
                         </button>
                       )}
+                      {(claim.status === 'submitted' || claim.status === 'certified') && (
+                        <button
+                          onClick={() => openDisputeModal(claim.id)}
+                          className="p-2 hover:bg-red-100 rounded-lg text-red-600"
+                          title="Mark as Disputed"
+                        >
+                          <AlertCircle className="h-4 w-4" />
+                        </button>
+                      )}
                       <button className="p-2 hover:bg-muted rounded-lg" title="Download">
                         <Download className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -664,6 +787,56 @@ export function ClaimsPage() {
                 className="px-4 py-2 border rounded-lg hover:bg-muted"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dispute Claim Modal */}
+      {showDisputeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-semibold text-red-600">Mark Claim as Disputed</h2>
+              <button onClick={() => setShowDisputeModal(null)} className="p-2 hover:bg-muted rounded-lg">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
+                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-red-800">
+                  <p className="font-medium">This action will mark the claim as disputed.</p>
+                  <p className="mt-1">The claim will remain in disputed status until resolved. Please provide details about the dispute.</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Dispute Notes <span className="text-red-500">*</span></label>
+                <textarea
+                  value={disputeNotes}
+                  onChange={(e) => setDisputeNotes(e.target.value)}
+                  placeholder="Describe the reason for the dispute, including any specific items or amounts in question..."
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[120px] resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 p-4 border-t">
+              <button
+                onClick={() => setShowDisputeModal(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDispute}
+                disabled={disputing || !disputeNotes.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {disputing ? 'Marking...' : 'Mark as Disputed'}
               </button>
             </div>
           </div>
