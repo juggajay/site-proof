@@ -70,6 +70,21 @@ interface ITPChecklistItem {
   order: number
 }
 
+interface ITPAttachmentDocument {
+  id: string
+  filename: string
+  fileUrl: string
+  caption: string | null
+  uploadedAt: string
+  uploadedBy: { id: string; fullName: string; email: string } | null
+}
+
+interface ITPAttachment {
+  id: string
+  documentId: string
+  document: ITPAttachmentDocument
+}
+
 interface ITPCompletion {
   id: string
   checklistItemId: string
@@ -80,6 +95,7 @@ interface ITPCompletion {
   isVerified: boolean
   verifiedAt: string | null
   verifiedBy: { id: string; fullName: string; email: string } | null
+  attachments: ITPAttachment[]
 }
 
 interface ITPInstance {
@@ -188,6 +204,8 @@ export function LotDetailPage() {
   const [updatingCompletion, setUpdatingCompletion] = useState<string | null>(null)
   const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null)
   const [loadingConformStatus, setLoadingConformStatus] = useState(false)
+  const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null)
 
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp'
@@ -567,6 +585,71 @@ export function LotDetailPage() {
     }
   }
 
+  // Handle adding a photo to an ITP completion
+  const handleAddPhoto = async (completionId: string, checklistItemId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !itpInstance) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    setUploadingPhoto(checklistItemId)
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      // For demo purposes, we'll create a data URL from the file
+      // In production, you would upload to Supabase Storage or similar
+      const reader = new FileReader()
+      reader.onloadend = async () => {
+        const fileUrl = reader.result as string
+
+        const response = await fetch(`${apiUrl}/api/itp/completions/${completionId}/attachments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            filename: file.name,
+            fileUrl,
+            caption: `ITP Evidence Photo - ${new Date().toLocaleString()}`,
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          // Update the ITP instance with the new attachment
+          setItpInstance(prev => {
+            if (!prev) return prev
+            const completionIndex = prev.completions.findIndex(c => c.id === completionId)
+            if (completionIndex >= 0) {
+              const newCompletions = [...prev.completions]
+              const completion = newCompletions[completionIndex]
+              newCompletions[completionIndex] = {
+                ...completion,
+                attachments: [...(completion.attachments || []), data.attachment]
+              }
+              return { ...prev, completions: newCompletions }
+            }
+            return prev
+          })
+        } else {
+          console.error('Failed to upload photo')
+          alert('Failed to upload photo. Please try again.')
+        }
+        setUploadingPhoto(null)
+      }
+      reader.readAsDataURL(file)
+    } catch (err) {
+      console.error('Failed to add photo:', err)
+      alert('Failed to upload photo. Please try again.')
+      setUploadingPhoto(null)
+    }
+
+    // Reset the input
+    event.target.value = ''
+  }
+
   const handleConformLot = async () => {
     if (!confirm('Are you sure you want to conform this lot? This action marks the lot as quality-approved.')) {
       return
@@ -775,7 +858,8 @@ export function LotDetailPage() {
                                           completedBy: null,
                                           isVerified: false,
                                           verifiedAt: null,
-                                          verifiedBy: null
+                                          verifiedBy: null,
+                                          attachments: []
                                         })
                                       }
                                       return { ...prev, completions: newCompletions }
@@ -791,6 +875,55 @@ export function LotDetailPage() {
                                   {completion.completedAt && ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
                                 </p>
                               )}
+
+                              {/* Photo Attachments Section */}
+                              <div className="mt-3 pt-2 border-t border-gray-100">
+                                {/* Display existing attachments */}
+                                {completion?.attachments && completion.attachments.length > 0 && (
+                                  <div className="mb-2">
+                                    <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                                      <span>📷</span> Photos ({completion.attachments.length})
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {completion.attachments.map((attachment) => (
+                                        <div
+                                          key={attachment.id}
+                                          className="relative group cursor-pointer"
+                                          onClick={() => setSelectedPhoto(attachment)}
+                                        >
+                                          <img
+                                            src={attachment.document.fileUrl}
+                                            alt={attachment.document.caption || attachment.document.filename}
+                                            className="w-16 h-16 object-cover rounded border hover:border-primary transition-colors"
+                                          />
+                                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
+                                            <span className="text-white text-xs">View</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Add Photo Button */}
+                                {completion?.id && (
+                                  <label className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 cursor-pointer">
+                                    <span>📷</span>
+                                    <span>Add Photo</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => handleAddPhoto(completion.id, item.id, e)}
+                                    />
+                                  </label>
+                                )}
+                                {!completion?.id && (
+                                  <span className="text-xs text-muted-foreground italic">
+                                    Complete the item first to attach photos
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -829,20 +962,46 @@ export function LotDetailPage() {
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div className="bg-background rounded-lg p-6 w-full max-w-md">
                   <h2 className="text-xl font-semibold mb-4">Assign ITP Template</h2>
+                  {lot.activityType && (
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Showing templates for <span className="font-medium text-foreground">{lot.activityType}</span> activity
+                    </p>
+                  )}
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {templates.map((template) => (
-                      <button
-                        key={template.id}
-                        onClick={() => handleAssignTemplate(template.id)}
-                        disabled={assigningTemplate}
-                        className="w-full text-left p-3 border rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50"
-                      >
-                        <div className="font-medium">{template.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {template.activityType} - {template.checklistItems.length} items
-                        </div>
-                      </button>
-                    ))}
+                    {/* Sort templates: matching activity type first, then others */}
+                    {[...templates]
+                      .sort((a, b) => {
+                        const aMatches = lot.activityType && a.activityType?.toLowerCase() === lot.activityType.toLowerCase()
+                        const bMatches = lot.activityType && b.activityType?.toLowerCase() === lot.activityType.toLowerCase()
+                        if (aMatches && !bMatches) return -1
+                        if (!aMatches && bMatches) return 1
+                        return 0
+                      })
+                      .map((template) => {
+                        const isMatch = lot.activityType && template.activityType?.toLowerCase() === lot.activityType.toLowerCase()
+                        return (
+                          <button
+                            key={template.id}
+                            onClick={() => handleAssignTemplate(template.id)}
+                            disabled={assigningTemplate}
+                            className={`w-full text-left p-3 border rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50 ${
+                              isMatch ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{template.name}</span>
+                              {isMatch && (
+                                <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full">
+                                  Suggested
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {template.activityType} - {template.checklistItems.length} items
+                            </div>
+                          </button>
+                        )
+                      })}
                   </div>
                   <div className="flex justify-end mt-4">
                     <button
@@ -852,6 +1011,53 @@ export function LotDetailPage() {
                     >
                       Cancel
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Photo Viewer Modal */}
+            {selectedPhoto && (
+              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setSelectedPhoto(null)}>
+                <div className="relative max-w-4xl max-h-[90vh] p-4" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => setSelectedPhoto(null)}
+                    className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors"
+                  >
+                    ✕
+                  </button>
+                  <img
+                    src={selectedPhoto.document.fileUrl}
+                    alt={selectedPhoto.document.caption || selectedPhoto.document.filename}
+                    className="max-w-full max-h-[80vh] object-contain rounded-lg"
+                  />
+                  <div className="mt-3 text-white text-center">
+                    <p className="font-medium">{selectedPhoto.document.caption || selectedPhoto.document.filename}</p>
+                    {selectedPhoto.document.uploadedBy && (
+                      <p className="text-sm text-white/70 mt-1">
+                        Uploaded by {selectedPhoto.document.uploadedBy.fullName || selectedPhoto.document.uploadedBy.email}
+                        {selectedPhoto.document.uploadedAt && ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
+                      </p>
+                    )}
+                    {/* Show ITP item reference */}
+                    {itpInstance && (() => {
+                      const completion = itpInstance.completions.find(c =>
+                        c.attachments?.some(a => a.id === selectedPhoto.id)
+                      )
+                      if (completion) {
+                        const checklistItem = itpInstance.template.checklistItems.find(
+                          item => item.id === completion.checklistItemId
+                        )
+                        if (checklistItem) {
+                          return (
+                            <p className="text-sm bg-primary/30 px-3 py-1 rounded mt-2 inline-block">
+                              📋 ITP Item: {checklistItem.order}. {checklistItem.description}
+                            </p>
+                          )
+                        }
+                      }
+                      return null
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1006,17 +1212,83 @@ export function LotDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Photos</h2>
-              <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
-                Upload Photo
-              </button>
             </div>
-            <div className="rounded-lg border p-6 text-center">
-              <div className="text-4xl mb-2">📷</div>
-              <h3 className="text-lg font-semibold mb-2">No Photos</h3>
-              <p className="text-muted-foreground">
-                No photos have been uploaded for this lot yet. Add photos to document work progress.
-              </p>
-            </div>
+            {/* Show ITP photos with their references */}
+            {(() => {
+              // Collect all photos from ITP completions
+              const itpPhotos: Array<{
+                attachment: ITPAttachment
+                checklistItem: ITPChecklistItem
+                completion: ITPCompletion
+              }> = []
+
+              if (itpInstance) {
+                itpInstance.completions.forEach(completion => {
+                  if (completion.attachments && completion.attachments.length > 0) {
+                    const checklistItem = itpInstance.template.checklistItems.find(
+                      item => item.id === completion.checklistItemId
+                    )
+                    if (checklistItem) {
+                      completion.attachments.forEach(attachment => {
+                        itpPhotos.push({ attachment, checklistItem, completion })
+                      })
+                    }
+                  }
+                })
+              }
+
+              if (itpPhotos.length === 0) {
+                return (
+                  <div className="rounded-lg border p-6 text-center">
+                    <div className="text-4xl mb-2">📷</div>
+                    <h3 className="text-lg font-semibold mb-2">No Photos</h3>
+                    <p className="text-muted-foreground">
+                      No photos have been uploaded for this lot yet. Add photos to ITP checklist items to document work progress.
+                    </p>
+                    <button
+                      onClick={() => handleTabChange('itp')}
+                      className="mt-4 rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+                    >
+                      Go to ITP Checklist
+                    </button>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {itpPhotos.length} photo{itpPhotos.length !== 1 ? 's' : ''} attached to ITP checklist items
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {itpPhotos.map(({ attachment, checklistItem }) => (
+                      <div
+                        key={attachment.id}
+                        className="relative group cursor-pointer rounded-lg border overflow-hidden hover:border-primary transition-colors"
+                        onClick={() => setSelectedPhoto(attachment)}
+                      >
+                        <img
+                          src={attachment.document.fileUrl}
+                          alt={attachment.document.caption || attachment.document.filename}
+                          className="w-full h-40 object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-white text-sm font-medium">View</span>
+                        </div>
+                        {/* ITP Reference Badge */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                          <p className="text-xs text-white truncate flex items-center gap-1">
+                            <span>📋</span>
+                            <span className="font-medium">ITP {checklistItem.order}:</span>
+                            <span className="truncate">{checklistItem.description}</span>
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
