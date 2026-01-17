@@ -1,7 +1,8 @@
 import { useParams } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink } from 'lucide-react'
+import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink, TrendingUp } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts'
 
 interface Claim {
   id: string
@@ -77,25 +78,67 @@ export function ClaimsPage() {
         const data = await response.json()
         setClaims(data.claims || [])
       } else {
-        // Demo data
+        // Demo data - multiple claims over months for cumulative chart
         setClaims([
           {
             id: '1',
             claimNumber: 1,
-            periodStart: '2025-12-01',
-            periodEnd: '2025-12-31',
+            periodStart: '2025-09-01',
+            periodEnd: '2025-09-30',
+            status: 'paid',
+            totalClaimedAmount: 85000,
+            certifiedAmount: 82000,
+            paidAmount: 82000,
+            submittedAt: '2025-10-05',
+            disputeNotes: null,
+            disputedAt: null,
+            lotCount: 6
+          },
+          {
+            id: '2',
+            claimNumber: 2,
+            periodStart: '2025-10-01',
+            periodEnd: '2025-10-31',
+            status: 'paid',
+            totalClaimedAmount: 112000,
+            certifiedAmount: 110000,
+            paidAmount: 110000,
+            submittedAt: '2025-11-05',
+            disputeNotes: null,
+            disputedAt: null,
+            lotCount: 9
+          },
+          {
+            id: '3',
+            claimNumber: 3,
+            periodStart: '2025-11-01',
+            periodEnd: '2025-11-30',
             status: 'paid',
             totalClaimedAmount: 145000,
             certifiedAmount: 142500,
             paidAmount: 142500,
-            submittedAt: '2026-01-05',
+            submittedAt: '2025-12-05',
             disputeNotes: null,
             disputedAt: null,
             lotCount: 12
           },
           {
-            id: '2',
-            claimNumber: 2,
+            id: '4',
+            claimNumber: 4,
+            periodStart: '2025-12-01',
+            periodEnd: '2025-12-31',
+            status: 'certified',
+            totalClaimedAmount: 168000,
+            certifiedAmount: 165000,
+            paidAmount: null,
+            submittedAt: '2026-01-05',
+            disputeNotes: null,
+            disputedAt: null,
+            lotCount: 14
+          },
+          {
+            id: '5',
+            claimNumber: 5,
             periodStart: '2026-01-01',
             periodEnd: '2026-01-31',
             status: 'submitted',
@@ -463,6 +506,69 @@ export function ClaimsPage() {
   const totalPaid = claims.reduce((sum, c) => sum + (c.paidAmount || 0), 0)
   const outstanding = totalCertified - totalPaid
 
+  // Calculate cumulative chart data - sorted by period end date
+  const cumulativeChartData = useMemo(() => {
+    if (claims.length === 0) return []
+
+    // Sort claims by period end date
+    const sortedClaims = [...claims].sort((a, b) =>
+      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
+    )
+
+    let cumulativeClaimed = 0
+    let cumulativeCertified = 0
+    let cumulativePaid = 0
+
+    return sortedClaims.map(claim => {
+      cumulativeClaimed += claim.totalClaimedAmount
+      cumulativeCertified += claim.certifiedAmount || 0
+      cumulativePaid += claim.paidAmount || 0
+
+      // Format month label
+      const periodEnd = new Date(claim.periodEnd)
+      const monthLabel = periodEnd.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' })
+
+      return {
+        name: monthLabel,
+        claimNumber: claim.claimNumber,
+        claimed: cumulativeClaimed,
+        certified: cumulativeCertified,
+        paid: cumulativePaid,
+        // Individual amounts for tooltip
+        claimAmount: claim.totalClaimedAmount,
+        certifiedAmount: claim.certifiedAmount,
+        paidAmount: claim.paidAmount
+      }
+    })
+  }, [claims])
+
+  // Custom tooltip for the chart
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload
+      return (
+        <div className="bg-white dark:bg-gray-800 p-3 border rounded-lg shadow-lg">
+          <p className="font-semibold mb-2">Claim {data.claimNumber} ({label})</p>
+          <div className="space-y-1 text-sm">
+            <p className="text-blue-600">
+              Cumulative Claimed: {formatCurrency(data.claimed)}
+            </p>
+            <p className="text-amber-600">
+              Cumulative Certified: {formatCurrency(data.certified)}
+            </p>
+            <p className="text-green-600">
+              Cumulative Paid: {formatCurrency(data.paid)}
+            </p>
+          </div>
+          <div className="border-t mt-2 pt-2 text-xs text-muted-foreground">
+            <p>This claim: {formatCurrency(data.claimAmount)}</p>
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -509,6 +615,79 @@ export function ClaimsPage() {
           <p className="text-2xl font-bold text-amber-600">{formatCurrency(outstanding)}</p>
         </div>
       </div>
+
+      {/* Cumulative Claims Chart */}
+      {cumulativeChartData.length >= 2 && (
+        <div className="rounded-lg border bg-card p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Cumulative Claims Over Time</h2>
+          </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={cumulativeChartData} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="colorClaimed" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorCertified" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 12 }}
+                  stroke="#6b7280"
+                />
+                <YAxis
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                  tick={{ fontSize: 12 }}
+                  stroke="#6b7280"
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="claimed"
+                  name="Claimed"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorClaimed)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="certified"
+                  name="Certified"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorCertified)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="paid"
+                  name="Paid"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorPaid)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2 text-center">
+            Showing cumulative totals across {cumulativeChartData.length} claims
+          </p>
+        </div>
+      )}
 
       {/* Claims List */}
       {claims.length === 0 ? (
