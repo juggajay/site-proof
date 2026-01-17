@@ -979,6 +979,171 @@ testResultsRouter.get('/:id/request-form', async (req, res) => {
   }
 })
 
+// GET /api/test-results/:id/verification-view - Get side-by-side verification view data
+testResultsRouter.get('/:id/verification-view', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+
+    const testResult = await prisma.testResult.findUnique({
+      where: { id },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            projectNumber: true,
+            specificationSet: true,
+          }
+        },
+        lot: {
+          select: {
+            id: true,
+            lotNumber: true,
+            description: true,
+            activityType: true,
+            chainageStart: true,
+            chainageEnd: true,
+            layer: true,
+          }
+        },
+        enteredBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          }
+        },
+        verifiedBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          }
+        },
+        certificateDoc: {
+          select: {
+            id: true,
+            filename: true,
+            fileUrl: true,
+            mimeType: true,
+            uploadedAt: true,
+          }
+        },
+      },
+    })
+
+    if (!testResult) {
+      return res.status(404).json({ error: 'Test result not found' })
+    }
+
+    // Verify user has access to the project
+    const projectAccess = await prisma.projectUser.findFirst({
+      where: {
+        projectId: testResult.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const projectCompanyAccess = await prisma.project.findFirst({
+      where: {
+        id: testResult.projectId,
+        companyId: user.companyId || undefined,
+      },
+    })
+
+    if (!projectAccess && !projectCompanyAccess) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this test result'
+      })
+    }
+
+    // Determine if result passes or fails specification
+    let specificationStatus = 'unknown'
+    if (testResult.resultValue !== null) {
+      const value = Number(testResult.resultValue)
+      const min = testResult.specificationMin !== null ? Number(testResult.specificationMin) : null
+      const max = testResult.specificationMax !== null ? Number(testResult.specificationMax) : null
+
+      if (min !== null && max !== null) {
+        specificationStatus = value >= min && value <= max ? 'pass' : 'fail'
+      } else if (min !== null) {
+        specificationStatus = value >= min ? 'pass' : 'fail'
+      } else if (max !== null) {
+        specificationStatus = value <= max ? 'pass' : 'fail'
+      }
+    }
+
+    // Get specification reference for this test type if available
+    const normalizedType = testResult.testType.toLowerCase().replace(/\s+/g, '_')
+    const standardSpec = testTypeSpecifications[normalizedType]
+
+    // Format the response for side-by-side view
+    res.json({
+      verificationView: {
+        // Left side: Document/Certificate info
+        document: testResult.certificateDoc ? {
+          id: testResult.certificateDoc.id,
+          filename: testResult.certificateDoc.filename,
+          fileUrl: testResult.certificateDoc.fileUrl,
+          mimeType: testResult.certificateDoc.mimeType,
+          uploadedAt: testResult.certificateDoc.uploadedAt,
+          isPdf: testResult.certificateDoc.mimeType === 'application/pdf',
+        } : null,
+
+        // Right side: Extracted/Entered data
+        extractedData: {
+          testType: testResult.testType,
+          testRequestNumber: testResult.testRequestNumber,
+          laboratoryName: testResult.laboratoryName,
+          laboratoryReportNumber: testResult.laboratoryReportNumber,
+          sampleDate: testResult.sampleDate,
+          sampleLocation: testResult.sampleLocation,
+          testDate: testResult.testDate,
+          resultDate: testResult.resultDate,
+          resultValue: testResult.resultValue,
+          resultUnit: testResult.resultUnit,
+          aiExtracted: testResult.aiExtracted,
+          aiConfidence: testResult.aiConfidence ? JSON.parse(testResult.aiConfidence as string) : null,
+        },
+
+        // Specification comparison
+        specification: {
+          min: testResult.specificationMin,
+          max: testResult.specificationMax,
+          unit: testResult.resultUnit,
+          currentStatus: testResult.passFail,
+          calculatedStatus: specificationStatus,
+          standardReference: standardSpec?.specReference || null,
+        },
+
+        // Metadata
+        metadata: {
+          id: testResult.id,
+          status: testResult.status,
+          project: testResult.project,
+          lot: testResult.lot,
+          enteredBy: testResult.enteredBy,
+          enteredAt: testResult.enteredAt,
+          verifiedBy: testResult.verifiedBy,
+          verifiedAt: testResult.verifiedAt,
+          createdAt: testResult.createdAt,
+          updatedAt: testResult.updatedAt,
+        },
+
+        // User permissions
+        canVerify: TEST_VERIFIERS.includes(projectAccess?.role || user.roleInCompany),
+        needsVerification: testResult.status !== 'verified',
+      }
+    })
+  } catch (error) {
+    console.error('Get verification view error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // POST /api/test-results/:id/verify - Verify a test result (quality management)
 testResultsRouter.post('/:id/verify', async (req, res) => {
   try {
