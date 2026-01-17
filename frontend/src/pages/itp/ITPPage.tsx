@@ -6,6 +6,7 @@ interface ChecklistItem {
   id?: string
   description: string
   category: string
+  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general'
   isHoldPoint: boolean
   pointType: 'standard' | 'witness' | 'hold_point'
   evidenceRequired: 'none' | 'photo' | 'test' | 'document'
@@ -180,11 +181,11 @@ function CreateTemplateModal({
   const [description, setDescription] = useState('')
   const [activityType, setActivityType] = useState('')
   const [checklistItems, setChecklistItems] = useState<Omit<ChecklistItem, 'id' | 'order'>[]>([
-    { description: '', category: 'general', isHoldPoint: false, pointType: 'standard', evidenceRequired: 'none' }
+    { description: '', category: 'general', responsibleParty: 'contractor', isHoldPoint: false, pointType: 'standard', evidenceRequired: 'none' }
   ])
 
   const handleAddItem = () => {
-    setChecklistItems([...checklistItems, { description: '', category: 'general', isHoldPoint: false, pointType: 'standard', evidenceRequired: 'none' }])
+    setChecklistItems([...checklistItems, { description: '', category: 'general', responsibleParty: 'contractor', isHoldPoint: false, pointType: 'standard', evidenceRequired: 'none' }])
   }
 
   const handleRemoveItem = (index: number) => {
@@ -272,15 +273,16 @@ function CreateTemplateModal({
                     />
                     <div className="flex items-center gap-4">
                       <select
-                        value={item.category}
-                        onChange={(e) => handleItemChange(index, 'category', e.target.value)}
+                        value={item.responsibleParty || 'contractor'}
+                        onChange={(e) => {
+                          handleItemChange(index, 'responsibleParty', e.target.value)
+                          handleItemChange(index, 'category', e.target.value)
+                        }}
                         className="px-2 py-1 border rounded text-sm"
                       >
-                        <option value="general">General</option>
-                        <option value="materials">Materials</option>
-                        <option value="workmanship">Workmanship</option>
-                        <option value="testing">Testing</option>
-                        <option value="documentation">Documentation</option>
+                        <option value="contractor">Contractor</option>
+                        <option value="subcontractor">Subcontractor</option>
+                        <option value="superintendent">Superintendent</option>
                       </select>
                       <select
                         value={item.pointType || 'standard'}

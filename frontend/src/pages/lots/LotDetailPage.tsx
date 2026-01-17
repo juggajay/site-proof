@@ -66,6 +66,7 @@ interface ITPChecklistItem {
   id: string
   description: string
   category: string
+  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general'
   isHoldPoint: boolean
   pointType: 'standard' | 'witness' | 'hold_point'
   evidenceRequired: 'none' | 'photo' | 'test' | 'document'
@@ -845,7 +846,21 @@ export function LotDetailPage() {
                                 {item.isHoldPoint && (
                                   <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Hold Point</span>
                                 )}
-                                <span className="text-xs bg-muted px-2 py-0.5 rounded capitalize">{item.category}</span>
+                                {/* Responsible party badge */}
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  item.responsibleParty === 'superintendent'
+                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                    : item.responsibleParty === 'subcontractor'
+                                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                                    : item.responsibleParty === 'contractor'
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                    : 'bg-muted'
+                                }`}>
+                                  {item.responsibleParty === 'superintendent' ? 'Superintendent' :
+                                   item.responsibleParty === 'subcontractor' ? 'Subcontractor' :
+                                   item.responsibleParty === 'contractor' ? 'Contractor' :
+                                   item.category || 'General'}
+                                </span>
                                 {/* Evidence required icons */}
                                 {item.evidenceRequired === 'photo' && (
                                   <span className="inline-flex items-center text-green-600 dark:text-green-400" title="Photo required">

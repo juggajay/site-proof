@@ -1,4 +1,4 @@
-// Feature #590 trigger - ITP evidence required indicator
+// Feature #591 trigger - ITP responsible party display
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
@@ -53,6 +53,7 @@ itpRouter.get('/templates', requireAuth, async (req: any, res) => {
         id: item.id,
         description: item.description,
         category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
         isHoldPoint: item.pointType === 'hold_point',
         pointType: item.pointType || 'standard',
         evidenceRequired: item.evidenceRequired || 'none',
@@ -93,6 +94,7 @@ itpRouter.get('/templates/:id', requireAuth, async (req: any, res) => {
         id: item.id,
         description: item.description,
         category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
         isHoldPoint: item.pointType === 'hold_point',
         pointType: item.pointType || 'standard',
         evidenceRequired: item.evidenceRequired || 'none',
@@ -148,6 +150,7 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
         id: item.id,
         description: item.description,
         category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
         isHoldPoint: item.pointType === 'hold_point',
         pointType: item.pointType || 'standard',
         evidenceRequired: item.evidenceRequired || 'none',
@@ -224,6 +227,7 @@ itpRouter.post('/instances', requireAuth, async (req: any, res) => {
           id: item.id,
           description: item.description,
           category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
           isHoldPoint: item.pointType === 'hold_point',
           pointType: item.pointType || 'standard',
           evidenceRequired: item.evidenceRequired || 'none',
@@ -292,6 +296,7 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
           id: item.id,
           description: item.description,
           category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
           isHoldPoint: item.pointType === 'hold_point',
           pointType: item.pointType || 'standard',
           evidenceRequired: item.evidenceRequired || 'none',
