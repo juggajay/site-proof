@@ -2,7 +2,8 @@ import { useParams } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth'
 import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink, TrendingUp } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, BarChart, Bar } from 'recharts'
+import { BarChart3 } from 'lucide-react'
 
 interface Claim {
   id: string
@@ -542,7 +543,31 @@ export function ClaimsPage() {
     })
   }, [claims])
 
-  // Custom tooltip for the chart
+  // Calculate monthly breakdown chart data (individual amounts per claim/month)
+  const monthlyBreakdownData = useMemo(() => {
+    if (claims.length === 0) return []
+
+    // Sort claims by period end date
+    const sortedClaims = [...claims].sort((a, b) =>
+      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
+    )
+
+    return sortedClaims.map(claim => {
+      const periodEnd = new Date(claim.periodEnd)
+      const monthLabel = periodEnd.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' })
+
+      return {
+        name: monthLabel,
+        claimNumber: claim.claimNumber,
+        claimed: claim.totalClaimedAmount,
+        certified: claim.certifiedAmount || 0,
+        paid: claim.paidAmount || 0,
+        status: claim.status
+      }
+    })
+  }, [claims])
+
+  // Custom tooltip for the cumulative chart
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
@@ -562,6 +587,42 @@ export function ClaimsPage() {
           </div>
           <div className="border-t mt-2 pt-2 text-xs text-muted-foreground">
             <p>This claim: {formatCurrency(data.claimAmount)}</p>
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
+
+  // Custom tooltip for monthly breakdown chart
+  const MonthlyTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload
+      const statusColors: Record<string, string> = {
+        draft: 'text-gray-600',
+        submitted: 'text-blue-600',
+        certified: 'text-amber-600',
+        paid: 'text-green-600',
+        disputed: 'text-red-600'
+      }
+      return (
+        <div className="bg-white dark:bg-gray-800 p-3 border rounded-lg shadow-lg">
+          <p className="font-semibold mb-2">Claim {data.claimNumber} ({label})</p>
+          <div className="space-y-1 text-sm">
+            <p className="text-blue-600">
+              Claimed: {formatCurrency(data.claimed)}
+            </p>
+            <p className="text-amber-600">
+              Certified: {formatCurrency(data.certified)}
+            </p>
+            <p className="text-green-600">
+              Paid: {formatCurrency(data.paid)}
+            </p>
+          </div>
+          <div className="border-t mt-2 pt-2 text-xs">
+            <p className={statusColors[data.status] || 'text-gray-600'}>
+              Status: {data.status.charAt(0).toUpperCase() + data.status.slice(1)}
+            </p>
           </div>
         </div>
       )
@@ -685,6 +746,56 @@ export function ClaimsPage() {
           </div>
           <p className="text-sm text-muted-foreground mt-2 text-center">
             Showing cumulative totals across {cumulativeChartData.length} claims
+          </p>
+        </div>
+      )}
+
+      {/* Monthly Breakdown Chart */}
+      {monthlyBreakdownData.length >= 2 && (
+        <div className="rounded-lg border bg-card p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Monthly Claim Breakdown</h2>
+          </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyBreakdownData} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 12 }}
+                  stroke="#6b7280"
+                />
+                <YAxis
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                  tick={{ fontSize: 12 }}
+                  stroke="#6b7280"
+                />
+                <Tooltip content={<MonthlyTooltip />} />
+                <Legend />
+                <Bar
+                  dataKey="claimed"
+                  name="Claimed"
+                  fill="#3b82f6"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="certified"
+                  name="Certified"
+                  fill="#f59e0b"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="paid"
+                  name="Paid"
+                  fill="#22c55e"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2 text-center">
+            Individual claim amounts per month
           </p>
         </div>
       )}
