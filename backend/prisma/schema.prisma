@@ -51,6 +51,9 @@ model User {
   verifiedNCRs    NCR[]             @relation("VerifiedByUser")
   closedNCRs      NCR[]             @relation("ClosedByUser")
   qmApprovedNCRs  NCR[]             @relation("QMApprovedByUser")
+  respondedNCRs   NCR[]             @relation("RespondedByUser")
+  qmReviewedNCRs  NCR[]             @relation("QMReviewedByUser")
+  escalatedNCRs   NCR[]             @relation("EscalatedByUser")
   submittedDiaries DailyDiary[]
   diaryAddendums  DiaryAddendum[]
   itpCompletions  ITPCompletion[]   @relation("CompletedByUser")
@@ -417,10 +420,34 @@ model NCR {
   clientNotificationRequired Boolean  @default(false) @map("client_notification_required")
   clientNotifiedAt          DateTime? @map("client_notified_at")
   lessonsLearned            String?   @map("lessons_learned")
+
+  // Response fields
+  response                  String?   @map("response")
+  respondedAt               DateTime? @map("responded_at")
+  respondedById             String?   @map("responded_by")
+
+  // QM Review fields
+  qmReviewedAt              DateTime? @map("qm_reviewed_at")
+  qmReviewedById            String?   @map("qm_reviewed_by")
+  qmReviewComments          String?   @map("qm_review_comments")
+
+  // Revision request fields
+  revisionRequested         Boolean   @default(false) @map("revision_requested")
+  revisionRequestedAt       DateTime? @map("revision_requested_at")
+  revisionCount             Int       @default(0) @map("revision_count")
+
+  // Escalation fields
+  escalatedAt               DateTime? @map("escalated_at")
+  escalatedById             String?   @map("escalated_by")
+  escalationReason          String?   @map("escalation_reason")
+
   createdAt                 DateTime  @default(now()) @map("created_at")
   updatedAt                 DateTime  @updatedAt @map("updated_at")
 
   project                  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  respondedBy              User?                 @relation("RespondedByUser", fields: [respondedById], references: [id])
+  qmReviewedBy             User?                 @relation("QMReviewedByUser", fields: [qmReviewedById], references: [id])
+  escalatedBy              User?                 @relation("EscalatedByUser", fields: [escalatedById], references: [id])
   raisedBy                 User                  @relation("RaisedByUser", fields: [raisedById], references: [id])
   responsibleUser          User?                 @relation("ResponsibleUser", fields: [responsibleUserId], references: [id])
   responsibleSubcontractor SubcontractorCompany? @relation(fields: [responsibleSubcontractorId], references: [id])
