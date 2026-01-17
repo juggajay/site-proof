@@ -55,6 +55,14 @@ export function SubcontractorsPage() {
     role: '',
     hourlyRate: ''
   })
+  const [showAddPlantModal, setShowAddPlantModal] = useState<string | null>(null)
+  const [plantData, setPlantData] = useState({
+    type: '',
+    description: '',
+    idRego: '',
+    dryRate: '',
+    wetRate: ''
+  })
 
   useEffect(() => {
     fetchSubcontractors()
@@ -235,18 +243,99 @@ export function SubcontractorsPage() {
     }
   }
 
-  const approvePlant = async (subId: string, plantId: string) => {
-    setSubcontractors(subs => subs.map(sub => {
-      if (sub.id === subId) {
-        return {
-          ...sub,
-          plant: sub.plant.map(p =>
-            p.id === plantId ? { ...p, status: 'approved' as const } : p
-          )
-        }
+  const updatePlantStatus = async (subId: string, plantId: string, status: 'pending' | 'approved' | 'inactive') => {
+    const token = getAuthToken()
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+
+    try {
+      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/plant/${plantId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ status })
+      })
+
+      if (response.ok) {
+        setSubcontractors(subs => subs.map(sub => {
+          if (sub.id === subId) {
+            return {
+              ...sub,
+              plant: sub.plant.map(p =>
+                p.id === plantId ? { ...p, status } : p
+              )
+            }
+          }
+          return sub
+        }))
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Failed to update plant status')
       }
-      return sub
-    }))
+    } catch (error) {
+      console.error('Update plant status error:', error)
+      alert('Failed to update plant status')
+    }
+  }
+
+  const approvePlant = async (subId: string, plantId: string) => {
+    await updatePlantStatus(subId, plantId, 'approved')
+  }
+
+  const deactivatePlant = async (subId: string, plantId: string) => {
+    if (!confirm('Are you sure you want to deactivate this plant? It will no longer be available for dockets.')) {
+      return
+    }
+    await updatePlantStatus(subId, plantId, 'inactive')
+  }
+
+  const addPlant = async (subId: string) => {
+    if (!plantData.type || !plantData.dryRate) {
+      alert('Type and dry rate are required')
+      return
+    }
+
+    const token = getAuthToken()
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+
+    try {
+      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/plant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          type: plantData.type,
+          description: plantData.description,
+          idRego: plantData.idRego,
+          dryRate: parseFloat(plantData.dryRate),
+          wetRate: plantData.wetRate ? parseFloat(plantData.wetRate) : 0
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSubcontractors(subs => subs.map(sub => {
+          if (sub.id === subId) {
+            return {
+              ...sub,
+              plant: [...sub.plant, data.plant]
+            }
+          }
+          return sub
+        }))
+        setShowAddPlantModal(null)
+        setPlantData({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Failed to add plant')
+      }
+    } catch (error) {
+      console.error('Add plant error:', error)
+      alert('Failed to add plant')
+    }
   }
 
   const approveSubcontractor = async (subId: string) => {
@@ -575,10 +664,19 @@ export function SubcontractorsPage() {
 
                 {/* Plant Register */}
                 <div>
-                  <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <Truck className="h-4 w-4" />
-                    Plant Register ({sub.plant.length})
-                  </h4>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Truck className="h-4 w-4" />
+                      Plant Register ({sub.plant.length})
+                    </h4>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowAddPlantModal(sub.id); }}
+                      className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add Plant
+                    </button>
+                  </div>
                   <div className="rounded-lg border">
                     <table className="w-full">
                       <thead className="bg-muted/50">
@@ -601,18 +699,36 @@ export function SubcontractorsPage() {
                             <td className="p-3 text-right font-semibold">{formatCurrency(p.dryRate)}/hr</td>
                             <td className="p-3 text-right font-semibold">{p.wetRate > 0 ? `${formatCurrency(p.wetRate)}/hr` : '-'}</td>
                             <td className="p-3 text-center">{getStatusBadge(p.status)}</td>
-                            <td className="p-3 text-right">
+                            <td className="p-3 text-right space-x-2">
                               {p.status === 'pending' && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); approvePlant(sub.id, p.id); }}
                                   className="text-sm text-green-600 hover:text-green-700 font-medium"
                                 >
-                                  Approve Rate
+                                  Approve
                                 </button>
+                              )}
+                              {p.status === 'approved' && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); deactivatePlant(sub.id, p.id); }}
+                                  className="text-sm text-orange-600 hover:text-orange-700 font-medium"
+                                >
+                                  Deactivate
+                                </button>
+                              )}
+                              {p.status === 'inactive' && (
+                                <span className="text-sm text-muted-foreground">Inactive</span>
                               )}
                             </td>
                           </tr>
                         ))}
+                        {sub.plant.length === 0 && (
+                          <tr>
+                            <td colSpan={7} className="p-4 text-center text-muted-foreground">
+                              No plant added yet
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -765,6 +881,95 @@ export function SubcontractorsPage() {
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
                 Add Employee
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Plant Modal */}
+      {showAddPlantModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-semibold">Add Plant</h2>
+              <button onClick={() => { setShowAddPlantModal(null); setPlantData({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' }); }} className="p-2 hover:bg-muted rounded-lg">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Type *</label>
+                <input
+                  type="text"
+                  value={plantData.type}
+                  onChange={(e) => setPlantData(prev => ({ ...prev, type: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Excavator, Roller, Truck..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <input
+                  type="text"
+                  value={plantData.description}
+                  onChange={(e) => setPlantData(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="20T Excavator, Padfoot Roller..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">ID/Rego</label>
+                <input
+                  type="text"
+                  value={plantData.idRego}
+                  onChange={(e) => setPlantData(prev => ({ ...prev, idRego: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="EXC-001"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Dry Rate ($/hr) *</label>
+                  <input
+                    type="number"
+                    value={plantData.dryRate}
+                    onChange={(e) => setPlantData(prev => ({ ...prev, dryRate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="150"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Wet Rate ($/hr)</label>
+                  <input
+                    type="number"
+                    value={plantData.wetRate}
+                    onChange={(e) => setPlantData(prev => ({ ...prev, wetRate: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="200"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 p-4 border-t">
+              <button
+                onClick={() => { setShowAddPlantModal(null); setPlantData({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' }); }}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => addPlant(showAddPlantModal)}
+                disabled={!plantData.type || !plantData.dryRate}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+              >
+                Add Plant
               </button>
             </div>
           </div>

@@ -632,3 +632,103 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// POST /api/subcontractors/:id/plant - Add plant to a subcontractor (admin)
+subcontractorsRouter.post('/:id/plant', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { type, description, idRego, dryRate, wetRate } = req.body
+
+    if (!type || dryRate === undefined) {
+      return res.status(400).json({ error: 'Type and dry rate are required' })
+    }
+
+    // Verify subcontractor exists
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Subcontractor not found' })
+    }
+
+    const plant = await prisma.plantRegister.create({
+      data: {
+        subcontractorCompanyId: id,
+        type,
+        description: description || '',
+        idRego: idRego || '',
+        dryRate: dryRate,
+        wetRate: wetRate || 0,
+        status: 'pending'
+      }
+    })
+
+    res.status(201).json({
+      plant: {
+        id: plant.id,
+        type: plant.type,
+        description: plant.description || '',
+        idRego: plant.idRego || '',
+        dryRate: Number(plant.dryRate),
+        wetRate: Number(plant.wetRate) || 0,
+        status: plant.status
+      }
+    })
+  } catch (error) {
+    console.error('Add plant error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PATCH /api/subcontractors/:id/plant/:plantId/status - Update plant status
+subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
+  try {
+    const { id, plantId } = req.params
+    const { status } = req.body
+    const userId = (req as any).user?.userId
+
+    const validStatuses = ['pending', 'approved', 'inactive']
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: pending, approved, or inactive' })
+    }
+
+    // Verify plant belongs to this subcontractor
+    const plant = await prisma.plantRegister.findFirst({
+      where: {
+        id: plantId,
+        subcontractorCompanyId: id
+      }
+    })
+
+    if (!plant) {
+      return res.status(404).json({ error: 'Plant not found' })
+    }
+
+    const updateData: any = { status }
+    if (status === 'approved') {
+      updateData.approvedById = userId
+      updateData.approvedAt = new Date()
+    }
+
+    const updated = await prisma.plantRegister.update({
+      where: { id: plantId },
+      data: updateData
+    })
+
+    res.json({
+      plant: {
+        id: updated.id,
+        type: updated.type,
+        description: updated.description || '',
+        idRego: updated.idRego || '',
+        dryRate: Number(updated.dryRate),
+        wetRate: Number(updated.wetRate) || 0,
+        status: updated.status
+      }
+    })
+  } catch (error) {
+    console.error('Update plant status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
