@@ -1,4 +1,4 @@
-// Feature #591 trigger - ITP responsible party display
+// Feature #592 trigger - ITP instance snapshot from template
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
@@ -184,21 +184,43 @@ itpRouter.post('/instances', requireAuth, async (req: any, res) => {
       return res.status(400).json({ error: 'Lot already has an ITP assigned' })
     }
 
-    // Get the template
+    // Get the template with checklist items
     const template = await prisma.iTPTemplate.findUnique({
       where: { id: templateId },
-      include: { checklistItems: true }
+      include: {
+        checklistItems: {
+          orderBy: { sequenceNumber: 'asc' }
+        }
+      }
     })
 
     if (!template) {
       return res.status(404).json({ error: 'Template not found' })
     }
 
-    // Create instance
+    // Create a snapshot of the template at assignment time
+    const templateSnapshot = {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      activityType: template.activityType,
+      checklistItems: template.checklistItems.map(item => ({
+        id: item.id,
+        description: item.description,
+        sequenceNumber: item.sequenceNumber,
+        pointType: item.pointType,
+        responsibleParty: item.responsibleParty,
+        evidenceRequired: item.evidenceRequired,
+        acceptanceCriteria: item.acceptanceCriteria
+      }))
+    }
+
+    // Create instance with snapshot
     const instance = await prisma.iTPInstance.create({
       data: {
         lotId,
-        templateId
+        templateId,
+        templateSnapshot: JSON.stringify(templateSnapshot)
       },
       include: {
         template: {
@@ -287,23 +309,47 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
       return res.status(404).json({ error: 'No ITP assigned to this lot' })
     }
 
-    // Transform to frontend-friendly format
-    const transformedInstance = {
-      ...instance,
-      template: {
-        ...instance.template,
-        checklistItems: instance.template.checklistItems.map(item => ({
+    // Use snapshot if available, otherwise fall back to live template
+    let templateData: any
+    if (instance.templateSnapshot) {
+      // Parse the snapshot (template state at assignment time)
+      const snapshot = JSON.parse(instance.templateSnapshot)
+      templateData = {
+        ...snapshot,
+        checklistItems: snapshot.checklistItems.map((item: any) => ({
           id: item.id,
           description: item.description,
           category: item.responsibleParty || 'general',
-        responsibleParty: item.responsibleParty || 'contractor',
+          responsibleParty: item.responsibleParty || 'contractor',
           isHoldPoint: item.pointType === 'hold_point',
           pointType: item.pointType || 'standard',
           evidenceRequired: item.evidenceRequired || 'none',
           order: item.sequenceNumber,
           acceptanceCriteria: item.acceptanceCriteria
         }))
-      },
+      }
+    } else {
+      // Fall back to live template for backwards compatibility
+      templateData = {
+        ...instance.template,
+        checklistItems: instance.template.checklistItems.map(item => ({
+          id: item.id,
+          description: item.description,
+          category: item.responsibleParty || 'general',
+          responsibleParty: item.responsibleParty || 'contractor',
+          isHoldPoint: item.pointType === 'hold_point',
+          pointType: item.pointType || 'standard',
+          evidenceRequired: item.evidenceRequired || 'none',
+          order: item.sequenceNumber,
+          acceptanceCriteria: item.acceptanceCriteria
+        }))
+      }
+    }
+
+    // Transform to frontend-friendly format
+    const transformedInstance = {
+      ...instance,
+      template: templateData,
       completions: instance.completions.map(c => ({
         ...c,
         isCompleted: c.status === 'completed',

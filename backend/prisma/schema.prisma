@@ -237,12 +237,13 @@ model ITPChecklistItem {
 }
 
 model ITPInstance {
-  id         String   @id @default(uuid())
-  lotId      String   @unique @map("lot_id")
-  templateId String   @map("template_id")
-  status     String   @default("not_started")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id               String   @id @default(uuid())
+  lotId            String   @unique @map("lot_id")
+  templateId       String   @map("template_id")
+  templateSnapshot String?  @map("template_snapshot") // JSON snapshot of template at assignment time
+  status           String   @default("not_started")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   lot         Lot             @relation(fields: [lotId], references: [id], onDelete: Cascade)
   template    ITPTemplate     @relation(fields: [templateId], references: [id])
