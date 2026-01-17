@@ -484,6 +484,32 @@ export function ClaimsPage() {
     }).format(amount)
   }
 
+  // Export claims to CSV
+  const handleExportCSV = () => {
+    const headers = ['Claim #', 'Period Start', 'Period End', 'Status', 'Lots', 'Claimed Amount', 'Certified Amount', 'Paid Amount', 'Submitted At', 'Payment Due Date']
+    const rows = claims.map(claim => [
+      `Claim ${claim.claimNumber}`,
+      new Date(claim.periodStart).toLocaleDateString(),
+      new Date(claim.periodEnd).toLocaleDateString(),
+      claim.status,
+      claim.lotCount,
+      claim.totalClaimedAmount,
+      claim.certifiedAmount ?? '-',
+      claim.paidAmount ?? '-',
+      claim.submittedAt ? new Date(claim.submittedAt).toLocaleDateString() : '-',
+      claim.paymentDueDate ? new Date(claim.paymentDueDate).toLocaleDateString() : (claim.submittedAt ? new Date(calculatePaymentDueDate(claim.submittedAt)).toLocaleDateString() : '-')
+    ])
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.setAttribute('download', `progress-claims-${projectId}-${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft':
@@ -648,13 +674,23 @@ export function ClaimsPage() {
             SOPA-compliant progress claims and payment tracking
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          New Claim
-        </button>
+        <div className="flex gap-2">
+          {claims.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+            >
+              Export CSV
+            </button>
+          )}
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            New Claim
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
