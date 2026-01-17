@@ -172,15 +172,41 @@ lotsRouter.get('/:id', async (req, res) => {
   }
 })
 
-// POST /api/lots - Create a new lot (requires creator role)
-lotsRouter.post('/', requireRole(LOT_CREATORS), async (req, res) => {
+// POST /api/lots - Create a new lot (requires creator role in project)
+lotsRouter.post('/', async (req, res) => {
   try {
+    const user = req.user!
     const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType } = req.body
 
     if (!projectId || !lotNumber) {
       return res.status(400).json({
         error: 'Bad Request',
         message: 'projectId and lotNumber are required'
+      })
+    }
+
+    // Check if user has creator role - either via company role or project membership
+    let hasPermission = LOT_CREATORS.includes(user.roleInCompany || '')
+
+    if (!hasPermission) {
+      // Check project-specific role
+      const projectUser = await prisma.projectUser.findFirst({
+        where: {
+          projectId,
+          userId: user.id,
+          status: 'active'
+        }
+      })
+
+      if (projectUser && LOT_CREATORS.includes(projectUser.role)) {
+        hasPermission = true
+      }
+    }
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to create lots in this project.'
       })
     }
 
@@ -399,10 +425,67 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
 
     const lot = await prisma.lot.findUnique({
       where: { id },
+      include: {
+        // Check for actual hold point records that aren't released
+        holdPoints: {
+          where: {
+            status: { not: 'released' }
+          }
+        },
+        // Also check for ITP instances with hold point items (virtual hold points)
+        itpInstance: {
+          include: {
+            template: {
+              include: {
+                checklistItems: {
+                  where: { pointType: 'hold_point' }
+                }
+              }
+            },
+            completions: {
+              where: {
+                checklistItem: { pointType: 'hold_point' }
+              }
+            }
+          }
+        }
+      }
     })
 
     if (!lot) {
       return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Check for unreleased hold points (actual records in hold_points table)
+    if (lot.holdPoints && lot.holdPoints.length > 0) {
+      return res.status(400).json({
+        error: 'Cannot delete lot',
+        message: `This lot has ${lot.holdPoints.length} unreleased hold point(s). Release all hold points before deleting the lot.`,
+        code: 'UNRELEASED_HOLD_POINTS',
+        unreleasedHoldPoints: lot.holdPoints.length
+      })
+    }
+
+    // Check for virtual hold points (ITP checklist items with hold_point type that haven't been released)
+    if (lot.itpInstance?.template?.checklistItems) {
+      const holdPointItems = lot.itpInstance.template.checklistItems
+      const releasedCompletions = lot.itpInstance.completions?.filter(
+        c => c.verificationStatus === 'verified'
+      ) || []
+
+      // Find hold point items that haven't been verified/released
+      const unreleasedHoldPoints = holdPointItems.filter(item =>
+        !releasedCompletions.some(c => c.checklistItemId === item.id)
+      )
+
+      if (unreleasedHoldPoints.length > 0) {
+        return res.status(400).json({
+          error: 'Cannot delete lot',
+          message: `This lot has ${unreleasedHoldPoints.length} unreleased hold point(s). Release all hold points before deleting the lot.`,
+          code: 'UNRELEASED_HOLD_POINTS',
+          unreleasedHoldPoints: unreleasedHoldPoints.length
+        })
+      }
     }
 
     await prisma.lot.delete({
@@ -438,10 +521,16 @@ lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
         id: true,
         lotNumber: true,
         status: true,
+        holdPoints: {
+          where: {
+            status: { not: 'released' }
+          },
+          select: { id: true }
+        }
       },
     })
 
-    // Check for lots that cannot be deleted
+    // Check for lots that cannot be deleted (conformed or claimed)
     const undeletableLots = lotsToDelete.filter(
       lot => lot.status === 'conformed' || lot.status === 'claimed'
     )
@@ -450,6 +539,19 @@ lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
       return res.status(400).json({
         error: 'Bad Request',
         message: `Cannot delete ${undeletableLots.length} lot(s) that are conformed or claimed: ${undeletableLots.map(l => l.lotNumber).join(', ')}`
+      })
+    }
+
+    // Check for lots with unreleased hold points
+    const lotsWithUnreleasedHP = lotsToDelete.filter(
+      lot => lot.holdPoints && lot.holdPoints.length > 0
+    )
+
+    if (lotsWithUnreleasedHP.length > 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Cannot delete ${lotsWithUnreleasedHP.length} lot(s) with unreleased hold points: ${lotsWithUnreleasedHP.map(l => l.lotNumber).join(', ')}`,
+        code: 'UNRELEASED_HOLD_POINTS'
       })
     }
 
