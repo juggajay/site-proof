@@ -406,6 +406,407 @@ testResultsRouter.delete('/:id', async (req, res) => {
   }
 })
 
+// GET /api/test-results/:id/request-form - Generate printable test request form for lab
+testResultsRouter.get('/:id/request-form', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+
+    const testResult = await prisma.testResult.findUnique({
+      where: { id },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            projectNumber: true,
+            clientName: true,
+            company: {
+              select: {
+                name: true,
+                abn: true,
+                address: true,
+                logoUrl: true,
+              }
+            }
+          }
+        },
+        lot: {
+          select: {
+            id: true,
+            lotNumber: true,
+            description: true,
+            chainageStart: true,
+            chainageEnd: true,
+            layer: true,
+            activityType: true,
+          }
+        },
+        enteredBy: {
+          select: {
+            fullName: true,
+            email: true,
+            phone: true,
+          }
+        },
+      },
+    })
+
+    if (!testResult) {
+      return res.status(404).json({ error: 'Test result not found' })
+    }
+
+    // Verify user has access to the project
+    const projectAccess = await prisma.projectUser.findFirst({
+      where: {
+        projectId: testResult.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const projectCompanyAccess = await prisma.project.findFirst({
+      where: {
+        id: testResult.projectId,
+        companyId: user.companyId || undefined,
+      },
+    })
+
+    if (!projectAccess && !projectCompanyAccess) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this test result'
+      })
+    }
+
+    // Format dates for display
+    const formatDate = (date: Date | null) => {
+      if (!date) return 'N/A'
+      return new Date(date).toLocaleDateString('en-AU', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      })
+    }
+
+    // Generate HTML for printable form
+    const formHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Request Form - ${testResult.testRequestNumber || 'N/A'}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #333;
+        }
+        .company-info { flex: 1; }
+        .company-name { font-size: 18px; font-weight: bold; color: #333; }
+        .form-title { text-align: right; }
+        .form-title h1 { font-size: 20px; color: #333; }
+        .form-title p { font-size: 14px; color: #666; }
+
+        .section {
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        .section-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+            background: #f5f5f5;
+            margin: -10px -10px 10px -10px;
+            padding: 8px 10px;
+        }
+        .row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        .field {
+            flex: 1;
+            padding-right: 15px;
+        }
+        .field label {
+            font-weight: bold;
+            display: block;
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        .field .value {
+            border-bottom: 1px solid #999;
+            min-height: 18px;
+            padding: 2px 0;
+        }
+
+        .specifications {
+            background: #f9f9f9;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #ccc;
+        }
+        .signature-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+        }
+        .signature-block {
+            width: 45%;
+        }
+        .signature-line {
+            border-bottom: 1px solid #333;
+            height: 30px;
+            margin-bottom: 5px;
+        }
+        .signature-label {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .notes {
+            min-height: 60px;
+            border: 1px solid #ccc;
+            padding: 8px;
+            margin-top: 5px;
+        }
+
+        @media print {
+            body { padding: 10px; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="margin-bottom: 15px; padding: 10px; background: #e3f2fd; border-radius: 4px;">
+        <button onclick="window.print()" style="padding: 8px 16px; cursor: pointer;">Print Form</button>
+        <span style="margin-left: 10px; color: #666;">Press Ctrl+P to print or save as PDF</span>
+    </div>
+
+    <div class="header">
+        <div class="company-info">
+            <div class="company-name">${testResult.project.company?.name || 'Company'}</div>
+            ${testResult.project.company?.abn ? `<div>ABN: ${testResult.project.company.abn}</div>` : ''}
+            ${testResult.project.company?.address ? `<div>${testResult.project.company.address}</div>` : ''}
+        </div>
+        <div class="form-title">
+            <h1>TEST REQUEST FORM</h1>
+            <p>Form No: ${testResult.testRequestNumber || 'TRF-' + testResult.id.substring(0, 8).toUpperCase()}</p>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Project Information</div>
+        <div class="row">
+            <div class="field" style="flex: 2;">
+                <label>Project Name</label>
+                <div class="value">${testResult.project.name}</div>
+            </div>
+            <div class="field">
+                <label>Project Number</label>
+                <div class="value">${testResult.project.projectNumber}</div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="field">
+                <label>Client</label>
+                <div class="value">${testResult.project.clientName || 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Request Date</label>
+                <div class="value">${formatDate(testResult.createdAt)}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Sample Location</div>
+        <div class="row">
+            <div class="field">
+                <label>Lot Number</label>
+                <div class="value">${testResult.lot?.lotNumber || 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Activity Type</label>
+                <div class="value">${testResult.lot?.activityType || 'N/A'}</div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="field" style="flex: 2;">
+                <label>Lot Description</label>
+                <div class="value">${testResult.lot?.description || 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Layer</label>
+                <div class="value">${testResult.lot?.layer || 'N/A'}</div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="field">
+                <label>Chainage Start</label>
+                <div class="value">${testResult.lot?.chainageStart || 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Chainage End</label>
+                <div class="value">${testResult.lot?.chainageEnd || 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Sample Location Detail</label>
+                <div class="value">${testResult.sampleLocation || 'N/A'}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Test Details</div>
+        <div class="row">
+            <div class="field" style="flex: 2;">
+                <label>Test Type</label>
+                <div class="value">${testResult.testType}</div>
+            </div>
+            <div class="field">
+                <label>Sample Date</label>
+                <div class="value">${formatDate(testResult.sampleDate)}</div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="field">
+                <label>Laboratory</label>
+                <div class="value">${testResult.laboratoryName || '(To be assigned)'}</div>
+            </div>
+            <div class="field">
+                <label>Priority</label>
+                <div class="value">Standard</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section specifications">
+        <div class="section-title">Specification Requirements</div>
+        <div class="row">
+            <div class="field">
+                <label>Specification Min</label>
+                <div class="value">${testResult.specificationMin ? testResult.specificationMin + ' ' + (testResult.resultUnit || '') : 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Specification Max</label>
+                <div class="value">${testResult.specificationMax ? testResult.specificationMax + ' ' + (testResult.resultUnit || '') : 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Unit of Measurement</label>
+                <div class="value">${testResult.resultUnit || 'N/A'}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Notes / Special Instructions</div>
+        <div class="notes"></div>
+    </div>
+
+    <div class="footer">
+        <div class="row">
+            <div class="field">
+                <label>Requested By</label>
+                <div class="value">${testResult.enteredBy?.fullName || 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Contact Email</label>
+                <div class="value">${testResult.enteredBy?.email || 'N/A'}</div>
+            </div>
+            <div class="field">
+                <label>Contact Phone</label>
+                <div class="value">${testResult.enteredBy?.phone || 'N/A'}</div>
+            </div>
+        </div>
+
+        <div class="signature-row">
+            <div class="signature-block">
+                <div class="signature-line"></div>
+                <div class="signature-label">Contractor Signature / Date</div>
+            </div>
+            <div class="signature-block">
+                <div class="signature-line"></div>
+                <div class="signature-label">Laboratory Receipt / Date</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top: 20px; text-align: center; font-size: 10px; color: #999;">
+        Generated by SiteProof | ${new Date().toLocaleString('en-AU')}
+    </div>
+</body>
+</html>
+`
+
+    // Return the HTML form or JSON metadata
+    const format = req.query.format || 'html'
+
+    if (format === 'json') {
+      // Return JSON metadata for the request form
+      res.json({
+        testRequestForm: {
+          requestNumber: testResult.testRequestNumber || 'TRF-' + testResult.id.substring(0, 8).toUpperCase(),
+          project: {
+            name: testResult.project.name,
+            number: testResult.project.projectNumber,
+            client: testResult.project.clientName,
+            company: testResult.project.company?.name
+          },
+          lot: testResult.lot ? {
+            number: testResult.lot.lotNumber,
+            description: testResult.lot.description,
+            activityType: testResult.lot.activityType,
+            chainageStart: testResult.lot.chainageStart,
+            chainageEnd: testResult.lot.chainageEnd,
+            layer: testResult.lot.layer
+          } : null,
+          testDetails: {
+            type: testResult.testType,
+            laboratory: testResult.laboratoryName,
+            sampleDate: testResult.sampleDate,
+            sampleLocation: testResult.sampleLocation
+          },
+          specifications: {
+            min: testResult.specificationMin,
+            max: testResult.specificationMax,
+            unit: testResult.resultUnit
+          },
+          requestedBy: testResult.enteredBy,
+          createdAt: testResult.createdAt
+        }
+      })
+    } else {
+      // Return HTML for printing
+      res.setHeader('Content-Type', 'text/html')
+      res.send(formHtml)
+    }
+  } catch (error) {
+    console.error('Generate test request form error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // POST /api/test-results/:id/verify - Verify a test result (quality management)
 testResultsRouter.post('/:id/verify', async (req, res) => {
   try {
