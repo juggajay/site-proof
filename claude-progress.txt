@@ -2269,3 +2269,194 @@ Date: 2026-01-14
 ================================================================================
 END OF SESSION 25 SUMMARY
 ================================================================================
+
+================================================================================
+Session: 26 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #582: Photo ITP completion relationship
+- VERIFIED: Complete photo-ITP link workflow working correctly
+- Testing performed:
+  1. Created new project "ITP Photo Test Project"
+  2. Created ITP template "Photo Test ITP" with 2 checklist items
+  3. Created lot "LOT-PHOTO-TEST-001"
+  4. Assigned ITP template to lot
+  5. Completed first checklist item
+  6. Uploaded photo to completed item
+  7. Verified photo attachment displayed in ITP Checklist tab
+  8. Verified photo modal shows ITP item reference
+  9. Verified Photos tab shows gallery with ITP reference badges
+
+### Bug Fix: Lot creation permission check
+- Fixed POST /api/lots endpoint to check both company role AND project-specific role
+- Previously only checked `user.roleInCompany` which blocked project admins with 'member' company role
+- Now also checks ProjectUser table for project-specific role (admin, project_manager, etc.)
+- Users who created a project are now properly allowed to create lots in that project
+
+## FILES MODIFIED THIS SESSION
+- backend/src/routes/lots.ts
+  - Added project role check for lot creation (in addition to company role)
+  - Enhanced lot delete endpoints with hold point validation (from previous sessions)
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-582-itp-completed-item.png - ITP item completed with checkmark
+- evidence/feature-582-photo-attached-to-itp-item.png - Photo attached to ITP item
+- evidence/feature-582-photo-viewer-with-itp-reference.png - Photo modal showing ITP reference
+- evidence/feature-582-photos-tab-with-itp-reference.png - Photos tab with ITP reference badges
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 292 (28.2%)
+- In Progress: 0
+- Pending: 743
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining features
+3. Run regression tests on critical features
+
+================================================================================
+END OF SESSION 26 SUMMARY
+================================================================================
+
+================================================================================
+Session: 27 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #583: Claim lot relationship integrity
+- VERIFIED: Lots included in progress claims cannot be deleted
+- Testing performed:
+  1. Created lot CLAIM-TEST-LOT-583 with status 'conformed'
+  2. Created progress claim including the lot
+  3. Updated lot status to 'claimed'
+  4. Verified UI hides Edit/Delete buttons for claimed lots
+  5. Verified backend returns 400 error when attempting to delete claimed lot
+  6. Error message: "Cannot delete a claimed lot"
+
+### Feature #584: Diary activity lot link
+- IMPLEMENTED: Clickable lot links in diary activities table
+- Implementation details:
+  1. Added Link import from react-router-dom to DailyDiaryPage.tsx
+  2. Changed lot display in activities table from plain text to Link component
+  3. Link styling: blue text with hover underline effect
+  4. Link navigates to /projects/{projectId}/lots/{lotId}
+- Testing performed:
+  1. Created test data with diary activity linked to lot CONCURRENT-1-1768335316703
+  2. Navigated to Daily Diary page
+  3. Clicked Activities tab to view activities
+  4. Verified lot number displays as blue clickable link
+  5. Clicked lot link and verified navigation to lot detail page
+
+## FILES CREATED/MODIFIED THIS SESSION
+- backend/scripts/setup-claim-lot-test.js - Test data setup for Feature #583
+- backend/scripts/setup-diary-lot-link-test.js - Test data setup for Feature #584
+- frontend/src/pages/diary/DailyDiaryPage.tsx
+  - Added Link import from react-router-dom
+  - Changed lot display to clickable Link component
+
+## SCREENSHOTS CAPTURED
+- feature-583-claim-with-lot.png - Progress claim including test lot
+- feature-583-claimed-lot-no-delete-button.png - Claimed lot without delete option
+- feature-584-activities-with-lot-link.png - Activities tab with clickable lot link
+- feature-584-lot-detail-page.png - Lot detail page after clicking link
+
+## GIT COMMITS
+- 930e76d: feat: Verify claim-lot relationship integrity - Feature #583 passing
+- 4900652: feat: Add clickable lot links in diary activities - Feature #584 passing
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 294 (28.4%)
+- In Progress: 0
+- Pending: 741
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining features
+3. Run regression tests on critical features
+
+================================================================================
+END OF SESSION 27 SUMMARY
+================================================================================
+
+================================================================================
+Session: 28 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #647: Claim certification overdue highlight - PASSING
+- VERIFIED: Overdue certification correctly highlighted
+- Testing performed:
+  1. Created test claim submitted 20 business days ago (well past 10-day SOPA timeframe)
+  2. Navigated to Progress Claims page
+  3. Verified "Certification overdue by 15 days" displayed in red text
+  4. Verified row highlighted with light red background (bg-red-50)
+- Implementation already existed - getCertificationDueStatus() function in ClaimsPage.tsx
+
+### Feature #648: Claim disputed status - PASSING
+- IMPLEMENTED: Complete disputed claim workflow
+- Implementation details:
+  1. Added disputedAt and disputeNotes fields to Prisma ProgressClaim model
+  2. Updated backend PUT /api/projects/:projectId/claims/:claimId to handle disputed status
+  3. Added dispute modal UI to ClaimsPage.tsx:
+     - "Mark as Disputed" button appears for submitted/certified claims
+     - Modal requires dispute notes before submission
+     - Red warning styling throughout
+  4. Updated claim interface to include disputeNotes and disputedAt fields
+- Testing performed:
+  1. Created submitted claim in Subcontractor Test Project
+  2. Clicked "Mark as Disputed" button (red AlertCircle icon)
+  3. Entered dispute notes in modal
+  4. Clicked "Mark as Disputed" button to confirm
+  5. Verified claim status changed to "Disputed" with red badge
+
+## FILES CREATED/MODIFIED THIS SESSION
+- backend/prisma/schema.prisma
+  - Added disputedAt DateTime? field
+  - Added disputeNotes String? field
+- backend/src/routes/claims.ts
+  - Added disputeNotes to PUT endpoint parameters
+  - Handle disputed status with disputedAt timestamp
+  - Return disputeNotes and disputedAt in GET responses
+- frontend/src/pages/claims/ClaimsPage.tsx
+  - Added Claim interface fields: disputeNotes, disputedAt
+  - Added state: showDisputeModal, disputeNotes, disputing
+  - Added openDisputeModal() and handleDispute() functions
+  - Added "Mark as Disputed" button for submitted/certified claims
+  - Added Dispute Modal UI with notes textarea
+  - Updated demo data to include new fields
+- backend/scripts/setup-overdue-claim-test.js - Test data for Feature #647
+- backend/scripts/setup-dispute-claim-test.js - Test data for Feature #648
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-647-claim-certification-overdue.png - Overdue claim with red highlight
+- evidence/feature-648-submitted-claim-with-dispute-button.png - Dispute button visible
+- evidence/feature-648-dispute-modal-open.png - Dispute modal
+- evidence/feature-648-dispute-notes-entered.png - Notes entered
+- evidence/feature-648-claim-disputed-status.png - Claim with Disputed status
+
+## GIT COMMITS
+- f64538a: feat: Implement claim certification overdue highlight and disputed status
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 340 (32.9%)
+- In Progress: 0
+- Pending: 695
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining claim and commercial features
+3. Run regression tests on critical features
+
+================================================================================
+END OF SESSION 28 SUMMARY
+================================================================================
