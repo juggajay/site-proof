@@ -293,6 +293,191 @@ reportsRouter.get('/test', async (req, res) => {
   }
 })
 
+// GET /api/reports/diary - Diary report with section selection
+reportsRouter.get('/diary', async (req, res) => {
+  try {
+    const { projectId, startDate, endDate, sections } = req.query
+
+    if (!projectId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'projectId query parameter is required'
+      })
+    }
+
+    // Parse sections parameter (comma-separated) - default to all sections
+    const selectedSections = sections
+      ? (sections as string).split(',')
+      : ['weather', 'personnel', 'plant', 'activities', 'delays']
+
+    // Build date filter
+    const dateFilter: { gte?: Date; lte?: Date } = {}
+    if (startDate) {
+      dateFilter.gte = new Date(startDate as string)
+    }
+    if (endDate) {
+      dateFilter.lte = new Date(endDate as string)
+    }
+
+    // Get diaries with selected sections
+    const diaries = await prisma.dailyDiary.findMany({
+      where: {
+        projectId: projectId as string,
+        ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+      },
+      include: {
+        personnel: selectedSections.includes('personnel'),
+        plant: selectedSections.includes('plant'),
+        activities: selectedSections.includes('activities')
+          ? { include: { lot: { select: { id: true, lotNumber: true } } } }
+          : false,
+        delays: selectedSections.includes('delays'),
+        submittedBy: {
+          select: { id: true, fullName: true, email: true }
+        },
+      },
+      orderBy: { date: 'desc' },
+    })
+
+    // Calculate summary statistics
+    const totalDiaries = diaries.length
+    const submittedCount = diaries.filter(d => d.status === 'submitted').length
+    const draftCount = diaries.filter(d => d.status === 'draft').length
+
+    // Weather summary (if section selected)
+    let weatherSummary: Record<string, number> = {}
+    if (selectedSections.includes('weather')) {
+      weatherSummary = diaries.reduce((acc: Record<string, number>, diary) => {
+        const condition = diary.weatherConditions || 'Not recorded'
+        acc[condition] = (acc[condition] || 0) + 1
+        return acc
+      }, {})
+    }
+
+    // Personnel summary (if section selected)
+    let personnelSummary = { totalPersonnel: 0, totalHours: 0, byCompany: {} as Record<string, { count: number; hours: number }> }
+    if (selectedSections.includes('personnel')) {
+      for (const diary of diaries) {
+        if (diary.personnel) {
+          for (const person of diary.personnel) {
+            personnelSummary.totalPersonnel++
+            const hours = person.hours ? parseFloat(person.hours.toString()) : 0
+            personnelSummary.totalHours += hours
+
+            const company = person.company || 'Unspecified'
+            if (!personnelSummary.byCompany[company]) {
+              personnelSummary.byCompany[company] = { count: 0, hours: 0 }
+            }
+            personnelSummary.byCompany[company].count++
+            personnelSummary.byCompany[company].hours += hours
+          }
+        }
+      }
+    }
+
+    // Plant summary (if section selected)
+    let plantSummary = { totalPlant: 0, totalHours: 0, byCompany: {} as Record<string, { count: number; hours: number }> }
+    if (selectedSections.includes('plant')) {
+      for (const diary of diaries) {
+        if (diary.plant) {
+          for (const item of diary.plant) {
+            plantSummary.totalPlant++
+            const hours = item.hoursOperated ? parseFloat(item.hoursOperated.toString()) : 0
+            plantSummary.totalHours += hours
+
+            const company = item.company || 'Unspecified'
+            if (!plantSummary.byCompany[company]) {
+              plantSummary.byCompany[company] = { count: 0, hours: 0 }
+            }
+            plantSummary.byCompany[company].count++
+            plantSummary.byCompany[company].hours += hours
+          }
+        }
+      }
+    }
+
+    // Activities summary (if section selected)
+    let activitiesSummary = { totalActivities: 0, byLot: {} as Record<string, number> }
+    if (selectedSections.includes('activities')) {
+      for (const diary of diaries) {
+        if (diary.activities) {
+          for (const activity of diary.activities) {
+            activitiesSummary.totalActivities++
+            const lotNumber = activity.lot?.lotNumber || 'No Lot'
+            activitiesSummary.byLot[lotNumber] = (activitiesSummary.byLot[lotNumber] || 0) + 1
+          }
+        }
+      }
+    }
+
+    // Delays summary (if section selected)
+    let delaysSummary = { totalDelays: 0, totalHours: 0, byType: {} as Record<string, { count: number; hours: number }> }
+    if (selectedSections.includes('delays')) {
+      for (const diary of diaries) {
+        if (diary.delays) {
+          for (const delay of diary.delays) {
+            delaysSummary.totalDelays++
+            const hours = delay.durationHours ? parseFloat(delay.durationHours.toString()) : 0
+            delaysSummary.totalHours += hours
+
+            const delayType = delay.delayType || 'Other'
+            if (!delaysSummary.byType[delayType]) {
+              delaysSummary.byType[delayType] = { count: 0, hours: 0 }
+            }
+            delaysSummary.byType[delayType].count++
+            delaysSummary.byType[delayType].hours += hours
+          }
+        }
+      }
+    }
+
+    const report = {
+      generatedAt: new Date().toISOString(),
+      projectId,
+      dateRange: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+      },
+      selectedSections,
+      totalDiaries,
+      submittedCount,
+      draftCount,
+      diaries: diaries.map(diary => ({
+        id: diary.id,
+        date: diary.date,
+        status: diary.status,
+        isLate: diary.isLate,
+        submittedBy: diary.submittedBy,
+        submittedAt: diary.submittedAt,
+        ...(selectedSections.includes('weather') ? {
+          weatherConditions: diary.weatherConditions,
+          temperatureMin: diary.temperatureMin,
+          temperatureMax: diary.temperatureMax,
+          rainfallMm: diary.rainfallMm,
+          weatherNotes: diary.weatherNotes,
+          generalNotes: diary.generalNotes,
+        } : {}),
+        ...(selectedSections.includes('personnel') ? { personnel: diary.personnel } : {}),
+        ...(selectedSections.includes('plant') ? { plant: diary.plant } : {}),
+        ...(selectedSections.includes('activities') ? { activities: diary.activities } : {}),
+        ...(selectedSections.includes('delays') ? { delays: diary.delays } : {}),
+      })),
+      summary: {
+        ...(selectedSections.includes('weather') ? { weather: weatherSummary } : {}),
+        ...(selectedSections.includes('personnel') ? { personnel: personnelSummary } : {}),
+        ...(selectedSections.includes('plant') ? { plant: plantSummary } : {}),
+        ...(selectedSections.includes('activities') ? { activities: activitiesSummary } : {}),
+        ...(selectedSections.includes('delays') ? { delays: delaysSummary } : {}),
+      },
+    }
+
+    res.json(report)
+  } catch (error) {
+    console.error('Diary report error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/reports/summary - Dashboard summary report
 reportsRouter.get('/summary', async (req, res) => {
   try {

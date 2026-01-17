@@ -100,6 +100,81 @@ interface TestReport {
   }
 }
 
+interface DiaryReport {
+  generatedAt: string
+  projectId: string
+  dateRange: {
+    startDate: string | null
+    endDate: string | null
+  }
+  selectedSections: string[]
+  totalDiaries: number
+  submittedCount: number
+  draftCount: number
+  diaries: Array<{
+    id: string
+    date: string
+    status: string
+    isLate: boolean
+    submittedBy?: { id: string; fullName: string; email: string } | null
+    submittedAt?: string | null
+    weatherConditions?: string | null
+    temperatureMin?: number | null
+    temperatureMax?: number | null
+    rainfallMm?: number | null
+    weatherNotes?: string | null
+    generalNotes?: string | null
+    personnel?: Array<{
+      id: string
+      name: string
+      company?: string | null
+      role?: string | null
+      hours?: number | null
+    }>
+    plant?: Array<{
+      id: string
+      description: string
+      company?: string | null
+      hoursOperated?: number | null
+    }>
+    activities?: Array<{
+      id: string
+      description: string
+      lot?: { id: string; lotNumber: string } | null
+      quantity?: number | null
+      unit?: string | null
+    }>
+    delays?: Array<{
+      id: string
+      delayType: string
+      durationHours?: number | null
+      description: string
+    }>
+  }>
+  summary: {
+    weather?: Record<string, number>
+    personnel?: {
+      totalPersonnel: number
+      totalHours: number
+      byCompany: Record<string, { count: number; hours: number }>
+    }
+    plant?: {
+      totalPlant: number
+      totalHours: number
+      byCompany: Record<string, { count: number; hours: number }>
+    }
+    activities?: {
+      totalActivities: number
+      byLot: Record<string, number>
+    }
+    delays?: {
+      totalDelays: number
+      totalHours: number
+      byType: Record<string, { count: number; hours: number }>
+    }
+  }
+}
+
 const STATUS_COLORS: Record<string, string> = {
   not_started: 'bg-gray-200 text-gray-700',
   in_progress: 'bg-blue-100 text-blue-700',
@@ -120,6 +195,14 @@ const STATUS_LABELS: Record<string, string> = {
   claimed: 'Claimed',
 }
 
+const DIARY_SECTIONS = [
+  { id: 'weather', label: 'Weather & Notes' },
+  { id: 'personnel', label: 'Personnel' },
+  { id: 'plant', label: 'Plant & Equipment' },
+  { id: 'activities', label: 'Activities' },
+  { id: 'delays', label: 'Delays' },
+]
+
 export function ReportsPage() {
   const { projectId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -128,11 +211,25 @@ export function ReportsPage() {
   const [lotReport, setLotReport] = useState<LotStatusReport | null>(null)
   const [ncrReport, setNCRReport] = useState<NCRReport | null>(null)
   const [testReport, setTestReport] = useState<TestReport | null>(null)
+  const [diaryReport, setDiaryReport] = useState<DiaryReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Diary report specific state
+  const [diarySections, setDiarySections] = useState<string[]>(['weather', 'personnel', 'plant', 'activities', 'delays'])
+  const [diaryStartDate, setDiaryStartDate] = useState<string>('')
+  const [diaryEndDate, setDiaryEndDate] = useState<string>('')
+
   const setActiveTab = (tab: string) => {
     setSearchParams({ tab })
+  }
+
+  const toggleDiarySection = (sectionId: string) => {
+    setDiarySections(prev =>
+      prev.includes(sectionId)
+        ? prev.filter(s => s !== sectionId)
+        : [...prev, sectionId]
+    )
   }
 
   useEffect(() => {
@@ -148,6 +245,7 @@ export function ReportsPage() {
     try {
       const token = getAuthToken()
       let endpoint = ''
+      let queryParams = `projectId=${projectId}`
 
       switch (reportType) {
         case 'lot-status':
@@ -159,11 +257,23 @@ export function ReportsPage() {
         case 'test':
           endpoint = 'test'
           break
+        case 'diary':
+          endpoint = 'diary'
+          if (diarySections.length > 0) {
+            queryParams += `&sections=${diarySections.join(',')}`
+          }
+          if (diaryStartDate) {
+            queryParams += `&startDate=${diaryStartDate}`
+          }
+          if (diaryEndDate) {
+            queryParams += `&endDate=${diaryEndDate}`
+          }
+          break
         default:
           endpoint = 'lot-status'
       }
 
-      const response = await fetch(`${API_URL}/api/reports/${endpoint}?projectId=${projectId}`, {
+      const response = await fetch(`${API_URL}/api/reports/${endpoint}?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -185,6 +295,9 @@ export function ReportsPage() {
         case 'test':
           setTestReport(data)
           break
+        case 'diary':
+          setDiaryReport(data)
+          break
       }
     } catch (err) {
       console.error('Error fetching report:', err)
@@ -194,10 +307,15 @@ export function ReportsPage() {
     }
   }
 
+  const fetchDiaryReport = () => {
+    fetchReport('diary')
+  }
+
   const tabs = [
     { id: 'lot-status', label: 'Lot Status' },
     { id: 'ncr', label: 'NCR Report' },
     { id: 'test', label: 'Test Results' },
+    { id: 'diary', label: 'Diary Report' },
   ]
 
   return (
@@ -620,6 +738,294 @@ export function ReportsPage() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Diary Report */}
+          {activeTab === 'diary' && (
+            <div className="space-y-6">
+              {/* Section Selection */}
+              <div className="bg-white border rounded-lg p-6">
+                <h3 className="text-lg font-medium mb-4">Report Options</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Date Range */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={diaryStartDate}
+                        onChange={(e) => setDiaryStartDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                      <span className="text-gray-500">to</span>
+                      <input
+                        type="date"
+                        value={diaryEndDate}
+                        onChange={(e) => setDiaryEndDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-md"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Section Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Sections to Include</label>
+                    <div className="flex flex-wrap gap-2">
+                      {DIARY_SECTIONS.map((section) => (
+                        <button
+                          key={section.id}
+                          onClick={() => toggleDiarySection(section.id)}
+                          className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            diarySections.includes(section.id)
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {section.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={fetchDiaryReport}
+                  disabled={loading || diarySections.length === 0}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? 'Generating...' : 'Generate Report'}
+                </button>
+              </div>
+
+              {diaryReport && (
+                <>
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white border rounded-lg p-4">
+                      <div className="text-3xl font-bold text-gray-800">{diaryReport.totalDiaries}</div>
+                      <div className="text-sm text-gray-500">Total Diaries</div>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-green-600">{diaryReport.submittedCount}</div>
+                      <div className="text-sm text-green-500">Submitted</div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-amber-600">{diaryReport.draftCount}</div>
+                      <div className="text-sm text-amber-500">Drafts</div>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-blue-600">{diaryReport.selectedSections.length}</div>
+                      <div className="text-sm text-blue-500">Sections Included</div>
+                    </div>
+                  </div>
+
+                  {/* Weather Summary */}
+                  {diaryReport.summary.weather && Object.keys(diaryReport.summary.weather).length > 0 && (
+                    <div className="bg-white border rounded-lg p-6">
+                      <h3 className="text-lg font-medium mb-4">Weather Summary</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(diaryReport.summary.weather).map(([condition, count]) => (
+                          <span key={condition} className="px-3 py-1 bg-blue-100 rounded-full text-sm">
+                            {condition}: <strong>{count}</strong>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Personnel Summary */}
+                  {diaryReport.summary.personnel && (
+                    <div className="bg-white border rounded-lg p-6">
+                      <h3 className="text-lg font-medium mb-4">Personnel Summary</h3>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-gray-100 rounded-lg p-3">
+                          <div className="text-2xl font-bold">{diaryReport.summary.personnel.totalPersonnel}</div>
+                          <div className="text-sm text-gray-500">Total Personnel Entries</div>
+                        </div>
+                        <div className="bg-gray-100 rounded-lg p-3">
+                          <div className="text-2xl font-bold">{diaryReport.summary.personnel.totalHours.toFixed(1)}</div>
+                          <div className="text-sm text-gray-500">Total Hours</div>
+                        </div>
+                      </div>
+                      {Object.keys(diaryReport.summary.personnel.byCompany).length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">By Company</h4>
+                          <div className="space-y-2">
+                            {Object.entries(diaryReport.summary.personnel.byCompany).map(([company, data]) => (
+                              <div key={company} className="flex justify-between bg-gray-50 px-3 py-2 rounded">
+                                <span>{company}</span>
+                                <span className="font-medium">{data.count} people, {data.hours.toFixed(1)} hrs</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Plant Summary */}
+                  {diaryReport.summary.plant && (
+                    <div className="bg-white border rounded-lg p-6">
+                      <h3 className="text-lg font-medium mb-4">Plant & Equipment Summary</h3>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-gray-100 rounded-lg p-3">
+                          <div className="text-2xl font-bold">{diaryReport.summary.plant.totalPlant}</div>
+                          <div className="text-sm text-gray-500">Total Plant Entries</div>
+                        </div>
+                        <div className="bg-gray-100 rounded-lg p-3">
+                          <div className="text-2xl font-bold">{diaryReport.summary.plant.totalHours.toFixed(1)}</div>
+                          <div className="text-sm text-gray-500">Total Operating Hours</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Activities Summary */}
+                  {diaryReport.summary.activities && (
+                    <div className="bg-white border rounded-lg p-6">
+                      <h3 className="text-lg font-medium mb-4">Activities Summary</h3>
+                      <div className="bg-gray-100 rounded-lg p-3 mb-4">
+                        <div className="text-2xl font-bold">{diaryReport.summary.activities.totalActivities}</div>
+                        <div className="text-sm text-gray-500">Total Activities Recorded</div>
+                      </div>
+                      {Object.keys(diaryReport.summary.activities.byLot).length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">By Lot</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(diaryReport.summary.activities.byLot).map(([lot, count]) => (
+                              <span key={lot} className="px-3 py-1 bg-green-100 rounded-full text-sm">
+                                {lot}: <strong>{count}</strong>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Delays Summary */}
+                  {diaryReport.summary.delays && (
+                    <div className="bg-white border rounded-lg p-6">
+                      <h3 className="text-lg font-medium mb-4">Delays Summary</h3>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-red-50 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-red-600">{diaryReport.summary.delays.totalDelays}</div>
+                          <div className="text-sm text-red-500">Total Delays</div>
+                        </div>
+                        <div className="bg-red-50 rounded-lg p-3">
+                          <div className="text-2xl font-bold text-red-600">{diaryReport.summary.delays.totalHours.toFixed(1)}</div>
+                          <div className="text-sm text-red-500">Total Delay Hours</div>
+                        </div>
+                      </div>
+                      {Object.keys(diaryReport.summary.delays.byType).length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">By Delay Type</h4>
+                          <div className="space-y-2">
+                            {Object.entries(diaryReport.summary.delays.byType).map(([type, data]) => (
+                              <div key={type} className="flex justify-between bg-red-50 px-3 py-2 rounded">
+                                <span className="capitalize">{type.replace(/_/g, ' ')}</span>
+                                <span className="font-medium">{data.count} delays, {data.hours.toFixed(1)} hrs</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Diary Entries Table */}
+                  <div className="bg-white border rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-medium">Diary Entries</h3>
+                      <span className="text-sm text-gray-500">
+                        Generated: {new Date(diaryReport.generatedAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            {diaryReport.selectedSections.includes('weather') && (
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Weather</th>
+                            )}
+                            {diaryReport.selectedSections.includes('personnel') && (
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Personnel</th>
+                            )}
+                            {diaryReport.selectedSections.includes('plant') && (
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plant</th>
+                            )}
+                            {diaryReport.selectedSections.includes('activities') && (
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activities</th>
+                            )}
+                            {diaryReport.selectedSections.includes('delays') && (
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Delays</th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {diaryReport.diaries.map((diary) => (
+                            <tr key={diary.id}>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                                {new Date(diary.date).toLocaleDateString('en-AU')}
+                                {diary.isLate && (
+                                  <span className="ml-2 px-1.5 py-0.5 bg-orange-100 text-orange-700 text-xs rounded">
+                                    Late
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                  diary.status === 'submitted'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {diary.status}
+                                </span>
+                              </td>
+                              {diaryReport.selectedSections.includes('weather') && (
+                                <td className="px-4 py-3 text-sm text-gray-500">
+                                  {diary.weatherConditions || '-'}
+                                  {diary.temperatureMin != null && diary.temperatureMax != null && (
+                                    <span className="ml-1">
+                                      ({diary.temperatureMin}°-{diary.temperatureMax}°C)
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+                              {diaryReport.selectedSections.includes('personnel') && (
+                                <td className="px-4 py-3 text-sm text-gray-500">
+                                  {diary.personnel?.length || 0} entries
+                                </td>
+                              )}
+                              {diaryReport.selectedSections.includes('plant') && (
+                                <td className="px-4 py-3 text-sm text-gray-500">
+                                  {diary.plant?.length || 0} entries
+                                </td>
+                              )}
+                              {diaryReport.selectedSections.includes('activities') && (
+                                <td className="px-4 py-3 text-sm text-gray-500">
+                                  {diary.activities?.length || 0} entries
+                                </td>
+                              )}
+                              {diaryReport.selectedSections.includes('delays') && (
+                                <td className="px-4 py-3 text-sm text-gray-500">
+                                  {diary.delays?.length || 0} entries
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {diaryReport.diaries.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">No diary entries found for the selected criteria.</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </>
