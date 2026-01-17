@@ -365,35 +365,56 @@ export function ReportsPage() {
           {/* Lot Status Report */}
           {activeTab === 'lot-status' && lotReport && (
             <div className="space-y-6">
-              {/* Summary Cards */}
+              {/* Summary Cards with Percentage */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 <div className="bg-gray-100 rounded-lg p-4 text-center">
                   <div className="text-2xl font-bold text-gray-700">{lotReport.summary.notStarted}</div>
                   <div className="text-sm text-gray-500">Not Started</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {lotReport.totalLots > 0 ? ((lotReport.summary.notStarted / lotReport.totalLots) * 100).toFixed(1) : 0}%
+                  </div>
                 </div>
                 <div className="bg-blue-100 rounded-lg p-4 text-center">
                   <div className="text-2xl font-bold text-blue-700">{lotReport.summary.inProgress}</div>
                   <div className="text-sm text-blue-600">In Progress</div>
+                  <div className="text-xs text-blue-400 mt-1">
+                    {lotReport.totalLots > 0 ? ((lotReport.summary.inProgress / lotReport.totalLots) * 100).toFixed(1) : 0}%
+                  </div>
                 </div>
                 <div className="bg-amber-100 rounded-lg p-4 text-center">
                   <div className="text-2xl font-bold text-amber-700">{lotReport.summary.awaitingTest}</div>
                   <div className="text-sm text-amber-600">Awaiting Test</div>
+                  <div className="text-xs text-amber-500 mt-1">
+                    {lotReport.totalLots > 0 ? ((lotReport.summary.awaitingTest / lotReport.totalLots) * 100).toFixed(1) : 0}%
+                  </div>
                 </div>
                 <div className="bg-amber-200 rounded-lg p-4 text-center">
                   <div className="text-2xl font-bold text-amber-800">{lotReport.summary.holdPoint}</div>
                   <div className="text-sm text-amber-700">Hold Point</div>
+                  <div className="text-xs text-amber-600 mt-1">
+                    {lotReport.totalLots > 0 ? ((lotReport.summary.holdPoint / lotReport.totalLots) * 100).toFixed(1) : 0}%
+                  </div>
                 </div>
                 <div className="bg-red-100 rounded-lg p-4 text-center">
                   <div className="text-2xl font-bold text-red-700">{lotReport.summary.ncrRaised}</div>
                   <div className="text-sm text-red-600">NCR Raised</div>
+                  <div className="text-xs text-red-400 mt-1">
+                    {lotReport.totalLots > 0 ? ((lotReport.summary.ncrRaised / lotReport.totalLots) * 100).toFixed(1) : 0}%
+                  </div>
                 </div>
                 <div className="bg-green-100 rounded-lg p-4 text-center">
                   <div className="text-2xl font-bold text-green-700">{lotReport.summary.conformed}</div>
                   <div className="text-sm text-green-600">Conformed</div>
+                  <div className="text-xs text-green-500 mt-1">
+                    {lotReport.totalLots > 0 ? ((lotReport.summary.conformed / lotReport.totalLots) * 100).toFixed(1) : 0}%
+                  </div>
                 </div>
                 <div className="bg-green-200 rounded-lg p-4 text-center">
                   <div className="text-2xl font-bold text-green-800">{lotReport.summary.claimed}</div>
                   <div className="text-sm text-green-700">Claimed</div>
+                  <div className="text-xs text-green-600 mt-1">
+                    {lotReport.totalLots > 0 ? ((lotReport.summary.claimed / lotReport.totalLots) * 100).toFixed(1) : 0}%
+                  </div>
                 </div>
               </div>
 
