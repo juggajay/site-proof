@@ -1,3 +1,4 @@
+// Feature #589 trigger - ITP point type display
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
@@ -53,6 +54,7 @@ itpRouter.get('/templates', requireAuth, async (req: any, res) => {
         description: item.description,
         category: item.responsibleParty || 'general',
         isHoldPoint: item.pointType === 'hold_point',
+        pointType: item.pointType || 'standard',
         order: item.sequenceNumber,
         acceptanceCriteria: item.acceptanceCriteria
       }))
@@ -91,6 +93,7 @@ itpRouter.get('/templates/:id', requireAuth, async (req: any, res) => {
         description: item.description,
         category: item.responsibleParty || 'general',
         isHoldPoint: item.pointType === 'hold_point',
+        pointType: item.pointType || 'standard',
         order: item.sequenceNumber,
         acceptanceCriteria: item.acceptanceCriteria
       }))
@@ -122,7 +125,7 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
           create: (checklistItems || []).map((item: any, index: number) => ({
             description: item.description,
             sequenceNumber: index + 1,
-            pointType: item.isHoldPoint ? 'hold_point' : 'standard',
+            pointType: item.pointType || (item.isHoldPoint ? 'hold_point' : 'standard'),
             responsibleParty: item.category || 'contractor',
             acceptanceCriteria: item.acceptanceCriteria || null
           }))
@@ -143,6 +146,7 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
         description: item.description,
         category: item.responsibleParty || 'general',
         isHoldPoint: item.pointType === 'hold_point',
+        pointType: item.pointType || 'standard',
         order: item.sequenceNumber,
         acceptanceCriteria: item.acceptanceCriteria
       }))
@@ -217,6 +221,7 @@ itpRouter.post('/instances', requireAuth, async (req: any, res) => {
           description: item.description,
           category: item.responsibleParty || 'general',
           isHoldPoint: item.pointType === 'hold_point',
+          pointType: item.pointType || 'standard',
           order: item.sequenceNumber,
           acceptanceCriteria: item.acceptanceCriteria
         }))
@@ -252,6 +257,17 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
             },
             verifiedBy: {
               select: { id: true, fullName: true, email: true }
+            },
+            attachments: {
+              include: {
+                document: {
+                  include: {
+                    uploadedBy: {
+                      select: { id: true, fullName: true, email: true }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -272,6 +288,7 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
           description: item.description,
           category: item.responsibleParty || 'general',
           isHoldPoint: item.pointType === 'hold_point',
+          pointType: item.pointType || 'standard',
           order: item.sequenceNumber,
           acceptanceCriteria: item.acceptanceCriteria
         }))
@@ -279,7 +296,12 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
       completions: instance.completions.map(c => ({
         ...c,
         isCompleted: c.status === 'completed',
-        isVerified: c.verificationStatus === 'verified'
+        isVerified: c.verificationStatus === 'verified',
+        attachments: (c as any).attachments?.map((a: any) => ({
+          id: a.id,
+          documentId: a.documentId,
+          document: a.document
+        })) || []
       }))
     }
 
@@ -401,6 +423,144 @@ itpRouter.post('/completions/:id/verify', requireAuth, async (req: any, res) => 
   } catch (error) {
     console.error('Error verifying ITP completion:', error)
     res.status(500).json({ error: 'Failed to verify completion' })
+  }
+})
+
+// Add photo attachment to ITP completion
+itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { completionId } = req.params
+    const { filename, fileUrl, caption, gpsLatitude, gpsLongitude } = req.body
+
+    if (!filename || !fileUrl) {
+      return res.status(400).json({ error: 'filename and fileUrl are required' })
+    }
+
+    // Get the completion to find projectId
+    const completion = await prisma.iTPCompletion.findUnique({
+      where: { id: completionId },
+      include: {
+        itpInstance: {
+          include: {
+            template: {
+              include: {
+                project: true
+              }
+            }
+          }
+        },
+        checklistItem: true
+      }
+    })
+
+    if (!completion) {
+      return res.status(404).json({ error: 'Completion not found' })
+    }
+
+    // Get the lot from the ITP instance
+    const itpInstance = await prisma.iTPInstance.findUnique({
+      where: { id: completion.itpInstanceId },
+      include: { lot: true }
+    })
+
+    // Create a document record for the photo
+    const document = await prisma.document.create({
+      data: {
+        projectId: completion.itpInstance.template.projectId,
+        lotId: itpInstance?.lotId || null,
+        documentType: 'photo',
+        category: 'itp_evidence',
+        filename,
+        fileUrl,
+        uploadedById: user.userId,
+        caption: caption || `ITP Evidence: ${completion.checklistItem.description}`,
+        gpsLatitude: gpsLatitude ? parseFloat(gpsLatitude) : null,
+        gpsLongitude: gpsLongitude ? parseFloat(gpsLongitude) : null
+      }
+    })
+
+    // Create the attachment link
+    const attachment = await prisma.iTPCompletionAttachment.create({
+      data: {
+        completionId,
+        documentId: document.id
+      },
+      include: {
+        document: true
+      }
+    })
+
+    res.status(201).json({
+      attachment: {
+        id: attachment.id,
+        documentId: attachment.documentId,
+        document: attachment.document
+      }
+    })
+  } catch (error) {
+    console.error('Error adding attachment to ITP completion:', error)
+    res.status(500).json({ error: 'Failed to add attachment' })
+  }
+})
+
+// Get attachments for an ITP completion
+itpRouter.get('/completions/:completionId/attachments', requireAuth, async (req: any, res) => {
+  try {
+    const { completionId } = req.params
+
+    const attachments = await prisma.iTPCompletionAttachment.findMany({
+      where: { completionId },
+      include: {
+        document: {
+          include: {
+            uploadedBy: {
+              select: { id: true, fullName: true, email: true }
+            }
+          }
+        }
+      }
+    })
+
+    res.json({
+      attachments: attachments.map(a => ({
+        id: a.id,
+        documentId: a.documentId,
+        document: a.document
+      }))
+    })
+  } catch (error) {
+    console.error('Error fetching ITP completion attachments:', error)
+    res.status(500).json({ error: 'Failed to fetch attachments' })
+  }
+})
+
+// Delete an attachment from ITP completion
+itpRouter.delete('/completions/:completionId/attachments/:attachmentId', requireAuth, async (req: any, res) => {
+  try {
+    const { completionId, attachmentId } = req.params
+
+    // Verify the attachment belongs to this completion
+    const attachment = await prisma.iTPCompletionAttachment.findFirst({
+      where: {
+        id: attachmentId,
+        completionId
+      }
+    })
+
+    if (!attachment) {
+      return res.status(404).json({ error: 'Attachment not found' })
+    }
+
+    // Delete the attachment (document remains for record keeping)
+    await prisma.iTPCompletionAttachment.delete({
+      where: { id: attachmentId }
+    })
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting ITP completion attachment:', error)
+    res.status(500).json({ error: 'Failed to delete attachment' })
   }
 })
 

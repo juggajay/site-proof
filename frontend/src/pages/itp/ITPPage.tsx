@@ -7,6 +7,7 @@ interface ChecklistItem {
   description: string
   category: string
   isHoldPoint: boolean
+  pointType: 'standard' | 'witness' | 'hold_point'
   verificationMethod?: string
   acceptanceCriteria?: string
   order: number
@@ -178,11 +179,11 @@ function CreateTemplateModal({
   const [description, setDescription] = useState('')
   const [activityType, setActivityType] = useState('')
   const [checklistItems, setChecklistItems] = useState<Omit<ChecklistItem, 'id' | 'order'>[]>([
-    { description: '', category: 'general', isHoldPoint: false }
+    { description: '', category: 'general', isHoldPoint: false, pointType: 'standard' }
   ])
 
   const handleAddItem = () => {
-    setChecklistItems([...checklistItems, { description: '', category: 'general', isHoldPoint: false }])
+    setChecklistItems([...checklistItems, { description: '', category: 'general', isHoldPoint: false, pointType: 'standard' }])
   }
 
   const handleRemoveItem = (index: number) => {
@@ -280,15 +281,19 @@ function CreateTemplateModal({
                         <option value="testing">Testing</option>
                         <option value="documentation">Documentation</option>
                       </select>
-                      <label className="flex items-center gap-1 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={item.isHoldPoint}
-                          onChange={(e) => handleItemChange(index, 'isHoldPoint', e.target.checked)}
-                          className="rounded"
-                        />
-                        Hold Point
-                      </label>
+                      <select
+                        value={item.pointType || 'standard'}
+                        onChange={(e) => {
+                          const newPointType = e.target.value as 'standard' | 'witness' | 'hold_point'
+                          handleItemChange(index, 'pointType', newPointType)
+                          handleItemChange(index, 'isHoldPoint', newPointType === 'hold_point')
+                        }}
+                        className="px-2 py-1 text-sm border rounded"
+                      >
+                        <option value="standard">S - Standard</option>
+                        <option value="witness">W - Witness</option>
+                        <option value="hold_point">H - Hold Point</option>
+                      </select>
                     </div>
                   </div>
                   {checklistItems.length > 1 && (

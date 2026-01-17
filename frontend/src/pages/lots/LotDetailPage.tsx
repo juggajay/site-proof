@@ -67,6 +67,7 @@ interface ITPChecklistItem {
   description: string
   category: string
   isHoldPoint: boolean
+  pointType: 'standard' | 'witness' | 'hold_point'
   order: number
 }
 
@@ -827,6 +828,16 @@ export function LotDetailPage() {
                             </button>
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
+                                {/* Point type indicator: S=Standard, W=Witness, H=Hold */}
+                                <span className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded ${
+                                  item.pointType === 'hold_point'
+                                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                    : item.pointType === 'witness'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                                }`} title={item.pointType === 'hold_point' ? 'Hold Point' : item.pointType === 'witness' ? 'Witness Point' : 'Standard Point'}>
+                                  {item.pointType === 'hold_point' ? 'H' : item.pointType === 'witness' ? 'W' : 'S'}
+                                </span>
                                 <span className={`font-medium ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
                                   {item.order}. {item.description}
                                 </span>
