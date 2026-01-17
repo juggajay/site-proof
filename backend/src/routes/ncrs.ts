@@ -601,6 +601,268 @@ ncrsRouter.post('/:id/reopen', requireAuth, async (req: any, res) => {
   }
 })
 
+// POST /api/ncrs/:id/evidence - Add evidence to NCR
+ncrsRouter.post('/:id/evidence', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id } = req.params
+    const { documentId, evidenceType, filename, fileUrl, fileSize, mimeType, caption, projectId: providedProjectId } = req.body
+
+    const ncr = await prisma.nCR.findUnique({
+      where: { id },
+    })
+
+    if (!ncr) {
+      return res.status(404).json({ message: 'NCR not found' })
+    }
+
+    // Check access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: ncr.projectId,
+        userId: user.userId,
+      },
+    })
+
+    if (!projectUser) {
+      return res.status(403).json({ message: 'Access denied' })
+    }
+
+    // If documentId is provided, link existing document
+    // Otherwise, create a new document first
+    let finalDocumentId = documentId
+
+    if (!documentId) {
+      // Create a new document for this evidence
+      if (!filename || !fileUrl) {
+        return res.status(400).json({ message: 'Either documentId or filename and fileUrl are required' })
+      }
+
+      const document = await prisma.document.create({
+        data: {
+          projectId: ncr.projectId,
+          documentType: evidenceType || 'ncr_evidence',
+          category: 'ncr_evidence',
+          filename,
+          fileUrl,
+          fileSize,
+          mimeType,
+          uploadedById: user.userId,
+          caption,
+        },
+      })
+      finalDocumentId = document.id
+    }
+
+    // Create the NCR evidence link
+    const evidence = await prisma.nCREvidence.create({
+      data: {
+        ncrId: id,
+        documentId: finalDocumentId,
+        evidenceType: evidenceType || 'photo',
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            fileUrl: true,
+            mimeType: true,
+            uploadedAt: true,
+          },
+        },
+      },
+    })
+
+    res.status(201).json({
+      evidence,
+      message: 'Evidence added to NCR successfully',
+    })
+  } catch (error) {
+    console.error('Add NCR evidence error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// GET /api/ncrs/:id/evidence - List evidence for NCR
+ncrsRouter.get('/:id/evidence', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id } = req.params
+
+    const ncr = await prisma.nCR.findUnique({
+      where: { id },
+    })
+
+    if (!ncr) {
+      return res.status(404).json({ message: 'NCR not found' })
+    }
+
+    // Check access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: ncr.projectId,
+        userId: user.userId,
+      },
+    })
+
+    if (!projectUser) {
+      return res.status(403).json({ message: 'Access denied' })
+    }
+
+    const evidence = await prisma.nCREvidence.findMany({
+      where: { ncrId: id },
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            fileUrl: true,
+            mimeType: true,
+            fileSize: true,
+            uploadedAt: true,
+            uploadedBy: { select: { fullName: true, email: true } },
+            caption: true,
+          },
+        },
+      },
+      orderBy: { uploadedAt: 'desc' },
+    })
+
+    // Group by evidence type
+    const grouped = {
+      photos: evidence.filter(e => e.evidenceType === 'photo'),
+      certificates: evidence.filter(e => e.evidenceType === 'certificate' || e.evidenceType === 'retest_certificate'),
+      documents: evidence.filter(e => !['photo', 'certificate', 'retest_certificate'].includes(e.evidenceType)),
+      all: evidence,
+    }
+
+    res.json({
+      evidence: grouped.all,
+      grouped,
+      count: evidence.length,
+    })
+  } catch (error) {
+    console.error('List NCR evidence error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// DELETE /api/ncrs/:id/evidence/:evidenceId - Remove evidence from NCR
+ncrsRouter.delete('/:id/evidence/:evidenceId', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id, evidenceId } = req.params
+
+    const ncr = await prisma.nCR.findUnique({
+      where: { id },
+    })
+
+    if (!ncr) {
+      return res.status(404).json({ message: 'NCR not found' })
+    }
+
+    // Check access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: ncr.projectId,
+        userId: user.userId,
+      },
+    })
+
+    if (!projectUser) {
+      return res.status(403).json({ message: 'Access denied' })
+    }
+
+    // Check if NCR is not closed
+    if (ncr.status === 'closed' || ncr.status === 'closed_concession') {
+      return res.status(400).json({ message: 'Cannot remove evidence from a closed NCR' })
+    }
+
+    await prisma.nCREvidence.delete({
+      where: { id: evidenceId },
+    })
+
+    res.json({ message: 'Evidence removed successfully' })
+  } catch (error) {
+    console.error('Remove NCR evidence error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// POST /api/ncrs/:id/submit-for-verification - Submit rectification for verification
+ncrsRouter.post('/:id/submit-for-verification', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id } = req.params
+    const { rectificationNotes } = req.body
+
+    const ncr = await prisma.nCR.findUnique({
+      where: { id },
+      include: {
+        ncrEvidence: true,
+      },
+    })
+
+    if (!ncr) {
+      return res.status(404).json({ message: 'NCR not found' })
+    }
+
+    // Check access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: ncr.projectId,
+        userId: user.userId,
+      },
+    })
+
+    if (!projectUser) {
+      return res.status(403).json({ message: 'Access denied' })
+    }
+
+    // Check if NCR is in rectification status
+    if (ncr.status !== 'rectification' && ncr.status !== 'investigating') {
+      return res.status(400).json({
+        message: 'NCR must be in rectification or investigating status to submit for verification',
+        currentStatus: ncr.status,
+      })
+    }
+
+    // Check if evidence has been uploaded
+    if (ncr.ncrEvidence.length === 0) {
+      return res.status(400).json({
+        message: 'Please upload at least one piece of evidence before submitting for verification',
+        evidenceCount: 0,
+      })
+    }
+
+    const updatedNcr = await prisma.nCR.update({
+      where: { id },
+      data: {
+        status: 'verification',
+        rectificationNotes,
+        rectificationSubmittedAt: new Date(),
+      },
+      include: {
+        ncrEvidence: {
+          include: {
+            document: { select: { filename: true, fileUrl: true } },
+          },
+        },
+      },
+    })
+
+    res.json({
+      ncr: updatedNcr,
+      message: 'NCR submitted for verification successfully',
+      evidenceCount: updatedNcr.ncrEvidence.length,
+    })
+  } catch (error) {
+    console.error('Submit NCR for verification error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
 // Helper endpoint to get user's role on a project
 ncrsRouter.get('/check-role/:projectId', requireAuth, async (req: any, res) => {
   try {
