@@ -419,6 +419,7 @@ lotsRouter.patch('/:id', async (req, res) => {
 })
 
 // DELETE /api/lots/:id - Delete a lot (requires deleter role)
+// Feature #585: Added docket allocation integrity check
 lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
   try {
     const { id } = req.params
@@ -448,12 +449,36 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
               }
             }
           }
+        },
+        // Check for docket allocations
+        docketLabourLots: {
+          select: { id: true }
+        },
+        docketPlantLots: {
+          select: { id: true }
         }
       }
     })
 
     if (!lot) {
       return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Check if lot is conformed or claimed - cannot delete these
+    if (lot.status === 'conformed') {
+      return res.status(400).json({
+        error: 'Cannot delete lot',
+        message: 'Cannot delete a conformed lot. Conformed lots have been quality-approved.',
+        code: 'LOT_CONFORMED'
+      })
+    }
+
+    if (lot.status === 'claimed') {
+      return res.status(400).json({
+        error: 'Cannot delete lot',
+        message: 'Cannot delete a claimed lot. This lot is part of a progress claim.',
+        code: 'LOT_CLAIMED'
+      })
     }
 
     // Check for unreleased hold points (actual records in hold_points table)
@@ -486,6 +511,24 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
           unreleasedHoldPoints: unreleasedHoldPoints.length
         })
       }
+    }
+
+    // Check for docket allocations - lots with docket costs cannot be deleted
+    const docketLabourCount = lot.docketLabourLots?.length || 0
+    const docketPlantCount = lot.docketPlantLots?.length || 0
+    const totalDocketAllocations = docketLabourCount + docketPlantCount
+
+    if (totalDocketAllocations > 0) {
+      return res.status(400).json({
+        error: 'Cannot delete lot',
+        message: `This lot has ${totalDocketAllocations} docket allocation(s) (${docketLabourCount} labour, ${docketPlantCount} plant). Remove docket allocations before deleting the lot.`,
+        code: 'HAS_DOCKET_ALLOCATIONS',
+        docketAllocations: {
+          labour: docketLabourCount,
+          plant: docketPlantCount,
+          total: totalDocketAllocations
+        }
+      })
     }
 
     await prisma.lot.delete({
