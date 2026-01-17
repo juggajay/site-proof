@@ -200,6 +200,78 @@ export function DailyDiaryPage() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [submitWarnings, setSubmitWarnings] = useState<string[]>([])
 
+  // Calendar state
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
+
+  // Helper function to get diary status for a date
+  const getDiaryStatusForDate = (date: Date): 'submitted' | 'draft' | 'missing' | 'future' => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const checkDate = new Date(date)
+    checkDate.setHours(0, 0, 0, 0)
+
+    // Future dates - no status
+    if (checkDate > today) return 'future'
+
+    // Check if we have a diary for this date
+    const dateStr = date.toISOString().split('T')[0]
+    const diary = diaries.find(d => d.date.split('T')[0] === dateStr)
+
+    if (diary) {
+      return diary.status
+    }
+
+    return 'missing'
+  }
+
+  // Generate calendar days for current month
+  const getCalendarDays = () => {
+    const year = calendarMonth.getFullYear()
+    const month = calendarMonth.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const daysInMonth = lastDay.getDate()
+    const startingDayOfWeek = firstDay.getDay() // 0 = Sunday
+
+    const days: Array<{ date: Date | null; status?: 'submitted' | 'draft' | 'missing' | 'future' }> = []
+
+    // Add empty cells for days before the 1st
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push({ date: null })
+    }
+
+    // Add all days in the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day)
+      days.push({
+        date,
+        status: getDiaryStatusForDate(date)
+      })
+    }
+
+    return days
+  }
+
+  // Navigate calendar months
+  const previousMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))
+  }
+
+  const nextMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))
+  }
+
+  // Handle clicking a calendar day
+  const handleCalendarDayClick = (date: Date) => {
+    const dateStr = date.toISOString().split('T')[0]
+    setSelectedDate(dateStr)
+    setShowCalendar(false)
+  }
+
   // Fetch diaries list
   useEffect(() => {
     if (projectId) {
@@ -779,7 +851,94 @@ export function DailyDiaryPage() {
             Late Entry
           </span>
         )}
+        <button
+          onClick={() => setShowCalendar(!showCalendar)}
+          className="ml-4 rounded-md bg-muted px-3 py-2 text-sm font-medium hover:bg-muted/80"
+        >
+          {showCalendar ? 'Hide Calendar' : 'View Calendar'}
+        </button>
       </div>
+
+      {/* Calendar View */}
+      {showCalendar && (
+        <div className="rounded-lg border bg-card p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <button
+              onClick={previousMonth}
+              className="rounded-md bg-muted px-3 py-1 text-sm hover:bg-muted/80"
+            >
+              ← Previous
+            </button>
+            <h3 className="text-lg font-semibold">
+              {calendarMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}
+            </h3>
+            <button
+              onClick={nextMonth}
+              className="rounded-md bg-muted px-3 py-1 text-sm hover:bg-muted/80"
+            >
+              Next →
+            </button>
+          </div>
+
+          {/* Calendar Legend */}
+          <div className="mb-4 flex items-center gap-4 text-sm">
+            <span className="flex items-center gap-1">
+              <span className="h-4 w-4 rounded bg-green-500"></span>
+              Submitted
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-4 w-4 rounded bg-yellow-500"></span>
+              Draft
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-4 w-4 rounded bg-red-500"></span>
+              Missing
+            </span>
+          </div>
+
+          {/* Day Headers */}
+          <div className="mb-2 grid grid-cols-7 gap-1 text-center text-sm font-medium text-muted-foreground">
+            <div>Sun</div>
+            <div>Mon</div>
+            <div>Tue</div>
+            <div>Wed</div>
+            <div>Thu</div>
+            <div>Fri</div>
+            <div>Sat</div>
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-1">
+            {getCalendarDays().map((day, index) => (
+              <div key={index} className="aspect-square">
+                {day.date ? (
+                  <button
+                    onClick={() => day.status !== 'future' && handleCalendarDayClick(day.date!)}
+                    disabled={day.status === 'future'}
+                    className={`flex h-full w-full items-center justify-center rounded-md text-sm font-medium transition-colors ${
+                      day.status === 'submitted'
+                        ? 'bg-green-500 text-white hover:bg-green-600'
+                        : day.status === 'draft'
+                        ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                        : day.status === 'missing'
+                        ? 'bg-red-500 text-white hover:bg-red-600'
+                        : 'bg-muted text-muted-foreground cursor-not-allowed'
+                    } ${
+                      day.date.toISOString().split('T')[0] === selectedDate
+                        ? 'ring-2 ring-primary ring-offset-2'
+                        : ''
+                    }`}
+                  >
+                    {day.date.getDate()}
+                  </button>
+                ) : (
+                  <div className="h-full w-full"></div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
