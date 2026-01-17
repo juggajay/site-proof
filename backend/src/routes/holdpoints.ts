@@ -5,6 +5,69 @@ import jwt from 'jsonwebtoken'
 const prisma = new PrismaClient()
 const holdpointsRouter = Router()
 
+// Utility function to calculate appropriate notification time based on working hours
+function calculateNotificationTime(
+  requestedDate: Date,
+  workingHoursStart: string = '07:00',
+  workingHoursEnd: string = '17:00',
+  workingDays: string = '1,2,3,4,5' // Mon-Fri by default
+): { scheduledTime: Date; adjustedForWorkingHours: boolean; reason?: string } {
+  const [startHour, startMin] = workingHoursStart.split(':').map(Number)
+  const [endHour, endMin] = workingHoursEnd.split(':').map(Number)
+  const workingDaysList = workingDays.split(',').map(Number) // 0=Sun, 1=Mon, etc.
+
+  let notificationTime = new Date(requestedDate)
+  let adjustedForWorkingHours = false
+  let reason: string | undefined
+
+  // Check if requested time is within working hours
+  const requestedHour = notificationTime.getHours()
+  const requestedMin = notificationTime.getMinutes()
+  const requestedDay = notificationTime.getDay()
+
+  const requestedTimeMinutes = requestedHour * 60 + requestedMin
+  const startTimeMinutes = startHour * 60 + startMin
+  const endTimeMinutes = endHour * 60 + endMin
+
+  // Check if it's a working day
+  if (!workingDaysList.includes(requestedDay)) {
+    adjustedForWorkingHours = true
+    reason = 'Scheduled for non-working day'
+
+    // Find next working day
+    let daysToAdd = 1
+    while (!workingDaysList.includes((requestedDay + daysToAdd) % 7)) {
+      daysToAdd++
+      if (daysToAdd > 7) break // Safety to prevent infinite loop
+    }
+    notificationTime.setDate(notificationTime.getDate() + daysToAdd)
+    notificationTime.setHours(startHour, startMin, 0, 0)
+    reason = `Adjusted to next working day (${notificationTime.toDateString()}) at ${workingHoursStart}`
+  }
+  // Check if before working hours start
+  else if (requestedTimeMinutes < startTimeMinutes) {
+    adjustedForWorkingHours = true
+    notificationTime.setHours(startHour, startMin, 0, 0)
+    reason = `Adjusted to start of working hours (${workingHoursStart})`
+  }
+  // Check if after working hours end
+  else if (requestedTimeMinutes >= endTimeMinutes) {
+    adjustedForWorkingHours = true
+
+    // Schedule for next working day
+    let daysToAdd = 1
+    while (!workingDaysList.includes((requestedDay + daysToAdd) % 7)) {
+      daysToAdd++
+      if (daysToAdd > 7) break
+    }
+    notificationTime.setDate(notificationTime.getDate() + daysToAdd)
+    notificationTime.setHours(startHour, startMin, 0, 0)
+    reason = `Scheduled after hours - moved to next working day (${notificationTime.toDateString()}) at ${workingHoursStart}`
+  }
+
+  return { scheduledTime: notificationTime, adjustedForWorkingHours, reason }
+}
+
 interface AuthUser {
   userId: string
   email: string
@@ -550,6 +613,95 @@ holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: any, res)
   } catch (error) {
     console.error('Error generating evidence package:', error)
     res.status(500).json({ error: 'Failed to generate evidence package' })
+  }
+})
+
+// Get notification timing for a hold point request based on working hours
+holdpointsRouter.post('/calculate-notification-time', requireAuth, async (req: any, res) => {
+  try {
+    const { projectId, requestedDateTime } = req.body
+
+    if (!projectId || !requestedDateTime) {
+      return res.status(400).json({ error: 'projectId and requestedDateTime are required' })
+    }
+
+    // Get project working hours configuration
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        workingHoursStart: true,
+        workingHoursEnd: true,
+        workingDays: true
+      }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    const requestedDate = new Date(requestedDateTime)
+    const result = calculateNotificationTime(
+      requestedDate,
+      project.workingHoursStart || '07:00',
+      project.workingHoursEnd || '17:00',
+      project.workingDays || '1,2,3,4,5'
+    )
+
+    res.json({
+      requestedDateTime: requestedDate.toISOString(),
+      scheduledNotificationTime: result.scheduledTime.toISOString(),
+      adjustedForWorkingHours: result.adjustedForWorkingHours,
+      adjustmentReason: result.reason,
+      workingHours: {
+        start: project.workingHoursStart || '07:00',
+        end: project.workingHoursEnd || '17:00',
+        days: project.workingDays || '1,2,3,4,5'
+      }
+    })
+  } catch (error) {
+    console.error('Error calculating notification time:', error)
+    res.status(500).json({ error: 'Failed to calculate notification time' })
+  }
+})
+
+// Get project working hours configuration
+holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, async (req: any, res) => {
+  try {
+    const { projectId } = req.params
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        name: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+        workingDays: true
+      }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    // Parse working days to human-readable format
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    const workingDaysList = (project.workingDays || '1,2,3,4,5').split(',').map(Number)
+    const workingDayNames = workingDaysList.map(d => dayNames[d])
+
+    res.json({
+      projectId: project.id,
+      projectName: project.name,
+      workingHours: {
+        start: project.workingHoursStart || '07:00',
+        end: project.workingHoursEnd || '17:00',
+        days: project.workingDays || '1,2,3,4,5',
+        dayNames: workingDayNames
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching working hours:', error)
+    res.status(500).json({ error: 'Failed to fetch working hours' })
   }
 })
 

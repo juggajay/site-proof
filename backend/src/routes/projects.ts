@@ -127,6 +127,9 @@ projectsRouter.get('/:id', async (req, res) => {
         lotStartingNumber: true,
         ncrPrefix: true,
         ncrStartingNumber: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+        workingDays: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -247,7 +250,7 @@ projectsRouter.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { name, code, lotPrefix, lotStartingNumber, ncrPrefix, ncrStartingNumber } = req.body
+    const { name, code, lotPrefix, lotStartingNumber, ncrPrefix, ncrStartingNumber, workingHoursStart, workingHoursEnd, workingDays } = req.body
 
     // Check access - user must be admin or project admin
     const projectUser = await prisma.projectUser.findFirst({
@@ -284,6 +287,9 @@ projectsRouter.patch('/:id', async (req, res) => {
     if (lotStartingNumber !== undefined) updateData.lotStartingNumber = lotStartingNumber
     if (ncrPrefix !== undefined) updateData.ncrPrefix = ncrPrefix
     if (ncrStartingNumber !== undefined) updateData.ncrStartingNumber = ncrStartingNumber
+    if (workingHoursStart !== undefined) updateData.workingHoursStart = workingHoursStart
+    if (workingHoursEnd !== undefined) updateData.workingHoursEnd = workingHoursEnd
+    if (workingDays !== undefined) updateData.workingDays = workingDays
 
     // Update the project
     const updatedProject = await prisma.project.update({
@@ -297,6 +303,9 @@ projectsRouter.patch('/:id', async (req, res) => {
         lotStartingNumber: true,
         ncrPrefix: true,
         ncrStartingNumber: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+        workingDays: true,
         status: true,
         createdAt: true,
         updatedAt: true,
