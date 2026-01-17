@@ -974,6 +974,38 @@ ncrsRouter.get('/analytics/:projectId', requireAuth, async (req: any, res) => {
       percentage: Math.round((value / totalNCRs) * 100)
     })).sort((a, b) => b.value - a.value)
 
+    // Closure time trend - group by month
+    const closureTimeTrend: Record<string, { totalDays: number; count: number }> = {}
+    closedWithDates.forEach(ncr => {
+      const closedMonth = new Date(ncr.closedAt!).toISOString().substring(0, 7) // YYYY-MM format
+      const daysToClose = (new Date(ncr.closedAt!).getTime() - new Date(ncr.raisedAt).getTime()) / (1000 * 60 * 60 * 24)
+
+      if (!closureTimeTrend[closedMonth]) {
+        closureTimeTrend[closedMonth] = { totalDays: 0, count: 0 }
+      }
+      closureTimeTrend[closedMonth].totalDays += daysToClose
+      closureTimeTrend[closedMonth].count += 1
+    })
+
+    const closureTimeTrendData = Object.entries(closureTimeTrend)
+      .map(([month, data]) => ({
+        month,
+        avgDays: Math.round(data.totalDays / data.count * 10) / 10,
+        count: data.count
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+
+    // NCR volume trend - group by month
+    const volumeTrend: Record<string, number> = {}
+    ncrs.forEach(ncr => {
+      const raisedMonth = new Date(ncr.raisedAt).toISOString().substring(0, 7)
+      volumeTrend[raisedMonth] = (volumeTrend[raisedMonth] || 0) + 1
+    })
+
+    const volumeTrendData = Object.entries(volumeTrend)
+      .map(([month, count]) => ({ month, count }))
+      .sort((a, b) => a.month.localeCompare(b.month))
+
     res.json({
       summary: {
         total: totalNCRs,
@@ -1007,6 +1039,17 @@ ncrsRouter.get('/analytics/:projectId', requireAuth, async (req: any, res) => {
             value,
             percentage: totalNCRs > 0 ? Math.round((value / totalNCRs) * 100) : 0
           })),
+        },
+        closureTimeTrend: {
+          title: 'Average Closure Time Trend',
+          description: 'Average days to close NCRs by month',
+          data: closureTimeTrendData,
+          overallAvg: avgDaysToClose,
+        },
+        volumeTrend: {
+          title: 'NCR Volume Trend',
+          description: 'Number of NCRs raised by month',
+          data: volumeTrendData,
         },
       },
       drillDown: {
