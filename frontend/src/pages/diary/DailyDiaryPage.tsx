@@ -63,7 +63,7 @@ interface DailyDiary {
   plant: Plant[]
   activities: Activity[]
   delays: Delay[]
-  submittedBy?: { id: string; name: string; email: string }
+  submittedBy?: { id: string; fullName: string; email: string }
   submittedAt?: string
   isLate?: boolean
   createdAt: string
@@ -628,7 +628,11 @@ export function DailyDiaryPage() {
       const token = getAuthToken()
       const res = await fetch(`${API_URL}/api/diary/${diary.id}/submit`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ acknowledgeWarnings: true }),
       })
 
       if (res.ok) {
@@ -650,7 +654,11 @@ export function DailyDiaryPage() {
       const token = getAuthToken()
       const res = await fetch(`${API_URL}/api/diary/${diary.id}/submit`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ acknowledgeWarnings: true }),
       })
 
       if (res.ok) {
@@ -1425,7 +1433,7 @@ export function DailyDiaryPage() {
           {diary && diary.status === 'submitted' && diary.submittedBy && (
             <div className="rounded-lg border bg-green-50 p-4 text-green-800">
               <p>
-                <strong>Submitted</strong> by {diary.submittedBy.name} on{' '}
+                <strong>Submitted</strong> by {diary.submittedBy.fullName} on{' '}
                 {diary.submittedAt && new Date(diary.submittedAt).toLocaleString('en-AU')}
                 {diary.isLate && <span className="ml-2 text-orange-600">(Late Entry)</span>}
               </p>
