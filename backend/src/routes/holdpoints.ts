@@ -377,4 +377,180 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
   }
 })
 
+// Generate evidence package for a hold point
+holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+
+    // Get the hold point with all related data
+    const holdPoint = await prisma.holdPoint.findUnique({
+      where: { id },
+      include: {
+        itpChecklistItem: true,
+        lot: {
+          include: {
+            project: true,
+            itpInstance: {
+              include: {
+                template: {
+                  include: {
+                    checklistItems: {
+                      orderBy: { sequenceNumber: 'asc' }
+                    }
+                  }
+                },
+                completions: {
+                  include: {
+                    completedBy: {
+                      select: { id: true, fullName: true, email: true }
+                    },
+                    verifiedBy: {
+                      select: { id: true, fullName: true, email: true }
+                    },
+                    attachments: {
+                      include: {
+                        document: true
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            testResults: {
+              include: {
+                verifiedBy: {
+                  select: { id: true, fullName: true, email: true }
+                }
+              }
+            },
+            documents: {
+              where: {
+                OR: [
+                  { documentType: 'photo' },
+                  { category: 'itp_evidence' }
+                ]
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!holdPoint) {
+      return res.status(404).json({ error: 'Hold point not found' })
+    }
+
+    const lot = holdPoint.lot
+    const itpInstance = lot.itpInstance
+
+    if (!itpInstance) {
+      return res.status(400).json({ error: 'No ITP assigned to this lot' })
+    }
+
+    // Get all checklist items up to and including the hold point
+    const holdPointItem = holdPoint.itpChecklistItem
+    const itemsUpToHP = itpInstance.template.checklistItems.filter(
+      item => item.sequenceNumber <= holdPointItem.sequenceNumber
+    )
+
+    // Map completions to items
+    const checklistWithStatus = itemsUpToHP.map(item => {
+      const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
+      return {
+        sequenceNumber: item.sequenceNumber,
+        description: item.description,
+        pointType: item.pointType,
+        responsibleParty: item.responsibleParty,
+        isCompleted: completion?.status === 'completed',
+        completedAt: completion?.completedAt,
+        completedBy: completion?.completedBy?.fullName || null,
+        isVerified: completion?.verificationStatus === 'verified',
+        verifiedAt: completion?.verifiedAt,
+        verifiedBy: completion?.verifiedBy?.fullName || null,
+        notes: completion?.notes,
+        attachments: completion?.attachments?.map(a => ({
+          id: a.id,
+          filename: a.document.filename,
+          fileUrl: a.document.fileUrl,
+          caption: a.document.caption
+        })) || []
+      }
+    })
+
+    // Get test results
+    const testResults = lot.testResults.map(t => ({
+      id: t.id,
+      testType: t.testType,
+      testRequestNumber: t.testRequestNumber,
+      laboratoryName: t.laboratoryName,
+      resultValue: t.resultValue,
+      resultUnit: t.resultUnit,
+      passFail: t.passFail,
+      status: t.status,
+      isVerified: t.status === 'verified',
+      verifiedBy: t.verifiedBy?.fullName || null,
+      createdAt: t.createdAt
+    }))
+
+    // Get photos/evidence documents
+    const photos = lot.documents.map(d => ({
+      id: d.id,
+      filename: d.filename,
+      fileUrl: d.fileUrl,
+      caption: d.caption,
+      uploadedAt: d.uploadedAt
+    }))
+
+    // Build evidence package response
+    const evidencePackage = {
+      holdPoint: {
+        id: holdPoint.id,
+        description: holdPoint.description,
+        status: holdPoint.status,
+        notificationSentAt: holdPoint.notificationSentAt,
+        scheduledDate: holdPoint.scheduledDate,
+        releasedAt: holdPoint.releasedAt,
+        releasedByName: holdPoint.releasedByName,
+        releaseNotes: holdPoint.releaseNotes
+      },
+      lot: {
+        id: lot.id,
+        lotNumber: lot.lotNumber,
+        description: lot.description,
+        activityType: lot.activityType,
+        chainageStart: lot.chainageStart,
+        chainageEnd: lot.chainageEnd
+      },
+      project: {
+        id: lot.project.id,
+        name: lot.project.name,
+        projectNumber: lot.project.projectNumber
+      },
+      itpTemplate: {
+        id: itpInstance.template.id,
+        name: itpInstance.template.name,
+        activityType: itpInstance.template.activityType
+      },
+      checklist: checklistWithStatus,
+      testResults,
+      photos,
+      summary: {
+        totalChecklistItems: checklistWithStatus.length,
+        completedItems: checklistWithStatus.filter(i => i.isCompleted).length,
+        verifiedItems: checklistWithStatus.filter(i => i.isVerified).length,
+        totalTestResults: testResults.length,
+        passingTests: testResults.filter(t => t.passFail === 'pass').length,
+        totalPhotos: photos.length,
+        totalAttachments: checklistWithStatus.reduce((sum, i) => sum + i.attachments.length, 0)
+      },
+      generatedAt: new Date().toISOString()
+    }
+
+    res.json({ evidencePackage })
+  } catch (error) {
+    console.error('Error generating evidence package:', error)
+    res.status(500).json({ error: 'Failed to generate evidence package' })
+  }
+})
+
 export { holdpointsRouter }
