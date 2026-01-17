@@ -214,6 +214,12 @@ reportsRouter.get('/ncr', async (req, res) => {
       return acc
     }, {})
 
+    // Calculate closure rate
+    const totalClosed = (statusCounts['closed'] || 0) + (statusCounts['closed_concession'] || 0)
+    const closureRate = ncrs.length > 0
+      ? ((totalClosed / ncrs.length) * 100).toFixed(1)
+      : '0.0'
+
     const report = {
       generatedAt: new Date().toISOString(),
       projectId,
@@ -225,6 +231,7 @@ reportsRouter.get('/ncr', async (req, res) => {
       overdueCount,
       closedThisMonth,
       averageClosureTime,
+      closureRate,
       ncrs,
       summary: {
         open: statusCounts['open'] || 0,

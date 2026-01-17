@@ -54,6 +54,7 @@ interface NCRReport {
   overdueCount: number
   closedThisMonth: number
   averageClosureTime: number
+  closureRate: string
   ncrs: Array<{
     id: string
     ncrNumber: string
@@ -557,7 +558,7 @@ export function ReportsPage() {
           {activeTab === 'ncr' && ncrReport && (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 <div className="bg-white border rounded-lg p-4">
                   <div className="text-3xl font-bold text-gray-800">{ncrReport.totalNCRs}</div>
                   <div className="text-sm text-gray-500">Total NCRs</div>
@@ -587,6 +588,10 @@ export function ReportsPage() {
                     {ncrReport.summary.closed + ncrReport.summary.closedConcession}
                   </div>
                   <div className="text-sm text-purple-500">Total Closed</div>
+                </div>
+                <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
+                  <div className="text-3xl font-bold text-teal-600">{ncrReport.closureRate}%</div>
+                  <div className="text-sm text-teal-500">Closure Rate</div>
                 </div>
               </div>
 
