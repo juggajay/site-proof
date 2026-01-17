@@ -109,6 +109,73 @@ export function CostsPage() {
     }).format(amount)
   }
 
+  const exportToExcel = () => {
+    // Build CSV data
+    const rows: string[][] = []
+
+    // Header
+    rows.push(['Project Cost Report'])
+    rows.push([`Generated: ${new Date().toLocaleDateString('en-AU')}`])
+    rows.push([])
+
+    // Summary section
+    rows.push(['COST SUMMARY'])
+    rows.push(['Metric', 'Value'])
+    if (summary) {
+      rows.push(['Total Cost', formatCurrency(summary.totalCost)])
+      rows.push(['Labour Cost', formatCurrency(summary.totalLabourCost)])
+      rows.push(['Plant Cost', formatCurrency(summary.totalPlantCost)])
+      rows.push(['Budget Total', formatCurrency(summary.budgetTotal)])
+      rows.push(['Budget Variance', formatCurrency(summary.budgetVariance)])
+      rows.push(['Approved Dockets', summary.approvedDockets.toString()])
+      rows.push(['Pending Dockets', summary.pendingDockets.toString()])
+    }
+    rows.push([])
+
+    // Subcontractor costs section
+    rows.push(['COSTS BY SUBCONTRACTOR'])
+    rows.push(['Subcontractor', 'Labour Cost', 'Plant Cost', 'Total Cost', 'Approved Dockets'])
+    subcontractorCosts.forEach(sub => {
+      rows.push([
+        sub.companyName,
+        formatCurrency(sub.labourCost),
+        formatCurrency(sub.plantCost),
+        formatCurrency(sub.totalCost),
+        sub.approvedDockets.toString()
+      ])
+    })
+    rows.push([])
+
+    // Lot costs section
+    rows.push(['COSTS BY LOT'])
+    rows.push(['Lot', 'Activity', 'Budget', 'Actual Cost', 'Variance'])
+    lotCosts.forEach(lot => {
+      rows.push([
+        lot.lotNumber,
+        lot.activity,
+        formatCurrency(lot.budgetAmount),
+        formatCurrency(lot.actualCost),
+        (lot.variance >= 0 ? '+' : '') + formatCurrency(lot.variance)
+      ])
+    })
+
+    // Convert to CSV string
+    const csvContent = rows.map(row =>
+      row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')
+    ).join('\n')
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `cost-report-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -132,7 +199,10 @@ export function CostsPage() {
             <Filter className="h-4 w-4" />
             Filter
           </button>
-          <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">
+          <button
+            onClick={exportToExcel}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+          >
             <Download className="h-4 w-4" />
             Export Report
           </button>
