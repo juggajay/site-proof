@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X } from 'lucide-react'
+import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink } from 'lucide-react'
 
 interface Claim {
   id: string
@@ -37,6 +37,8 @@ export function ClaimsPage() {
     selectedLots: [] as string[]
   })
   const [creating, setCreating] = useState(false)
+  const [showSubmitModal, setShowSubmitModal] = useState<string | null>(null)  // claim id
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     fetchClaims()
@@ -228,6 +230,54 @@ export function ClaimsPage() {
     }
   }
 
+  const openSubmitModal = (claimId: string) => {
+    setShowSubmitModal(claimId)
+  }
+
+  const handleSubmit = async (method: 'email' | 'download' | 'portal') => {
+    if (!showSubmitModal) return
+    setSubmitting(true)
+
+    const claim = claims.find(c => c.id === showSubmitModal)
+    if (!claim) return
+
+    try {
+      // Update claim status to submitted
+      const updatedClaims = claims.map(c =>
+        c.id === showSubmitModal
+          ? { ...c, status: 'submitted' as const, submittedAt: new Date().toISOString() }
+          : c
+      )
+      setClaims(updatedClaims)
+
+      // Simulate submission based on method
+      if (method === 'email') {
+        alert(`Claim ${claim.claimNumber} submitted via email successfully!`)
+      } else if (method === 'download') {
+        // Create a simple CSV download
+        const csvContent = `Claim Number,${claim.claimNumber}\nPeriod,${claim.periodStart} to ${claim.periodEnd}\nTotal Amount,$${claim.totalClaimedAmount.toLocaleString()}\nLots,${claim.lotCount}\nStatus,Submitted`
+        const blob = new Blob([csvContent], { type: 'text/csv' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `claim-${claim.claimNumber}.csv`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        alert(`Claim ${claim.claimNumber} downloaded and marked as submitted!`)
+      } else if (method === 'portal') {
+        alert(`Claim ${claim.claimNumber} uploaded to portal successfully!`)
+      }
+
+      setShowSubmitModal(null)
+    } catch (error) {
+      console.error('Error submitting claim:', error)
+      alert('Error submitting claim. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const formatCurrency = (amount: number | null) => {
     if (amount === null) return '-'
     return new Intl.NumberFormat('en-AU', {
@@ -349,9 +399,20 @@ export function ClaimsPage() {
                   <td className="p-4 text-right">{formatCurrency(claim.certifiedAmount)}</td>
                   <td className="p-4 text-right text-green-600">{formatCurrency(claim.paidAmount)}</td>
                   <td className="p-4 text-right">
-                    <button className="p-2 hover:bg-muted rounded-lg" title="Download">
-                      <Download className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      {claim.status === 'draft' && (
+                        <button
+                          onClick={() => openSubmitModal(claim.id)}
+                          className="p-2 hover:bg-primary/10 rounded-lg text-primary"
+                          title="Submit Claim"
+                        >
+                          <Send className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button className="p-2 hover:bg-muted rounded-lg" title="Download">
+                        <Download className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -471,6 +532,79 @@ export function ClaimsPage() {
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
                 {creating ? 'Creating...' : 'Create Claim'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Claim Modal */}
+      {showSubmitModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-semibold">Submit Claim</h2>
+              <button onClick={() => setShowSubmitModal(null)} className="p-2 hover:bg-muted rounded-lg">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <p className="text-muted-foreground mb-6">
+                Choose how you would like to submit this progress claim:
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => handleSubmit('email')}
+                  disabled={submitting}
+                  className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
+                >
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Mail className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium">Email</div>
+                    <div className="text-sm text-muted-foreground">Send claim via email to client</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleSubmit('download')}
+                  disabled={submitting}
+                  className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
+                >
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Download className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium">Download</div>
+                    <div className="text-sm text-muted-foreground">Download package for manual submission</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleSubmit('portal')}
+                  disabled={submitting}
+                  className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
+                >
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Upload className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="font-medium">Portal Upload</div>
+                    <div className="text-sm text-muted-foreground">Upload directly to client portal</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end p-4 border-t">
+              <button
+                onClick={() => setShowSubmitModal(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+              >
+                Cancel
               </button>
             </div>
           </div>
