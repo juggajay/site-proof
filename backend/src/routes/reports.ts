@@ -46,6 +46,30 @@ reportsRouter.get('/lot-status', async (req, res) => {
       return acc
     }, {})
 
+    // Calculate period comparison data
+    const today = new Date()
+    const startOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0) // Last day of previous month
+
+    // Count lots conformed this period (this month)
+    const conformedThisPeriod = lots.filter(lot =>
+      lot.conformedAt && new Date(lot.conformedAt) >= startOfThisMonth
+    ).length
+
+    // Count lots conformed last period (last month)
+    const conformedLastPeriod = lots.filter(lot =>
+      lot.conformedAt &&
+      new Date(lot.conformedAt) >= startOfLastMonth &&
+      new Date(lot.conformedAt) <= endOfLastMonth
+    ).length
+
+    // Calculate change from previous period
+    const periodChange = conformedThisPeriod - conformedLastPeriod
+    const periodChangePercent = conformedLastPeriod > 0
+      ? ((periodChange / conformedLastPeriod) * 100).toFixed(1)
+      : conformedThisPeriod > 0 ? '+100.0' : '0.0'
+
     // Calculate activity type counts
     const activityCounts = lots.reduce((acc: Record<string, number>, lot) => {
       const activity = lot.activityType || 'Unknown'
@@ -72,6 +96,14 @@ reportsRouter.get('/lot-status', async (req, res) => {
         ncrRaised: statusCounts['ncr_raised'] || 0,
         conformed: statusCounts['conformed'] || 0,
         claimed: statusCounts['claimed'] || 0,
+      },
+      periodComparison: {
+        conformedThisPeriod,
+        conformedLastPeriod,
+        periodChange,
+        periodChangePercent,
+        currentPeriodLabel: startOfThisMonth.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }),
+        previousPeriodLabel: startOfLastMonth.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }),
       }
     }
 

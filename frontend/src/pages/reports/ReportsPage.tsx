@@ -33,6 +33,14 @@ interface LotStatusReport {
     conformed: number
     claimed: number
   }
+  periodComparison?: {
+    conformedThisPeriod: number
+    conformedLastPeriod: number
+    periodChange: number
+    periodChangePercent: string
+    currentPeriodLabel: string
+    previousPeriodLabel: string
+  }
 }
 
 interface NCRReport {
@@ -417,6 +425,74 @@ export function ReportsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Period Comparison */}
+              {lotReport.periodComparison && (
+                <div className="bg-white border rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">Period Comparison</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-green-600">
+                        {lotReport.periodComparison.conformedThisPeriod}
+                      </div>
+                      <div className="text-sm text-green-600">
+                        Conformed This Period
+                      </div>
+                      <div className="text-xs text-green-500 mt-1">
+                        {lotReport.periodComparison.currentPeriodLabel}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <div className="text-3xl font-bold text-gray-600">
+                        {lotReport.periodComparison.conformedLastPeriod}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Conformed Last Period
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {lotReport.periodComparison.previousPeriodLabel}
+                      </div>
+                    </div>
+                    <div className={`border rounded-lg p-4 ${
+                      lotReport.periodComparison.periodChange > 0
+                        ? 'bg-green-50 border-green-200'
+                        : lotReport.periodComparison.periodChange < 0
+                        ? 'bg-red-50 border-red-200'
+                        : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <div className={`text-3xl font-bold ${
+                        lotReport.periodComparison.periodChange > 0
+                          ? 'text-green-600'
+                          : lotReport.periodComparison.periodChange < 0
+                          ? 'text-red-600'
+                          : 'text-gray-600'
+                      }`}>
+                        {lotReport.periodComparison.periodChange > 0 ? '+' : ''}
+                        {lotReport.periodComparison.periodChange}
+                      </div>
+                      <div className={`text-sm ${
+                        lotReport.periodComparison.periodChange > 0
+                          ? 'text-green-600'
+                          : lotReport.periodComparison.periodChange < 0
+                          ? 'text-red-600'
+                          : 'text-gray-600'
+                      }`}>
+                        Change from Previous
+                      </div>
+                      <div className={`text-xs mt-1 ${
+                        lotReport.periodComparison.periodChange > 0
+                          ? 'text-green-500'
+                          : lotReport.periodComparison.periodChange < 0
+                          ? 'text-red-500'
+                          : 'text-gray-500'
+                      }`}>
+                        {lotReport.periodComparison.periodChange > 0 ? '+' : ''}
+                        {lotReport.periodComparison.periodChangePercent}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Total Count */}
               <div className="bg-white border rounded-lg p-6">
