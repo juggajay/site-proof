@@ -49,6 +49,12 @@ export function SubcontractorsPage() {
     phone: ''
   })
   const [inviting, setInviting] = useState(false)
+  const [showAddEmployeeModal, setShowAddEmployeeModal] = useState<string | null>(null)
+  const [employeeData, setEmployeeData] = useState({
+    name: '',
+    role: '',
+    hourlyRate: ''
+  })
 
   useEffect(() => {
     fetchSubcontractors()
@@ -136,18 +142,97 @@ export function SubcontractorsPage() {
     }
   }
 
-  const approveEmployee = async (subId: string, empId: string) => {
-    setSubcontractors(subs => subs.map(sub => {
-      if (sub.id === subId) {
-        return {
-          ...sub,
-          employees: sub.employees.map(emp =>
-            emp.id === empId ? { ...emp, status: 'approved' as const } : emp
-          )
-        }
+  const updateEmployeeStatus = async (subId: string, empId: string, status: 'pending' | 'approved' | 'inactive') => {
+    const token = getAuthToken()
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+
+    try {
+      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/employees/${empId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ status })
+      })
+
+      if (response.ok) {
+        setSubcontractors(subs => subs.map(sub => {
+          if (sub.id === subId) {
+            return {
+              ...sub,
+              employees: sub.employees.map(emp =>
+                emp.id === empId ? { ...emp, status } : emp
+              )
+            }
+          }
+          return sub
+        }))
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Failed to update employee status')
       }
-      return sub
-    }))
+    } catch (error) {
+      console.error('Update employee status error:', error)
+      alert('Failed to update employee status')
+    }
+  }
+
+  const approveEmployee = async (subId: string, empId: string) => {
+    await updateEmployeeStatus(subId, empId, 'approved')
+  }
+
+  const deactivateEmployee = async (subId: string, empId: string) => {
+    if (!confirm('Are you sure you want to deactivate this employee? They will no longer be available for dockets.')) {
+      return
+    }
+    await updateEmployeeStatus(subId, empId, 'inactive')
+  }
+
+  const addEmployee = async (subId: string) => {
+    if (!employeeData.name || !employeeData.hourlyRate) {
+      alert('Name and hourly rate are required')
+      return
+    }
+
+    const token = getAuthToken()
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+
+    try {
+      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/employees`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          name: employeeData.name,
+          role: employeeData.role,
+          hourlyRate: parseFloat(employeeData.hourlyRate)
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSubcontractors(subs => subs.map(sub => {
+          if (sub.id === subId) {
+            return {
+              ...sub,
+              employees: [...sub.employees, data.employee]
+            }
+          }
+          return sub
+        }))
+        setShowAddEmployeeModal(null)
+        setEmployeeData({ name: '', role: '', hourlyRate: '' })
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Failed to add employee')
+      }
+    } catch (error) {
+      console.error('Add employee error:', error)
+      alert('Failed to add employee')
+    }
   }
 
   const approvePlant = async (subId: string, plantId: string) => {
@@ -273,8 +358,9 @@ export function SubcontractorsPage() {
       case 'suspended':
         return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800"><Clock className="h-3 w-3" /> Suspended</span>
       case 'removed':
-      case 'inactive':
         return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><X className="h-3 w-3" /> Removed</span>
+      case 'inactive':
+        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700"><X className="h-3 w-3" /> Inactive</span>
       default:
         return <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status}</span>
     }
@@ -421,10 +507,19 @@ export function SubcontractorsPage() {
 
                 {/* Employee Roster */}
                 <div>
-                  <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Employee Roster ({sub.employees.length})
-                  </h4>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Employee Roster ({sub.employees.length})
+                    </h4>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowAddEmployeeModal(sub.id); }}
+                      className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add Employee
+                    </button>
+                  </div>
                   <div className="rounded-lg border">
                     <table className="w-full">
                       <thead className="bg-muted/50">
@@ -443,18 +538,36 @@ export function SubcontractorsPage() {
                             <td className="p-3">{emp.role}</td>
                             <td className="p-3 text-right font-semibold">{formatCurrency(emp.hourlyRate)}/hr</td>
                             <td className="p-3 text-center">{getStatusBadge(emp.status)}</td>
-                            <td className="p-3 text-right">
+                            <td className="p-3 text-right space-x-2">
                               {emp.status === 'pending' && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); approveEmployee(sub.id, emp.id); }}
                                   className="text-sm text-green-600 hover:text-green-700 font-medium"
                                 >
-                                  Approve Rate
+                                  Approve
                                 </button>
+                              )}
+                              {emp.status === 'approved' && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); deactivateEmployee(sub.id, emp.id); }}
+                                  className="text-sm text-orange-600 hover:text-orange-700 font-medium"
+                                >
+                                  Deactivate
+                                </button>
+                              )}
+                              {emp.status === 'inactive' && (
+                                <span className="text-sm text-muted-foreground">Inactive</span>
                               )}
                             </td>
                           </tr>
                         ))}
+                        {sub.employees.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="p-4 text-center text-muted-foreground">
+                              No employees added yet
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -587,6 +700,71 @@ export function SubcontractorsPage() {
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
                 {inviting ? 'Sending...' : 'Send Invitation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Employee Modal */}
+      {showAddEmployeeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-semibold">Add Employee</h2>
+              <button onClick={() => { setShowAddEmployeeModal(null); setEmployeeData({ name: '', role: '', hourlyRate: '' }); }} className="p-2 hover:bg-muted rounded-lg">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Employee Name *</label>
+                <input
+                  type="text"
+                  value={employeeData.name}
+                  onChange={(e) => setEmployeeData(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="John Smith"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Role</label>
+                <input
+                  type="text"
+                  value={employeeData.role}
+                  onChange={(e) => setEmployeeData(prev => ({ ...prev, role: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Operator, Labourer, Supervisor..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Hourly Rate *</label>
+                <input
+                  type="number"
+                  value={employeeData.hourlyRate}
+                  onChange={(e) => setEmployeeData(prev => ({ ...prev, hourlyRate: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="85"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 p-4 border-t">
+              <button
+                onClick={() => { setShowAddEmployeeModal(null); setEmployeeData({ name: '', role: '', hourlyRate: '' }); }}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => addEmployee(showAddEmployeeModal)}
+                disabled={!employeeData.name || !employeeData.hourlyRate}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+              >
+                Add Employee
               </button>
             </div>
           </div>

@@ -537,3 +537,98 @@ subcontractorsRouter.get('/project/:projectId', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// POST /api/subcontractors/:id/employees - Add employee to a subcontractor (admin)
+subcontractorsRouter.post('/:id/employees', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { name, role, hourlyRate, phone } = req.body
+
+    if (!name || hourlyRate === undefined) {
+      return res.status(400).json({ error: 'Name and hourly rate are required' })
+    }
+
+    // Verify subcontractor exists
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Subcontractor not found' })
+    }
+
+    const employee = await prisma.employeeRoster.create({
+      data: {
+        subcontractorCompanyId: id,
+        name,
+        role: role || '',
+        hourlyRate: hourlyRate,
+        phone: phone || '',
+        status: 'pending'
+      }
+    })
+
+    res.status(201).json({
+      employee: {
+        id: employee.id,
+        name: employee.name,
+        role: employee.role || '',
+        hourlyRate: Number(employee.hourlyRate),
+        status: employee.status
+      }
+    })
+  } catch (error) {
+    console.error('Add employee error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PATCH /api/subcontractors/:id/employees/:empId/status - Update employee status
+subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
+  try {
+    const { id, empId } = req.params
+    const { status } = req.body
+    const userId = (req as any).user?.userId
+
+    const validStatuses = ['pending', 'approved', 'inactive']
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be: pending, approved, or inactive' })
+    }
+
+    // Verify employee belongs to this subcontractor
+    const employee = await prisma.employeeRoster.findFirst({
+      where: {
+        id: empId,
+        subcontractorCompanyId: id
+      }
+    })
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' })
+    }
+
+    const updateData: any = { status }
+    if (status === 'approved') {
+      updateData.approvedById = userId
+      updateData.approvedAt = new Date()
+    }
+
+    const updated = await prisma.employeeRoster.update({
+      where: { id: empId },
+      data: updateData
+    })
+
+    res.json({
+      employee: {
+        id: updated.id,
+        name: updated.name,
+        role: updated.role || '',
+        hourlyRate: Number(updated.hourlyRate),
+        status: updated.status
+      }
+    })
+  } catch (error) {
+    console.error('Update employee status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
