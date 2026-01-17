@@ -1,4 +1,4 @@
-// Feature #589 trigger - ITP point type display
+// Feature #590 trigger - ITP evidence required indicator
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
@@ -55,6 +55,7 @@ itpRouter.get('/templates', requireAuth, async (req: any, res) => {
         category: item.responsibleParty || 'general',
         isHoldPoint: item.pointType === 'hold_point',
         pointType: item.pointType || 'standard',
+        evidenceRequired: item.evidenceRequired || 'none',
         order: item.sequenceNumber,
         acceptanceCriteria: item.acceptanceCriteria
       }))
@@ -94,6 +95,7 @@ itpRouter.get('/templates/:id', requireAuth, async (req: any, res) => {
         category: item.responsibleParty || 'general',
         isHoldPoint: item.pointType === 'hold_point',
         pointType: item.pointType || 'standard',
+        evidenceRequired: item.evidenceRequired || 'none',
         order: item.sequenceNumber,
         acceptanceCriteria: item.acceptanceCriteria
       }))
@@ -127,6 +129,7 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
             sequenceNumber: index + 1,
             pointType: item.pointType || (item.isHoldPoint ? 'hold_point' : 'standard'),
             responsibleParty: item.category || 'contractor',
+            evidenceRequired: item.evidenceRequired || 'none',
             acceptanceCriteria: item.acceptanceCriteria || null
           }))
         }
@@ -147,6 +150,7 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
         category: item.responsibleParty || 'general',
         isHoldPoint: item.pointType === 'hold_point',
         pointType: item.pointType || 'standard',
+        evidenceRequired: item.evidenceRequired || 'none',
         order: item.sequenceNumber,
         acceptanceCriteria: item.acceptanceCriteria
       }))
@@ -222,6 +226,7 @@ itpRouter.post('/instances', requireAuth, async (req: any, res) => {
           category: item.responsibleParty || 'general',
           isHoldPoint: item.pointType === 'hold_point',
           pointType: item.pointType || 'standard',
+          evidenceRequired: item.evidenceRequired || 'none',
           order: item.sequenceNumber,
           acceptanceCriteria: item.acceptanceCriteria
         }))
@@ -289,6 +294,7 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
           category: item.responsibleParty || 'general',
           isHoldPoint: item.pointType === 'hold_point',
           pointType: item.pointType || 'standard',
+          evidenceRequired: item.evidenceRequired || 'none',
           order: item.sequenceNumber,
           acceptanceCriteria: item.acceptanceCriteria
         }))

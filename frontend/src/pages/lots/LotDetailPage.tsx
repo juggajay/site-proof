@@ -68,6 +68,7 @@ interface ITPChecklistItem {
   category: string
   isHoldPoint: boolean
   pointType: 'standard' | 'witness' | 'hold_point'
+  evidenceRequired: 'none' | 'photo' | 'test' | 'document'
   order: number
 }
 
@@ -845,6 +846,28 @@ export function LotDetailPage() {
                                   <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Hold Point</span>
                                 )}
                                 <span className="text-xs bg-muted px-2 py-0.5 rounded capitalize">{item.category}</span>
+                                {/* Evidence required icons */}
+                                {item.evidenceRequired === 'photo' && (
+                                  <span className="inline-flex items-center text-green-600 dark:text-green-400" title="Photo required">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                                    </svg>
+                                  </span>
+                                )}
+                                {item.evidenceRequired === 'test' && (
+                                  <span className="inline-flex items-center text-purple-600 dark:text-purple-400" title="Test required">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C.817 14.769 2.156 18 4.828 18h10.343c2.673 0 4.012-3.231 2.122-5.121l-4-4A1 1 0 0113 8.172V4.414l.707-.707A1 1 0 0013 2H7zm2 6.172V4h2v4.172a3 3 0 00.879 2.12l1.027 1.028a4 4 0 00-2.171.102l-.47.156a4 4 0 01-2.53 0l-.563-.187a1.993 1.993 0 00-.114-.035l1.063-1.063A3 3 0 009 8.172z" clipRule="evenodd" />
+                                    </svg>
+                                  </span>
+                                )}
+                                {item.evidenceRequired === 'document' && (
+                                  <span className="inline-flex items-center text-blue-600 dark:text-blue-400" title="Document required">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                                    </svg>
+                                  </span>
+                                )}
                               </div>
                               <div className="mt-2">
                                 <input

@@ -8,6 +8,7 @@ interface ChecklistItem {
   category: string
   isHoldPoint: boolean
   pointType: 'standard' | 'witness' | 'hold_point'
+  evidenceRequired: 'none' | 'photo' | 'test' | 'document'
   verificationMethod?: string
   acceptanceCriteria?: string
   order: number
@@ -179,11 +180,11 @@ function CreateTemplateModal({
   const [description, setDescription] = useState('')
   const [activityType, setActivityType] = useState('')
   const [checklistItems, setChecklistItems] = useState<Omit<ChecklistItem, 'id' | 'order'>[]>([
-    { description: '', category: 'general', isHoldPoint: false, pointType: 'standard' }
+    { description: '', category: 'general', isHoldPoint: false, pointType: 'standard', evidenceRequired: 'none' }
   ])
 
   const handleAddItem = () => {
-    setChecklistItems([...checklistItems, { description: '', category: 'general', isHoldPoint: false, pointType: 'standard' }])
+    setChecklistItems([...checklistItems, { description: '', category: 'general', isHoldPoint: false, pointType: 'standard', evidenceRequired: 'none' }])
   }
 
   const handleRemoveItem = (index: number) => {
@@ -293,6 +294,16 @@ function CreateTemplateModal({
                         <option value="standard">S - Standard</option>
                         <option value="witness">W - Witness</option>
                         <option value="hold_point">H - Hold Point</option>
+                      </select>
+                      <select
+                        value={item.evidenceRequired || 'none'}
+                        onChange={(e) => handleItemChange(index, 'evidenceRequired', e.target.value)}
+                        className="px-2 py-1 text-sm border rounded"
+                      >
+                        <option value="none">No Evidence</option>
+                        <option value="photo">📷 Photo</option>
+                        <option value="test">🧪 Test</option>
+                        <option value="document">📄 Document</option>
                       </select>
                     </div>
                   </div>
