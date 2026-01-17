@@ -440,6 +440,114 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
   }
 })
 
+// Escalate a hold point to QM/PM
+holdpointsRouter.post('/:id/escalate', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+    const { escalatedTo, escalationReason } = req.body
+    const userId = req.user.userId
+
+    // Get hold point with lot/project info
+    const existingHP = await prisma.holdPoint.findUnique({
+      where: { id },
+      include: {
+        lot: {
+          include: {
+            project: true
+          }
+        }
+      }
+    })
+
+    if (!existingHP) {
+      return res.status(404).json({ error: 'Hold point not found' })
+    }
+
+    // Update hold point with escalation info
+    const holdPoint = await prisma.holdPoint.update({
+      where: { id },
+      data: {
+        isEscalated: true,
+        escalatedAt: new Date(),
+        escalatedById: userId,
+        escalatedTo: escalatedTo || 'QM,PM', // Default to QM and PM
+        escalationReason: escalationReason || 'Stale hold point - no response received'
+      },
+      include: {
+        lot: true,
+        itpChecklistItem: true
+      }
+    })
+
+    // Get QM/PM users from the project to notify
+    const projectUsers = await prisma.projectUser.findMany({
+      where: {
+        projectId: existingHP.lot.projectId,
+        role: { in: ['admin', 'project_manager', 'qm', 'quality_manager'] }
+      },
+      include: {
+        user: {
+          select: { id: true, email: true, fullName: true }
+        }
+      }
+    })
+
+    // Create notifications for QM/PM users
+    const notificationsToCreate = projectUsers.map(pu => ({
+      userId: pu.userId,
+      projectId: existingHP.lot.projectId,
+      type: 'hold_point_escalation',
+      title: 'Hold Point Escalated',
+      message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been escalated. Reason: ${holdPoint.escalationReason}`,
+      linkUrl: `/projects/${existingHP.lot.projectId}/holdpoints/${id}`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+    }
+
+    res.json({
+      success: true,
+      message: 'Hold point escalated successfully',
+      holdPoint,
+      notifiedUsers: projectUsers.map(pu => ({
+        email: pu.user.email,
+        fullName: pu.user.fullName,
+        role: pu.role
+      }))
+    })
+  } catch (error) {
+    console.error('Error escalating hold point:', error)
+    res.status(500).json({ error: 'Failed to escalate hold point' })
+  }
+})
+
+// Resolve an escalated hold point
+holdpointsRouter.post('/:id/resolve-escalation', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+
+    const holdPoint = await prisma.holdPoint.update({
+      where: { id },
+      data: {
+        escalationResolved: true,
+        escalationResolvedAt: new Date()
+      }
+    })
+
+    res.json({
+      success: true,
+      message: 'Escalation resolved',
+      holdPoint
+    })
+  } catch (error) {
+    console.error('Error resolving escalation:', error)
+    res.status(500).json({ error: 'Failed to resolve escalation' })
+  }
+})
+
 // Generate evidence package for a hold point
 holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: any, res) => {
   try {

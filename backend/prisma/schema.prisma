@@ -320,6 +320,14 @@ model HoldPoint {
   evidencePackageUrl   String?   @map("evidence_package_url")
   chaseCount           Int       @default(0) @map("chase_count")
   lastChasedAt         DateTime? @map("last_chased_at")
+  // Escalation fields
+  isEscalated          Boolean   @default(false) @map("is_escalated")
+  escalatedAt          DateTime? @map("escalated_at")
+  escalatedById        String?   @map("escalated_by")
+  escalatedTo          String?   @map("escalated_to") // JSON array of user IDs or roles
+  escalationReason     String?   @map("escalation_reason")
+  escalationResolved   Boolean   @default(false) @map("escalation_resolved")
+  escalationResolvedAt DateTime? @map("escalation_resolved_at")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
