@@ -456,6 +456,117 @@ router.get('/project/:projectId/recent-plant', async (req: Request, res: Respons
   }
 })
 
+// GET /api/diary/project/:projectId/activity-suggestions - Get activity suggestions
+router.get('/project/:projectId/activity-suggestions', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { search } = req.query
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    const suggestions: Array<{ description: string; source: string; category?: string }> = []
+
+    // 1. Get checklist item descriptions from ITP templates for this project
+    const itpTemplates = await prisma.iTPTemplate.findMany({
+      where: { projectId },
+      include: {
+        checklistItems: {
+          select: { description: true }
+        }
+      }
+    })
+
+    for (const template of itpTemplates) {
+      for (const item of template.checklistItems) {
+        suggestions.push({
+          description: item.description,
+          source: 'ITP Template',
+          category: template.activityType
+        })
+      }
+    }
+
+    // 2. Get recent activity descriptions from diaries
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const recentActivities = await prisma.diaryActivity.findMany({
+      where: {
+        diary: {
+          projectId,
+          date: { gte: thirtyDaysAgo }
+        }
+      },
+      select: { description: true },
+      distinct: ['description'],
+      take: 50
+    })
+
+    for (const activity of recentActivities) {
+      // Only add if not already in suggestions
+      if (!suggestions.some(s => s.description === activity.description)) {
+        suggestions.push({
+          description: activity.description,
+          source: 'Recent Activity'
+        })
+      }
+    }
+
+    // 3. Add common construction activities as fallback
+    const commonActivities = [
+      'Site setup and establishment',
+      'Excavation works',
+      'Backfilling and compaction',
+      'Concrete pour',
+      'Formwork installation',
+      'Reinforcement installation',
+      'Survey and setout',
+      'Quality testing',
+      'Material delivery',
+      'Site cleanup'
+    ]
+
+    for (const desc of commonActivities) {
+      if (!suggestions.some(s => s.description === desc)) {
+        suggestions.push({
+          description: desc,
+          source: 'Common'
+        })
+      }
+    }
+
+    // Filter by search term if provided
+    let filtered = suggestions
+    if (search && typeof search === 'string') {
+      const searchLower = search.toLowerCase()
+      filtered = suggestions.filter(s =>
+        s.description.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // Deduplicate and limit
+    const unique = Array.from(new Map(filtered.map(s => [s.description, s])).values())
+    const limited = unique.slice(0, 20)
+
+    res.json({
+      suggestions: limited,
+      count: limited.length,
+      totalAvailable: unique.length
+    })
+  } catch (error) {
+    console.error('Error getting activity suggestions:', error)
+    res.status(500).json({ error: 'Failed to get activity suggestions' })
+  }
+})
+
 // POST /api/diary/:diaryId/activities - Add activity to diary
 router.post('/:diaryId/activities', async (req: Request, res: Response) => {
   try {
