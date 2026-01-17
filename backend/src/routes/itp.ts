@@ -166,6 +166,167 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
   }
 })
 
+// Update ITP template
+itpRouter.patch('/templates/:id', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+    const { name, description, activityType, checklistItems } = req.body
+
+    // First, delete existing checklist items and recreate (simplest approach)
+    if (checklistItems) {
+      await prisma.iTPChecklistItem.deleteMany({
+        where: { templateId: id }
+      })
+    }
+
+    const template = await prisma.iTPTemplate.update({
+      where: { id },
+      data: {
+        name,
+        description,
+        activityType,
+        checklistItems: checklistItems ? {
+          create: checklistItems.map((item: any, index: number) => ({
+            description: item.description,
+            sequenceNumber: index + 1,
+            pointType: item.pointType || 'standard',
+            responsibleParty: item.responsibleParty || item.category || 'contractor',
+            evidenceRequired: item.evidenceRequired || 'none',
+            acceptanceCriteria: item.acceptanceCriteria || null
+          }))
+        } : undefined
+      },
+      include: {
+        checklistItems: {
+          orderBy: { sequenceNumber: 'asc' }
+        }
+      }
+    })
+
+    // Transform to frontend-friendly format
+    const transformedTemplate = {
+      ...template,
+      checklistItems: template.checklistItems.map(item => ({
+        id: item.id,
+        description: item.description,
+        category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
+        isHoldPoint: item.pointType === 'hold_point',
+        pointType: item.pointType || 'standard',
+        evidenceRequired: item.evidenceRequired || 'none',
+        order: item.sequenceNumber,
+        acceptanceCriteria: item.acceptanceCriteria
+      }))
+    }
+
+    res.json({ template: transformedTemplate })
+  } catch (error) {
+    console.error('Error updating ITP template:', error)
+    res.status(500).json({ error: 'Failed to update template' })
+  }
+})
+
+// Get lots using a template (for propagation feature)
+itpRouter.get('/templates/:id/lots', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+
+    const instances = await prisma.iTPInstance.findMany({
+      where: { templateId: id },
+      include: {
+        lot: {
+          select: {
+            id: true,
+            lotNumber: true,
+            description: true,
+            status: true
+          }
+        }
+      }
+    })
+
+    // Filter to in-progress lots (not completed)
+    const lotsUsingTemplate = instances
+      .filter(inst => inst.lot.status !== 'conformed')
+      .map(inst => ({
+        instanceId: inst.id,
+        lotId: inst.lot.id,
+        lotNumber: inst.lot.lotNumber,
+        description: inst.lot.description,
+        status: inst.lot.status,
+        hasSnapshot: !!inst.templateSnapshot
+      }))
+
+    res.json({ lots: lotsUsingTemplate, total: lotsUsingTemplate.length })
+  } catch (error) {
+    console.error('Error fetching lots using template:', error)
+    res.status(500).json({ error: 'Failed to fetch lots' })
+  }
+})
+
+// Propagate template changes to selected lots
+itpRouter.post('/templates/:id/propagate', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+    const { instanceIds } = req.body
+
+    if (!instanceIds || !Array.isArray(instanceIds) || instanceIds.length === 0) {
+      return res.status(400).json({ error: 'instanceIds array is required' })
+    }
+
+    // Get the current template state
+    const template = await prisma.iTPTemplate.findUnique({
+      where: { id },
+      include: {
+        checklistItems: {
+          orderBy: { sequenceNumber: 'asc' }
+        }
+      }
+    })
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    // Create new snapshot
+    const newSnapshot = {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      activityType: template.activityType,
+      checklistItems: template.checklistItems.map(item => ({
+        id: item.id,
+        description: item.description,
+        sequenceNumber: item.sequenceNumber,
+        pointType: item.pointType,
+        responsibleParty: item.responsibleParty,
+        evidenceRequired: item.evidenceRequired,
+        acceptanceCriteria: item.acceptanceCriteria
+      }))
+    }
+
+    // Update snapshots for selected instances
+    const updateResult = await prisma.iTPInstance.updateMany({
+      where: {
+        id: { in: instanceIds },
+        templateId: id
+      },
+      data: {
+        templateSnapshot: JSON.stringify(newSnapshot)
+      }
+    })
+
+    res.json({
+      success: true,
+      updatedCount: updateResult.count,
+      message: `Updated ${updateResult.count} lot(s) with latest template`
+    })
+  } catch (error) {
+    console.error('Error propagating template changes:', error)
+    res.status(500).json({ error: 'Failed to propagate changes' })
+  }
+})
+
 // Assign ITP template to lot (create ITP instance)
 itpRouter.post('/instances', requireAuth, async (req: any, res) => {
   try {
