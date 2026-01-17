@@ -391,6 +391,31 @@ export function NCRPage() {
       : 'bg-yellow-100 text-yellow-800'
   }
 
+  // Export NCRs to CSV
+  const handleExportCSV = () => {
+    const headers = ['NCR Number', 'Lots', 'Description', 'Category', 'Severity', 'Status', 'Responsible', 'Due Date', 'Created At']
+    const rows = filteredNcrs.map(ncr => [
+      ncr.ncrNumber,
+      ncr.ncrLots.map(nl => nl.lot.lotNumber).join('; ') || '-',
+      `"${ncr.description.replace(/"/g, '""')}"`,
+      ncr.category,
+      ncr.severity,
+      ncr.status.replace('_', ' '),
+      ncr.responsibleUser ? (ncr.responsibleUser.fullName || ncr.responsibleUser.email) : 'Unassigned',
+      ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString() : '-',
+      new Date(ncr.createdAt).toLocaleDateString()
+    ])
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.setAttribute('download', `ncr-register-${projectId || 'all'}-${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -409,17 +434,27 @@ export function NCRPage() {
             {projectId ? 'Manage NCR lifecycle for this project' : 'All NCRs across your projects'}
           </p>
         </div>
-        {projectId && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Raise NCR
-          </button>
-        )}
+        <div className="flex gap-2">
+          {filteredNcrs.length > 0 && (
+            <button
+              onClick={() => handleExportCSV()}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              Export CSV
+            </button>
+          )}
+          {projectId && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Raise NCR
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
