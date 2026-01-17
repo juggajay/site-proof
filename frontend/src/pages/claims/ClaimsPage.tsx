@@ -14,6 +14,19 @@ interface Claim {
   paidAmount: number | null
   submittedAt: string | null
   lotCount: number
+  paymentDueDate?: string | null
+}
+
+// SOPA timeframes by Australian state (business days for payment)
+const SOPA_TIMEFRAMES: Record<string, { responseTime: number; paymentTime: number; label: string }> = {
+  NSW: { responseTime: 10, paymentTime: 15, label: 'NSW (Building and Construction Industry Security of Payment Act 1999)' },
+  VIC: { responseTime: 10, paymentTime: 15, label: 'VIC (Building and Construction Industry Security of Payment Act 2002)' },
+  QLD: { responseTime: 10, paymentTime: 15, label: 'QLD (Building Industry Fairness (Security of Payment) Act 2017)' },
+  WA: { responseTime: 14, paymentTime: 28, label: 'WA (Building and Construction Industry (Security of Payment) Act 2021)' },
+  SA: { responseTime: 10, paymentTime: 15, label: 'SA (Building and Construction Industry Security of Payment Act 2009)' },
+  TAS: { responseTime: 10, paymentTime: 15, label: 'TAS (Building and Construction Industry Security of Payment Act 2009)' },
+  NT: { responseTime: 10, paymentTime: 15, label: 'NT (Construction Contracts (Security of Payments) Act 2004)' },
+  ACT: { responseTime: 10, paymentTime: 15, label: 'ACT (Building and Construction Industry (Security of Payment) Act 2009)' },
 }
 
 interface ConformedLot {
@@ -278,6 +291,44 @@ export function ClaimsPage() {
     }
   }
 
+  // Calculate payment due date based on SOPA timeframes
+  const calculatePaymentDueDate = (submittedAt: string, state: string = 'NSW'): string => {
+    const timeframe = SOPA_TIMEFRAMES[state] || SOPA_TIMEFRAMES.NSW
+    const submissionDate = new Date(submittedAt)
+    let businessDays = timeframe.paymentTime
+    let currentDate = new Date(submissionDate)
+
+    while (businessDays > 0) {
+      currentDate.setDate(currentDate.getDate() + 1)
+      const dayOfWeek = currentDate.getDay()
+      // Skip weekends (0 = Sunday, 6 = Saturday)
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        businessDays--
+      }
+    }
+
+    return currentDate.toISOString()
+  }
+
+  const getPaymentDueStatus = (claim: Claim): { text: string; className: string } | null => {
+    if (!claim.submittedAt || claim.status === 'draft' || claim.status === 'paid') {
+      return null
+    }
+
+    const dueDate = calculatePaymentDueDate(claim.submittedAt)
+    const now = new Date()
+    const due = new Date(dueDate)
+    const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (daysUntilDue < 0) {
+      return { text: `Overdue by ${Math.abs(daysUntilDue)} days`, className: 'text-red-600' }
+    } else if (daysUntilDue <= 3) {
+      return { text: `Due in ${daysUntilDue} days`, className: 'text-amber-600' }
+    } else {
+      return { text: `Due ${due.toLocaleDateString('en-AU')}`, className: 'text-muted-foreground' }
+    }
+  }
+
   const formatCurrency = (amount: number | null) => {
     if (amount === null) return '-'
     return new Intl.NumberFormat('en-AU', {
@@ -379,6 +430,7 @@ export function ClaimsPage() {
                 <th className="text-left p-4 font-medium">Claim #</th>
                 <th className="text-left p-4 font-medium">Period</th>
                 <th className="text-left p-4 font-medium">Status</th>
+                <th className="text-left p-4 font-medium">Payment Due (SOPA)</th>
                 <th className="text-right p-4 font-medium">Lots</th>
                 <th className="text-right p-4 font-medium">Claimed</th>
                 <th className="text-right p-4 font-medium">Certified</th>
@@ -394,6 +446,13 @@ export function ClaimsPage() {
                     {new Date(claim.periodStart).toLocaleDateString()} - {new Date(claim.periodEnd).toLocaleDateString()}
                   </td>
                   <td className="p-4">{getStatusBadge(claim.status)}</td>
+                  <td className="p-4">
+                    {(() => {
+                      const dueStatus = getPaymentDueStatus(claim)
+                      if (!dueStatus) return <span className="text-muted-foreground">-</span>
+                      return <span className={`text-sm ${dueStatus.className}`}>{dueStatus.text}</span>
+                    })()}
+                  </td>
                   <td className="p-4 text-right">{claim.lotCount}</td>
                   <td className="p-4 text-right font-semibold">{formatCurrency(claim.totalClaimedAmount)}</td>
                   <td className="p-4 text-right">{formatCurrency(claim.certifiedAmount)}</td>
