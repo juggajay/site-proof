@@ -13,6 +13,7 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
+import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 
 // Main Pages
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -38,6 +39,7 @@ import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { ProfilePage } from '@/pages/profile/ProfilePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { CostsPage } from '@/pages/costs/CostsPage'
+import { CompanySettingsPage } from '@/pages/company/CompanySettingsPage'
 
 // Admin-only roles
 const ADMIN_ROLES = ['owner', 'admin', 'project_manager']
@@ -61,6 +63,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
         </Route>
 
         {/* Protected Routes */}
@@ -157,6 +160,16 @@ function App() {
 
           {/* Settings */}
           <Route path="/settings" element={<SettingsPage />} />
+
+          {/* Company Settings - Admin Only */}
+          <Route
+            path="/company-settings"
+            element={
+              <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                <CompanySettingsPage />
+              </RoleProtectedRoute>
+            }
+          />
 
           {/* Profile */}
           <Route path="/profile" element={<ProfilePage />} />

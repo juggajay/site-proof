@@ -25,23 +25,53 @@ authRouter.post('/register', async (req, res) => {
     // Build full name from parts if not provided directly
     const name = fullName || (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || null)
 
-    // Create user
+    // Create user with emailVerified set to false
     const passwordHash = hashPassword(password)
     const user = await prisma.user.create({
       data: {
         email,
         passwordHash,
         fullName: name,
+        emailVerified: false,
       },
       select: {
         id: true,
         email: true,
         fullName: true,
         roleInCompany: true,
+        emailVerified: true,
       },
     })
 
-    // Generate token
+    // Generate email verification token
+    const crypto = await import('crypto')
+    const verificationToken = crypto.randomBytes(32).toString('hex')
+
+    // Token expires in 24 hours
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
+    await prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        token: verificationToken,
+        expiresAt,
+      },
+    })
+
+    // In development, log the verification link to console
+    const verifyUrl = `http://localhost:5173/verify-email?token=${verificationToken}`
+    console.log('')
+    console.log('========================================')
+    console.log('📧 EMAIL VERIFICATION LINK (Development Mode)')
+    console.log('========================================')
+    console.log(`Email: ${email}`)
+    console.log(`Token: ${verificationToken}`)
+    console.log(`Verify URL: ${verifyUrl}`)
+    console.log(`Expires: ${expiresAt.toISOString()}`)
+    console.log('========================================')
+    console.log('')
+
+    // Generate auth token
     const token = generateToken({
       userId: user.id,
       email: user.email,
@@ -54,8 +84,11 @@ authRouter.post('/register', async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         role: user.roleInCompany,
+        emailVerified: user.emailVerified,
       },
       token,
+      message: 'Account created. Please check your email to verify your account.',
+      verificationRequired: true,
     })
   } catch (error) {
     console.error('Registration error:', error)
@@ -309,6 +342,304 @@ authRouter.get('/validate-reset-token', async (req, res) => {
   } catch (error) {
     console.error('Validate reset token error:', error)
     res.status(500).json({ valid: false, message: 'Internal server error' })
+  }
+})
+
+// PATCH /api/auth/profile - Update user profile
+authRouter.patch('/profile', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const token = authHeader.substring(7)
+
+    // Import verifyToken dynamically to avoid circular import
+    const { verifyToken } = await import('../lib/auth.js')
+    const userData = await verifyToken(token)
+
+    if (!userData) {
+      return res.status(401).json({ message: 'Invalid token' })
+    }
+
+    const { fullName, phone } = req.body
+
+    // Update user profile
+    const updatedUser = await prisma.user.update({
+      where: { id: userData.id },
+      data: {
+        fullName: fullName !== undefined ? fullName : undefined,
+        phone: phone !== undefined ? phone : undefined,
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        roleInCompany: true,
+        companyId: true,
+        company: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    })
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        fullName: updatedUser.fullName,
+        name: updatedUser.fullName,
+        phone: updatedUser.phone,
+        role: updatedUser.roleInCompany,
+        companyId: updatedUser.companyId,
+        companyName: updatedUser.company?.name || null,
+      },
+    })
+  } catch (error) {
+    console.error('Update profile error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// POST /api/auth/change-password - Change user password (requires current password)
+authRouter.post('/change-password', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const token = authHeader.substring(7)
+
+    // Import verifyToken dynamically to avoid circular import
+    const { verifyToken } = await import('../lib/auth.js')
+    const userData = await verifyToken(token)
+
+    if (!userData) {
+      return res.status(401).json({ message: 'Invalid token' })
+    }
+
+    const { currentPassword, newPassword, confirmPassword } = req.body
+
+    // Validate input
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: 'Current password, new password, and confirm password are required' })
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: 'New password and confirm password do not match' })
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters long' })
+    }
+
+    // Get user with password hash
+    const user = await prisma.user.findUnique({
+      where: { id: userData.userId || userData.id },
+      select: { id: true, passwordHash: true },
+    })
+
+    if (!user || !user.passwordHash) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    // Verify current password
+    if (!verifyPassword(currentPassword, user.passwordHash)) {
+      return res.status(401).json({ message: 'Current password is incorrect' })
+    }
+
+    // Hash and update password
+    const newPasswordHash = hashPassword(newPassword)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: newPasswordHash },
+    })
+
+    console.log(`✅ Password changed for user: ${userData.email}`)
+
+    res.json({ message: 'Password changed successfully' })
+  } catch (error) {
+    console.error('Change password error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// POST /api/auth/verify-email - Verify email with token
+authRouter.post('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.body
+
+    if (!token) {
+      return res.status(400).json({ message: 'Verification token is required' })
+    }
+
+    // Find the token
+    const verificationToken = await prisma.emailVerificationToken.findUnique({
+      where: { token },
+      include: { user: true },
+    })
+
+    if (!verificationToken) {
+      return res.status(400).json({ message: 'Invalid verification token' })
+    }
+
+    // Check if token has been used
+    if (verificationToken.usedAt) {
+      return res.status(400).json({ message: 'This verification token has already been used' })
+    }
+
+    // Check if token has expired
+    if (verificationToken.expiresAt < new Date()) {
+      return res.status(400).json({ message: 'This verification token has expired' })
+    }
+
+    // Check if user is already verified
+    if (verificationToken.user.emailVerified) {
+      return res.status(400).json({ message: 'Email is already verified' })
+    }
+
+    // Update user and mark token as used
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: verificationToken.userId },
+        data: {
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      }),
+      prisma.emailVerificationToken.update({
+        where: { id: verificationToken.id },
+        data: { usedAt: new Date() },
+      }),
+    ])
+
+    console.log(`✅ Email verified for: ${verificationToken.user.email}`)
+
+    res.json({
+      message: 'Email verified successfully. You can now log in.',
+      verified: true,
+    })
+  } catch (error) {
+    console.error('Verify email error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// GET /api/auth/verify-email-status - Check verification status
+authRouter.get('/verify-email-status', async (req, res) => {
+  try {
+    const { token } = req.query
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ valid: false, message: 'Token is required' })
+    }
+
+    const verificationToken = await prisma.emailVerificationToken.findUnique({
+      where: { token },
+      include: { user: { select: { email: true, emailVerified: true } } },
+    })
+
+    if (!verificationToken) {
+      return res.json({ valid: false, message: 'Invalid verification token' })
+    }
+
+    if (verificationToken.usedAt) {
+      return res.json({ valid: false, message: 'This verification token has already been used', alreadyVerified: true })
+    }
+
+    if (verificationToken.expiresAt < new Date()) {
+      return res.json({ valid: false, message: 'This verification token has expired', expired: true })
+    }
+
+    if (verificationToken.user.emailVerified) {
+      return res.json({ valid: false, message: 'Email is already verified', alreadyVerified: true })
+    }
+
+    res.json({ valid: true, email: verificationToken.user.email })
+  } catch (error) {
+    console.error('Verify email status error:', error)
+    res.status(500).json({ valid: false, message: 'Internal server error' })
+  }
+})
+
+// POST /api/auth/resend-verification - Resend verification email
+authRouter.post('/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, emailVerified: true },
+    })
+
+    // Always return success (don't reveal if email exists)
+    if (!user) {
+      return res.json({
+        message: 'If an account exists with this email, a new verification link has been sent.'
+      })
+    }
+
+    if (user.emailVerified) {
+      return res.json({
+        message: 'Email is already verified. You can log in.',
+        alreadyVerified: true,
+      })
+    }
+
+    // Invalidate any existing tokens for this user
+    await prisma.emailVerificationToken.updateMany({
+      where: {
+        userId: user.id,
+        usedAt: null,
+        expiresAt: { gt: new Date() }
+      },
+      data: { usedAt: new Date() } // Mark as used to invalidate
+    })
+
+    // Generate new verification token
+    const crypto = await import('crypto')
+    const verificationToken = crypto.randomBytes(32).toString('hex')
+
+    // Token expires in 24 hours
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
+    await prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        token: verificationToken,
+        expiresAt,
+      },
+    })
+
+    // In development, log the verification link to console
+    const verifyUrl = `http://localhost:5173/verify-email?token=${verificationToken}`
+    console.log('')
+    console.log('========================================')
+    console.log('📧 EMAIL VERIFICATION LINK (Resent - Development Mode)')
+    console.log('========================================')
+    console.log(`Email: ${email}`)
+    console.log(`Token: ${verificationToken}`)
+    console.log(`Verify URL: ${verifyUrl}`)
+    console.log(`Expires: ${expiresAt.toISOString()}`)
+    console.log('========================================')
+    console.log('')
+
+    res.json({
+      message: 'If an account exists with this email, a new verification link has been sent.'
+    })
+  } catch (error) {
+    console.error('Resend verification error:', error)
+    res.status(500).json({ message: 'Internal server error' })
   }
 })
 

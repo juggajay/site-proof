@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
-import { Check, X } from 'lucide-react'
+import { Check, X, Mail } from 'lucide-react'
 
 const MIN_PASSWORD_LENGTH = 12
 
@@ -14,6 +14,8 @@ export function RegisterPage() {
   const [lastName, setLastName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [registrationSuccess, setRegistrationSuccess] = useState(false)
+  const [registeredEmail, setRegisteredEmail] = useState('')
   const { signUp } = useAuth()
   const navigate = useNavigate()
 
@@ -63,13 +65,49 @@ export function RegisterPage() {
     setLoading(true)
 
     try {
-      await signUp(email, password, { firstName, lastName })
-      navigate('/login')
-    } catch (err) {
-      setError('Registration failed. Please try again.')
+      const result = await signUp(email, password, { firstName, lastName })
+      // Show verification message instead of navigating to login
+      setRegisteredEmail(email)
+      setRegistrationSuccess(true)
+    } catch (err: any) {
+      setError(err?.message || 'Registration failed. Please try again.')
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show success message after registration
+  if (registrationSuccess) {
+    return (
+      <div className="w-full max-w-md space-y-6 text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <Mail className="h-8 w-8 text-primary" />
+        </div>
+        <h2 className="text-2xl font-bold">Check Your Email</h2>
+        <p className="text-muted-foreground">
+          We've sent a verification link to <strong>{registeredEmail}</strong>.
+          Please check your email and click the link to verify your account.
+        </p>
+        <div className="rounded-lg border bg-amber-50 p-4 text-left text-sm text-amber-800">
+          <strong>Development Mode:</strong> Check the terminal/console running the backend server
+          for the verification link.
+        </div>
+        <div className="space-y-2">
+          <Link
+            to="/login"
+            className="inline-block w-full rounded-lg bg-primary py-2 text-center text-primary-foreground hover:bg-primary/90"
+          >
+            Go to Login
+          </Link>
+          <Link
+            to="/verify-email"
+            className="inline-block w-full rounded-lg border py-2 text-center hover:bg-muted"
+          >
+            Resend Verification Email
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (
