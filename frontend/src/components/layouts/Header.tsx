@@ -1,5 +1,5 @@
 import { useAuth, getAuthToken } from '@/lib/auth'
-import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, Settings, UserCircle } from 'lucide-react'
+import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, Settings, UserCircle, Search } from 'lucide-react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Breadcrumbs } from './Breadcrumbs'
@@ -26,7 +26,9 @@ export function Header() {
   const { projectId } = useParams()
   const [projects, setProjects] = useState<Project[]>([])
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false)
+  const [projectSearchTerm, setProjectSearchTerm] = useState('')
   const projectSelectorRef = useRef<HTMLDivElement>(null)
+  const projectSearchInputRef = useRef<HTMLInputElement>(null)
 
   // Notification state
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -41,8 +43,23 @@ export function Header() {
   // Find the current project from the list
   const currentProject = projects.find(p => p.id === projectId)
 
+  // Filter projects by search term
+  const filteredProjects = projects.filter(p =>
+    p.name.toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
+    p.projectNumber.toLowerCase().includes(projectSearchTerm.toLowerCase())
+  )
+
   // Calculate unread count
   const unreadCount = notifications.filter(n => !n.read).length
+
+  // Focus search input when project selector opens and reset search when closing
+  useEffect(() => {
+    if (isProjectSelectorOpen) {
+      setTimeout(() => projectSearchInputRef.current?.focus(), 100)
+    } else {
+      setProjectSearchTerm('')
+    }
+  }, [isProjectSelectorOpen])
 
   // Fetch user's projects
   useEffect(() => {
@@ -268,35 +285,54 @@ export function Header() {
             </button>
 
             {isProjectSelectorOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border bg-card shadow-lg">
-                <div className="p-1">
+              <div className="absolute right-0 top-full z-50 mt-1 min-w-[260px] rounded-lg border bg-card shadow-lg">
+                <div className="p-2">
                   <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                     Switch Project
                   </div>
+                  {/* Search input */}
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      ref={projectSearchInputRef}
+                      type="text"
+                      placeholder="Search projects..."
+                      value={projectSearchTerm}
+                      onChange={(e) => setProjectSearchTerm(e.target.value)}
+                      className="w-full rounded border bg-background pl-8 pr-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      aria-label="Search projects"
+                    />
+                  </div>
                   <ul role="listbox" className="max-h-[300px] overflow-auto">
-                    {projects.map((project) => (
-                      <li key={project.id}>
-                        <button
-                          onClick={() => handleProjectSelect(project)}
-                          className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted ${
-                            project.id === projectId ? 'bg-primary/10 text-primary' : ''
-                          }`}
-                          role="option"
-                          aria-selected={project.id === projectId}
-                        >
-                          <FolderKanban className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate font-medium">{project.name}</div>
-                            <div className="truncate text-xs text-muted-foreground">
-                              {project.projectNumber}
-                            </div>
-                          </div>
-                          {project.id === projectId && (
-                            <span className="ml-auto text-xs text-primary">Current</span>
-                          )}
-                        </button>
+                    {filteredProjects.length === 0 ? (
+                      <li className="px-2 py-3 text-center text-sm text-muted-foreground">
+                        No projects found
                       </li>
-                    ))}
+                    ) : (
+                      filteredProjects.map((project) => (
+                        <li key={project.id}>
+                          <button
+                            onClick={() => handleProjectSelect(project)}
+                            className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted ${
+                              project.id === projectId ? 'bg-primary/10 text-primary' : ''
+                            }`}
+                            role="option"
+                            aria-selected={project.id === projectId}
+                          >
+                            <FolderKanban className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-medium">{project.name}</div>
+                              <div className="truncate text-xs text-muted-foreground">
+                                {project.projectNumber}
+                              </div>
+                            </div>
+                            {project.id === projectId && (
+                              <span className="ml-auto text-xs text-primary">Current</span>
+                            )}
+                          </button>
+                        </li>
+                      ))
+                    )}
                   </ul>
                 </div>
               </div>

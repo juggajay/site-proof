@@ -1,16 +1,22 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
-import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus } from 'lucide-react'
+import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive } from 'lucide-react'
 
 interface Project {
   id: string
   name: string
   code: string
+  status?: string
   lotPrefix?: string
   lotStartingNumber?: number
   ncrPrefix?: string
   ncrStartingNumber?: number
+  chainageStart?: number | null
+  chainageEnd?: number | null
+  workingHoursStart?: string | null
+  workingHoursEnd?: string | null
+  workingDays?: string[] | null
 }
 
 interface TeamMember {
@@ -53,6 +59,10 @@ export function ProjectSettingsPage() {
     lotStartingNumber: 1,
     ncrPrefix: 'NCR-',
     ncrStartingNumber: 1,
+    chainageStart: 0,
+    chainageEnd: 10000,
+    workingHoursStart: '06:00',
+    workingHoursEnd: '18:00',
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -63,6 +73,11 @@ export function ProjectSettingsPage() {
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
+
+  // Archive dialog state
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+  const [archiveError, setArchiveError] = useState('')
 
   // Team state
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
@@ -101,6 +116,10 @@ export function ProjectSettingsPage() {
             lotStartingNumber: data.project.lotStartingNumber || 1,
             ncrPrefix: data.project.ncrPrefix || 'NCR-',
             ncrStartingNumber: data.project.ncrStartingNumber || 1,
+            chainageStart: data.project.chainageStart ?? 0,
+            chainageEnd: data.project.chainageEnd ?? 10000,
+            workingHoursStart: data.project.workingHoursStart || '06:00',
+            workingHoursEnd: data.project.workingHoursEnd || '18:00',
           })
         }
       } catch (error) {
@@ -200,6 +219,50 @@ export function ProjectSettingsPage() {
     }
   }
 
+  const handleArchiveClick = () => {
+    setShowArchiveDialog(true)
+    setArchiveError('')
+  }
+
+  const handleCancelArchive = () => {
+    setShowArchiveDialog(false)
+    setArchiveError('')
+  }
+
+  const handleConfirmArchive = async () => {
+    setArchiving(true)
+    setArchiveError('')
+
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+
+    try {
+      const newStatus = project?.status === 'archived' ? 'active' : 'archived'
+      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update project status')
+      }
+
+      // Update local project state
+      setProject(prev => prev ? { ...prev, status: newStatus } : null)
+      setShowArchiveDialog(false)
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : 'Failed to update project status')
+    } finally {
+      setArchiving(false)
+    }
+  }
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target
     setFormData((prev) => ({
@@ -211,9 +274,51 @@ export function ProjectSettingsPage() {
   }
 
   const handleSaveSettings = async () => {
-    setSaving(true)
     setSaveError('')
     setSaveSuccess(false)
+
+    // Client-side validation
+    if (!formData.name.trim()) {
+      setSaveError('Project name is required')
+      return
+    }
+
+    if (formData.lotPrefix.length > 50) {
+      setSaveError('Lot prefix must be 50 characters or less')
+      return
+    }
+
+    if (formData.ncrPrefix.length > 50) {
+      setSaveError('NCR prefix must be 50 characters or less')
+      return
+    }
+
+    if (formData.lotStartingNumber < 0) {
+      setSaveError('Lot starting number must be a positive number')
+      return
+    }
+
+    if (formData.ncrStartingNumber < 0) {
+      setSaveError('NCR starting number must be a positive number')
+      return
+    }
+
+    if (formData.chainageStart < 0) {
+      setSaveError('Chainage start must be a non-negative number')
+      return
+    }
+
+    if (formData.chainageEnd < 0) {
+      setSaveError('Chainage end must be a non-negative number')
+      return
+    }
+
+    if (formData.chainageStart >= formData.chainageEnd) {
+      setSaveError('Chainage end must be greater than chainage start')
+      return
+    }
+
+    setSaving(true)
 
     const token = getAuthToken()
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
@@ -232,6 +337,10 @@ export function ProjectSettingsPage() {
           lotStartingNumber: formData.lotStartingNumber,
           ncrPrefix: formData.ncrPrefix,
           ncrStartingNumber: formData.ncrStartingNumber,
+          chainageStart: formData.chainageStart,
+          chainageEnd: formData.chainageEnd,
+          workingHoursStart: formData.workingHoursStart,
+          workingHoursEnd: formData.workingHoursEnd,
         }),
       })
 
@@ -467,6 +576,66 @@ export function ProjectSettingsPage() {
                 </div>
               </div>
             </div>
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">Chainage Configuration</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure the chainage range for this project. Lot chainages will be constrained to this range.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Chainage Start (m)</label>
+                  <input
+                    type="number"
+                    name="chainageStart"
+                    value={formData.chainageStart}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                    placeholder="0"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Chainage End (m)</label>
+                  <input
+                    type="number"
+                    name="chainageEnd"
+                    value={formData.chainageEnd}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                    placeholder="10000"
+                    min="0"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">Working Hours</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure the project's working hours for notifications and due date calculations.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    name="workingHoursStart"
+                    value={formData.workingHoursStart}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">End Time</label>
+                  <input
+                    type="time"
+                    name="workingHoursEnd"
+                    value={formData.workingHoursEnd}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
 
             {/* Save Button */}
             <div className="flex justify-end">
@@ -480,8 +649,38 @@ export function ProjectSettingsPage() {
               </button>
             </div>
 
+            {/* Archive Project */}
+            <div className="rounded-lg border border-amber-500/50 p-4 mt-8">
+              <div className="flex items-center gap-2 mb-2">
+                <Archive className="h-5 w-5 text-amber-600" />
+                <h2 className="text-lg font-semibold text-amber-600">
+                  {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
+                </h2>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                {project?.status === 'archived'
+                  ? 'Restore this project to make it active again. Users will be able to edit and add new data.'
+                  : 'Archive this project to make it read-only. You can restore it later.'}
+              </p>
+              {project?.status === 'archived' && (
+                <div className="mb-4 px-3 py-2 rounded-lg bg-amber-100 text-amber-800 text-sm">
+                  This project is currently archived (read-only)
+                </div>
+              )}
+              <button
+                onClick={handleArchiveClick}
+                className={`rounded-lg px-4 py-2 text-sm ${
+                  project?.status === 'archived'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-amber-600 text-white hover:bg-amber-700'
+                }`}
+              >
+                {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
+              </button>
+            </div>
+
             {/* Danger Zone */}
-            <div className="rounded-lg border border-destructive/50 p-4 mt-8">
+            <div className="rounded-lg border border-destructive/50 p-4 mt-4">
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
                 <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
@@ -794,6 +993,51 @@ export function ProjectSettingsPage() {
                 className="rounded-lg bg-destructive px-4 py-2 text-sm text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
               >
                 {deleting ? 'Deleting...' : 'Delete Project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Archive Confirmation Dialog */}
+      {showArchiveDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
+            <h3 className="text-xl font-bold mb-4 text-amber-600">
+              {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {project?.status === 'archived'
+                ? <>Are you sure you want to restore <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become active and editable again.</>
+                : <>Are you sure you want to archive <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become read-only but can be restored later.</>}
+            </p>
+
+            {archiveError && (
+              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4">
+                {archiveError}
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelArchive}
+                disabled={archiving}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmArchive}
+                disabled={archiving}
+                className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${
+                  project?.status === 'archived'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-amber-600 hover:bg-amber-700'
+                }`}
+              >
+                {archiving
+                  ? (project?.status === 'archived' ? 'Restoring...' : 'Archiving...')
+                  : (project?.status === 'archived' ? 'Restore Project' : 'Archive Project')}
               </button>
             </div>
           </div>

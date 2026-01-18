@@ -130,6 +130,8 @@ projectsRouter.get('/:id', async (req, res) => {
         workingHoursStart: true,
         workingHoursEnd: true,
         workingDays: true,
+        chainageStart: true,
+        chainageEnd: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -165,6 +167,8 @@ projectsRouter.get('/:id', async (req, res) => {
       project: {
         ...project,
         code: project.projectNumber,
+        chainageStart: project.chainageStart ? Number(project.chainageStart) : null,
+        chainageEnd: project.chainageEnd ? Number(project.chainageEnd) : null,
       }
     })
   } catch (error) {
@@ -250,7 +254,44 @@ projectsRouter.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { name, code, lotPrefix, lotStartingNumber, ncrPrefix, ncrStartingNumber, workingHoursStart, workingHoursEnd, workingDays } = req.body
+    const { name, code, lotPrefix, lotStartingNumber, ncrPrefix, ncrStartingNumber, workingHoursStart, workingHoursEnd, workingDays, chainageStart, chainageEnd, status } = req.body
+
+    // Validate required fields
+    if (name !== undefined && !name.trim()) {
+      return res.status(400).json({ message: 'Project name is required' })
+    }
+
+    // Validate lotPrefix format (must not be empty if provided)
+    if (lotPrefix !== undefined && typeof lotPrefix === 'string' && lotPrefix.length > 50) {
+      return res.status(400).json({ message: 'Lot prefix must be 50 characters or less' })
+    }
+
+    // Validate ncrPrefix format
+    if (ncrPrefix !== undefined && typeof ncrPrefix === 'string' && ncrPrefix.length > 50) {
+      return res.status(400).json({ message: 'NCR prefix must be 50 characters or less' })
+    }
+
+    // Validate starting numbers are positive
+    if (lotStartingNumber !== undefined && (typeof lotStartingNumber !== 'number' || lotStartingNumber < 0)) {
+      return res.status(400).json({ message: 'Lot starting number must be a positive number' })
+    }
+
+    if (ncrStartingNumber !== undefined && (typeof ncrStartingNumber !== 'number' || ncrStartingNumber < 0)) {
+      return res.status(400).json({ message: 'NCR starting number must be a positive number' })
+    }
+
+    // Validate chainage values
+    if (chainageStart !== undefined && chainageStart !== null && (typeof chainageStart !== 'number' || chainageStart < 0)) {
+      return res.status(400).json({ message: 'Chainage start must be a non-negative number' })
+    }
+
+    if (chainageEnd !== undefined && chainageEnd !== null && (typeof chainageEnd !== 'number' || chainageEnd < 0)) {
+      return res.status(400).json({ message: 'Chainage end must be a non-negative number' })
+    }
+
+    if (chainageStart !== undefined && chainageEnd !== undefined && chainageStart !== null && chainageEnd !== null && chainageStart >= chainageEnd) {
+      return res.status(400).json({ message: 'Chainage end must be greater than chainage start' })
+    }
 
     // Check access - user must be admin or project admin
     const projectUser = await prisma.projectUser.findFirst({
@@ -290,6 +331,16 @@ projectsRouter.patch('/:id', async (req, res) => {
     if (workingHoursStart !== undefined) updateData.workingHoursStart = workingHoursStart
     if (workingHoursEnd !== undefined) updateData.workingHoursEnd = workingHoursEnd
     if (workingDays !== undefined) updateData.workingDays = workingDays
+    if (chainageStart !== undefined) updateData.chainageStart = chainageStart
+    if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd
+    if (status !== undefined) {
+      // Validate status values
+      const validStatuses = ['active', 'archived', 'completed', 'on_hold']
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: 'Invalid status value' })
+      }
+      updateData.status = status
+    }
 
     // Update the project
     const updatedProject = await prisma.project.update({
@@ -306,6 +357,8 @@ projectsRouter.patch('/:id', async (req, res) => {
         workingHoursStart: true,
         workingHoursEnd: true,
         workingDays: true,
+        chainageStart: true,
+        chainageEnd: true,
         status: true,
         createdAt: true,
         updatedAt: true,
@@ -317,6 +370,8 @@ projectsRouter.patch('/:id', async (req, res) => {
       project: {
         ...updatedProject,
         code: updatedProject.projectNumber,
+        chainageStart: updatedProject.chainageStart ? Number(updatedProject.chainageStart) : null,
+        chainageEnd: updatedProject.chainageEnd ? Number(updatedProject.chainageEnd) : null,
       }
     })
   } catch (error) {
