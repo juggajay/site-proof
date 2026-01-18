@@ -49,6 +49,9 @@ import { PortfolioPage } from '@/pages/portfolio/PortfolioPage'
 import { PrivacyPolicyPage } from '@/pages/legal/PrivacyPolicyPage'
 import { TermsOfServicePage } from '@/pages/legal/TermsOfServicePage'
 
+// Support Pages
+import { SupportPage } from '@/pages/support/SupportPage'
+
 // Admin-only roles
 const ADMIN_ROLES = ['owner', 'admin', 'project_manager']
 
@@ -208,6 +211,9 @@ function App() {
 
           {/* Profile */}
           <Route path="/profile" element={<ProfilePage />} />
+
+          {/* Support */}
+          <Route path="/support" element={<SupportPage />} />
 
           {/* My Company - Subcontractor admins only */}
           <Route
