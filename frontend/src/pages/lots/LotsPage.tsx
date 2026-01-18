@@ -70,6 +70,18 @@ const statusColors: Record<string, string> = {
   on_hold: 'bg-red-100 text-red-800',
 }
 
+// Status options for multi-select filter
+const STATUS_OPTIONS = [
+  { value: 'not_started', label: 'Not Started' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'awaiting_test', label: 'Awaiting Test' },
+  { value: 'hold_point', label: 'Hold Point' },
+  { value: 'ncr_raised', label: 'NCR Raised' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'conformed', label: 'Conformed' },
+  { value: 'claimed', label: 'Claimed' },
+]
+
 export function LotsPage() {
   const { projectId } = useParams()
   const navigate = useNavigate()
@@ -88,6 +100,7 @@ export function LotsPage() {
   // Quick view state
   const [quickViewLot, setQuickViewLot] = useState<{ id: string; position: { x: number; y: number } } | null>(null)
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const statusDropdownRef = useRef<HTMLDivElement>(null)
 
   // Create lot modal state
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -206,7 +219,7 @@ export function LotsPage() {
     const newFilter: SavedFilter = {
       id: crypto.randomUUID(),
       name: newFilterName.trim(),
-      status: statusFilter,
+      status: statusFilters.join(','), // Save comma-separated statuses
       activity: activityFilter,
       search: searchQuery,
       createdAt: new Date().toISOString(),
@@ -298,11 +311,16 @@ export function LotsPage() {
 
   // Get filter, sort, and pagination from URL
   const currentPage = parseInt(searchParams.get('page') || '1', 10)
-  const statusFilter = searchParams.get('status') || ''
+  const statusFilterParam = searchParams.get('status') || ''
+  // Support comma-separated status filter for multi-select
+  const statusFilters = statusFilterParam ? statusFilterParam.split(',').filter(Boolean) : []
   const activityFilter = searchParams.get('activity') || ''
   const searchQuery = searchParams.get('search') || ''
   const sortField = searchParams.get('sort') || 'lotNumber'
   const sortDirection = (searchParams.get('dir') || 'asc') as 'asc' | 'desc'
+
+  // Status filter dropdown state
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
 
   // Check if user can delete lots
   const canDelete = user?.role ? LOT_DELETE_ROLES.includes(user.role) : false
@@ -316,7 +334,8 @@ export function LotsPage() {
   // Filter and sort lots based on current filters and sort order
   const filteredLots = useMemo(() => {
     const filtered = lots.filter((lot) => {
-      if (statusFilter && lot.status !== statusFilter) return false
+      // Multi-select status filter: if any statuses are selected, lot must match one
+      if (statusFilters.length > 0 && !statusFilters.includes(lot.status)) return false
       if (activityFilter && lot.activityType !== activityFilter) return false
       // Case-insensitive search on lot number and description
       if (searchQuery) {
@@ -362,7 +381,7 @@ export function LotsPage() {
       if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1
       return 0
     })
-  }, [lots, statusFilter, activityFilter, searchQuery, sortField, sortDirection])
+  }, [lots, statusFilters, activityFilter, searchQuery, sortField, sortDirection])
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredLots.length / PAGE_SIZE)
@@ -388,8 +407,21 @@ export function LotsPage() {
     setSearchParams(params)
   }
 
-  const handleStatusFilter = (status: string) => {
-    updateFilters({ status })
+  // Multi-select status filter: toggle individual status
+  const handleStatusToggle = (status: string) => {
+    let newFilters: string[]
+    if (statusFilters.includes(status)) {
+      // Remove status
+      newFilters = statusFilters.filter(s => s !== status)
+    } else {
+      // Add status
+      newFilters = [...statusFilters, status]
+    }
+    updateFilters({ status: newFilters.join(',') })
+  }
+
+  const clearStatusFilters = () => {
+    updateFilters({ status: '' })
   }
 
   const handleActivityFilter = (activity: string) => {
@@ -468,6 +500,23 @@ export function LotsPage() {
   useEffect(() => {
     fetchLots()
   }, [projectId, navigate])
+
+  // Close status dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setStatusDropdownOpen(false)
+      }
+    }
+
+    if (statusDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [statusDropdownOpen])
 
   // Fetch subcontractors for the project
   const fetchSubcontractors = async () => {
@@ -768,6 +817,45 @@ export function LotsPage() {
   const handleDeleteClick = (lot: Lot) => {
     setLotToDelete(lot)
     setDeleteModalOpen(true)
+  }
+
+  // Clone lot - creates a copy with suggested adjacent chainage
+  const handleCloneLot = async (lot: Lot) => {
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/lots/${lot.id}/clone`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}), // Backend will auto-generate lot number and adjacent chainage
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to clone lot')
+      }
+
+      const data = await response.json()
+
+      // Add cloned lot to the list
+      setLots(prev => [...prev, data.lot])
+
+      toast({
+        title: 'Lot Cloned',
+        description: `${lot.lotNumber} cloned as ${data.lot.lotNumber}`,
+        variant: 'success',
+      })
+    } catch (err) {
+      toast({
+        title: 'Clone Failed',
+        description: err instanceof Error ? err.message : 'Failed to clone lot',
+        variant: 'error',
+      })
+    }
   }
 
   // Quick view hover handlers
@@ -1232,29 +1320,61 @@ export function LotsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="status-filter" className="text-sm font-medium">
+          <label className="text-sm font-medium">
             Status:
           </label>
-          <div className="flex items-center">
-            <select
-              id="status-filter"
-              value={statusFilter}
-              onChange={(e) => handleStatusFilter(e.target.value)}
-              className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+          <div className="relative" ref={statusDropdownRef}>
+            <button
+              onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+              className="rounded-lg border bg-background px-3 py-1.5 text-sm min-w-[140px] text-left flex items-center justify-between gap-2"
             >
-              <option value="">All Statuses</option>
-              <option value="not_started">Not Started</option>
-              <option value="in_progress">In Progress</option>
-              <option value="awaiting_test">Awaiting Test</option>
-              <option value="hold_point">Hold Point</option>
-              <option value="ncr_raised">NCR Raised</option>
-              <option value="completed">Completed</option>
-              <option value="conformed">Conformed</option>
-              <option value="claimed">Claimed</option>
-            </select>
-            {statusFilter && (
+              <span className="truncate">
+                {statusFilters.length === 0
+                  ? 'All Statuses'
+                  : statusFilters.length === 1
+                    ? STATUS_OPTIONS.find(s => s.value === statusFilters[0])?.label
+                    : `${statusFilters.length} selected`}
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${statusDropdownOpen ? 'rotate-180' : ''}`}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            {statusDropdownOpen && (
+              <div className="absolute z-50 mt-1 w-48 rounded-lg border bg-background shadow-lg">
+                <div className="p-2 max-h-64 overflow-y-auto">
+                  {STATUS_OPTIONS.map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted rounded cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={statusFilters.includes(option.value)}
+                        onChange={() => handleStatusToggle(option.value)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <span className="text-sm">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {statusFilters.length > 0 && (
+                  <div className="border-t p-2">
+                    <button
+                      onClick={() => {
+                        clearStatusFilters()
+                        setStatusDropdownOpen(false)
+                      }}
+                      className="w-full text-sm text-primary hover:underline text-center py-1"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {statusFilters.length > 0 && (
               <button
-                onClick={() => handleStatusFilter('')}
+                onClick={clearStatusFilters}
                 className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
                 title="Clear status filter"
                 aria-label="Clear status filter"
@@ -1300,7 +1420,7 @@ export function LotsPage() {
             )}
           </div>
         </div>
-        {(statusFilter || activityFilter || searchQuery) && (
+        {(statusFilters.length > 0 || activityFilter || searchQuery) && (
           <>
             <button
               onClick={() => {
@@ -1637,6 +1757,15 @@ export function LotsPage() {
                             Edit
                           </button>
                         )}
+                        {canCreate && (
+                          <button
+                            className="text-sm text-blue-600 hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
+                            onClick={() => handleCloneLot(lot)}
+                            title="Clone lot with adjacent chainage"
+                          >
+                            Clone
+                          </button>
+                        )}
                         {canDelete && lot.status !== 'conformed' && lot.status !== 'claimed' && (
                           <button
                             className="text-sm text-red-600 hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
@@ -1718,7 +1847,9 @@ export function LotsPage() {
             <div className="mt-2 text-xs text-muted-foreground">
               <p>Current filter:</p>
               <ul className="mt-1 ml-4 list-disc">
-                {statusFilter && <li>Status: {statusFilter.replace('_', ' ')}</li>}
+                {statusFilters.length > 0 && (
+                  <li>Status: {statusFilters.map(s => s.replace('_', ' ')).join(', ')}</li>
+                )}
                 {activityFilter && <li>Activity: {activityFilter}</li>}
                 {searchQuery && <li>Search: "{searchQuery}"</li>}
               </ul>

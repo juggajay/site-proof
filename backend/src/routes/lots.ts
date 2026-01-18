@@ -414,6 +414,116 @@ lotsRouter.post('/bulk', requireRole(LOT_CREATORS), async (req, res) => {
   }
 })
 
+// POST /api/lots/:id/clone - Clone a lot with suggested adjacent chainage
+lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), async (req, res) => {
+  try {
+    const { id } = req.params
+    const { lotNumber, chainageStart, chainageEnd } = req.body
+
+    // Get the original lot
+    const sourceLot = await prisma.lot.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        projectId: true,
+        lotNumber: true,
+        description: true,
+        activityType: true,
+        lotType: true,
+        chainageStart: true,
+        chainageEnd: true,
+        offset: true,
+        offsetCustom: true,
+        layer: true,
+        areaZone: true,
+        assignedSubcontractorId: true,
+      },
+    })
+
+    if (!sourceLot) {
+      return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Calculate suggested adjacent chainage if not provided
+    let suggestedChainageStart = chainageStart
+    let suggestedChainageEnd = chainageEnd
+
+    if (suggestedChainageStart === undefined && sourceLot.chainageEnd !== null) {
+      // Suggest next section starting from where the original ended
+      suggestedChainageStart = sourceLot.chainageEnd
+      if (sourceLot.chainageStart !== null) {
+        const sectionLength = sourceLot.chainageEnd - sourceLot.chainageStart
+        suggestedChainageEnd = suggestedChainageStart + sectionLength
+      }
+    }
+
+    // If no lotNumber provided, generate a suggestion
+    let newLotNumber = lotNumber
+    if (!newLotNumber) {
+      // Try to increment the lot number (e.g., LOT-001 -> LOT-002)
+      const match = sourceLot.lotNumber.match(/^(.*)(\d+)$/)
+      if (match) {
+        const prefix = match[1]
+        const num = parseInt(match[2], 10)
+        const paddedNum = String(num + 1).padStart(match[2].length, '0')
+        newLotNumber = `${prefix}${paddedNum}`
+      } else {
+        newLotNumber = `${sourceLot.lotNumber}-copy`
+      }
+    }
+
+    // Create the cloned lot
+    const clonedLot = await prisma.lot.create({
+      data: {
+        projectId: sourceLot.projectId,
+        lotNumber: newLotNumber,
+        description: sourceLot.description,
+        activityType: sourceLot.activityType,
+        lotType: sourceLot.lotType,
+        chainageStart: suggestedChainageStart ?? sourceLot.chainageStart,
+        chainageEnd: suggestedChainageEnd ?? sourceLot.chainageEnd,
+        offset: sourceLot.offset,
+        offsetCustom: sourceLot.offsetCustom,
+        layer: sourceLot.layer,
+        areaZone: sourceLot.areaZone,
+        assignedSubcontractorId: sourceLot.assignedSubcontractorId,
+      },
+      select: {
+        id: true,
+        lotNumber: true,
+        description: true,
+        status: true,
+        activityType: true,
+        chainageStart: true,
+        chainageEnd: true,
+        offset: true,
+        layer: true,
+        areaZone: true,
+        assignedSubcontractorId: true,
+        createdAt: true,
+      },
+    })
+
+    res.status(201).json({
+      lot: clonedLot,
+      sourceLotId: sourceLot.id,
+      message: `Lot cloned from ${sourceLot.lotNumber}`,
+    })
+  } catch (error: any) {
+    console.error('Clone lot error:', error)
+
+    if (error?.code === 'P2002') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'A lot with this number already exists in this project',
+        code: 'DUPLICATE_LOT_NUMBER'
+      })
+    }
+
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // Roles that can edit lots
 const LOT_EDITORS = ['owner', 'admin', 'project_manager', 'site_engineer', 'quality_manager', 'foreman']
 
