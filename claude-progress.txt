@@ -2460,3 +2460,83 @@ Date: 2026-01-18
 ================================================================================
 END OF SESSION 28 SUMMARY
 ================================================================================
+
+================================================================================
+Session: 29 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #950: Account verification email - PASSING
+- IMPLEMENTED: Complete email verification system for account registration
+- Backend implementation (backend/src/routes/auth.ts):
+  - POST /api/auth/register - Creates verification token on registration
+  - POST /api/auth/verify-email - Verifies email with token
+  - GET /api/auth/verify-email-status - Checks token validity
+  - POST /api/auth/resend-verification - Resends verification email
+  - Verification emails logged to console in development mode
+
+- Database changes (backend/prisma/schema.prisma):
+  - Added EmailVerificationToken model
+  - Added emailVerified (Boolean) and emailVerifiedAt (DateTime) to User model
+
+- Frontend implementation:
+  - Created VerifyEmailPage.tsx component with:
+    - Loading state while verifying
+    - Success state with green checkmark
+    - Error state with resend form
+    - No-token state with email input for resend
+  - Updated RegisterPage.tsx to show "Check Your Email" after registration
+  - Added /verify-email route to App.tsx
+
+### Testing Performed (All Steps Verified)
+1. ✅ Register new account
+   - Created user test-verify-950@example.com
+   - Account created with emailVerified: false
+2. ✅ Verify verification email sent
+   - Backend logs verification link to console
+   - Frontend shows "Check Your Email" message
+   - Development mode notice displayed
+3. ✅ Can verify account
+   - Retrieved token from database
+   - Navigated to /verify-email?token=...
+   - Email verified successfully
+   - User record updated: emailVerified: true, emailVerifiedAt: timestamp
+
+### Environment Changes
+- Changed frontend port from 5173 to 5174 (port conflict with another app)
+
+## FILES CREATED/MODIFIED THIS SESSION
+- backend/prisma/schema.prisma
+  - Added EmailVerificationToken model
+  - Added emailVerified and emailVerifiedAt fields to User
+- backend/src/routes/auth.ts
+  - Updated register endpoint to create verification token
+  - Added verify-email, verify-email-status, resend-verification endpoints
+- frontend/src/pages/auth/VerifyEmailPage.tsx (NEW)
+- frontend/src/pages/auth/RegisterPage.tsx - Added success message after registration
+- frontend/src/App.tsx - Added /verify-email route
+- frontend/vite.config.ts - Changed port to 5174
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-950-registration-check-email.png - "Check Your Email" page
+- evidence/feature-950-email-verified-success.png - Email verified success page
+
+## GIT COMMITS
+- 5fc94a3: feat: Implement email verification for account registration (#950)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 477 (46.1%)
+- In Progress: 0
+- Pending: 558
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining features
+3. Run regression tests on critical features
+
+================================================================================
+END OF SESSION 29 SUMMARY
+================================================================================
