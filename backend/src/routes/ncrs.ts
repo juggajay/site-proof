@@ -73,7 +73,7 @@ ncrsRouter.get('/', requireAuth, async (req: any, res) => {
       }
     }
 
-    // Subcontractors can only see NCRs linked to lots assigned to their company
+    // Subcontractors can see NCRs linked to lots assigned to their company OR assigned to them as responsible party
     if (userDetails?.roleInCompany === 'subcontractor' || userDetails?.roleInCompany === 'subcontractor_admin') {
       // Find the user's subcontractor company
       const subcontractorUser = await prisma.subcontractorUser.findFirst({
@@ -90,20 +90,26 @@ ncrsRouter.get('/', requireAuth, async (req: any, res) => {
 
         const assignedLotIds = assignedLots.map(l => l.id)
 
-        if (assignedLotIds.length > 0) {
-          // Filter NCRs to only those linked to assigned lots
-          where.ncrLots = {
-            some: {
-              lotId: { in: assignedLotIds },
+        // Feature #212: Allow subcontractors to see NCRs where they are the responsible party
+        // OR NCRs linked to their assigned lots
+        where.OR = [
+          { responsibleUserId: user.userId }, // NCRs assigned to this user
+          ...(assignedLotIds.length > 0 ? [{
+            ncrLots: {
+              some: {
+                lotId: { in: assignedLotIds },
+              },
             },
-          }
-        } else {
-          // No assigned lots, return empty result
-          return res.json({ ncrs: [] })
+          }] : []),
+        ]
+
+        // If no assigned lots and no responsible NCRs possible, the OR handles it
+        if (assignedLotIds.length === 0) {
+          where.OR = [{ responsibleUserId: user.userId }]
         }
       } else {
-        // No subcontractor company found, return empty result
-        return res.json({ ncrs: [] })
+        // No subcontractor company found, but they may still be responsible for NCRs
+        where.responsibleUserId = user.userId
       }
     }
 
@@ -218,7 +224,7 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
     })
     const ncrNumber = `NCR-${String(existingCount + 1).padStart(4, '0')}`
 
-    // Major NCRs require QM approval to close
+    // Major NCRs require QM approval to close and client notification
     const isMajor = severity === 'major'
 
     const ncr = await prisma.nCR.create({
@@ -230,6 +236,7 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
         category,
         severity: severity || 'minor',
         qmApprovalRequired: isMajor,
+        clientNotificationRequired: isMajor, // Feature #213: Major NCRs require client notification
         raisedById: user.userId,
         responsibleUserId,
         dueDate: dueDate ? new Date(dueDate) : undefined,
@@ -260,14 +267,34 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
       })
     }
 
+    // Feature #212: Notify responsible party when assigned to NCR
+    if (responsibleUserId && responsibleUserId !== user.userId) {
+      const raisedByUser = await prisma.user.findUnique({
+        where: { id: user.userId },
+        select: { fullName: true, email: true }
+      })
+      const raisedByName = raisedByUser?.fullName || raisedByUser?.email || 'Someone'
+
+      await prisma.notification.create({
+        data: {
+          userId: responsibleUserId,
+          projectId,
+          type: 'ncr_assigned',
+          title: `NCR Assigned to You`,
+          message: `${raisedByName} assigned ${ncrNumber} to you: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
+          linkUrl: `/projects/${projectId}/ncr`,
+        }
+      })
+    }
+
     // Notify head contractor users when a subcontractor raises an NCR
     // Check if the user is a subcontractor
-    const raisedByUser = await prisma.user.findUnique({
+    const raisedByUserInfo = await prisma.user.findUnique({
       where: { id: user.userId },
       select: { roleInCompany: true, fullName: true, email: true }
     })
 
-    if (raisedByUser && ['subcontractor', 'subcontractor_admin'].includes(raisedByUser.roleInCompany || '')) {
+    if (raisedByUserInfo && ['subcontractor', 'subcontractor_admin'].includes(raisedByUserInfo.roleInCompany || '')) {
       // Get head contractor users (project managers, quality managers, admins) on this project
       const headContractorUsers = await prisma.projectUser.findMany({
         where: {
@@ -280,7 +307,7 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
 
       // Create notifications for head contractor users
       if (headContractorUsers.length > 0) {
-        const raisedByName = raisedByUser.fullName || raisedByUser.email || 'A subcontractor'
+        const raisedByName = raisedByUserInfo.fullName || raisedByUserInfo.email || 'A subcontractor'
         const lotNumbers = ncr.ncrLots.map(nl => nl.lot.lotNumber).join(', ') || 'No lots'
 
         await prisma.notification.createMany({
@@ -543,6 +570,132 @@ ncrsRouter.post('/:id/close', requireAuth, async (req: any, res) => {
     })
   } catch (error) {
     console.error('Close NCR error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// Feature #213: POST /api/ncrs/:id/notify-client - Notify client about major NCR
+ncrsRouter.post('/:id/notify-client', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id } = req.params
+    const { recipientEmail, additionalMessage } = req.body
+
+    const ncr = await prisma.nCR.findUnique({
+      where: { id },
+      include: {
+        project: { select: { name: true, projectNumber: true } },
+        raisedBy: { select: { fullName: true, email: true } },
+        ncrLots: {
+          include: {
+            lot: { select: { lotNumber: true, description: true } },
+          },
+        },
+      },
+    })
+
+    if (!ncr) {
+      return res.status(404).json({ message: 'NCR not found' })
+    }
+
+    // Check if client notification is required (major NCR)
+    if (!ncr.clientNotificationRequired) {
+      return res.status(400).json({ message: 'Client notification not required for this NCR' })
+    }
+
+    // Check if already notified
+    if (ncr.clientNotifiedAt) {
+      return res.status(400).json({
+        message: `Client was already notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString()}`,
+      })
+    }
+
+    // Check access - only PM, QM, or admin can notify client
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: ncr.projectId,
+        userId: user.userId,
+        role: { in: ['quality_manager', 'admin', 'project_manager', 'owner'] },
+      },
+    })
+
+    if (!projectUser) {
+      return res.status(403).json({
+        message: 'Only Project Managers, Quality Managers, or Admins can notify client',
+      })
+    }
+
+    // Get user details for notification
+    const notifiedByUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { fullName: true, email: true },
+    })
+
+    // Generate notification package content
+    const lotNumbers = ncr.ncrLots.map(nl => nl.lot.lotNumber).join(', ') || 'N/A'
+    const notificationPackage = {
+      ncrNumber: ncr.ncrNumber,
+      project: `${ncr.project.name} (${ncr.project.projectNumber})`,
+      severity: ncr.severity,
+      category: ncr.category,
+      affectedLots: lotNumbers,
+      description: ncr.description,
+      specificationReference: ncr.specificationReference || 'N/A',
+      raisedBy: ncr.raisedBy?.fullName || ncr.raisedBy?.email || 'Unknown',
+      raisedAt: ncr.raisedAt,
+      notifiedBy: notifiedByUser?.fullName || notifiedByUser?.email || 'Unknown',
+      notifiedAt: new Date().toISOString(),
+      additionalMessage: additionalMessage || null,
+    }
+
+    // In development mode, log the notification package
+    console.log('\n========================================')
+    console.log('📧 CLIENT NOTIFICATION (Development Mode)')
+    console.log('========================================')
+    console.log('NCR:', ncr.ncrNumber)
+    console.log('Recipient:', recipientEmail || '[No email provided]')
+    console.log('Notification Package:', JSON.stringify(notificationPackage, null, 2))
+    console.log('========================================\n')
+
+    // Update NCR with notification timestamp
+    const updatedNcr = await prisma.nCR.update({
+      where: { id },
+      data: {
+        clientNotifiedAt: new Date(),
+      },
+      include: {
+        project: { select: { name: true } },
+        raisedBy: { select: { fullName: true, email: true } },
+        ncrLots: {
+          include: {
+            lot: { select: { lotNumber: true, description: true } },
+          },
+        },
+      },
+    })
+
+    // Create audit log entry
+    await prisma.auditLog.create({
+      data: {
+        userId: user.userId,
+        action: 'NCR_CLIENT_NOTIFIED',
+        entityType: 'NCR',
+        entityId: ncr.id,
+        details: JSON.stringify({
+          ncrNumber: ncr.ncrNumber,
+          recipientEmail: recipientEmail || 'Not specified',
+          notificationPackage,
+        }),
+      },
+    })
+
+    res.json({
+      ncr: updatedNcr,
+      notificationPackage,
+      message: `Client notification sent for ${ncr.ncrNumber}`,
+    })
+  } catch (error) {
+    console.error('Notify client error:', error)
     res.status(500).json({ message: 'Internal server error' })
   }
 })

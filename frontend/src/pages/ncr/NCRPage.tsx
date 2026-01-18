@@ -23,6 +23,8 @@ interface NCR {
   createdAt: string
   project: { name: string; projectNumber: string }
   ncrLots: Array<{ lot: { lotNumber: string; description: string } }>
+  clientNotificationRequired?: boolean // Feature #213
+  clientNotifiedAt?: string | null // Feature #213
 }
 
 interface UserRole {
@@ -49,6 +51,13 @@ export function NCRPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [copiedNcrId, setCopiedNcrId] = useState<string | null>(null)
+
+  // Feature #213: Client notification state
+  const [showNotifyClientModal, setShowNotifyClientModal] = useState(false)
+  const [notifyingNcr, setNotifyingNcr] = useState<NCR | null>(null)
+  const [notifyClientEmail, setNotifyClientEmail] = useState('')
+  const [notifyClientMessage, setNotifyClientMessage] = useState('')
+  const [notifyingClient, setNotifyingClient] = useState(false)
 
   // Copy NCR link handler
   const handleCopyNcrLink = async (ncrId: string, ncrNumber: string) => {
@@ -395,6 +404,50 @@ export function NCRPage() {
       setError(err instanceof Error ? err.message : 'Failed to submit rectification')
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  // Feature #213: Handle client notification
+  const handleNotifyClient = async () => {
+    if (!notifyingNcr) return
+
+    setNotifyingClient(true)
+    try {
+      const response = await fetch(`${API_URL}/api/ncrs/${notifyingNcr.id}/notify-client`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipientEmail: notifyClientEmail || undefined,
+          additionalMessage: notifyClientMessage || undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to notify client')
+      }
+
+      const data = await response.json()
+      toast({
+        title: 'Client Notified',
+        description: `Client notification sent for ${notifyingNcr.ncrNumber}`,
+      })
+      setShowNotifyClientModal(false)
+      setNotifyingNcr(null)
+      setNotifyClientEmail('')
+      setNotifyClientMessage('')
+      fetchNcrs()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to notify client',
+        variant: 'error',
+      })
+    } finally {
+      setNotifyingClient(false)
     }
   }
 
@@ -750,6 +803,31 @@ export function NCRPage() {
                         </button>
                       )}
 
+                      {/* Feature #213: Notify Client Button for major NCRs */}
+                      {ncr.severity === 'major' &&
+                       ncr.clientNotificationRequired &&
+                       !ncr.clientNotifiedAt &&
+                       (userRole?.role === 'project_manager' || userRole?.role === 'quality_manager' || userRole?.role === 'admin' || userRole?.role === 'owner') && (
+                        <button
+                          onClick={() => {
+                            setNotifyingNcr(ncr)
+                            setShowNotifyClientModal(true)
+                          }}
+                          disabled={actionLoading}
+                          className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                          title="Notify client about this major NCR"
+                        >
+                          Notify Client
+                        </button>
+                      )}
+
+                      {/* Client Notified Badge */}
+                      {ncr.clientNotifiedAt && (
+                        <span className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 rounded" title={`Client notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString()}`}>
+                          ✓ Client Notified
+                        </span>
+                      )}
+
                       {/* Rectify Button */}
                       {(ncr.status === 'investigating' || ncr.status === 'rectification') && (
                         <button
@@ -854,6 +932,99 @@ export function NCRPage() {
           onSubmit={(data) => handleCloseWithConcession(selectedNcr.id, data)}
           loading={actionLoading}
         />
+      )}
+
+      {/* Feature #213: Notify Client Modal */}
+      {showNotifyClientModal && notifyingNcr && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Notify Client - Major NCR</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNotifyClientModal(false)
+                  setNotifyingNcr(null)
+                  setNotifyClientEmail('')
+                  setNotifyClientMessage('')
+                }}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm font-medium text-red-800">Major NCR: {notifyingNcr.ncrNumber}</p>
+              <p className="text-sm text-red-700 mt-1">{notifyingNcr.description.substring(0, 100)}{notifyingNcr.description.length > 100 ? '...' : ''}</p>
+              <p className="text-xs text-red-600 mt-2">
+                Affected Lots: {notifyingNcr.ncrLots.map(nl => nl.lot.lotNumber).join(', ') || 'None'}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Client Email (optional)</label>
+                <input
+                  type="email"
+                  value={notifyClientEmail}
+                  onChange={(e) => setNotifyClientEmail(e.target.value)}
+                  placeholder="Enter client email address"
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+                <p className="text-xs text-gray-500 mt-1">Leave blank to record notification without sending email</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Additional Message (optional)</label>
+                <textarea
+                  value={notifyClientMessage}
+                  onChange={(e) => setNotifyClientMessage(e.target.value)}
+                  placeholder="Add any additional context for the client..."
+                  rows={3}
+                  className="w-full border rounded-lg px-3 py-2"
+                />
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+              <p className="text-sm text-blue-800 font-medium">Notification Package will include:</p>
+              <ul className="text-xs text-blue-700 mt-1 list-disc list-inside">
+                <li>NCR Number and Description</li>
+                <li>Category and Severity</li>
+                <li>Affected Lots</li>
+                <li>Specification Reference</li>
+                <li>Raised By and Date</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNotifyClientModal(false)
+                  setNotifyingNcr(null)
+                  setNotifyClientEmail('')
+                  setNotifyClientMessage('')
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                disabled={notifyingClient}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleNotifyClient}
+                disabled={notifyingClient}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {notifyingClient ? 'Sending...' : 'Send Notification'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )
