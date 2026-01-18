@@ -1134,4 +1134,130 @@ router.get('/:diaryId/addendums', async (req: Request, res: Response) => {
   }
 })
 
+// GET /api/diary/:projectId/weather/:date - Get weather for project location
+// Uses Open-Meteo API (free, no API key required)
+router.get('/:projectId/weather/:date', async (req: Request, res: Response) => {
+  try {
+    const { projectId, date } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied to this project' })
+    }
+
+    // Get project location
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { latitude: true, longitude: true, state: true }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    let latitude = project.latitude ? Number(project.latitude) : null
+    let longitude = project.longitude ? Number(project.longitude) : null
+
+    // If no coordinates, use default coordinates based on Australian state
+    if (!latitude || !longitude) {
+      const stateCoords: Record<string, { lat: number; lon: number }> = {
+        'NSW': { lat: -33.8688, lon: 151.2093 },    // Sydney
+        'VIC': { lat: -37.8136, lon: 144.9631 },    // Melbourne
+        'QLD': { lat: -27.4698, lon: 153.0251 },    // Brisbane
+        'WA': { lat: -31.9505, lon: 115.8605 },     // Perth
+        'SA': { lat: -34.9285, lon: 138.6007 },     // Adelaide
+        'TAS': { lat: -42.8821, lon: 147.3272 },    // Hobart
+        'NT': { lat: -12.4634, lon: 130.8456 },     // Darwin
+        'ACT': { lat: -35.2809, lon: 149.1300 },    // Canberra
+      }
+
+      const state = project.state?.toUpperCase() || 'NSW'
+      const coords = stateCoords[state] || stateCoords['NSW']
+      latitude = coords.lat
+      longitude = coords.lon
+    }
+
+    // Fetch weather from Open-Meteo API
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Australia%2FSydney&start_date=${date}&end_date=${date}`
+
+    const weatherResponse = await fetch(weatherUrl)
+
+    if (!weatherResponse.ok) {
+      console.error('Weather API error:', weatherResponse.status, await weatherResponse.text())
+      return res.status(502).json({ error: 'Failed to fetch weather data' })
+    }
+
+    const weatherData = await weatherResponse.json() as {
+      daily?: {
+        time?: string[]
+        weather_code?: number[]
+        temperature_2m_min?: number[]
+        temperature_2m_max?: number[]
+        precipitation_sum?: number[]
+      }
+    }
+
+    if (!weatherData.daily || !weatherData.daily.time || weatherData.daily.time.length === 0) {
+      return res.status(404).json({ error: 'No weather data available for this date' })
+    }
+
+    // Map WMO weather codes to conditions
+    const weatherCodeMap: Record<number, string> = {
+      0: 'Fine',
+      1: 'Fine',
+      2: 'Partly Cloudy',
+      3: 'Cloudy',
+      45: 'Fog',
+      48: 'Fog',
+      51: 'Rain',
+      53: 'Rain',
+      55: 'Rain',
+      56: 'Rain',
+      57: 'Rain',
+      61: 'Rain',
+      63: 'Rain',
+      65: 'Heavy Rain',
+      66: 'Rain',
+      67: 'Heavy Rain',
+      71: 'Rain',
+      73: 'Rain',
+      75: 'Heavy Rain',
+      77: 'Rain',
+      80: 'Rain',
+      81: 'Rain',
+      82: 'Heavy Rain',
+      85: 'Rain',
+      86: 'Heavy Rain',
+      95: 'Storm',
+      96: 'Storm',
+      99: 'Storm',
+    }
+
+    const weatherCode = weatherData.daily.weather_code?.[0] ?? 0
+    const weatherCondition = weatherCodeMap[weatherCode] || 'Partly Cloudy'
+
+    res.json({
+      date: weatherData.daily.time?.[0],
+      weatherConditions: weatherCondition,
+      temperatureMin: weatherData.daily.temperature_2m_min?.[0],
+      temperatureMax: weatherData.daily.temperature_2m_max?.[0],
+      rainfallMm: weatherData.daily.precipitation_sum?.[0] || 0,
+      source: 'Open-Meteo',
+      location: {
+        latitude,
+        longitude,
+        fromProjectState: !project.latitude || !project.longitude
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching weather:', error)
+    res.status(500).json({ error: 'Failed to fetch weather data' })
+  }
+})
+
 export default router

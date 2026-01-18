@@ -96,6 +96,9 @@ model Project {
   ncrPrefix         String?  @default("NCR-") @map("ncr_prefix")
   ncrStartingNumber Int?     @default(1) @map("ncr_starting_number")
   settings          String?   // Stored as JSON string for SQLite
+  // Location for weather API
+  latitude          Decimal? @map("latitude")
+  longitude         Decimal? @map("longitude")
   // Working hours for notification timing
   workingHoursStart String?  @default("07:00") @map("working_hours_start") // Format: HH:mm
   workingHoursEnd   String?  @default("17:00") @map("working_hours_end")   // Format: HH:mm

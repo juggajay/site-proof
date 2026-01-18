@@ -91,6 +91,8 @@ export function DailyDiaryPage() {
   const [showNewEntry, setShowNewEntry] = useState(false)
   const [activeTab, setActiveTab] = useState<'weather' | 'personnel' | 'plant' | 'activities' | 'delays'>('weather')
   const [error, setError] = useState<string | null>(null)
+  const [fetchingWeather, setFetchingWeather] = useState(false)
+  const [weatherSource, setWeatherSource] = useState<string | null>(null)
 
   // Addendum state
   const [addendums, setAddendums] = useState<Addendum[]>([])
@@ -326,6 +328,37 @@ export function DailyDiaryPage() {
     }
   }
 
+  // Feature #226: Fetch weather from API and auto-populate
+  const fetchWeatherForDate = async (date: string) => {
+    if (!projectId) return
+    setFetchingWeather(true)
+    setWeatherSource(null)
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary/${projectId}/weather/${date}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setWeatherForm(prev => ({
+          ...prev,
+          weatherConditions: data.weatherConditions || prev.weatherConditions,
+          temperatureMin: data.temperatureMin?.toString() || prev.temperatureMin,
+          temperatureMax: data.temperatureMax?.toString() || prev.temperatureMax,
+          rainfallMm: data.rainfallMm?.toString() || prev.rainfallMm,
+        }))
+        setWeatherSource(data.location?.fromProjectState
+          ? `Weather auto-populated from ${data.source} (state capital)`
+          : `Weather auto-populated from ${data.source}`)
+      }
+    } catch (err) {
+      console.error('Error fetching weather:', err)
+      // Silently fail - weather is optional
+    } finally {
+      setFetchingWeather(false)
+    }
+  }
+
   const fetchDiaryForDate = async (date: string) => {
     setLoading(true)
     setError(null)
@@ -356,7 +389,10 @@ export function DailyDiaryPage() {
           weatherNotes: '',
           generalNotes: '',
         })
+        setWeatherSource(null)
         setShowNewEntry(false)
+        // Feature #226: Auto-fetch weather when no diary exists for the date
+        fetchWeatherForDate(date)
       }
     } catch (err) {
       console.error('Error fetching diary:', err)
@@ -988,7 +1024,20 @@ export function DailyDiaryPage() {
           {/* Weather Tab */}
           {activeTab === 'weather' && (
             <div className="rounded-lg border bg-card p-6">
-              <h3 className="mb-4 text-lg font-semibold">Weather & General Notes</h3>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Weather & General Notes</h3>
+                {fetchingWeather && (
+                  <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    Fetching weather...
+                  </span>
+                )}
+                {weatherSource && !fetchingWeather && (
+                  <span className="text-sm text-green-600">
+                    ✓ {weatherSource}
+                  </span>
+                )}
+              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium">Weather Conditions</label>
@@ -1063,13 +1112,24 @@ export function DailyDiaryPage() {
                 </div>
               </div>
               {diary?.status !== 'submitted' && (
-                <div className="mt-4">
+                <div className="mt-4 flex items-center gap-3">
                   <button
                     onClick={createOrUpdateDiary}
                     disabled={saving}
                     className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                   >
                     {saving ? 'Saving...' : diary ? 'Update Weather Info' : 'Create Diary Entry'}
+                  </button>
+                  <button
+                    onClick={() => fetchWeatherForDate(selectedDate)}
+                    disabled={fetchingWeather}
+                    className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                    title="Refresh weather from API"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    {fetchingWeather ? 'Fetching...' : 'Refresh Weather'}
                   </button>
                 </div>
               )}
