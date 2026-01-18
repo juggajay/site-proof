@@ -1,10 +1,12 @@
 import { useTheme } from '@/lib/theme'
 import { useDateFormat, DateFormat } from '@/lib/dateFormat'
-import { Sun, Moon, Monitor, Check, Calendar } from 'lucide-react'
+import { useTimezone, TIMEZONES } from '@/lib/timezone'
+import { Sun, Moon, Monitor, Check, Calendar, Clock, Globe } from 'lucide-react'
 
 export function SettingsPage() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const { dateFormat, setDateFormat, formatDate } = useDateFormat()
+  const { timezone, setTimezone, formatTime, formatDateTime } = useTimezone()
 
   const themeOptions = [
     { value: 'light' as const, label: 'Light', icon: Sun, description: 'Always use light mode' },
@@ -18,8 +20,8 @@ export function SettingsPage() {
     { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD', example: '2024-12-31' },
   ]
 
-  // Sample date for preview
-  const sampleDate = new Date(2024, 11, 31) // Dec 31, 2024
+  // Get current timezone label
+  const currentTimezoneInfo = TIMEZONES.find(tz => tz.value === timezone)
 
   return (
     <div className="space-y-6">
@@ -85,14 +87,15 @@ export function SettingsPage() {
       </div>
 
       {/* Regional Settings Section */}
-      <div className="rounded-lg border bg-card p-6 space-y-4">
+      <div className="rounded-lg border bg-card p-6 space-y-6">
         <div>
           <h2 className="text-xl font-semibold">Regional Settings</h2>
           <p className="text-sm text-muted-foreground">
-            Configure date and time display preferences.
+            Configure date, time, and timezone preferences.
           </p>
         </div>
 
+        {/* Date Format */}
         <div>
           <label className="block text-sm font-medium mb-3">Date Format</label>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -132,6 +135,30 @@ export function SettingsPage() {
           </div>
           <p className="text-xs text-muted-foreground mt-3">
             Preview: Today's date would be displayed as <span className="font-mono font-medium">{formatDate(new Date())}</span>
+          </p>
+        </div>
+
+        {/* Timezone */}
+        <div>
+          <label className="block text-sm font-medium mb-3">
+            <div className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              Timezone
+            </div>
+          </label>
+          <select
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="w-full max-w-md rounded-md border bg-background px-3 py-2"
+          >
+            {TIMEZONES.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label} (UTC{tz.offset})
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground mt-3">
+            Current time in selected timezone: <span className="font-mono font-medium">{formatTime(new Date())}</span>
           </p>
         </div>
       </div>
