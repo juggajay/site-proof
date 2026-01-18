@@ -68,6 +68,7 @@ export function HoldPointsPage() {
   const [chasingHpId, setChasingHpId] = useState<string | null>(null)
   const [showRecordReleaseModal, setShowRecordReleaseModal] = useState(false)
   const [recordingRelease, setRecordingRelease] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'notified' | 'released'>('all')
 
   // Generate Evidence Package PDF handler
   const handleGenerateEvidencePackage = async (hp: HoldPoint) => {
@@ -397,6 +398,11 @@ export function HoldPointsPage() {
     return labels[status] || status
   }
 
+  // Filter hold points by status (Feature #189)
+  const filteredHoldPoints = statusFilter === 'all'
+    ? holdPoints
+    : holdPoints.filter(hp => hp.status === statusFilter)
+
   // Export hold points to CSV
   const handleExportCSV = () => {
     const headers = ['Lot', 'Description', 'Point Type', 'Status', 'Scheduled Date', 'Released At', 'Released By', 'Release Notes']
@@ -431,12 +437,25 @@ export function HoldPointsPage() {
           </p>
         </div>
         {holdPoints.length > 0 && (
-          <button
-            onClick={handleExportCSV}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-          >
-            Export CSV
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Status Filter (Feature #189) */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'notified' | 'released')}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="notified">Awaiting Release</option>
+              <option value="released">Released</option>
+            </select>
+            <button
+              onClick={handleExportCSV}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+            >
+              Export CSV
+            </button>
+          </div>
         )}
       </div>
 
@@ -453,6 +472,21 @@ export function HoldPointsPage() {
             Create an ITP template with hold point items and assign it to a lot to see hold points here.
           </p>
         </div>
+      ) : filteredHoldPoints.length === 0 ? (
+        <div className="rounded-lg border p-8 text-center">
+          <div className="text-4xl mb-4">🔍</div>
+          <h3 className="text-lg font-semibold mb-2">No Hold Points Match Filter</h3>
+          <p className="text-muted-foreground mb-4">
+            No hold points with status "{getStatusLabel(statusFilter)}" found.
+            Try selecting a different status filter.
+          </p>
+          <button
+            onClick={() => setStatusFilter('all')}
+            className="text-primary hover:underline"
+          >
+            Show all hold points
+          </button>
+        </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
           <table className="w-full">
@@ -467,7 +501,7 @@ export function HoldPointsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {holdPoints.map((hp) => (
+              {filteredHoldPoints.map((hp) => (
                 <tr key={hp.id} className="hover:bg-muted/25">
                   <td className="px-4 py-3 font-medium">{hp.lotNumber}</td>
                   <td className="px-4 py-3">
