@@ -7,6 +7,7 @@ import { getAuthToken, useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
 import { ImportLotsModal } from '@/components/lots/ImportLotsModal'
+import { ExportLotsModal } from '@/components/lots/ExportLotsModal'
 import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2 } from 'lucide-react'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
@@ -119,6 +120,9 @@ export function LotsPage() {
 
   // Import modal state
   const [importModalOpen, setImportModalOpen] = useState(false)
+
+  // Export modal state
+  const [exportModalOpen, setExportModalOpen] = useState(false)
 
   // Bulk delete state
   const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set())
@@ -1003,7 +1007,7 @@ export function LotsPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={handleExportCSV}
+            onClick={() => setExportModalOpen(true)}
             className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
           >
             Export CSV
@@ -1941,6 +1945,17 @@ export function LotsPage() {
             setImportModalOpen(false)
             fetchLots()
           }}
+        />
+      )}
+
+      {/* Export Lots Modal */}
+      {exportModalOpen && projectId && (
+        <ExportLotsModal
+          projectId={projectId}
+          lots={filteredLots}
+          canViewBudgets={canViewBudgets}
+          isSubcontractor={isSubcontractor}
+          onClose={() => setExportModalOpen(false)}
         />
       )}
     </div>
