@@ -1,4 +1,4 @@
-// Feature #585 trigger
+// Feature #171 N/A trigger
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
@@ -25,6 +25,7 @@ import { supportRouter } from './routes/support.js'
 import { auditLogRouter } from './routes/auditLog.js'
 import { commentsRouter } from './routes/comments.js'
 import { notificationsRouter } from './routes/notifications.js'
+import documentsRouter from './routes/documents.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -40,6 +41,7 @@ app.use(cors({
     'http://localhost:5177',
     'http://localhost:5178',
     'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
     'http://127.0.0.1:5177',
     process.env.FRONTEND_URL || ''
   ].filter(Boolean),
@@ -76,6 +78,7 @@ app.use('/api/support', supportRouter)
 app.use('/api/audit-logs', auditLogRouter)
 app.use('/api/comments', commentsRouter)
 app.use('/api/notifications', notificationsRouter)
+app.use('/api/documents', documentsRouter)
 
 // tRPC
 app.use(
