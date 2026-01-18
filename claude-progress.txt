@@ -2861,11 +2861,21 @@ Date: 2026-01-18
   4. Step 4: Verify confirmation - Success message displayed, backend logged request
 - Backend confirmed receiving: category: "bug", subject, message, userEmail
 
+### Feature #998: Feature request submission - PASSING
+- VERIFIED: Feature request submission using existing support form
+- The Support page includes "Feature Request" category option
+- Testing performed:
+  1. Step 1: Have feature idea - User navigates to support with idea
+  2. Step 2: Find feedback option - Selected "Feature Request" from Category dropdown
+  3. Step 3: Submit request - Filled subject and message, submitted form
+  4. Step 4: Verify received - Backend logged request, success message displayed
+- Backend confirmed receiving: category: "feature", subject, message, userEmail
+
 ## FEATURE STATISTICS (Updated)
 - Total Features: 1035
-- Passing: 524 (50.6%)
+- Passing: 525 (50.7%)
 - In Progress: 0
-- Pending: 511
+- Pending: 510
 
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
