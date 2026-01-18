@@ -1174,7 +1174,7 @@ function RecordReleaseModal({
     new Date().toTimeString().slice(0, 5)
   )
   const [releaseNotes, setReleaseNotes] = useState('')
-  const [releaseMethod, setReleaseMethod] = useState<'digital' | 'email'>('digital')
+  const [releaseMethod, setReleaseMethod] = useState<'digital' | 'email' | 'paper'>('digital')
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1196,7 +1196,7 @@ function RecordReleaseModal({
     // Note: File upload would be handled separately in a production system
     // For now, we'll include the filename in the notes if a file was selected
     let notes = releaseNotes
-    if (releaseMethod === 'email' && evidenceFile) {
+    if ((releaseMethod === 'email' || releaseMethod === 'paper') && evidenceFile) {
       notes = `${releaseNotes}\n[Evidence attached: ${evidenceFile.name}]`.trim()
     }
     onSubmit(releasedByName, releasedByOrg, releaseDate, releaseTime, notes, releaseMethod)
@@ -1249,6 +1249,17 @@ function RecordReleaseModal({
                   className="w-4 h-4 text-primary"
                 />
                 <span className="text-sm">Email Confirmation</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="releaseMethod"
+                  value="paper"
+                  checked={releaseMethod === 'paper'}
+                  onChange={() => setReleaseMethod('paper')}
+                  className="w-4 h-4 text-primary"
+                />
+                <span className="text-sm">Paper Form</span>
               </label>
             </div>
           </div>
@@ -1312,7 +1323,7 @@ function RecordReleaseModal({
             />
           </div>
 
-          {/* Signature or Email Evidence based on method */}
+          {/* Signature or Evidence based on method */}
           {releaseMethod === 'digital' ? (
             <div className="p-4 bg-muted/50 border border-dashed rounded-lg">
               <div className="text-sm text-muted-foreground text-center">
@@ -1321,7 +1332,7 @@ function RecordReleaseModal({
                 <p className="text-xs">(Coming soon)</p>
               </div>
             </div>
-          ) : (
+          ) : releaseMethod === 'email' ? (
             <div className="space-y-2">
               <label className="block text-sm font-medium">Email Evidence</label>
               <div className="p-4 border border-dashed rounded-lg bg-blue-50/50">
@@ -1334,6 +1345,28 @@ function RecordReleaseModal({
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   Upload email or screenshot as evidence (PDF, EML, MSG, PNG, JPG)
+                </p>
+                {evidenceFile && (
+                  <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700 flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    <span>Selected: {evidenceFile.name}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Paper Form Evidence</label>
+              <div className="p-4 border border-dashed rounded-lg bg-amber-50/50">
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={handleFileChange}
+                  className="w-full text-sm"
+                  id="paper-evidence-upload"
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Upload photo or scan of signed release form (PDF, PNG, JPG)
                 </p>
                 {evidenceFile && (
                   <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700 flex items-center gap-2">
