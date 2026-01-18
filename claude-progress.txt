@@ -3049,3 +3049,151 @@ Date: 2026-01-18
 ================================================================================
 END OF SESSION 32 SUMMARY (continued)
 ================================================================================
+
+================================================================================
+Session: 33 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #1009: Company logo upload - PASSING (already implemented)
+- Verified existing implementation in CompanySettingsPage.tsx
+- Tested logo upload flow with PNG file
+- Logo preview shown after upload
+- Settings saved successfully, logo persisted after refresh
+
+### Feature #1010: Company address update - PASSING (already implemented)
+- Tested address update in Company Settings
+- Changed address from Sydney to Melbourne
+- Verified persistence after page refresh
+
+### Feature #1011: Lot batch import validation report - PASSING
+- IMPLEMENTED: Complete CSV import with validation
+- Created ImportLotsModal.tsx component with:
+  1. File upload interface with CSV parsing
+  2. Client-side validation for:
+     - Required fields (lot_number minimum 3 chars)
+     - Duplicate lot numbers within file
+     - Chainage validation (end > start)
+  3. Validation report UI with:
+     - Total rows, error count, warning count
+     - Errors section (blocking) - red highlighted by row
+     - Warnings section (non-blocking) - yellow highlighted by row
+  4. Import button disabled when errors exist
+
+### Feature #1012: Lot import rollback on failure - PASSING
+- IMPLEMENTED: Strict mode for atomic imports
+- Added checkbox "Strict Mode (All or Nothing)"
+- When strict mode enabled:
+  - Uses POST /api/lots/bulk endpoint with transaction
+  - If any lot fails (e.g., duplicate in database), ALL lots rolled back
+  - Error message: "Import failed - no lots were created (strict mode rollback)"
+- Verified rollback behavior when importing file with duplicate lot number
+
+### Feature #1013: Export with column selection - PASSING
+- IMPLEMENTED: ExportLotsModal.tsx component
+- Column selection UI with checkboxes
+- Select All / Select None quick actions
+- Lot Number is required column (cannot deselect)
+- Real-time summary showing "Exporting X lots with Y of Z columns"
+- Verified exported CSV contains only selected columns
+
+## FILES CREATED
+- frontend/src/components/lots/ImportLotsModal.tsx (new)
+- frontend/src/components/lots/ExportLotsModal.tsx (new)
+- test-import-lots-with-issues.csv (test file)
+- test-import-valid-lots.csv (test file)
+- test-import-duplicate-db.csv (test file)
+
+## FILES MODIFIED
+- frontend/src/pages/lots/LotsPage.tsx - Added import/export modal integrations
+
+## SCREENSHOTS CAPTURED
+- validation-report-with-errors-and-warnings.png - CSV import validation report
+- strict-mode-checkbox-visible.png - Strict mode option in import modal
+- export-column-selection-modal.png - Export modal with column checkboxes
+- export-3-columns-selected.png - Export with 3 columns selected
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 538 (52.0%)
+- In Progress: 0
+- Pending: 497
+
+## MILESTONE
+Crossed 52% completion (538/1035 features passing)
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing import/export features
+3. Run regression tests on lot management features
+
+================================================================================
+END OF SESSION 33 SUMMARY
+================================================================================
+
+================================================================================
+Session: 34 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #145: Lot register filter by chainage range - PASSING
+- IMPLEMENTED: Chainage range filter UI in Lot Register page
+- Implementation details:
+  1. Added Min/Max chainage input fields to filter bar after Activity filter
+  2. Inputs are number spinbuttons with placeholder text (Min/Max)
+  3. Values update URL params (chMin/chMax) on change
+  4. Filter logic (already existed) checks if lot's chainage range overlaps with filter range
+  5. Clear button (X) appears when chainage filter is active
+  6. "Clear All Filters" button now includes chainage filter clearing
+- Filter logic (lines 352-370):
+  - If lot has no chainage, it's excluded when chainage filter is active
+  - Checks for overlap: lot range must intersect with filter range
+  - Handles single-point chainages (start == end)
+- Created test data script with 8 lots at various chainages:
+  - CHAIN-LOT-001: 100-150
+  - CHAIN-LOT-002: 150-200
+  - CHAIN-LOT-003: 200-250
+  - CHAIN-LOT-004: 300-350
+  - CHAIN-LOT-005: 400-500
+  - CHAIN-LOT-006: 50-80
+  - CHAIN-LOT-007: 175 (point)
+  - CHAIN-LOT-008: No chainage
+
+### Environment Setup
+- Restarted frontend and backend servers
+- Fixed frontend .env to point to correct backend port (4000)
+- Reset admin@test.com password for testing
+
+## FILES MODIFIED
+- frontend/src/pages/lots/LotsPage.tsx - Added chainage range filter UI (61 lines added)
+- frontend/.env - Updated VITE_API_URL port
+
+## FILES CREATED
+- backend/scripts/setup-chainage-filter-test.js - Test data setup script
+- backend/scripts/list-projects.js - Utility script
+- backend/scripts/check-password-hash.js - Debug utility
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-145-chainage-filter-ui.png - Lot Register with chainage filter visible
+
+## GIT COMMITS
+- 3a4d39d: feat: Add chainage range filter UI to Lot Register (Feature #145)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 579 (55.9%)
+- In Progress: 0
+- Pending: 456
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing lot management features
+3. Consider fixing auth token persistence issue (navigation resets session)
+
+================================================================================
+END OF SESSION 34 SUMMARY
+================================================================================
