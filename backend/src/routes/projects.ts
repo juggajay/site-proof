@@ -183,6 +183,14 @@ projectsRouter.get('/:id', async (req, res) => {
   }
 })
 
+// Subscription tier project limits
+const TIER_PROJECT_LIMITS: Record<string, number> = {
+  basic: 3,
+  professional: 10,
+  enterprise: 50,
+  unlimited: Infinity,
+}
+
 // POST /api/projects - Create a new project
 projectsRouter.post('/', async (req, res) => {
   try {
@@ -194,6 +202,34 @@ projectsRouter.post('/', async (req, res) => {
         error: 'Bad Request',
         message: 'Name is required'
       })
+    }
+
+    // Check project limit if user has a company
+    if (user.companyId) {
+      const company = await prisma.company.findUnique({
+        where: { id: user.companyId },
+        select: { subscriptionTier: true }
+      })
+
+      if (company) {
+        const tier = company.subscriptionTier || 'basic'
+        const limit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic
+
+        // Count existing projects for this company
+        const projectCount = await prisma.project.count({
+          where: { companyId: user.companyId }
+        })
+
+        if (projectCount >= limit) {
+          return res.status(403).json({
+            error: 'Project Limit Reached',
+            message: `Your ${tier} subscription allows up to ${limit} projects. Please upgrade to create more projects.`,
+            currentCount: projectCount,
+            limit: limit,
+            tier: tier
+          })
+        }
+      }
     }
 
     // Create company for user if they don't have one
