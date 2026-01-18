@@ -367,6 +367,136 @@ ncrsRouter.post('/:id/respond', requireAuth, async (req: any, res) => {
   }
 })
 
+// Feature #215: POST /api/ncrs/:id/qm-review - QM reviews the NCR response
+ncrsRouter.post('/:id/qm-review', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id } = req.params
+    const { action, comments } = req.body // action: 'accept' or 'request_revision'
+
+    if (!action || !['accept', 'request_revision'].includes(action)) {
+      return res.status(400).json({ message: 'Action must be "accept" or "request_revision"' })
+    }
+
+    const ncr = await prisma.nCR.findUnique({
+      where: { id },
+      include: {
+        project: true,
+        responsibleUser: { select: { id: true, fullName: true, email: true } },
+      },
+    })
+
+    if (!ncr) {
+      return res.status(404).json({ message: 'NCR not found' })
+    }
+
+    // Must be in 'investigating' status (after response submitted)
+    if (ncr.status !== 'investigating') {
+      return res.status(400).json({ message: 'NCR must be in investigating status to review' })
+    }
+
+    // Check if user has QM role on this project
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: ncr.projectId,
+        userId: user.userId,
+        role: { in: ['quality_manager', 'admin', 'project_manager'] },
+      },
+    })
+
+    if (!projectUser) {
+      return res.status(403).json({
+        message: 'Only Quality Managers, Project Managers, or Admins can review NCR responses',
+      })
+    }
+
+    // Get reviewer info for notifications
+    const reviewer = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { fullName: true, email: true },
+    })
+    const reviewerName = reviewer?.fullName || reviewer?.email || 'QM'
+
+    if (action === 'accept') {
+      // Accept response - proceed to rectification status
+      const updatedNcr = await prisma.nCR.update({
+        where: { id },
+        data: {
+          status: 'rectification',
+          qmReviewedAt: new Date(),
+          qmReviewedById: user.userId,
+          qmReviewComments: comments || null,
+          revisionRequested: false,
+        },
+        include: {
+          project: { select: { name: true } },
+          raisedBy: { select: { fullName: true, email: true } },
+          responsibleUser: { select: { fullName: true, email: true } },
+        },
+      })
+
+      // Notify responsible party that response was accepted
+      if (ncr.responsibleUserId) {
+        await prisma.notification.create({
+          data: {
+            userId: ncr.responsibleUserId,
+            projectId: ncr.projectId,
+            type: 'ncr_response_accepted',
+            title: `NCR Response Accepted`,
+            message: `${reviewerName} has accepted your response for ${ncr.ncrNumber}. Please proceed with rectification.`,
+            linkUrl: `/projects/${ncr.projectId}/ncr`,
+          },
+        })
+      }
+
+      res.json({ ncr: updatedNcr, message: 'Response accepted, NCR proceeds to rectification' })
+    } else {
+      // Request revision - send back to responsible party
+      const updatedNcr = await prisma.nCR.update({
+        where: { id },
+        data: {
+          status: 'open', // Reset to open for revision
+          qmReviewedAt: new Date(),
+          qmReviewedById: user.userId,
+          qmReviewComments: comments || 'Revision requested',
+          revisionRequested: true,
+          revisionRequestedAt: new Date(),
+          revisionCount: { increment: 1 },
+          // Clear previous response fields for re-entry
+          rootCauseCategory: null,
+          rootCauseDescription: null,
+          proposedCorrectiveAction: null,
+          responseSubmittedAt: null,
+        },
+        include: {
+          project: { select: { name: true } },
+          raisedBy: { select: { fullName: true, email: true } },
+          responsibleUser: { select: { fullName: true, email: true } },
+        },
+      })
+
+      // Notify responsible party about revision request
+      if (ncr.responsibleUserId) {
+        await prisma.notification.create({
+          data: {
+            userId: ncr.responsibleUserId,
+            projectId: ncr.projectId,
+            type: 'ncr_revision_requested',
+            title: `NCR Revision Requested`,
+            message: `${reviewerName} has requested a revision for ${ncr.ncrNumber}. Feedback: ${comments || 'Please review and resubmit.'}`,
+            linkUrl: `/projects/${ncr.projectId}/ncr`,
+          },
+        })
+      }
+
+      res.json({ ncr: updatedNcr, message: 'Revision requested, feedback sent to responsible party' })
+    }
+  } catch (error) {
+    console.error('QM review NCR error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
 // POST /api/ncrs/:id/rectify - Submit rectification evidence
 ncrsRouter.post('/:id/rectify', requireAuth, async (req: any, res) => {
   try {
