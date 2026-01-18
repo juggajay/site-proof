@@ -59,6 +59,18 @@ export function DrawingsPage() {
   })
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Revision modal state
+  const [showRevisionModal, setShowRevisionModal] = useState(false)
+  const [revisionDrawing, setRevisionDrawing] = useState<Drawing | null>(null)
+  const [revisionForm, setRevisionForm] = useState({
+    revision: '',
+    title: '',
+    issueDate: '',
+    status: 'for_construction',
+  })
+  const revisionFileInputRef = useRef<HTMLInputElement>(null)
+  const [revisionFile, setRevisionFile] = useState<File | null>(null)
+
   // Filters
   const [filterStatus, setFilterStatus] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -170,6 +182,61 @@ export function DrawingsPage() {
     } catch (err) {
       console.error('Error deleting drawing:', err)
       alert('Failed to delete drawing')
+    }
+  }
+
+  const openRevisionModal = (drawing: Drawing) => {
+    setRevisionDrawing(drawing)
+    setRevisionForm({
+      revision: '',
+      title: drawing.title || '',
+      issueDate: '',
+      status: 'for_construction',
+    })
+    setRevisionFile(null)
+    setShowRevisionModal(true)
+  }
+
+  const handleRevisionUpload = async () => {
+    if (!revisionFile || !revisionForm.revision || !revisionDrawing) {
+      alert('Please select a file and enter a new revision')
+      return
+    }
+
+    setUploading(true)
+
+    try {
+      const token = getAuthToken()
+      const formData = new FormData()
+      formData.append('file', revisionFile)
+      if (revisionForm.title) formData.append('title', revisionForm.title)
+      formData.append('revision', revisionForm.revision)
+      if (revisionForm.issueDate) formData.append('issueDate', revisionForm.issueDate)
+      formData.append('status', revisionForm.status)
+
+      const res = await fetch(`${API_URL}/api/drawings/${revisionDrawing.id}/supersede`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+
+      if (res.ok) {
+        setShowRevisionModal(false)
+        setRevisionFile(null)
+        setRevisionDrawing(null)
+        if (revisionFileInputRef.current) revisionFileInputRef.current.value = ''
+        fetchDrawings() // Refresh to show new revision and mark old as superseded
+      } else {
+        const error = await res.json()
+        alert(error.error || 'Failed to upload new revision')
+      }
+    } catch (err) {
+      console.error('Error uploading revision:', err)
+      alert('Failed to upload revision')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -377,6 +444,17 @@ export function DrawingsPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                           </a>
+                          {!drawing.supersededBy && (
+                            <button
+                              onClick={() => openRevisionModal(drawing)}
+                              className="rounded-md p-2 hover:bg-blue-100 text-blue-600"
+                              title="Upload New Revision"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDelete(drawing.id)}
                             className="rounded-md p-2 hover:bg-red-100 text-red-600"
@@ -502,6 +580,112 @@ export function DrawingsPage() {
                 className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {uploading ? 'Uploading...' : 'Upload'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revision Modal */}
+      {showRevisionModal && revisionDrawing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold mb-2">Upload New Revision</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Creating new revision for: <strong>{revisionDrawing.drawingNumber}</strong>
+              {revisionDrawing.revision && ` (Current: Rev ${revisionDrawing.revision})`}
+            </p>
+
+            <div className="space-y-4">
+              {/* File Input */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Select File *</label>
+                <input
+                  ref={revisionFileInputRef}
+                  type="file"
+                  onChange={(e) => setRevisionFile(e.target.files?.[0] || null)}
+                  accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.tiff,.tif"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+                {revisionFile && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Selected: {revisionFile.name} ({formatFileSize(revisionFile.size)})
+                  </p>
+                )}
+              </div>
+
+              {/* New Revision */}
+              <div>
+                <label className="block text-sm font-medium mb-2">New Revision *</label>
+                <input
+                  type="text"
+                  value={revisionForm.revision}
+                  onChange={(e) => setRevisionForm(prev => ({ ...prev, revision: e.target.value }))}
+                  placeholder="e.g., B, C, 02"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Title</label>
+                <input
+                  type="text"
+                  value={revisionForm.title}
+                  onChange={(e) => setRevisionForm(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              {/* Issue Date */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Issue Date</label>
+                <input
+                  type="date"
+                  value={revisionForm.issueDate}
+                  onChange={(e) => setRevisionForm(prev => ({ ...prev, issueDate: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Status</label>
+                <select
+                  value={revisionForm.status}
+                  onChange={(e) => setRevisionForm(prev => ({ ...prev, status: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {DRAWING_STATUSES.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                <strong>Note:</strong> The previous revision ({revisionDrawing.revision || 'original'}) will be marked as superseded.
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowRevisionModal(false)
+                  setRevisionFile(null)
+                  setRevisionDrawing(null)
+                }}
+                disabled={uploading}
+                className="rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRevisionUpload}
+                disabled={!revisionFile || !revisionForm.revision || uploading}
+                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {uploading ? 'Uploading...' : 'Upload Revision'}
               </button>
             </div>
           </div>
