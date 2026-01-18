@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 
@@ -93,6 +93,13 @@ export function DailyDiaryPage() {
   const [error, setError] = useState<string | null>(null)
   const [fetchingWeather, setFetchingWeather] = useState(false)
   const [weatherSource, setWeatherSource] = useState<string | null>(null)
+
+  // Feature #234: Auto-save state
+  const [autoSaving, setAutoSaving] = useState(false)
+  const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const previousWeatherFormRef = useRef<string>('')
 
   // Addendum state
   const [addendums, setAddendums] = useState<Addendum[]>([])
@@ -298,6 +305,111 @@ export function DailyDiaryPage() {
     }
   }, [diary?.id, diary?.status])
 
+  // Feature #234: Auto-save functionality
+  const performAutoSave = useCallback(async () => {
+    if (!diary || diary.status === 'submitted' || saving || autoSaving) return
+
+    const currentFormJson = JSON.stringify(weatherForm)
+    if (currentFormJson === previousWeatherFormRef.current) {
+      // No changes to save
+      setHasUnsavedChanges(false)
+      return
+    }
+
+    setAutoSaving(true)
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          projectId,
+          date: selectedDate,
+          weatherConditions: weatherForm.weatherConditions || undefined,
+          temperatureMin: weatherForm.temperatureMin ? parseFloat(weatherForm.temperatureMin) : undefined,
+          temperatureMax: weatherForm.temperatureMax ? parseFloat(weatherForm.temperatureMax) : undefined,
+          rainfallMm: weatherForm.rainfallMm ? parseFloat(weatherForm.rainfallMm) : undefined,
+          weatherNotes: weatherForm.weatherNotes || undefined,
+          generalNotes: weatherForm.generalNotes || undefined,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setDiary(data)
+        setLastAutoSaved(new Date())
+        setHasUnsavedChanges(false)
+        previousWeatherFormRef.current = currentFormJson
+      }
+    } catch (err) {
+      console.error('Auto-save failed:', err)
+    } finally {
+      setAutoSaving(false)
+    }
+  }, [diary, saving, autoSaving, weatherForm, projectId, selectedDate])
+
+  // Track weather form changes for auto-save
+  useEffect(() => {
+    if (diary && diary.status !== 'submitted') {
+      const currentFormJson = JSON.stringify(weatherForm)
+      if (currentFormJson !== previousWeatherFormRef.current) {
+        setHasUnsavedChanges(true)
+      }
+    }
+  }, [weatherForm, diary])
+
+  // Auto-save timer - save every 60 seconds if there are changes
+  useEffect(() => {
+    if (diary && diary.status !== 'submitted' && hasUnsavedChanges) {
+      // Clear any existing timer
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+
+      // Set new timer for 60 seconds
+      autoSaveTimerRef.current = setTimeout(() => {
+        performAutoSave()
+      }, 60000)
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+      }
+    }
+  }, [diary, hasUnsavedChanges, performAutoSave])
+
+  // Save before page unload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges && diary && diary.status !== 'submitted') {
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedChanges, diary])
+
+  // Initialize previous form ref when diary loads
+  useEffect(() => {
+    if (diary) {
+      previousWeatherFormRef.current = JSON.stringify({
+        weatherConditions: diary.weatherConditions || '',
+        temperatureMin: diary.temperatureMin?.toString() || '',
+        temperatureMax: diary.temperatureMax?.toString() || '',
+        rainfallMm: diary.rainfallMm?.toString() || '',
+        weatherNotes: diary.weatherNotes || '',
+        generalNotes: diary.generalNotes || '',
+      })
+    }
+  }, [diary?.id])
+
   const fetchDiaries = async () => {
     try {
       const token = getAuthToken()
@@ -433,6 +545,10 @@ export function DailyDiaryPage() {
         setDiary(data)
         setShowNewEntry(true)
         fetchDiaries()
+        // Feature #234: Reset auto-save state after manual save
+        setHasUnsavedChanges(false)
+        setLastAutoSaved(new Date())
+        previousWeatherFormRef.current = JSON.stringify(weatherForm)
       } else {
         const errorData = await res.json()
         setError(errorData.error || 'Failed to save diary')
@@ -1025,18 +1141,39 @@ export function DailyDiaryPage() {
           {activeTab === 'weather' && (
             <div className="rounded-lg border bg-card p-6">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Weather & General Notes</h3>
-                {fetchingWeather && (
-                  <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                    Fetching weather...
-                  </span>
-                )}
-                {weatherSource && !fetchingWeather && (
-                  <span className="text-sm text-green-600">
-                    ✓ {weatherSource}
-                  </span>
-                )}
+                <div className="flex items-center gap-4">
+                  <h3 className="text-lg font-semibold">Weather & General Notes</h3>
+                  {/* Feature #234: Auto-save status */}
+                  {autoSaving && (
+                    <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                      Auto-saving...
+                    </span>
+                  )}
+                  {!autoSaving && lastAutoSaved && (
+                    <span className="text-xs text-muted-foreground">
+                      Auto-saved {lastAutoSaved.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                  {!autoSaving && hasUnsavedChanges && !lastAutoSaved && (
+                    <span className="text-xs text-orange-500">
+                      • Unsaved changes
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {fetchingWeather && (
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      Fetching weather...
+                    </span>
+                  )}
+                  {weatherSource && !fetchingWeather && (
+                    <span className="text-sm text-green-600">
+                      ✓ {weatherSource}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
