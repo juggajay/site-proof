@@ -6,7 +6,8 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
-import { Link2, Check, RefreshCw } from 'lucide-react'
+import { Link2, Check, RefreshCw, FileText } from 'lucide-react'
+import { generateConformanceReportPDF, ConformanceReportData } from '@/lib/pdfGenerator'
 
 // Tab types for lot detail page
 type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'comments' | 'history'
@@ -242,6 +243,7 @@ export function LotDetailPage() {
   const [overrideStatus, setOverrideStatus] = useState('')
   const [overrideReason, setOverrideReason] = useState('')
   const [overriding, setOverriding] = useState(false)
+  const [generatingReport, setGeneratingReport] = useState(false)
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -881,6 +883,115 @@ export function LotDetailPage() {
       })
     } finally {
       setOverriding(false)
+    }
+  }
+
+  // Handle generating conformance report PDF
+  const handleGenerateReport = async () => {
+    if (!lot || lot.status !== 'conformed') return
+
+    setGeneratingReport(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      // Fetch all data needed for the report
+      const [projectRes, itpRes, testsRes, ncrsRes] = await Promise.all([
+        fetch(`${apiUrl}/api/projects/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        itpInstance ? Promise.resolve({ ok: true, json: () => Promise.resolve({ instance: itpInstance }) }) :
+          fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        fetch(`${apiUrl}/api/test-results?projectId=${projectId}&lotId=${lotId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ])
+
+      const projectData = projectRes.ok ? await projectRes.json() : { project: { name: 'Unknown Project' } }
+      const itpData = itpRes.ok ? await itpRes.json() : { instance: null }
+      const testsData = testsRes.ok ? await testsRes.json() : { testResults: [] }
+      const ncrsData = ncrsRes.ok ? await ncrsRes.json() : { ncrs: [] }
+
+      // Count photos from ITP completions
+      let photoCount = 0
+      if (itpData.instance?.completions) {
+        itpData.instance.completions.forEach((completion: any) => {
+          if (completion.attachments) {
+            photoCount += completion.attachments.length
+          }
+        })
+      }
+
+      // Extract hold point releases (completions of hold_point items that are verified)
+      const holdPointReleases: any[] = []
+      if (itpData.instance?.template?.checklistItems && itpData.instance?.completions) {
+        const holdPointItems = itpData.instance.template.checklistItems.filter(
+          (item: any) => item.pointType === 'hold_point'
+        )
+        holdPointItems.forEach((item: any) => {
+          const completion = itpData.instance.completions.find(
+            (c: any) => c.checklistItemId === item.id && c.isVerified
+          )
+          if (completion) {
+            holdPointReleases.push({
+              checklistItemDescription: item.description,
+              releasedAt: completion.verifiedAt || completion.completedAt,
+              releasedBy: completion.verifiedBy || completion.completedBy,
+            })
+          }
+        })
+      }
+
+      // Prepare data for PDF
+      const reportData: ConformanceReportData = {
+        lot: {
+          lotNumber: lot.lotNumber,
+          description: lot.description,
+          status: lot.status,
+          activityType: lot.activityType,
+          chainageStart: lot.chainageStart,
+          chainageEnd: lot.chainageEnd,
+          layer: lot.layer,
+          areaZone: lot.areaZone,
+          conformedAt: lot.conformedAt,
+          conformedBy: lot.conformedBy,
+        },
+        project: {
+          name: projectData.project?.name || 'Unknown Project',
+          contractNumber: projectData.project?.contractNumber || null,
+        },
+        itp: itpData.instance ? {
+          templateName: itpData.instance.template?.name || 'Unknown Template',
+          checklistItems: itpData.instance.template?.checklistItems || [],
+          completions: itpData.instance.completions || [],
+        } : null,
+        testResults: testsData.testResults || [],
+        ncrs: ncrsData.ncrs || [],
+        holdPointReleases,
+        photoCount,
+      }
+
+      // Generate PDF
+      generateConformanceReportPDF(reportData)
+
+      toast({
+        title: 'Report generated',
+        description: 'The conformance report PDF has been downloaded.',
+      })
+    } catch (err) {
+      console.error('Failed to generate report:', err)
+      toast({
+        title: 'Report generation failed',
+        description: 'An error occurred while generating the report.',
+        variant: 'error',
+      })
+    } finally {
+      setGeneratingReport(false)
     }
   }
 
@@ -1811,38 +1922,49 @@ export function LotDetailPage() {
       {/* Conformed Status Display */}
       {lot.status === 'conformed' && (
         <div className="mt-6 rounded-lg border border-green-400 bg-green-100 p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">✅</span>
-            <div>
-              <h2 className="text-lg font-semibold text-green-800">Lot Conformed</h2>
-              <p className="text-sm text-green-700">
-                This lot has been quality-approved and is ready for claiming.
-              </p>
-              {/* Conformance Details */}
-              {(lot.conformedAt || lot.conformedBy) && (
-                <div className="mt-2 pt-2 border-t border-green-300">
-                  <div className="flex flex-wrap gap-4 text-sm text-green-700">
-                    {lot.conformedBy && (
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium">Conformed by:</span>
-                        <span>{lot.conformedBy.fullName || lot.conformedBy.email}</span>
-                      </div>
-                    )}
-                    {lot.conformedAt && (
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium">Conformed on:</span>
-                        <time dateTime={lot.conformedAt} title={new Date(lot.conformedAt).toISOString()}>
-                          {new Date(lot.conformedAt).toLocaleString('en-AU', {
-                            dateStyle: 'medium',
-                            timeStyle: 'short',
-                          })}
-                        </time>
-                      </div>
-                    )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">✅</span>
+              <div>
+                <h2 className="text-lg font-semibold text-green-800">Lot Conformed</h2>
+                <p className="text-sm text-green-700">
+                  This lot has been quality-approved and is ready for claiming.
+                </p>
+                {/* Conformance Details */}
+                {(lot.conformedAt || lot.conformedBy) && (
+                  <div className="mt-2 pt-2 border-t border-green-300">
+                    <div className="flex flex-wrap gap-4 text-sm text-green-700">
+                      {lot.conformedBy && (
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">Conformed by:</span>
+                          <span>{lot.conformedBy.fullName || lot.conformedBy.email}</span>
+                        </div>
+                      )}
+                      {lot.conformedAt && (
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">Conformed on:</span>
+                          <time dateTime={lot.conformedAt} title={new Date(lot.conformedAt).toISOString()}>
+                            {new Date(lot.conformedAt).toLocaleString('en-AU', {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })}
+                          </time>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
+            {/* Generate Conformance Report Button */}
+            <button
+              onClick={handleGenerateReport}
+              disabled={generatingReport}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <FileText className="h-4 w-4" />
+              {generatingReport ? 'Generating...' : 'Generate Conformance Report'}
+            </button>
           </div>
         </div>
       )}
