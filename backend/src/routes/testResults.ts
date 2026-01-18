@@ -414,9 +414,7 @@ testResultsRouter.post('/', async (req, res) => {
         specificationMin: specificationMin ? parseFloat(specificationMin) : null,
         specificationMax: specificationMax ? parseFloat(specificationMax) : null,
         passFail: passFail || 'pending',
-        status: 'entered',
-        enteredById: user.id,
-        enteredAt: new Date(),
+        status: 'requested', // Feature #196: Start in 'requested' status
       },
       select: {
         id: true,
@@ -1247,6 +1245,252 @@ testResultsRouter.post('/:id/verify', async (req, res) => {
     })
   } catch (error) {
     console.error('Verify test result error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Valid status workflow transitions (Feature #196)
+// requested -> at_lab -> results_received -> entered -> verified
+const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+  'requested': ['at_lab'],
+  'at_lab': ['results_received'],
+  'results_received': ['entered'],
+  'entered': ['verified'],
+  'verified': [], // Terminal state
+}
+
+// Status labels for display
+const STATUS_LABELS: Record<string, string> = {
+  'requested': 'Requested',
+  'at_lab': 'At Lab',
+  'results_received': 'Results Received',
+  'entered': 'Entered',
+  'verified': 'Verified',
+}
+
+// POST /api/test-results/:id/status - Update test result status (Feature #196)
+testResultsRouter.post('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { status } = req.body
+
+    if (!status) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'status is required'
+      })
+    }
+
+    const testResult = await prisma.testResult.findUnique({
+      where: { id },
+    })
+
+    if (!testResult) {
+      return res.status(404).json({ error: 'Test result not found' })
+    }
+
+    // Verify user has access and permission
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: testResult.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const userProjectRole = projectUser?.role || user.roleInCompany
+
+    // Verification requires higher permission
+    if (status === 'verified' && !TEST_VERIFIERS.includes(userProjectRole)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to verify test results'
+      })
+    }
+
+    // Other status changes require creator permission
+    if (status !== 'verified' && !TEST_CREATORS.includes(userProjectRole)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to update test result status'
+      })
+    }
+
+    // Validate the status transition
+    const currentStatus = testResult.status
+    const allowedTransitions = VALID_STATUS_TRANSITIONS[currentStatus] || []
+
+    if (!allowedTransitions.includes(status)) {
+      return res.status(400).json({
+        error: 'Invalid Status Transition',
+        message: `Cannot transition from '${STATUS_LABELS[currentStatus] || currentStatus}' to '${STATUS_LABELS[status] || status}'`,
+        currentStatus: currentStatus,
+        allowedTransitions: allowedTransitions.map(s => ({ status: s, label: STATUS_LABELS[s] || s }))
+      })
+    }
+
+    // Build update data based on the new status
+    const updateData: any = { status }
+
+    // If entering 'entered' status, record who entered and when
+    if (status === 'entered') {
+      updateData.enteredById = user.id
+      updateData.enteredAt = new Date()
+    }
+
+    // If entering 'verified' status, record who verified and when
+    if (status === 'verified') {
+      updateData.verifiedById = user.id
+      updateData.verifiedAt = new Date()
+    }
+
+    const updatedTestResult = await prisma.testResult.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        testType: true,
+        status: true,
+        enteredAt: true,
+        verifiedAt: true,
+        enteredBy: {
+          select: {
+            fullName: true,
+            email: true,
+          }
+        },
+        verifiedBy: {
+          select: {
+            fullName: true,
+            email: true,
+          }
+        },
+      },
+    })
+
+    res.json({
+      message: `Test result status updated to '${STATUS_LABELS[status] || status}'`,
+      testResult: updatedTestResult,
+      nextTransitions: (VALID_STATUS_TRANSITIONS[status] || []).map(s => ({
+        status: s,
+        label: STATUS_LABELS[s] || s
+      }))
+    })
+  } catch (error) {
+    console.error('Update test result status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/test-results/:id/workflow - Get workflow status info (Feature #196)
+testResultsRouter.get('/:id/workflow', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+
+    const testResult = await prisma.testResult.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        projectId: true,
+        enteredAt: true,
+        verifiedAt: true,
+        createdAt: true,
+        enteredBy: {
+          select: { fullName: true }
+        },
+        verifiedBy: {
+          select: { fullName: true }
+        },
+      },
+    })
+
+    if (!testResult) {
+      return res.status(404).json({ error: 'Test result not found' })
+    }
+
+    // Verify user has access to the project
+    const projectAccess = await prisma.projectUser.findFirst({
+      where: {
+        projectId: testResult.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const projectCompanyAccess = await prisma.project.findFirst({
+      where: {
+        id: testResult.projectId,
+        companyId: user.companyId || undefined,
+      },
+    })
+
+    if (!projectAccess && !projectCompanyAccess) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this test result'
+      })
+    }
+
+    const userProjectRole = projectAccess?.role || user.roleInCompany
+
+    // Build workflow steps with status
+    const workflowSteps = [
+      {
+        status: 'requested',
+        label: 'Requested',
+        completed: true, // Always completed (initial state)
+        completedAt: testResult.createdAt,
+        completedBy: null,
+      },
+      {
+        status: 'at_lab',
+        label: 'At Lab',
+        completed: ['at_lab', 'results_received', 'entered', 'verified'].includes(testResult.status),
+        completedAt: null,
+        completedBy: null,
+      },
+      {
+        status: 'results_received',
+        label: 'Results Received',
+        completed: ['results_received', 'entered', 'verified'].includes(testResult.status),
+        completedAt: null,
+        completedBy: null,
+      },
+      {
+        status: 'entered',
+        label: 'Entered',
+        completed: ['entered', 'verified'].includes(testResult.status),
+        completedAt: testResult.enteredAt,
+        completedBy: testResult.enteredBy?.fullName || null,
+      },
+      {
+        status: 'verified',
+        label: 'Verified',
+        completed: testResult.status === 'verified',
+        completedAt: testResult.verifiedAt,
+        completedBy: testResult.verifiedBy?.fullName || null,
+      },
+    ]
+
+    res.json({
+      workflow: {
+        currentStatus: testResult.status,
+        currentStatusLabel: STATUS_LABELS[testResult.status] || testResult.status,
+        steps: workflowSteps,
+        nextTransitions: (VALID_STATUS_TRANSITIONS[testResult.status] || []).map(s => ({
+          status: s,
+          label: STATUS_LABELS[s] || s,
+          canPerform: s === 'verified' ? TEST_VERIFIERS.includes(userProjectRole) : TEST_CREATORS.includes(userProjectRole)
+        })),
+        canAdvance: (VALID_STATUS_TRANSITIONS[testResult.status] || []).length > 0,
+        isComplete: testResult.status === 'verified',
+      }
+    })
+  } catch (error) {
+    console.error('Get workflow status error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

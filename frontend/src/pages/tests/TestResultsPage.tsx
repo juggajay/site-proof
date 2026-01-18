@@ -37,8 +37,33 @@ const statusColors: Record<string, string> = {
 
 const testStatusColors: Record<string, string> = {
   requested: 'bg-gray-100 text-gray-800',
+  at_lab: 'bg-yellow-100 text-yellow-800',
+  results_received: 'bg-purple-100 text-purple-800',
   entered: 'bg-blue-100 text-blue-800',
   verified: 'bg-green-100 text-green-800',
+}
+
+const testStatusLabels: Record<string, string> = {
+  requested: 'Requested',
+  at_lab: 'At Lab',
+  results_received: 'Results Received',
+  entered: 'Entered',
+  verified: 'Verified',
+}
+
+// Feature #196: Valid status transitions
+const nextStatusMap: Record<string, string> = {
+  requested: 'at_lab',
+  at_lab: 'results_received',
+  results_received: 'entered',
+  entered: 'verified',
+}
+
+const nextStatusButtonLabels: Record<string, string> = {
+  requested: 'Mark as At Lab',
+  at_lab: 'Mark Results Received',
+  results_received: 'Enter Results',
+  entered: 'Verify',
 }
 
 export function TestResultsPage() {
@@ -50,6 +75,7 @@ export function TestResultsPage() {
   const [error, setError] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
 
   // Form state for creating test results
   const [formData, setFormData] = useState({
@@ -106,6 +132,42 @@ export function TestResultsPage() {
 
     fetchData()
   }, [projectId, navigate])
+
+  // Feature #196: Update test status workflow
+  const handleUpdateStatus = async (testId: string, newStatus: string) => {
+    setUpdatingStatusId(testId)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/test-results/${testId}/status`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      if (response.ok) {
+        // Refetch to get updated test results
+        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (testsResponse.ok) {
+          const testsData = await testsResponse.json()
+          setTestResults(testsData.testResults || [])
+        }
+      } else {
+        const data = await response.json()
+        alert(data.message || 'Failed to update status')
+      }
+    } catch (err) {
+      alert('Failed to update test status')
+    } finally {
+      setUpdatingStatusId(null)
+    }
+  }
 
   const handleCreateTestResult = async () => {
     if (!formData.testType) {
@@ -258,6 +320,7 @@ export function TestResultsPage() {
                 <th className="px-4 py-3 text-left text-sm font-medium">Result</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Pass/Fail</th>
                 <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -290,8 +353,22 @@ export function TestResultsPage() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-gray-100'}`}>
-                      {test.status}
+                      {testStatusLabels[test.status] || test.status}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {nextStatusMap[test.status] && (
+                      <button
+                        onClick={() => handleUpdateStatus(test.id, nextStatusMap[test.status])}
+                        disabled={updatingStatusId === test.id}
+                        className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {updatingStatusId === test.id ? 'Updating...' : nextStatusButtonLabels[test.status]}
+                      </button>
+                    )}
+                    {test.status === 'verified' && (
+                      <span className="text-green-600 text-xs font-medium">✓ Complete</span>
+                    )}
                   </td>
                 </tr>
               ))}
