@@ -25,8 +25,24 @@ interface TestResult {
   status: string
   lotId: string | null
   lot: Lot | null
+  aiExtracted?: boolean
   createdAt: string
   updatedAt: string
+}
+
+// Feature #200: AI Extraction types
+interface ExtractedField {
+  value: string
+  confidence: number
+}
+
+interface ExtractionResult {
+  success: boolean
+  extractedFields: Record<string, ExtractedField>
+  confidence: Record<string, number>
+  lowConfidenceFields: { field: string; confidence: number }[]
+  needsReview: boolean
+  reviewMessage: string
 }
 
 const statusColors: Record<string, string> = {
@@ -95,6 +111,16 @@ export function TestResultsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
+
+  // Feature #200: Upload Certificate state
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null)
+  const [extractedTestId, setExtractedTestId] = useState<string | null>(null)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [reviewFormData, setReviewFormData] = useState<Record<string, string>>({})
+  const [confirmingExtraction, setConfirmingExtraction] = useState(false)
 
   // Feature #198: Test type specifications for auto-populate
   const testTypeSpecs: Record<string, { min: string; max: string; unit: string }> = {
@@ -305,6 +331,133 @@ export function TestResultsPage() {
     }
   }
 
+  // Feature #200: Handle certificate upload with AI extraction
+  const handleUploadCertificate = async () => {
+    if (!uploadedFile) {
+      alert('Please select a file first')
+      return
+    }
+
+    setUploading(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const formData = new FormData()
+      formData.append('certificate', uploadedFile)
+      formData.append('projectId', projectId || '')
+
+      const response = await fetch(`${apiUrl}/api/test-results/upload-certificate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setExtractionResult(data.extraction)
+        setExtractedTestId(data.testResult.id)
+
+        // Set form data for review from extracted values
+        const extractedFields = data.extraction.extractedFields
+        setReviewFormData({
+          testType: extractedFields.testType?.value || '',
+          laboratoryName: extractedFields.laboratoryName?.value || '',
+          laboratoryReportNumber: extractedFields.laboratoryReportNumber?.value || '',
+          sampleDate: extractedFields.sampleDate?.value || '',
+          testDate: extractedFields.testDate?.value || '',
+          sampleLocation: extractedFields.sampleLocation?.value || '',
+          resultValue: extractedFields.resultValue?.value || '',
+          resultUnit: extractedFields.resultUnit?.value || '',
+          specificationMin: extractedFields.specificationMin?.value || '',
+          specificationMax: extractedFields.specificationMax?.value || '',
+        })
+
+        // Create preview URL for the PDF
+        const previewUrl = URL.createObjectURL(uploadedFile)
+        setPdfUrl(previewUrl)
+
+        // Refresh test results list
+        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (testsResponse.ok) {
+          const testsData = await testsResponse.json()
+          setTestResults(testsData.testResults || [])
+        }
+      } else {
+        const data = await response.json()
+        alert(data.message || 'Failed to upload certificate')
+      }
+    } catch (err) {
+      alert('Failed to upload certificate')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Feature #200: Confirm extraction and save corrections
+  const handleConfirmExtraction = async () => {
+    if (!extractedTestId) return
+
+    setConfirmingExtraction(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/test-results/${extractedTestId}/confirm-extraction`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ corrections: reviewFormData }),
+      })
+
+      if (response.ok) {
+        // Close modal and refresh
+        setShowUploadModal(false)
+        setUploadedFile(null)
+        setExtractionResult(null)
+        setExtractedTestId(null)
+        setPdfUrl(null)
+        setReviewFormData({})
+
+        // Refresh test results
+        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (testsResponse.ok) {
+          const testsData = await testsResponse.json()
+          setTestResults(testsData.testResults || [])
+        }
+      } else {
+        const data = await response.json()
+        alert(data.message || 'Failed to confirm extraction')
+      }
+    } catch (err) {
+      alert('Failed to confirm extraction')
+    } finally {
+      setConfirmingExtraction(false)
+    }
+  }
+
+  // Feature #200: Get confidence indicator color/style
+  const getConfidenceIndicator = (field: string): { color: string; text: string } => {
+    if (!extractionResult) return { color: '', text: '' }
+    const confidence = extractionResult.confidence[field]
+    if (!confidence) return { color: '', text: '' }
+
+    if (confidence < 0.80) {
+      return { color: 'border-red-500 bg-red-50 dark:bg-red-900/30', text: `${Math.round(confidence * 100)}% - Low confidence, please verify` }
+    } else if (confidence < 0.90) {
+      return { color: 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20', text: `${Math.round(confidence * 100)}% confidence` }
+    }
+    return { color: 'border-green-500 bg-green-50 dark:bg-green-900/20', text: `${Math.round(confidence * 100)}% confidence` }
+  }
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center p-6">
@@ -359,6 +512,13 @@ export function TestResultsPage() {
               Export CSV
             </button>
           )}
+          {/* Feature #200: Upload Certificate button */}
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="rounded-lg border border-primary px-4 py-2 text-primary hover:bg-primary/10"
+          >
+            📄 Upload Certificate
+          </button>
           <button
             onClick={() => setShowCreateModal(true)}
             className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
@@ -413,6 +573,12 @@ export function TestResultsPage() {
                   <td className="px-4 py-3 text-sm font-medium">
                     <div className="flex items-center gap-2">
                       {test.testType}
+                      {/* Feature #200: AI extracted indicator */}
+                      {test.aiExtracted && (
+                        <span className="px-1.5 py-0.5 text-[10px] bg-purple-500 text-white rounded font-bold" title="AI Extracted from certificate">
+                          AI
+                        </span>
+                      )}
                       {overdue && (
                         <span className="px-1.5 py-0.5 text-[10px] bg-red-500 text-white rounded font-bold">
                           OVERDUE
@@ -691,6 +857,279 @@ export function TestResultsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feature #200: Upload Certificate Modal with AI Extraction */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h2 className="text-xl font-bold">
+                {extractionResult ? '📊 Review AI Extracted Data' : '📄 Upload Test Certificate'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowUploadModal(false)
+                  setUploadedFile(null)
+                  setExtractionResult(null)
+                  setExtractedTestId(null)
+                  setPdfUrl(null)
+                  setReviewFormData({})
+                }}
+                className="text-muted-foreground hover:text-foreground text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Before extraction - File upload */}
+            {!extractionResult ? (
+              <div className="p-6">
+                <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                  <div className="text-5xl mb-4">📄</div>
+                  <h3 className="text-lg font-semibold mb-2">Upload Test Certificate PDF</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Upload a test certificate and our AI will automatically extract the test data
+                  </p>
+                  <input
+                    type="file"
+                    accept=".pdf,image/jpeg,image/png"
+                    onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                    id="certificate-upload"
+                  />
+                  <label
+                    htmlFor="certificate-upload"
+                    className="inline-block px-4 py-2 rounded-lg bg-primary text-primary-foreground cursor-pointer hover:bg-primary/90"
+                  >
+                    Select File
+                  </label>
+                  {uploadedFile && (
+                    <div className="mt-4 p-3 bg-muted rounded-lg">
+                      <p className="text-sm font-medium">{uploadedFile.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => {
+                      setShowUploadModal(false)
+                      setUploadedFile(null)
+                    }}
+                    className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUploadCertificate}
+                    disabled={!uploadedFile || uploading}
+                    className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {uploading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Processing with AI...
+                      </span>
+                    ) : (
+                      '🤖 Extract with AI'
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* After extraction - Side-by-side view */
+              <div className="flex-1 flex overflow-hidden">
+                {/* Left side - PDF Preview */}
+                <div className="w-1/2 border-r flex flex-col">
+                  <div className="p-3 bg-muted/50 border-b">
+                    <h3 className="font-medium">Certificate Preview</h3>
+                  </div>
+                  <div className="flex-1 overflow-auto p-4">
+                    {pdfUrl && uploadedFile?.type === 'application/pdf' ? (
+                      <iframe
+                        src={pdfUrl}
+                        className="w-full h-full min-h-[500px] rounded border"
+                        title="Certificate Preview"
+                      />
+                    ) : pdfUrl ? (
+                      <img src={pdfUrl} alt="Certificate" className="max-w-full rounded border" />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-muted-foreground">
+                        No preview available
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right side - Extracted Data */}
+                <div className="w-1/2 flex flex-col">
+                  <div className="p-3 bg-muted/50 border-b">
+                    <h3 className="font-medium">Extracted Data</h3>
+                    {extractionResult.needsReview && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        ⚠️ {extractionResult.reviewMessage}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-auto p-4 space-y-4">
+                    {/* Confidence Summary */}
+                    <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                      <div className="flex items-center gap-2 text-sm font-medium text-purple-800 dark:text-purple-200">
+                        <span>🤖</span>
+                        <span>AI Extraction Complete</span>
+                      </div>
+                      <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                        {extractionResult.lowConfidenceFields.length === 0
+                          ? 'All fields extracted with high confidence'
+                          : `${extractionResult.lowConfidenceFields.length} field(s) need verification (highlighted in red)`}
+                      </p>
+                    </div>
+
+                    {/* Editable Fields */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Test Type</label>
+                        <input
+                          type="text"
+                          value={reviewFormData.testType || ''}
+                          onChange={(e) => setReviewFormData({ ...reviewFormData, testType: e.target.value })}
+                          className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('testType').color}`}
+                        />
+                        <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('testType').text}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Laboratory Name</label>
+                        <input
+                          type="text"
+                          value={reviewFormData.laboratoryName || ''}
+                          onChange={(e) => setReviewFormData({ ...reviewFormData, laboratoryName: e.target.value })}
+                          className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('laboratoryName').color}`}
+                        />
+                        <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('laboratoryName').text}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Lab Report Number</label>
+                        <input
+                          type="text"
+                          value={reviewFormData.laboratoryReportNumber || ''}
+                          onChange={(e) => setReviewFormData({ ...reviewFormData, laboratoryReportNumber: e.target.value })}
+                          className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('laboratoryReportNumber').color}`}
+                        />
+                        <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('laboratoryReportNumber').text}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Sample Date</label>
+                          <input
+                            type="date"
+                            value={reviewFormData.sampleDate || ''}
+                            onChange={(e) => setReviewFormData({ ...reviewFormData, sampleDate: e.target.value })}
+                            className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('sampleDate').color}`}
+                          />
+                          <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('sampleDate').text}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Test Date</label>
+                          <input
+                            type="date"
+                            value={reviewFormData.testDate || ''}
+                            onChange={(e) => setReviewFormData({ ...reviewFormData, testDate: e.target.value })}
+                            className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('testDate').color}`}
+                          />
+                          <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('testDate').text}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Sample Location</label>
+                        <input
+                          type="text"
+                          value={reviewFormData.sampleLocation || ''}
+                          onChange={(e) => setReviewFormData({ ...reviewFormData, sampleLocation: e.target.value })}
+                          className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('sampleLocation').color}`}
+                        />
+                        <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('sampleLocation').text}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Result Value</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={reviewFormData.resultValue || ''}
+                            onChange={(e) => setReviewFormData({ ...reviewFormData, resultValue: e.target.value })}
+                            className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('resultValue').color}`}
+                          />
+                          <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('resultValue').text}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Unit</label>
+                          <input
+                            type="text"
+                            value={reviewFormData.resultUnit || ''}
+                            onChange={(e) => setReviewFormData({ ...reviewFormData, resultUnit: e.target.value })}
+                            className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('resultUnit').color}`}
+                          />
+                          <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('resultUnit').text}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Spec Min</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={reviewFormData.specificationMin || ''}
+                            onChange={(e) => setReviewFormData({ ...reviewFormData, specificationMin: e.target.value })}
+                            className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('specificationMin').color}`}
+                          />
+                          <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('specificationMin').text}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Spec Max</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={reviewFormData.specificationMax || ''}
+                            onChange={(e) => setReviewFormData({ ...reviewFormData, specificationMax: e.target.value })}
+                            className={`w-full rounded-lg border px-3 py-2 ${getConfidenceIndicator('specificationMax').color}`}
+                          />
+                          <p className="text-xs text-muted-foreground mt-0.5">{getConfidenceIndicator('specificationMax').text}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Footer actions */}
+                  <div className="p-4 border-t flex justify-end gap-3">
+                    <button
+                      onClick={() => {
+                        setShowUploadModal(false)
+                        setUploadedFile(null)
+                        setExtractionResult(null)
+                        setExtractedTestId(null)
+                        setPdfUrl(null)
+                        setReviewFormData({})
+                      }}
+                      className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleConfirmExtraction}
+                      disabled={confirmingExtraction}
+                      className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {confirmingExtraction ? 'Saving...' : '✓ Confirm & Save'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

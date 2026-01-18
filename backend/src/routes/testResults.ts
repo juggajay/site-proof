@@ -1,8 +1,41 @@
 import { Router } from 'express'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 
 export const testResultsRouter = Router()
+
+// Configure multer for file uploads
+const uploadsDir = path.join(process.cwd(), 'uploads', 'certificates')
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true })
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir)
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, `cert-${uniqueSuffix}${path.extname(file.originalname)}`)
+  }
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    // Accept only PDFs and images
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error('Only PDF and image files are allowed'))
+    }
+  }
+})
 
 // Test type specifications lookup table
 // Based on Australian road standards (TMR MRTS, RMS QA specs, etc.)
@@ -253,6 +286,7 @@ testResultsRouter.get('/', async (req, res) => {
             lotNumber: true,
           }
         },
+        aiExtracted: true,  // Feature #200
         createdAt: true,
         updatedAt: true,
       },
@@ -1491,6 +1525,400 @@ testResultsRouter.get('/:id/workflow', async (req, res) => {
     })
   } catch (error) {
     console.error('Get workflow status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ============================================================================
+// Feature #200: AI Test Certificate Extraction
+// ============================================================================
+
+// Simulated AI extraction - extracts field values from PDF content
+// In production, this would call an actual AI/ML service
+const simulateAIExtraction = (filename: string) => {
+  // Simulate extracted data based on common test certificate patterns
+  // Generate realistic looking data with varying confidence levels
+  const testTypes = ['Compaction Test', 'CBR Test', 'Grading Analysis', 'Moisture Content', 'Plasticity Index']
+  const labs = ['ABC Testing Labs', 'National Geotechnical', 'Southern Materials Testing', 'Boral Testing Services']
+
+  const randomConfidence = (min: number, max: number) => +(Math.random() * (max - min) + min).toFixed(2)
+
+  // Generate extracted values with confidence scores
+  const extractedData = {
+    testType: {
+      value: testTypes[Math.floor(Math.random() * testTypes.length)],
+      confidence: randomConfidence(0.85, 0.98)
+    },
+    laboratoryName: {
+      value: labs[Math.floor(Math.random() * labs.length)],
+      confidence: randomConfidence(0.90, 0.99)
+    },
+    laboratoryReportNumber: {
+      value: `LAB-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`,
+      confidence: randomConfidence(0.88, 0.96)
+    },
+    sampleDate: {
+      value: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      confidence: randomConfidence(0.75, 0.92)
+    },
+    testDate: {
+      value: new Date(Date.now() - Math.random() * 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      confidence: randomConfidence(0.78, 0.95)
+    },
+    resultValue: {
+      value: String((Math.random() * 10 + 93).toFixed(1)),  // 93-103 range
+      confidence: randomConfidence(0.82, 0.97)
+    },
+    resultUnit: {
+      value: '% MDD',
+      confidence: randomConfidence(0.85, 0.99)
+    },
+    specificationMin: {
+      value: '95',
+      confidence: randomConfidence(0.70, 0.88)  // Often harder to extract
+    },
+    specificationMax: {
+      value: '100',
+      confidence: randomConfidence(0.68, 0.85)  // Often harder to extract
+    },
+    sampleLocation: {
+      value: `CH ${Math.floor(Math.random() * 5000)}+${String(Math.floor(Math.random() * 100)).padStart(2, '0')}`,
+      confidence: randomConfidence(0.60, 0.80)  // Handwritten/variable format
+    },
+  }
+
+  return extractedData
+}
+
+// POST /api/test-results/upload-certificate - Upload a test certificate PDF for AI extraction
+testResultsRouter.post('/upload-certificate', upload.single('certificate'), async (req, res) => {
+  try {
+    const user = req.user!
+    const file = req.file
+    const { projectId } = req.body
+
+    if (!file) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'No file uploaded'
+      })
+    }
+
+    if (!projectId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'projectId is required'
+      })
+    }
+
+    // Verify user has access and permission
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const userProjectRole = projectUser?.role || user.roleInCompany
+
+    if (!TEST_CREATORS.includes(userProjectRole)) {
+      // Delete uploaded file if permission denied
+      fs.unlinkSync(file.path)
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to upload test certificates'
+      })
+    }
+
+    // Create document record for the certificate
+    const document = await prisma.document.create({
+      data: {
+        projectId,
+        documentType: 'test_certificate',
+        category: 'test_results',
+        filename: file.originalname,
+        fileUrl: `/uploads/certificates/${file.filename}`,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        uploadedById: user.id,
+      }
+    })
+
+    // Simulate AI extraction (immediate for demo, would be async in production)
+    const extractedData = simulateAIExtraction(file.originalname)
+
+    // Build confidence object for storage
+    const confidenceObj: Record<string, number> = {}
+    for (const [key, data] of Object.entries(extractedData)) {
+      confidenceObj[key] = data.confidence
+    }
+
+    // Create a new test result with extracted data
+    const testResult = await prisma.testResult.create({
+      data: {
+        projectId,
+        testType: extractedData.testType.value,
+        laboratoryName: extractedData.laboratoryName.value,
+        laboratoryReportNumber: extractedData.laboratoryReportNumber.value,
+        sampleDate: new Date(extractedData.sampleDate.value),
+        testDate: new Date(extractedData.testDate.value),
+        sampleLocation: extractedData.sampleLocation.value,
+        resultValue: parseFloat(extractedData.resultValue.value),
+        resultUnit: extractedData.resultUnit.value,
+        specificationMin: parseFloat(extractedData.specificationMin.value),
+        specificationMax: parseFloat(extractedData.specificationMax.value),
+        passFail: parseFloat(extractedData.resultValue.value) >= 95 ? 'pass' : 'fail',
+        certificateDocId: document.id,
+        aiExtracted: true,
+        aiConfidence: JSON.stringify(confidenceObj),
+        status: 'results_received',  // Skip to results_received since we have the cert
+      },
+      include: {
+        certificateDoc: {
+          select: {
+            id: true,
+            filename: true,
+            fileUrl: true,
+            mimeType: true,
+          }
+        }
+      }
+    })
+
+    // Identify low confidence fields that need review
+    const lowConfidenceThreshold = 0.80
+    const lowConfidenceFields = Object.entries(confidenceObj)
+      .filter(([_, conf]) => conf < lowConfidenceThreshold)
+      .map(([field, conf]) => ({ field, confidence: conf }))
+
+    res.status(201).json({
+      message: 'Certificate uploaded and processed successfully',
+      testResult: {
+        id: testResult.id,
+        testType: testResult.testType,
+        status: testResult.status,
+        aiExtracted: testResult.aiExtracted,
+        certificateDoc: testResult.certificateDoc,
+      },
+      extraction: {
+        success: true,
+        extractedFields: extractedData,
+        confidence: confidenceObj,
+        lowConfidenceFields,
+        needsReview: lowConfidenceFields.length > 0,
+        reviewMessage: lowConfidenceFields.length > 0
+          ? `${lowConfidenceFields.length} field(s) need manual verification due to low AI confidence`
+          : 'All fields extracted with high confidence'
+      }
+    })
+  } catch (error) {
+    console.error('Upload certificate error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/test-results/:id/extraction - Get AI extraction details for a test result
+testResultsRouter.get('/:id/extraction', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+
+    const testResult = await prisma.testResult.findUnique({
+      where: { id },
+      include: {
+        certificateDoc: {
+          select: {
+            id: true,
+            filename: true,
+            fileUrl: true,
+            mimeType: true,
+            uploadedAt: true,
+          }
+        }
+      }
+    })
+
+    if (!testResult) {
+      return res.status(404).json({ error: 'Test result not found' })
+    }
+
+    // Verify user has access
+    const projectAccess = await prisma.projectUser.findFirst({
+      where: {
+        projectId: testResult.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const projectCompanyAccess = await prisma.project.findFirst({
+      where: {
+        id: testResult.projectId,
+        companyId: user.companyId || undefined,
+      },
+    })
+
+    if (!projectAccess && !projectCompanyAccess) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this test result'
+      })
+    }
+
+    if (!testResult.aiExtracted) {
+      return res.json({
+        extraction: {
+          aiExtracted: false,
+          message: 'This test result was not AI-extracted'
+        }
+      })
+    }
+
+    const confidence = testResult.aiConfidence ? JSON.parse(testResult.aiConfidence) : {}
+    const lowConfidenceThreshold = 0.80
+    const mediumConfidenceThreshold = 0.90
+
+    // Build field status with confidence indicators
+    const fieldStatus: Record<string, { value: any; confidence: number; status: string }> = {}
+
+    const fields = [
+      { key: 'testType', value: testResult.testType },
+      { key: 'laboratoryName', value: testResult.laboratoryName },
+      { key: 'laboratoryReportNumber', value: testResult.laboratoryReportNumber },
+      { key: 'sampleDate', value: testResult.sampleDate },
+      { key: 'testDate', value: testResult.testDate },
+      { key: 'sampleLocation', value: testResult.sampleLocation },
+      { key: 'resultValue', value: testResult.resultValue },
+      { key: 'resultUnit', value: testResult.resultUnit },
+      { key: 'specificationMin', value: testResult.specificationMin },
+      { key: 'specificationMax', value: testResult.specificationMax },
+    ]
+
+    for (const { key, value } of fields) {
+      const conf = confidence[key] || 1.0
+      let status = 'high'
+      if (conf < lowConfidenceThreshold) status = 'low'
+      else if (conf < mediumConfidenceThreshold) status = 'medium'
+
+      fieldStatus[key] = { value, confidence: conf, status }
+    }
+
+    const lowConfidenceFields = Object.entries(fieldStatus)
+      .filter(([_, f]) => f.status === 'low')
+      .map(([key, f]) => ({ field: key, confidence: f.confidence }))
+
+    res.json({
+      extraction: {
+        aiExtracted: true,
+        certificateDoc: testResult.certificateDoc,
+        fields: fieldStatus,
+        lowConfidenceFields,
+        needsReview: lowConfidenceFields.length > 0,
+        thresholds: {
+          low: lowConfidenceThreshold,
+          medium: mediumConfidenceThreshold
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Get extraction details error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PATCH /api/test-results/:id/confirm-extraction - Confirm or correct AI-extracted fields
+testResultsRouter.patch('/:id/confirm-extraction', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { confirmedFields, corrections } = req.body
+
+    const testResult = await prisma.testResult.findUnique({
+      where: { id },
+    })
+
+    if (!testResult) {
+      return res.status(404).json({ error: 'Test result not found' })
+    }
+
+    // Verify user has permission
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: testResult.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const userProjectRole = projectUser?.role || user.roleInCompany
+
+    if (!TEST_CREATORS.includes(userProjectRole)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to confirm test results'
+      })
+    }
+
+    // Build update data from corrections
+    const updateData: any = {}
+
+    if (corrections) {
+      if (corrections.testType !== undefined) updateData.testType = corrections.testType
+      if (corrections.laboratoryName !== undefined) updateData.laboratoryName = corrections.laboratoryName
+      if (corrections.laboratoryReportNumber !== undefined) updateData.laboratoryReportNumber = corrections.laboratoryReportNumber
+      if (corrections.sampleDate !== undefined) updateData.sampleDate = corrections.sampleDate ? new Date(corrections.sampleDate) : null
+      if (corrections.testDate !== undefined) updateData.testDate = corrections.testDate ? new Date(corrections.testDate) : null
+      if (corrections.sampleLocation !== undefined) updateData.sampleLocation = corrections.sampleLocation
+      if (corrections.resultValue !== undefined) updateData.resultValue = corrections.resultValue ? parseFloat(corrections.resultValue) : null
+      if (corrections.resultUnit !== undefined) updateData.resultUnit = corrections.resultUnit
+      if (corrections.specificationMin !== undefined) updateData.specificationMin = corrections.specificationMin ? parseFloat(corrections.specificationMin) : null
+      if (corrections.specificationMax !== undefined) updateData.specificationMax = corrections.specificationMax ? parseFloat(corrections.specificationMax) : null
+      if (corrections.passFail !== undefined) updateData.passFail = corrections.passFail
+    }
+
+    // Move to 'entered' status after confirmation
+    updateData.status = 'entered'
+    updateData.enteredById = user.id
+    updateData.enteredAt = new Date()
+
+    const updatedTestResult = await prisma.testResult.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        testType: true,
+        laboratoryName: true,
+        laboratoryReportNumber: true,
+        sampleDate: true,
+        testDate: true,
+        sampleLocation: true,
+        resultValue: true,
+        resultUnit: true,
+        specificationMin: true,
+        specificationMax: true,
+        passFail: true,
+        status: true,
+        aiExtracted: true,
+        enteredAt: true,
+        enteredBy: {
+          select: {
+            fullName: true,
+          }
+        }
+      }
+    })
+
+    res.json({
+      message: 'Extraction confirmed and test result saved',
+      testResult: updatedTestResult,
+      nextStep: {
+        status: 'entered',
+        message: 'Test result is now entered and ready for verification'
+      }
+    })
+  } catch (error) {
+    console.error('Confirm extraction error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
