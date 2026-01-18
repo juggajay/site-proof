@@ -12,6 +12,7 @@ interface Lot {
   chainageStart: number | null
   chainageEnd: number | null
   offset: string | null
+  offsetCustom: string | null
   layer: string | null
   areaZone: string | null
   budgetAmount?: number | null
@@ -64,6 +65,7 @@ export function LotEditPage() {
     chainageStart: '',
     chainageEnd: '',
     offset: '',
+    offsetCustom: '',
     layer: '',
     areaZone: '',
     status: '',
@@ -161,6 +163,7 @@ export function LotEditPage() {
           chainageStart: data.lot.chainageStart?.toString() || '',
           chainageEnd: data.lot.chainageEnd?.toString() || '',
           offset: data.lot.offset || '',
+          offsetCustom: data.lot.offsetCustom || '',
           layer: data.lot.layer || '',
           areaZone: data.lot.areaZone || '',
           status: data.lot.status || '',
@@ -244,6 +247,7 @@ export function LotEditPage() {
       chainageStart: formData.chainageStart ? parseFloat(formData.chainageStart) : null,
       chainageEnd: formData.chainageEnd ? parseFloat(formData.chainageEnd) : null,
       offset: formData.offset || null,
+      offsetCustom: formData.offset === 'custom' ? formData.offsetCustom || null : null,
       layer: formData.layer || null,
       areaZone: formData.areaZone || null,
       status: formData.status || null,
@@ -513,6 +517,24 @@ export function LotEditPage() {
                 ))}
               </select>
             </div>
+
+            {formData.offset === 'custom' && (
+              <div>
+                <label htmlFor="offsetCustom" className="block text-sm font-medium mb-1">
+                  Custom Offset Value
+                </label>
+                <input
+                  type="text"
+                  id="offsetCustom"
+                  name="offsetCustom"
+                  value={formData.offsetCustom}
+                  onChange={handleInputChange}
+                  disabled={isLocked}
+                  placeholder="e.g., +2.5m, -1.0m CL"
+                  className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+                />
+              </div>
+            )}
 
             <div>
               <label htmlFor="layer" className="block text-sm font-medium mb-1">

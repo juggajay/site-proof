@@ -68,6 +68,7 @@ lotsRouter.get('/', async (req, res) => {
         chainageStart: true,
         chainageEnd: true,
         offset: true,
+        offsetCustom: true,
         layer: true,
         areaZone: true,
         budgetAmount: true,
@@ -183,6 +184,7 @@ lotsRouter.get('/:id', async (req, res) => {
         chainageStart: true,
         chainageEnd: true,
         offset: true,
+        offsetCustom: true,
         layer: true,
         areaZone: true,
         projectId: true,
@@ -263,7 +265,7 @@ lotsRouter.get('/:id', async (req, res) => {
 lotsRouter.post('/', async (req, res) => {
   try {
     const user = req.user!
-    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType } = req.body
+    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType, itpTemplateId, assignedSubcontractorId } = req.body
 
     if (!projectId || !lotNumber) {
       return res.status(400).json({
@@ -306,15 +308,33 @@ lotsRouter.post('/', async (req, res) => {
         lotType: lotType || 'chainage',
         chainageStart,
         chainageEnd,
+        assignedSubcontractorId: assignedSubcontractorId || null,
       },
       select: {
         id: true,
         lotNumber: true,
         description: true,
         status: true,
+        assignedSubcontractorId: true,
         createdAt: true,
       },
     })
+
+    // If an ITP template is specified, create an ITP instance for the lot
+    if (itpTemplateId) {
+      try {
+        await prisma.itpInstance.create({
+          data: {
+            lotId: lot.id,
+            templateId: itpTemplateId,
+            status: 'not_started',
+          },
+        })
+      } catch (itpError) {
+        console.error('Failed to create ITP instance:', itpError)
+        // Don't fail the lot creation if ITP instance fails
+      }
+    }
 
     res.status(201).json({ lot })
   } catch (error: any) {
@@ -451,6 +471,7 @@ lotsRouter.patch('/:id', async (req, res) => {
       chainageStart,
       chainageEnd,
       offset,
+      offsetCustom,
       layer,
       areaZone,
       status,
@@ -466,6 +487,7 @@ lotsRouter.patch('/:id', async (req, res) => {
     if (chainageStart !== undefined) updateData.chainageStart = chainageStart
     if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd
     if (offset !== undefined) updateData.offset = offset
+    if (offsetCustom !== undefined) updateData.offsetCustom = offsetCustom
     if (layer !== undefined) updateData.layer = layer
     if (areaZone !== undefined) updateData.areaZone = areaZone
     if (status !== undefined) updateData.status = status
@@ -490,6 +512,7 @@ lotsRouter.patch('/:id', async (req, res) => {
         chainageStart: true,
         chainageEnd: true,
         offset: true,
+        offsetCustom: true,
         layer: true,
         areaZone: true,
         budgetAmount: true,

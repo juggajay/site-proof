@@ -98,10 +98,16 @@ export function LotsPage() {
     activityType: 'Earthworks',
     chainageStart: '',
     chainageEnd: '',
+    assignedSubcontractorId: '',
   })
   const [chainageError, setChainageError] = useState<string | null>(null)
   const [lotNumberTouched, setLotNumberTouched] = useState(false)
   const [lotNumberError, setLotNumberError] = useState<string | null>(null)
+
+  // ITP template suggestion state
+  const [itpTemplates, setItpTemplates] = useState<{ id: string; name: string; activityType: string }[]>([])
+  const [suggestedTemplate, setSuggestedTemplate] = useState<{ id: string; name: string } | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
 
   // Lot number length constraints
   const LOT_NUMBER_MIN_LENGTH = 3
@@ -560,39 +566,90 @@ export function LotsPage() {
       activityType: 'Earthworks',
       chainageStart: '',
       chainageEnd: '',
+      assignedSubcontractorId: '',
     })
     setChainageError(null)
+    setSuggestedTemplate(null)
+    setSelectedTemplateId('')
     setCreateModalOpen(true)
 
-    // Fetch suggested lot number
     const token = getAuthToken()
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
     if (projectId && token) {
+      // Fetch suggested lot number, ITP templates, and subcontractors in parallel
       try {
-        const response = await fetch(`${apiUrl}/api/lots/suggest-number?projectId=${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (response.ok) {
-          const data = await response.json()
+        const [lotResponse, itpResponse, subResponse] = await Promise.all([
+          fetch(`${apiUrl}/api/lots/suggest-number?projectId=${projectId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          fetch(`${apiUrl}/api/itp/templates?projectId=${projectId}&includeGlobal=true`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          fetch(`${apiUrl}/api/subcontractors/for-project/${projectId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ])
+
+        if (lotResponse.ok) {
+          const data = await lotResponse.json()
           if (data.suggestedNumber) {
             setNewLot(prev => ({ ...prev, lotNumber: data.suggestedNumber }))
           }
         }
+
+        if (itpResponse.ok) {
+          const data = await itpResponse.json()
+          const templates = data.templates || []
+          setItpTemplates(templates.filter((t: any) => t.isActive !== false))
+          // Find suggested template for default activity type (Earthworks)
+          const suggested = templates.find((t: any) =>
+            t.activityType?.toLowerCase() === 'earthworks' && t.isActive !== false
+          )
+          if (suggested) {
+            setSuggestedTemplate({ id: suggested.id, name: suggested.name })
+            setSelectedTemplateId(suggested.id)
+          }
+        }
+
+        if (subResponse.ok) {
+          const data = await subResponse.json()
+          setSubcontractors(data.subcontractors || [])
+        }
       } catch (err) {
-        console.error('Failed to fetch suggested lot number:', err)
+        console.error('Failed to fetch lot data:', err)
       }
+    }
+  }
+
+  // Update suggested ITP template when activity type changes
+  const handleActivityTypeChange = (activityType: string) => {
+    setNewLot(prev => ({ ...prev, activityType }))
+
+    // Find matching template
+    const suggested = itpTemplates.find(t =>
+      t.activityType?.toLowerCase() === activityType.toLowerCase()
+    )
+    if (suggested) {
+      setSuggestedTemplate({ id: suggested.id, name: suggested.name })
+      setSelectedTemplateId(suggested.id)
+    } else {
+      setSuggestedTemplate(null)
+      setSelectedTemplateId('')
     }
   }
 
   const handleCloseCreateModal = () => {
     setCreateModalOpen(false)
     setLotNumberTouched(false)
+    setSuggestedTemplate(null)
+    setSelectedTemplateId('')
     setNewLot({
       lotNumber: '',
       description: '',
       activityType: 'Earthworks',
       chainageStart: '',
       chainageEnd: '',
+      assignedSubcontractorId: '',
     })
   }
 
@@ -666,6 +723,8 @@ export function LotsPage() {
           activityType: newLot.activityType,
           chainageStart: newLot.chainageStart ? parseInt(newLot.chainageStart) : null,
           chainageEnd: newLot.chainageEnd ? parseInt(newLot.chainageEnd) : null,
+          itpTemplateId: selectedTemplateId || null,
+          assignedSubcontractorId: newLot.assignedSubcontractorId || null,
         }),
       })
 
@@ -685,10 +744,17 @@ export function LotsPage() {
       }])
       setCreateModalOpen(false)
 
+      // Find template name for toast message
+      const assignedTemplate = selectedTemplateId
+        ? itpTemplates.find(t => t.id === selectedTemplateId)
+        : null
+
       // Show success toast with specific lot number
       toast({
         title: 'Lot Created',
-        description: `Lot ${newLot.lotNumber} has been created successfully`,
+        description: assignedTemplate
+          ? `Lot ${newLot.lotNumber} created with ITP template "${assignedTemplate.name}"`
+          : `Lot ${newLot.lotNumber} has been created successfully`,
         variant: 'success',
       })
     } catch (err) {
@@ -1932,7 +1998,7 @@ export function LotsPage() {
                 <select
                   id="lot-activity"
                   value={newLot.activityType}
-                  onChange={(e) => setNewLot((prev) => ({ ...prev, activityType: e.target.value }))}
+                  onChange={(e) => handleActivityTypeChange(e.target.value)}
                   className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="Earthworks">Earthworks</option>
@@ -1941,6 +2007,48 @@ export function LotsPage() {
                   <option value="Pavement">Pavement</option>
                   <option value="Structures">Structures</option>
                   <option value="Utilities">Utilities</option>
+                </select>
+              </div>
+
+              {/* ITP Template suggestion */}
+              {suggestedTemplate && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-sm text-blue-800">
+                    <span className="font-medium">Suggested ITP Template:</span>{' '}
+                    {suggestedTemplate.name}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="use-suggested-itp"
+                      checked={selectedTemplateId === suggestedTemplate.id}
+                      onChange={(e) => setSelectedTemplateId(e.target.checked ? suggestedTemplate.id : '')}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="use-suggested-itp" className="text-sm text-blue-700">
+                      Assign this ITP template to the lot
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* ITP template dropdown for manual selection */}
+              <div>
+                <label htmlFor="lot-itp-template" className="block text-sm font-medium text-gray-700">
+                  ITP Template (Optional)
+                </label>
+                <select
+                  id="lot-itp-template"
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">No ITP template</option>
+                  {itpTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} ({template.activityType})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1986,6 +2094,28 @@ export function LotsPage() {
               </div>
               {chainageError && (
                 <p className="text-sm text-red-600 mt-1" role="alert" aria-live="assertive">{chainageError}</p>
+              )}
+
+              {/* Subcontractor assignment */}
+              {subcontractors.length > 0 && (
+                <div>
+                  <label htmlFor="lot-subcontractor" className="block text-sm font-medium text-gray-700">
+                    Assign to Subcontractor (Optional)
+                  </label>
+                  <select
+                    id="lot-subcontractor"
+                    value={newLot.assignedSubcontractorId}
+                    onChange={(e) => setNewLot((prev) => ({ ...prev, assignedSubcontractorId: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">No subcontractor assigned</option>
+                    {subcontractors.map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.companyName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
             </div>
 
