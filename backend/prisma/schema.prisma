@@ -64,6 +64,7 @@ model User {
   itpVerifications ITPCompletion[]  @relation("VerifiedByUser")
   testEntries     TestResult[]      @relation("EnteredByUser")
   testVerifications TestResult[]    @relation("VerifiedByTestUser")
+  testRejections  TestResult[]      @relation("RejectedByTestUser")
   uploadedDocs    Document[]
   notifications   Notification[]
   auditLogs       AuditLog[]
@@ -374,6 +375,9 @@ model TestResult {
   enteredAt             DateTime? @map("entered_at")
   verifiedById          String?   @map("verified_by")
   verifiedAt            DateTime? @map("verified_at")
+  rejectedById          String?   @map("rejected_by")
+  rejectedAt            DateTime? @map("rejected_at")
+  rejectionReason       String?   @map("rejection_reason")
   aiExtracted           Boolean   @default(false) @map("ai_extracted")
   aiConfidence          String?   @map("ai_confidence")  // Stored as JSON string for SQLite
   createdAt             DateTime  @default(now()) @map("created_at")
@@ -385,6 +389,7 @@ model TestResult {
   certificateDoc   Document?         @relation(fields: [certificateDocId], references: [id])
   enteredBy        User?             @relation("EnteredByUser", fields: [enteredById], references: [id])
   verifiedBy       User?             @relation("VerifiedByTestUser", fields: [verifiedById], references: [id])
+  rejectedBy       User?             @relation("RejectedByTestUser", fields: [rejectedById], references: [id])
 
   @@map("test_results")
 }

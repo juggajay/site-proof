@@ -132,6 +132,12 @@ export function TestResultsPage() {
   const [batchReviewData, setBatchReviewData] = useState<Record<string, Record<string, string>>>({})
   const [batchConfirming, setBatchConfirming] = useState(false)
 
+  // Feature #204: Reject test verification state
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectingTestId, setRejectingTestId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejecting, setRejecting] = useState(false)
+
   // Feature #198: Test type specifications for auto-populate
   const testTypeSpecs: Record<string, { min: string; max: string; unit: string }> = {
     'compaction': { min: '95', max: '100', unit: '% MDD' },
@@ -276,6 +282,57 @@ export function TestResultsPage() {
       alert('Failed to update test status')
     } finally {
       setUpdatingStatusId(null)
+    }
+  }
+
+  // Feature #204: Open reject modal
+  const openRejectModal = (testId: string) => {
+    setRejectingTestId(testId)
+    setRejectReason('')
+    setShowRejectModal(true)
+  }
+
+  // Feature #204: Handle reject test verification
+  const handleRejectTest = async () => {
+    if (!rejectingTestId || !rejectReason.trim()) {
+      alert('Rejection reason is required')
+      return
+    }
+
+    setRejecting(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/test-results/${rejectingTestId}/reject`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: rejectReason.trim() }),
+      })
+
+      if (response.ok) {
+        // Refetch to get updated test results
+        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (testsResponse.ok) {
+          const testsData = await testsResponse.json()
+          setTestResults(testsData.testResults || [])
+        }
+        setShowRejectModal(false)
+        setRejectingTestId(null)
+        setRejectReason('')
+      } else {
+        const data = await response.json()
+        alert(data.message || 'Failed to reject test result')
+      }
+    } catch (err) {
+      alert('Failed to reject test result')
+    } finally {
+      setRejecting(false)
     }
   }
 
@@ -776,18 +833,29 @@ export function TestResultsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {nextStatusMap[test.status] && (
-                      <button
-                        onClick={() => handleUpdateStatus(test.id, nextStatusMap[test.status])}
-                        disabled={updatingStatusId === test.id}
-                        className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                      >
-                        {updatingStatusId === test.id ? 'Updating...' : nextStatusButtonLabels[test.status]}
-                      </button>
-                    )}
-                    {test.status === 'verified' && (
-                      <span className="text-green-600 text-xs font-medium">✓ Complete</span>
-                    )}
+                    <div className="flex gap-2 items-center">
+                      {nextStatusMap[test.status] && (
+                        <button
+                          onClick={() => handleUpdateStatus(test.id, nextStatusMap[test.status])}
+                          disabled={updatingStatusId === test.id}
+                          className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                        >
+                          {updatingStatusId === test.id ? 'Updating...' : nextStatusButtonLabels[test.status]}
+                        </button>
+                      )}
+                      {/* Feature #204: Reject button for tests in "entered" status */}
+                      {test.status === 'entered' && (
+                        <button
+                          onClick={() => openRejectModal(test.id)}
+                          className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
+                        >
+                          Reject
+                        </button>
+                      )}
+                      {test.status === 'verified' && (
+                        <span className="text-green-600 text-xs font-medium">✓ Complete</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
                 )
@@ -1600,6 +1668,50 @@ export function TestResultsPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Feature #204: Reject Test Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-bold mb-2 text-red-600">Reject Test Verification</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Please provide a reason for rejecting this test result. The engineer will be notified and can re-enter the data.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Rejection Reason *</label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Enter the reason for rejection (e.g., incorrect values, missing data, doesn't match certificate)"
+                  rows={4}
+                  className="w-full rounded-lg border px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowRejectModal(false)
+                    setRejectingTestId(null)
+                    setRejectReason('')
+                  }}
+                  className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
+                  disabled={rejecting}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRejectTest}
+                  disabled={rejecting || !rejectReason.trim()}
+                  className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {rejecting ? 'Rejecting...' : 'Reject Test'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

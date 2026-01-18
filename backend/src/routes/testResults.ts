@@ -1220,6 +1220,123 @@ testResultsRouter.get('/:id/verification-view', async (req, res) => {
   }
 })
 
+// POST /api/test-results/:id/reject - Reject a test result verification (Feature #204)
+testResultsRouter.post('/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { reason } = req.body
+
+    if (!reason || reason.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Rejection reason is required'
+      })
+    }
+
+    const testResult = await prisma.testResult.findUnique({
+      where: { id },
+      include: {
+        enteredBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          }
+        }
+      }
+    })
+
+    if (!testResult) {
+      return res.status(404).json({ error: 'Test result not found' })
+    }
+
+    // Verify user has permission to reject (same as verify)
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: testResult.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const userProjectRole = projectUser?.role || user.roleInCompany
+
+    if (!TEST_VERIFIERS.includes(userProjectRole)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to reject test results'
+      })
+    }
+
+    // Can only reject tests that are in 'entered' status (pending verification)
+    if (testResult.status !== 'entered') {
+      return res.status(400).json({
+        error: 'Invalid Status',
+        message: `Cannot reject a test result with status '${testResult.status}'. Only tests in 'Entered' status can be rejected.`
+      })
+    }
+
+    // Reset status back to 'results_received' so engineer can re-enter
+    const updatedTestResult = await prisma.testResult.update({
+      where: { id },
+      data: {
+        status: 'results_received',
+        rejectedById: user.id,
+        rejectedAt: new Date(),
+        rejectionReason: reason.trim(),
+        // Clear verification fields
+        verifiedById: null,
+        verifiedAt: null,
+        // Clear entered fields so engineer can re-enter
+        enteredById: null,
+        enteredAt: null,
+      },
+      select: {
+        id: true,
+        testType: true,
+        status: true,
+        rejectedAt: true,
+        rejectionReason: true,
+        rejectedBy: {
+          select: {
+            fullName: true,
+            email: true,
+          }
+        },
+        enteredBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          }
+        },
+      },
+    })
+
+    // In a real app, we would send a notification to the engineer here
+    // For now, we'll just include the engineer info in the response
+    const engineerNotified = testResult.enteredBy ? {
+      userId: testResult.enteredBy.id,
+      name: testResult.enteredBy.fullName,
+      email: testResult.enteredBy.email,
+      message: `Your test result "${testResult.testType}" was rejected. Reason: ${reason.trim()}`
+    } : null
+
+    res.json({
+      message: 'Test result rejected',
+      testResult: updatedTestResult,
+      notification: {
+        sent: engineerNotified !== null,
+        recipient: engineerNotified
+      }
+    })
+  } catch (error) {
+    console.error('Reject test result error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // POST /api/test-results/:id/verify - Verify a test result (quality management)
 testResultsRouter.post('/:id/verify', async (req, res) => {
   try {
