@@ -1,12 +1,27 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTheme } from '@/lib/theme'
 import { useDateFormat, DateFormat } from '@/lib/dateFormat'
 import { useTimezone, TIMEZONES } from '@/lib/timezone'
-import { Sun, Moon, Monitor, Check, Calendar, Clock, Globe } from 'lucide-react'
+import { getAuthToken, useAuth } from '@/lib/auth'
+import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle } from 'lucide-react'
 
 export function SettingsPage() {
+  const navigate = useNavigate()
+  const { user, signOut } = useAuth()
   const { theme, setTheme, resolvedTheme } = useTheme()
   const { dateFormat, setDateFormat, formatDate } = useDateFormat()
   const { timezone, setTimezone, formatTime, formatDateTime } = useTimezone()
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [exportSuccess, setExportSuccess] = useState(false)
+
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('')
+  const [deletePassword, setDeletePassword] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const themeOptions = [
     { value: 'light' as const, label: 'Light', icon: Sun, description: 'Always use light mode' },
@@ -22,6 +37,110 @@ export function SettingsPage() {
 
   // Get current timezone label
   const currentTimezoneInfo = TIMEZONES.find(tz => tz.value === timezone)
+
+  // GDPR Data Export function
+  const handleExportData = async () => {
+    setIsExporting(true)
+    setExportError(null)
+    setExportSuccess(false)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setExportError('You must be logged in to export data')
+        return
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
+      const response = await fetch(`${apiUrl}/api/auth/export-data`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to export data')
+      }
+
+      // Get the filename from the Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = `siteproof-data-export-${new Date().toISOString().split('T')[0]}.json`
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="(.+)"/)
+        if (match) {
+          filename = match[1]
+        }
+      }
+
+      // Convert response to blob and trigger download
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      setExportSuccess(true)
+      // Clear success message after 5 seconds
+      setTimeout(() => setExportSuccess(false), 5000)
+    } catch (error) {
+      console.error('Export error:', error)
+      setExportError('Failed to export data. Please try again.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // Handle account deletion
+  const handleDeleteAccount = async () => {
+    if (!deleteConfirmEmail) {
+      setDeleteError('Please enter your email to confirm deletion')
+      return
+    }
+
+    setIsDeleting(true)
+    setDeleteError(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setDeleteError('You must be logged in to delete your account')
+        return
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
+      const response = await fetch(`${apiUrl}/api/auth/delete-account`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          confirmEmail: deleteConfirmEmail,
+          password: deletePassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to delete account')
+      }
+
+      // Account deleted successfully - sign out and redirect
+      signOut()
+      navigate('/login', { state: { message: 'Your account has been successfully deleted.' } })
+    } catch (error) {
+      console.error('Delete account error:', error)
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete account. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -178,15 +297,173 @@ export function SettingsPage() {
 
       <div className="rounded-lg border bg-card p-6 space-y-4">
         <div>
-          <h2 className="text-xl font-semibold">Privacy</h2>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Privacy & Data
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Manage your privacy settings.
+            Manage your privacy settings and download your data.
           </p>
         </div>
-        <p className="text-muted-foreground text-sm">
-          Privacy settings coming soon.
-        </p>
+
+        {/* Data Export Section */}
+        <div className="border-t pt-4">
+          <h3 className="text-lg font-medium mb-2">Export Your Data</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Download a copy of all your data stored in SiteProof. This includes your profile information,
+            project memberships, NCRs, daily diaries, test results, and activity logs.
+            The data is exported in a portable JSON format.
+          </p>
+
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={handleExportData}
+              disabled={isExporting}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed w-fit"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Preparing Export...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Export My Data
+                </>
+              )}
+            </button>
+
+            {exportSuccess && (
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <Check className="h-4 w-4" />
+                Data exported successfully! Check your downloads folder.
+              </div>
+            )}
+
+            {exportError && (
+              <div className="text-sm text-red-600 dark:text-red-400">
+                {exportError}
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground mt-4">
+            Your data export includes: user profile, company information, project memberships,
+            NCRs created or assigned to you, daily diaries, ITP completions, test results,
+            lots you created, and your activity log.
+          </p>
+        </div>
+
+        {/* Delete Account Section */}
+        <div className="border-t pt-4 mt-6">
+          <h3 className="text-lg font-medium mb-2 flex items-center gap-2 text-red-600 dark:text-red-400">
+            <Trash2 className="h-5 w-5" />
+            Delete Account
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Permanently delete your account and all associated data. This action cannot be undone.
+            Before deleting, we recommend exporting your data above.
+          </p>
+
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 w-fit"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete My Account
+          </button>
+        </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <h2 className="text-xl font-semibold">Delete Account</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-sm text-red-800 dark:text-red-200">
+                  <strong>Warning:</strong> This will permanently delete your account and all associated data including:
+                </p>
+                <ul className="text-sm text-red-700 dark:text-red-300 mt-2 list-disc list-inside space-y-1">
+                  <li>Your profile and settings</li>
+                  <li>All project memberships</li>
+                  <li>ITP completions you've made</li>
+                  <li>Other user-created content</li>
+                </ul>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Type your email to confirm: <span className="text-muted-foreground">{user?.email}</span>
+                </label>
+                <input
+                  type="email"
+                  value={deleteConfirmEmail}
+                  onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Enter your password (optional)
+                </label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </div>
+
+              {deleteError && (
+                <div className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                  {deleteError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setDeleteConfirmEmail('')
+                    setDeletePassword('')
+                    setDeleteError(null)
+                  }}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={isDeleting || !deleteConfirmEmail}
+                  className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    'Permanently Delete'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

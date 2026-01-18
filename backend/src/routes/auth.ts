@@ -688,3 +688,337 @@ authRouter.post('/test-expired-token', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' })
   }
 })
+
+// GET /api/auth/export-data - GDPR compliant data export
+// Returns all user data in a portable JSON format
+authRouter.get('/export-data', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const token = authHeader.substring(7)
+    // Import verifyToken dynamically to avoid circular import
+    const { verifyToken } = await import('../lib/auth.js')
+    const userData = await verifyToken(token)
+
+    if (!userData) {
+      return res.status(401).json({ message: 'Invalid token' })
+    }
+
+    const userId = userData.userId || userData.id
+
+    // Fetch all user-related data
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+            abn: true,
+            address: true,
+          },
+        },
+        projectUsers: {
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+                projectNumber: true,
+                status: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    // Get NCRs raised by or assigned to the user
+    const ncrs = await prisma.nCR.findMany({
+      where: {
+        OR: [
+          { raisedById: userId },
+          { responsibleUserId: userId },
+        ],
+      },
+      select: {
+        id: true,
+        ncrNumber: true,
+        description: true,
+        status: true,
+        severity: true,
+        category: true,
+        raisedAt: true,
+        closedAt: true,
+      },
+    })
+
+    // Get daily diaries submitted by user
+    const diaries = await prisma.dailyDiary.findMany({
+      where: { submittedById: userId },
+      select: {
+        id: true,
+        date: true,
+        weatherConditions: true,
+        temperatureMin: true,
+        temperatureMax: true,
+        rainfallMm: true,
+        generalNotes: true,
+        status: true,
+        submittedAt: true,
+        createdAt: true,
+      },
+    })
+
+    // Get ITP completions by user
+    const itpCompletions = await prisma.iTPCompletion.findMany({
+      where: { completedById: userId },
+      select: {
+        id: true,
+        completedAt: true,
+        notes: true,
+        checklistItem: {
+          select: {
+            description: true,
+            sequenceNumber: true,
+          },
+        },
+      },
+    })
+
+    // Get test results entered by user
+    const testResults = await prisma.testResult.findMany({
+      where: { enteredById: userId },
+      select: {
+        id: true,
+        testType: true,
+        testDate: true,
+        resultValue: true,
+        resultUnit: true,
+        passFail: true,
+        laboratoryName: true,
+        laboratoryReportNumber: true,
+        createdAt: true,
+      },
+    })
+
+    // Get lots created by user
+    const lotsCreated = await prisma.lot.findMany({
+      where: { createdById: userId },
+      select: {
+        id: true,
+        lotNumber: true,
+        description: true,
+        activityType: true,
+        status: true,
+        createdAt: true,
+      },
+    })
+
+    // Get audit log entries for this user
+    const auditLogs = await prisma.auditLog.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        changes: true,
+        ipAddress: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 1000, // Limit to last 1000 entries
+    })
+
+    // Build the export data structure
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      exportVersion: '1.0',
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        phone: user.phone,
+        role: user.roleInCompany,
+        emailVerified: user.emailVerified,
+        emailVerifiedAt: user.emailVerifiedAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+      company: user.company ? {
+        id: user.company.id,
+        name: user.company.name,
+        abn: user.company.abn,
+        address: user.company.address,
+      } : null,
+      projectMemberships: user.projectUsers.map(pu => ({
+        role: pu.role,
+        invitedAt: pu.invitedAt,
+        acceptedAt: pu.acceptedAt,
+        status: pu.status,
+        project: pu.project,
+      })),
+      ncrs: ncrs,
+      dailyDiaries: diaries.map(d => ({
+        id: d.id,
+        date: d.date,
+        weatherConditions: d.weatherConditions,
+        temperatureMin: d.temperatureMin,
+        temperatureMax: d.temperatureMax,
+        rainfallMm: d.rainfallMm,
+        notes: d.generalNotes,
+        status: d.status,
+        submittedAt: d.submittedAt,
+        createdAt: d.createdAt,
+      })),
+      itpCompletions: itpCompletions.map(c => ({
+        id: c.id,
+        completedAt: c.completedAt,
+        notes: c.notes,
+        checklistItemDescription: c.checklistItem?.description,
+        checklistItemSequence: c.checklistItem?.sequenceNumber,
+      })),
+      testResults: testResults,
+      lotsCreated: lotsCreated,
+      activityLog: auditLogs,
+    }
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/json')
+    res.setHeader('Content-Disposition', `attachment; filename="siteproof-data-export-${user.email}-${new Date().toISOString().split('T')[0]}.json"`)
+
+    res.json(exportData)
+  } catch (error) {
+    console.error('Data export error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// GDPR Data Deletion endpoint
+authRouter.delete('/delete-account', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const token = authHeader.substring(7)
+    const { verifyToken } = await import('../lib/auth.js')
+    const userData = await verifyToken(token)
+
+    if (!userData) {
+      return res.status(401).json({ message: 'Invalid token' })
+    }
+
+    const userId = userData.userId || userData.id
+
+    // Get the confirmation password from request body
+    const { password, confirmEmail } = req.body
+
+    if (!confirmEmail) {
+      return res.status(400).json({ message: 'Email confirmation required' })
+    }
+
+    // Verify the user exists and get their data
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        passwordHash: true,
+        fullName: true,
+        companyId: true,
+        roleInCompany: true,
+      },
+    })
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    // Verify email matches
+    if (confirmEmail.toLowerCase() !== user.email.toLowerCase()) {
+      return res.status(400).json({ message: 'Email confirmation does not match' })
+    }
+
+    // Verify password if the user has one set
+    if (user.passwordHash && password) {
+      const bcrypt = await import('bcryptjs')
+      const isValidPassword = await bcrypt.compare(password, user.passwordHash)
+      if (!isValidPassword) {
+        return res.status(400).json({ message: 'Invalid password' })
+      }
+    }
+
+    // Create an audit log entry before deletion (for compliance)
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'user',
+        entityId: userId,
+        action: 'account_deletion_requested',
+        changes: JSON.stringify({
+          email: user.email,
+          fullName: user.fullName,
+          deletedAt: new Date().toISOString(),
+          reason: 'GDPR deletion request',
+        }),
+        userId: userId,
+        ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        userAgent: req.headers['user-agent'] || 'unknown',
+      },
+    })
+
+    // Delete all user-related data in order (respecting foreign key constraints)
+    // The order matters due to foreign key relationships
+
+    // 1. Delete ITP completions by user
+    await prisma.iTPCompletion.deleteMany({
+      where: { completedById: userId },
+    })
+
+    // 2. Delete email verification tokens
+    await prisma.emailVerificationToken.deleteMany({
+      where: { userId },
+    })
+
+    // 3. Delete password reset tokens
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId },
+    })
+
+    // 4. Delete project user memberships (this removes the user from all projects)
+    await prisma.projectUser.deleteMany({
+      where: { userId },
+    })
+
+    // 5. Delete the audit log for this user (anonymize - the account_deletion audit remains)
+    await prisma.auditLog.updateMany({
+      where: { userId },
+      data: { userId: null },
+    })
+
+    // 6. Finally, delete the user record
+    await prisma.user.delete({
+      where: { id: userId },
+    })
+
+    console.log(`Account deleted for user: ${user.email} (ID: ${userId})`)
+
+    res.json({
+      success: true,
+      message: 'Your account and associated data have been permanently deleted.',
+    })
+  } catch (error) {
+    console.error('Account deletion error:', error)
+    res.status(500).json({ message: 'Failed to delete account. Please contact support.' })
+  }
+})
