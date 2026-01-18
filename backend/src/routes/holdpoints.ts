@@ -255,19 +255,43 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: any, r
   }
 })
 
+// Utility function to calculate working days between two dates
+function calculateWorkingDays(
+  fromDate: Date,
+  toDate: Date,
+  workingDays: string = '1,2,3,4,5' // Mon-Fri by default
+): number {
+  const workingDaysList = workingDays.split(',').map(Number) // 0=Sun, 1=Mon, etc.
+  let count = 0
+  const current = new Date(fromDate)
+  current.setHours(0, 0, 0, 0)
+  const target = new Date(toDate)
+  target.setHours(0, 0, 0, 0)
+
+  while (current < target) {
+    if (workingDaysList.includes(current.getDay())) {
+      count++
+    }
+    current.setDate(current.getDate() + 1)
+  }
+
+  return count
+}
+
 // Request hold point release - checks prerequisites first
 holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => {
   try {
-    const { lotId, itpChecklistItemId, scheduledDate, scheduledTime, notificationSentTo } = req.body
+    const { lotId, itpChecklistItemId, scheduledDate, scheduledTime, notificationSentTo, noticePeriodOverride, noticePeriodOverrideReason } = req.body
 
     if (!lotId || !itpChecklistItemId) {
       return res.status(400).json({ error: 'lotId and itpChecklistItemId are required' })
     }
 
-    // Get the lot with ITP instance
+    // Get the lot with ITP instance and project
     const lot = await prisma.lot.findUnique({
       where: { id: lotId },
       include: {
+        project: true,
         itpInstance: {
           include: {
             template: {
@@ -321,7 +345,49 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
       })
     }
 
+    // Check minimum notice period (Feature #180)
+    let projectSettings: any = {}
+    if (lot.project.settings) {
+      try {
+        projectSettings = JSON.parse(lot.project.settings)
+      } catch (e) {
+        // Invalid JSON, use defaults
+      }
+    }
+
+    // Default minimum notice period is 1 working day
+    const minimumNoticeDays = projectSettings.holdPointMinimumNoticeDays ?? 1
+
+    if (scheduledDate && minimumNoticeDays > 0 && !noticePeriodOverride) {
+      const today = new Date()
+      const scheduled = new Date(scheduledDate)
+      const workingDays = calculateWorkingDays(
+        today,
+        scheduled,
+        lot.project.workingDays || '1,2,3,4,5'
+      )
+
+      if (workingDays < minimumNoticeDays) {
+        return res.status(400).json({
+          error: 'Notice period not met',
+          code: 'NOTICE_PERIOD_WARNING',
+          message: `The scheduled date is less than the minimum ${minimumNoticeDays} working day${minimumNoticeDays > 1 ? 's' : ''} notice period.`,
+          details: {
+            scheduledDate,
+            workingDaysNotice: workingDays,
+            minimumNoticeDays,
+            requiresOverride: true
+          }
+        })
+      }
+    }
+
     // All prerequisites completed - create or update hold point request
+    // If override was used, include the reason in notes
+    const overrideNote = noticePeriodOverride && noticePeriodOverrideReason
+      ? `[Notice period override: ${noticePeriodOverrideReason}]`
+      : null
+
     let holdPoint
     if (lot.holdPoints.length > 0) {
       // Update existing
@@ -332,7 +398,8 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
           notificationSentAt: new Date(),
           notificationSentTo: notificationSentTo || null,
           scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
-          scheduledTime: scheduledTime || null
+          scheduledTime: scheduledTime || null,
+          ...(overrideNote && { releaseNotes: overrideNote })
         },
         include: { itpChecklistItem: true }
       })
@@ -348,7 +415,8 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
           notificationSentAt: new Date(),
           notificationSentTo: notificationSentTo || null,
           scheduledDate: scheduledDate ? new Date(scheduledDate) : null,
-          scheduledTime: scheduledTime || null
+          scheduledTime: scheduledTime || null,
+          ...(overrideNote && { releaseNotes: overrideNote })
         },
         include: { itpChecklistItem: true }
       })

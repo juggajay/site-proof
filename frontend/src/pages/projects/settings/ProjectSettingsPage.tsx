@@ -997,6 +997,68 @@ export function ProjectSettingsPage() {
               </div>
             </div>
             <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">Witness Point Auto-Notification</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Automatically notify clients when approaching witness points in an ITP workflow.
+              </p>
+              <div className="space-y-4">
+                <label className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 cursor-pointer">
+                  <div>
+                    <p className="font-medium">Enable Witness Point Notifications</p>
+                    <p className="text-sm text-muted-foreground">Send notification when approaching a witness point</p>
+                  </div>
+                  <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-gray-300" />
+                </label>
+                <div className="p-3 rounded-lg bg-muted/30">
+                  <label className="block text-sm font-medium mb-2">Notification Trigger</label>
+                  <p className="text-xs text-muted-foreground mb-2">When to notify the client about an upcoming witness point</p>
+                  <select className="w-full rounded-lg border bg-background px-3 py-2 text-sm">
+                    <option value="previous_item">When previous checklist item is completed</option>
+                    <option value="2_items_before">When 2 items before witness point is completed</option>
+                    <option value="same_day">Same day notification (at start of working day)</option>
+                  </select>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/30">
+                  <label className="block text-sm font-medium mb-2">Client Contact Email</label>
+                  <p className="text-xs text-muted-foreground mb-2">Email address for witness point notifications</p>
+                  <input
+                    type="email"
+                    placeholder="superintendent@client.com"
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="p-3 rounded-lg bg-muted/30">
+                  <label className="block text-sm font-medium mb-2">Client Contact Name</label>
+                  <input
+                    type="text"
+                    placeholder="John Smith"
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">Hold Point Minimum Notice Period</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Set the minimum working days notice required before a hold point inspection can be scheduled.
+              </p>
+              <div className="space-y-4">
+                <div className="p-3 rounded-lg bg-muted/30">
+                  <label className="block text-sm font-medium mb-2">Minimum Notice (Working Days)</label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    If a user schedules an inspection with less than this notice, they'll receive a warning and must provide a reason to override.
+                  </p>
+                  <select className="w-full rounded-lg border bg-background px-3 py-2 text-sm">
+                    <option value="0">No minimum notice</option>
+                    <option value="1" selected>1 working day (default)</option>
+                    <option value="2">2 working days</option>
+                    <option value="3">3 working days</option>
+                    <option value="5">5 working days</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border p-4">
               <h2 className="text-lg font-semibold mb-2">Hold Point Recipients</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Default recipients for hold point notifications.

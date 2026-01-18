@@ -50,7 +50,19 @@ export function HoldPointsPage() {
   const [holdPointDetails, setHoldPointDetails] = useState<HoldPointDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [requesting, setRequesting] = useState(false)
-  const [requestError, setRequestError] = useState<{message: string, incompleteItems?: PrerequisiteItem[]} | null>(null)
+  const [requestError, setRequestError] = useState<{
+    message: string;
+    incompleteItems?: PrerequisiteItem[];
+    code?: string;
+    details?: {
+      scheduledDate?: string;
+      workingDaysNotice?: number;
+      minimumNoticeDays?: number;
+      requiresOverride?: boolean;
+    };
+  } | null>(null)
+  const [noticePeriodOverride, setNoticePeriodOverride] = useState(false)
+  const [noticePeriodOverrideReason, setNoticePeriodOverrideReason] = useState('')
   const [copiedHpId, setCopiedHpId] = useState<string | null>(null)
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null)
 
@@ -178,7 +190,13 @@ export function HoldPointsPage() {
     fetchHoldPointDetails(hp)
   }
 
-  const handleSubmitRequest = async (scheduledDate: string, scheduledTime: string, notificationSentTo: string) => {
+  const handleSubmitRequest = async (
+    scheduledDate: string,
+    scheduledTime: string,
+    notificationSentTo: string,
+    overrideNoticePeriod?: boolean,
+    overrideReason?: string
+  ) => {
     if (!selectedHoldPoint || !token) return
 
     setRequesting(true)
@@ -197,6 +215,8 @@ export function HoldPointsPage() {
           scheduledDate: scheduledDate || null,
           scheduledTime: scheduledTime || null,
           notificationSentTo: notificationSentTo || null,
+          noticePeriodOverride: overrideNoticePeriod || false,
+          noticePeriodOverrideReason: overrideReason || null,
         }),
       })
 
@@ -208,11 +228,22 @@ export function HoldPointsPage() {
             message: data.message,
             incompleteItems: data.incompleteItems
           })
+        } else if (data.code === 'NOTICE_PERIOD_WARNING') {
+          // Handle notice period warning - allow user to override
+          setRequestError({
+            message: data.message,
+            code: data.code,
+            details: data.details
+          })
         } else {
           setRequestError({ message: data.error || 'Failed to request release' })
         }
         return
       }
+
+      // Reset override state on success
+      setNoticePeriodOverride(false)
+      setNoticePeriodOverrideReason('')
 
       // Success - refresh hold points
       const refreshResponse = await fetch(`${apiUrl}/api/holdpoints/project/${projectId}`, {
@@ -442,9 +473,19 @@ function RequestReleaseModal({
   details: HoldPointDetails | null
   loading: boolean
   requesting: boolean
-  error: { message: string; incompleteItems?: PrerequisiteItem[] } | null
+  error: {
+    message: string;
+    incompleteItems?: PrerequisiteItem[];
+    code?: string;
+    details?: {
+      scheduledDate?: string;
+      workingDaysNotice?: number;
+      minimumNoticeDays?: number;
+      requiresOverride?: boolean;
+    };
+  } | null
   onClose: () => void
-  onSubmit: (scheduledDate: string, scheduledTime: string, notificationSentTo: string) => void
+  onSubmit: (scheduledDate: string, scheduledTime: string, notificationSentTo: string, overrideNoticePeriod?: boolean, overrideReason?: string) => void
 }) {
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
@@ -452,13 +493,29 @@ function RequestReleaseModal({
   const [showPreview, setShowPreview] = useState(false)
   const [previewData, setPreviewData] = useState<HPEvidencePackageData | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const [overrideReason, setOverrideReason] = useState('')
 
   const token = getAuthToken()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
+  // Check if we have a notice period warning that needs override
+  const hasNoticePeriodWarning = error?.code === 'NOTICE_PERIOD_WARNING'
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     onSubmit(scheduledDate, scheduledTime, notificationSentTo)
+  }
+
+  const handleOverrideSubmit = () => {
+    if (!overrideReason.trim()) {
+      toast({
+        title: 'Override reason required',
+        description: 'Please provide a reason for overriding the notice period',
+        variant: 'destructive',
+      })
+      return
+    }
+    onSubmit(scheduledDate, scheduledTime, notificationSentTo, true, overrideReason)
   }
 
   const handlePreviewPackage = async () => {
@@ -555,7 +612,7 @@ function RequestReleaseModal({
             )}
 
             {/* Error / Block Message */}
-            {error && (
+            {error && !hasNoticePeriodWarning && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex items-start gap-2">
                   <span className="text-red-500 text-xl">⚠️</span>
@@ -573,6 +630,55 @@ function RequestReleaseModal({
                         </ul>
                       </div>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notice Period Warning - Allow Override (Feature #180) */}
+            {hasNoticePeriodWarning && (
+              <div className="mb-4 p-4 bg-amber-50 border border-amber-300 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <span className="text-amber-500 text-xl">⚠️</span>
+                  <div className="flex-1">
+                    <div className="font-medium text-amber-800">{error.message}</div>
+                    {error.details && (
+                      <div className="mt-2 text-sm text-amber-700">
+                        <p>Scheduled date provides only {error.details.workingDaysNotice} working day{error.details.workingDaysNotice !== 1 ? 's' : ''} notice.</p>
+                        <p>Minimum required: {error.details.minimumNoticeDays} working day{error.details.minimumNoticeDays !== 1 ? 's' : ''}.</p>
+                      </div>
+                    )}
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-amber-800 mb-1">
+                          Override Reason (required)
+                        </label>
+                        <textarea
+                          value={overrideReason}
+                          onChange={(e) => setOverrideReason(e.target.value)}
+                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm"
+                          placeholder="Explain why this short notice is necessary..."
+                          rows={2}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleOverrideSubmit}
+                          disabled={requesting || !overrideReason.trim()}
+                          className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm"
+                        >
+                          {requesting ? 'Requesting...' : 'Override & Submit'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          className="px-4 py-2 border border-amber-300 rounded-lg hover:bg-amber-100 text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
