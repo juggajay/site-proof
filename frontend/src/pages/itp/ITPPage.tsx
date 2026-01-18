@@ -24,6 +24,7 @@ interface ITPTemplate {
   createdAt: string
   isGlobalTemplate?: boolean
   stateSpec?: string | null
+  isActive?: boolean
 }
 
 export function ITPPage() {
@@ -99,6 +100,56 @@ export function ITPPage() {
     }
   }
 
+  const handleToggleActive = async (template: ITPTemplate) => {
+    if (!token || template.isGlobalTemplate) return
+
+    try {
+      const response = await fetch(`${apiUrl}/api/itp/templates/${template.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          isActive: !template.isActive,
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setTemplates(prev =>
+          prev.map(t => t.id === template.id ? { ...t, isActive: result.template.isActive } : t)
+        )
+      }
+    } catch (err) {
+      console.error('Failed to toggle template status:', err)
+    }
+  }
+
+  const handleCloneTemplate = async (template: ITPTemplate) => {
+    if (!token || !projectId) return
+
+    try {
+      const response = await fetch(`${apiUrl}/api/itp/templates/${template.id}/clone`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          projectId,
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setTemplates(prev => [result.template, ...prev])
+      }
+    } catch (err) {
+      console.error('Failed to clone template:', err)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -157,15 +208,27 @@ export function ITPPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {templates.map((template) => (
-            <div key={template.id} className="rounded-lg border p-4 hover:border-primary/50 transition-colors">
+            <div
+              key={template.id}
+              className={`rounded-lg border p-4 transition-colors ${
+                template.isActive === false ? 'opacity-60 bg-muted/30' : 'hover:border-primary/50'
+              }`}
+            >
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <h3 className="font-semibold">{template.name}</h3>
-                  {template.isGlobalTemplate && (
-                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-                      {template.stateSpec || 'Library'} Template
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    {template.isGlobalTemplate && (
+                      <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                        {template.stateSpec || 'Library'} Template
+                      </span>
+                    )}
+                    {template.isActive === false && (
+                      <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <span className="text-xs bg-muted px-2 py-1 rounded">{template.activityType}</span>
               </div>
@@ -179,6 +242,27 @@ export function ITPPage() {
                 <span className="text-xs text-muted-foreground">
                   {template.checklistItems.filter(i => i.isHoldPoint).length} hold points
                 </span>
+              </div>
+              <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                <button
+                  onClick={() => handleCloneTemplate(template)}
+                  className="text-xs px-2 py-1 rounded border hover:bg-muted"
+                  title="Clone template"
+                >
+                  Copy
+                </button>
+                {!template.isGlobalTemplate && (
+                  <button
+                    onClick={() => handleToggleActive(template)}
+                    className={`text-xs px-2 py-1 rounded ${
+                      template.isActive !== false
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {template.isActive !== false ? 'Active' : 'Inactive'}
+                  </button>
+                )}
               </div>
             </div>
           ))}

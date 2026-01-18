@@ -69,6 +69,7 @@ itpRouter.get('/templates', requireAuth, async (req: any, res) => {
     const transformedTemplates = templates.map(t => ({
       ...t,
       isGlobalTemplate: t.projectId === null,
+      isActive: t.isActive,
       stateSpec: t.stateSpec,
       checklistItems: t.checklistItems.map(item => ({
         id: item.id,
@@ -190,11 +191,84 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
   }
 })
 
+// Clone ITP template
+itpRouter.post('/templates/:id/clone', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+    const { projectId, name } = req.body
+
+    // Get the source template with all checklist items
+    const sourceTemplate = await prisma.iTPTemplate.findUnique({
+      where: { id },
+      include: {
+        checklistItems: {
+          orderBy: { sequenceNumber: 'asc' }
+        }
+      }
+    })
+
+    if (!sourceTemplate) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    // Create the cloned template
+    const clonedTemplate = await prisma.iTPTemplate.create({
+      data: {
+        projectId: projectId || sourceTemplate.projectId,
+        name: name || `${sourceTemplate.name} (Copy)`,
+        description: sourceTemplate.description,
+        activityType: sourceTemplate.activityType,
+        specificationReference: sourceTemplate.specificationReference,
+        stateSpec: sourceTemplate.stateSpec,
+        isActive: true,
+        checklistItems: {
+          create: sourceTemplate.checklistItems.map((item, index) => ({
+            description: item.description,
+            sequenceNumber: index + 1,
+            pointType: item.pointType,
+            responsibleParty: item.responsibleParty,
+            evidenceRequired: item.evidenceRequired,
+            acceptanceCriteria: item.acceptanceCriteria,
+            testType: item.testType
+          }))
+        }
+      },
+      include: {
+        checklistItems: {
+          orderBy: { sequenceNumber: 'asc' }
+        }
+      }
+    })
+
+    // Transform response
+    const transformedTemplate = {
+      ...clonedTemplate,
+      isActive: clonedTemplate.isActive,
+      checklistItems: clonedTemplate.checklistItems.map(item => ({
+        id: item.id,
+        description: item.description,
+        category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
+        isHoldPoint: item.pointType === 'hold_point',
+        pointType: item.pointType || 'standard',
+        evidenceRequired: item.evidenceRequired || 'none',
+        order: item.sequenceNumber,
+        acceptanceCriteria: item.acceptanceCriteria
+      }))
+    }
+
+    res.status(201).json({ template: transformedTemplate })
+  } catch (error) {
+    console.error('Error cloning ITP template:', error)
+    res.status(500).json({ error: 'Failed to clone template' })
+  }
+})
+
 // Update ITP template
 itpRouter.patch('/templates/:id', requireAuth, async (req: any, res) => {
   try {
     const { id } = req.params
-    const { name, description, activityType, checklistItems } = req.body
+    const { name, description, activityType, checklistItems, isActive } = req.body
 
     // First, delete existing checklist items and recreate (simplest approach)
     if (checklistItems) {
@@ -203,23 +277,27 @@ itpRouter.patch('/templates/:id', requireAuth, async (req: any, res) => {
       })
     }
 
+    const updateData: Record<string, unknown> = {}
+    if (name !== undefined) updateData.name = name
+    if (description !== undefined) updateData.description = description
+    if (activityType !== undefined) updateData.activityType = activityType
+    if (isActive !== undefined) updateData.isActive = isActive
+    if (checklistItems) {
+      updateData.checklistItems = {
+        create: checklistItems.map((item: any, index: number) => ({
+          description: item.description,
+          sequenceNumber: index + 1,
+          pointType: item.pointType || 'standard',
+          responsibleParty: item.responsibleParty || item.category || 'contractor',
+          evidenceRequired: item.evidenceRequired || 'none',
+          acceptanceCriteria: item.acceptanceCriteria || null
+        }))
+      }
+    }
+
     const template = await prisma.iTPTemplate.update({
       where: { id },
-      data: {
-        name,
-        description,
-        activityType,
-        checklistItems: checklistItems ? {
-          create: checklistItems.map((item: any, index: number) => ({
-            description: item.description,
-            sequenceNumber: index + 1,
-            pointType: item.pointType || 'standard',
-            responsibleParty: item.responsibleParty || item.category || 'contractor',
-            evidenceRequired: item.evidenceRequired || 'none',
-            acceptanceCriteria: item.acceptanceCriteria || null
-          }))
-        } : undefined
-      },
+      data: updateData,
       include: {
         checklistItems: {
           orderBy: { sequenceNumber: 'asc' }
@@ -230,6 +308,7 @@ itpRouter.patch('/templates/:id', requireAuth, async (req: any, res) => {
     // Transform to frontend-friendly format
     const transformedTemplate = {
       ...template,
+      isActive: template.isActive,
       checklistItems: template.checklistItems.map(item => ({
         id: item.id,
         description: item.description,
