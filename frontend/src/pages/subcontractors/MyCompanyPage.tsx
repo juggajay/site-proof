@@ -44,7 +44,8 @@ export function MyCompanyPage() {
   const [saving, setSaving] = useState(false)
 
   // Only subcontractor_admin can manage roster - regular subcontractor users can only view
-  const canManageRoster = user?.roleInCompany === 'subcontractor_admin'
+  // Note: user.role is used (from auth context) not roleInCompany
+  const canManageRoster = user?.role === 'subcontractor_admin'
 
   useEffect(() => {
     fetchCompanyData()
