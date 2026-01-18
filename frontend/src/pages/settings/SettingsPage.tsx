@@ -4,7 +4,7 @@ import { useTheme } from '@/lib/theme'
 import { useDateFormat, DateFormat } from '@/lib/dateFormat'
 import { useTimezone, TIMEZONES } from '@/lib/timezone'
 import { getAuthToken, useAuth } from '@/lib/auth'
-import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info } from 'lucide-react'
+import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut } from 'lucide-react'
 
 // App version info
 const APP_VERSION = '1.3.0'
@@ -27,6 +27,11 @@ export function SettingsPage() {
   const [deletePassword, setDeletePassword] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  // Leave company state
+  const [showLeaveCompanyModal, setShowLeaveCompanyModal] = useState(false)
+  const [isLeavingCompany, setIsLeavingCompany] = useState(false)
+  const [leaveCompanyError, setLeaveCompanyError] = useState<string | null>(null)
 
   const themeOptions = [
     { value: 'light' as const, label: 'Light', icon: Sun, description: 'Always use light mode' },
@@ -144,6 +149,44 @@ export function SettingsPage() {
       setDeleteError(error instanceof Error ? error.message : 'Failed to delete account. Please try again.')
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  // Handle leaving company
+  const handleLeaveCompany = async () => {
+    setIsLeavingCompany(true)
+    setLeaveCompanyError(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setLeaveCompanyError('You must be logged in to leave the company')
+        return
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
+      const response = await fetch(`${apiUrl}/api/company/leave`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to leave company')
+      }
+
+      // Successfully left company - reload to refresh user data
+      setShowLeaveCompanyModal(false)
+      window.location.reload()
+    } catch (error) {
+      console.error('Leave company error:', error)
+      setLeaveCompanyError(error instanceof Error ? error.message : 'Failed to leave company. Please try again.')
+    } finally {
+      setIsLeavingCompany(false)
     }
   }
 
@@ -398,6 +441,52 @@ export function SettingsPage() {
         </div>
       </div>
 
+      {/* Company Membership Section - only show if user has a company */}
+      {user?.companyId && (
+        <div className="rounded-lg border bg-card p-6 space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Company Membership
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Manage your company membership settings.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-lg bg-muted/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Current Company</p>
+                <p className="text-lg font-semibold">{user?.companyName || 'Unknown Company'}</p>
+              </div>
+              <div className="p-2 rounded-full bg-primary/10">
+                <Building2 className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-medium mb-2 flex items-center gap-2 text-amber-600">
+              <LogOut className="h-5 w-5" />
+              Leave Company
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Remove yourself from this company. You will lose access to all company projects and data.
+              This action cannot be undone.
+            </p>
+
+            <button
+              onClick={() => setShowLeaveCompanyModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20 w-fit"
+            >
+              <LogOut className="h-4 w-4" />
+              Leave Company
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* About Section */}
       <div className="rounded-lg border bg-card p-6 space-y-4">
         <div>
@@ -512,6 +601,70 @@ export function SettingsPage() {
                     </>
                   ) : (
                     'Permanently Delete'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Company Confirmation Modal */}
+      {showLeaveCompanyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
+              </div>
+              <h2 className="text-xl font-semibold">Leave Company</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  <strong>Warning:</strong> Leaving <strong>{user?.companyName}</strong> will:
+                </p>
+                <ul className="text-sm text-amber-700 dark:text-amber-300 mt-2 list-disc list-inside space-y-1">
+                  <li>Remove your access to all company projects</li>
+                  <li>Remove you from all project teams</li>
+                  <li>Revoke access to company documents</li>
+                </ul>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to leave this company? You will need to be re-invited to rejoin.
+              </p>
+
+              {leaveCompanyError && (
+                <div className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                  {leaveCompanyError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowLeaveCompanyModal(false)
+                    setLeaveCompanyError(null)
+                  }}
+                  disabled={isLeavingCompany}
+                  className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleLeaveCompany}
+                  disabled={isLeavingCompany}
+                  className="flex-1 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {isLeavingCompany ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Leaving...
+                    </>
+                  ) : (
+                    'Leave Company'
                   )}
                 </button>
               </div>

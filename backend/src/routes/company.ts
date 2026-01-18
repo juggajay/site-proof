@@ -85,6 +85,58 @@ companyRouter.get('/', async (req, res) => {
   }
 })
 
+// POST /api/company/leave - Leave the current company
+companyRouter.post('/leave', async (req, res) => {
+  try {
+    const user = req.user!
+
+    if (!user.companyId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'You are not a member of any company'
+      })
+    }
+
+    // Don't allow owners to leave (they must transfer ownership or delete company)
+    if (user.roleInCompany === 'owner') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Company owners cannot leave. Please transfer ownership first or delete the company.'
+      })
+    }
+
+    // Remove user from all project memberships for this company
+    const companyProjects = await prisma.project.findMany({
+      where: { companyId: user.companyId },
+      select: { id: true }
+    })
+
+    const projectIds = companyProjects.map(p => p.id)
+
+    // Delete project user records
+    await prisma.projectUser.deleteMany({
+      where: {
+        userId: user.userId,
+        projectId: { in: projectIds }
+      }
+    })
+
+    // Remove company association from user using raw SQL to avoid Prisma quirks
+    // Set role_in_company to 'member' (default) since it's NOT NULL
+    await prisma.$executeRaw`UPDATE users SET company_id = NULL, role_in_company = 'member' WHERE id = ${user.userId}`
+
+    console.log(`User ${user.email} left company ${user.companyId}`)
+
+    res.json({
+      message: 'Successfully left the company',
+      leftAt: new Date().toISOString()
+    })
+  } catch (error) {
+    console.error('Leave company error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // PATCH /api/company - Update the current user's company
 companyRouter.patch('/', async (req, res) => {
   try {

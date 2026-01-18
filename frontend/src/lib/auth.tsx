@@ -75,7 +75,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
 
           if (response.ok) {
-            setUser(parsed.user)
+            // Use fresh user data from the API response
+            const data = await response.json()
+            const freshUser = data.user
+            // Update storage with fresh user data
+            const updatedAuth = { ...parsed, user: freshUser }
+            storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedAuth))
+            setUser(freshUser)
           } else {
             // Token is invalid or expired
             clearAuthFromAllStorages()
