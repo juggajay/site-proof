@@ -4,7 +4,12 @@ import { useTheme } from '@/lib/theme'
 import { useDateFormat, DateFormat } from '@/lib/dateFormat'
 import { useTimezone, TIMEZONES } from '@/lib/timezone'
 import { getAuthToken, useAuth } from '@/lib/auth'
-import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle } from 'lucide-react'
+import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info } from 'lucide-react'
+
+// App version info
+const APP_VERSION = '1.3.0'
+const BUILD_DATE = '2026-01-18'
+const BUILD_NUMBER = '20260118.1'
 
 export function SettingsPage() {
   const navigate = useNavigate()
@@ -390,6 +395,39 @@ export function SettingsPage() {
             <Trash2 className="h-4 w-4" />
             Delete My Account
           </button>
+        </div>
+      </div>
+
+      {/* About Section */}
+      <div className="rounded-lg border bg-card p-6 space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Info className="h-5 w-5" />
+            About SiteProof
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Application version and build information.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="p-4 rounded-lg bg-muted/50">
+            <p className="text-sm text-muted-foreground">Version</p>
+            <p className="text-lg font-semibold">{APP_VERSION}</p>
+          </div>
+          <div className="p-4 rounded-lg bg-muted/50">
+            <p className="text-sm text-muted-foreground">Build Date</p>
+            <p className="text-lg font-semibold">{BUILD_DATE}</p>
+          </div>
+          <div className="p-4 rounded-lg bg-muted/50">
+            <p className="text-sm text-muted-foreground">Build Number</p>
+            <p className="text-lg font-mono">{BUILD_NUMBER}</p>
+          </div>
+        </div>
+
+        <div className="text-sm text-muted-foreground">
+          <p>SiteProof is a civil construction quality management platform.</p>
+          <p className="mt-2">© {new Date().getFullYear()} SiteProof. All rights reserved.</p>
         </div>
       </div>
 
