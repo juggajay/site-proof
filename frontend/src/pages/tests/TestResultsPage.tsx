@@ -96,12 +96,31 @@ export function TestResultsPage() {
   const [creating, setCreating] = useState(false)
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
 
+  // Feature #198: Test type specifications for auto-populate
+  const testTypeSpecs: Record<string, { min: string; max: string; unit: string }> = {
+    'compaction': { min: '95', max: '100', unit: '% MDD' },
+    'cbr': { min: '15', max: '', unit: '%' },
+    'moisture_content': { min: '', max: '', unit: '%' },
+    'plasticity_index': { min: '', max: '25', unit: '%' },
+    'liquid_limit': { min: '', max: '45', unit: '%' },
+    'grading': { min: '', max: '', unit: 'envelope' },
+    'sand_equivalent': { min: '30', max: '', unit: '%' },
+    'concrete_slump': { min: '50', max: '120', unit: 'mm' },
+    'concrete_strength': { min: '32', max: '', unit: 'MPa' },
+    'asphalt_density': { min: '93', max: '100', unit: '%' },
+    'dcp': { min: '', max: '10', unit: 'mm/blow' },
+  }
+
   // Form state for creating test results
   const [formData, setFormData] = useState({
     testType: '',
     testRequestNumber: '',
     laboratoryName: '',
+    laboratoryReportNumber: '',
     sampleLocation: '',
+    sampleDate: '',
+    testDate: '',
+    resultDate: '',
     lotId: '',
     resultValue: '',
     resultUnit: '',
@@ -109,6 +128,42 @@ export function TestResultsPage() {
     specificationMax: '',
     passFail: 'pending',
   })
+
+  // Feature #198: Auto-populate spec values when test type changes
+  const handleTestTypeChange = (testType: string) => {
+    const normalizedType = testType.toLowerCase().replace(/\s+/g, '_')
+    const specs = testTypeSpecs[normalizedType]
+
+    if (specs) {
+      setFormData(prev => ({
+        ...prev,
+        testType,
+        specificationMin: specs.min,
+        specificationMax: specs.max,
+        resultUnit: specs.unit,
+      }))
+    } else {
+      setFormData(prev => ({ ...prev, testType }))
+    }
+  }
+
+  // Feature #198: Auto-calculate pass/fail when result or specs change
+  const calculatePassFail = (value: string, min: string, max: string): string => {
+    if (!value) return 'pending'
+    const numValue = parseFloat(value)
+    const numMin = min ? parseFloat(min) : null
+    const numMax = max ? parseFloat(max) : null
+
+    if (numMin !== null && numValue < numMin) return 'fail'
+    if (numMax !== null && numValue > numMax) return 'fail'
+    if (numMin !== null || numMax !== null) return 'pass'
+    return 'pending'
+  }
+
+  const handleResultValueChange = (value: string) => {
+    const passFail = calculatePassFail(value, formData.specificationMin, formData.specificationMax)
+    setFormData(prev => ({ ...prev, resultValue: value, passFail }))
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -227,7 +282,11 @@ export function TestResultsPage() {
           testType: '',
           testRequestNumber: '',
           laboratoryName: '',
+          laboratoryReportNumber: '',
           sampleLocation: '',
+          sampleDate: '',
+          testDate: '',
+          resultDate: '',
           lotId: '',
           resultValue: '',
           resultUnit: '',
@@ -423,25 +482,53 @@ export function TestResultsPage() {
             <div className="p-6">
               <h2 className="text-xl font-bold mb-4">Add Test Result</h2>
               <div className="space-y-4">
+                {/* Feature #198: Enhanced form with all fields */}
                 <div>
                   <label className="block text-sm font-medium mb-1">Test Type *</label>
                   <input
                     type="text"
                     value={formData.testType}
-                    onChange={(e) => setFormData({ ...formData, testType: e.target.value })}
+                    onChange={(e) => handleTestTypeChange(e.target.value)}
                     placeholder="e.g., Compaction, CBR, Grading"
                     className="w-full rounded-lg border px-3 py-2"
+                    list="test-types"
                   />
+                  <datalist id="test-types">
+                    <option value="Compaction" />
+                    <option value="CBR" />
+                    <option value="Moisture Content" />
+                    <option value="Plasticity Index" />
+                    <option value="Liquid Limit" />
+                    <option value="Grading" />
+                    <option value="Sand Equivalent" />
+                    <option value="Concrete Slump" />
+                    <option value="Concrete Strength" />
+                    <option value="Asphalt Density" />
+                    <option value="DCP" />
+                  </datalist>
+                  <p className="text-xs text-muted-foreground mt-1">Select a standard type to auto-populate specs</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Test Request Number</label>
-                  <input
-                    type="text"
-                    value={formData.testRequestNumber}
-                    onChange={(e) => setFormData({ ...formData, testRequestNumber: e.target.value })}
-                    placeholder="e.g., TR-001"
-                    className="w-full rounded-lg border px-3 py-2"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Test Request Number</label>
+                    <input
+                      type="text"
+                      value={formData.testRequestNumber}
+                      onChange={(e) => setFormData({ ...formData, testRequestNumber: e.target.value })}
+                      placeholder="e.g., TR-001"
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Lab Report Number</label>
+                    <input
+                      type="text"
+                      value={formData.laboratoryReportNumber}
+                      onChange={(e) => setFormData({ ...formData, laboratoryReportNumber: e.target.value })}
+                      placeholder="e.g., LAB-2024-0001"
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Link to Lot</label>
@@ -478,6 +565,37 @@ export function TestResultsPage() {
                     className="w-full rounded-lg border px-3 py-2"
                   />
                 </div>
+                {/* Dates Section */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Sample Date</label>
+                    <input
+                      type="date"
+                      value={formData.sampleDate}
+                      onChange={(e) => setFormData({ ...formData, sampleDate: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Test Date</label>
+                    <input
+                      type="date"
+                      value={formData.testDate}
+                      onChange={(e) => setFormData({ ...formData, testDate: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Result Date</label>
+                    <input
+                      type="date"
+                      value={formData.resultDate}
+                      onChange={(e) => setFormData({ ...formData, resultDate: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
+                </div>
+                {/* Result Section */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Result Value</label>
@@ -485,7 +603,7 @@ export function TestResultsPage() {
                       type="number"
                       step="any"
                       value={formData.resultValue}
-                      onChange={(e) => setFormData({ ...formData, resultValue: e.target.value })}
+                      onChange={(e) => handleResultValueChange(e.target.value)}
                       placeholder="e.g., 98.5"
                       className="w-full rounded-lg border px-3 py-2"
                     />
@@ -501,6 +619,7 @@ export function TestResultsPage() {
                     />
                   </div>
                 </div>
+                {/* Specification Section */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Spec Min</label>
@@ -508,7 +627,11 @@ export function TestResultsPage() {
                       type="number"
                       step="any"
                       value={formData.specificationMin}
-                      onChange={(e) => setFormData({ ...formData, specificationMin: e.target.value })}
+                      onChange={(e) => {
+                        const newMin = e.target.value
+                        const passFail = calculatePassFail(formData.resultValue, newMin, formData.specificationMax)
+                        setFormData({ ...formData, specificationMin: newMin, passFail })
+                      }}
                       placeholder="e.g., 95"
                       className="w-full rounded-lg border px-3 py-2"
                     />
@@ -519,18 +642,32 @@ export function TestResultsPage() {
                       type="number"
                       step="any"
                       value={formData.specificationMax}
-                      onChange={(e) => setFormData({ ...formData, specificationMax: e.target.value })}
+                      onChange={(e) => {
+                        const newMax = e.target.value
+                        const passFail = calculatePassFail(formData.resultValue, formData.specificationMin, newMax)
+                        setFormData({ ...formData, specificationMax: newMax, passFail })
+                      }}
                       placeholder="e.g., 100"
                       className="w-full rounded-lg border px-3 py-2"
                     />
                   </div>
                 </div>
+                {/* Pass/Fail with auto-calculated indicator */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">Pass/Fail Status</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Pass/Fail Status
+                    {formData.resultValue && (formData.specificationMin || formData.specificationMax) && (
+                      <span className="ml-2 text-xs text-muted-foreground">(auto-calculated)</span>
+                    )}
+                  </label>
                   <select
                     value={formData.passFail}
                     onChange={(e) => setFormData({ ...formData, passFail: e.target.value })}
-                    className="w-full rounded-lg border px-3 py-2"
+                    className={`w-full rounded-lg border px-3 py-2 ${
+                      formData.passFail === 'pass' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' :
+                      formData.passFail === 'fail' ? 'border-red-500 bg-red-50 dark:bg-red-900/20' :
+                      ''
+                    }`}
                   >
                     <option value="pending">Pending</option>
                     <option value="pass">Pass</option>
