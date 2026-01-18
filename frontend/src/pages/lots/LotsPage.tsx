@@ -44,6 +44,7 @@ interface SavedFilter {
   status: string
   activity: string
   search: string
+  subcontractor?: string
   createdAt: string
 }
 
@@ -222,6 +223,7 @@ export function LotsPage() {
       status: statusFilters.join(','), // Save comma-separated statuses
       activity: activityFilter,
       search: searchQuery,
+      subcontractor: subcontractorFilter,
       createdAt: new Date().toISOString(),
     }
 
@@ -239,6 +241,7 @@ export function LotsPage() {
       status: filter.status,
       activity: filter.activity,
       search: filter.search,
+      subcontractor: filter.subcontractor || '',
     })
     setSavedFiltersDropdownOpen(false)
     toast({ description: `Filter "${filter.name}" loaded`, variant: 'success' })
@@ -323,6 +326,9 @@ export function LotsPage() {
   const chainageMinFilter = searchParams.get('chMin') || ''
   const chainageMaxFilter = searchParams.get('chMax') || ''
 
+  // Subcontractor filter
+  const subcontractorFilter = searchParams.get('subcontractor') || ''
+
   // Status filter dropdown state
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
 
@@ -363,6 +369,17 @@ export function LotsPage() {
         // Check for overlap: lot range must intersect with filter range
         if (minFilter !== null && lotEnd < minFilter) return false
         if (maxFilter !== null && lotStart > maxFilter) return false
+      }
+
+      // Subcontractor filter: filter by assigned subcontractor
+      if (subcontractorFilter) {
+        if (subcontractorFilter === 'unassigned') {
+          // Show only lots with no subcontractor assigned
+          if (lot.assignedSubcontractorId) return false
+        } else {
+          // Show only lots assigned to the selected subcontractor
+          if (lot.assignedSubcontractorId !== subcontractorFilter) return false
+        }
       }
 
       return true
@@ -449,6 +466,10 @@ export function LotsPage() {
     updateFilters({ activity })
   }
 
+  const handleSubcontractorFilter = (subcontractor: string) => {
+    updateFilters({ subcontractor })
+  }
+
   const handleSearch = (query: string) => {
     updateFilters({ search: query })
   }
@@ -521,6 +542,13 @@ export function LotsPage() {
   useEffect(() => {
     fetchLots()
   }, [projectId, navigate])
+
+  // Fetch subcontractors on mount for the filter dropdown
+  useEffect(() => {
+    if (projectId && !isSubcontractor) {
+      fetchSubcontractors()
+    }
+  }, [projectId, isSubcontractor])
 
   // Close status dropdown when clicking outside
   useEffect(() => {
@@ -1479,11 +1507,48 @@ export function LotsPage() {
             )}
           </div>
         </div>
-        {(statusFilters.length > 0 || activityFilter || searchQuery || chainageMinFilter || chainageMaxFilter) && (
+        {/* Subcontractor Filter - hidden for subcontractor users */}
+        {!isSubcontractor && subcontractors.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="subcontractor-filter" className="text-sm font-medium">
+              Subcontractor:
+            </label>
+            <div className="flex items-center">
+              <select
+                id="subcontractor-filter"
+                value={subcontractorFilter}
+                onChange={(e) => handleSubcontractorFilter(e.target.value)}
+                className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+              >
+                <option value="">All Subcontractors</option>
+                <option value="unassigned">Unassigned</option>
+                {subcontractors.map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.companyName}
+                  </option>
+                ))}
+              </select>
+              {subcontractorFilter && (
+                <button
+                  onClick={() => handleSubcontractorFilter('')}
+                  className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                  title="Clear subcontractor filter"
+                  aria-label="Clear subcontractor filter"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {(statusFilters.length > 0 || activityFilter || searchQuery || chainageMinFilter || chainageMaxFilter || subcontractorFilter) && (
           <>
             <button
               onClick={() => {
-                updateFilters({ status: '', activity: '', search: '', chMin: '', chMax: '' })
+                updateFilters({ status: '', activity: '', search: '', chMin: '', chMax: '', subcontractor: '' })
               }}
               className="text-sm text-primary hover:underline"
             >
