@@ -265,7 +265,7 @@ lotsRouter.get('/:id', async (req, res) => {
 lotsRouter.post('/', async (req, res) => {
   try {
     const user = req.user!
-    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType, itpTemplateId, assignedSubcontractorId } = req.body
+    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType, itpTemplateId, assignedSubcontractorId, areaZone } = req.body
 
     if (!projectId || !lotNumber) {
       return res.status(400).json({
@@ -309,6 +309,7 @@ lotsRouter.post('/', async (req, res) => {
         chainageStart,
         chainageEnd,
         assignedSubcontractorId: assignedSubcontractorId || null,
+        areaZone: areaZone || null,
       },
       select: {
         id: true,

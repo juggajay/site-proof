@@ -45,6 +45,7 @@ interface SavedFilter {
   activity: string
   search: string
   subcontractor?: string
+  areaZone?: string
   createdAt: string
 }
 
@@ -224,6 +225,7 @@ export function LotsPage() {
       activity: activityFilter,
       search: searchQuery,
       subcontractor: subcontractorFilter,
+      areaZone: areaZoneFilter,
       createdAt: new Date().toISOString(),
     }
 
@@ -242,6 +244,7 @@ export function LotsPage() {
       activity: filter.activity,
       search: filter.search,
       subcontractor: filter.subcontractor || '',
+      areaZone: filter.areaZone || '',
     })
     setSavedFiltersDropdownOpen(false)
     toast({ description: `Filter "${filter.name}" loaded`, variant: 'success' })
@@ -329,6 +332,9 @@ export function LotsPage() {
   // Subcontractor filter
   const subcontractorFilter = searchParams.get('subcontractor') || ''
 
+  // Area/Zone filter
+  const areaZoneFilter = searchParams.get('areaZone') || ''
+
   // Status filter dropdown state
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
 
@@ -339,6 +345,12 @@ export function LotsPage() {
   const activityTypes = useMemo(() => {
     const types = new Set(lots.map((l) => l.activityType).filter(Boolean))
     return Array.from(types).sort()
+  }, [lots])
+
+  // Get unique area zones for filter dropdown
+  const areaZones = useMemo(() => {
+    const zones = new Set(lots.map((l) => l.areaZone).filter(Boolean))
+    return Array.from(zones).sort() as string[]
   }, [lots])
 
   // Filter and sort lots based on current filters and sort order
@@ -379,6 +391,17 @@ export function LotsPage() {
         } else {
           // Show only lots assigned to the selected subcontractor
           if (lot.assignedSubcontractorId !== subcontractorFilter) return false
+        }
+      }
+
+      // Area/Zone filter: filter by area zone
+      if (areaZoneFilter) {
+        if (areaZoneFilter === 'unassigned') {
+          // Show only lots with no area zone assigned
+          if (lot.areaZone) return false
+        } else {
+          // Show only lots in the selected area zone
+          if (lot.areaZone !== areaZoneFilter) return false
         }
       }
 
@@ -468,6 +491,10 @@ export function LotsPage() {
 
   const handleSubcontractorFilter = (subcontractor: string) => {
     updateFilters({ subcontractor })
+  }
+
+  const handleAreaZoneFilter = (areaZone: string) => {
+    updateFilters({ areaZone })
   }
 
   const handleSearch = (query: string) => {
@@ -1544,11 +1571,48 @@ export function LotsPage() {
             </div>
           </div>
         )}
-        {(statusFilters.length > 0 || activityFilter || searchQuery || chainageMinFilter || chainageMaxFilter || subcontractorFilter) && (
+        {/* Area/Zone Filter */}
+        {areaZones.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="area-zone-filter" className="text-sm font-medium">
+              Area/Zone:
+            </label>
+            <div className="flex items-center">
+              <select
+                id="area-zone-filter"
+                value={areaZoneFilter}
+                onChange={(e) => handleAreaZoneFilter(e.target.value)}
+                className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+              >
+                <option value="">All Areas</option>
+                <option value="unassigned">Unassigned</option>
+                {areaZones.map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone}
+                  </option>
+                ))}
+              </select>
+              {areaZoneFilter && (
+                <button
+                  onClick={() => handleAreaZoneFilter('')}
+                  className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                  title="Clear area/zone filter"
+                  aria-label="Clear area/zone filter"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {(statusFilters.length > 0 || activityFilter || searchQuery || chainageMinFilter || chainageMaxFilter || subcontractorFilter || areaZoneFilter) && (
           <>
             <button
               onClick={() => {
-                updateFilters({ status: '', activity: '', search: '', chMin: '', chMax: '', subcontractor: '' })
+                updateFilters({ status: '', activity: '', search: '', chMin: '', chMax: '', subcontractor: '', areaZone: '' })
               }}
               className="text-sm text-primary hover:underline"
             >
