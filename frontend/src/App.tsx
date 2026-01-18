@@ -45,6 +45,10 @@ import { CostsPage } from '@/pages/costs/CostsPage'
 import { CompanySettingsPage } from '@/pages/company/CompanySettingsPage'
 import { PortfolioPage } from '@/pages/portfolio/PortfolioPage'
 
+// Legal Pages
+import { PrivacyPolicyPage } from '@/pages/legal/PrivacyPolicyPage'
+import { TermsOfServicePage } from '@/pages/legal/TermsOfServicePage'
+
 // Admin-only roles
 const ADMIN_ROLES = ['owner', 'admin', 'project_manager']
 
@@ -82,6 +86,10 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
         </Route>
+
+        {/* Legal Pages (public, no layout) */}
+        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route path="/terms-of-service" element={<TermsOfServicePage />} />
 
         {/* Protected Routes */}
         <Route

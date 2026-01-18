@@ -306,6 +306,23 @@ export function SettingsPage() {
           </p>
         </div>
 
+        {/* Privacy Policy Link */}
+        <div className="border-t pt-4">
+          <h3 className="text-lg font-medium mb-2">Privacy Policy</h3>
+          <p className="text-sm text-muted-foreground mb-3">
+            Learn how we collect, use, and protect your personal information.
+          </p>
+          <a
+            href="/privacy-policy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-primary hover:underline"
+          >
+            <Shield className="h-4 w-4" />
+            View Privacy Policy
+          </a>
+        </div>
+
         {/* Data Export Section */}
         <div className="border-t pt-4">
           <h3 className="text-lg font-medium mb-2">Export Your Data</h3>
