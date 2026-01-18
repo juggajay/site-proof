@@ -52,6 +52,7 @@ export function ProjectsPage() {
     client: '',
     state: '',
     specSet: '',
+    startDate: '',
   })
 
   useEffect(() => {
@@ -112,6 +113,7 @@ export function ProjectsPage() {
           clientName: formData.client || null,
           state: formData.state || null,
           specificationSet: formData.specSet || null,
+          startDate: formData.startDate || null,
         }),
       })
 
@@ -124,7 +126,7 @@ export function ProjectsPage() {
       // Add new project to list
       setProjects((prev) => [...prev, data.project])
       // Reset form and close modal
-      setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '' })
+      setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '', startDate: '' })
       setShowCreateModal(false)
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create project')
@@ -226,6 +228,20 @@ export function ProjectsPage() {
                   value={formData.client}
                   onChange={handleInputChange}
                   placeholder="e.g., Department of Transport"
+                  className="w-full rounded-lg border px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="startDate" className="block text-sm font-medium mb-1">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  id="startDate"
+                  name="startDate"
+                  value={formData.startDate}
+                  onChange={handleInputChange}
                   className="w-full rounded-lg border px-3 py-2"
                 />
               </div>

@@ -8,6 +8,7 @@ interface Project {
   name: string
   code: string
   status?: string
+  startDate?: string | null
   lotPrefix?: string
   lotStartingNumber?: number
   ncrPrefix?: string
@@ -564,6 +565,18 @@ export function ProjectSettingsPage() {
                   />
                 </div>
               </div>
+              {project?.startDate && (
+                <div className="mt-4 pt-4 border-t">
+                  <label className="block text-sm font-medium mb-1">Start Date</label>
+                  <div className="text-sm text-muted-foreground">
+                    {new Date(project.startDate).toLocaleDateString('en-AU', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="rounded-lg border p-4">
               <h2 className="text-lg font-semibold mb-2">Lot Numbering</h2>
