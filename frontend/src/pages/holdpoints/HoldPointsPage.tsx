@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { Link2, Check, FileText, Download, Eye, X, RefreshCw, ClipboardCheck } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
 
 interface HoldPoint {
   id: string
@@ -429,6 +430,43 @@ export function HoldPointsPage() {
     overdue: holdPoints.filter(hp => isOverdue(hp)).length
   }
 
+  // Calculate chart data (Feature #192)
+  const chartData = useMemo(() => {
+    // HP releases over time - last 7 days
+    const releasesOverTime: { date: string; releases: number }[] = []
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const dayStart = new Date(date)
+      dayStart.setHours(0, 0, 0, 0)
+      const dayEnd = new Date(date)
+      dayEnd.setHours(23, 59, 59, 999)
+
+      const releases = holdPoints.filter(hp => {
+        if (!hp.releasedAt) return false
+        const releasedDate = new Date(hp.releasedAt)
+        return releasedDate >= dayStart && releasedDate <= dayEnd
+      }).length
+
+      releasesOverTime.push({ date: dateStr, releases })
+    }
+
+    // Average time from notification to release
+    const releasedHPs = holdPoints.filter(hp => hp.status === 'released' && hp.notificationSentAt && hp.releasedAt)
+    let avgTimeToRelease = 0
+    if (releasedHPs.length > 0) {
+      const totalHours = releasedHPs.reduce((sum, hp) => {
+        const notified = new Date(hp.notificationSentAt!).getTime()
+        const released = new Date(hp.releasedAt!).getTime()
+        return sum + (released - notified) / (1000 * 60 * 60) // hours
+      }, 0)
+      avgTimeToRelease = Math.round(totalHours / releasedHPs.length)
+    }
+
+    return { releasesOverTime, avgTimeToRelease }
+  }, [holdPoints])
+
   // Export hold points to CSV
   const handleExportCSV = () => {
     const headers = ['Lot', 'Description', 'Point Type', 'Status', 'Scheduled Date', 'Released At', 'Released By', 'Release Notes']
@@ -510,6 +548,54 @@ export function HoldPointsPage() {
           <div className="rounded-lg border bg-card p-4">
             <div className="text-sm text-muted-foreground">Released This Week</div>
             <div className="text-2xl font-bold mt-1 text-green-600">{stats.releasedThisWeek}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Charts Section (Feature #192) */}
+      {!loading && holdPoints.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* HP Releases Over Time Chart */}
+          <div className="rounded-lg border bg-card p-4">
+            <h3 className="text-sm font-medium mb-4">HP Releases - Last 7 Days</h3>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData.releasesOverTime}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                  <Bar dataKey="releases" fill="#22c55e" radius={[4, 4, 0, 0]} name="Releases" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Average Time to Release */}
+          <div className="rounded-lg border bg-card p-4">
+            <h3 className="text-sm font-medium mb-4">Average Time: Notification to Release</h3>
+            <div className="h-48 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-5xl font-bold text-primary">
+                  {chartData.avgTimeToRelease > 24
+                    ? `${Math.round(chartData.avgTimeToRelease / 24)}d`
+                    : `${chartData.avgTimeToRelease}h`
+                  }
+                </div>
+                <div className="text-sm text-muted-foreground mt-2">
+                  {chartData.avgTimeToRelease > 24
+                    ? `${chartData.avgTimeToRelease} hours total`
+                    : 'hours on average'
+                  }
+                </div>
+                <div className="mt-4 text-xs text-muted-foreground">
+                  Based on {holdPoints.filter(hp => hp.status === 'released').length} released hold points
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
