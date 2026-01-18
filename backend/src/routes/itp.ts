@@ -265,7 +265,8 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
             pointType: item.pointType || (item.isHoldPoint ? 'hold_point' : 'standard'),
             responsibleParty: item.category || 'contractor',
             evidenceRequired: item.evidenceRequired || 'none',
-            acceptanceCriteria: item.acceptanceCriteria || null
+            acceptanceCriteria: item.acceptanceCriteria || null,
+            testType: item.testType || null
           }))
         }
       },
@@ -512,7 +513,8 @@ itpRouter.post('/templates/:id/propagate', requireAuth, async (req: any, res) =>
         pointType: item.pointType,
         responsibleParty: item.responsibleParty,
         evidenceRequired: item.evidenceRequired,
-        acceptanceCriteria: item.acceptanceCriteria
+        acceptanceCriteria: item.acceptanceCriteria,
+        testType: item.testType
       }))
     }
 
@@ -583,7 +585,8 @@ itpRouter.post('/instances', requireAuth, async (req: any, res) => {
         pointType: item.pointType,
         responsibleParty: item.responsibleParty,
         evidenceRequired: item.evidenceRequired,
-        acceptanceCriteria: item.acceptanceCriteria
+        acceptanceCriteria: item.acceptanceCriteria,
+        testType: item.testType
       }))
     }
 
@@ -697,7 +700,8 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
           pointType: item.pointType || 'standard',
           evidenceRequired: item.evidenceRequired || 'none',
           order: item.sequenceNumber,
-          acceptanceCriteria: item.acceptanceCriteria
+          acceptanceCriteria: item.acceptanceCriteria,
+          testType: item.testType || null
         }))
       }
     } else {
@@ -713,7 +717,8 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
           pointType: item.pointType || 'standard',
           evidenceRequired: item.evidenceRequired || 'none',
           order: item.sequenceNumber,
-          acceptanceCriteria: item.acceptanceCriteria
+          acceptanceCriteria: item.acceptanceCriteria,
+          testType: item.testType || null
         }))
       }
     }

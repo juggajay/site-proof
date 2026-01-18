@@ -12,6 +12,7 @@ interface ChecklistItem {
   evidenceRequired: 'none' | 'photo' | 'test' | 'document'
   verificationMethod?: string
   acceptanceCriteria?: string
+  testType?: string
   order: number
 }
 
@@ -442,6 +443,15 @@ function CreateTemplateModal({
                         <option value="test">🧪 Test</option>
                         <option value="document">📄 Document</option>
                       </select>
+                      {item.evidenceRequired === 'test' && (
+                        <input
+                          type="text"
+                          value={item.testType || ''}
+                          onChange={(e) => handleItemChange(index, 'testType', e.target.value)}
+                          className="px-2 py-1 text-sm border rounded w-28"
+                          placeholder="Test type"
+                        />
+                      )}
                     </div>
                   </div>
                   {checklistItems.length > 1 && (
