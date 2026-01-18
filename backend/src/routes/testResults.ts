@@ -1922,3 +1922,275 @@ testResultsRouter.patch('/:id/confirm-extraction', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// POST /api/test-results/batch-upload - Batch upload multiple test certificates (Feature #202)
+testResultsRouter.post('/batch-upload', upload.array('certificates', 10), async (req, res) => {
+  try {
+    const user = req.user!
+    const files = req.files as Express.Multer.File[]
+    const { projectId } = req.body
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'No files uploaded'
+      })
+    }
+
+    if (!projectId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'projectId is required'
+      })
+    }
+
+    // Verify user has access and permission
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const userProjectRole = projectUser?.role || user.roleInCompany
+
+    if (!TEST_CREATORS.includes(userProjectRole)) {
+      // Delete uploaded files if permission denied
+      for (const file of files) {
+        fs.unlinkSync(file.path)
+      }
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to upload test certificates'
+      })
+    }
+
+    // Process each file
+    const results: any[] = []
+
+    for (const file of files) {
+      try {
+        // Create document record for the certificate
+        const document = await prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'test_certificate',
+            category: 'test_results',
+            filename: file.originalname,
+            fileUrl: `/uploads/certificates/${file.filename}`,
+            fileSize: file.size,
+            mimeType: file.mimetype,
+            uploadedById: user.id,
+          }
+        })
+
+        // Simulate AI extraction
+        const extractedData = simulateAIExtraction(file.originalname)
+
+        // Build confidence object for storage
+        const confidenceObj: Record<string, number> = {}
+        for (const [key, data] of Object.entries(extractedData)) {
+          confidenceObj[key] = data.confidence
+        }
+
+        // Create a new test result with extracted data
+        const testResult = await prisma.testResult.create({
+          data: {
+            projectId,
+            testType: extractedData.testType.value,
+            laboratoryName: extractedData.laboratoryName.value,
+            laboratoryReportNumber: extractedData.laboratoryReportNumber.value,
+            sampleDate: new Date(extractedData.sampleDate.value),
+            testDate: new Date(extractedData.testDate.value),
+            sampleLocation: extractedData.sampleLocation.value,
+            resultValue: parseFloat(extractedData.resultValue.value),
+            resultUnit: extractedData.resultUnit.value,
+            specificationMin: parseFloat(extractedData.specificationMin.value),
+            specificationMax: parseFloat(extractedData.specificationMax.value),
+            passFail: parseFloat(extractedData.resultValue.value) >= 95 ? 'pass' : 'fail',
+            certificateDocId: document.id,
+            aiExtracted: true,
+            aiConfidence: JSON.stringify(confidenceObj),
+            status: 'results_received',
+          },
+          include: {
+            certificateDoc: {
+              select: {
+                id: true,
+                filename: true,
+                fileUrl: true,
+                mimeType: true,
+              }
+            }
+          }
+        })
+
+        // Identify low confidence fields
+        const lowConfidenceThreshold = 0.80
+        const lowConfidenceFields = Object.entries(confidenceObj)
+          .filter(([_, conf]) => conf < lowConfidenceThreshold)
+          .map(([field, conf]) => ({ field, confidence: conf }))
+
+        results.push({
+          success: true,
+          filename: file.originalname,
+          testResult: {
+            id: testResult.id,
+            testType: testResult.testType,
+            status: testResult.status,
+            aiExtracted: testResult.aiExtracted,
+            certificateDoc: testResult.certificateDoc,
+          },
+          extraction: {
+            extractedFields: extractedData,
+            confidence: confidenceObj,
+            lowConfidenceFields,
+            needsReview: lowConfidenceFields.length > 0,
+          }
+        })
+      } catch (fileError) {
+        console.error(`Error processing file ${file.originalname}:`, fileError)
+        results.push({
+          success: false,
+          filename: file.originalname,
+          error: 'Failed to process file'
+        })
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+    const failCount = results.filter(r => !r.success).length
+    const needsReviewCount = results.filter(r => r.success && r.extraction?.needsReview).length
+
+    res.status(201).json({
+      message: `Processed ${successCount} of ${files.length} certificates`,
+      summary: {
+        total: files.length,
+        success: successCount,
+        failed: failCount,
+        needsReview: needsReviewCount,
+      },
+      results
+    })
+  } catch (error) {
+    console.error('Batch upload error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/test-results/batch-confirm - Batch confirm multiple extractions (Feature #202)
+testResultsRouter.post('/batch-confirm', async (req, res) => {
+  try {
+    const user = req.user!
+    const { confirmations } = req.body
+
+    if (!confirmations || !Array.isArray(confirmations) || confirmations.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'confirmations array is required'
+      })
+    }
+
+    const results: any[] = []
+
+    for (const confirmation of confirmations) {
+      const { testResultId, corrections } = confirmation
+
+      try {
+        const testResult = await prisma.testResult.findUnique({
+          where: { id: testResultId },
+        })
+
+        if (!testResult) {
+          results.push({
+            success: false,
+            testResultId,
+            error: 'Test result not found'
+          })
+          continue
+        }
+
+        // Verify user has permission
+        const projectUser = await prisma.projectUser.findFirst({
+          where: {
+            projectId: testResult.projectId,
+            userId: user.id,
+            status: 'active',
+          },
+        })
+
+        const userProjectRole = projectUser?.role || user.roleInCompany
+
+        if (!TEST_CREATORS.includes(userProjectRole)) {
+          results.push({
+            success: false,
+            testResultId,
+            error: 'No permission'
+          })
+          continue
+        }
+
+        // Build update data from corrections
+        const updateData: any = {}
+
+        if (corrections) {
+          if (corrections.testType !== undefined) updateData.testType = corrections.testType
+          if (corrections.laboratoryName !== undefined) updateData.laboratoryName = corrections.laboratoryName
+          if (corrections.laboratoryReportNumber !== undefined) updateData.laboratoryReportNumber = corrections.laboratoryReportNumber
+          if (corrections.sampleDate !== undefined) updateData.sampleDate = corrections.sampleDate ? new Date(corrections.sampleDate) : null
+          if (corrections.testDate !== undefined) updateData.testDate = corrections.testDate ? new Date(corrections.testDate) : null
+          if (corrections.sampleLocation !== undefined) updateData.sampleLocation = corrections.sampleLocation
+          if (corrections.resultValue !== undefined) updateData.resultValue = corrections.resultValue ? parseFloat(corrections.resultValue) : null
+          if (corrections.resultUnit !== undefined) updateData.resultUnit = corrections.resultUnit
+          if (corrections.specificationMin !== undefined) updateData.specificationMin = corrections.specificationMin ? parseFloat(corrections.specificationMin) : null
+          if (corrections.specificationMax !== undefined) updateData.specificationMax = corrections.specificationMax ? parseFloat(corrections.specificationMax) : null
+          if (corrections.passFail !== undefined) updateData.passFail = corrections.passFail
+        }
+
+        // Move to 'entered' status after confirmation
+        updateData.status = 'entered'
+        updateData.enteredById = user.id
+        updateData.enteredAt = new Date()
+
+        const updatedTestResult = await prisma.testResult.update({
+          where: { id: testResultId },
+          data: updateData,
+          select: {
+            id: true,
+            testType: true,
+            status: true,
+          }
+        })
+
+        results.push({
+          success: true,
+          testResultId,
+          testResult: updatedTestResult
+        })
+      } catch (confirmError) {
+        console.error(`Error confirming test result ${testResultId}:`, confirmError)
+        results.push({
+          success: false,
+          testResultId,
+          error: 'Failed to confirm'
+        })
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+
+    res.json({
+      message: `Confirmed ${successCount} of ${confirmations.length} test results`,
+      summary: {
+        total: confirmations.length,
+        success: successCount,
+        failed: confirmations.length - successCount,
+      },
+      results
+    })
+  } catch (error) {
+    console.error('Batch confirm error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
