@@ -41,6 +41,8 @@ model User {
   roleInCompany String   @default("member") @map("role_in_company")
   emailVerified Boolean  @default(false) @map("email_verified")
   emailVerifiedAt DateTime? @map("email_verified_at")
+  tosAcceptedAt DateTime? @map("tos_accepted_at")
+  tosVersion    String?  @map("tos_version")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

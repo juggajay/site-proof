@@ -4,13 +4,21 @@ import { generateToken, generateExpiredToken, hashPassword, verifyPassword } fro
 
 export const authRouter = Router()
 
+// Current ToS version - update when ToS changes
+const CURRENT_TOS_VERSION = '1.0'
+
 // POST /api/auth/register
 authRouter.post('/register', async (req, res) => {
   try {
-    const { email, password, fullName, firstName, lastName } = req.body
+    const { email, password, fullName, firstName, lastName, tosAccepted } = req.body
 
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' })
+    }
+
+    // Require ToS acceptance
+    if (!tosAccepted) {
+      return res.status(400).json({ message: 'You must accept the Terms of Service to create an account' })
     }
 
     // Check if user already exists
@@ -25,7 +33,7 @@ authRouter.post('/register', async (req, res) => {
     // Build full name from parts if not provided directly
     const name = fullName || (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || null)
 
-    // Create user with emailVerified set to false
+    // Create user with emailVerified set to false and ToS acceptance recorded
     const passwordHash = hashPassword(password)
     const user = await prisma.user.create({
       data: {
@@ -42,6 +50,15 @@ authRouter.post('/register', async (req, res) => {
         emailVerified: true,
       },
     })
+
+    // Record ToS acceptance using raw SQL (to avoid Prisma client regeneration issues)
+    const tosAcceptedAt = new Date().toISOString()
+    await prisma.$executeRawUnsafe(
+      `UPDATE users SET tos_accepted_at = ?, tos_version = ? WHERE id = ?`,
+      tosAcceptedAt,
+      CURRENT_TOS_VERSION,
+      user.id
+    )
 
     // Generate email verification token
     const crypto = await import('crypto')

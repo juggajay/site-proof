@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
-import { Check, X, Mail } from 'lucide-react'
+import { Check, X, Mail, FileText } from 'lucide-react'
 
 const MIN_PASSWORD_LENGTH = 12
 
@@ -12,6 +12,7 @@ export function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [tosAccepted, setTosAccepted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [registrationSuccess, setRegistrationSuccess] = useState(false)
@@ -62,10 +63,15 @@ export function RegisterPage() {
       return
     }
 
+    if (!tosAccepted) {
+      setError('You must accept the Terms of Service to create an account')
+      return
+    }
+
     setLoading(true)
 
     try {
-      const result = await signUp(email, password, { firstName, lastName })
+      const result = await signUp(email, password, { firstName, lastName, tosAccepted })
       // Show verification message instead of navigating to login
       setRegisteredEmail(email)
       setRegistrationSuccess(true)
@@ -219,9 +225,45 @@ export function RegisterPage() {
         />
       </div>
 
+      <div className="rounded-lg border bg-muted/50 p-4">
+        <div className="flex items-start gap-3">
+          <input
+            id="tosAccepted"
+            type="checkbox"
+            checked={tosAccepted}
+            onChange={(e) => setTosAccepted(e.target.checked)}
+            className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            required
+          />
+          <label htmlFor="tosAccepted" className="text-sm">
+            <span className="flex items-center gap-1">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <span>I agree to the</span>
+            </span>
+            <a
+              href="/terms-of-service"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              Terms of Service
+            </a>{' '}
+            and{' '}
+            <a
+              href="/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              Privacy Policy
+            </a>
+          </label>
+        </div>
+      </div>
+
       <button
         type="submit"
-        disabled={loading || (email.length > 0 && !isEmailValid) || (password.length > 0 && !isPasswordValid)}
+        disabled={loading || (email.length > 0 && !isEmailValid) || (password.length > 0 && !isPasswordValid) || !tosAccepted}
         className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
         {loading ? 'Creating account...' : 'Create Account'}
