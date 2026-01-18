@@ -4,6 +4,7 @@ import { AuthProvider } from '@/lib/auth'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute'
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp'
+import { OnboardingTour } from '@/components/OnboardingTour'
 
 // Layouts
 import { MainLayout } from '@/components/layouts/MainLayout'
@@ -61,6 +62,7 @@ function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) 
     <>
       {children}
       <KeyboardShortcutsHelp isOpen={isOpen} onClose={closeHelp} />
+      <OnboardingTour />
     </>
   )
 }
