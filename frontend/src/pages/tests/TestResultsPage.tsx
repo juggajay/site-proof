@@ -66,6 +66,25 @@ const nextStatusButtonLabels: Record<string, string> = {
   entered: 'Verify',
 }
 
+// Feature #197: Check if test is overdue (14+ days since creation and not verified)
+const OVERDUE_DAYS = 14
+const isTestOverdue = (test: TestResult): boolean => {
+  if (test.status === 'verified') return false
+  const created = new Date(test.createdAt)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const daysSinceCreated = Math.floor((today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+  return daysSinceCreated >= OVERDUE_DAYS
+}
+
+// Feature #197: Calculate days since sample/creation
+const getDaysSince = (dateStr: string | null, fallbackDateStr: string): number => {
+  const date = dateStr ? new Date(dateStr) : new Date(fallbackDateStr)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+}
+
 export function TestResultsPage() {
   const { projectId } = useParams()
   const navigate = useNavigate()
@@ -324,9 +343,28 @@ export function TestResultsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {testResults.map((test) => (
-                <tr key={test.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3 text-sm font-medium">{test.testType}</td>
+              {testResults.map((test) => {
+                const overdue = isTestOverdue(test)
+                const daysSince = getDaysSince(test.sampleDate, test.createdAt)
+                return (
+                <tr
+                  key={test.id}
+                  className={`hover:bg-muted/30 ${overdue ? 'bg-red-50 dark:bg-red-900/20 border-l-4 border-l-red-500' : ''}`}
+                >
+                  <td className="px-4 py-3 text-sm font-medium">
+                    <div className="flex items-center gap-2">
+                      {test.testType}
+                      {overdue && (
+                        <span className="px-1.5 py-0.5 text-[10px] bg-red-500 text-white rounded font-bold">
+                          OVERDUE
+                        </span>
+                      )}
+                    </div>
+                    {/* Feature #197: Show days since sample/created */}
+                    <div className={`text-xs mt-0.5 ${overdue ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+                      {daysSince} days since {test.sampleDate ? 'sample' : 'request'}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-sm">{test.testRequestNumber || '—'}</td>
                   <td className="px-4 py-3 text-sm">
                     {test.lot ? (
@@ -371,7 +409,8 @@ export function TestResultsPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
