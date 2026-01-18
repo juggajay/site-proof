@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express'
 import { verifyToken } from '../lib/auth.js'
 
+// Type alias for requests that will have user populated
+export type AuthRequest = Request
+
 // Extend Express Request to include user
 declare global {
   namespace Express {

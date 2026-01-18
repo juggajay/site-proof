@@ -71,6 +71,7 @@ model User {
   preparedClaims  ProgressClaim[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
+  comments             Comment[]
 
   @@map("users")
 }
@@ -1011,4 +1012,45 @@ model ScheduledReport {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("scheduled_reports")
+}
+
+// ============================================================================
+// Comments
+// ============================================================================
+
+model Comment {
+  id           String    @id @default(uuid())
+  entityType   String    @map("entity_type") // Lot, NCR, TestResult, etc.
+  entityId     String    @map("entity_id")
+  parentId     String?   @map("parent_id") // For reply threading
+  content      String
+  authorId     String    @map("author_id")
+  isEdited     Boolean   @default(false) @map("is_edited")
+  editedAt     DateTime? @map("edited_at")
+  deletedAt    DateTime? @map("deleted_at") // Soft delete
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  author      User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent      Comment?            @relation("CommentReplies", fields: [parentId], references: [id])
+  replies     Comment[]           @relation("CommentReplies")
+  attachments CommentAttachment[]
+
+  @@index([entityType, entityId])
+  @@map("comments")
+}
+
+model CommentAttachment {
+  id        String   @id @default(uuid())
+  commentId String   @map("comment_id")
+  filename  String
+  fileUrl   String   @map("file_url")
+  fileSize  Int?     @map("file_size")
+  mimeType  String?  @map("mime_type")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([commentId])
+  @@map("comment_attachments")
 }

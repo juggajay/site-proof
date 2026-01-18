@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken } from '@/lib/auth'
+import { CommentsSection } from '@/components/comments/CommentsSection'
 
 // Tab types for lot detail page
-type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'history'
+type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'comments' | 'history'
 
 const tabs: { id: LotTab; label: string }[] = [
   { id: 'itp', label: 'ITP Checklist' },
@@ -13,6 +14,7 @@ const tabs: { id: LotTab; label: string }[] = [
   { id: 'ncrs', label: 'NCRs' },
   { id: 'photos', label: 'Photos' },
   { id: 'documents', label: 'Documents' },
+  { id: 'comments', label: 'Comments' },
   { id: 'history', label: 'History' },
 ]
 
@@ -1409,6 +1411,11 @@ export function LotDetailPage() {
               </p>
             </div>
           </div>
+        )}
+
+        {/* Comments Tab */}
+        {currentTab === 'comments' && lotId && (
+          <CommentsSection entityType="Lot" entityId={lotId} />
         )}
 
         {/* History Tab */}

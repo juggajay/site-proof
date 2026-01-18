@@ -13,11 +13,17 @@ interface Project {
 
 interface Notification {
   id: string
-  type: 'info' | 'warning' | 'success'
+  type: string
   title: string
-  message: string
-  timestamp: string
-  read: boolean
+  message: string | null
+  linkUrl: string | null
+  isRead: boolean
+  createdAt: string
+  project?: {
+    id: string
+    name: string
+    projectNumber: string
+  } | null
 }
 
 export function Header() {
@@ -33,8 +39,9 @@ export function Header() {
 
   // Notification state
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
-  const [notificationFilter, setNotificationFilter] = useState<'all' | 'info' | 'warning' | 'success'>('all')
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'mention' | 'info' | 'warning'>('all')
   const notificationRef = useRef<HTMLDivElement>(null)
 
   // User menu state
@@ -53,8 +60,27 @@ export function Header() {
     p.projectNumber.toLowerCase().includes(projectSearchTerm.toLowerCase())
   )
 
-  // Calculate unread count
-  const unreadCount = notifications.filter(n => !n.read).length
+  // Fetch notifications from API
+  const fetchNotifications = async () => {
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    try {
+      const response = await fetch(`${apiUrl}/api/notifications`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setNotifications(data.notifications || [])
+        setUnreadCount(data.unreadCount || 0)
+      }
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err)
+    }
+  }
 
   // Focus search input when project selector opens and reset search when closing
   useEffect(() => {
@@ -89,74 +115,18 @@ export function Header() {
     fetchProjects()
   }, [])
 
-  // Fetch notifications (mock data for now - will be replaced with API)
+  // Fetch notifications on mount and periodically
   useEffect(() => {
-    // Mock notifications for demonstration
-    const mockNotifications: Notification[] = [
-      {
-        id: '1',
-        type: 'warning',
-        title: 'Hold Point Pending',
-        message: 'LOT-001 requires inspector sign-off',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
-        read: false,
-      },
-      {
-        id: '2',
-        type: 'success',
-        title: 'Test Results Uploaded',
-        message: 'Compaction test results for LOT-003 uploaded',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-        read: false,
-      },
-      {
-        id: '3',
-        type: 'info',
-        title: 'NCR Assigned',
-        message: 'NCR-2024-001 has been assigned to you',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-        read: true,
-      },
-      {
-        id: '4',
-        type: 'info',
-        title: 'NCR Response Required',
-        message: 'NCR-2024-002 awaiting your response',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
-        read: false,
-      },
-      {
-        id: '5',
-        type: 'warning',
-        title: 'ITP Overdue',
-        message: 'ITP checklist for LOT-005 is 3 days overdue',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), // 3 days ago
-        read: true,
-      },
-      {
-        id: '6',
-        type: 'info',
-        title: 'Old NCR Closed',
-        message: 'NCR-2023-089 has been closed',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(), // 10 days ago
-        read: true,
-      },
-      {
-        id: '7',
-        type: 'success',
-        title: 'Old Test Complete',
-        message: 'Soil testing for Section B completed',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(), // 14 days ago
-        read: true,
-      },
-    ]
-    setNotifications(mockNotifications)
+    fetchNotifications()
+    // Poll for new notifications every 60 seconds
+    const interval = setInterval(fetchNotifications, 60000)
+    return () => clearInterval(interval)
   }, [])
 
   // Filter notifications by type
   const filteredNotifications = notificationFilter === 'all'
     ? notifications
-    : notifications.filter(n => n.type === notificationFilter)
+    : notifications.filter(n => n.type.toLowerCase() === notificationFilter)
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -222,32 +192,77 @@ export function Header() {
   }
 
   // Mark notification as read
-  const markAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    )
+  const markAsRead = async (notification: Notification) => {
+    if (notification.isRead) {
+      // If already read, just navigate
+      if (notification.linkUrl) {
+        navigate(notification.linkUrl)
+        setIsNotificationOpen(false)
+      }
+      return
+    }
+
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    try {
+      await fetch(`${apiUrl}/api/notifications/${notification.id}/read`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      setNotifications(prev =>
+        prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+      )
+      setUnreadCount(prev => Math.max(0, prev - 1))
+
+      // Navigate if there's a link
+      if (notification.linkUrl) {
+        navigate(notification.linkUrl)
+        setIsNotificationOpen(false)
+      }
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err)
+    }
   }
 
   // Mark all as read
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  const markAllAsRead = async () => {
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    try {
+      await fetch(`${apiUrl}/api/notifications/read-all`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
+      setUnreadCount(0)
+    } catch (err) {
+      console.error('Failed to mark all as read:', err)
+    }
   }
 
   // Check if notification is old (more than 7 days)
-  const isOldNotification = (timestamp: string) => {
+  const isOldNotification = (createdAt: string) => {
     const now = new Date()
-    const date = new Date(timestamp)
+    const date = new Date(createdAt)
     const diffMs = now.getTime() - date.getTime()
     const diffDays = diffMs / 86400000
     return diffDays > 7
   }
 
   // Count old notifications
-  const oldNotificationCount = notifications.filter(n => isOldNotification(n.timestamp)).length
+  const oldNotificationCount = notifications.filter(n => isOldNotification(n.createdAt)).length
 
   // Clear old notifications
   const clearOldNotifications = () => {
-    setNotifications(prev => prev.filter(n => !isOldNotification(n.timestamp)))
+    setNotifications(prev => prev.filter(n => !isOldNotification(n.createdAt)))
   }
 
   // Format relative time
@@ -266,12 +281,14 @@ export function Header() {
   }
 
   // Get notification icon by type
-  const getNotificationIcon = (type: Notification['type']) => {
-    switch (type) {
+  const getNotificationIcon = (type: string) => {
+    switch (type.toLowerCase()) {
       case 'warning':
         return <AlertCircle className="h-4 w-4 text-amber-500" />
       case 'success':
         return <CheckCircle className="h-4 w-4 text-green-500" />
+      case 'mention':
+        return <User className="h-4 w-4 text-primary" />
       default:
         return <Clock className="h-4 w-4 text-blue-500" />
     }
@@ -411,7 +428,7 @@ export function Header() {
               </div>
               {/* Filter tabs */}
               <div className="flex border-b px-2">
-                {(['all', 'info', 'warning', 'success'] as const).map((filter) => (
+                {(['all', 'mention', 'info', 'warning'] as const).map((filter) => (
                   <button
                     key={filter}
                     onClick={() => setNotificationFilter(filter)}
@@ -421,7 +438,7 @@ export function Header() {
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {filter === 'info' ? 'NCR' : filter === 'warning' ? 'Alerts' : filter === 'success' ? 'Updates' : 'All'}
+                    {filter === 'mention' ? '@Mentions' : filter === 'info' ? 'Info' : filter === 'warning' ? 'Alerts' : 'All'}
                   </button>
                 ))}
               </div>
@@ -435,10 +452,10 @@ export function Header() {
                     {filteredNotifications.map((notification) => (
                       <li
                         key={notification.id}
-                        className={`border-b last:border-0 ${!notification.read ? 'bg-primary/5' : ''}`}
+                        className={`border-b last:border-0 ${!notification.isRead ? 'bg-primary/5' : ''}`}
                       >
                         <button
-                          onClick={() => markAsRead(notification.id)}
+                          onClick={() => markAsRead(notification)}
                           className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/50"
                         >
                           <div className="mt-0.5 flex-shrink-0">
@@ -447,7 +464,7 @@ export function Header() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-medium">{notification.title}</span>
-                              {!notification.read && (
+                              {!notification.isRead && (
                                 <span className="h-2 w-2 rounded-full bg-primary" />
                               )}
                             </div>
@@ -455,7 +472,7 @@ export function Header() {
                               {notification.message}
                             </p>
                             <span className="mt-1 text-xs text-muted-foreground">
-                              {formatRelativeTime(notification.timestamp)}
+                              {formatRelativeTime(notification.createdAt)}
                             </span>
                           </div>
                         </button>

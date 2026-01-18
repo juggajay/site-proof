@@ -23,6 +23,8 @@ import { docketsRouter } from './routes/dockets.js'
 import { companyRouter } from './routes/company.js'
 import { supportRouter } from './routes/support.js'
 import { auditLogRouter } from './routes/auditLog.js'
+import { commentsRouter } from './routes/comments.js'
+import { notificationsRouter } from './routes/notifications.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -72,6 +74,8 @@ app.use('/api/dockets', docketsRouter)
 app.use('/api/company', companyRouter)
 app.use('/api/support', supportRouter)
 app.use('/api/audit-logs', auditLogRouter)
+app.use('/api/comments', commentsRouter)
+app.use('/api/notifications', notificationsRouter)
 
 // tRPC
 app.use(
