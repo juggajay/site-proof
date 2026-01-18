@@ -2894,11 +2894,43 @@ Date: 2026-01-18
 ## GIT COMMITS (Feature #999)
 - ef3d3e5: feat: Add app version display to Settings page (Feature #999)
 
+### Feature #1000: Session activity timeout warning - PASSING
+- IMPLEMENTED: Session timeout warning with inactivity detection
+- Implementation details:
+  1. Created SessionTimeoutWarning component:
+     - 15-minute inactivity detection (customizable)
+     - 60-second countdown warning dialog
+     - Activity tracking via mouse, keyboard, scroll, and touch events
+  2. Warning dialog features:
+     - Amber-styled warning icon and countdown
+     - "You will be logged out in X seconds" countdown display
+     - "Stay Logged In" button - dismisses dialog, resets timer
+     - "Logout Now" button - immediately logs out user
+  3. Test mode available via ?sessionTest=true URL parameter:
+     - 5-second inactivity time, 10-second countdown
+  4. Auto-logout when countdown reaches 0
+- Testing performed (All Steps Verified):
+  1. Step 1: Be inactive for period - Warning appeared after inactivity
+  2. Step 2: Verify warning shown - Dialog with countdown, message, and buttons visible
+  3. Step 3: Can extend session - "Stay Logged In" button works, timer resets
+  4. Step 4: Or logout automatically - User logged out when countdown expires
+
+## FILES CREATED THIS SESSION (Feature #1000)
+- frontend/src/components/SessionTimeoutWarning.tsx (NEW)
+- frontend/src/App.tsx - Added SessionTimeoutWarning import and component
+
+## SCREENSHOTS CAPTURED (Feature #1000)
+- feature-1000-session-timeout-warning.png - Warning dialog with countdown
+- feature-1000-session-extended.png - Session extended after clicking Stay Logged In
+
+## GIT COMMITS (Feature #1000)
+- 83a27e3: feat: Add session activity timeout warning (Feature #1000)
+
 ## FEATURE STATISTICS (Updated)
 - Total Features: 1035
-- Passing: 526 (50.8%)
+- Passing: 527 (50.9%)
 - In Progress: 0
-- Pending: 509
+- Pending: 508
 
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
