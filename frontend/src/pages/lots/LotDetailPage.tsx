@@ -127,6 +127,10 @@ interface ITPCompletion {
   verifiedBy: { id: string; fullName: string; email: string } | null
   attachments: ITPAttachment[]
   linkedNcr?: { id: string; ncrNumber: string } | null
+  // Witness point details
+  witnessPresent?: boolean | null
+  witnessName?: string | null
+  witnessCompany?: string | null
 }
 
 interface ITPInstance {
@@ -286,6 +290,17 @@ export function LotDetailPage() {
   const [failedNcrCategory, setFailedNcrCategory] = useState('workmanship')
   const [failedNcrSeverity, setFailedNcrSeverity] = useState('minor')
   const [submittingFailed, setSubmittingFailed] = useState(false)
+
+  // Witness point modal state
+  const [witnessModal, setWitnessModal] = useState<{
+    checklistItemId: string
+    itemDescription: string
+    existingNotes: string | null
+  } | null>(null)
+  const [witnessPresent, setWitnessPresent] = useState<boolean | null>(null)
+  const [witnessName, setWitnessName] = useState('')
+  const [witnessCompany, setWitnessCompany] = useState('')
+  const [submittingWitness, setSubmittingWitness] = useState(false)
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -661,13 +676,28 @@ export function LotDetailPage() {
     }
   }
 
-  const handleToggleCompletion = async (checklistItemId: string, currentlyCompleted: boolean, existingNotes: string | null, forceComplete = false) => {
+  const handleToggleCompletion = async (checklistItemId: string, currentlyCompleted: boolean, existingNotes: string | null, forceComplete = false, witnessData?: { witnessPresent: boolean; witnessName?: string; witnessCompany?: string }) => {
     if (!itpInstance) return
+
+    const item = itpInstance.template.checklistItems.find(i => i.id === checklistItemId)
+    const completion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
+
+    // Check if this is a witness point and we're completing (not uncompleting)
+    if (!currentlyCompleted && !forceComplete && item?.pointType === 'witness' && !witnessData) {
+      // Show witness modal to collect witness details
+      setWitnessPresent(null)
+      setWitnessName('')
+      setWitnessCompany('')
+      setWitnessModal({
+        checklistItemId,
+        itemDescription: item.description,
+        existingNotes
+      })
+      return
+    }
 
     // Check if this item requires evidence and doesn't have any yet
     if (!currentlyCompleted && !forceComplete) {
-      const item = itpInstance.template.checklistItems.find(i => i.id === checklistItemId)
-      const completion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
       const hasAttachments = completion?.attachments && completion.attachments.length > 0
 
       if (item && item.evidenceRequired !== 'none' && !hasAttachments) {
@@ -703,6 +733,12 @@ export function LotDetailPage() {
           checklistItemId,
           isCompleted: !currentlyCompleted,
           notes: existingNotes,
+          // Include witness data if provided
+          ...(witnessData && {
+            witnessPresent: witnessData.witnessPresent,
+            witnessName: witnessData.witnessName || null,
+            witnessCompany: witnessData.witnessCompany || null
+          })
         }),
       })
 
@@ -939,6 +975,66 @@ export function LotDetailPage() {
       })
     } finally {
       setSubmittingFailed(false)
+    }
+  }
+
+  // Handle completing a witness point with witness details
+  const handleCompleteWitnessPoint = async () => {
+    if (!witnessModal || !itpInstance || witnessPresent === null) {
+      toast({
+        title: 'Selection required',
+        description: 'Please indicate whether the client witness was present.',
+        variant: 'error'
+      })
+      return
+    }
+
+    // If witness was present, require name
+    if (witnessPresent && !witnessName.trim()) {
+      toast({
+        title: 'Witness name required',
+        description: 'Please enter the name of the witness who was present.',
+        variant: 'error'
+      })
+      return
+    }
+
+    setSubmittingWitness(true)
+
+    try {
+      // Call handleToggleCompletion with witness data
+      await handleToggleCompletion(
+        witnessModal.checklistItemId,
+        false, // currentlyCompleted - we're completing it
+        witnessModal.existingNotes,
+        true, // forceComplete to skip the modal check
+        {
+          witnessPresent,
+          witnessName: witnessPresent ? witnessName.trim() : undefined,
+          witnessCompany: witnessPresent ? witnessCompany.trim() : undefined
+        }
+      )
+
+      toast({
+        title: 'Witness point completed',
+        description: witnessPresent
+          ? `Witness details recorded: ${witnessName}${witnessCompany ? ` (${witnessCompany})` : ''}`
+          : 'Noted that notification was given but witness not present.',
+      })
+
+      setWitnessModal(null)
+      setWitnessPresent(null)
+      setWitnessName('')
+      setWitnessCompany('')
+    } catch (err) {
+      console.error('Failed to complete witness point:', err)
+      toast({
+        title: 'Failed to complete',
+        description: 'An error occurred. Please try again.',
+        variant: 'error'
+      })
+    } finally {
+      setSubmittingWitness(false)
     }
   }
 
@@ -1526,15 +1622,33 @@ export function LotDetailPage() {
                       const isFailed = completion?.isFailed || false
                       const notes = completion?.notes || ''
 
+                      // Check if item is locked due to unreleased hold point (Feature #194)
+                      // An item is locked if there's an unreleased hold point BEFORE it in the sequence
+                      const isLockedByHoldPoint = (() => {
+                        // Get all hold point items that come BEFORE this item (lower order number)
+                        const precedingHoldPoints = itpInstance.template.checklistItems.filter(
+                          (i: any) => i.pointType === 'hold_point' && i.order < item.order
+                        )
+                        // Check if any preceding hold point is NOT released (not completed or not verified)
+                        return precedingHoldPoints.some((hp: any) => {
+                          const hpCompletion = itpInstance.completions.find((c: any) => c.checklistItemId === hp.id)
+                          // A hold point is "released" if it's completed AND verified
+                          return !hpCompletion?.isCompleted || !hpCompletion?.isVerified
+                        })
+                      })()
+
                       return (
-                        <div key={item.id} className={`p-4 ${isNotApplicable ? 'bg-gray-50 dark:bg-gray-900/30' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''}`}>
+                        <div key={item.id} className={`p-4 ${isNotApplicable ? 'bg-gray-50 dark:bg-gray-900/30' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''} ${isLockedByHoldPoint && !isCompleted ? 'opacity-60 bg-gray-100/50 dark:bg-gray-800/30' : ''}`}>
                           <div className="flex items-start gap-3">
                             <button
-                              onClick={() => !isNotApplicable && !isFailed && handleToggleCompletion(item.id, isCompleted, notes)}
-                              disabled={updatingCompletion === item.id || isNotApplicable || isFailed}
-                              aria-label={isFailed ? 'Failed' : isNotApplicable ? 'Not Applicable' : isCompleted ? `Mark "${item.description}" as incomplete` : `Mark "${item.description}" as complete`}
+                              onClick={() => !isNotApplicable && !isFailed && !isLockedByHoldPoint && handleToggleCompletion(item.id, isCompleted, notes)}
+                              disabled={updatingCompletion === item.id || isNotApplicable || isFailed || (isLockedByHoldPoint && !isCompleted)}
+                              aria-label={isLockedByHoldPoint && !isCompleted ? 'Locked - complete preceding hold point first' : isFailed ? 'Failed' : isNotApplicable ? 'Not Applicable' : isCompleted ? `Mark "${item.description}" as incomplete` : `Mark "${item.description}" as complete`}
+                              title={isLockedByHoldPoint && !isCompleted ? 'Complete preceding hold point first' : undefined}
                               className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                isFailed
+                                isLockedByHoldPoint && !isCompleted
+                                  ? 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed'
+                                  : isFailed
                                   ? 'bg-red-500 border-red-500 text-white cursor-not-allowed'
                                   : isNotApplicable
                                   ? 'bg-gray-400 border-gray-400 text-white cursor-not-allowed'
@@ -1543,7 +1657,7 @@ export function LotDetailPage() {
                                   : 'border-gray-300 hover:border-primary'
                               } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
                             >
-                              {isFailed ? <span className="text-[10px] font-bold" aria-hidden="true">✗</span> : isNotApplicable ? <span className="text-[10px] font-bold" aria-hidden="true">—</span> : isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
+                              {isLockedByHoldPoint && !isCompleted ? <span className="text-[10px]" aria-hidden="true">🔒</span> : isFailed ? <span className="text-[10px] font-bold" aria-hidden="true">✗</span> : isNotApplicable ? <span className="text-[10px] font-bold" aria-hidden="true">—</span> : isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
                             </button>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -1563,6 +1677,12 @@ export function LotDetailPage() {
                                 {/* N/A Badge */}
                                 {isNotApplicable && (
                                   <span className="text-xs bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded font-medium">N/A</span>
+                                )}
+                                {/* Locked by HP Badge (Feature #194) */}
+                                {isLockedByHoldPoint && !isCompleted && (
+                                  <span className="text-xs bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded font-medium" title="Complete preceding hold point to unlock">
+                                    🔒 Locked
+                                  </span>
                                 )}
                                 {item.isHoldPoint && (
                                   <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Hold Point</span>
@@ -1647,6 +1767,25 @@ export function LotDetailPage() {
                                   Completed by {completion.completedBy.fullName || completion.completedBy.email}
                                   {completion.completedAt && ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
                                 </p>
+                              )}
+
+                              {/* Witness Point Details (if this is a witness point and has witness data) */}
+                              {item.pointType === 'witness' && completion?.witnessPresent !== undefined && completion?.witnessPresent !== null && (
+                                <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
+                                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                                    Witness Details:
+                                  </p>
+                                  {completion.witnessPresent ? (
+                                    <p className="text-xs text-amber-600 dark:text-amber-500">
+                                      ✓ Witness present: {completion.witnessName || 'Name not recorded'}
+                                      {completion.witnessCompany && ` (${completion.witnessCompany})`}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-amber-600 dark:text-amber-500">
+                                      ✗ Witness not present (notification given)
+                                    </p>
+                                  )}
+                                </div>
                               )}
 
                               {/* Photo Attachments Section */}
@@ -2745,6 +2884,120 @@ export function LotDetailPage() {
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submittingFailed ? 'Creating NCR...' : 'Mark as Failed & Raise NCR'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Witness Point Completion Modal */}
+      {witnessModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400">
+                <span className="text-xl font-bold">W</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Complete Witness Point</h2>
+                <p className="text-sm text-muted-foreground">Record witness attendance</p>
+              </div>
+            </div>
+
+            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+              <p className="text-sm font-medium">{witnessModal.itemDescription}</p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Was the client witness present? <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setWitnessPresent(true)}
+                    className={`flex-1 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
+                      witnessPresent === true
+                        ? 'bg-green-100 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-400'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    ✓ Yes, witness was present
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWitnessPresent(false)}
+                    className={`flex-1 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
+                      witnessPresent === false
+                        ? 'bg-orange-100 border-orange-500 text-orange-700 dark:bg-orange-900/30 dark:border-orange-600 dark:text-orange-400'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    ✗ No, notification given
+                  </button>
+                </div>
+              </div>
+
+              {witnessPresent === true && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Witness Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={witnessName}
+                      onChange={(e) => setWitnessName(e.target.value)}
+                      placeholder="Enter witness name..."
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Witness Company/Organisation
+                    </label>
+                    <input
+                      type="text"
+                      value={witnessCompany}
+                      onChange={(e) => setWitnessCompany(e.target.value)}
+                      placeholder="e.g., Client Name, Superintendent Firm..."
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
+                    />
+                  </div>
+                </>
+              )}
+
+              {witnessPresent === false && (
+                <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <p className="text-sm text-orange-700 dark:text-orange-400">
+                    <strong>Note:</strong> The item will be marked as complete with a record that notification was given but the witness was not present.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setWitnessModal(null)
+                  setWitnessPresent(null)
+                  setWitnessName('')
+                  setWitnessCompany('')
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+                disabled={submittingWitness}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCompleteWitnessPoint}
+                disabled={submittingWitness || witnessPresent === null || (witnessPresent && !witnessName.trim())}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submittingWitness ? 'Saving...' : 'Complete Witness Point'}
               </button>
             </div>
           </div>
