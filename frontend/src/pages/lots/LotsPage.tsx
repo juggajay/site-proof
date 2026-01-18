@@ -6,7 +6,7 @@ import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
-import { Settings2, Check, ChevronUp, ChevronDown } from 'lucide-react'
+import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2 } from 'lucide-react'
 
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager']
@@ -31,6 +31,16 @@ const DEFAULT_COLUMN_ORDER: ColumnId[] = ['lotNumber', 'description', 'chainage'
 
 const COLUMN_STORAGE_KEY = 'siteproof_lot_columns'
 const COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order'
+const SAVED_FILTERS_STORAGE_KEY = 'siteproof_lot_saved_filters'
+
+interface SavedFilter {
+  id: string
+  name: string
+  status: string
+  activity: string
+  search: string
+  createdAt: string
+}
 
 interface Lot {
   id: string
@@ -148,6 +158,63 @@ export function LotsPage() {
   })
 
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
+
+  // Saved filters state
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => {
+    try {
+      const stored = localStorage.getItem(SAVED_FILTERS_STORAGE_KEY)
+      if (stored) {
+        return JSON.parse(stored) as SavedFilter[]
+      }
+    } catch (e) {
+      console.error('Error loading saved filters:', e)
+    }
+    return []
+  })
+  const [showSaveFilterModal, setShowSaveFilterModal] = useState(false)
+  const [newFilterName, setNewFilterName] = useState('')
+  const [savedFiltersDropdownOpen, setSavedFiltersDropdownOpen] = useState(false)
+
+  // Save filter to localStorage
+  const saveCurrentFilter = () => {
+    if (!newFilterName.trim()) return
+
+    const newFilter: SavedFilter = {
+      id: crypto.randomUUID(),
+      name: newFilterName.trim(),
+      status: statusFilter,
+      activity: activityFilter,
+      search: searchQuery,
+      createdAt: new Date().toISOString(),
+    }
+
+    const updatedFilters = [...savedFilters, newFilter]
+    setSavedFilters(updatedFilters)
+    localStorage.setItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters))
+    setShowSaveFilterModal(false)
+    setNewFilterName('')
+    toast({ description: `Filter "${newFilter.name}" saved`, variant: 'success' })
+  }
+
+  // Load a saved filter
+  const loadSavedFilter = (filter: SavedFilter) => {
+    updateFilters({
+      status: filter.status,
+      activity: filter.activity,
+      search: filter.search,
+    })
+    setSavedFiltersDropdownOpen(false)
+    toast({ description: `Filter "${filter.name}" loaded`, variant: 'success' })
+  }
+
+  // Delete a saved filter
+  const deleteSavedFilter = (filterId: string) => {
+    const filterName = savedFilters.find(f => f.id === filterId)?.name
+    const updatedFilters = savedFilters.filter(f => f.id !== filterId)
+    setSavedFilters(updatedFilters)
+    localStorage.setItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters))
+    toast({ description: `Filter "${filterName}" deleted`, variant: 'success' })
+  }
 
   // Toggle column visibility
   const toggleColumn = (columnId: ColumnId) => {
@@ -1080,15 +1147,79 @@ export function LotsPage() {
           </div>
         </div>
         {(statusFilter || activityFilter || searchQuery) && (
-          <button
-            onClick={() => {
-              updateFilters({ status: '', activity: '', search: '' })
-            }}
-            className="text-sm text-primary hover:underline"
-          >
-            Clear All Filters
-          </button>
+          <>
+            <button
+              onClick={() => {
+                updateFilters({ status: '', activity: '', search: '' })
+              }}
+              className="text-sm text-primary hover:underline"
+            >
+              Clear All Filters
+            </button>
+            <button
+              onClick={() => setShowSaveFilterModal(true)}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              title="Save current filter"
+            >
+              <Save className="h-3.5 w-3.5" />
+              Save Filter
+            </button>
+          </>
         )}
+
+        {/* Saved Filters Dropdown */}
+        {savedFilters.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setSavedFiltersDropdownOpen(!savedFiltersDropdownOpen)}
+              className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+              title="Load saved filter"
+            >
+              <Bookmark className="h-4 w-4" />
+              Saved ({savedFilters.length})
+            </button>
+            {savedFiltersDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setSavedFiltersDropdownOpen(false)}
+                />
+                <div className="absolute left-0 top-full mt-1 z-20 w-64 rounded-lg border bg-white dark:bg-card shadow-lg">
+                  <div className="p-2 border-b">
+                    <span className="text-xs font-medium text-muted-foreground">Saved Filters</span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {savedFilters.map((filter) => (
+                      <div
+                        key={filter.id}
+                        className="flex items-center justify-between px-3 py-2 hover:bg-muted group"
+                      >
+                        <button
+                          onClick={() => loadSavedFilter(filter)}
+                          className="flex-1 text-left text-sm truncate"
+                          title={`Load filter: ${filter.name}`}
+                        >
+                          {filter.name}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteSavedFilter(filter.id)
+                          }}
+                          className="p-1 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete filter"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <span className="text-sm text-muted-foreground">
           Showing {filteredLots.length} of {lots.length} lots
         </span>
@@ -1400,6 +1531,58 @@ export function LotsPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Save Filter Modal */}
+      {showSaveFilterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-md rounded-lg bg-white dark:bg-card p-6 shadow-xl">
+            <h2 className="text-lg font-semibold">Save Current Filter</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Save the current filter settings for quick access later.
+            </p>
+            <div className="mt-4">
+              <label className="block text-sm font-medium mb-1">Filter Name</label>
+              <input
+                type="text"
+                value={newFilterName}
+                onChange={(e) => setNewFilterName(e.target.value)}
+                placeholder="e.g., Completed Earthworks"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveCurrentFilter()
+                }}
+              />
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              <p>Current filter:</p>
+              <ul className="mt-1 ml-4 list-disc">
+                {statusFilter && <li>Status: {statusFilter.replace('_', ' ')}</li>}
+                {activityFilter && <li>Activity: {activityFilter}</li>}
+                {searchQuery && <li>Search: "{searchQuery}"</li>}
+              </ul>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowSaveFilterModal(false)
+                  setNewFilterName('')
+                }}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveCurrentFilter}
+                disabled={!newFilterName.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                Save Filter
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
