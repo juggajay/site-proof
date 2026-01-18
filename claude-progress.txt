@@ -3611,3 +3611,80 @@ Date: 2026-01-18
 ================================================================================
 END OF SESSION 38 SUMMARY
 ================================================================================
+
+================================================================================
+SESSION 39 - Feature #254: Invite subcontractor to project
+================================================================================
+Date: 2026-01-19
+
+## ENVIRONMENT SETUP
+- Fixed database issue: token_invalidated_at column was missing
+- Ran migration script: add-token-invalidated-column.js
+- Reset admin user password to work with correct hash algorithm
+- Backend running on port 4000
+- Frontend running on port 5175
+
+## FEATURE IMPLEMENTED
+- Feature #254: Invite subcontractor to project
+- Priority: 1134
+- Category: functional
+
+## IMPLEMENTATION DETAILS
+
+### Backend Changes (backend/src/routes/subcontractors.ts)
+- Added email invitation logging for development mode
+- When subcontractor is invited, logs:
+  - Recipient email address
+  - Email subject line
+  - Full email body with invitation details
+  - Accept invitation URL link
+  - Sender information
+
+### Testing Performed (All Steps Verified)
+1. Step 1: Navigate to subcontractors - ✅ Via project sidebar
+2. Step 2: Click Invite - ✅ "Invite Subcontractor" button opens modal
+3. Step 3: Enter company name, ABN - ✅ Form accepts input
+4. Step 4: Enter primary contact details - ✅ Name, email, phone fields work
+5. Step 5: Send invitation - ✅ Form submits successfully
+6. Step 6: Verify email sent - ✅ Email content logged to console
+7. Step 7: Verify status Pending Rate Approval - ✅ Shows "Pending" in UI, "pending_approval" in DB
+
+### Test Data Created
+- TEST_INVITE_254 Contractors Pty Ltd
+- ABN: 98 765 432 100
+- Primary Contact: Jane Test Contact
+- Email: jane.test254@testcontractors.com.au
+- Phone: 0400 254 254
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-254-subcontractors-page.png - Initial subcontractors page
+- evidence/feature-254-invite-modal-open.png - Invite modal with form
+- evidence/feature-254-form-filled.png - Form with test data entered
+- evidence/feature-254-invitation-sent-pending.png - Success with pending status
+- evidence/feature-254-final-verification.png - Final page with new subcontractor
+
+## FILES MODIFIED
+- backend/src/routes/subcontractors.ts
+  - Added email logging block (19 lines)
+  - Logs full invitation email to console
+
+## GIT COMMITS
+- 645d4cf: feat: Implement subcontractor invitation with email logging (Feature #254)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 640 (61.8%)
+- In Progress: 0
+- Pending: 395
+
+## MILESTONE
+Reached 61.8% completion (640/1035 features passing)
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing functional features
+3. Run regression tests on subcontractor functionality
+
+================================================================================
+END OF SESSION 39 SUMMARY
+================================================================================

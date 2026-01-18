@@ -620,6 +620,58 @@ export function ClaimsPage() {
     return null
   }
 
+  // Export chart data to CSV
+  const exportChartDataToCSV = (data: any[], filename: string, headers: string[]) => {
+    // Build CSV content
+    const csvRows = [headers.join(',')]
+
+    data.forEach(row => {
+      const values = headers.map(header => {
+        // Convert header to camelCase key
+        const key = header.toLowerCase().replace(/ /g, '')
+        const value = row[key] ?? row[header.toLowerCase()] ?? ''
+        // Escape values that contain commas
+        return typeof value === 'string' && value.includes(',')
+          ? `"${value}"`
+          : value
+      })
+      csvRows.push(values.join(','))
+    })
+
+    const csvContent = csvRows.join('\n')
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `${filename}-${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportCumulativeData = () => {
+    const exportData = cumulativeChartData.map(item => ({
+      name: item.name,
+      claimed: item.claimed,
+      certified: item.certified,
+      paid: item.paid
+    }))
+    exportChartDataToCSV(exportData, 'cumulative-claims', ['Name', 'Claimed', 'Certified', 'Paid'])
+  }
+
+  const handleExportMonthlyData = () => {
+    const exportData = monthlyBreakdownData.map(item => ({
+      name: item.name,
+      claimed: item.claimed,
+      certified: item.certified,
+      paid: item.paid
+    }))
+    exportChartDataToCSV(exportData, 'monthly-claims-breakdown', ['Name', 'Claimed', 'Certified', 'Paid'])
+  }
+
   // Custom tooltip for monthly breakdown chart
   const MonthlyTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -716,9 +768,19 @@ export function ClaimsPage() {
       {/* Cumulative Claims Chart */}
       {cumulativeChartData.length >= 2 && (
         <div className="rounded-lg border bg-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Cumulative Claims Over Time</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">Cumulative Claims Over Time</h2>
+            </div>
+            <button
+              onClick={handleExportCumulativeData}
+              className="flex items-center gap-1 px-2 py-1 text-xs border rounded hover:bg-muted"
+              title="Export chart data as CSV"
+            >
+              <Download className="h-3 w-3" />
+              Export Data
+            </button>
           </div>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -789,9 +851,19 @@ export function ClaimsPage() {
       {/* Monthly Breakdown Chart */}
       {monthlyBreakdownData.length >= 2 && (
         <div className="rounded-lg border bg-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Monthly Claim Breakdown</h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">Monthly Claim Breakdown</h2>
+            </div>
+            <button
+              onClick={handleExportMonthlyData}
+              className="flex items-center gap-1 px-2 py-1 text-xs border rounded hover:bg-muted"
+              title="Export chart data as CSV"
+            >
+              <Download className="h-3 w-3" />
+              Export Data
+            </button>
           </div>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">

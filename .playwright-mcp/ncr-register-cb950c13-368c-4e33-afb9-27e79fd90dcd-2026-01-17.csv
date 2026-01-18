@@ -1,0 +1,2 @@
+NCR Number,Lots,Description,Category,Severity,Status,Responsible,Due Date,Created At
+NCR-0001,NCR-TEST-LOT-003,"Test NCR for lot relationship cleanup - linked to 3 lots",workmanship,minor,open,Unassigned,-,1/14/2026

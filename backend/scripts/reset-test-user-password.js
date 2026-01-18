@@ -9,9 +9,9 @@ function hashPassword(password) {
 }
 
 async function main() {
-  // Update testadmin2's password
+  // Update admin@test.com's password
   const user = await prisma.user.update({
-    where: { email: 'commercial-pm@test.com' },
+    where: { email: 'admin@test.com' },
     data: {
       passwordHash: hashPassword('password123'),
     },

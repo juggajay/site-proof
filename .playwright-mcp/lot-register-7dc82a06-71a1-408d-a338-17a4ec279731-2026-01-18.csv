@@ -1,0 +1,4 @@
+Lot Number,Description,Chainage Start,Chainage End,Activity Type,Status,Budget,Subcontractor
+LOT-STRICT-001,First strict test lot,100,200,Earthworks,not_started,,
+LOT-STRICT-002,Second strict test lot,200,300,Pavement,not_started,,
+LOT-STRICT-003,Third strict test lot,300,400,Drainage,not_started,,

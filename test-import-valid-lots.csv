@@ -1,0 +1,4 @@
+lot_number,description,chainage_start,chainage_end,activity_type
+LOT-STRICT-001,First strict test lot,100,200,Earthworks
+LOT-STRICT-002,Second strict test lot,200,300,Pavement
+LOT-STRICT-003,Third strict test lot,300,400,Drainage

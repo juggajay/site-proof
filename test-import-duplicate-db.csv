@@ -1,0 +1,4 @@
+lot_number,description,chainage_start,chainage_end,activity_type
+LOT-NEW-001,A new lot that should work,500,600,Earthworks
+LOT-STRICT-001,This duplicates existing lot in DB,700,800,Pavement
+LOT-NEW-002,Another new lot,800,900,Drainage

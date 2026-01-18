@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getAuthToken, useAuth } from '@/lib/auth'
-import { Building2, Save, AlertTriangle, Upload, Crown, UserCog, Loader2 } from 'lucide-react'
+import { Building2, Save, AlertTriangle, Upload, Crown, UserCog, Loader2, X } from 'lucide-react'
 
 interface CompanyMember {
   id: string
@@ -30,6 +30,9 @@ export function CompanySettingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // File input ref for logo upload
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -40,6 +43,7 @@ export function CompanySettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
 
   // Ownership transfer state
   const [showTransferModal, setShowTransferModal] = useState(false)
@@ -140,12 +144,44 @@ export function CompanySettingsPage() {
   }
 
   const handleLogoUpload = () => {
-    // For now, just allow entering a URL
-    // In a real implementation, this would open a file picker and upload to storage
-    const url = prompt('Enter logo URL:', formData.logoUrl)
-    if (url !== null) {
-      setFormData(prev => ({ ...prev, logoUrl: url }))
+    // Trigger the hidden file input
+    logoInputRef.current?.click()
+  }
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'].includes(file.type)) {
+      setSaveError('Please select a valid image file (PNG, JPG, GIF, or WebP)')
+      return
     }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setSaveError('Image file must be less than 2MB')
+      return
+    }
+
+    setLogoUploading(true)
+    setSaveError('')
+
+    // Convert to base64 data URL for preview and storage
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      setFormData(prev => ({ ...prev, logoUrl: dataUrl }))
+      setLogoUploading(false)
+    }
+    reader.onerror = () => {
+      setSaveError('Failed to read image file')
+      setLogoUploading(false)
+    }
+    reader.readAsDataURL(file)
+
+    // Reset the input so the same file can be selected again
+    e.target.value = ''
   }
 
   // Load company members when opening transfer modal
@@ -383,37 +419,66 @@ export function CompanySettingsPage() {
         {/* Logo Upload */}
         <div>
           <label className="block text-sm font-medium mb-2">Company Logo</label>
+          {/* Hidden file input */}
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+            onChange={handleLogoFileChange}
+            className="hidden"
+          />
           <div className="flex items-center gap-4">
             {formData.logoUrl ? (
-              <div className="relative h-20 w-20 rounded-lg border overflow-hidden">
+              <div className="relative h-20 w-20 rounded-lg border overflow-hidden group">
                 <img
                   src={formData.logoUrl}
                   alt="Company logo"
                   className="h-full w-full object-contain"
                 />
+                {/* Remove button overlay */}
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, logoUrl: '' }))}
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remove logo"
+                >
+                  <X className="h-6 w-6 text-white" />
+                </button>
               </div>
             ) : (
               <div className="flex h-20 w-20 items-center justify-center rounded-lg border bg-muted">
                 <Building2 className="h-8 w-8 text-muted-foreground" />
               </div>
             )}
-            <button
-              type="button"
-              onClick={handleLogoUpload}
-              className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm hover:bg-muted"
-            >
-              <Upload className="h-4 w-4" />
-              Upload Logo
-            </button>
-            {formData.logoUrl && (
+            <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => setFormData(prev => ({ ...prev, logoUrl: '' }))}
-                className="text-sm text-red-600 hover:text-red-700"
+                onClick={handleLogoUpload}
+                disabled={logoUploading}
+                className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
               >
-                Remove
+                {logoUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    {formData.logoUrl ? 'Change Logo' : 'Upload Logo'}
+                  </>
+                )}
               </button>
-            )}
+              {formData.logoUrl && (
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, logoUrl: '' }))}
+                  className="text-sm text-red-600 hover:text-red-700"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             Recommended: Square image, PNG or JPG, max 2MB

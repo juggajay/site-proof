@@ -1,0 +1,9 @@
+lot_number,description,chainage_start,chainage_end,activity_type
+LOT-VALID-001,Valid lot with all fields,100,200,Earthworks
+LO,Too short lot number,300,400,Pavement
+LOT-VALID-002,,500,600,Drainage
+LOT-VALID-003,Valid lot,700,800,InvalidActivity
+,Missing lot number,900,1000,Concrete
+LOT-VALID-001,Duplicate lot number,1100,1200,Structures
+LOT-VALID-004,Invalid chainage,500,400,Earthworks
+LOT-VALID-005,Missing description and activity,,,

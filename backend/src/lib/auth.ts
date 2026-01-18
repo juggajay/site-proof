@@ -24,10 +24,14 @@ export interface AuthUser {
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
+  console.log('[AUTH DEBUG] verifyToken called')
   try {
+    console.log('[AUTH DEBUG] Verifying JWT...')
     const payload = jwt.verify(token, JWT_SECRET) as TokenPayload
+    console.log('[AUTH DEBUG] JWT verified, userId:', payload.userId)
 
     // Get user with tokenInvalidatedAt field
+    console.log('[AUTH DEBUG] Querying user from database...')
     const userResult = await prisma.$queryRaw<Array<{
       id: string
       email: string
@@ -50,8 +54,12 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       const tokenIssuedAt = new Date(payload.iat * 1000)
       // SQLite stores dates as strings, so we need to parse it
       const invalidatedAt = new Date(user.token_invalidated_at as unknown as string)
+      console.log('[AUTH DEBUG] Token iat:', payload.iat, '→', tokenIssuedAt.toISOString())
+      console.log('[AUTH DEBUG] Token invalidated at:', user.token_invalidated_at, '→', invalidatedAt.toISOString())
+      console.log('[AUTH DEBUG] tokenIssuedAt < invalidatedAt?', tokenIssuedAt < invalidatedAt)
       if (tokenIssuedAt < invalidatedAt) {
         // Token was issued before the user logged out all devices
+        console.log('[AUTH DEBUG] Token rejected - issued before invalidation')
         return null
       }
     }
@@ -67,7 +75,8 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       role: user.role_in_company,
       createdAt: user.created_at,
     }
-  } catch {
+  } catch (error) {
+    console.log('[AUTH DEBUG] Error in verifyToken:', error)
     return null
   }
 }

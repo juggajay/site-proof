@@ -1,10 +1,186 @@
 // Feature #592 trigger - ITP instance snapshot from template
+// Feature #175 - Auto-notification before witness point
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
 
 const prisma = new PrismaClient()
 const itpRouter = Router()
+
+/**
+ * Check for upcoming witness points and send notifications
+ * Called after an ITP item is completed to check if the next item is a witness point
+ */
+async function checkAndNotifyWitnessPoint(
+  itpInstanceId: string,
+  completedItemId: string,
+  userId: string
+) {
+  try {
+    // Get the ITP instance with template and lot info
+    const instance = await prisma.iTPInstance.findUnique({
+      where: { id: itpInstanceId },
+      include: {
+        lot: {
+          include: {
+            project: true
+          }
+        },
+        template: {
+          include: {
+            checklistItems: {
+              orderBy: { sequenceNumber: 'asc' }
+            }
+          }
+        },
+        completions: true
+      }
+    })
+
+    if (!instance || !instance.lot || !instance.lot.project) {
+      return null
+    }
+
+    // Get checklist items from snapshot or template
+    let checklistItems: any[]
+    if (instance.templateSnapshot) {
+      const snapshot = JSON.parse(instance.templateSnapshot)
+      checklistItems = snapshot.checklistItems || []
+    } else {
+      checklistItems = instance.template.checklistItems
+    }
+
+    // Find the completed item's sequence number
+    const completedItem = checklistItems.find((item: any) => item.id === completedItemId)
+    if (!completedItem) {
+      return null
+    }
+
+    const completedSequence = completedItem.sequenceNumber
+
+    // Check project settings for witness point notification configuration
+    const project = instance.lot.project
+    let settings: any = {}
+    if (project.settings) {
+      try {
+        settings = JSON.parse(project.settings)
+      } catch (e) {
+        // Invalid JSON, use defaults
+      }
+    }
+
+    // Default: notify when previous item is completed
+    const notificationTrigger = settings.witnessPointNotificationTrigger || 'previous_item'
+    const witnessNotificationEnabled = settings.witnessPointNotificationEnabled !== false // default true
+    const clientEmail = settings.witnessPointClientEmail || null
+    const clientName = settings.witnessPointClientName || 'Client Representative'
+
+    if (!witnessNotificationEnabled) {
+      return null
+    }
+
+    // Determine the sequence number to check for witness point
+    let targetSequence: number
+    if (notificationTrigger === '2_items_before') {
+      targetSequence = completedSequence + 2
+    } else {
+      // previous_item (default)
+      targetSequence = completedSequence + 1
+    }
+
+    // Find the target item
+    const nextItem = checklistItems.find((item: any) => item.sequenceNumber === targetSequence)
+    if (!nextItem) {
+      return null
+    }
+
+    // Check if it's a witness point (pointType can be 'witness' or 'witness_point')
+    if (nextItem.pointType !== 'witness' && nextItem.pointType !== 'witness_point') {
+      return null
+    }
+
+    // Check if the witness point is already completed (no need to notify)
+    const witnessPointCompletion = instance.completions.find(
+      (c: any) => c.checklistItemId === nextItem.id && (c.status === 'completed' || c.status === 'not_applicable')
+    )
+    if (witnessPointCompletion) {
+      return null // Witness point already passed
+    }
+
+    // Check if notification was already sent for this witness point
+    const existingNotification = await prisma.notification.findFirst({
+      where: {
+        projectId: project.id,
+        type: 'witness_point_approaching',
+        linkUrl: { contains: nextItem.id }
+      }
+    })
+
+    if (existingNotification) {
+      return null // Already notified
+    }
+
+    // Get the user who completed the item to attribute the notification
+    const completingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { fullName: true, email: true }
+    })
+
+    const userName = completingUser?.fullName || completingUser?.email || 'A team member'
+
+    // Create notifications for project managers and superintendents
+    const projectUsers = await prisma.projectUser.findMany({
+      where: {
+        projectId: project.id,
+        role: { in: ['project_manager', 'admin', 'superintendent'] }
+      },
+      include: {
+        user: { select: { id: true, email: true, fullName: true } }
+      }
+    })
+
+    const notificationsCreated = []
+
+    for (const pu of projectUsers) {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: pu.user.id,
+          projectId: project.id,
+          type: 'witness_point_approaching',
+          title: `Witness Point Approaching: ${nextItem.description}`,
+          message: `${userName} completed "${completedItem.description}" on lot ${instance.lot.lotNumber}. The next item is a witness point that requires client notification.`,
+          linkUrl: `/projects/${project.id}/lots/${instance.lot.id}?tab=itp&highlight=${nextItem.id}`
+        }
+      })
+      notificationsCreated.push(notification)
+    }
+
+    // Log the notification for console/email integration
+    console.log(`\n========================================`)
+    console.log(`WITNESS POINT NOTIFICATION`)
+    console.log(`========================================`)
+    console.log(`Project: ${project.name}`)
+    console.log(`Lot: ${instance.lot.lotNumber}`)
+    console.log(`Approaching Witness Point: ${nextItem.description}`)
+    console.log(`Triggered by: ${userName} completing "${completedItem.description}"`)
+    if (clientEmail) {
+      console.log(`Client to notify: ${clientName} <${clientEmail}>`)
+    }
+    console.log(`----------------------------------------`)
+    console.log(`Notifications sent to ${notificationsCreated.length} project team members`)
+    console.log(`========================================\n`)
+
+    return {
+      witnessPoint: nextItem,
+      notificationsSent: notificationsCreated.length,
+      clientEmail,
+      clientName
+    }
+  } catch (error) {
+    console.error('Error checking witness point notification:', error)
+    return null
+  }
+}
 
 interface AuthUser {
   userId: string
@@ -761,7 +937,11 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       // NCR details for failed status
       ncrDescription,
       ncrCategory,
-      ncrSeverity
+      ncrSeverity,
+      // Witness point details
+      witnessPresent,
+      witnessName,
+      witnessCompany
     } = req.body
 
     if (!itpInstanceId || !checklistItemId) {
@@ -797,6 +977,18 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
     // Determine completedAt and completedById based on status
     const isFinished = newStatus === 'completed' || newStatus === 'not_applicable' || newStatus === 'failed'
 
+    // Build witness data object (only include if values provided)
+    const witnessData: Record<string, unknown> = {}
+    if (witnessPresent !== undefined) {
+      witnessData.witnessPresent = witnessPresent
+    }
+    if (witnessName !== undefined) {
+      witnessData.witnessName = witnessName || null
+    }
+    if (witnessCompany !== undefined) {
+      witnessData.witnessCompany = witnessCompany || null
+    }
+
     let completion
     if (existingCompletion) {
       // Update existing completion
@@ -806,7 +998,8 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           status: newStatus,
           notes: notes ?? existingCompletion.notes,
           completedAt: isFinished ? new Date() : null,
-          completedById: isFinished ? user.userId : null
+          completedById: isFinished ? user.userId : null,
+          ...witnessData
         },
         include: {
           completedBy: {
@@ -828,7 +1021,8 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           status: newStatus,
           notes: notes || null,
           completedAt: isFinished ? new Date() : null,
-          completedById: isFinished ? user.userId : null
+          completedById: isFinished ? user.userId : null,
+          ...witnessData
         },
         include: {
           completedBy: {
@@ -915,6 +1109,16 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       await updateLotStatusFromITP(itpInstanceId)
     }
 
+    // Check for approaching witness points and send notifications (Feature #175)
+    let witnessPointNotification = null
+    if (isFinished && newStatus === 'completed') {
+      witnessPointNotification = await checkAndNotifyWitnessPoint(
+        itpInstanceId,
+        checklistItemId,
+        user.userId
+      )
+    }
+
     // Transform to frontend-friendly format
     const transformedCompletion = {
       ...completion,
@@ -926,7 +1130,7 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       linkedNcr: createdNcr
     }
 
-    res.json({ completion: transformedCompletion, ncr: createdNcr })
+    res.json({ completion: transformedCompletion, ncr: createdNcr, witnessPointNotification })
   } catch (error) {
     console.error('Error updating ITP completion:', error)
     res.status(500).json({ error: 'Failed to update completion' })

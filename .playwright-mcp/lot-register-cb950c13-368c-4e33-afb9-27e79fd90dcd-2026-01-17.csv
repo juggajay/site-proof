@@ -1,0 +1,4 @@
+Lot Number,Description,Chainage Start,Chainage End,Activity Type,Status,Budget,Subcontractor
+HP-TEST-LOT-003,Final test for HP deletion protection,,,Earthworks,not_started,,
+LOT-DISPUTE-TEST-1768690572756,Test lot for dispute claim feature,100,200,Earthworks,claimed,75000,
+NCR-TEST-LOT-003,Test lot 3 for NCR relationship test,,,Earthworks,ncr_raised,,
