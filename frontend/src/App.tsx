@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { AuthProvider } from '@/lib/auth'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute'
+import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp'
 
 // Layouts
 import { MainLayout } from '@/components/layouts/MainLayout'
@@ -54,9 +55,20 @@ const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
 // Subcontractor roles
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
 
+function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) {
+  const { isOpen, closeHelp } = useKeyboardShortcutsHelp()
+  return (
+    <>
+      {children}
+      <KeyboardShortcutsHelp isOpen={isOpen} onClose={closeHelp} />
+    </>
+  )
+}
+
 function App() {
   return (
     <AuthProvider>
+      <KeyboardShortcutsProvider>
       <Routes>
         {/* Auth Routes */}
         <Route element={<AuthLayout />}>
@@ -200,6 +212,7 @@ function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <Toaster />
+      </KeyboardShortcutsProvider>
     </AuthProvider>
   )
 }
