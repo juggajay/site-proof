@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react'
-import { getAuthToken } from '@/lib/auth'
-import { Building2, Save, AlertTriangle, Upload } from 'lucide-react'
+import { getAuthToken, useAuth } from '@/lib/auth'
+import { Building2, Save, AlertTriangle, Upload, Crown, UserCog, Loader2 } from 'lucide-react'
+
+interface CompanyMember {
+  id: string
+  email: string
+  fullName: string | null
+  roleInCompany: string
+}
 
 interface Company {
   id: string
@@ -18,6 +25,7 @@ interface Company {
 }
 
 export function CompanySettingsPage() {
+  const { user, refreshUser } = useAuth()
   const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -32,6 +40,14 @@ export function CompanySettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
+
+  // Ownership transfer state
+  const [showTransferModal, setShowTransferModal] = useState(false)
+  const [members, setMembers] = useState<CompanyMember[]>([])
+  const [loadingMembers, setLoadingMembers] = useState(false)
+  const [selectedNewOwner, setSelectedNewOwner] = useState('')
+  const [transferring, setTransferring] = useState(false)
+  const [transferError, setTransferError] = useState('')
 
   useEffect(() => {
     async function fetchCompany() {
@@ -129,6 +145,86 @@ export function CompanySettingsPage() {
     const url = prompt('Enter logo URL:', formData.logoUrl)
     if (url !== null) {
       setFormData(prev => ({ ...prev, logoUrl: url }))
+    }
+  }
+
+  // Load company members when opening transfer modal
+  const handleOpenTransferModal = async () => {
+    setShowTransferModal(true)
+    setLoadingMembers(true)
+    setTransferError('')
+    setSelectedNewOwner('')
+
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/company/members`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Filter out the current user (owner)
+        const otherMembers = data.members.filter((m: CompanyMember) => m.id !== user?.id)
+        setMembers(otherMembers)
+      } else {
+        const data = await response.json()
+        setTransferError(data.message || 'Failed to load company members')
+      }
+    } catch (err) {
+      console.error('Load members error:', err)
+      setTransferError('Failed to load company members')
+    } finally {
+      setLoadingMembers(false)
+    }
+  }
+
+  // Handle ownership transfer
+  const handleTransferOwnership = async () => {
+    if (!selectedNewOwner) {
+      setTransferError('Please select a new owner')
+      return
+    }
+
+    setTransferring(true)
+    setTransferError('')
+
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/company/transfer-ownership`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ newOwnerId: selectedNewOwner }),
+      })
+
+      if (response.ok) {
+        setShowTransferModal(false)
+        // Refresh user data to reflect new role
+        if (refreshUser) {
+          await refreshUser()
+        }
+        // Show success message
+        setSaveSuccess(true)
+        setTimeout(() => setSaveSuccess(false), 5000)
+      } else {
+        const data = await response.json()
+        setTransferError(data.message || 'Failed to transfer ownership')
+      }
+    } catch (err) {
+      console.error('Transfer ownership error:', err)
+      setTransferError('Failed to transfer ownership')
+    } finally {
+      setTransferring(false)
     }
   }
 
@@ -372,6 +468,138 @@ export function CompanySettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Transfer Ownership - Only visible to owners */}
+      {user?.role === 'owner' && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-6 space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2 text-amber-800 dark:text-amber-200">
+              <Crown className="h-5 w-5" />
+              Transfer Ownership
+            </h2>
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              Transfer company ownership to another team member.
+            </p>
+          </div>
+
+          <div className="text-sm text-amber-800 dark:text-amber-200 space-y-2">
+            <p>
+              <strong>Warning:</strong> Transferring ownership will:
+            </p>
+            <ul className="list-disc list-inside ml-2 space-y-1">
+              <li>Make another user the company owner</li>
+              <li>Change your role to Admin</li>
+              <li>Cannot be undone without the new owner's consent</li>
+            </ul>
+          </div>
+
+          <button
+            onClick={handleOpenTransferModal}
+            className="flex items-center gap-2 rounded-md border border-amber-400 bg-amber-100 px-4 py-2 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+          >
+            <UserCog className="h-4 w-4" />
+            Transfer Ownership
+          </button>
+        </div>
+      )}
+
+      {/* Transfer Ownership Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                <Crown className="h-6 w-6 text-amber-600" />
+              </div>
+              <h2 className="text-xl font-semibold">Transfer Ownership</h2>
+            </div>
+
+            {loadingMembers ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : members.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-muted-foreground">
+                  No other members in your company to transfer ownership to.
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Invite team members first before transferring ownership.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Select New Owner
+                  </label>
+                  <select
+                    value={selectedNewOwner}
+                    onChange={(e) => setSelectedNewOwner(e.target.value)}
+                    className="w-full rounded-md border bg-background px-3 py-2"
+                  >
+                    <option value="">Choose a team member...</option>
+                    {members.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.fullName || member.email} ({member.roleInCompany})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedNewOwner && (
+                  <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      You are about to transfer ownership to{' '}
+                      <strong>
+                        {members.find((m) => m.id === selectedNewOwner)?.fullName ||
+                          members.find((m) => m.id === selectedNewOwner)?.email}
+                      </strong>
+                      . This action cannot be easily undone.
+                    </p>
+                  </div>
+                )}
+
+                {transferError && (
+                  <div className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                    {transferError}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4 mt-4 border-t">
+              <button
+                onClick={() => {
+                  setShowTransferModal(false)
+                  setTransferError('')
+                  setSelectedNewOwner('')
+                }}
+                disabled={transferring}
+                className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              {members.length > 0 && (
+                <button
+                  onClick={handleTransferOwnership}
+                  disabled={transferring || !selectedNewOwner}
+                  className="flex-1 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {transferring ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Transferring...
+                    </>
+                  ) : (
+                    'Transfer Ownership'
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

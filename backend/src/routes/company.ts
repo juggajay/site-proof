@@ -137,6 +137,120 @@ companyRouter.post('/leave', async (req, res) => {
   }
 })
 
+// GET /api/company/members - Get all members of the current user's company
+companyRouter.get('/members', async (req, res) => {
+  try {
+    const user = req.user!
+
+    if (!user.companyId) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'No company associated with this user'
+      })
+    }
+
+    // Only owners can view members for transfer purposes
+    if (user.roleInCompany !== 'owner') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Only company owners can view members for ownership transfer'
+      })
+    }
+
+    const members = await prisma.user.findMany({
+      where: { companyId: user.companyId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        roleInCompany: true,
+      },
+      orderBy: { fullName: 'asc' }
+    })
+
+    res.json({ members })
+  } catch (error) {
+    console.error('Get company members error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/company/transfer-ownership - Transfer company ownership to another user
+companyRouter.post('/transfer-ownership', async (req, res) => {
+  try {
+    const user = req.user!
+    const { newOwnerId } = req.body
+
+    if (!user.companyId) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'No company associated with this user'
+      })
+    }
+
+    // Only owners can transfer ownership
+    if (user.roleInCompany !== 'owner') {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Only the company owner can transfer ownership'
+      })
+    }
+
+    if (!newOwnerId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'New owner ID is required'
+      })
+    }
+
+    // Cannot transfer to yourself
+    if (newOwnerId === user.userId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Cannot transfer ownership to yourself'
+      })
+    }
+
+    // Verify new owner is a member of the same company
+    const newOwner = await prisma.user.findFirst({
+      where: {
+        id: newOwnerId,
+        companyId: user.companyId
+      }
+    })
+
+    if (!newOwner) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'User not found in your company'
+      })
+    }
+
+    // Transfer ownership: update both users in a transaction
+    await prisma.$transaction([
+      // Set new owner
+      prisma.$executeRaw`UPDATE users SET role_in_company = 'owner' WHERE id = ${newOwnerId}`,
+      // Demote current owner to admin
+      prisma.$executeRaw`UPDATE users SET role_in_company = 'admin' WHERE id = ${user.userId}`,
+    ])
+
+    console.log(`Ownership of company ${user.companyId} transferred from ${user.email} to ${newOwner.email}`)
+
+    res.json({
+      message: 'Ownership transferred successfully',
+      newOwner: {
+        id: newOwner.id,
+        email: newOwner.email,
+        fullName: newOwner.fullName
+      },
+      transferredAt: new Date().toISOString()
+    })
+  } catch (error) {
+    console.error('Transfer ownership error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // PATCH /api/company - Update the current user's company
 companyRouter.patch('/', async (req, res) => {
   try {
