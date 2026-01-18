@@ -1300,4 +1300,169 @@ router.get('/:projectId/weather/:date', async (req: Request, res: Response) => {
   }
 })
 
+// Feature #242: GET /api/diary/project/:projectId/delays - Get all delays for a project
+router.get('/project/:projectId/delays', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { delayType, startDate, endDate } = req.query
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied to this project' })
+    }
+
+    // Build date filter
+    const dateFilter: { gte?: Date; lte?: Date } = {}
+    if (startDate && typeof startDate === 'string') {
+      dateFilter.gte = new Date(startDate)
+    }
+    if (endDate && typeof endDate === 'string') {
+      dateFilter.lte = new Date(endDate)
+    }
+
+    // Get all diaries with delays
+    const diaries = await prisma.dailyDiary.findMany({
+      where: {
+        projectId,
+        ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+      },
+      include: {
+        delays: true,
+      },
+    })
+
+    // Flatten delays and add diary info
+    let delays = diaries.flatMap(diary =>
+      diary.delays.map(delay => ({
+        id: delay.id,
+        diaryId: diary.id,
+        diaryDate: diary.date,
+        diaryStatus: diary.status,
+        delayType: delay.delayType,
+        startTime: delay.startTime,
+        endTime: delay.endTime,
+        durationHours: delay.durationHours ? Number(delay.durationHours) : null,
+        description: delay.description,
+        impact: delay.impact,
+      }))
+    )
+
+    // Filter by delay type if provided
+    if (delayType && typeof delayType === 'string') {
+      delays = delays.filter(d => d.delayType === delayType)
+    }
+
+    // Calculate summary by type
+    const summaryByType: Record<string, { count: number; totalHours: number }> = {}
+    for (const delay of delays) {
+      if (!summaryByType[delay.delayType]) {
+        summaryByType[delay.delayType] = { count: 0, totalHours: 0 }
+      }
+      summaryByType[delay.delayType].count++
+      summaryByType[delay.delayType].totalHours += delay.durationHours || 0
+    }
+
+    // Calculate totals
+    const totalDelays = delays.length
+    const totalHours = delays.reduce((sum, d) => sum + (d.durationHours || 0), 0)
+
+    res.json({
+      delays: delays.sort((a, b) => new Date(b.diaryDate).getTime() - new Date(a.diaryDate).getTime()),
+      summary: {
+        totalDelays,
+        totalHours,
+        byType: summaryByType,
+      },
+    })
+  } catch (error) {
+    console.error('Error fetching delays:', error)
+    res.status(500).json({ error: 'Failed to fetch delays' })
+  }
+})
+
+// Feature #242: GET /api/diary/project/:projectId/delays/export - Export delays to CSV
+router.get('/project/:projectId/delays/export', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { delayType, startDate, endDate } = req.query
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied to this project' })
+    }
+
+    // Build date filter
+    const dateFilter: { gte?: Date; lte?: Date } = {}
+    if (startDate && typeof startDate === 'string') {
+      dateFilter.gte = new Date(startDate)
+    }
+    if (endDate && typeof endDate === 'string') {
+      dateFilter.lte = new Date(endDate)
+    }
+
+    // Get all diaries with delays
+    const diaries = await prisma.dailyDiary.findMany({
+      where: {
+        projectId,
+        ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+      },
+      include: {
+        delays: true,
+      },
+    })
+
+    // Flatten delays
+    let delays = diaries.flatMap(diary =>
+      diary.delays.map(delay => ({
+        diaryDate: diary.date,
+        delayType: delay.delayType,
+        startTime: delay.startTime,
+        endTime: delay.endTime,
+        durationHours: delay.durationHours ? Number(delay.durationHours) : null,
+        description: delay.description,
+        impact: delay.impact,
+      }))
+    )
+
+    // Filter by delay type if provided
+    if (delayType && typeof delayType === 'string') {
+      delays = delays.filter(d => d.delayType === delayType)
+    }
+
+    // Sort by date descending
+    delays.sort((a, b) => new Date(b.diaryDate).getTime() - new Date(a.diaryDate).getTime())
+
+    // Generate CSV
+    const csvHeaders = ['Date', 'Delay Type', 'Start Time', 'End Time', 'Duration (Hours)', 'Description', 'Impact']
+    const csvRows = delays.map(d => [
+      new Date(d.diaryDate).toLocaleDateString('en-AU'),
+      d.delayType,
+      d.startTime || '',
+      d.endTime || '',
+      d.durationHours?.toFixed(1) || '',
+      `"${(d.description || '').replace(/"/g, '""')}"`,
+      `"${(d.impact || '').replace(/"/g, '""')}"`,
+    ])
+
+    const csv = [csvHeaders.join(','), ...csvRows.map(r => r.join(','))].join('\n')
+
+    res.setHeader('Content-Type', 'text/csv')
+    res.setHeader('Content-Disposition', 'attachment; filename=delay-register.csv')
+    res.send(csv)
+  } catch (error) {
+    console.error('Error exporting delays:', error)
+    res.status(500).json({ error: 'Failed to export delays' })
+  }
+})
+
 export default router

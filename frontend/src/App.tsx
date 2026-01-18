@@ -34,6 +34,7 @@ import { HoldPointsPage } from '@/pages/holdpoints/HoldPointsPage'
 import { TestResultsPage } from '@/pages/tests/TestResultsPage'
 import { NCRPage } from '@/pages/ncr/NCRPage'
 import { DailyDiaryPage } from '@/pages/diary/DailyDiaryPage'
+import { DelayRegisterPage } from '@/pages/diary/DelayRegisterPage'
 import { DocketApprovalsPage } from '@/pages/dockets/DocketApprovalsPage'
 import { ClaimsPage } from '@/pages/claims/ClaimsPage'
 import { DocumentsPage } from '@/pages/documents/DocumentsPage'
@@ -170,6 +171,7 @@ function App() {
 
           {/* Daily Diary */}
           <Route path="/projects/:projectId/diary" element={<DailyDiaryPage />} />
+          <Route path="/projects/:projectId/delays" element={<DelayRegisterPage />} />
 
           {/* Docket Approvals */}
           <Route path="/projects/:projectId/dockets" element={<DocketApprovalsPage />} />
