@@ -181,7 +181,7 @@ projectsRouter.get('/:id', async (req, res) => {
 projectsRouter.post('/', async (req, res) => {
   try {
     const user = req.user!
-    const { name, projectNumber, clientName, startDate, targetCompletion, state, specificationSet } = req.body
+    const { name, projectNumber, clientName, startDate, targetCompletion, contractValue, state, specificationSet } = req.body
 
     if (!name) {
       return res.status(400).json({
@@ -217,6 +217,7 @@ projectsRouter.post('/', async (req, res) => {
         clientName,
         startDate: startDate ? new Date(startDate) : null,
         targetCompletion: targetCompletion ? new Date(targetCompletion) : null,
+        contractValue: contractValue ? parseFloat(contractValue) : null,
         companyId: companyId,
         state: state || 'NSW',
         specificationSet: specificationSet || 'MRTS',

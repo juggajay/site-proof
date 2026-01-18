@@ -54,6 +54,7 @@ export function ProjectsPage() {
     specSet: '',
     startDate: '',
     targetCompletion: '',
+    contractValue: '',
   })
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export function ProjectsPage() {
           specificationSet: formData.specSet || null,
           startDate: formData.startDate || null,
           targetCompletion: formData.targetCompletion || null,
+          contractValue: formData.contractValue || null,
         }),
       })
 
@@ -128,7 +130,7 @@ export function ProjectsPage() {
       // Add new project to list
       setProjects((prev) => [...prev, data.project])
       // Reset form and close modal
-      setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '', startDate: '', targetCompletion: '' })
+      setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '', startDate: '', targetCompletion: '', contractValue: '' })
       setShowCreateModal(false)
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create project')
@@ -231,6 +233,23 @@ export function ProjectsPage() {
                   onChange={handleInputChange}
                   placeholder="e.g., Department of Transport"
                   className="w-full rounded-lg border px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="contractValue" className="block text-sm font-medium mb-1">
+                  Contract Value ($)
+                </label>
+                <input
+                  type="number"
+                  id="contractValue"
+                  name="contractValue"
+                  value={formData.contractValue}
+                  onChange={handleInputChange}
+                  placeholder="e.g., 5000000"
+                  className="w-full rounded-lg border px-3 py-2"
+                  min="0"
+                  step="0.01"
                 />
               </div>
 

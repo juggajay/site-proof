@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { getAuthToken } from '@/lib/auth'
+import { getAuthToken, useAuth } from '@/lib/auth'
 import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive, CheckCircle2 } from 'lucide-react'
 
 interface Project {
@@ -10,6 +10,7 @@ interface Project {
   status?: string
   startDate?: string | null
   targetCompletion?: string | null
+  contractValue?: number | string | null
   lotPrefix?: string
   lotStartingNumber?: number
   ncrPrefix?: string
@@ -46,9 +47,14 @@ const ROLE_OPTIONS = [
 export function ProjectSettingsPage() {
   const { projectId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Check if user can view contract value (admins, owners, project managers)
+  // Note: user.role is the company role stored in auth context
+  const canViewContractValue = user && ['admin', 'owner', 'project_manager'].includes(user.role || user.roleInCompany || '')
 
   // Get active tab from URL or default to 'general'
   const activeTab = (searchParams.get('tab') as SettingsTab) || 'general'
@@ -592,6 +598,17 @@ export function ProjectSettingsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+              {canViewContractValue && project?.contractValue && (
+                <div className="mt-4 pt-4 border-t">
+                  <label className="block text-sm font-medium mb-1">Contract Value</label>
+                  <div className="text-sm text-muted-foreground">
+                    ${Number(project.contractValue).toLocaleString('en-AU', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </div>
                 </div>
               )}
             </div>
