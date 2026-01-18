@@ -6,12 +6,30 @@ import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
+import { Settings2, Check } from 'lucide-react'
 
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager']
 
 // Pagination settings
 const PAGE_SIZE = 5
+
+// Column configuration
+const COLUMN_CONFIG = [
+  { id: 'lotNumber', label: 'Lot Number', required: true },
+  { id: 'description', label: 'Description', required: false },
+  { id: 'chainage', label: 'Chainage', required: false },
+  { id: 'activityType', label: 'Activity Type', required: false },
+  { id: 'status', label: 'Status', required: false },
+  { id: 'subcontractor', label: 'Subcontractor', required: false },
+  { id: 'budget', label: 'Budget', required: false },
+] as const
+
+type ColumnId = typeof COLUMN_CONFIG[number]['id']
+
+const DEFAULT_VISIBLE_COLUMNS: ColumnId[] = ['lotNumber', 'description', 'chainage', 'activityType', 'status', 'subcontractor', 'budget']
+
+const COLUMN_STORAGE_KEY = 'siteproof_lot_columns'
 
 interface Lot {
   id: string
@@ -90,6 +108,50 @@ export function LotsPage() {
   const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set())
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // Bulk status update state
+  const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false)
+  const [bulkStatusUpdating, setBulkStatusUpdating] = useState(false)
+  const [newBulkStatus, setNewBulkStatus] = useState('in_progress')
+
+  // Bulk assign subcontractor state
+  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false)
+  const [bulkAssigning, setBulkAssigning] = useState(false)
+  const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>('')
+  const [subcontractors, setSubcontractors] = useState<{ id: string; companyName: string }[]>([])
+
+  // Column customization state
+  const [visibleColumns, setVisibleColumns] = useState<ColumnId[]>(() => {
+    try {
+      const stored = localStorage.getItem(COLUMN_STORAGE_KEY)
+      if (stored) {
+        return JSON.parse(stored) as ColumnId[]
+      }
+    } catch (e) {
+      console.error('Error loading column settings:', e)
+    }
+    return DEFAULT_VISIBLE_COLUMNS
+  })
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
+
+  // Toggle column visibility
+  const toggleColumn = (columnId: ColumnId) => {
+    const column = COLUMN_CONFIG.find(c => c.id === columnId)
+    if (column?.required) return // Can't hide required columns
+
+    setVisibleColumns(prev => {
+      const newColumns = prev.includes(columnId)
+        ? prev.filter(c => c !== columnId)
+        : [...prev, columnId]
+
+      // Save to localStorage
+      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(newColumns))
+      return newColumns
+    })
+  }
+
+  // Check if column is visible
+  const isColumnVisible = (columnId: ColumnId) => visibleColumns.includes(columnId)
 
   // Get filter, sort, and pagination from URL
   const currentPage = parseInt(searchParams.get('page') || '1', 10)
@@ -264,6 +326,31 @@ export function LotsPage() {
     fetchLots()
   }, [projectId, navigate])
 
+  // Fetch subcontractors for the project
+  const fetchSubcontractors = async () => {
+    if (!projectId) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/subcontractors/for-project/${projectId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSubcontractors(data.subcontractors || [])
+      }
+    } catch (err) {
+      console.error('Fetch subcontractors error:', err)
+    }
+  }
+
   // Format chainage for display
   const formatChainage = (lot: Lot) => {
     if (lot.chainageStart != null && lot.chainageEnd != null) {
@@ -377,12 +464,18 @@ export function LotsPage() {
         if (bulkDeleteModalOpen) {
           setBulkDeleteModalOpen(false)
         }
+        if (bulkStatusModalOpen) {
+          setBulkStatusModalOpen(false)
+        }
+        if (bulkAssignModalOpen) {
+          setBulkAssignModalOpen(false)
+        }
       }
     }
 
     document.addEventListener('keydown', handleEscapeKey)
     return () => document.removeEventListener('keydown', handleEscapeKey)
-  }, [createModalOpen, deleteModalOpen, bulkWizardOpen, bulkDeleteModalOpen])
+  }, [createModalOpen, deleteModalOpen, bulkWizardOpen, bulkDeleteModalOpen, bulkStatusModalOpen, bulkAssignModalOpen])
 
   // Handle create lot submission
   const handleCreateLot = async () => {
@@ -644,6 +737,136 @@ export function LotsPage() {
     }
   }
 
+  // Bulk status update handler
+  const handleBulkStatusUpdate = async () => {
+    if (selectedLots.size === 0) return
+
+    // Prevent concurrent submissions (double-click protection)
+    if (bulkStatusUpdating) {
+      return
+    }
+
+    setBulkStatusUpdating(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/lots/bulk-update-status`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lotIds: Array.from(selectedLots),
+          status: newBulkStatus,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to update lot status')
+      }
+
+      const data = await response.json()
+
+      // Update lots in state
+      setLots((prev) => prev.map((lot) =>
+        selectedLots.has(lot.id)
+          ? { ...lot, status: newBulkStatus }
+          : lot
+      ))
+      setSelectedLots(new Set())
+      setBulkStatusModalOpen(false)
+
+      toast({
+        title: 'Status Updated',
+        description: data.message,
+        variant: 'success',
+      })
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to update lot status',
+        variant: 'error',
+      })
+    } finally {
+      setBulkStatusUpdating(false)
+    }
+  }
+
+  // Open bulk assign modal (fetch subcontractors first)
+  const handleOpenBulkAssignModal = async () => {
+    await fetchSubcontractors()
+    setSelectedSubcontractorId('')
+    setBulkAssignModalOpen(true)
+  }
+
+  // Bulk assign subcontractor handler
+  const handleBulkAssignSubcontractor = async () => {
+    if (selectedLots.size === 0) return
+
+    // Prevent concurrent submissions (double-click protection)
+    if (bulkAssigning) {
+      return
+    }
+
+    setBulkAssigning(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/lots/bulk-assign-subcontractor`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lotIds: Array.from(selectedLots),
+          subcontractorId: selectedSubcontractorId || null,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to assign subcontractor')
+      }
+
+      const data = await response.json()
+
+      // Update lots in state
+      const selectedSub = subcontractors.find(s => s.id === selectedSubcontractorId)
+      setLots((prev) => prev.map((lot) =>
+        selectedLots.has(lot.id)
+          ? {
+              ...lot,
+              assignedSubcontractorId: selectedSubcontractorId || null,
+              assignedSubcontractor: selectedSubcontractorId && selectedSub
+                ? { companyName: selectedSub.companyName }
+                : null
+            }
+          : lot
+      ))
+      setSelectedLots(new Set())
+      setBulkAssignModalOpen(false)
+
+      toast({
+        title: 'Subcontractor Assigned',
+        description: data.message,
+        variant: 'success',
+      })
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to assign subcontractor',
+        variant: 'error',
+      })
+    } finally {
+      setBulkAssigning(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -655,6 +878,24 @@ export function LotsPage() {
           >
             Export CSV
           </button>
+          {canCreate && selectedLots.size > 0 && (
+            <>
+              <button
+                onClick={() => setBulkStatusModalOpen(true)}
+                className="rounded-lg border border-blue-500 px-4 py-2 text-sm text-blue-500 hover:bg-blue-50"
+              >
+                Update Status ({selectedLots.size})
+              </button>
+              {!isSubcontractor && (
+                <button
+                  onClick={handleOpenBulkAssignModal}
+                  className="rounded-lg border border-purple-500 px-4 py-2 text-sm text-purple-500 hover:bg-purple-50"
+                >
+                  Assign Subcontractor ({selectedLots.size})
+                </button>
+              )}
+            </>
+          )}
           {canDelete && selectedLots.size > 0 && (
             <button
               onClick={() => setBulkDeleteModalOpen(true)}
@@ -799,6 +1040,64 @@ export function LotsPage() {
         <span className="text-sm text-muted-foreground">
           Showing {filteredLots.length} of {lots.length} lots
         </span>
+
+        {/* Column Settings */}
+        <div className="relative ml-auto">
+          <button
+            onClick={() => setColumnSettingsOpen(!columnSettingsOpen)}
+            className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+            title="Customize columns"
+          >
+            <Settings2 className="h-4 w-4" />
+            Columns
+          </button>
+          {columnSettingsOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setColumnSettingsOpen(false)}
+              />
+              <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-lg border bg-white shadow-lg">
+                <div className="p-2 border-b">
+                  <span className="text-xs font-medium text-muted-foreground">Show/Hide Columns</span>
+                </div>
+                <div className="p-1">
+                  {COLUMN_CONFIG.map((column) => {
+                    // Skip subcontractor for subcontractors, budget for non-commercial
+                    if (column.id === 'subcontractor' && isSubcontractor) return null
+                    if (column.id === 'budget' && !canViewBudgets) return null
+
+                    return (
+                      <button
+                        key={column.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleColumn(column.id)
+                        }}
+                        disabled={column.required}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted text-left ${
+                          column.required ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                          isColumnVisible(column.id) ? 'bg-primary border-primary' : 'border-gray-300'
+                        }`}>
+                          {isColumnVisible(column.id) && (
+                            <Check className="h-3 w-3 text-white" />
+                          )}
+                        </div>
+                        {column.label}
+                        {column.required && (
+                          <span className="text-xs text-muted-foreground ml-auto">(required)</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Loading State */}
@@ -832,15 +1131,25 @@ export function LotsPage() {
                     />
                   </th>
                 )}
-                <SortableHeader field="lotNumber">Lot Number</SortableHeader>
-                <SortableHeader field="description">Description</SortableHeader>
-                <SortableHeader field="chainage">Chainage</SortableHeader>
-                <SortableHeader field="activityType">Activity Type</SortableHeader>
-                <SortableHeader field="status">Status</SortableHeader>
-                {!isSubcontractor && (
+                {isColumnVisible('lotNumber') && (
+                  <SortableHeader field="lotNumber">Lot Number</SortableHeader>
+                )}
+                {isColumnVisible('description') && (
+                  <SortableHeader field="description">Description</SortableHeader>
+                )}
+                {isColumnVisible('chainage') && (
+                  <SortableHeader field="chainage">Chainage</SortableHeader>
+                )}
+                {isColumnVisible('activityType') && (
+                  <SortableHeader field="activityType">Activity Type</SortableHeader>
+                )}
+                {isColumnVisible('status') && (
+                  <SortableHeader field="status">Status</SortableHeader>
+                )}
+                {!isSubcontractor && isColumnVisible('subcontractor') && (
                   <th className="text-left p-3 font-medium">Subcontractor</th>
                 )}
-                {canViewBudgets && (
+                {canViewBudgets && isColumnVisible('budget') && (
                   <th className="text-left p-3 font-medium">Budget</th>
                 )}
                 <th className="text-left p-3 font-medium">Actions</th>
@@ -892,26 +1201,36 @@ export function LotsPage() {
                         )}
                       </td>
                     )}
-                    <td className="p-3 font-medium">{lot.lotNumber}</td>
-                    <td className="p-3 max-w-xs">
-                      <span
-                        className="block truncate"
-                        title={lot.description || ''}
-                      >
-                        {lot.description || '—'}
-                      </span>
-                    </td>
-                    <td className="p-3">{formatChainage(lot)}</td>
-                    <td className="p-3 capitalize">{lot.activityType || '—'}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
-                        {lot.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    {!isSubcontractor && (
+                    {isColumnVisible('lotNumber') && (
+                      <td className="p-3 font-medium">{lot.lotNumber}</td>
+                    )}
+                    {isColumnVisible('description') && (
+                      <td className="p-3 max-w-xs">
+                        <span
+                          className="block truncate"
+                          title={lot.description || ''}
+                        >
+                          {lot.description || '—'}
+                        </span>
+                      </td>
+                    )}
+                    {isColumnVisible('chainage') && (
+                      <td className="p-3">{formatChainage(lot)}</td>
+                    )}
+                    {isColumnVisible('activityType') && (
+                      <td className="p-3 capitalize">{lot.activityType || '—'}</td>
+                    )}
+                    {isColumnVisible('status') && (
+                      <td className="p-3">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
+                          {lot.status.replace('_', ' ')}
+                        </span>
+                      </td>
+                    )}
+                    {!isSubcontractor && isColumnVisible('subcontractor') && (
                       <td className="p-3">{lot.assignedSubcontractor?.companyName || '—'}</td>
                     )}
-                    {canViewBudgets && (
+                    {canViewBudgets && isColumnVisible('budget') && (
                       <td className="p-3">{lot.budgetAmount ? `$${lot.budgetAmount.toLocaleString()}` : '—'}</td>
                     )}
                     <td className="p-3">
@@ -1051,6 +1370,106 @@ export function LotsPage() {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {bulkDeleting ? 'Deleting...' : `Delete ${selectedLots.size} Lot(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Status Update Modal */}
+      {bulkStatusModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900">Update Lot Status</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Update status for{' '}
+              <span className="font-semibold text-gray-900">{selectedLots.size} lot(s)</span>
+            </p>
+            <div className="mt-4">
+              <label htmlFor="bulk-status-select" className="block text-sm font-medium text-gray-700 mb-1">
+                New Status
+              </label>
+              <select
+                id="bulk-status-select"
+                value={newBulkStatus}
+                onChange={(e) => setNewBulkStatus(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="not_started">Not Started</option>
+                <option value="in_progress">In Progress</option>
+                <option value="awaiting_test">Awaiting Test</option>
+                <option value="hold_point">Hold Point</option>
+                <option value="ncr_raised">NCR Raised</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setBulkStatusModalOpen(false)}
+                disabled={bulkStatusUpdating}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkStatusUpdate}
+                disabled={bulkStatusUpdating}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {bulkStatusUpdating ? 'Updating...' : 'Update Status'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Assign Subcontractor Modal */}
+      {bulkAssignModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setBulkAssignModalOpen(false)
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Assign Subcontractor</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Assign {selectedLots.size} selected lot(s) to a subcontractor.
+            </p>
+            <div className="mb-4">
+              <label htmlFor="bulk-subcontractor" className="block text-sm font-medium text-gray-700 mb-1">
+                Subcontractor
+              </label>
+              <select
+                id="bulk-subcontractor"
+                value={selectedSubcontractorId}
+                onChange={(e) => setSelectedSubcontractorId(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">-- Unassign --</option>
+                {subcontractors.map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.companyName}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setBulkAssignModalOpen(false)}
+                disabled={bulkAssigning}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkAssignSubcontractor}
+                disabled={bulkAssigning}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {bulkAssigning ? 'Assigning...' : 'Assign'}
               </button>
             </div>
           </div>
