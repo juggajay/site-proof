@@ -2768,6 +2768,52 @@ Date: 2026-01-18
 - In Progress: 0
 - Pending: 514
 
+### Feature #995: Privacy policy link - PASSING
+- IMPLEMENTED: Privacy Policy and Terms of Service pages
+- Implementation details:
+  1. Created PrivacyPolicyPage with comprehensive sections:
+     - Introduction
+     - Information We Collect (Personal Info, Project Data, Usage Data)
+     - How We Use Your Information
+     - Data Security
+     - Data Retention
+     - Your Rights (GDPR/Australian Privacy Act compliance)
+     - Contact Information
+     - Related Documents links
+  2. Created TermsOfServicePage with full terms:
+     - Agreement to Terms, Service Description
+     - Account Responsibilities, Acceptable Use
+     - Data Ownership, Subscription & Payment
+     - Limitation of Liability, Changes to Terms
+  3. Added routes /privacy-policy and /terms-of-service in App.tsx
+  4. Added Privacy Policy link in Settings > Privacy & Data section
+
+### Testing Performed (All Steps Verified)
+1. Step 1: View footer or settings - Settings has "Privacy & Data" section
+2. Step 2: Verify privacy policy link - "View Privacy Policy" link visible
+3. Step 3: Policy accessible - Privacy Policy page loads with full content
+
+## FILES CREATED THIS SESSION (Feature #995)
+- frontend/src/pages/legal/PrivacyPolicyPage.tsx (NEW)
+- frontend/src/pages/legal/TermsOfServicePage.tsx (NEW)
+- frontend/src/App.tsx - Added legal page imports and routes
+- frontend/src/pages/settings/SettingsPage.tsx - Added Privacy Policy link
+
+## SCREENSHOTS CAPTURED (Feature #995)
+- evidence/feature-995-privacy-link-in-settings.png - Settings page
+- evidence/feature-995-privacy-data-section.png - Privacy & Data section
+- evidence/feature-995-privacy-policy-link-visible.png - Link visible
+- evidence/feature-995-privacy-policy-page.png - Full Privacy Policy page
+
+## GIT COMMITS (Feature #995)
+- 34c50b2: feat: Add Privacy Policy and Terms of Service pages (Feature #995)
+
+## FEATURE STATISTICS (Updated)
+- Total Features: 1035
+- Passing: 522 (50.4%)
+- In Progress: 0
+- Pending: 513
+
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
 2. Continue implementing remaining features
