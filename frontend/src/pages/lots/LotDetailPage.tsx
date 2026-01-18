@@ -266,6 +266,7 @@ export function LotDetailPage() {
     evidenceType: string
     currentNotes: string | null
   } | null>(null)
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -1301,9 +1302,27 @@ export function LotDetailPage() {
                     )
                   })()}
                 </div>
+                {/* Filter toggle */}
+                <div className="flex items-center justify-end">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showIncompleteOnly}
+                      onChange={(e) => setShowIncompleteOnly(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <span>Show incomplete only</span>
+                  </label>
+                </div>
                 <div className="rounded-lg border">
                   <div className="divide-y">
-                    {itpInstance.template.checklistItems.map((item) => {
+                    {itpInstance.template.checklistItems
+                      .filter((item) => {
+                        if (!showIncompleteOnly) return true
+                        const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
+                        return !completion?.isCompleted
+                      })
+                      .map((item) => {
                       const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
                       const isCompleted = completion?.isCompleted || false
                       const notes = completion?.notes || ''
