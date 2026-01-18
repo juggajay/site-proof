@@ -252,10 +252,10 @@ reportsRouter.get('/ncr', async (req, res) => {
   }
 })
 
-// GET /api/reports/test - Test results report
+// GET /api/reports/test - Test results report (Feature #208)
 reportsRouter.get('/test', async (req, res) => {
   try {
-    const { projectId } = req.query
+    const { projectId, startDate, endDate, testTypes, lotIds } = req.query
 
     if (!projectId) {
       return res.status(400).json({
@@ -264,9 +264,41 @@ reportsRouter.get('/test', async (req, res) => {
       })
     }
 
-    // Get all test results for the project
+    // Build where clause with optional filters
+    const whereClause: any = { projectId: projectId as string }
+
+    // Filter by date range (using sample date)
+    if (startDate || endDate) {
+      whereClause.sampleDate = {}
+      if (startDate) {
+        whereClause.sampleDate.gte = new Date(startDate as string)
+      }
+      if (endDate) {
+        const end = new Date(endDate as string)
+        end.setHours(23, 59, 59, 999)
+        whereClause.sampleDate.lte = end
+      }
+    }
+
+    // Filter by test types
+    if (testTypes) {
+      const types = (testTypes as string).split(',').filter(t => t.trim())
+      if (types.length > 0) {
+        whereClause.testType = { in: types }
+      }
+    }
+
+    // Filter by lot IDs
+    if (lotIds) {
+      const lots = (lotIds as string).split(',').filter(l => l.trim())
+      if (lots.length > 0) {
+        whereClause.lotId = { in: lots }
+      }
+    }
+
+    // Get all test results for the project with filters
     const tests = await prisma.testResult.findMany({
-      where: { projectId: projectId as string },
+      where: whereClause,
       select: {
         id: true,
         testRequestNumber: true,

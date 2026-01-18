@@ -235,6 +235,12 @@ export function ReportsPage() {
   const [diaryStartDate, setDiaryStartDate] = useState<string>('')
   const [diaryEndDate, setDiaryEndDate] = useState<string>('')
 
+  // Feature #208: Test report filter state
+  const [testStartDate, setTestStartDate] = useState<string>('')
+  const [testEndDate, setTestEndDate] = useState<string>('')
+  const [selectedTestTypes, setSelectedTestTypes] = useState<string[]>([])
+  const [availableTestTypes, setAvailableTestTypes] = useState<string[]>([])
+
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
@@ -296,6 +302,16 @@ export function ReportsPage() {
           break
         case 'test':
           endpoint = 'test'
+          // Feature #208: Add test report filters
+          if (testStartDate) {
+            queryParams += `&startDate=${testStartDate}`
+          }
+          if (testEndDate) {
+            queryParams += `&endDate=${testEndDate}`
+          }
+          if (selectedTestTypes.length > 0) {
+            queryParams += `&testTypes=${selectedTestTypes.join(',')}`
+          }
           break
         case 'diary':
           endpoint = 'diary'
@@ -803,9 +819,97 @@ export function ReportsPage() {
           )}
 
           {/* Test Results Report */}
-          {activeTab === 'test' && testReport && (
+          {activeTab === 'test' && (
             <div className="space-y-6">
-              {/* Summary Cards */}
+              {/* Feature #208: Report Filters */}
+              <div className="bg-white border rounded-lg p-6 print:hidden">
+                <h3 className="text-lg font-medium mb-4">Report Options</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Date Range */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Date Range (Sample Date)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={testStartDate}
+                        onChange={(e) => setTestStartDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      />
+                      <span className="text-gray-500">to</span>
+                      <input
+                        type="date"
+                        value={testEndDate}
+                        onChange={(e) => setTestEndDate(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Test Types Selection */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Test Types</label>
+                    <div className="flex flex-wrap gap-2">
+                      {testReport && Object.keys(testReport.testTypeCounts).length > 0 ? (
+                        Object.keys(testReport.testTypeCounts).map((testType) => (
+                          <button
+                            key={testType}
+                            onClick={() => setSelectedTestTypes(prev =>
+                              prev.includes(testType)
+                                ? prev.filter(t => t !== testType)
+                                : [...prev, testType]
+                            )}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                              selectedTestTypes.includes(testType)
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {testType}
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-gray-500 text-sm">All types (generate report to see options)</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => fetchReport('test')}
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {loading ? 'Generating...' : 'Generate Report'}
+                  </button>
+                  {(testStartDate || testEndDate || selectedTestTypes.length > 0) && (
+                    <button
+                      onClick={() => {
+                        setTestStartDate('')
+                        setTestEndDate('')
+                        setSelectedTestTypes([])
+                      }}
+                      className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {testReport && (
+                <>
+                  {/* Feature #208: Report Actions */}
+                  <div className="flex justify-end gap-3 print:hidden">
+                    <button
+                      onClick={() => window.print()}
+                      className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      🖨️ Print / Save PDF
+                    </button>
+                  </div>
+
+                  {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white border rounded-lg p-4">
                   <div className="text-3xl font-bold text-gray-800">{testReport.totalTests}</div>
@@ -889,6 +993,8 @@ export function ReportsPage() {
                   )}
                 </div>
               </div>
+                </>
+              )}
             </div>
           )}
 
