@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
-import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive } from 'lucide-react'
+import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive, CheckCircle2 } from 'lucide-react'
 
 interface Project {
   id: string
@@ -78,6 +78,11 @@ export function ProjectSettingsPage() {
   const [showArchiveDialog, setShowArchiveDialog] = useState(false)
   const [archiving, setArchiving] = useState(false)
   const [archiveError, setArchiveError] = useState('')
+
+  // Complete project dialog state
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false)
+  const [completing, setCompleting] = useState(false)
+  const [completeError, setCompleteError] = useState('')
 
   // Team state
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
@@ -260,6 +265,50 @@ export function ProjectSettingsPage() {
       setArchiveError(error instanceof Error ? error.message : 'Failed to update project status')
     } finally {
       setArchiving(false)
+    }
+  }
+
+  const handleCompleteClick = () => {
+    setShowCompleteDialog(true)
+    setCompleteError('')
+  }
+
+  const handleCancelComplete = () => {
+    setShowCompleteDialog(false)
+    setCompleteError('')
+  }
+
+  const handleConfirmComplete = async () => {
+    setCompleting(true)
+    setCompleteError('')
+
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+
+    try {
+      const newStatus = project?.status === 'completed' ? 'active' : 'completed'
+      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update project status')
+      }
+
+      // Update local project state
+      setProject(prev => prev ? { ...prev, status: newStatus } : null)
+      setShowCompleteDialog(false)
+    } catch (error) {
+      setCompleteError(error instanceof Error ? error.message : 'Failed to update project status')
+    } finally {
+      setCompleting(false)
     }
   }
 
@@ -649,8 +698,38 @@ export function ProjectSettingsPage() {
               </button>
             </div>
 
+            {/* Complete Project */}
+            <div className="rounded-lg border border-green-500/50 p-4 mt-8">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <h2 className="text-lg font-semibold text-green-600">
+                  {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
+                </h2>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                {project?.status === 'completed'
+                  ? 'Reactivate this project to continue work. The project will become active again.'
+                  : 'Mark this project as completed when all work is finished. Completed projects remain accessible.'}
+              </p>
+              {project?.status === 'completed' && (
+                <div className="mb-4 px-3 py-2 rounded-lg bg-green-100 text-green-800 text-sm">
+                  This project has been marked as completed
+                </div>
+              )}
+              <button
+                onClick={handleCompleteClick}
+                className={`rounded-lg px-4 py-2 text-sm ${
+                  project?.status === 'completed'
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
+              </button>
+            </div>
+
             {/* Archive Project */}
-            <div className="rounded-lg border border-amber-500/50 p-4 mt-8">
+            <div className="rounded-lg border border-amber-500/50 p-4 mt-4">
               <div className="flex items-center gap-2 mb-2">
                 <Archive className="h-5 w-5 text-amber-600" />
                 <h2 className="text-lg font-semibold text-amber-600">
@@ -1038,6 +1117,51 @@ export function ProjectSettingsPage() {
                 {archiving
                   ? (project?.status === 'archived' ? 'Restoring...' : 'Archiving...')
                   : (project?.status === 'archived' ? 'Restore Project' : 'Archive Project')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Confirmation Dialog */}
+      {showCompleteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
+            <h3 className="text-xl font-bold mb-4 text-green-600">
+              {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {project?.status === 'completed'
+                ? <>Are you sure you want to reactivate <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become active and editable again.</>
+                : <>Are you sure you want to mark <strong className="text-foreground">{project?.name || projectId}</strong> as completed? Completed projects remain accessible but indicate all work is finished.</>}
+            </p>
+
+            {completeError && (
+              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4">
+                {completeError}
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleCancelComplete}
+                disabled={completing}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmComplete}
+                disabled={completing}
+                className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${
+                  project?.status === 'completed'
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+              >
+                {completing
+                  ? (project?.status === 'completed' ? 'Reactivating...' : 'Completing...')
+                  : (project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed')}
               </button>
             </div>
           </div>
