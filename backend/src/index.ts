@@ -26,6 +26,7 @@ import { auditLogRouter } from './routes/auditLog.js'
 import { commentsRouter } from './routes/comments.js'
 import { notificationsRouter } from './routes/notifications.js'
 import documentsRouter from './routes/documents.js'
+import { drawingsRouter } from './routes/drawings.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -79,6 +80,7 @@ app.use('/api/audit-logs', auditLogRouter)
 app.use('/api/comments', commentsRouter)
 app.use('/api/notifications', notificationsRouter)
 app.use('/api/documents', documentsRouter)
+app.use('/api/drawings', drawingsRouter)
 
 // tRPC
 app.use(

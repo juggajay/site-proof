@@ -38,6 +38,7 @@ import { DelayRegisterPage } from '@/pages/diary/DelayRegisterPage'
 import { DocketApprovalsPage } from '@/pages/dockets/DocketApprovalsPage'
 import { ClaimsPage } from '@/pages/claims/ClaimsPage'
 import { DocumentsPage } from '@/pages/documents/DocumentsPage'
+import { DrawingsPage } from '@/pages/drawings/DrawingsPage'
 import { SubcontractorsPage } from '@/pages/subcontractors/SubcontractorsPage'
 import { MyCompanyPage } from '@/pages/subcontractors/MyCompanyPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
@@ -198,6 +199,9 @@ function App() {
 
           {/* Documents */}
           <Route path="/projects/:projectId/documents" element={<DocumentsPage />} />
+
+          {/* Drawings */}
+          <Route path="/projects/:projectId/drawings" element={<DrawingsPage />} />
 
           {/* Subcontractors - Management roles only */}
           <Route
