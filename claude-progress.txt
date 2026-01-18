@@ -2540,3 +2540,166 @@ Date: 2026-01-18
 ================================================================================
 END OF SESSION 29 SUMMARY
 ================================================================================
+
+================================================================================
+Session: 30 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #991: Feature changelog notification - PASSING
+- IMPLEMENTED: Complete changelog notification system for new releases
+- Implementation details:
+  1. Created ChangelogNotification.tsx component with:
+     - Beautiful modal UI with blue gradient header
+     - Version tracking using localStorage (siteproof_last_seen_version)
+     - Three changelog entries (v1.3.0, v1.2.0, v1.1.0)
+     - Different icons for features (gift), improvements (zap), security (shield), docs (file)
+     - Navigation between changelog entries with dot indicators
+     - "Got it!" button on last entry to dismiss
+  2. Integrated into App.tsx alongside OnboardingTour
+  3. Changelog shows automatically after login when new version is available
+  4. Once dismissed, user won't see it again until next version bump
+
+### Testing Performed (All Steps Verified)
+1. Step 1: New feature released - Created v1.3.0 changelog with 5 features
+2. Step 2: Login after release - Cleared localStorage and refreshed page
+3. Step 3: Verify changelog notification - Modal appeared with "What's New in SiteProof"
+4. Step 4: Shows new features - All 5 features displayed with proper icons
+5. Verified navigation between versions (1.3.0 → 1.2.0 → 1.1.0)
+6. Verified "Got it!" dismisses and saves to localStorage
+7. Verified changelog does NOT appear again after refresh (version saved)
+
+### Regression Testing
+- Feature #342 (Search with only spaces handled) - PASSED
+  - Quick search modal opened
+  - Entered only spaces
+  - Handled gracefully without errors
+
+## FILES CREATED/MODIFIED THIS SESSION
+- frontend/src/components/ChangelogNotification.tsx (NEW)
+  - Main component with modal UI
+  - useChangelog() hook for state management
+  - CURRENT_APP_VERSION export
+- frontend/src/App.tsx
+  - Added ChangelogNotification import
+  - Added component to KeyboardShortcutsProvider
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-991-changelog-notification-v1.3.0.png - Version 1.3.0 changelog
+- evidence/feature-991-changelog-notification-v1.2.0.png - Version 1.2.0 changelog
+- evidence/feature-991-changelog-notification-v1.1.0.png - Version 1.1.0 changelog
+- evidence/feature-991-changelog-after-login.png - Changelog after login
+
+## GIT COMMITS
+- 4883598: feat: Add changelog notification for new releases (Feature #991)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 518 (50.0%)
+- In Progress: 0
+- Pending: 517
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining features (50% complete!)
+3. Run regression tests on critical features
+
+================================================================================
+END OF SESSION 30 SUMMARY
+================================================================================
+
+================================================================================
+Session: 31 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #992: Data export GDPR compliance - PASSING
+- FIXED: Data export endpoint field mappings for Prisma schema
+- Fixed field names:
+  - NCR: `raisedById`/`responsibleUserId` instead of `createdById`/`assignedToId`
+  - NCR: removed non-existent `title` field, use `raisedAt` instead of `createdAt`
+  - DailyDiary: `submittedById`, `rainfallMm`, `generalNotes`
+  - TestResult: `enteredById`, `laboratoryName`, `laboratoryReportNumber`, `passFail`
+  - Replaced `holdPointsReleased` with `lotsCreated` (HoldPoint lacks user ID field)
+- Testing performed:
+  1. Clicked "Export My Data" button in Settings > Privacy & Data
+  2. Downloaded JSON file containing all user data
+  3. Verified portable JSON format with all required sections:
+     - User profile (id, email, fullName, phone, role, emailVerified)
+     - Company information (name, abn, address)
+     - Project memberships (5 projects with roles and dates)
+     - NCRs (2 NCRs with details)
+     - Daily diaries (1 diary with weather data)
+     - ITP completions (6 completions)
+     - Test results (1 result)
+     - Lots created (array)
+     - Activity log
+
+### Feature #993: Data deletion request - PASSING
+- IMPLEMENTED: Complete GDPR account deletion functionality
+- Backend implementation (DELETE /api/auth/delete-account):
+  - Requires email confirmation to prevent accidental deletion
+  - Optional password verification for additional security
+  - Creates audit log entry BEFORE deletion for compliance
+  - Cascades deletion: ITP completions, verification tokens, password reset tokens, project users
+  - Anonymizes remaining audit logs (sets userId to null)
+  - Returns success message on completion
+
+- Frontend implementation (SettingsPage.tsx):
+  - Red-styled "Delete My Account" button in Privacy & Data section
+  - Confirmation modal with:
+    - Warning message listing data to be deleted
+    - Email confirmation field (must match user's email)
+    - Optional password field
+    - Cancel and "Permanently Delete" buttons
+  - Proper error handling (shows "Email confirmation does not match")
+  - Loading state during deletion
+  - Signs out user and redirects to login after deletion
+
+- Testing performed:
+  1. Created test user: delete-test-993@example.com
+  2. Verified email and logged in
+  3. Clicked "Delete My Account" button - modal appeared
+  4. Entered wrong email - got "Email confirmation does not match" error
+  5. Entered correct email - account deleted successfully
+  6. Tried to login again - "Invalid email or password" confirms deletion
+  7. Verified audit log contains deletion record with email, fullName, deletedAt, reason
+
+## FILES CREATED/MODIFIED THIS SESSION
+- backend/src/routes/auth.ts
+  - Fixed export-data endpoint field mappings
+  - Added delete-account endpoint with full cascade deletion
+- frontend/src/pages/settings/SettingsPage.tsx
+  - Added Delete Account section UI
+  - Added confirmation modal with validation
+  - Fixed signOut function call (was logout)
+- backend/scripts/check-audit-log.js (NEW) - Utility to verify audit trail
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-992-data-export-success.png - Export success message
+- evidence/feature-993-delete-account-button.png - Delete button in UI
+- evidence/feature-993-delete-confirmation-modal.png - Confirmation modal
+- evidence/feature-993-email-mismatch-error.png - Email validation error
+- evidence/feature-993-user-deleted-login-fails.png - Login fails after deletion
+
+## GIT COMMITS
+- c482b8e: feat: Implement GDPR data export and account deletion (Features #992, #993)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 520 (50.2%)
+- In Progress: 0
+- Pending: 515
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining features
+3. Run regression tests on critical features
+
+================================================================================
+END OF SESSION 31 SUMMARY
+================================================================================
