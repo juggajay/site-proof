@@ -5,25 +5,44 @@ interface User {
   id: string
   email: string
   fullName?: string
+  name?: string
+  phone?: string
   role?: string
   companyId?: string | null
   companyName?: string | null
+  createdAt?: string
 }
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   sessionExpired: boolean
-  signIn: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>
   signUp: (email: string, password: string, metadata?: object) => Promise<void>
   signOut: () => Promise<void>
   handleSessionExpired: () => void
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Local storage key for auth
+// Storage keys for auth
 const AUTH_STORAGE_KEY = 'siteproof_auth'
+const REMEMBER_ME_KEY = 'siteproof_remember_me'
+
+// Helper to get the appropriate storage based on remember me preference
+function getAuthStorage(): Storage {
+  // Check if user chose to be remembered
+  const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true'
+  return rememberMe ? localStorage : sessionStorage
+}
+
+// Helper to clear auth from both storages
+function clearAuthFromAllStorages() {
+  localStorage.removeItem(AUTH_STORAGE_KEY)
+  sessionStorage.removeItem(AUTH_STORAGE_KEY)
+  localStorage.removeItem(REMEMBER_ME_KEY)
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -33,7 +52,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Check for stored auth on mount and verify token is valid
     const verifySession = async () => {
-      const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
+      // Check localStorage first (remember me), then sessionStorage
+      let storedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
+      let storage: Storage = localStorage
+
+      if (!storedAuth) {
+        storedAuth = sessionStorage.getItem(AUTH_STORAGE_KEY)
+        storage = sessionStorage
+      }
+
       if (storedAuth) {
         try {
           const parsed = JSON.parse(storedAuth)
@@ -51,11 +78,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(parsed.user)
           } else {
             // Token is invalid or expired
-            localStorage.removeItem(AUTH_STORAGE_KEY)
+            clearAuthFromAllStorages()
             setSessionExpired(true)
           }
         } catch (e) {
-          localStorage.removeItem(AUTH_STORAGE_KEY)
+          clearAuthFromAllStorages()
         }
       }
       setLoading(false)
@@ -64,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     verifySession()
   }, [])
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, rememberMe: boolean = true) => {
     // For local development, use backend API for auth
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
@@ -84,8 +111,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json()
 
-      // Store auth data
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+      // Clear any existing auth from both storages first
+      clearAuthFromAllStorages()
+
+      // Store the remember me preference
+      if (rememberMe) {
+        localStorage.setItem(REMEMBER_ME_KEY, 'true')
+      }
+
+      // Store auth data in the appropriate storage
+      const storage = rememberMe ? localStorage : sessionStorage
+      storage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
         user: data.user,
         token: data.token,
       }))
@@ -130,18 +166,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY)
+    clearAuthFromAllStorages()
     setUser(null)
   }
 
   const handleSessionExpired = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY)
+    clearAuthFromAllStorages()
     setUser(null)
     setSessionExpired(true)
   }
 
+  const refreshUser = async () => {
+    // Check localStorage first (remember me), then sessionStorage
+    let storedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
+    let storage: Storage = localStorage
+
+    if (!storedAuth) {
+      storedAuth = sessionStorage.getItem(AUTH_STORAGE_KEY)
+      storage = sessionStorage
+    }
+
+    if (!storedAuth) return
+
+    try {
+      const parsed = JSON.parse(storedAuth)
+      const token = parsed.token
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      const response = await fetch(`${apiUrl}/api/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Update user in state and the appropriate storage
+        const updatedAuth = {
+          ...parsed,
+          user: data.user,
+        }
+        storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedAuth))
+        setUser(data.user)
+      }
+    } catch (e) {
+      console.error('Failed to refresh user:', e)
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, sessionExpired, signIn, signUp, signOut, handleSessionExpired }}>
+    <AuthContext.Provider value={{ user, loading, sessionExpired, signIn, signUp, signOut, handleSessionExpired, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
@@ -157,7 +231,12 @@ export function useAuth() {
 
 // Helper to get the stored token
 export function getAuthToken(): string | null {
-  const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
+  // Check localStorage first (remember me), then sessionStorage
+  let storedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
+  if (!storedAuth) {
+    storedAuth = sessionStorage.getItem(AUTH_STORAGE_KEY)
+  }
+
   if (storedAuth) {
     try {
       const parsed = JSON.parse(storedAuth)

@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth'
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(true) // Default to checked
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { signIn } = useAuth()
@@ -20,7 +21,7 @@ export function LoginPage() {
     setLoading(true)
 
     try {
-      await signIn(email, password)
+      await signIn(email, password, rememberMe)
       // Navigate to the original destination or dashboard
       const from = location.state?.from?.pathname || '/dashboard'
       navigate(from, { replace: true })
@@ -73,6 +74,19 @@ export function LoginPage() {
           className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
           required
         />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          id="rememberMe"
+          type="checkbox"
+          checked={rememberMe}
+          onChange={(e) => setRememberMe(e.target.checked)}
+          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+        />
+        <label htmlFor="rememberMe" className="text-sm text-muted-foreground">
+          Remember me
+        </label>
       </div>
 
       <button
