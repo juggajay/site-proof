@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check, FileText, Download, Eye, X } from 'lucide-react'
+import { Link2, Check, FileText, Download, Eye, X, RefreshCw } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
 
 interface HoldPoint {
@@ -65,6 +65,7 @@ export function HoldPointsPage() {
   const [noticePeriodOverrideReason, setNoticePeriodOverrideReason] = useState('')
   const [copiedHpId, setCopiedHpId] = useState<string | null>(null)
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null)
+  const [chasingHpId, setChasingHpId] = useState<string | null>(null)
 
   // Generate Evidence Package PDF handler
   const handleGenerateEvidencePackage = async (hp: HoldPoint) => {
@@ -129,6 +130,51 @@ export function HoldPointsPage() {
         description: `Link to HP for ${lotNumber} has been copied.`,
       })
       setTimeout(() => setCopiedHpId(null), 2000)
+    }
+  }
+
+  // Chase hold point handler (Feature #183)
+  const handleChaseHoldPoint = async (hp: HoldPoint) => {
+    if (hp.id.startsWith('virtual-') || !token) return
+
+    setChasingHpId(hp.id)
+    try {
+      const response = await fetch(`${apiUrl}/api/holdpoints/${hp.id}/chase`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to chase hold point')
+      }
+
+      // Refresh hold points list
+      const refreshResponse = await fetch(`${apiUrl}/api/holdpoints/project/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json()
+        setHoldPoints(refreshData.holdPoints || [])
+      }
+
+      toast({
+        title: 'Chase sent',
+        description: `Follow-up notification sent for ${hp.lotNumber}. Chase count: ${(data.holdPoint?.chaseCount || 1)}`,
+      })
+    } catch (err) {
+      console.error('Failed to chase hold point:', err)
+      toast({
+        title: 'Error',
+        description: 'Failed to send chase notification',
+        variant: 'destructive',
+      })
+    } finally {
+      setChasingHpId(null)
     }
   }
 
@@ -403,7 +449,29 @@ export function HoldPointsPage() {
                         </button>
                       )}
                       {hp.status === 'notified' && (
-                        <span className="text-sm text-amber-600">Awaiting...</span>
+                        <>
+                          <span className="text-sm text-amber-600">Awaiting...</span>
+                          {!hp.id.startsWith('virtual-') && (
+                            <button
+                              onClick={() => handleChaseHoldPoint(hp)}
+                              disabled={chasingHpId === hp.id}
+                              className="flex items-center gap-1 px-2 py-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Send follow-up notification"
+                            >
+                              {chasingHpId === hp.id ? (
+                                <>
+                                  <RefreshCw className="h-3 w-3 animate-spin" />
+                                  <span>Chasing...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="h-3 w-3" />
+                                  <span>Chase</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </>
                       )}
                       {hp.status === 'released' && (
                         <>
