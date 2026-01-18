@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
-import { generateToken, generateExpiredToken, hashPassword, verifyPassword } from '../lib/auth.js'
+import { generateToken, generateExpiredToken, hashPassword, verifyPassword, verifyToken } from '../lib/auth.js'
 
 export const authRouter = Router()
 
@@ -202,6 +202,42 @@ authRouter.get('/me', async (req, res) => {
 authRouter.post('/logout', (_req, res) => {
   // For JWT-based auth, client simply clears the token
   res.json({ message: 'Logged out successfully' })
+})
+
+// POST /api/auth/logout-all-devices - Invalidate all existing sessions
+authRouter.post('/logout-all-devices', async (req, res) => {
+  try {
+    // Get the authorization header
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authentication required' })
+    }
+
+    const token = authHeader.substring(7)
+    const user = await verifyToken(token)
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid or expired token' })
+    }
+
+    // Update the token_invalidated_at timestamp to invalidate all existing tokens
+    const now = new Date().toISOString()
+    await prisma.$executeRawUnsafe(
+      `UPDATE users SET token_invalidated_at = ? WHERE id = ?`,
+      now,
+      user.userId
+    )
+
+    console.log(`User ${user.email} logged out from all devices at ${now}`)
+
+    res.json({
+      message: 'Successfully logged out from all devices',
+      loggedOutAt: now
+    })
+  } catch (error) {
+    console.error('Logout all devices error:', error)
+    res.status(500).json({ message: 'Failed to logout from all devices' })
+  }
 })
 
 // POST /api/auth/forgot-password - Request a password reset
