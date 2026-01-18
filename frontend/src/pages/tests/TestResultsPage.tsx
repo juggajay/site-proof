@@ -138,6 +138,15 @@ export function TestResultsPage() {
   const [rejectReason, setRejectReason] = useState('')
   const [rejecting, setRejecting] = useState(false)
 
+  // Feature #205: Test register filtering state
+  const [filterTestType, setFilterTestType] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterPassFail, setFilterPassFail] = useState('')
+  const [filterLot, setFilterLot] = useState('')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+
   // Feature #198: Test type specifications for auto-populate
   const testTypeSpecs: Record<string, { min: string; max: string; unit: string }> = {
     'compaction': { min: '95', max: '100', unit: '% MDD' },
@@ -206,6 +215,55 @@ export function TestResultsPage() {
     const passFail = calculatePassFail(value, formData.specificationMin, formData.specificationMax)
     setFormData(prev => ({ ...prev, resultValue: value, passFail }))
   }
+
+  // Feature #205: Filter test results
+  const filteredTestResults = testResults.filter(test => {
+    // Filter by test type
+    if (filterTestType && !test.testType.toLowerCase().includes(filterTestType.toLowerCase())) {
+      return false
+    }
+    // Filter by status
+    if (filterStatus && test.status !== filterStatus) {
+      return false
+    }
+    // Filter by pass/fail
+    if (filterPassFail && test.passFail !== filterPassFail) {
+      return false
+    }
+    // Filter by lot
+    if (filterLot && test.lot?.id !== filterLot) {
+      return false
+    }
+    // Filter by date range (using sample date or created date)
+    if (filterDateFrom) {
+      const testDate = test.sampleDate ? new Date(test.sampleDate) : new Date(test.createdAt)
+      const fromDate = new Date(filterDateFrom)
+      if (testDate < fromDate) return false
+    }
+    if (filterDateTo) {
+      const testDate = test.sampleDate ? new Date(test.sampleDate) : new Date(test.createdAt)
+      const toDate = new Date(filterDateTo)
+      toDate.setHours(23, 59, 59, 999) // Include the entire "to" day
+      if (testDate > toDate) return false
+    }
+    return true
+  })
+
+  // Get unique test types for filter dropdown
+  const uniqueTestTypes = [...new Set(testResults.map(t => t.testType))].sort()
+
+  // Reset all filters
+  const clearFilters = () => {
+    setFilterTestType('')
+    setFilterStatus('')
+    setFilterPassFail('')
+    setFilterLot('')
+    setFilterDateFrom('')
+    setFilterDateTo('')
+  }
+
+  // Check if any filters are active
+  const hasActiveFilters = filterTestType || filterStatus || filterPassFail || filterLot || filterDateFrom || filterDateTo
 
   useEffect(() => {
     async function fetchData() {
@@ -744,6 +802,122 @@ export function TestResultsPage() {
         Manage test results and certificates for this project.
       </p>
 
+      {/* Feature #205: Filter Bar */}
+      {testResults.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border hover:bg-muted"
+          >
+            🔍 Filters {hasActiveFilters && <span className="bg-primary text-primary-foreground px-1.5 py-0.5 rounded text-xs">{filteredTestResults.length}/{testResults.length}</span>}
+          </button>
+
+          {showFilters && (
+            <div className="mt-3 p-4 rounded-lg border bg-muted/30 space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {/* Test Type Filter */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">Test Type</label>
+                  <select
+                    value={filterTestType}
+                    onChange={(e) => setFilterTestType(e.target.value)}
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                  >
+                    <option value="">All Types</option>
+                    {uniqueTestTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status Filter */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">Status</label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="requested">Requested</option>
+                    <option value="at_lab">At Lab</option>
+                    <option value="results_received">Results Received</option>
+                    <option value="entered">Entered</option>
+                    <option value="verified">Verified</option>
+                  </select>
+                </div>
+
+                {/* Pass/Fail Filter */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">Pass/Fail</label>
+                  <select
+                    value={filterPassFail}
+                    onChange={(e) => setFilterPassFail(e.target.value)}
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                  >
+                    <option value="">All</option>
+                    <option value="pass">Pass</option>
+                    <option value="fail">Fail</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </div>
+
+                {/* Lot Filter */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">Linked Lot</label>
+                  <select
+                    value={filterLot}
+                    onChange={(e) => setFilterLot(e.target.value)}
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                  >
+                    <option value="">All Lots</option>
+                    {lots.map(lot => (
+                      <option key={lot.id} value={lot.id}>{lot.lotNumber}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date From */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">From Date</label>
+                  <input
+                    type="date"
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                  />
+                </div>
+
+                {/* Date To */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">To Date</label>
+                  <input
+                    type="date"
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+
+              {hasActiveFilters && (
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm text-muted-foreground">
+                    Showing {filteredTestResults.length} of {testResults.length} results
+                  </span>
+                  <button
+                    onClick={clearFilters}
+                    className="text-sm text-red-600 hover:text-red-700"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Test Results Table */}
       {testResults.length === 0 ? (
         <div className="rounded-lg border p-8 text-center">
@@ -775,7 +949,21 @@ export function TestResultsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {testResults.map((test) => {
+              {filteredTestResults.length === 0 && hasActiveFilters ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                    <div className="text-3xl mb-2">🔍</div>
+                    <p>No test results match your filters.</p>
+                    <button
+                      onClick={clearFilters}
+                      className="mt-2 text-sm text-primary hover:underline"
+                    >
+                      Clear all filters
+                    </button>
+                  </td>
+                </tr>
+              ) : null}
+              {filteredTestResults.map((test) => {
                 const overdue = isTestOverdue(test)
                 const daysSince = getDaysSince(test.sampleDate, test.createdAt)
                 return (
