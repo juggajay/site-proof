@@ -3,6 +3,7 @@ import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Breadcrumbs } from './Breadcrumbs'
+import { GlobalSearch } from '@/components/GlobalSearch'
 
 interface Project {
   id: string
@@ -39,6 +40,9 @@ export function Header() {
   // User menu state
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+
+  // Global search state
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
 
   // Find the current project from the list
   const currentProject = projects.find(p => p.id === projectId)
@@ -184,6 +188,18 @@ export function Header() {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [])
 
+  // Cmd+K keyboard shortcut for global search
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+        event.preventDefault()
+        setIsSearchOpen(true)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   const handleSignOut = async () => {
     await signOut()
     navigate('/login', { replace: true })
@@ -267,6 +283,19 @@ export function Header() {
         <Breadcrumbs />
       </div>
       <div className="flex items-center gap-4">
+        {/* Quick Search Button */}
+        <button
+          onClick={() => setIsSearchOpen(true)}
+          className="flex items-center gap-2 rounded-lg border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Quick search"
+        >
+          <Search className="h-4 w-4" />
+          <span className="hidden sm:inline">Search</span>
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border bg-muted px-1.5 py-0.5 text-xs font-medium">
+            <span className="text-xs">⌘</span>K
+          </kbd>
+        </button>
+
         {/* Project Selector - only show when in a project context */}
         {projectId && projects.length > 0 && (
           <div ref={projectSelectorRef} className="relative">
@@ -506,6 +535,9 @@ export function Header() {
           )}
         </div>
       </div>
+
+      {/* Global Search Modal */}
+      <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </header>
   )
 }
