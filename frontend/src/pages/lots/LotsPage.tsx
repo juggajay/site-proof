@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
@@ -8,6 +8,8 @@ import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
 import { ImportLotsModal } from '@/components/lots/ImportLotsModal'
 import { ExportLotsModal } from '@/components/lots/ExportLotsModal'
+import { LotQuickView } from '@/components/lots/LotQuickView'
+import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal'
 import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2 } from 'lucide-react'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
@@ -83,6 +85,10 @@ export function LotsPage() {
   const [lotToDelete, setLotToDelete] = useState<Lot | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Quick view state
+  const [quickViewLot, setQuickViewLot] = useState<{ id: string; position: { x: number; y: number } } | null>(null)
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   // Create lot modal state
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -139,6 +145,9 @@ export function LotsPage() {
   const [bulkAssigning, setBulkAssigning] = useState(false)
   const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>('')
   const [subcontractors, setSubcontractors] = useState<{ id: string; companyName: string }[]>([])
+
+  // Print labels state
+  const [printLabelsModalOpen, setPrintLabelsModalOpen] = useState(false)
 
   // Column customization state
   const [visibleColumns, setVisibleColumns] = useState<ColumnId[]>(() => {
@@ -598,12 +607,15 @@ export function LotsPage() {
         if (bulkAssignModalOpen) {
           setBulkAssignModalOpen(false)
         }
+        if (printLabelsModalOpen) {
+          setPrintLabelsModalOpen(false)
+        }
       }
     }
 
     document.addEventListener('keydown', handleEscapeKey)
     return () => document.removeEventListener('keydown', handleEscapeKey)
-  }, [createModalOpen, deleteModalOpen, bulkWizardOpen, bulkDeleteModalOpen, bulkStatusModalOpen, bulkAssignModalOpen])
+  }, [createModalOpen, deleteModalOpen, bulkWizardOpen, bulkDeleteModalOpen, bulkStatusModalOpen, bulkAssignModalOpen, printLabelsModalOpen])
 
   // Handle create lot submission
   const handleCreateLot = async () => {
@@ -671,6 +683,34 @@ export function LotsPage() {
   const handleDeleteClick = (lot: Lot) => {
     setLotToDelete(lot)
     setDeleteModalOpen(true)
+  }
+
+  // Quick view hover handlers
+  const handleLotMouseEnter = (lotId: string, event: React.MouseEvent) => {
+    // Clear any existing timeout
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    // Delay showing the quick view to avoid flickering
+    hoverTimeoutRef.current = setTimeout(() => {
+      setQuickViewLot({
+        id: lotId,
+        position: { x: event.clientX, y: event.clientY }
+      })
+    }, 400) // 400ms delay before showing
+  }
+
+  const handleLotMouseLeave = () => {
+    // Clear the hover timeout
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    // Don't immediately close - let the popup handle its own close
+  }
+
+  const handleQuickViewClose = () => {
+    setQuickViewLot(null)
   }
 
   // Cancel deletion
@@ -1036,6 +1076,14 @@ export function LotsPage() {
               className="rounded-lg border border-red-500 px-4 py-2 text-sm text-red-500 hover:bg-red-50"
             >
               Delete Selected ({selectedLots.size})
+            </button>
+          )}
+          {selectedLots.size > 0 && (
+            <button
+              onClick={() => setPrintLabelsModalOpen(true)}
+              className="rounded-lg border border-green-500 px-4 py-2 text-sm text-green-500 hover:bg-green-50"
+            >
+              Print Labels ({selectedLots.size})
             </button>
           )}
           {!isSubcontractor && canCreate && (
@@ -1432,7 +1480,12 @@ export function LotsPage() {
                 </tr>
               ) : (
                 paginatedLots.map((lot) => (
-                  <tr key={lot.id} className="border-b hover:bg-muted/25">
+                  <tr
+                    key={lot.id}
+                    className="border-b hover:bg-muted/25 cursor-pointer"
+                    onMouseEnter={(e) => handleLotMouseEnter(lot.id, e)}
+                    onMouseLeave={handleLotMouseLeave}
+                  >
                     {canDelete && (
                       <td className="p-3">
                         {lot.status !== 'conformed' && lot.status !== 'claimed' && (
@@ -1642,6 +1695,16 @@ export function LotsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Lot Quick View Popup */}
+      {quickViewLot && projectId && (
+        <LotQuickView
+          lotId={quickViewLot.id}
+          projectId={projectId}
+          position={quickViewLot.position}
+          onClose={handleQuickViewClose}
+        />
       )}
 
       {/* Bulk Delete Confirmation Modal */}
@@ -1956,6 +2019,15 @@ export function LotsPage() {
           canViewBudgets={canViewBudgets}
           isSubcontractor={isSubcontractor}
           onClose={() => setExportModalOpen(false)}
+        />
+      )}
+
+      {/* Print Labels Modal */}
+      {printLabelsModalOpen && projectId && (
+        <PrintLabelsModal
+          lots={lots.filter(lot => selectedLots.has(lot.id))}
+          projectId={projectId}
+          onClose={() => setPrintLabelsModalOpen(false)}
         />
       )}
     </div>

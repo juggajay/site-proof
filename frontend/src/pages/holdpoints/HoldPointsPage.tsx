@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
+import { toast } from '@/components/ui/toaster'
+import { Link2, Check } from 'lucide-react'
 
 interface HoldPoint {
   id: string
@@ -48,6 +50,35 @@ export function HoldPointsPage() {
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [requesting, setRequesting] = useState(false)
   const [requestError, setRequestError] = useState<{message: string, incompleteItems?: PrerequisiteItem[]} | null>(null)
+  const [copiedHpId, setCopiedHpId] = useState<string | null>(null)
+
+  // Copy HP link handler
+  const handleCopyHpLink = async (hpId: string, lotNumber: string, description: string) => {
+    const url = `${window.location.origin}/projects/${projectId}/holdpoints?hp=${hpId}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedHpId(hpId)
+      toast({
+        title: 'Link copied!',
+        description: `Link to HP for ${lotNumber} has been copied.`,
+      })
+      setTimeout(() => setCopiedHpId(null), 2000)
+    } catch (err) {
+      // Fallback
+      const textArea = document.createElement('textarea')
+      textArea.value = url
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      setCopiedHpId(hpId)
+      toast({
+        title: 'Link copied!',
+        description: `Link to HP for ${lotNumber} has been copied.`,
+      })
+      setTimeout(() => setCopiedHpId(null), 2000)
+    }
+  }
 
   const token = getAuthToken()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -280,20 +311,33 @@ export function HoldPointsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {hp.status === 'pending' && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleRequestRelease(hp)}
-                        className="text-sm text-primary hover:underline"
+                        onClick={() => handleCopyHpLink(hp.id, hp.lotNumber, hp.description)}
+                        className="p-1.5 border rounded hover:bg-muted/50 transition-colors"
+                        title="Copy link to this hold point"
                       >
-                        Request Release
+                        {copiedHpId === hp.id ? (
+                          <Check className="h-3.5 w-3.5 text-green-600" />
+                        ) : (
+                          <Link2 className="h-3.5 w-3.5" />
+                        )}
                       </button>
-                    )}
-                    {hp.status === 'notified' && (
-                      <span className="text-sm text-amber-600">Awaiting...</span>
-                    )}
-                    {hp.status === 'released' && (
-                      <span className="text-sm text-green-600">✓ Released</span>
-                    )}
+                      {hp.status === 'pending' && (
+                        <button
+                          onClick={() => handleRequestRelease(hp)}
+                          className="text-sm text-primary hover:underline"
+                        >
+                          Request Release
+                        </button>
+                      )}
+                      {hp.status === 'notified' && (
+                        <span className="text-sm text-amber-600">Awaiting...</span>
+                      )}
+                      {hp.status === 'released' && (
+                        <span className="text-sm text-green-600">✓ Released</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

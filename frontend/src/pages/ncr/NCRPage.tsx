@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth, getAuthToken } from '../../lib/auth'
+import { toast } from '@/components/ui/toaster'
+import { Link2, Check } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
@@ -46,6 +48,35 @@ export function NCRPage() {
   const [respondingNcr, setRespondingNcr] = useState<NCR | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [copiedNcrId, setCopiedNcrId] = useState<string | null>(null)
+
+  // Copy NCR link handler
+  const handleCopyNcrLink = async (ncrId: string, ncrNumber: string) => {
+    const url = `${window.location.origin}/projects/${projectId}/ncrs?ncr=${ncrId}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedNcrId(ncrId)
+      toast({
+        title: 'Link copied!',
+        description: `Link to ${ncrNumber} has been copied to your clipboard.`,
+      })
+      setTimeout(() => setCopiedNcrId(null), 2000)
+    } catch (err) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea')
+      textArea.value = url
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      setCopiedNcrId(ncrId)
+      toast({
+        title: 'Link copied!',
+        description: `Link to ${ncrNumber} has been copied to your clipboard.`,
+      })
+      setTimeout(() => setCopiedNcrId(null), 2000)
+    }
+  }
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string>('')
@@ -679,6 +710,18 @@ export function NCRPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
+                      {/* Copy Link Button */}
+                      <button
+                        onClick={() => handleCopyNcrLink(ncr.id, ncr.ncrNumber)}
+                        className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
+                        title="Copy link to this NCR"
+                      >
+                        {copiedNcrId === ncr.id ? (
+                          <Check className="h-3.5 w-3.5 text-green-600" />
+                        ) : (
+                          <Link2 className="h-3.5 w-3.5" />
+                        )}
+                      </button>
                       {/* Respond Button for open NCRs */}
                       {ncr.status === 'open' && (
                         <button

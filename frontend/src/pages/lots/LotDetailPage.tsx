@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken } from '@/lib/auth'
+import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
+import { LotQRCode } from '@/components/lots/LotQRCode'
+import { Link2, Check } from 'lucide-react'
 
 // Tab types for lot detail page
 type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'comments' | 'history'
@@ -228,6 +231,35 @@ export function LotDetailPage() {
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null)
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+
+  // Copy link handler
+  const handleCopyLink = async () => {
+    const url = `${window.location.origin}/projects/${projectId}/lots/${lotId}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkCopied(true)
+      toast({
+        title: 'Link copied!',
+        description: 'The lot link has been copied to your clipboard.',
+      })
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch (err) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea')
+      textArea.value = url
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      setLinkCopied(true)
+      toast({
+        title: 'Link copied!',
+        description: 'The lot link has been copied to your clipboard.',
+      })
+      setTimeout(() => setLinkCopied(false), 2000)
+    }
+  }
 
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp'
@@ -743,11 +775,37 @@ export function LotDetailPage() {
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{lot.lotNumber}</h1>
-          <p className="text-sm text-muted-foreground">{lot.description || 'No description'}</p>
+        <div className="flex items-start gap-4">
+          {/* QR Code */}
+          <LotQRCode
+            lotId={lotId!}
+            lotNumber={lot.lotNumber}
+            projectId={projectId!}
+            size="medium"
+          />
+          <div>
+            <h1 className="text-2xl font-bold">{lot.lotNumber}</h1>
+            <p className="text-sm text-muted-foreground">{lot.description || 'No description'}</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleCopyLink}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+            title="Copy link to this lot"
+          >
+            {linkCopied ? (
+              <>
+                <Check className="h-4 w-4 text-green-600" />
+                <span className="text-green-600">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Link2 className="h-4 w-4" />
+                <span>Copy Link</span>
+              </>
+            )}
+          </button>
           {canEdit && isEditable && (
             <button
               onClick={() => navigate(`/projects/${projectId}/lots/${lotId}/edit`)}

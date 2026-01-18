@@ -112,6 +112,16 @@ lotsRouter.get('/:id', async (req, res) => {
         assignedSubcontractorId: true,
         createdAt: true,
         updatedAt: true,
+        _count: {
+          select: {
+            testResults: true,
+            ncrLots: true,
+            documents: true,
+          },
+        },
+        itpInstance: {
+          select: { id: true },
+        },
       },
     })
 
@@ -615,6 +625,153 @@ lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// POST /api/lots/bulk-update-status - Bulk update lot status (requires creator role)
+lotsRouter.post('/bulk-update-status', requireRole(LOT_CREATORS), async (req, res) => {
+  try {
+    const { lotIds, status } = req.body
+
+    if (!lotIds || !Array.isArray(lotIds) || lotIds.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'lotIds array is required and must not be empty'
+      })
+    }
+
+    // Valid statuses
+    const validStatuses = [
+      'not_started', 'in_progress', 'awaiting_test',
+      'hold_point', 'ncr_raised', 'completed'
+    ]
+
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `status must be one of: ${validStatuses.join(', ')}`
+      })
+    }
+
+    // Check that lots exist and can be updated (not conformed or claimed)
+    const lotsToUpdate = await prisma.lot.findMany({
+      where: {
+        id: { in: lotIds },
+      },
+      select: {
+        id: true,
+        lotNumber: true,
+        status: true,
+      },
+    })
+
+    // Check for lots that cannot be updated (conformed or claimed)
+    const unupdatableLots = lotsToUpdate.filter(
+      lot => lot.status === 'conformed' || lot.status === 'claimed'
+    )
+
+    if (unupdatableLots.length > 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Cannot update ${unupdatableLots.length} lot(s) that are conformed or claimed: ${unupdatableLots.map(l => l.lotNumber).join(', ')}`
+      })
+    }
+
+    // Update all lots
+    const result = await prisma.lot.updateMany({
+      where: {
+        id: { in: lotIds },
+        status: { notIn: ['conformed', 'claimed'] },
+      },
+      data: {
+        status: status,
+        updatedAt: new Date(),
+      },
+    })
+
+    res.json({
+      message: `Successfully updated ${result.count} lot(s) to "${status.replace('_', ' ')}"`,
+      count: result.count,
+    })
+  } catch (error) {
+    console.error('Bulk update lot status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/lots/bulk-assign-subcontractor - Bulk assign lots to subcontractor (requires creator role)
+lotsRouter.post('/bulk-assign-subcontractor', requireRole(LOT_CREATORS), async (req, res) => {
+  try {
+    const { lotIds, subcontractorId } = req.body
+
+    if (!lotIds || !Array.isArray(lotIds) || lotIds.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'lotIds array is required and must not be empty'
+      })
+    }
+
+    // subcontractorId can be null (to unassign) or a valid ID
+    if (subcontractorId !== null && subcontractorId !== undefined) {
+      // Verify subcontractor exists
+      const subcontractor = await prisma.subcontractorCompany.findUnique({
+        where: { id: subcontractorId },
+        select: { id: true, companyName: true }
+      })
+
+      if (!subcontractor) {
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Subcontractor company not found'
+        })
+      }
+    }
+
+    // Check that lots exist and can be updated (not conformed or claimed)
+    const lotsToUpdate = await prisma.lot.findMany({
+      where: {
+        id: { in: lotIds },
+      },
+      select: {
+        id: true,
+        lotNumber: true,
+        status: true,
+      },
+    })
+
+    // Check for lots that cannot be updated (conformed or claimed)
+    const unupdatableLots = lotsToUpdate.filter(
+      lot => lot.status === 'conformed' || lot.status === 'claimed'
+    )
+
+    if (unupdatableLots.length > 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Cannot update ${unupdatableLots.length} lot(s) that are conformed or claimed: ${unupdatableLots.map(l => l.lotNumber).join(', ')}`
+      })
+    }
+
+    // Update all lots
+    const result = await prisma.lot.updateMany({
+      where: {
+        id: { in: lotIds },
+        status: { notIn: ['conformed', 'claimed'] },
+      },
+      data: {
+        assignedSubcontractorId: subcontractorId || null,
+        updatedAt: new Date(),
+      },
+    })
+
+    const action = subcontractorId ? 'assigned' : 'unassigned'
+    res.json({
+      message: `Successfully ${action} ${result.count} lot(s)`,
+      count: result.count,
+    })
+  } catch (error) {
+    console.error('Bulk assign subcontractor error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/lots/check-role/:projectId - Check user's role on a project
 lotsRouter.get('/check-role/:projectId', async (req, res) => {
   try {
