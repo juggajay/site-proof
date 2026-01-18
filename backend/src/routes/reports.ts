@@ -637,3 +637,213 @@ reportsRouter.get('/summary', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// ============================================================================
+// Scheduled Reports API
+// ============================================================================
+
+// Helper to calculate the next run time based on frequency
+function calculateNextRunAt(frequency: string, dayOfWeek: number | null, dayOfMonth: number | null, timeOfDay: string): Date {
+  const now = new Date()
+  const [hours, minutes] = timeOfDay.split(':').map(Number)
+  const nextRun = new Date()
+  nextRun.setHours(hours, minutes, 0, 0)
+
+  switch (frequency) {
+    case 'daily':
+      // If time has passed today, schedule for tomorrow
+      if (nextRun <= now) {
+        nextRun.setDate(nextRun.getDate() + 1)
+      }
+      break
+    case 'weekly':
+      // Find next occurrence of dayOfWeek (0 = Sunday)
+      const targetDay = dayOfWeek ?? 1 // Default to Monday
+      const currentDay = nextRun.getDay()
+      let daysUntil = targetDay - currentDay
+      if (daysUntil < 0 || (daysUntil === 0 && nextRun <= now)) {
+        daysUntil += 7
+      }
+      nextRun.setDate(nextRun.getDate() + daysUntil)
+      break
+    case 'monthly':
+      // Find next occurrence of dayOfMonth
+      const targetDayOfMonth = dayOfMonth ?? 1 // Default to 1st
+      nextRun.setDate(targetDayOfMonth)
+      if (nextRun <= now) {
+        nextRun.setMonth(nextRun.getMonth() + 1)
+      }
+      // Handle months that don't have the target day (e.g., Feb 30)
+      if (nextRun.getDate() !== targetDayOfMonth) {
+        nextRun.setDate(0) // Last day of previous month
+      }
+      break
+  }
+
+  return nextRun
+}
+
+// GET /api/reports/schedules - List scheduled reports for a project
+reportsRouter.get('/schedules', async (req, res) => {
+  try {
+    const { projectId } = req.query
+
+    if (!projectId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'projectId query parameter is required'
+      })
+    }
+
+    const schedules = await prisma.scheduledReport.findMany({
+      where: { projectId: projectId as string },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    res.json({ schedules })
+  } catch (error) {
+    console.error('List scheduled reports error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/reports/schedules - Create a new scheduled report
+reportsRouter.post('/schedules', async (req, res) => {
+  try {
+    const { projectId, reportType, frequency, dayOfWeek, dayOfMonth, timeOfDay, recipients } = req.body
+    const userId = (req as any).user?.id
+
+    if (!projectId || !reportType || !frequency || !recipients) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'projectId, reportType, frequency, and recipients are required'
+      })
+    }
+
+    // Validate frequency
+    if (!['daily', 'weekly', 'monthly'].includes(frequency)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'frequency must be daily, weekly, or monthly'
+      })
+    }
+
+    // Validate reportType
+    if (!['lot-status', 'ncr', 'test', 'diary'].includes(reportType)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'reportType must be lot-status, ncr, test, or diary'
+      })
+    }
+
+    // Calculate next run time
+    const nextRunAt = calculateNextRunAt(
+      frequency,
+      dayOfWeek ?? null,
+      dayOfMonth ?? null,
+      timeOfDay || '09:00'
+    )
+
+    const schedule = await prisma.scheduledReport.create({
+      data: {
+        projectId,
+        reportType,
+        frequency,
+        dayOfWeek: dayOfWeek ?? null,
+        dayOfMonth: dayOfMonth ?? null,
+        timeOfDay: timeOfDay || '09:00',
+        recipients: Array.isArray(recipients) ? recipients.join(',') : recipients,
+        nextRunAt,
+        createdById: userId,
+        isActive: true,
+      },
+    })
+
+    res.status(201).json({ schedule })
+  } catch (error) {
+    console.error('Create scheduled report error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PUT /api/reports/schedules/:id - Update a scheduled report
+reportsRouter.put('/schedules/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { reportType, frequency, dayOfWeek, dayOfMonth, timeOfDay, recipients, isActive } = req.body
+
+    // Check if schedule exists
+    const existing = await prisma.scheduledReport.findUnique({
+      where: { id },
+    })
+
+    if (!existing) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Scheduled report not found'
+      })
+    }
+
+    // Calculate new next run time if scheduling parameters changed
+    const newFrequency = frequency ?? existing.frequency
+    const newDayOfWeek = dayOfWeek ?? existing.dayOfWeek
+    const newDayOfMonth = dayOfMonth ?? existing.dayOfMonth
+    const newTimeOfDay = timeOfDay ?? existing.timeOfDay
+
+    const nextRunAt = calculateNextRunAt(
+      newFrequency,
+      newDayOfWeek,
+      newDayOfMonth,
+      newTimeOfDay
+    )
+
+    const schedule = await prisma.scheduledReport.update({
+      where: { id },
+      data: {
+        ...(reportType !== undefined && { reportType }),
+        ...(frequency !== undefined && { frequency }),
+        ...(dayOfWeek !== undefined && { dayOfWeek }),
+        ...(dayOfMonth !== undefined && { dayOfMonth }),
+        ...(timeOfDay !== undefined && { timeOfDay }),
+        ...(recipients !== undefined && {
+          recipients: Array.isArray(recipients) ? recipients.join(',') : recipients
+        }),
+        ...(isActive !== undefined && { isActive }),
+        nextRunAt,
+      },
+    })
+
+    res.json({ schedule })
+  } catch (error) {
+    console.error('Update scheduled report error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/reports/schedules/:id - Delete a scheduled report
+reportsRouter.delete('/schedules/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    // Check if schedule exists
+    const existing = await prisma.scheduledReport.findUnique({
+      where: { id },
+    })
+
+    if (!existing) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Scheduled report not found'
+      })
+    }
+
+    await prisma.scheduledReport.delete({
+      where: { id },
+    })
+
+    res.json({ success: true, message: 'Scheduled report deleted' })
+  } catch (error) {
+    console.error('Delete scheduled report error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})

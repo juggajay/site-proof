@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
-import { Lock, Sparkles } from 'lucide-react'
+import { Lock, Sparkles, Calendar, Mail } from 'lucide-react'
+import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
@@ -234,6 +235,9 @@ export function ReportsPage() {
   const [diaryStartDate, setDiaryStartDate] = useState<string>('')
   const [diaryEndDate, setDiaryEndDate] = useState<string>('')
 
+  // Schedule modal state
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+
   const setActiveTab = (tab: string) => {
     setSearchParams({ tab })
   }
@@ -361,13 +365,22 @@ export function ReportsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Reports & Analytics</h1>
-        <button
-          onClick={() => fetchReport(activeTab)}
-          disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? 'Refreshing...' : 'Refresh Report'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowScheduleModal(true)}
+            className="px-4 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50 flex items-center gap-2"
+          >
+            <Mail className="h-4 w-4" />
+            Schedule Reports
+          </button>
+          <button
+            onClick={() => fetchReport(activeTab)}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? 'Refreshing...' : 'Refresh Report'}
+          </button>
+        </div>
       </div>
 
       {/* Tab Navigation */}
@@ -1308,6 +1321,14 @@ export function ReportsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Schedule Report Modal */}
+      {showScheduleModal && projectId && (
+        <ScheduleReportModal
+          projectId={projectId}
+          onClose={() => setShowScheduleModal(false)}
+        />
       )}
     </div>
   )

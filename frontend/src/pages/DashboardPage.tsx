@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import {
@@ -13,7 +13,8 @@ import {
   Activity,
   ListChecks,
   DollarSign,
-  Users
+  Users,
+  Download
 } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
@@ -142,6 +143,60 @@ export function DashboardPage() {
     })
   }
 
+  // Export dashboard to PDF using browser print
+  const handleExportPDF = () => {
+    // Add print class to body for styling
+    document.body.classList.add('printing-dashboard')
+
+    // Create a style element for print-specific styles
+    const printStyles = document.createElement('style')
+    printStyles.id = 'dashboard-print-styles'
+    printStyles.innerHTML = `
+      @media print {
+        body.printing-dashboard * {
+          visibility: hidden;
+        }
+        body.printing-dashboard .dashboard-content,
+        body.printing-dashboard .dashboard-content * {
+          visibility: visible;
+        }
+        body.printing-dashboard .dashboard-content {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          padding: 20px;
+        }
+        body.printing-dashboard .no-print {
+          display: none !important;
+        }
+        body.printing-dashboard .bg-card {
+          background: white !important;
+          border: 1px solid #ddd !important;
+        }
+        body.printing-dashboard h1 {
+          font-size: 24px;
+          margin-bottom: 10px;
+        }
+        @page {
+          size: A4 portrait;
+          margin: 15mm;
+        }
+      }
+    `
+    document.head.appendChild(printStyles)
+
+    // Trigger print dialog
+    window.print()
+
+    // Cleanup after print
+    setTimeout(() => {
+      document.body.classList.remove('printing-dashboard')
+      const styleEl = document.getElementById('dashboard-print-styles')
+      if (styleEl) styleEl.remove()
+    }, 500)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -151,7 +206,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 dashboard-content">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
@@ -160,16 +215,28 @@ export function DashboardPage() {
           </p>
         </div>
 
-        {/* Widget Settings Dropdown */}
-        <div className="relative">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 no-print">
+          {/* Export PDF Button */}
           <button
-            onClick={() => setShowWidgetSettings(!showWidgetSettings)}
+            onClick={handleExportPDF}
             className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
-            title="Customize widgets"
+            title="Export to PDF"
           >
-            <Settings2 className="h-4 w-4" />
-            Customize
+            <Download className="h-4 w-4" />
+            Export PDF
           </button>
+
+          {/* Widget Settings Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowWidgetSettings(!showWidgetSettings)}
+              className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
+              title="Customize widgets"
+            >
+              <Settings2 className="h-4 w-4" />
+              Customize
+            </button>
 
           {showWidgetSettings && (
             <>
@@ -199,6 +266,7 @@ export function DashboardPage() {
               </div>
             </>
           )}
+          </div>
         </div>
       </div>
 

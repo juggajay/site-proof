@@ -989,3 +989,26 @@ model EmailVerificationToken {
 
   @@map("email_verification_tokens")
 }
+
+// ============================================================================
+// Scheduled Reports
+// ============================================================================
+
+model ScheduledReport {
+  id           String   @id @default(uuid())
+  projectId    String   @map("project_id")
+  reportType   String   @map("report_type") // lot-status, ncr, test, diary
+  frequency    String   // daily, weekly, monthly
+  dayOfWeek    Int?     @map("day_of_week") // 0-6 for weekly reports (0=Sunday)
+  dayOfMonth   Int?     @map("day_of_month") // 1-31 for monthly reports
+  timeOfDay    String   @default("09:00") @map("time_of_day") // HH:mm format
+  recipients   String   // Comma-separated email addresses
+  isActive     Boolean  @default(true) @map("is_active")
+  lastSentAt   DateTime? @map("last_sent_at")
+  nextRunAt    DateTime? @map("next_run_at")
+  createdById  String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("scheduled_reports")
+}

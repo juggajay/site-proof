@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Download, X, Check } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Download, X, Check, Calendar } from 'lucide-react'
 
 interface ExportColumn {
   key: string
@@ -13,6 +13,19 @@ interface ExportLotsModalProps {
   canViewBudgets: boolean
   isSubcontractor: boolean
   onClose: () => void
+}
+
+// Helper to format date for input
+const formatDateForInput = (date: Date | null): string => {
+  if (!date) return ''
+  return date.toISOString().split('T')[0]
+}
+
+// Helper to parse date from input
+const parseDateFromInput = (value: string): Date | null => {
+  if (!value) return null
+  const date = new Date(value)
+  return isNaN(date.getTime()) ? null : date
 }
 
 const ALL_COLUMNS: ExportColumn[] = [
@@ -45,6 +58,41 @@ export function ExportLotsModal({
     new Set(availableColumns.map((col) => col.key))
   )
 
+  // Date range filter state
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
+
+  // Filter lots by date range
+  const filteredLots = useMemo(() => {
+    let result = lots
+
+    if (startDate) {
+      const start = parseDateFromInput(startDate)
+      if (start) {
+        // Set to start of day
+        start.setHours(0, 0, 0, 0)
+        result = result.filter((lot) => {
+          const lotDate = new Date(lot.createdAt)
+          return lotDate >= start
+        })
+      }
+    }
+
+    if (endDate) {
+      const end = parseDateFromInput(endDate)
+      if (end) {
+        // Set to end of day
+        end.setHours(23, 59, 59, 999)
+        result = result.filter((lot) => {
+          const lotDate = new Date(lot.createdAt)
+          return lotDate <= end
+        })
+      }
+    }
+
+    return result
+  }, [lots, startDate, endDate])
+
   const toggleColumn = (key: string) => {
     const column = availableColumns.find((c) => c.key === key)
     if (column?.required) return // Can't deselect required columns
@@ -75,8 +123,8 @@ export function ExportLotsModal({
       .filter((col) => selectedColumns.has(col.key))
       .map((col) => col.label)
 
-    // Convert lots to CSV rows
-    const rows = lots.map((lot) => {
+    // Convert lots to CSV rows (using filtered lots)
+    const rows = filteredLots.map((lot) => {
       const row: string[] = []
       availableColumns.forEach((col) => {
         if (!selectedColumns.has(col.key)) return
@@ -209,10 +257,52 @@ export function ExportLotsModal({
           </div>
         </div>
 
+        {/* Date Range Filter */}
+        <div className="mb-4">
+          <p className="text-sm font-medium mb-2 flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Filter by creation date (optional):
+          </p>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-xs text-muted-foreground">From</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border rounded-md bg-background text-sm"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-muted-foreground">To</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full mt-1 px-3 py-2 border rounded-md bg-background text-sm"
+              />
+            </div>
+          </div>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => {
+                setStartDate('')
+                setEndDate('')
+              }}
+              className="text-xs text-primary hover:underline mt-2"
+            >
+              Clear date filter
+            </button>
+          )}
+        </div>
+
         {/* Summary */}
         <p className="text-sm text-muted-foreground mb-4">
-          Exporting {lots.length} lot{lots.length !== 1 ? 's' : ''} with{' '}
-          {selectedCount} of {totalCount} columns
+          Exporting {filteredLots.length} lot{filteredLots.length !== 1 ? 's' : ''}{' '}
+          {filteredLots.length !== lots.length && (
+            <span className="text-amber-600">(filtered from {lots.length})</span>
+          )}{' '}
+          with {selectedCount} of {totalCount} columns
         </p>
 
         {/* Actions */}
@@ -225,7 +315,7 @@ export function ExportLotsModal({
           </button>
           <button
             onClick={handleExport}
-            disabled={selectedCount === 0}
+            disabled={selectedCount === 0 || filteredLots.length === 0}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Download className="h-4 w-4" />
