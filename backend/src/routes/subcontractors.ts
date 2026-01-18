@@ -69,6 +69,25 @@ subcontractorsRouter.post('/invite', async (req, res) => {
 
     console.log(`Subcontractor ${companyName} invited to project ${project.name} by ${user.email}`)
 
+    // Log email invitation (in production, this would send an actual email)
+    const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:5175'}/subcontractor-portal/accept-invite?id=${subcontractor.id}`
+    console.log('\n========================================')
+    console.log('📧 SUBCONTRACTOR INVITATION EMAIL')
+    console.log('========================================')
+    console.log(`To: ${primaryContactEmail}`)
+    console.log(`Subject: Invitation to join ${project.name} on SiteProof`)
+    console.log('----------------------------------------')
+    console.log(`Hi ${primaryContactName},`)
+    console.log('')
+    console.log(`You have been invited to join the project "${project.name}" on SiteProof`)
+    console.log(`as a subcontractor for ${companyName}.`)
+    console.log('')
+    console.log(`Click the link below to accept your invitation and set up your account:`)
+    console.log(`${inviteUrl}`)
+    console.log('')
+    console.log(`This invitation was sent by ${user.email}.`)
+    console.log('========================================\n')
+
     res.status(201).json({
       message: 'Subcontractor invited successfully',
       subcontractor: {
