@@ -112,6 +112,22 @@ export function Header() {
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), // 3 days ago
         read: true,
       },
+      {
+        id: '6',
+        type: 'info',
+        title: 'Old NCR Closed',
+        message: 'NCR-2023-089 has been closed',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(), // 10 days ago
+        read: true,
+      },
+      {
+        id: '7',
+        type: 'success',
+        title: 'Old Test Complete',
+        message: 'Soil testing for Section B completed',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(), // 14 days ago
+        read: true,
+      },
     ]
     setNotifications(mockNotifications)
   }, [])
@@ -182,6 +198,23 @@ export function Header() {
   // Mark all as read
   const markAllAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  }
+
+  // Check if notification is old (more than 7 days)
+  const isOldNotification = (timestamp: string) => {
+    const now = new Date()
+    const date = new Date(timestamp)
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = diffMs / 86400000
+    return diffDays > 7
+  }
+
+  // Count old notifications
+  const oldNotificationCount = notifications.filter(n => isOldNotification(n.timestamp)).length
+
+  // Clear old notifications
+  const clearOldNotifications = () => {
+    setNotifications(prev => prev.filter(n => !isOldNotification(n.timestamp)))
   }
 
   // Format relative time
@@ -292,14 +325,24 @@ export function Header() {
             <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card shadow-lg">
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <h3 className="font-semibold">Notifications</h3>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsRead}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Mark all as read
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {oldNotificationCount > 0 && (
+                    <button
+                      onClick={clearOldNotifications}
+                      className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                    >
+                      Clear old
+                    </button>
+                  )}
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
               </div>
               {/* Filter tabs */}
               <div className="flex border-b px-2">
