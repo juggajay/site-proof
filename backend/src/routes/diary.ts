@@ -74,9 +74,11 @@ async function checkProjectAccess(userId: string, projectId: string): Promise<bo
 }
 
 // GET /api/diary/:projectId - List all diaries for a project
+// Supports ?search=text to filter by content
 router.get('/:projectId', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
+    const { search } = req.query
     const userId = (req as any).user?.id
 
     if (!userId) {
@@ -99,6 +101,44 @@ router.get('/:projectId', async (req: Request, res: Response) => {
       },
       orderBy: { date: 'desc' }
     })
+
+    // Feature #240: Filter by search term if provided
+    if (search && typeof search === 'string' && search.trim()) {
+      const searchLower = search.toLowerCase().trim()
+      const filteredDiaries = diaries.filter(diary => {
+        // Search in general notes
+        if (diary.generalNotes?.toLowerCase().includes(searchLower)) return true
+        // Search in weather notes
+        if (diary.weatherNotes?.toLowerCase().includes(searchLower)) return true
+        // Search in weather conditions
+        if (diary.weatherConditions?.toLowerCase().includes(searchLower)) return true
+        // Search in personnel names and companies
+        if (diary.personnel.some(p =>
+          p.name?.toLowerCase().includes(searchLower) ||
+          p.company?.toLowerCase().includes(searchLower) ||
+          p.role?.toLowerCase().includes(searchLower)
+        )) return true
+        // Search in plant descriptions
+        if (diary.plant.some(p =>
+          p.description?.toLowerCase().includes(searchLower) ||
+          p.company?.toLowerCase().includes(searchLower) ||
+          p.notes?.toLowerCase().includes(searchLower)
+        )) return true
+        // Search in activities
+        if (diary.activities.some(a =>
+          a.description?.toLowerCase().includes(searchLower) ||
+          a.notes?.toLowerCase().includes(searchLower)
+        )) return true
+        // Search in delays
+        if (diary.delays.some(d =>
+          d.description?.toLowerCase().includes(searchLower) ||
+          d.delayType?.toLowerCase().includes(searchLower) ||
+          d.impact?.toLowerCase().includes(searchLower)
+        )) return true
+        return false
+      })
+      return res.json(filteredDiaries)
+    }
 
     res.json(diaries)
   } catch (error) {

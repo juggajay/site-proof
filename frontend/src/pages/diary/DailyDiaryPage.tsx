@@ -101,6 +101,12 @@ export function DailyDiaryPage() {
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
   const previousWeatherFormRef = useRef<string>('')
 
+  // Feature #240: Search diaries state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filteredDiaries, setFilteredDiaries] = useState<DailyDiary[]>([])
+  const [searching, setSearching] = useState(false)
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null)
+
   // Addendum state
   const [addendums, setAddendums] = useState<Addendum[]>([])
   const [addendumContent, setAddendumContent] = useState('')
@@ -439,6 +445,48 @@ export function DailyDiaryPage() {
       console.error('Error fetching lots:', err)
     }
   }
+
+  // Feature #240: Search diaries by content
+  const searchDiaries = async (query: string) => {
+    if (!query.trim()) {
+      setFilteredDiaries([])
+      return
+    }
+    setSearching(true)
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary/${projectId}?search=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setFilteredDiaries(data)
+      }
+    } catch (err) {
+      console.error('Error searching diaries:', err)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  // Debounced search - wait 500ms after typing stops
+  useEffect(() => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current)
+    }
+    if (searchQuery.trim()) {
+      searchTimerRef.current = setTimeout(() => {
+        searchDiaries(searchQuery)
+      }, 500)
+    } else {
+      setFilteredDiaries([])
+    }
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current)
+      }
+    }
+  }, [searchQuery])
 
   // Feature #226: Fetch weather from API and auto-populate
   const fetchWeatherForDate = async (date: string) => {
@@ -1870,9 +1918,81 @@ export function DailyDiaryPage() {
       {/* Recent Diaries List */}
       {diaries.length > 0 && (
         <div className="rounded-lg border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold">Recent Diary Entries</h3>
-          <div className="space-y-2">
-            {diaries.slice(0, 10).map((d) => (
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Recent Diary Entries</h3>
+            {/* Feature #240: Search input */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search diaries..."
+                className="w-64 rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm"
+              />
+              <svg
+                className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searching && (
+                <div className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              )}
+            </div>
+          </div>
+
+          {/* Search Results */}
+          {searchQuery.trim() && filteredDiaries.length > 0 && (
+            <div className="mb-4">
+              <p className="text-sm text-muted-foreground mb-2">
+                Found {filteredDiaries.length} diary {filteredDiaries.length === 1 ? 'entry' : 'entries'} matching "{searchQuery}"
+              </p>
+              <div className="space-y-2 border-l-2 border-primary pl-4">
+                {filteredDiaries.slice(0, 10).map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => {
+                      setSelectedDate(d.date.split('T')[0])
+                      setSearchQuery('')
+                      setFilteredDiaries([])
+                    }}
+                    className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 ${
+                      d.date.split('T')[0] === selectedDate ? 'border-primary bg-primary/5' : ''
+                    }`}
+                  >
+                    <div>
+                      <span className="font-medium">{formatDate(d.date)}</span>
+                      {d.weatherConditions && (
+                        <span className="ml-2 text-muted-foreground">- {d.weatherConditions}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        d.status === 'submitted'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-yellow-100 text-yellow-700'
+                      }`}>
+                        {d.status}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {searchQuery.trim() && filteredDiaries.length === 0 && !searching && (
+            <div className="mb-4 text-sm text-muted-foreground">
+              No diaries found matching "{searchQuery}"
+            </div>
+          )}
+
+          {/* Recent Diaries */}
+          {!searchQuery.trim() && (
+            <div className="space-y-2">
+              {diaries.slice(0, 10).map((d) => (
               <button
                 key={d.id}
                 onClick={() => setSelectedDate(d.date.split('T')[0])}
@@ -1900,7 +2020,8 @@ export function DailyDiaryPage() {
                 </div>
               </button>
             ))}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>
