@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { MessageSquare, Send, CornerDownRight, Edit2, Trash2, X, Check, Paperclip, Download, FileText, Image } from 'lucide-react'
 import { getAuthToken, useAuth } from '@/lib/auth'
+import { toast } from '@/components/ui/toaster'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
@@ -97,18 +98,56 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     }
   }
 
+  // File validation constants
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+  const ALLOWED_TYPES = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'application/pdf',
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain'
+  ]
+
+  const validateFile = (file: File): string | null => {
+    if (file.size > MAX_FILE_SIZE) {
+      return `File "${file.name}" exceeds the 10MB size limit.`
+    }
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return `File "${file.name}" is not a supported format. Allowed: images, PDF, Word, Excel, text files.`
+    }
+    return null
+  }
+
   // Handle file selection for main comment
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files) return
 
     const newAttachments: PendingAttachment[] = []
+    const errors: string[] = []
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
+      const error = validateFile(file)
+      if (error) {
+        errors.push(error)
+        continue
+      }
       const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
       newAttachments.push({ file, preview })
     }
-    setPendingAttachments(prev => [...prev, ...newAttachments])
+
+    if (errors.length > 0) {
+      toast({
+        title: 'Some files could not be added',
+        description: errors.join(' '),
+        variant: 'destructive'
+      })
+    }
+
+    if (newAttachments.length > 0) {
+      setPendingAttachments(prev => [...prev, ...newAttachments])
+    }
 
     // Reset input
     if (fileInputRef.current) {
@@ -122,12 +161,30 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     if (!files) return
 
     const newAttachments: PendingAttachment[] = []
+    const errors: string[] = []
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
+      const error = validateFile(file)
+      if (error) {
+        errors.push(error)
+        continue
+      }
       const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
       newAttachments.push({ file, preview })
     }
-    setReplyAttachments(prev => [...prev, ...newAttachments])
+
+    if (errors.length > 0) {
+      toast({
+        title: 'Some files could not be added',
+        description: errors.join(' '),
+        variant: 'destructive'
+      })
+    }
+
+    if (newAttachments.length > 0) {
+      setReplyAttachments(prev => [...prev, ...newAttachments])
+    }
 
     // Reset input
     if (replyFileInputRef.current) {

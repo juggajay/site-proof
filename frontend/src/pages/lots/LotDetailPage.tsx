@@ -678,6 +678,30 @@ export function LotDetailPage() {
     const file = event.target.files?.[0]
     if (!file || !itpInstance) return
 
+    // File validation
+    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: 'File too large',
+        description: `The file "${file.name}" exceeds the 10MB limit. Please select a smaller file.`,
+        variant: 'destructive'
+      })
+      event.target.value = '' // Reset input
+      return
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast({
+        title: 'Invalid file type',
+        description: `The file "${file.name}" is not a supported image format. Please use JPEG, PNG, GIF, or WebP.`,
+        variant: 'destructive'
+      })
+      event.target.value = '' // Reset input
+      return
+    }
+
     const token = getAuthToken()
     if (!token) return
 
