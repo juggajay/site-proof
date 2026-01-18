@@ -398,6 +398,17 @@ export function HoldPointsPage() {
     return labels[status] || status
   }
 
+  // Check if HP is overdue (Feature #190)
+  // An HP is overdue if status is 'notified' and scheduled date has passed
+  const isOverdue = (hp: HoldPoint): boolean => {
+    if (hp.status !== 'notified') return false
+    if (!hp.scheduledDate) return false
+    const scheduled = new Date(hp.scheduledDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return scheduled < today
+  }
+
   // Filter hold points by status (Feature #189)
   const filteredHoldPoints = statusFilter === 'all'
     ? holdPoints
@@ -502,8 +513,18 @@ export function HoldPointsPage() {
             </thead>
             <tbody className="divide-y">
               {filteredHoldPoints.map((hp) => (
-                <tr key={hp.id} className="hover:bg-muted/25">
-                  <td className="px-4 py-3 font-medium">{hp.lotNumber}</td>
+                <tr
+                  key={hp.id}
+                  className={`hover:bg-muted/25 ${isOverdue(hp) ? 'bg-red-50 border-l-4 border-l-red-500' : ''}`}
+                >
+                  <td className="px-4 py-3 font-medium">
+                    {hp.lotNumber}
+                    {isOverdue(hp) && (
+                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-normal">
+                        OVERDUE
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="max-w-md truncate">{hp.description}</div>
                   </td>
@@ -512,7 +533,7 @@ export function HoldPointsPage() {
                       {getStatusLabel(hp.status)}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                  <td className={`px-4 py-3 text-sm ${isOverdue(hp) ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
                     {hp.scheduledDate
                       ? new Date(hp.scheduledDate).toLocaleDateString()
                       : '-'}
