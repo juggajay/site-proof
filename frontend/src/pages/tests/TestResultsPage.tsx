@@ -147,6 +147,9 @@ export function TestResultsPage() {
   const [filterDateTo, setFilterDateTo] = useState('')
   const [showFilters, setShowFilters] = useState(false)
 
+  // Feature #206: Test register search
+  const [searchQuery, setSearchQuery] = useState('')
+
   // Feature #198: Test type specifications for auto-populate
   const testTypeSpecs: Record<string, { min: string; max: string; unit: string }> = {
     'compaction': { min: '95', max: '100', unit: '% MDD' },
@@ -216,8 +219,23 @@ export function TestResultsPage() {
     setFormData(prev => ({ ...prev, resultValue: value, passFail }))
   }
 
-  // Feature #205: Filter test results
+  // Feature #205 & #206: Filter and search test results
   const filteredTestResults = testResults.filter(test => {
+    // Feature #206: Search by query (report number, lot number, test type, lab name)
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      const matchesTestType = test.testType.toLowerCase().includes(query)
+      const matchesReportNumber = test.testRequestNumber?.toLowerCase().includes(query) || false
+      const matchesLabReportNumber = test.laboratoryReportNumber?.toLowerCase().includes(query) || false
+      const matchesLotNumber = test.lot?.lotNumber?.toLowerCase().includes(query) || false
+      const matchesLabName = test.laboratoryName?.toLowerCase().includes(query) || false
+      const matchesSampleLocation = test.sampleLocation?.toLowerCase().includes(query) || false
+
+      if (!matchesTestType && !matchesReportNumber && !matchesLabReportNumber &&
+          !matchesLotNumber && !matchesLabName && !matchesSampleLocation) {
+        return false
+      }
+    }
     // Filter by test type
     if (filterTestType && !test.testType.toLowerCase().includes(filterTestType.toLowerCase())) {
       return false
@@ -260,10 +278,11 @@ export function TestResultsPage() {
     setFilterLot('')
     setFilterDateFrom('')
     setFilterDateTo('')
+    setSearchQuery('')
   }
 
   // Check if any filters are active
-  const hasActiveFilters = filterTestType || filterStatus || filterPassFail || filterLot || filterDateFrom || filterDateTo
+  const hasActiveFilters = filterTestType || filterStatus || filterPassFail || filterLot || filterDateFrom || filterDateTo || searchQuery
 
   useEffect(() => {
     async function fetchData() {
@@ -802,15 +821,38 @@ export function TestResultsPage() {
         Manage test results and certificates for this project.
       </p>
 
-      {/* Feature #205: Filter Bar */}
+      {/* Feature #205 & #206: Search and Filter Bar */}
       {testResults.length > 0 && (
         <div className="mb-4">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border hover:bg-muted"
-          >
-            🔍 Filters {hasActiveFilters && <span className="bg-primary text-primary-foreground px-1.5 py-0.5 rounded text-xs">{filteredTestResults.length}/{testResults.length}</span>}
-          </button>
+          <div className="flex gap-3 items-center">
+            {/* Feature #206: Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by report #, lot #, lab name..."
+                className="w-full rounded-lg border px-3 py-2 pl-9 text-sm"
+              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">🔍</span>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Filters Toggle */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border hover:bg-muted"
+            >
+              ⚙️ Filters {hasActiveFilters && <span className="bg-primary text-primary-foreground px-1.5 py-0.5 rounded text-xs">{filteredTestResults.length}/{testResults.length}</span>}
+            </button>
+          </div>
 
           {showFilters && (
             <div className="mt-3 p-4 rounded-lg border bg-muted/30 space-y-3">
