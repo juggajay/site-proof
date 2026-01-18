@@ -22,6 +22,7 @@ import { holdpointsRouter } from './routes/holdpoints.js'
 import { docketsRouter } from './routes/dockets.js'
 import { companyRouter } from './routes/company.js'
 import { supportRouter } from './routes/support.js'
+import { auditLogRouter } from './routes/auditLog.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -70,6 +71,7 @@ app.use('/api/holdpoints', holdpointsRouter)
 app.use('/api/dockets', docketsRouter)
 app.use('/api/company', companyRouter)
 app.use('/api/support', supportRouter)
+app.use('/api/audit-logs', auditLogRouter)
 
 // tRPC
 app.use(

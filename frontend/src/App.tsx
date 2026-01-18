@@ -53,6 +53,9 @@ import { TermsOfServicePage } from '@/pages/legal/TermsOfServicePage'
 // Support Pages
 import { SupportPage } from '@/pages/support/SupportPage'
 
+// Admin Pages
+import { AuditLogPage } from '@/pages/admin/AuditLogPage'
+
 // Admin-only roles
 const ADMIN_ROLES = ['owner', 'admin', 'project_manager']
 
@@ -216,6 +219,16 @@ function App() {
 
           {/* Support */}
           <Route path="/support" element={<SupportPage />} />
+
+          {/* Audit Log - Admin Only */}
+          <Route
+            path="/audit-log"
+            element={
+              <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                <AuditLogPage />
+              </RoleProtectedRoute>
+            }
+          />
 
           {/* My Company - Subcontractor admins only */}
           <Route

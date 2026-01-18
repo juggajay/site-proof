@@ -17,6 +17,7 @@ import {
   Building2,
   PieChart,
   HelpCircle,
+  ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
@@ -73,6 +74,7 @@ const settingsNavigation: NavigationItem[] = [
   { name: 'Settings', href: '/settings', icon: Settings },
   { name: 'Help & Support', href: '/support', icon: HelpCircle },
   { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
+  { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAdmin: true },
 ]
 
 // Subcontractor-specific navigation
