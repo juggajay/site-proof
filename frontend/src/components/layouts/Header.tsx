@@ -31,6 +31,7 @@ export function Header() {
   // Notification state
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'info' | 'warning' | 'success'>('all')
   const notificationRef = useRef<HTMLDivElement>(null)
 
   // User menu state
@@ -95,9 +96,30 @@ export function Header() {
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
         read: true,
       },
+      {
+        id: '4',
+        type: 'info',
+        title: 'NCR Response Required',
+        message: 'NCR-2024-002 awaiting your response',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
+        read: false,
+      },
+      {
+        id: '5',
+        type: 'warning',
+        title: 'ITP Overdue',
+        message: 'ITP checklist for LOT-005 is 3 days overdue',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), // 3 days ago
+        read: true,
+      },
     ]
     setNotifications(mockNotifications)
   }, [])
+
+  // Filter notifications by type
+  const filteredNotifications = notificationFilter === 'all'
+    ? notifications
+    : notifications.filter(n => n.type === notificationFilter)
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -279,14 +301,30 @@ export function Header() {
                   </button>
                 )}
               </div>
-              <div className="max-h-[400px] overflow-auto">
-                {notifications.length === 0 ? (
+              {/* Filter tabs */}
+              <div className="flex border-b px-2">
+                {(['all', 'info', 'warning', 'success'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setNotificationFilter(filter)}
+                    className={`px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                      notificationFilter === filter
+                        ? 'border-b-2 border-primary text-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {filter === 'info' ? 'NCR' : filter === 'warning' ? 'Alerts' : filter === 'success' ? 'Updates' : 'All'}
+                  </button>
+                ))}
+              </div>
+              <div className="max-h-[350px] overflow-auto">
+                {filteredNotifications.length === 0 ? (
                   <div className="p-6 text-center text-sm text-muted-foreground">
-                    No notifications
+                    No {notificationFilter === 'all' ? '' : notificationFilter} notifications
                   </div>
                 ) : (
                   <ul>
-                    {notifications.map((notification) => (
+                    {filteredNotifications.map((notification) => (
                       <li
                         key={notification.id}
                         className={`border-b last:border-0 ${!notification.read ? 'bg-primary/5' : ''}`}
