@@ -83,7 +83,7 @@ const createDocumentSchema = z.object({
 router.get('/:projectId', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
-    const { category, documentType, lotId, search } = req.query
+    const { category, documentType, lotId, search, dateFrom, dateTo } = req.query
     const userId = (req as any).user?.id
 
     if (!userId) {
@@ -99,6 +99,20 @@ router.get('/:projectId', async (req: Request, res: Response) => {
     if (category) where.category = category
     if (documentType) where.documentType = documentType
     if (lotId) where.lotId = lotId
+
+    // Feature #249: Date range filtering
+    if (dateFrom || dateTo) {
+      where.uploadedAt = {}
+      if (dateFrom && typeof dateFrom === 'string') {
+        where.uploadedAt.gte = new Date(dateFrom)
+      }
+      if (dateTo && typeof dateTo === 'string') {
+        // Include entire end day by setting to end of day
+        const endDate = new Date(dateTo)
+        endDate.setHours(23, 59, 59, 999)
+        where.uploadedAt.lte = endDate
+      }
+    }
 
     let documents = await prisma.document.findMany({
       where,

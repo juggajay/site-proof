@@ -71,6 +71,9 @@ export function DocumentsPage() {
   // Filters
   const [filterType, setFilterType] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterLot, setFilterLot] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
@@ -78,7 +81,7 @@ export function DocumentsPage() {
       fetchDocuments()
       fetchLots()
     }
-  }, [projectId, filterType, filterCategory])
+  }, [projectId, filterType, filterCategory, filterLot, dateFrom, dateTo])
 
   const fetchDocuments = async () => {
     setLoading(true)
@@ -89,6 +92,9 @@ export function DocumentsPage() {
       const params = new URLSearchParams()
       if (filterType) params.append('documentType', filterType)
       if (filterCategory) params.append('category', filterCategory)
+      if (filterLot) params.append('lotId', filterLot)
+      if (dateFrom) params.append('dateFrom', dateFrom)
+      if (dateTo) params.append('dateTo', dateTo)
       if (searchQuery.trim()) params.append('search', searchQuery.trim())
       if (params.toString()) url += `?${params.toString()}`
 
@@ -288,7 +294,38 @@ export function DocumentsPage() {
               ))}
             </select>
           </div>
-          <div className="flex-1">
+          <div>
+            <label className="block text-sm font-medium mb-1">Lot</label>
+            <select
+              value={filterLot}
+              onChange={(e) => setFilterLot(e.target.value)}
+              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">All Lots</option>
+              {lots.map(lot => (
+                <option key={lot.id} value={lot.id}>{lot.lotNumber}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Date From</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Date To</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium mb-1">Search</label>
             <input
               type="text"
@@ -305,6 +342,21 @@ export function DocumentsPage() {
           >
             Search
           </button>
+          {(filterType || filterCategory || filterLot || dateFrom || dateTo || searchQuery) && (
+            <button
+              onClick={() => {
+                setFilterType('')
+                setFilterCategory('')
+                setFilterLot('')
+                setDateFrom('')
+                setDateTo('')
+                setSearchQuery('')
+              }}
+              className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600 hover:bg-red-100"
+            >
+              Clear All
+            </button>
+          )}
         </div>
       </div>
 
