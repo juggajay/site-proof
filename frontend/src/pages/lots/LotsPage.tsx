@@ -6,6 +6,7 @@ import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
+import { ImportLotsModal } from '@/components/lots/ImportLotsModal'
 import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2 } from 'lucide-react'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
@@ -115,6 +116,9 @@ export function LotsPage() {
 
   // Bulk create wizard state
   const [bulkWizardOpen, setBulkWizardOpen] = useState(false)
+
+  // Import modal state
+  const [importModalOpen, setImportModalOpen] = useState(false)
 
   // Bulk delete state
   const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set())
@@ -1033,6 +1037,12 @@ export function LotsPage() {
           {!isSubcontractor && canCreate && (
             <>
               <button
+                onClick={() => setImportModalOpen(true)}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+              >
+                Import CSV
+              </button>
+              <button
                 onClick={() => setBulkWizardOpen(true)}
                 className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
               >
@@ -1919,6 +1929,18 @@ export function LotsPage() {
           projectId={projectId}
           onClose={() => setBulkWizardOpen(false)}
           onSuccess={handleBulkCreateSuccess}
+        />
+      )}
+
+      {/* Import Lots Modal */}
+      {importModalOpen && projectId && (
+        <ImportLotsModal
+          projectId={projectId}
+          onClose={() => setImportModalOpen(false)}
+          onSuccess={() => {
+            setImportModalOpen(false)
+            fetchLots()
+          }}
         />
       )}
     </div>
