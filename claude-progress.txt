@@ -2851,11 +2851,21 @@ Date: 2026-01-18
 ## GIT COMMITS (Feature #996)
 - 03ed206: feat: Add Help & Support page with contact info and support request form (Feature #996)
 
+### Feature #997: Bug report submission - PASSING
+- VERIFIED: Bug report submission using existing support form
+- The Support page created in Feature #996 includes "Bug Report" category
+- Testing performed:
+  1. Step 1: Encounter issue - Navigated to Help & Support page
+  2. Step 2: Find report bug option - Selected "Bug Report" from Category dropdown
+  3. Step 3: Submit bug report - Filled subject and message, submitted form
+  4. Step 4: Verify confirmation - Success message displayed, backend logged request
+- Backend confirmed receiving: category: "bug", subject, message, userEmail
+
 ## FEATURE STATISTICS (Updated)
 - Total Features: 1035
-- Passing: 523 (50.5%)
+- Passing: 524 (50.6%)
 - In Progress: 0
-- Pending: 512
+- Pending: 511
 
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
