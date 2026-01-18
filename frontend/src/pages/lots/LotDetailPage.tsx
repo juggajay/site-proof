@@ -117,6 +117,8 @@ interface ITPCompletion {
   id: string
   checklistItemId: string
   isCompleted: boolean
+  isNotApplicable?: boolean
+  isFailed?: boolean
   notes: string | null
   completedAt: string | null
   completedBy: { id: string; fullName: string; email: string } | null
@@ -124,6 +126,7 @@ interface ITPCompletion {
   verifiedAt: string | null
   verifiedBy: { id: string; fullName: string; email: string } | null
   attachments: ITPAttachment[]
+  linkedNcr?: { id: string; ncrNumber: string } | null
 }
 
 interface ITPInstance {
@@ -267,6 +270,22 @@ export function LotDetailPage() {
     currentNotes: string | null
   } | null>(null)
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
+  const [naModal, setNaModal] = useState<{
+    checklistItemId: string
+    itemDescription: string
+  } | null>(null)
+  const [naReason, setNaReason] = useState('')
+  const [submittingNa, setSubmittingNa] = useState(false)
+
+  // Failed modal state for NCR creation
+  const [failedModal, setFailedModal] = useState<{
+    checklistItemId: string
+    itemDescription: string
+  } | null>(null)
+  const [failedNcrDescription, setFailedNcrDescription] = useState('')
+  const [failedNcrCategory, setFailedNcrCategory] = useState('workmanship')
+  const [failedNcrSeverity, setFailedNcrSeverity] = useState('minor')
+  const [submittingFailed, setSubmittingFailed] = useState(false)
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -753,6 +772,176 @@ export function LotDetailPage() {
     }
   }
 
+  // Handle marking an ITP item as Not Applicable
+  const handleMarkAsNA = async () => {
+    if (!naModal || !itpInstance || !naReason.trim()) {
+      toast({
+        title: 'Reason required',
+        description: 'Please provide a reason for marking this item as N/A.',
+        variant: 'error'
+      })
+      return
+    }
+
+    const token = getAuthToken()
+    if (!token) return
+
+    setSubmittingNa(true)
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId: naModal.checklistItemId,
+          status: 'not_applicable',
+          notes: naReason.trim(),
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Update the completions in state
+        setItpInstance(prev => {
+          if (!prev) return prev
+          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === naModal.checklistItemId)
+          const newCompletions = [...prev.completions]
+          if (existingIndex >= 0) {
+            newCompletions[existingIndex] = data.completion
+          } else {
+            newCompletions.push(data.completion)
+          }
+          return { ...prev, completions: newCompletions }
+        })
+        toast({
+          title: 'Item marked as N/A',
+          description: 'The checklist item has been marked as not applicable.',
+        })
+        setNaModal(null)
+        setNaReason('')
+      } else {
+        const errData = await response.json()
+        toast({
+          title: 'Failed to mark as N/A',
+          description: errData.error || 'An error occurred. Please try again.',
+          variant: 'error'
+        })
+      }
+    } catch (err) {
+      console.error('Failed to mark as N/A:', err)
+      toast({
+        title: 'Failed to mark as N/A',
+        description: 'An error occurred. Please try again.',
+        variant: 'error'
+      })
+    } finally {
+      setSubmittingNa(false)
+    }
+  }
+
+  // Handle marking an ITP item as Failed (triggers NCR creation)
+  const handleMarkAsFailed = async () => {
+    if (!failedModal || !itpInstance || !failedNcrDescription.trim()) {
+      toast({
+        title: 'Description required',
+        description: 'Please provide a description for the NCR.',
+        variant: 'error'
+      })
+      return
+    }
+
+    const token = getAuthToken()
+    if (!token) return
+
+    setSubmittingFailed(true)
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId: failedModal.checklistItemId,
+          status: 'failed',
+          notes: `Failed: ${failedNcrDescription.trim()}`,
+          ncrDescription: failedNcrDescription.trim(),
+          ncrCategory: failedNcrCategory,
+          ncrSeverity: failedNcrSeverity,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Update the completions in state
+        setItpInstance(prev => {
+          if (!prev) return prev
+          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === failedModal.checklistItemId)
+          const newCompletions = [...prev.completions]
+          if (existingIndex >= 0) {
+            newCompletions[existingIndex] = data.completion
+          } else {
+            newCompletions.push(data.completion)
+          }
+          return { ...prev, completions: newCompletions }
+        })
+
+        // Refresh the lot data to reflect status change
+        const lotResponse = await fetch(`${apiUrl}/api/lots/${lotId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (lotResponse.ok) {
+          const lotData = await lotResponse.json()
+          setLot(lotData.lot)
+        }
+
+        // Refresh NCRs list
+        const ncrsResponse = await fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (ncrsResponse.ok) {
+          const ncrsData = await ncrsResponse.json()
+          setNcrs(ncrsData.ncrs || [])
+        }
+
+        toast({
+          title: 'Item marked as Failed - NCR created',
+          description: data.ncr
+            ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
+            : 'The item has been marked as failed.',
+        })
+        setFailedModal(null)
+        setFailedNcrDescription('')
+        setFailedNcrCategory('workmanship')
+        setFailedNcrSeverity('minor')
+      } else {
+        const errData = await response.json()
+        toast({
+          title: 'Failed to mark item',
+          description: errData.error || 'An error occurred. Please try again.',
+          variant: 'error'
+        })
+      }
+    } catch (err) {
+      console.error('Failed to mark as Failed:', err)
+      toast({
+        title: 'Failed to mark item',
+        description: 'An error occurred. Please try again.',
+        variant: 'error'
+      })
+    } finally {
+      setSubmittingFailed(false)
+    }
+  }
+
   // Handle adding a photo to an ITP completion
   const handleAddPhoto = async (completionId: string, checklistItemId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -1069,6 +1258,7 @@ export function LotDetailPage() {
 
     setAssigningSubcontractor(true)
     const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
       const response = await fetch(`${apiUrl}/api/lots/${lot.id}/assign`, {
@@ -1290,14 +1480,20 @@ export function LotDetailPage() {
                   </div>
                   {(() => {
                     const totalItems = itpInstance.template.checklistItems.length
+                    // Count both completed and N/A items as "finished"
                     const completedItems = itpInstance.completions.filter(c => c.isCompleted).length
-                    const percentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
+                    const naItems = itpInstance.completions.filter(c => c.isNotApplicable).length
+                    const finishedItems = completedItems + naItems
+                    const percentage = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0
                     return (
                       <>
                         <div className="w-full bg-gray-200 rounded-full h-2.5">
                           <div className="bg-primary h-2.5 rounded-full transition-all" style={{ width: `${percentage}%` }}></div>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-2">{completedItems} of {totalItems} checklist items completed ({percentage}%)</p>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          {finishedItems} of {totalItems} checklist items completed ({percentage}%)
+                          {naItems > 0 && <span className="text-gray-500"> • {naItems} N/A</span>}
+                        </p>
                       </>
                     )
                   })()}
@@ -1320,30 +1516,37 @@ export function LotDetailPage() {
                       .filter((item) => {
                         if (!showIncompleteOnly) return true
                         const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
-                        return !completion?.isCompleted
+                        // Treat completed, N/A, and failed items as "finished"
+                        return !completion?.isCompleted && !completion?.isNotApplicable && !completion?.isFailed
                       })
                       .map((item) => {
                       const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
                       const isCompleted = completion?.isCompleted || false
+                      const isNotApplicable = completion?.isNotApplicable || false
+                      const isFailed = completion?.isFailed || false
                       const notes = completion?.notes || ''
 
                       return (
-                        <div key={item.id} className="p-4">
+                        <div key={item.id} className={`p-4 ${isNotApplicable ? 'bg-gray-50 dark:bg-gray-900/30' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''}`}>
                           <div className="flex items-start gap-3">
                             <button
-                              onClick={() => handleToggleCompletion(item.id, isCompleted, notes)}
-                              disabled={updatingCompletion === item.id}
-                              aria-label={isCompleted ? `Mark "${item.description}" as incomplete` : `Mark "${item.description}" as complete`}
+                              onClick={() => !isNotApplicable && !isFailed && handleToggleCompletion(item.id, isCompleted, notes)}
+                              disabled={updatingCompletion === item.id || isNotApplicable || isFailed}
+                              aria-label={isFailed ? 'Failed' : isNotApplicable ? 'Not Applicable' : isCompleted ? `Mark "${item.description}" as incomplete` : `Mark "${item.description}" as complete`}
                               className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                isCompleted
+                                isFailed
+                                  ? 'bg-red-500 border-red-500 text-white cursor-not-allowed'
+                                  : isNotApplicable
+                                  ? 'bg-gray-400 border-gray-400 text-white cursor-not-allowed'
+                                  : isCompleted
                                   ? 'bg-green-500 border-green-500 text-white'
                                   : 'border-gray-300 hover:border-primary'
                               } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
                             >
-                              {isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
+                              {isFailed ? <span className="text-[10px] font-bold" aria-hidden="true">✗</span> : isNotApplicable ? <span className="text-[10px] font-bold" aria-hidden="true">—</span> : isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
                             </button>
                             <div className="flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 {/* Point type indicator: S=Standard, W=Witness, H=Hold */}
                                 <span className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded ${
                                   item.pointType === 'hold_point'
@@ -1354,9 +1557,13 @@ export function LotDetailPage() {
                                 }`} title={item.pointType === 'hold_point' ? 'Hold Point' : item.pointType === 'witness' ? 'Witness Point' : 'Standard Point'}>
                                   {item.pointType === 'hold_point' ? 'H' : item.pointType === 'witness' ? 'W' : 'S'}
                                 </span>
-                                <span className={`font-medium ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
+                                <span className={`font-medium ${isCompleted || isNotApplicable ? 'line-through text-muted-foreground' : ''}`}>
                                   {item.order}. {item.description}
                                 </span>
+                                {/* N/A Badge */}
+                                {isNotApplicable && (
+                                  <span className="text-xs bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded font-medium">N/A</span>
+                                )}
                                 {item.isHoldPoint && (
                                   <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Hold Point</span>
                                 )}
@@ -1472,7 +1679,7 @@ export function LotDetailPage() {
                                 )}
 
                                 {/* Add Photo Button */}
-                                {completion?.id && (
+                                {completion?.id && !isNotApplicable && (
                                   <label className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 cursor-pointer">
                                     <span>📷</span>
                                     <span>Add Photo</span>
@@ -1484,10 +1691,55 @@ export function LotDetailPage() {
                                     />
                                   </label>
                                 )}
-                                {!completion?.id && (
+                                {!completion?.id && !isNotApplicable && (
                                   <span className="text-xs text-muted-foreground italic">
                                     Complete the item first to attach photos
                                   </span>
+                                )}
+
+                                {/* Mark as N/A and Mark as Failed Buttons - only show for pending items */}
+                                {!isCompleted && !isNotApplicable && !isFailed && (
+                                  <div className="flex items-center gap-2 ml-3">
+                                    <button
+                                      onClick={() => setNaModal({ checklistItemId: item.id, itemDescription: item.description })}
+                                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                                      title="Mark this item as Not Applicable"
+                                    >
+                                      <span>—</span>
+                                      <span>Mark as N/A</span>
+                                    </button>
+                                    <button
+                                      onClick={() => setFailedModal({ checklistItemId: item.id, itemDescription: item.description })}
+                                      className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                                      title="Mark this item as Failed and raise an NCR"
+                                    >
+                                      <span>✗</span>
+                                      <span>Mark as Failed</span>
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Show N/A reason */}
+                                {isNotApplicable && notes && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    <span className="font-medium">Reason:</span> {notes}
+                                  </p>
+                                )}
+
+                                {/* Show Failed status with NCR link */}
+                                {isFailed && (
+                                  <p className="text-xs text-red-600 mt-1">
+                                    <span className="font-medium">⚠️ Failed</span>
+                                    {notes && `: ${notes}`}
+                                    {completion?.linkedNcr && (
+                                      <a
+                                        href={`/projects/${projectId}/ncr`}
+                                        className="ml-2 underline hover:text-red-800"
+                                      >
+                                        View NCR {completion.linkedNcr.ncrNumber}
+                                      </a>
+                                    )}
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -2344,6 +2596,155 @@ export function LotDetailPage() {
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
               >
                 Complete Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark as N/A Modal */}
+      {naModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                <span className="text-xl font-bold">—</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Mark as Not Applicable</h2>
+                <p className="text-sm text-muted-foreground">This item will be skipped</p>
+              </div>
+            </div>
+
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm font-medium">{naModal.itemDescription}</p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">
+                Reason for N/A <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={naReason}
+                onChange={(e) => setNaReason(e.target.value)}
+                placeholder="Enter reason why this item is not applicable..."
+                className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent resize-none"
+                rows={3}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                A reason is required to mark an item as N/A
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setNaModal(null)
+                  setNaReason('')
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+                disabled={submittingNa}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMarkAsNA}
+                disabled={submittingNa || !naReason.trim()}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submittingNa ? 'Saving...' : 'Mark as N/A'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark as Failed Modal - Creates NCR */}
+      {failedModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400">
+                <span className="text-xl font-bold">✗</span>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Mark as Failed</h2>
+                <p className="text-sm text-muted-foreground">This will raise an NCR</p>
+              </div>
+            </div>
+
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+              <p className="text-sm font-medium">{failedModal.itemDescription}</p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  NCR Description <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={failedNcrDescription}
+                  onChange={(e) => setFailedNcrDescription(e.target.value)}
+                  placeholder="Describe the non-conformance..."
+                  className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent resize-none"
+                  rows={3}
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Category
+                </label>
+                <select
+                  value={failedNcrCategory}
+                  onChange={(e) => setFailedNcrCategory(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
+                >
+                  <option value="workmanship">Workmanship</option>
+                  <option value="material">Material</option>
+                  <option value="design">Design</option>
+                  <option value="documentation">Documentation</option>
+                  <option value="process">Process</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Severity
+                </label>
+                <select
+                  value={failedNcrSeverity}
+                  onChange={(e) => setFailedNcrSeverity(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
+                >
+                  <option value="minor">Minor</option>
+                  <option value="major">Major (requires QM approval to close)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setFailedModal(null)
+                  setFailedNcrDescription('')
+                  setFailedNcrCategory('workmanship')
+                  setFailedNcrSeverity('minor')
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+                disabled={submittingFailed}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMarkAsFailed}
+                disabled={submittingFailed || !failedNcrDescription.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submittingFailed ? 'Creating NCR...' : 'Mark as Failed & Raise NCR'}
               </button>
             </div>
           </div>

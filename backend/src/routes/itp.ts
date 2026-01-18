@@ -74,10 +74,10 @@ async function updateLotStatusFromITP(itpInstanceId: string) {
       return
     }
 
-    // Count completed items
+    // Count completed items (including N/A items as "finished")
     const completedItemIds = new Set(
       instance.completions
-        .filter(c => c.status === 'completed')
+        .filter(c => c.status === 'completed' || c.status === 'not_applicable')
         .map(c => c.checklistItemId)
     )
 
@@ -729,7 +729,9 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
       template: templateData,
       completions: instance.completions.map(c => ({
         ...c,
-        isCompleted: c.status === 'completed',
+        isCompleted: c.status === 'completed' || c.status === 'not_applicable',
+        isNotApplicable: c.status === 'not_applicable',
+        isFailed: c.status === 'failed',
         isVerified: c.verificationStatus === 'verified',
         attachments: (c as any).attachments?.map((a: any) => ({
           id: a.id,
@@ -746,18 +748,43 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
   }
 })
 
-// Complete/update a checklist item
+// Complete/update a checklist item (supports N/A and Failed status with reason)
 itpRouter.post('/completions', requireAuth, async (req: any, res) => {
   try {
     const user = req.user as AuthUser
-    const { itpInstanceId, checklistItemId, isCompleted, notes } = req.body
+    const {
+      itpInstanceId,
+      checklistItemId,
+      isCompleted,
+      notes,
+      status: directStatus,
+      // NCR details for failed status
+      ncrDescription,
+      ncrCategory,
+      ncrSeverity
+    } = req.body
 
     if (!itpInstanceId || !checklistItemId) {
       return res.status(400).json({ error: 'itpInstanceId and checklistItemId are required' })
     }
 
-    // Determine status based on isCompleted flag
-    const newStatus = isCompleted ? 'completed' : 'pending'
+    // Validate N/A status requires a reason
+    if (directStatus === 'not_applicable' && !notes?.trim()) {
+      return res.status(400).json({ error: 'A reason is required when marking an item as N/A' })
+    }
+
+    // Validate failed status requires NCR description
+    if (directStatus === 'failed' && !ncrDescription?.trim()) {
+      return res.status(400).json({ error: 'NCR description is required when marking an item as Failed' })
+    }
+
+    // Determine status - direct status takes precedence, then isCompleted flag
+    let newStatus: string
+    if (directStatus) {
+      newStatus = directStatus
+    } else {
+      newStatus = isCompleted ? 'completed' : 'pending'
+    }
 
     // Check if completion already exists
     const existingCompletion = await prisma.iTPCompletion.findFirst({
@@ -767,16 +794,19 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       }
     })
 
+    // Determine completedAt and completedById based on status
+    const isFinished = newStatus === 'completed' || newStatus === 'not_applicable' || newStatus === 'failed'
+
     let completion
     if (existingCompletion) {
       // Update existing completion
       completion = await prisma.iTPCompletion.update({
         where: { id: existingCompletion.id },
         data: {
-          status: isCompleted !== undefined ? newStatus : existingCompletion.status,
+          status: newStatus,
           notes: notes ?? existingCompletion.notes,
-          completedAt: isCompleted ? new Date() : (isCompleted === false ? null : existingCompletion.completedAt),
-          completedById: isCompleted ? user.userId : (isCompleted === false ? null : existingCompletion.completedById)
+          completedAt: isFinished ? new Date() : null,
+          completedById: isFinished ? user.userId : null
         },
         include: {
           completedBy: {
@@ -784,7 +814,9 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           },
           verifiedBy: {
             select: { id: true, fullName: true, email: true }
-          }
+          },
+          attachments: true,
+          checklistItem: true
         }
       })
     } else {
@@ -795,8 +827,8 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           checklistItemId,
           status: newStatus,
           notes: notes || null,
-          completedAt: isCompleted ? new Date() : null,
-          completedById: isCompleted ? user.userId : null
+          completedAt: isFinished ? new Date() : null,
+          completedById: isFinished ? user.userId : null
         },
         include: {
           completedBy: {
@@ -804,24 +836,97 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           },
           verifiedBy: {
             select: { id: true, fullName: true, email: true }
-          }
+          },
+          attachments: true,
+          checklistItem: true
         }
       })
     }
 
-    // Auto-progress lot status based on ITP completion state
-    if (isCompleted) {
+    // If status is 'failed', create an NCR linked to the lot
+    let createdNcr = null
+    if (newStatus === 'failed') {
+      // Get the ITP instance to find the lot and project
+      const itpInstance = await prisma.iTPInstance.findUnique({
+        where: { id: itpInstanceId },
+        include: {
+          lot: true,
+          template: true
+        }
+      })
+
+      if (itpInstance && itpInstance.lot) {
+        const lot = itpInstance.lot
+
+        // Get checklist item description for NCR context
+        const checklistItemDescription = (completion as any).checklistItem?.description || 'ITP checklist item'
+
+        // Generate NCR number
+        const existingNcrCount = await prisma.nCR.count({
+          where: { projectId: lot.projectId }
+        })
+        const ncrNumber = `NCR-${String(existingNcrCount + 1).padStart(4, '0')}`
+
+        // Determine if major NCR requires QM approval
+        const isMajor = ncrSeverity === 'major'
+
+        // Create the NCR
+        createdNcr = await prisma.nCR.create({
+          data: {
+            projectId: lot.projectId,
+            ncrNumber,
+            description: ncrDescription || `ITP item failed: ${checklistItemDescription}`,
+            specificationReference: itpInstance.template?.specificationReference || null,
+            category: ncrCategory || 'workmanship',
+            severity: ncrSeverity || 'minor',
+            qmApprovalRequired: isMajor,
+            raisedById: user.userId,
+            // Store ITP item reference in rectification notes for traceability
+            rectificationNotes: `Raised from ITP checklist item: ${checklistItemDescription} (Item ID: ${checklistItemId})`,
+            ncrLots: {
+              create: [{
+                lotId: lot.id
+              }]
+            }
+          },
+          include: {
+            project: { select: { name: true } },
+            raisedBy: { select: { fullName: true, email: true } },
+            ncrLots: {
+              include: {
+                lot: { select: { lotNumber: true } }
+              }
+            }
+          }
+        })
+
+        // Update lot status to ncr_raised
+        await prisma.lot.update({
+          where: { id: lot.id },
+          data: { status: 'ncr_raised' }
+        })
+
+        console.log(`Created NCR ${ncrNumber} for failed ITP item: ${checklistItemDescription}`)
+      }
+    }
+
+    // Auto-progress lot status based on ITP completion state (but not for failed items)
+    if (isFinished && newStatus !== 'failed') {
       await updateLotStatusFromITP(itpInstanceId)
     }
 
-    // Transform to frontend-friendly format (add isCompleted and isVerified)
+    // Transform to frontend-friendly format
     const transformedCompletion = {
       ...completion,
-      isCompleted: completion.status === 'completed',
-      isVerified: completion.verificationStatus === 'verified'
+      isCompleted: completion.status === 'completed' || completion.status === 'not_applicable',
+      isNotApplicable: completion.status === 'not_applicable',
+      isFailed: completion.status === 'failed',
+      isVerified: completion.verificationStatus === 'verified',
+      attachments: (completion as any).attachments || [],
+      linkedNcr: createdNcr
     }
 
-    res.json({ completion: transformedCompletion })
+    res.json({ completion: transformedCompletion, ncr: createdNcr })
   } catch (error) {
     console.error('Error updating ITP completion:', error)
     res.status(500).json({ error: 'Failed to update completion' })
