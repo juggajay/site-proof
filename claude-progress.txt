@@ -2943,11 +2943,48 @@ Date: 2026-01-18
 - feature-1001-multi-session-device-a.png - Tab 1 on Projects page
 - feature-1001-multi-session-device-b.png - Tab 2 on Dashboard page
 
+### Feature #1002: Session logout all devices - PASSING
+- IMPLEMENTED: Logout all devices functionality with token invalidation
+- Implementation details:
+  1. Backend changes:
+     - Added token_invalidated_at column to users table (via migration script)
+     - Modified verifyToken() in auth.ts to check token issue time (iat) against invalidation time
+     - Tokens issued before the invalidation time are rejected with 401
+     - Added /api/auth/logout-all-devices endpoint
+  2. Frontend changes:
+     - Added "Logout All Devices" button to ProfilePage with red styling
+     - Button shows LogOut icon and loading state during operation
+     - Confirmation dialog before executing logout
+     - Shows success toast and redirects to login after completion
+  3. Token invalidation mechanism:
+     - When logout-all-devices is called, token_invalidated_at is set to current time
+     - All existing JWTs issued before this time are invalidated
+     - SQLite stores dates as strings, so conversion is handled properly
+- Testing performed (All Steps Verified):
+  1. Step 1: Have multiple sessions - Logged in on Tab 1 (Device A) and Tab 2 (Device B)
+  2. Step 2: Logout all devices - Clicked "Logout All Devices" button, API returned 200
+  3. Step 3: Verify all sessions ended - Both Tab 1 and Tab 2 redirected to login
+  4. Step 4: "Your session has expired" message shown on login page
+
+## FILES MODIFIED THIS SESSION (Feature #1002)
+- backend/src/lib/auth.ts - Added token invalidation check in verifyToken()
+- backend/src/routes/auth.ts - Added /api/auth/logout-all-devices endpoint
+- frontend/src/pages/profile/ProfilePage.tsx - Added Logout All Devices button and handler
+- backend/scripts/add-token-invalidated-column.js (NEW) - Migration script for database
+
+## SCREENSHOTS CAPTURED (Feature #1002)
+- feature-1002-logout-all-devices-button.png - Button visible on Profile page
+- feature-1002-session-expired-redirect.png - Login page with session expired message
+- feature-1002-both-sessions-logged-out.png - Both tabs logged out
+
+## GIT COMMITS (Feature #1002)
+- 7096ad3: feat: Add logout all devices functionality (Feature #1002)
+
 ## FEATURE STATISTICS (Updated)
 - Total Features: 1035
-- Passing: 528 (51.0%)
+- Passing: 529 (51.1%)
 - In Progress: 0
-- Pending: 507
+- Pending: 506
 
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
@@ -2955,5 +2992,5 @@ Date: 2026-01-18
 3. Run regression tests on critical features
 
 ================================================================================
-END OF SESSION 32 SUMMARY
+END OF SESSION 32 SUMMARY (continued)
 ================================================================================
