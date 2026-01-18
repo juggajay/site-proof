@@ -58,12 +58,18 @@ projectsRouter.get('/', async (req, res) => {
         status: true,
         startDate: true,
         targetCompletion: true,
+        contractValue: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
     })
 
-    res.json({ projects })
+    // Hide contract values from subcontractors (commercial isolation)
+    const sanitizedProjects = isSubcontractor
+      ? projects.map(p => ({ ...p, contractValue: null }))
+      : projects
+
+    res.json({ projects: sanitizedProjects })
   } catch (error) {
     console.error('Get projects error:', error)
     res.status(500).json({ error: 'Internal server error' })

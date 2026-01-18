@@ -40,6 +40,7 @@ import { ProfilePage } from '@/pages/profile/ProfilePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { CostsPage } from '@/pages/costs/CostsPage'
 import { CompanySettingsPage } from '@/pages/company/CompanySettingsPage'
+import { PortfolioPage } from '@/pages/portfolio/PortfolioPage'
 
 // Admin-only roles
 const ADMIN_ROLES = ['owner', 'admin', 'project_manager']
@@ -76,6 +77,16 @@ function App() {
         >
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+
+          {/* Portfolio - Admin Only */}
+          <Route
+            path="/portfolio"
+            element={
+              <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                <PortfolioPage />
+              </RoleProtectedRoute>
+            }
+          />
 
           {/* Projects */}
           <Route path="/projects" element={<ProjectsPage />} />
