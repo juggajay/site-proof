@@ -414,6 +414,21 @@ export function HoldPointsPage() {
     ? holdPoints
     : holdPoints.filter(hp => hp.status === statusFilter)
 
+  // Calculate summary stats (Feature #191)
+  const stats = {
+    total: holdPoints.length,
+    pending: holdPoints.filter(hp => hp.status === 'pending').length,
+    notified: holdPoints.filter(hp => hp.status === 'notified').length,
+    releasedThisWeek: holdPoints.filter(hp => {
+      if (hp.status !== 'released' || !hp.releasedAt) return false
+      const releasedDate = new Date(hp.releasedAt)
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      return releasedDate >= weekAgo
+    }).length,
+    overdue: holdPoints.filter(hp => isOverdue(hp)).length
+  }
+
   // Export hold points to CSV
   const handleExportCSV = () => {
     const headers = ['Lot', 'Description', 'Point Type', 'Status', 'Scheduled Date', 'Released At', 'Released By', 'Release Notes']
@@ -469,6 +484,35 @@ export function HoldPointsPage() {
           </div>
         )}
       </div>
+
+      {/* Summary Cards (Feature #191) */}
+      {!loading && holdPoints.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Total HPs</div>
+            <div className="text-2xl font-bold mt-1">{stats.total}</div>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Pending</div>
+            <div className="text-2xl font-bold mt-1 text-gray-600">{stats.pending}</div>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Awaiting Release</div>
+            <div className="text-2xl font-bold mt-1 text-amber-600">
+              {stats.notified}
+              {stats.overdue > 0 && (
+                <span className="ml-2 text-sm font-normal text-red-600">
+                  ({stats.overdue} overdue)
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-sm text-muted-foreground">Released This Week</div>
+            <div className="text-2xl font-bold mt-1 text-green-600">{stats.releasedThisWeek}</div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center p-8">
