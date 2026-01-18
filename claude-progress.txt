@@ -2703,3 +2703,76 @@ Date: 2026-01-18
 ================================================================================
 END OF SESSION 31 SUMMARY
 ================================================================================
+
+================================================================================
+Session: 32 (Coding Agent)
+Date: 2026-01-18
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #994: Terms of service acceptance - PASSING
+- IMPLEMENTED: Complete ToS acceptance requirement for user registration
+- Implementation details:
+  1. Added tosAcceptedAt and tosVersion fields to User model in Prisma schema
+  2. Backend registration endpoint now requires `tosAccepted: true`
+     - Returns 400 error: "You must accept the Terms of Service to create an account"
+  3. Frontend RegisterPage updated with:
+     - ToS checkbox in bordered container with document icon
+     - Links to Terms of Service and Privacy Policy
+     - "Create Account" button disabled until ToS checkbox is checked
+  4. ToS acceptance recorded using raw SQL (to handle Prisma client regeneration issues):
+     - tos_accepted_at: timestamp of acceptance
+     - tos_version: "1.0" (current version)
+
+### Testing Performed (All Steps Verified)
+1. Step 1: New user registration - Form accepts valid registration data
+2. Step 2: Verify ToS shown - Checkbox visible with links to Terms and Privacy Policy
+3. Step 3: Must accept to proceed - Button disabled until checkbox checked
+4. Step 4: Acceptance recorded - Database stores tos_accepted_at and tos_version
+
+### Regression Testing
+- Login functionality verified working
+- Dashboard loads correctly after login
+
+### Environment Changes
+- Updated frontend/.env: VITE_API_URL changed to port 4000
+- Updated backend/.env: PORT changed to 4000
+
+## FILES CREATED/MODIFIED THIS SESSION
+- backend/prisma/schema.prisma
+  - Added tosAcceptedAt and tosVersion fields to User model
+- backend/src/routes/auth.ts
+  - Added CURRENT_TOS_VERSION constant
+  - Added tosAccepted validation in register endpoint
+  - Added raw SQL update to record ToS acceptance
+- frontend/src/pages/auth/RegisterPage.tsx
+  - Added tosAccepted state
+  - Added ToS checkbox with styled container
+  - Added validation in handleSubmit
+  - Disabled button until ToS accepted
+- backend/scripts/check-tos-acceptance.js (NEW) - Utility to verify ToS acceptance
+
+## SCREENSHOTS CAPTURED
+- evidence/feature-994-tos-checkbox-visible.png - ToS checkbox in registration form
+- evidence/feature-994-button-disabled-without-tos.png - Button disabled without ToS
+- evidence/feature-994-tos-accepted-button-enabled.png - Button enabled after ToS accepted
+- evidence/feature-994-registration-success.png - Registration success page
+
+## GIT COMMITS
+- d2dcec4: feat: Add Terms of Service acceptance requirement (Feature #994)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 521 (50.3%)
+- In Progress: 0
+- Pending: 514
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining features
+3. Run regression tests on critical features
+
+================================================================================
+END OF SESSION 32 SUMMARY
+================================================================================
