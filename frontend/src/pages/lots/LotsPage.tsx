@@ -553,7 +553,7 @@ export function LotsPage() {
   }
 
   // Open/close create lot modal
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = async () => {
     setNewLot({
       lotNumber: '',
       description: '',
@@ -563,6 +563,25 @@ export function LotsPage() {
     })
     setChainageError(null)
     setCreateModalOpen(true)
+
+    // Fetch suggested lot number
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    if (projectId && token) {
+      try {
+        const response = await fetch(`${apiUrl}/api/lots/suggest-number?projectId=${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.suggestedNumber) {
+            setNewLot(prev => ({ ...prev, lotNumber: data.suggestedNumber }))
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch suggested lot number:', err)
+      }
+    }
   }
 
   const handleCloseCreateModal = () => {

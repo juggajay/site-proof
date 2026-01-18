@@ -89,6 +89,83 @@ lotsRouter.get('/', async (req, res) => {
   }
 })
 
+// GET /api/lots/suggest-number - Get suggested next lot number for a project
+lotsRouter.get('/suggest-number', async (req, res) => {
+  try {
+    const { projectId } = req.query
+    const user = req.user!
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' })
+    }
+
+    // Verify user has access to the project
+    const projectAccess = await prisma.projectUser.findFirst({
+      where: { projectId: projectId as string, userId: user.id }
+    })
+
+    if (!projectAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    // Get project settings
+    const project = await prisma.project.findUnique({
+      where: { id: projectId as string },
+      select: {
+        lotPrefix: true,
+        lotStartingNumber: true
+      }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    const prefix = project.lotPrefix || 'LOT-'
+    const startingNumber = project.lotStartingNumber || 1
+
+    // Find the highest existing lot number with this prefix
+    const existingLots = await prisma.lot.findMany({
+      where: {
+        projectId: projectId as string,
+        lotNumber: { startsWith: prefix }
+      },
+      select: { lotNumber: true },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    let nextNumber = startingNumber
+
+    if (existingLots.length > 0) {
+      // Extract numbers from existing lot numbers and find the highest
+      const numbers = existingLots
+        .map(lot => {
+          const match = lot.lotNumber.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`))
+          return match ? parseInt(match[1], 10) : 0
+        })
+        .filter(n => !isNaN(n) && n > 0)
+
+      if (numbers.length > 0) {
+        nextNumber = Math.max(...numbers) + 1
+      }
+    }
+
+    // Pad with zeros to match the starting number format
+    const paddingLength = Math.max(String(startingNumber).length, String(nextNumber).length, 3)
+    const suggestedNumber = `${prefix}${String(nextNumber).padStart(paddingLength, '0')}`
+
+    res.json({
+      suggestedNumber,
+      prefix,
+      nextNumber,
+      startingNumber
+    })
+  } catch (error) {
+    console.error('Suggest lot number error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/lots/:id - Get a single lot
 lotsRouter.get('/:id', async (req, res) => {
   try {
