@@ -76,6 +76,10 @@ export function DocumentsPage() {
   const [dateTo, setDateTo] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Viewer modal state
+  const [viewerDoc, setViewerDoc] = useState<Document | null>(null)
+  const [viewerZoom, setViewerZoom] = useState(100)
+
   useEffect(() => {
     if (projectId) {
       fetchDocuments()
@@ -243,6 +247,27 @@ export function DocumentsPage() {
   const isImage = (mimeType: string | null) => {
     return mimeType?.startsWith('image/')
   }
+
+  const isPdf = (mimeType: string | null) => {
+    return mimeType === 'application/pdf'
+  }
+
+  const canPreview = (mimeType: string | null) => {
+    return isImage(mimeType) || isPdf(mimeType)
+  }
+
+  const openViewer = (doc: Document) => {
+    setViewerDoc(doc)
+    setViewerZoom(100)
+  }
+
+  const closeViewer = () => {
+    setViewerDoc(null)
+    setViewerZoom(100)
+  }
+
+  const zoomIn = () => setViewerZoom(prev => Math.min(prev + 25, 200))
+  const zoomOut = () => setViewerZoom(prev => Math.max(prev - 25, 50))
 
   return (
     <div className="space-y-6">
@@ -444,6 +469,18 @@ export function DocumentsPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
+                  {canPreview(doc.mimeType) && (
+                    <button
+                      onClick={() => openViewer(doc)}
+                      className="rounded-md p-2 hover:bg-blue-100 text-blue-600"
+                      title="View"
+                    >
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    </button>
+                  )}
                   <a
                     href={`${API_URL}${doc.fileUrl}`}
                     target="_blank"
@@ -588,6 +625,121 @@ export function DocumentsPage() {
               >
                 {uploading ? 'Uploading...' : 'Upload'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Viewer Modal */}
+      {viewerDoc && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/90">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-black/50 text-white">
+            <div className="flex items-center gap-4">
+              <h3 className="font-medium truncate max-w-md">{viewerDoc.filename}</h3>
+              <span className="text-sm text-gray-300">
+                {formatFileSize(viewerDoc.fileSize)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Zoom Controls */}
+              <button
+                onClick={zoomOut}
+                disabled={viewerZoom <= 50}
+                className="rounded-md p-2 hover:bg-white/20 disabled:opacity-50"
+                title="Zoom Out"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                </svg>
+              </button>
+              <span className="text-sm w-12 text-center">{viewerZoom}%</span>
+              <button
+                onClick={zoomIn}
+                disabled={viewerZoom >= 200}
+                className="rounded-md p-2 hover:bg-white/20 disabled:opacity-50"
+                title="Zoom In"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                </svg>
+              </button>
+              {/* Download */}
+              <a
+                href={`${API_URL}${viewerDoc.fileUrl}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md p-2 hover:bg-white/20"
+                title="Download"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </a>
+              {/* Close */}
+              <button
+                onClick={closeViewer}
+                className="rounded-md p-2 hover:bg-white/20 ml-2"
+                title="Close"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+            {isPdf(viewerDoc.mimeType) ? (
+              <iframe
+                src={`${API_URL}${viewerDoc.fileUrl}#toolbar=1&navpanes=0`}
+                className="bg-white rounded shadow-lg"
+                style={{
+                  width: `${viewerZoom}%`,
+                  height: '90vh',
+                  maxWidth: '100%',
+                }}
+                title={viewerDoc.filename}
+              />
+            ) : isImage(viewerDoc.mimeType) ? (
+              <div
+                className="overflow-auto max-h-[90vh]"
+                style={{ cursor: 'grab' }}
+              >
+                <img
+                  src={`${API_URL}${viewerDoc.fileUrl}`}
+                  alt={viewerDoc.filename}
+                  className="rounded shadow-lg transition-transform"
+                  style={{
+                    transform: `scale(${viewerZoom / 100})`,
+                    transformOrigin: 'center',
+                    maxWidth: viewerZoom <= 100 ? '100%' : 'none',
+                  }}
+                  draggable={false}
+                />
+              </div>
+            ) : (
+              <div className="text-white text-center">
+                <p>Preview not available for this file type</p>
+                <a
+                  href={`${API_URL}${viewerDoc.fileUrl}`}
+                  className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm"
+                  download
+                >
+                  Download File
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* Document Info Footer */}
+          <div className="px-4 py-2 bg-black/50 text-white text-sm">
+            <div className="flex items-center gap-4">
+              {viewerDoc.caption && <span>{viewerDoc.caption}</span>}
+              {viewerDoc.uploadedBy && <span>Uploaded by {viewerDoc.uploadedBy.fullName}</span>}
+              <span>{formatDate(viewerDoc.uploadedAt)}</span>
+              {viewerDoc.lot && <span>Lot {viewerDoc.lot.lotNumber}</span>}
             </div>
           </div>
         </div>
