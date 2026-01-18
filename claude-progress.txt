@@ -2871,11 +2871,34 @@ Date: 2026-01-18
   4. Step 4: Verify received - Backend logged request, success message displayed
 - Backend confirmed receiving: category: "feature", subject, message, userEmail
 
+### Feature #999: App version display - PASSING
+- IMPLEMENTED: "About SiteProof" section in Settings page
+- Implementation details:
+  1. Added version constants to SettingsPage.tsx:
+     - APP_VERSION: "1.3.0"
+     - BUILD_DATE: "2026-01-18"
+     - BUILD_NUMBER: "20260118.1"
+  2. Created About section with Info icon showing:
+     - Version number (1.3.0)
+     - Build date (2026-01-18)
+     - Build number (20260118.1)
+     - Copyright notice
+- Testing performed (All Steps Verified):
+  1. Step 1: Check footer or about - About section in Settings page
+  2. Step 2: Verify version number shown - "1.3.0" displayed
+  3. Step 3: Verify build info if applicable - Build Date and Build Number shown
+
+## FILES MODIFIED THIS SESSION (Feature #999)
+- frontend/src/pages/settings/SettingsPage.tsx - Added About SiteProof section
+
+## GIT COMMITS (Feature #999)
+- ef3d3e5: feat: Add app version display to Settings page (Feature #999)
+
 ## FEATURE STATISTICS (Updated)
 - Total Features: 1035
-- Passing: 525 (50.7%)
+- Passing: 526 (50.8%)
 - In Progress: 0
-- Pending: 510
+- Pending: 509
 
 ## NEXT STEPS FOR FUTURE SESSIONS
 1. Get next feature with feature_get_next()
