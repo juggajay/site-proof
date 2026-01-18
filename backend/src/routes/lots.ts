@@ -189,8 +189,22 @@ lotsRouter.get('/:id', async (req, res) => {
         areaZone: true,
         projectId: true,
         assignedSubcontractorId: true,
+        assignedSubcontractor: {
+          select: {
+            id: true,
+            companyName: true,
+          },
+        },
         createdAt: true,
         updatedAt: true,
+        conformedAt: true,
+        conformedBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
         _count: {
           select: {
             testResults: true,
@@ -979,6 +993,140 @@ lotsRouter.post('/bulk-assign-subcontractor', requireRole(LOT_CREATORS), async (
     })
   } catch (error) {
     console.error('Bulk assign subcontractor error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/lots/:id/assign - Assign a subcontractor to a lot with notification
+lotsRouter.post('/:id/assign', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { subcontractorId } = req.body
+
+    // Get the lot with project info
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        lotNumber: true,
+        description: true,
+        status: true,
+        projectId: true,
+        assignedSubcontractorId: true,
+      },
+    })
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Don't allow assigning claimed lots
+    if (lot.status === 'claimed') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Cannot assign a claimed lot',
+      })
+    }
+
+    // Check user permission (only PMs and above can assign)
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: lot.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const userRole = projectUser?.role || user.roleInCompany
+    const canAssign = ['owner', 'admin', 'project_manager', 'site_manager'].includes(userRole)
+
+    if (!canAssign) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to assign lots',
+      })
+    }
+
+    // Update the lot
+    const updatedLot = await prisma.lot.update({
+      where: { id },
+      data: {
+        assignedSubcontractorId: subcontractorId || null,
+        updatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        lotNumber: true,
+        description: true,
+        status: true,
+        assignedSubcontractorId: true,
+        assignedSubcontractor: {
+          select: {
+            id: true,
+            companyName: true,
+          },
+        },
+      },
+    })
+
+    // If assigning (not unassigning), send notifications to subcontractor users
+    if (subcontractorId) {
+      // Find all users linked to this subcontractor company
+      const subcontractorUsers = await prisma.subcontractorUser.findMany({
+        where: {
+          subcontractorCompanyId: subcontractorId,
+        },
+        select: {
+          userId: true,
+        },
+      })
+
+      if (subcontractorUsers.length > 0) {
+        // Get assigner info
+        const assignerName = user.fullName || user.email || 'A project manager'
+
+        // Create notifications for all subcontractor users
+        await prisma.notification.createMany({
+          data: subcontractorUsers.map(su => ({
+            userId: su.userId,
+            projectId: lot.projectId,
+            type: 'lot_assigned',
+            title: 'Lot Assigned to Your Company',
+            message: `${assignerName} assigned lot ${lot.lotNumber}${lot.description ? ` (${lot.description})` : ''} to your company.`,
+            linkUrl: `/projects/${lot.projectId}/lots/${lot.id}`,
+          })),
+        })
+      }
+
+      // Record in audit log
+      await prisma.auditLog.create({
+        data: {
+          projectId: lot.projectId,
+          userId: user.id,
+          entityType: 'Lot',
+          entityId: id,
+          action: 'subcontractor_assigned',
+          changes: JSON.stringify({
+            lotNumber: lot.lotNumber,
+            subcontractorId,
+            subcontractorName: updatedLot.assignedSubcontractor?.companyName,
+            previousSubcontractorId: lot.assignedSubcontractorId,
+            assignedBy: user.email,
+          }),
+        },
+      })
+    }
+
+    res.json({
+      message: subcontractorId
+        ? `Lot assigned to ${updatedLot.assignedSubcontractor?.companyName || 'subcontractor'}`
+        : 'Lot unassigned from subcontractor',
+      lot: updatedLot,
+      notificationsSent: subcontractorId ? true : false,
+    })
+  } catch (error) {
+    console.error('Assign subcontractor error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

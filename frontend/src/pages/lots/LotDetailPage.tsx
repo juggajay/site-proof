@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
-import { Link2, Check, RefreshCw, FileText } from 'lucide-react'
+import { Link2, Check, RefreshCw, FileText, Users } from 'lucide-react'
 import { generateConformanceReportPDF, ConformanceReportData } from '@/lib/pdfGenerator'
 
 // Tab types for lot detail page
@@ -50,6 +50,17 @@ interface Lot {
     fullName: string | null
     email: string
   } | null
+  assignedSubcontractorId: string | null
+  assignedSubcontractor?: {
+    id: string
+    companyName: string
+  } | null
+}
+
+interface SubcontractorCompany {
+  id: string
+  companyName: string
+  status: string
 }
 
 interface TestResult {
@@ -244,6 +255,10 @@ export function LotDetailPage() {
   const [overrideReason, setOverrideReason] = useState('')
   const [overriding, setOverriding] = useState(false)
   const [generatingReport, setGeneratingReport] = useState(false)
+  const [showSubcontractorModal, setShowSubcontractorModal] = useState(false)
+  const [subcontractors, setSubcontractors] = useState<SubcontractorCompany[]>([])
+  const [selectedSubcontractor, setSelectedSubcontractor] = useState<string>('')
+  const [assigningSubcontractor, setAssigningSubcontractor] = useState(false)
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -527,6 +542,29 @@ export function LotDetailPage() {
 
     fetchActivityHistory()
   }, [lotId, currentTab])
+
+  // Fetch subcontractors when assign modal opens
+  useEffect(() => {
+    if (showSubcontractorModal && projectId) {
+      const fetchSubcontractors = async () => {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+        try {
+          const token = getAuthToken()
+          const response = await fetch(
+            `${apiUrl}/api/subcontractors?projectId=${projectId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          if (response.ok) {
+            const data = await response.json()
+            setSubcontractors(data.subcontractors || [])
+          }
+        } catch (err) {
+          console.error('Failed to fetch subcontractors:', err)
+        }
+      }
+      fetchSubcontractors()
+    }
+  }, [showSubcontractorModal, projectId])
 
   // Extract quality access permissions
   const canConformLots = qualityAccess?.canConformLots || false
@@ -995,6 +1033,60 @@ export function LotDetailPage() {
     }
   }
 
+  // Handle assigning subcontractor to lot
+  const handleAssignSubcontractor = async () => {
+    if (!lot) return
+
+    setAssigningSubcontractor(true)
+    const token = getAuthToken()
+
+    try {
+      const response = await fetch(`${apiUrl}/api/lots/${lot.id}/assign`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subcontractorId: selectedSubcontractor || null,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to assign subcontractor')
+      }
+
+      const data = await response.json()
+
+      toast({
+        title: selectedSubcontractor ? 'Subcontractor assigned' : 'Subcontractor unassigned',
+        description: data.message,
+      })
+
+      // Refresh lot data
+      setShowSubcontractorModal(false)
+      setSelectedSubcontractor('')
+      // Refetch lot data
+      const lotResponse = await fetch(`${apiUrl}/api/lots/${lot.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (lotResponse.ok) {
+        const lotData = await lotResponse.json()
+        setLot(lotData.lot)
+      }
+    } catch (err: any) {
+      console.error('Failed to assign subcontractor:', err)
+      toast({
+        title: 'Assignment failed',
+        description: err.message || 'An error occurred',
+        variant: 'error',
+      })
+    } finally {
+      setAssigningSubcontractor(false)
+    }
+  }
+
   // Valid statuses for override
   const validStatuses = [
     { value: 'not_started', label: 'Not Started' },
@@ -1046,6 +1138,20 @@ export function LotDetailPage() {
               className="rounded-lg border border-amber-500 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50"
             >
               Edit Lot
+            </button>
+          )}
+          {/* Assign Subcontractor Button - only for PMs and above, not claimed lots */}
+          {canEdit && lot.status !== 'claimed' && (
+            <button
+              onClick={() => {
+                setSelectedSubcontractor(lot.assignedSubcontractorId || '')
+                setShowSubcontractorModal(true)
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-blue-500 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
+              title={lot.assignedSubcontractor ? `Assigned to ${lot.assignedSubcontractor.companyName}` : 'Assign to subcontractor'}
+            >
+              <Users className="h-4 w-4" />
+              <span>{lot.assignedSubcontractor ? lot.assignedSubcontractor.companyName : 'Assign Subcontractor'}</span>
             </button>
           )}
           {/* Override Status Button - only for quality managers and above */}
@@ -2051,6 +2157,90 @@ export function LotDetailPage() {
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {overriding ? 'Overriding...' : 'Override Status'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Subcontractor Modal */}
+      {showSubcontractorModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold">Assign Subcontractor</h2>
+                <p className="text-sm text-muted-foreground">Assign this lot to a subcontractor company</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Lot
+                </label>
+                <div className="px-3 py-2 rounded border bg-muted/50">
+                  <span className="font-medium">{lot.lotNumber}</span>
+                  {lot.description && (
+                    <span className="text-muted-foreground"> - {lot.description}</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="subcontractor-select" className="block text-sm font-medium mb-1">
+                  Subcontractor Company
+                </label>
+                <select
+                  id="subcontractor-select"
+                  value={selectedSubcontractor}
+                  onChange={(e) => setSelectedSubcontractor(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg bg-background"
+                >
+                  <option value="">No subcontractor assigned</option>
+                  {subcontractors
+                    .filter(sub => sub.status === 'approved')
+                    .map(sub => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.companyName}
+                      </option>
+                    ))
+                  }
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Only approved subcontractors are shown. The subcontractor users will be notified.
+                </p>
+              </div>
+
+              {lot.assignedSubcontractorId && selectedSubcontractor !== lot.assignedSubcontractorId && (
+                <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <strong>Note:</strong> This will change the assigned subcontractor from{' '}
+                  <span className="font-medium">{lot.assignedSubcontractor?.companyName || 'current'}</span> to{' '}
+                  <span className="font-medium">{selectedSubcontractor ? subcontractors.find(s => s.id === selectedSubcontractor)?.companyName : 'none'}</span>.
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowSubcontractorModal(false)
+                  setSelectedSubcontractor('')
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+                disabled={assigningSubcontractor}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignSubcontractor}
+                disabled={assigningSubcontractor}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {assigningSubcontractor ? 'Assigning...' : selectedSubcontractor ? 'Assign Subcontractor' : 'Remove Assignment'}
               </button>
             </div>
           </div>
