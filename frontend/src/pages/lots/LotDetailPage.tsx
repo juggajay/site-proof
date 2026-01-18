@@ -43,6 +43,12 @@ interface Lot {
   areaZone: string | null
   createdAt: string
   updatedAt: string
+  conformedAt: string | null
+  conformedBy: {
+    id: string
+    fullName: string | null
+    email: string
+  } | null
 }
 
 interface TestResult {
@@ -1812,6 +1818,30 @@ export function LotDetailPage() {
               <p className="text-sm text-green-700">
                 This lot has been quality-approved and is ready for claiming.
               </p>
+              {/* Conformance Details */}
+              {(lot.conformedAt || lot.conformedBy) && (
+                <div className="mt-2 pt-2 border-t border-green-300">
+                  <div className="flex flex-wrap gap-4 text-sm text-green-700">
+                    {lot.conformedBy && (
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">Conformed by:</span>
+                        <span>{lot.conformedBy.fullName || lot.conformedBy.email}</span>
+                      </div>
+                    )}
+                    {lot.conformedAt && (
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">Conformed on:</span>
+                        <time dateTime={lot.conformedAt} title={new Date(lot.conformedAt).toISOString()}>
+                          {new Date(lot.conformedAt).toLocaleString('en-AU', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          })}
+                        </time>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
