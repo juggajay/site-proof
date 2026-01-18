@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth, getAuthToken } from '../../lib/auth'
 
@@ -876,9 +877,9 @@ function CreateNCRModal({
     onSubmit({ description, category, severity, specificationReference, lotIds: selectedLotIds.length > 0 ? selectedLotIds : undefined, dueDate: dueDate || undefined })
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Raise Non-Conformance Report</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -1009,7 +1010,8 @@ function CreateNCRModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1032,9 +1034,9 @@ function CloseNCRModal({
     onSubmit(verificationNotes)
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Close NCR {ncr.ncrNumber}</h2>
 
         {ncr.severity === 'major' && ncr.qmApprovedAt && (
@@ -1072,7 +1074,8 @@ function CloseNCRModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1097,9 +1100,9 @@ function RespondNCRModal({
     onSubmit({ rootCauseCategory, rootCauseDescription, proposedCorrectiveAction })
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Respond to NCR {ncr.ncrNumber}</h2>
 
         <div className="mb-4 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm">
@@ -1167,7 +1170,8 @@ function RespondNCRModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -1212,9 +1216,9 @@ function ConcessionModal({
 
   const isFormValid = justification && riskAssessment && (!requiresClientApproval || clientApprovalConfirmed)
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-2">Close NCR with Concession</h2>
         <p className="text-sm text-muted-foreground mb-4">
           Use this when full rectification is not possible and a concession is required.
@@ -1360,6 +1364,7 @@ function ConcessionModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
