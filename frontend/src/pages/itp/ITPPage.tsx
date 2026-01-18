@@ -35,6 +35,7 @@ export function ITPPage() {
   const [creating, setCreating] = useState(false)
   const [includeGlobalTemplates, setIncludeGlobalTemplates] = useState(true)
   const [projectSpecificationSet, setProjectSpecificationSet] = useState<string | null>(null)
+  const [activityTypeFilter, setActivityTypeFilter] = useState<string>('')
 
   const token = getAuthToken()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -172,8 +173,8 @@ export function ITPPage() {
         </button>
       </div>
 
-      {/* Filter toggle for global templates */}
-      <div className="flex items-center gap-3 pb-2 border-b">
+      {/* Filters */}
+      <div className="flex items-center gap-6 pb-2 border-b">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -182,9 +183,24 @@ export function ITPPage() {
             className="rounded border-gray-300"
           />
           <span className="text-sm">
-            Include {projectSpecificationSet || 'spec'} library templates
+            Include {projectSpecificationSet || 'MRTS'} library templates
           </span>
         </label>
+
+        {/* Activity Type Filter */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted-foreground">Activity Type:</label>
+          <select
+            value={activityTypeFilter}
+            onChange={(e) => setActivityTypeFilter(e.target.value)}
+            className="text-sm border rounded px-2 py-1"
+          >
+            <option value="">All Activities</option>
+            {[...new Set(templates.map(t => t.activityType))].sort().map(type => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -207,7 +223,9 @@ export function ITPPage() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {templates.map((template) => (
+          {templates
+            .filter(t => !activityTypeFilter || t.activityType === activityTypeFilter)
+            .map((template) => (
             <div
               key={template.id}
               className={`rounded-lg border p-4 transition-colors ${
