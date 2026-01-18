@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
-import { Link2, Check } from 'lucide-react'
+import { Link2, Check, RefreshCw } from 'lucide-react'
 
 // Tab types for lot detail page
 type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'comments' | 'history'
@@ -232,6 +232,10 @@ export function LotDetailPage() {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [showOverrideModal, setShowOverrideModal] = useState(false)
+  const [overrideStatus, setOverrideStatus] = useState('')
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overriding, setOverriding] = useState(false)
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -686,7 +690,7 @@ export function LotDetailPage() {
       toast({
         title: 'File too large',
         description: `The file "${file.name}" exceeds the 10MB limit. Please select a smaller file.`,
-        variant: 'destructive'
+        variant: 'error'
       })
       event.target.value = '' // Reset input
       return
@@ -696,7 +700,7 @@ export function LotDetailPage() {
       toast({
         title: 'Invalid file type',
         description: `The file "${file.name}" is not a supported image format. Please use JPEG, PNG, GIF, or WebP.`,
-        variant: 'destructive'
+        variant: 'error'
       })
       event.target.value = '' // Reset input
       return
@@ -795,6 +799,95 @@ export function LotDetailPage() {
     }
   }
 
+  // Handle status override
+  const handleOverrideStatus = async () => {
+    if (!overrideStatus || !overrideReason.trim()) {
+      toast({
+        title: 'Missing fields',
+        description: 'Please select a status and provide a reason.',
+        variant: 'error'
+      })
+      return
+    }
+
+    if (overrideReason.trim().length < 5) {
+      toast({
+        title: 'Reason too short',
+        description: 'Please provide a more detailed reason (at least 5 characters).',
+        variant: 'error'
+      })
+      return
+    }
+
+    setOverriding(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/lots/${lotId}/override-status`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: overrideStatus,
+          reason: overrideReason.trim()
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setLot((prev) => prev ? { ...prev, status: data.lot.status } : null)
+        setShowOverrideModal(false)
+        setOverrideStatus('')
+        setOverrideReason('')
+        toast({
+          title: 'Status overridden',
+          description: `Status changed from "${data.previousStatus.replace('_', ' ')}" to "${data.lot.status.replace('_', ' ')}".`,
+        })
+        // Refresh history if we're on that tab
+        if (currentTab === 'history') {
+          setLoadingHistory(true)
+          const historyResponse = await fetch(
+            `${apiUrl}/api/audit-logs?entityType=Lot&search=${lotId}&limit=100`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          if (historyResponse.ok) {
+            const historyData = await historyResponse.json()
+            setActivityLogs(historyData.logs || [])
+          }
+          setLoadingHistory(false)
+        }
+      } else {
+        const data = await response.json()
+        toast({
+          title: 'Override failed',
+          description: data.message || data.error || 'Failed to override status',
+          variant: 'error'
+        })
+      }
+    } catch (err) {
+      toast({
+        title: 'Override failed',
+        description: 'An error occurred. Please try again.',
+        variant: 'error'
+      })
+    } finally {
+      setOverriding(false)
+    }
+  }
+
+  // Valid statuses for override
+  const validStatuses = [
+    { value: 'not_started', label: 'Not Started' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'awaiting_test', label: 'Awaiting Test' },
+    { value: 'hold_point', label: 'Hold Point' },
+    { value: 'ncr_raised', label: 'NCR Raised' },
+    { value: 'completed', label: 'Completed' },
+  ]
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -836,6 +929,21 @@ export function LotDetailPage() {
               className="rounded-lg border border-amber-500 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50"
             >
               Edit Lot
+            </button>
+          )}
+          {/* Override Status Button - only for quality managers and above */}
+          {canConformLots && lot.status !== 'claimed' && (
+            <button
+              onClick={() => {
+                setOverrideStatus(lot.status !== 'conformed' ? '' : 'completed')
+                setOverrideReason('')
+                setShowOverrideModal(true)
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-500 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50"
+              title="Manually override lot status"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Override Status</span>
             </button>
           )}
           <span className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
@@ -1704,6 +1812,94 @@ export function LotDetailPage() {
               <p className="text-sm text-green-700">
                 This lot has been quality-approved and is ready for claiming.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Override Modal */}
+      {showOverrideModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-purple-100 text-purple-600">
+                <RefreshCw className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold">Override Status</h2>
+                <p className="text-sm text-muted-foreground">Manually change the lot status</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Current Status
+                </label>
+                <div className={`px-3 py-2 rounded border ${statusColors[lot.status] || 'bg-gray-100'}`}>
+                  {lot.status.replace('_', ' ')}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="override-status" className="block text-sm font-medium mb-1">
+                  New Status <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="override-status"
+                  value={overrideStatus}
+                  onChange={(e) => setOverrideStatus(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg bg-background"
+                >
+                  <option value="">Select new status...</option>
+                  {validStatuses
+                    .filter(s => s.value !== lot.status) // Exclude current status
+                    .map(status => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))
+                  }
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="override-reason" className="block text-sm font-medium mb-1">
+                  Reason for Override <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="override-reason"
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                  placeholder="Explain why you are overriding the status..."
+                  rows={3}
+                  className="w-full px-3 py-2 border rounded-lg bg-background resize-none"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  This reason will be recorded in the lot history for audit purposes.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowOverrideModal(false)
+                  setOverrideStatus('')
+                  setOverrideReason('')
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+                disabled={overriding}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleOverrideStatus}
+                disabled={overriding || !overrideStatus || !overrideReason.trim()}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {overriding ? 'Overriding...' : 'Override Status'}
+              </button>
             </div>
           </div>
         </div>

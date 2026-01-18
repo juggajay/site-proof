@@ -1143,3 +1143,127 @@ lotsRouter.post('/:id/conform', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// Roles that can override lot status
+const STATUS_OVERRIDERS = ['owner', 'admin', 'project_manager', 'quality_manager']
+
+// Valid lot statuses for override
+const VALID_STATUSES = [
+  'not_started', 'in_progress', 'awaiting_test',
+  'hold_point', 'ncr_raised', 'completed'
+]
+
+// POST /api/lots/:id/override-status - Manual status override with reason (Feature #159)
+lotsRouter.post('/:id/override-status', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { status, reason } = req.body
+
+    // Validate inputs
+    if (!status || !reason) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Both status and reason are required'
+      })
+    }
+
+    if (typeof reason !== 'string' || reason.trim().length < 5) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Reason must be at least 5 characters'
+      })
+    }
+
+    if (!VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`
+      })
+    }
+
+    // Get the lot
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        lotNumber: true,
+        status: true,
+        projectId: true,
+      },
+    })
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Don't allow overriding claimed lots
+    if (lot.status === 'claimed') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Cannot override status of a claimed lot'
+      })
+    }
+
+    // Check user permission
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: lot.projectId,
+        userId: user.id,
+        status: 'active',
+      },
+    })
+
+    const userProjectRole = projectUser?.role || user.roleInCompany
+
+    if (!STATUS_OVERRIDERS.includes(userProjectRole)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have permission to override lot status. Required roles: Quality Manager, Project Manager, Admin, or Owner.'
+      })
+    }
+
+    const previousStatus = lot.status
+
+    // Update the lot status
+    const updatedLot = await prisma.lot.update({
+      where: { id },
+      data: { status },
+      select: {
+        id: true,
+        lotNumber: true,
+        status: true,
+        updatedAt: true,
+      },
+    })
+
+    // Record the override in the audit log with the reason
+    await prisma.auditLog.create({
+      data: {
+        projectId: lot.projectId,
+        userId: user.id,
+        entityType: 'Lot',
+        entityId: id,
+        action: 'status_override',
+        changes: JSON.stringify({
+          status: {
+            from: previousStatus,
+            to: status
+          },
+          reason: reason.trim(),
+          overriddenBy: user.email
+        }),
+      },
+    })
+
+    res.json({
+      message: 'Status overridden successfully',
+      lot: updatedLot,
+      previousStatus,
+      reason: reason.trim()
+    })
+  } catch (error) {
+    console.error('Override status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
