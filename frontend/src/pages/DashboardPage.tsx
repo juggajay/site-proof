@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import {
   FolderKanban,
@@ -14,13 +14,16 @@ import {
   ListChecks,
   DollarSign,
   Users,
-  Download
+  Download,
+  AlertCircle,
+  ChevronRight
 } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
 // Widget configuration
 const WIDGET_CONFIG = [
+  { id: 'attentionItems', label: 'Items Requiring Attention', required: false },
   { id: 'projectSummary', label: 'Project Summary', required: false },
   { id: 'recentActivity', label: 'Recent Activity', required: false },
   { id: 'lotStatus', label: 'Lot Status', required: false },
@@ -31,7 +34,7 @@ const WIDGET_CONFIG = [
 
 type WidgetId = typeof WIDGET_CONFIG[number]['id']
 
-const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = ['projectSummary', 'recentActivity', 'lotStatus', 'holdPoints', 'ncrs', 'quickLinks']
+const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = ['attentionItems', 'projectSummary', 'recentActivity', 'lotStatus', 'holdPoints', 'ncrs', 'quickLinks']
 
 const WIDGET_STORAGE_KEY = 'siteproof_dashboard_widgets'
 
@@ -42,22 +45,46 @@ interface Project {
   status: string
 }
 
+interface AttentionItem {
+  id: string
+  type: 'ncr' | 'holdpoint'
+  title: string
+  description: string
+  status: string
+  daysOverdue?: number
+  daysStale?: number
+  dueDate?: string
+  project: {
+    id: string
+    name: string
+    projectNumber: string
+  }
+  link: string
+}
+
 interface DashboardStats {
   totalProjects: number
   activeProjects: number
   totalLots: number
   openHoldPoints: number
   openNCRs: number
+  attentionItems: {
+    overdueNCRs: AttentionItem[]
+    staleHoldPoints: AttentionItem[]
+    total: number
+  }
   recentActivities: Array<{
     id: string
     type: string
     description: string
     timestamp: string
+    link?: string
   }>
 }
 
 export function DashboardPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<DashboardStats>({
@@ -66,6 +93,11 @@ export function DashboardPage() {
     totalLots: 0,
     openHoldPoints: 0,
     openNCRs: 0,
+    attentionItems: {
+      overdueNCRs: [],
+      staleHoldPoints: [],
+      total: 0
+    },
     recentActivities: [],
   })
 
@@ -93,30 +125,59 @@ export function DashboardPage() {
       }
 
       try {
-        const response = await fetch(`${API_URL}/api/projects`, {
+        // Fetch dashboard stats from new endpoint
+        const statsResponse = await fetch(`${API_URL}/api/dashboard/stats`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         })
 
-        if (response.ok) {
-          const data = await response.json()
-          const projectList = data.projects || []
-          setProjects(projectList)
-
-          // Calculate stats from projects
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json()
           setStats({
-            totalProjects: projectList.length,
-            activeProjects: projectList.filter((p: Project) => p.status === 'active').length,
-            totalLots: 0, // Would come from API
-            openHoldPoints: 0, // Would come from API
-            openNCRs: 0, // Would come from API
-            recentActivities: [
-              { id: '1', type: 'lot', description: 'Lot LOT-001 status changed to completed', timestamp: new Date().toISOString() },
-              { id: '2', type: 'ncr', description: 'New NCR raised: NCR-2024-001', timestamp: new Date(Date.now() - 3600000).toISOString() },
-              { id: '3', type: 'holdpoint', description: 'Hold point released for concrete pour', timestamp: new Date(Date.now() - 7200000).toISOString() },
-            ],
+            totalProjects: statsData.totalProjects || 0,
+            activeProjects: statsData.activeProjects || 0,
+            totalLots: statsData.totalLots || 0,
+            openHoldPoints: statsData.openHoldPoints || 0,
+            openNCRs: statsData.openNCRs || 0,
+            attentionItems: statsData.attentionItems || {
+              overdueNCRs: [],
+              staleHoldPoints: [],
+              total: 0
+            },
+            recentActivities: statsData.recentActivities || [],
           })
+        } else {
+          // Fallback to projects endpoint if dashboard stats fails
+          const response = await fetch(`${API_URL}/api/projects`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            const projectList = data.projects || []
+            setProjects(projectList)
+
+            setStats({
+              totalProjects: projectList.length,
+              activeProjects: projectList.filter((p: Project) => p.status === 'active').length,
+              totalLots: 0,
+              openHoldPoints: 0,
+              openNCRs: 0,
+              attentionItems: {
+                overdueNCRs: [],
+                staleHoldPoints: [],
+                total: 0
+              },
+              recentActivities: [
+                { id: '1', type: 'lot', description: 'Lot LOT-001 status changed to completed', timestamp: new Date().toISOString() },
+                { id: '2', type: 'ncr', description: 'New NCR raised: NCR-2024-001', timestamp: new Date(Date.now() - 3600000).toISOString() },
+                { id: '3', type: 'holdpoint', description: 'Hold point released for concrete pour', timestamp: new Date(Date.now() - 7200000).toISOString() },
+              ],
+            })
+          }
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err)
@@ -269,6 +330,84 @@ export function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Items Requiring Attention Widget */}
+      {isWidgetVisible('attentionItems') && stats.attentionItems.total > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg">
+          <div className="p-4 border-b border-red-200 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <h2 className="text-lg font-semibold text-red-700">Items Requiring Attention</h2>
+            <span className="ml-auto bg-red-100 text-red-700 text-sm font-medium px-2.5 py-0.5 rounded-full">
+              {stats.attentionItems.total}
+            </span>
+          </div>
+          <div className="divide-y divide-red-100">
+            {/* Overdue NCRs */}
+            {stats.attentionItems.overdueNCRs.length > 0 && (
+              <div className="p-4">
+                <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Overdue NCRs ({stats.attentionItems.overdueNCRs.length})
+                </h3>
+                <div className="space-y-2">
+                  {stats.attentionItems.overdueNCRs.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => navigate(item.link)}
+                      className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-red-100 hover:border-red-300 hover:bg-red-50 transition-colors text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{item.title}</span>
+                          <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded">
+                            {item.daysOverdue} day{item.daysOverdue !== 1 ? 's' : ''} overdue
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate mt-1">
+                          {item.project.name} • {item.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Stale Hold Points */}
+            {stats.attentionItems.staleHoldPoints.length > 0 && (
+              <div className="p-4">
+                <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Stale Hold Points ({stats.attentionItems.staleHoldPoints.length})
+                </h3>
+                <div className="space-y-2">
+                  {stats.attentionItems.staleHoldPoints.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => navigate(item.link)}
+                      className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-amber-100 hover:border-amber-300 hover:bg-amber-50 transition-colors text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{item.title}</span>
+                          <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded">
+                            {item.daysStale} day{item.daysStale !== 1 ? 's' : ''} waiting
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate mt-1">
+                          {item.project.name} • {item.description}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Project Summary Widget */}
       {isWidgetVisible('projectSummary') && (
