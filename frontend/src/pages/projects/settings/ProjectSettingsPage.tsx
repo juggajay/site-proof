@@ -9,6 +9,7 @@ interface Project {
   code: string
   status?: string
   startDate?: string | null
+  targetCompletion?: string | null
   lotPrefix?: string
   lotStartingNumber?: number
   ncrPrefix?: string
@@ -565,16 +566,32 @@ export function ProjectSettingsPage() {
                   />
                 </div>
               </div>
-              {project?.startDate && (
-                <div className="mt-4 pt-4 border-t">
-                  <label className="block text-sm font-medium mb-1">Start Date</label>
-                  <div className="text-sm text-muted-foreground">
-                    {new Date(project.startDate).toLocaleDateString('en-AU', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </div>
+              {(project?.startDate || project?.targetCompletion) && (
+                <div className="mt-4 pt-4 border-t grid gap-4 sm:grid-cols-2">
+                  {project?.startDate && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Start Date</label>
+                      <div className="text-sm text-muted-foreground">
+                        {new Date(project.startDate).toLocaleDateString('en-AU', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {project?.targetCompletion && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Target Completion</label>
+                      <div className="text-sm text-muted-foreground">
+                        {new Date(project.targetCompletion).toLocaleDateString('en-AU', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -53,6 +53,7 @@ export function ProjectsPage() {
     state: '',
     specSet: '',
     startDate: '',
+    targetCompletion: '',
   })
 
   useEffect(() => {
@@ -114,6 +115,7 @@ export function ProjectsPage() {
           state: formData.state || null,
           specificationSet: formData.specSet || null,
           startDate: formData.startDate || null,
+          targetCompletion: formData.targetCompletion || null,
         }),
       })
 
@@ -126,7 +128,7 @@ export function ProjectsPage() {
       // Add new project to list
       setProjects((prev) => [...prev, data.project])
       // Reset form and close modal
-      setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '', startDate: '' })
+      setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '', startDate: '', targetCompletion: '' })
       setShowCreateModal(false)
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create project')
@@ -241,6 +243,20 @@ export function ProjectsPage() {
                   id="startDate"
                   name="startDate"
                   value={formData.startDate}
+                  onChange={handleInputChange}
+                  className="w-full rounded-lg border px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="targetCompletion" className="block text-sm font-medium mb-1">
+                  Target Completion
+                </label>
+                <input
+                  type="date"
+                  id="targetCompletion"
+                  name="targetCompletion"
+                  value={formData.targetCompletion}
                   onChange={handleInputChange}
                   className="w-full rounded-lg border px-3 py-2"
                 />
