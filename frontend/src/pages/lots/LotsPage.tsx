@@ -7,6 +7,7 @@ import { getAuthToken, useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
 import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2 } from 'lucide-react'
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager']
@@ -989,7 +990,13 @@ export function LotsPage() {
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Lot Register</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Lot Register</h1>
+          <ContextHelp
+            title={HELP_CONTENT.lots.title}
+            content={HELP_CONTENT.lots.content}
+          />
+        </div>
         <div className="flex items-center gap-3">
           <button
             onClick={handleExportCSV}
