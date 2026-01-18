@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
-import { FolderKanban, TrendingUp, AlertTriangle, CheckCircle2, Clock, DollarSign } from 'lucide-react'
+import { FolderKanban, TrendingUp, AlertTriangle, CheckCircle2, Clock, DollarSign, AlertCircle, ExternalLink } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
@@ -25,13 +25,62 @@ interface PortfolioStats {
   projectsAtRisk: number
 }
 
+interface CashFlowSummary {
+  totalClaimed: number
+  totalCertified: number
+  totalPaid: number
+  outstanding: number
+}
+
+interface CriticalNCR {
+  id: string
+  ncrNumber: string
+  description: string
+  category: string
+  status: string
+  dueDate?: string
+  isOverdue: boolean
+  daysUntilDue: number | null
+  project: {
+    id: string
+    name: string
+    projectNumber: string
+  }
+  link: string
+}
+
+interface RiskIndicator {
+  type: string
+  severity: 'critical' | 'warning'
+  message: string
+  explanation: string
+}
+
+interface ProjectAtRisk {
+  id: string
+  name: string
+  projectNumber: string
+  riskIndicators: RiskIndicator[]
+  riskLevel: 'critical' | 'warning'
+  link: string
+}
+
 export function PortfolioPage() {
+  const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
+  const [cashFlow, setCashFlow] = useState<CashFlowSummary>({
+    totalClaimed: 0,
+    totalCertified: 0,
+    totalPaid: 0,
+    outstanding: 0
+  })
+  const [criticalNCRs, setCriticalNCRs] = useState<CriticalNCR[]>([])
+  const [projectsAtRisk, setProjectsAtRisk] = useState<ProjectAtRisk[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchData = async () => {
       const token = getAuthToken()
       if (!token) {
         setLoading(false)
@@ -39,18 +88,43 @@ export function PortfolioPage() {
       }
 
       try {
-        const response = await fetch(`${API_URL}/api/projects`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        // Fetch projects, cash flow, critical NCRs, and risks in parallel
+        const [projectsResponse, cashFlowResponse, ncrsResponse, risksResponse] = await Promise.all([
+          fetch(`${API_URL}/api/projects`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/api/dashboard/portfolio-cashflow`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/api/dashboard/portfolio-ncrs`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/api/dashboard/portfolio-risks`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        ])
 
-        if (!response.ok) {
+        if (!projectsResponse.ok) {
           throw new Error('Failed to fetch projects')
         }
 
-        const data = await response.json()
-        setProjects(data.projects || [])
+        const projectsData = await projectsResponse.json()
+        setProjects(projectsData.projects || [])
+
+        if (cashFlowResponse.ok) {
+          const cashFlowData = await cashFlowResponse.json()
+          setCashFlow(cashFlowData)
+        }
+
+        if (ncrsResponse.ok) {
+          const ncrsData = await ncrsResponse.json()
+          setCriticalNCRs(ncrsData.ncrs || [])
+        }
+
+        if (risksResponse.ok) {
+          const risksData = await risksResponse.json()
+          setProjectsAtRisk(risksData.projectsAtRisk || [])
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load projects')
       } finally {
@@ -58,7 +132,7 @@ export function PortfolioPage() {
       }
     }
 
-    fetchProjects()
+    fetchData()
   }, [])
 
   // Calculate aggregate metrics
@@ -216,6 +290,146 @@ export function PortfolioPage() {
           </div>
         </div>
       </div>
+
+      {/* Cash Flow Summary */}
+      <div className="bg-card rounded-lg border p-4">
+        <h2 className="text-lg font-semibold mb-4">Cash Flow Summary</h2>
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <p className="text-sm text-muted-foreground">Total Claimed</p>
+            <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+              ${cashFlow.totalClaimed.toLocaleString('en-AU', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}
+            </p>
+          </div>
+          <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+            <p className="text-sm text-muted-foreground">Total Certified</p>
+            <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
+              ${cashFlow.totalCertified.toLocaleString('en-AU', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}
+            </p>
+          </div>
+          <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <p className="text-sm text-muted-foreground">Total Paid</p>
+            <p className="text-xl font-bold text-green-600 dark:text-green-400">
+              ${cashFlow.totalPaid.toLocaleString('en-AU', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}
+            </p>
+          </div>
+          <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+            <p className="text-sm text-muted-foreground">Outstanding</p>
+            <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+              ${cashFlow.outstanding.toLocaleString('en-AU', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Critical NCRs Section */}
+      {criticalNCRs.length > 0 && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="p-4 border-b border-red-200 dark:border-red-800 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <h2 className="text-lg font-semibold text-red-700 dark:text-red-400">Critical NCRs Across Projects</h2>
+            <span className="ml-auto bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300 text-sm font-medium px-2.5 py-0.5 rounded-full">
+              {criticalNCRs.length}
+            </span>
+          </div>
+          <div className="divide-y divide-red-200 dark:divide-red-800">
+            {criticalNCRs.map((ncr) => (
+              <div
+                key={ncr.id}
+                className="p-4 hover:bg-red-100/50 dark:hover:bg-red-900/30 transition-colors cursor-pointer"
+                onClick={() => navigate(ncr.link)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-red-700 dark:text-red-400">{ncr.ncrNumber}</span>
+                      <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300 rounded">
+                        {ncr.status}
+                      </span>
+                      {ncr.isOverdue && (
+                        <span className="text-xs px-2 py-0.5 bg-red-600 text-white rounded">
+                          OVERDUE
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-red-600/80 dark:text-red-300/80 mt-1">{ncr.description}</p>
+                    <p className="text-xs text-red-500/70 dark:text-red-400/70 mt-1">
+                      {ncr.project.name} ({ncr.project.projectNumber})
+                      {ncr.dueDate && ` • Due: ${new Date(ncr.dueDate).toLocaleDateString('en-AU')}`}
+                    </p>
+                  </div>
+                  <ExternalLink className="h-4 w-4 text-red-400" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Projects at Risk Section */}
+      {projectsAtRisk.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="p-4 border-b border-amber-200 dark:border-amber-800 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <h2 className="text-lg font-semibold text-amber-700 dark:text-amber-400">Projects at Risk</h2>
+            <span className="ml-auto bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300 text-sm font-medium px-2.5 py-0.5 rounded-full">
+              {projectsAtRisk.length}
+            </span>
+          </div>
+          <div className="divide-y divide-amber-200 dark:divide-amber-800">
+            {projectsAtRisk.map((project) => (
+              <div
+                key={project.id}
+                className="p-4 hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors cursor-pointer"
+                onClick={() => navigate(project.link)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-amber-700 dark:text-amber-400">{project.name}</span>
+                      <span className="text-xs text-amber-600/70 dark:text-amber-400/70">({project.projectNumber})</span>
+                      {project.riskLevel === 'critical' && (
+                        <span className="text-xs px-2 py-0.5 bg-red-600 text-white rounded">
+                          CRITICAL
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      {project.riskIndicators.map((indicator, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            indicator.severity === 'critical'
+                              ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
+                              : 'bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300'
+                          }`}>
+                            {indicator.message}
+                          </span>
+                          <span className="text-xs text-amber-500/70 dark:text-amber-400/70 italic">
+                            {indicator.explanation}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <ExternalLink className="h-4 w-4 text-amber-400 mt-1" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* All Projects List */}
       <div className="bg-card rounded-lg border">

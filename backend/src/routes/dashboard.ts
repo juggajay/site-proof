@@ -239,3 +239,304 @@ dashboardRouter.get('/stats', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// GET /api/dashboard/portfolio-cashflow - Get portfolio-wide cash flow summary
+dashboardRouter.get('/portfolio-cashflow', async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found'
+      })
+    }
+
+    // Get all projects the user has access to
+    const projectAccess = await prisma.projectUser.findMany({
+      where: { userId },
+      select: { projectId: true }
+    })
+
+    const projectIds = projectAccess.map(pa => pa.projectId)
+
+    // If no projects, return empty cash flow
+    if (projectIds.length === 0) {
+      return res.json({
+        totalClaimed: 0,
+        totalCertified: 0,
+        totalPaid: 0,
+        outstanding: 0
+      })
+    }
+
+    // Get all progress claims for accessible projects
+    const claims = await prisma.progressClaim.findMany({
+      where: { projectId: { in: projectIds } },
+      select: {
+        totalClaimedAmount: true,
+        certifiedAmount: true,
+        paidAmount: true,
+        status: true
+      }
+    })
+
+    // Calculate totals across all claims
+    let totalClaimed = 0
+    let totalCertified = 0
+    let totalPaid = 0
+
+    for (const claim of claims) {
+      totalClaimed += claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0
+      totalCertified += claim.certifiedAmount ? Number(claim.certifiedAmount) : 0
+      totalPaid += claim.paidAmount ? Number(claim.paidAmount) : 0
+    }
+
+    // Outstanding = Certified - Paid (amount approved but not yet paid)
+    const outstanding = totalCertified - totalPaid
+
+    res.json({
+      totalClaimed,
+      totalCertified,
+      totalPaid,
+      outstanding
+    })
+  } catch (error) {
+    console.error('Portfolio cash flow error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/dashboard/portfolio-ncrs - Get critical NCRs across all projects
+dashboardRouter.get('/portfolio-ncrs', async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found'
+      })
+    }
+
+    // Get all projects the user has access to
+    const projectAccess = await prisma.projectUser.findMany({
+      where: { userId },
+      select: { projectId: true }
+    })
+
+    const projectIds = projectAccess.map(pa => pa.projectId)
+
+    // If no projects, return empty list
+    if (projectIds.length === 0) {
+      return res.json({ ncrs: [] })
+    }
+
+    // Get major NCRs (critical) that are not closed
+    const criticalNCRs = await prisma.nCR.findMany({
+      where: {
+        projectId: { in: projectIds },
+        category: 'major',
+        status: { notIn: ['closed', 'closed_concession'] }
+      },
+      select: {
+        id: true,
+        ncrNumber: true,
+        description: true,
+        category: true,
+        status: true,
+        dueDate: true,
+        createdAt: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            projectNumber: true
+          }
+        }
+      },
+      orderBy: [
+        { dueDate: 'asc' },
+        { createdAt: 'desc' }
+      ],
+      take: 10
+    })
+
+    const today = new Date()
+    const formattedNCRs = criticalNCRs.map(ncr => ({
+      id: ncr.id,
+      ncrNumber: ncr.ncrNumber,
+      description: ncr.description?.substring(0, 100) || 'No description',
+      category: ncr.category,
+      status: ncr.status,
+      dueDate: ncr.dueDate?.toISOString(),
+      isOverdue: ncr.dueDate ? new Date(ncr.dueDate) < today : false,
+      daysUntilDue: ncr.dueDate ? Math.ceil((new Date(ncr.dueDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null,
+      project: {
+        id: ncr.project.id,
+        name: ncr.project.name,
+        projectNumber: ncr.project.projectNumber
+      },
+      link: `/projects/${ncr.project.id}/ncr?ncrId=${ncr.id}`
+    }))
+
+    res.json({ ncrs: formattedNCRs })
+  } catch (error) {
+    console.error('Portfolio NCRs error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/dashboard/portfolio-risks - Get projects at risk with risk indicators
+dashboardRouter.get('/portfolio-risks', async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found'
+      })
+    }
+
+    // Get all projects the user has access to
+    const projectAccess = await prisma.projectUser.findMany({
+      where: { userId },
+      select: { projectId: true }
+    })
+
+    const projectIds = projectAccess.map(pa => pa.projectId)
+
+    if (projectIds.length === 0) {
+      return res.json({ projectsAtRisk: [] })
+    }
+
+    const today = new Date()
+    const thirtyDaysFromNow = new Date(today)
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+
+    // Get all active projects with their risk indicators
+    const projects = await prisma.project.findMany({
+      where: {
+        id: { in: projectIds },
+        status: 'active'
+      },
+      select: {
+        id: true,
+        name: true,
+        projectNumber: true,
+        targetCompletion: true,
+        status: true
+      }
+    })
+
+    const projectsAtRisk = []
+
+    for (const project of projects) {
+      const riskIndicators = []
+
+      // Check for timeline risk (due within 30 days)
+      if (project.targetCompletion) {
+        const targetDate = new Date(project.targetCompletion)
+        const daysUntilTarget = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        if (daysUntilTarget <= 30 && daysUntilTarget > 0) {
+          riskIndicators.push({
+            type: 'timeline',
+            severity: 'warning',
+            message: `Target completion in ${daysUntilTarget} days`,
+            explanation: 'Project is approaching its target completion date'
+          })
+        } else if (daysUntilTarget <= 0) {
+          riskIndicators.push({
+            type: 'timeline',
+            severity: 'critical',
+            message: `Overdue by ${Math.abs(daysUntilTarget)} days`,
+            explanation: 'Project has exceeded its target completion date'
+          })
+        }
+      }
+
+      // Check for major open NCRs
+      const majorNCRCount = await prisma.nCR.count({
+        where: {
+          projectId: project.id,
+          category: 'major',
+          status: { notIn: ['closed', 'closed_concession'] }
+        }
+      })
+      if (majorNCRCount > 0) {
+        riskIndicators.push({
+          type: 'ncr',
+          severity: majorNCRCount >= 3 ? 'critical' : 'warning',
+          message: `${majorNCRCount} open major NCR${majorNCRCount > 1 ? 's' : ''}`,
+          explanation: 'Major non-conformances require attention and may impact project delivery'
+        })
+      }
+
+      // Check for overdue NCRs
+      const overdueNCRCount = await prisma.nCR.count({
+        where: {
+          projectId: project.id,
+          status: { notIn: ['closed', 'closed_concession'] },
+          dueDate: { lt: today }
+        }
+      })
+      if (overdueNCRCount > 0) {
+        riskIndicators.push({
+          type: 'overdue_ncr',
+          severity: 'critical',
+          message: `${overdueNCRCount} overdue NCR${overdueNCRCount > 1 ? 's' : ''}`,
+          explanation: 'NCRs have exceeded their due date and require immediate action'
+        })
+      }
+
+      // Check for stale hold points
+      const sevenDaysAgo = new Date(today)
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      const staleHPCount = await prisma.holdPoint.count({
+        where: {
+          lot: { projectId: project.id },
+          status: { in: ['pending', 'scheduled', 'requested'] },
+          createdAt: { lt: sevenDaysAgo }
+        }
+      })
+      if (staleHPCount > 0) {
+        riskIndicators.push({
+          type: 'holdpoint',
+          severity: 'warning',
+          message: `${staleHPCount} stale hold point${staleHPCount > 1 ? 's' : ''}`,
+          explanation: 'Hold points have been pending for more than 7 days without progress'
+        })
+      }
+
+      // Only include projects that have risk indicators
+      if (riskIndicators.length > 0) {
+        // Sort by severity (critical first)
+        riskIndicators.sort((a, b) => {
+          const severityOrder = { critical: 0, warning: 1 }
+          return severityOrder[a.severity as keyof typeof severityOrder] - severityOrder[b.severity as keyof typeof severityOrder]
+        })
+
+        projectsAtRisk.push({
+          id: project.id,
+          name: project.name,
+          projectNumber: project.projectNumber,
+          riskIndicators,
+          riskLevel: riskIndicators.some(r => r.severity === 'critical') ? 'critical' : 'warning',
+          link: `/projects/${project.id}/ncr`
+        })
+      }
+    }
+
+    // Sort by risk level (critical first)
+    projectsAtRisk.sort((a, b) => {
+      const levelOrder = { critical: 0, warning: 1 }
+      return levelOrder[a.riskLevel as keyof typeof levelOrder] - levelOrder[b.riskLevel as keyof typeof levelOrder]
+    })
+
+    res.json({ projectsAtRisk })
+  } catch (error) {
+    console.error('Portfolio risks error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
