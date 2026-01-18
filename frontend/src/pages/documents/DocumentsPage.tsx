@@ -75,6 +75,7 @@ export function DocumentsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false)
 
   // Viewer modal state
   const [viewerDoc, setViewerDoc] = useState<Document | null>(null)
@@ -223,6 +224,28 @@ export function DocumentsPage() {
     }
   }
 
+  const toggleFavourite = async (doc: Document) => {
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/documents/${doc.id}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isFavourite: !doc.isFavourite }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setDocuments(prev => prev.map(d => d.id === doc.id ? updated : d))
+      } else {
+        alert('Failed to update favourite status')
+      }
+    } catch (err) {
+      console.error('Error toggling favourite:', err)
+    }
+  }
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return 'Unknown'
     if (bytes < 1024) return bytes + ' B'
@@ -367,7 +390,21 @@ export function DocumentsPage() {
           >
             Search
           </button>
-          {(filterType || filterCategory || filterLot || dateFrom || dateTo || searchQuery) && (
+          <button
+            onClick={() => setShowFavouritesOnly(!showFavouritesOnly)}
+            className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm ${
+              showFavouritesOnly
+                ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                : 'bg-muted hover:bg-muted/80'
+            }`}
+            title={showFavouritesOnly ? 'Show All' : 'Show Favourites Only'}
+          >
+            <svg className={`h-4 w-4 ${showFavouritesOnly ? 'fill-yellow-500' : ''}`} fill={showFavouritesOnly ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+            Favourites
+          </button>
+          {(filterType || filterCategory || filterLot || dateFrom || dateTo || searchQuery || showFavouritesOnly) && (
             <button
               onClick={() => {
                 setFilterType('')
@@ -376,6 +413,7 @@ export function DocumentsPage() {
                 setDateFrom('')
                 setDateTo('')
                 setSearchQuery('')
+                setShowFavouritesOnly(false)
               }}
               className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600 hover:bg-red-100"
             >
@@ -422,7 +460,9 @@ export function DocumentsPage() {
           </div>
         ) : (
           <div className="divide-y">
-            {documents.map((doc) => (
+            {documents
+              .filter(doc => !showFavouritesOnly || doc.isFavourite)
+              .map((doc) => (
               <div key={doc.id} className="flex items-center gap-4 p-4 hover:bg-muted/30">
                 {/* Icon or Thumbnail */}
                 <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
@@ -469,6 +509,15 @@ export function DocumentsPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleFavourite(doc)}
+                    className={`rounded-md p-2 hover:bg-yellow-100 ${doc.isFavourite ? 'text-yellow-500' : 'text-gray-400'}`}
+                    title={doc.isFavourite ? 'Remove from Favourites' : 'Add to Favourites'}
+                  >
+                    <svg className="h-5 w-5" fill={doc.isFavourite ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                  </button>
                   {canPreview(doc.mimeType) && (
                     <button
                       onClick={() => openViewer(doc)}
