@@ -6,7 +6,7 @@ import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
-import { Settings2, Check } from 'lucide-react'
+import { Settings2, Check, ChevronUp, ChevronDown } from 'lucide-react'
 
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager']
@@ -27,9 +27,10 @@ const COLUMN_CONFIG = [
 
 type ColumnId = typeof COLUMN_CONFIG[number]['id']
 
-const DEFAULT_VISIBLE_COLUMNS: ColumnId[] = ['lotNumber', 'description', 'chainage', 'activityType', 'status', 'subcontractor', 'budget']
+const DEFAULT_COLUMN_ORDER: ColumnId[] = ['lotNumber', 'description', 'chainage', 'activityType', 'status', 'subcontractor', 'budget']
 
 const COLUMN_STORAGE_KEY = 'siteproof_lot_columns'
+const COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order'
 
 interface Lot {
   id: string
@@ -130,8 +131,22 @@ export function LotsPage() {
     } catch (e) {
       console.error('Error loading column settings:', e)
     }
-    return DEFAULT_VISIBLE_COLUMNS
+    return DEFAULT_COLUMN_ORDER
   })
+
+  // Column order state (separate from visibility)
+  const [columnOrder, setColumnOrder] = useState<ColumnId[]>(() => {
+    try {
+      const stored = localStorage.getItem(COLUMN_ORDER_STORAGE_KEY)
+      if (stored) {
+        return JSON.parse(stored) as ColumnId[]
+      }
+    } catch (e) {
+      console.error('Error loading column order:', e)
+    }
+    return DEFAULT_COLUMN_ORDER
+  })
+
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
 
   // Toggle column visibility
@@ -150,8 +165,45 @@ export function LotsPage() {
     })
   }
 
+  // Move column up in order
+  const moveColumnUp = (columnId: ColumnId) => {
+    setColumnOrder(prev => {
+      const index = prev.indexOf(columnId)
+      if (index <= 0) return prev // Can't move first column up
+
+      // Don't allow moving above lotNumber (required first column)
+      if (prev[index - 1] === 'lotNumber') return prev
+
+      const newOrder = [...prev]
+      ;[newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
+      localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(newOrder))
+      return newOrder
+    })
+  }
+
+  // Move column down in order
+  const moveColumnDown = (columnId: ColumnId) => {
+    setColumnOrder(prev => {
+      const index = prev.indexOf(columnId)
+      if (index < 0 || index >= prev.length - 1) return prev // Can't move last column down
+
+      // Don't allow moving lotNumber (required first column)
+      if (columnId === 'lotNumber') return prev
+
+      const newOrder = [...prev]
+      ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
+      localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(newOrder))
+      return newOrder
+    })
+  }
+
   // Check if column is visible
   const isColumnVisible = (columnId: ColumnId) => visibleColumns.includes(columnId)
+
+  // Get ordered and visible columns
+  const orderedVisibleColumns = useMemo(() => {
+    return columnOrder.filter(colId => isColumnVisible(colId))
+  }, [columnOrder, visibleColumns])
 
   // Get filter, sort, and pagination from URL
   const currentPage = parseInt(searchParams.get('page') || '1', 10)
@@ -1057,40 +1109,77 @@ export function LotsPage() {
                 className="fixed inset-0 z-10"
                 onClick={() => setColumnSettingsOpen(false)}
               />
-              <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-lg border bg-white shadow-lg">
+              <div className="absolute right-0 top-full mt-1 z-20 w-64 rounded-lg border bg-white shadow-lg">
                 <div className="p-2 border-b">
-                  <span className="text-xs font-medium text-muted-foreground">Show/Hide Columns</span>
+                  <span className="text-xs font-medium text-muted-foreground">Show/Hide & Reorder Columns</span>
                 </div>
                 <div className="p-1">
-                  {COLUMN_CONFIG.map((column) => {
+                  {columnOrder.map((columnId, index) => {
+                    const column = COLUMN_CONFIG.find(c => c.id === columnId)
+                    if (!column) return null
                     // Skip subcontractor for subcontractors, budget for non-commercial
                     if (column.id === 'subcontractor' && isSubcontractor) return null
                     if (column.id === 'budget' && !canViewBudgets) return null
 
+                    const isFirst = index === 0 || columnOrder[index - 1] === 'lotNumber'
+                    const isLast = index === columnOrder.length - 1
+
                     return (
-                      <button
+                      <div
                         key={column.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleColumn(column.id)
-                        }}
-                        disabled={column.required}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted text-left ${
-                          column.required ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
+                        className="flex items-center gap-1 px-2 py-1.5 text-sm rounded hover:bg-muted"
                       >
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                          isColumnVisible(column.id) ? 'bg-primary border-primary' : 'border-gray-300'
-                        }`}>
-                          {isColumnVisible(column.id) && (
-                            <Check className="h-3 w-3 text-white" />
+                        {/* Visibility toggle */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleColumn(column.id)
+                          }}
+                          disabled={column.required}
+                          className={`flex items-center gap-2 flex-1 text-left ${
+                            column.required ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                            isColumnVisible(column.id) ? 'bg-primary border-primary' : 'border-gray-300'
+                          }`}>
+                            {isColumnVisible(column.id) && (
+                              <Check className="h-3 w-3 text-white" />
+                            )}
+                          </div>
+                          <span className="truncate">{column.label}</span>
+                          {column.required && (
+                            <span className="text-xs text-muted-foreground">(req)</span>
                           )}
-                        </div>
-                        {column.label}
-                        {column.required && (
-                          <span className="text-xs text-muted-foreground ml-auto">(required)</span>
+                        </button>
+                        {/* Reorder buttons */}
+                        {!column.required && (
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                moveColumnUp(column.id)
+                              }}
+                              disabled={isFirst}
+                              className={`p-0.5 rounded hover:bg-gray-200 ${isFirst ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              title="Move up"
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                moveColumnDown(column.id)
+                              }}
+                              disabled={isLast}
+                              className={`p-0.5 rounded hover:bg-gray-200 ${isLast ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              title="Move down"
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </button>
+                          </div>
                         )}
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -1131,27 +1220,30 @@ export function LotsPage() {
                     />
                   </th>
                 )}
-                {isColumnVisible('lotNumber') && (
-                  <SortableHeader field="lotNumber">Lot Number</SortableHeader>
-                )}
-                {isColumnVisible('description') && (
-                  <SortableHeader field="description">Description</SortableHeader>
-                )}
-                {isColumnVisible('chainage') && (
-                  <SortableHeader field="chainage">Chainage</SortableHeader>
-                )}
-                {isColumnVisible('activityType') && (
-                  <SortableHeader field="activityType">Activity Type</SortableHeader>
-                )}
-                {isColumnVisible('status') && (
-                  <SortableHeader field="status">Status</SortableHeader>
-                )}
-                {!isSubcontractor && isColumnVisible('subcontractor') && (
-                  <th className="text-left p-3 font-medium">Subcontractor</th>
-                )}
-                {canViewBudgets && isColumnVisible('budget') && (
-                  <th className="text-left p-3 font-medium">Budget</th>
-                )}
+                {orderedVisibleColumns.map((columnId) => {
+                  // Skip subcontractor for subcontractors, budget for non-commercial
+                  if (columnId === 'subcontractor' && isSubcontractor) return null
+                  if (columnId === 'budget' && !canViewBudgets) return null
+
+                  const column = COLUMN_CONFIG.find(c => c.id === columnId)
+                  if (!column) return null
+
+                  // Sortable columns
+                  if (['lotNumber', 'description', 'chainage', 'activityType', 'status'].includes(columnId)) {
+                    return (
+                      <SortableHeader key={columnId} field={columnId}>
+                        {column.label}
+                      </SortableHeader>
+                    )
+                  }
+
+                  // Non-sortable columns
+                  return (
+                    <th key={columnId} className="text-left p-3 font-medium">
+                      {column.label}
+                    </th>
+                  )
+                })}
                 <th className="text-left p-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -1201,38 +1293,42 @@ export function LotsPage() {
                         )}
                       </td>
                     )}
-                    {isColumnVisible('lotNumber') && (
-                      <td className="p-3 font-medium">{lot.lotNumber}</td>
-                    )}
-                    {isColumnVisible('description') && (
-                      <td className="p-3 max-w-xs">
-                        <span
-                          className="block truncate"
-                          title={lot.description || ''}
-                        >
-                          {lot.description || '—'}
-                        </span>
-                      </td>
-                    )}
-                    {isColumnVisible('chainage') && (
-                      <td className="p-3">{formatChainage(lot)}</td>
-                    )}
-                    {isColumnVisible('activityType') && (
-                      <td className="p-3 capitalize">{lot.activityType || '—'}</td>
-                    )}
-                    {isColumnVisible('status') && (
-                      <td className="p-3">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
-                          {lot.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                    )}
-                    {!isSubcontractor && isColumnVisible('subcontractor') && (
-                      <td className="p-3">{lot.assignedSubcontractor?.companyName || '—'}</td>
-                    )}
-                    {canViewBudgets && isColumnVisible('budget') && (
-                      <td className="p-3">{lot.budgetAmount ? `$${lot.budgetAmount.toLocaleString()}` : '—'}</td>
-                    )}
+                    {orderedVisibleColumns.map((columnId) => {
+                      // Skip subcontractor for subcontractors, budget for non-commercial
+                      if (columnId === 'subcontractor' && isSubcontractor) return null
+                      if (columnId === 'budget' && !canViewBudgets) return null
+
+                      switch (columnId) {
+                        case 'lotNumber':
+                          return <td key={columnId} className="p-3 font-medium">{lot.lotNumber}</td>
+                        case 'description':
+                          return (
+                            <td key={columnId} className="p-3 max-w-xs">
+                              <span className="block truncate" title={lot.description || ''}>
+                                {lot.description || '—'}
+                              </span>
+                            </td>
+                          )
+                        case 'chainage':
+                          return <td key={columnId} className="p-3">{formatChainage(lot)}</td>
+                        case 'activityType':
+                          return <td key={columnId} className="p-3 capitalize">{lot.activityType || '—'}</td>
+                        case 'status':
+                          return (
+                            <td key={columnId} className="p-3">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
+                                {lot.status.replace('_', ' ')}
+                              </span>
+                            </td>
+                          )
+                        case 'subcontractor':
+                          return <td key={columnId} className="p-3">{lot.assignedSubcontractor?.companyName || '—'}</td>
+                        case 'budget':
+                          return <td key={columnId} className="p-3">{lot.budgetAmount ? `$${lot.budgetAmount.toLocaleString()}` : '—'}</td>
+                        default:
+                          return null
+                      }
+                    })}
                     <td className="p-3">
                       <div className="flex items-center gap-1">
                         <button
