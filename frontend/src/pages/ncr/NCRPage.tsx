@@ -73,6 +73,12 @@ export function NCRPage() {
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [submittingRectification, setSubmittingRectification] = useState(false)
 
+  // Feature #218: Reject rectification state
+  const [showRejectRectificationModal, setShowRejectRectificationModal] = useState(false)
+  const [rejectingRectificationNcr, setRejectingRectificationNcr] = useState<NCR | null>(null)
+  const [rejectFeedback, setRejectFeedback] = useState('')
+  const [rejectingRectification, setRejectingRectification] = useState(false)
+
   // Copy NCR link handler
   const handleCopyNcrLink = async (ncrId: string, ncrNumber: string) => {
     const url = `${window.location.origin}/projects/${projectId}/ncrs?ncr=${ncrId}`
@@ -503,6 +509,52 @@ export function NCRPage() {
       })
     } finally {
       setSubmittingRectification(false)
+    }
+  }
+
+  // Feature #218: Handle reject rectification
+  const handleRejectRectification = async () => {
+    if (!rejectingRectificationNcr || !rejectFeedback.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Feedback is required when rejecting rectification',
+        variant: 'error',
+      })
+      return
+    }
+
+    setRejectingRectification(true)
+    try {
+      const response = await fetch(`${API_URL}/api/ncrs/${rejectingRectificationNcr.id}/reject-rectification`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ feedback: rejectFeedback }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to reject rectification')
+      }
+
+      toast({
+        title: 'Rectification Rejected',
+        description: 'NCR has been returned to rectification status and responsible party notified',
+      })
+      setShowRejectRectificationModal(false)
+      setRejectingRectificationNcr(null)
+      setRejectFeedback('')
+      fetchNcrs()
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to reject rectification',
+        variant: 'error',
+      })
+    } finally {
+      setRejectingRectification(false)
     }
   }
 
@@ -997,6 +1049,22 @@ export function NCRPage() {
                         </button>
                       )}
 
+                      {/* Feature #218: Reject Rectification Button */}
+                      {ncr.status === 'verification' &&
+                       (userRole?.isQualityManager || userRole?.role === 'project_manager' || userRole?.role === 'admin') && (
+                        <button
+                          onClick={() => {
+                            setRejectingRectificationNcr(ncr)
+                            setShowRejectRectificationModal(true)
+                          }}
+                          disabled={actionLoading}
+                          className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                          title="Reject rectification and return to responsible party"
+                        >
+                          Reject
+                        </button>
+                      )}
+
                       {/* Close Button */}
                       {ncr.status === 'verification' && (
                         <button
@@ -1384,6 +1452,74 @@ export function NCRPage() {
                 title={evidenceFiles.length === 0 ? 'Please upload at least one piece of evidence' : 'Submit for verification'}
               >
                 {submittingRectification ? 'Submitting...' : 'Submit for Verification'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Feature #218: Reject Rectification Modal */}
+      {showRejectRectificationModal && rejectingRectificationNcr && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-red-600">Reject Rectification</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRejectRectificationModal(false)
+                  setRejectingRectificationNcr(null)
+                  setRejectFeedback('')
+                }}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <p className="text-sm font-medium text-gray-800">{rejectingRectificationNcr.ncrNumber}</p>
+              <p className="text-sm text-gray-600 mt-1">{rejectingRectificationNcr.description}</p>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              The rectification will be rejected and returned to the responsible party for additional work.
+              Please provide feedback explaining what needs to be improved.
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">Feedback / Issues Found *</label>
+              <textarea
+                value={rejectFeedback}
+                onChange={(e) => setRejectFeedback(e.target.value)}
+                placeholder="Describe the issues with the rectification and what needs to be addressed..."
+                rows={4}
+                className="w-full border rounded-lg px-3 py-2"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRejectRectificationModal(false)
+                  setRejectingRectificationNcr(null)
+                  setRejectFeedback('')
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                disabled={rejectingRectification}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRejectRectification}
+                disabled={rejectingRectification || !rejectFeedback.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {rejectingRectification ? 'Rejecting...' : 'Reject Rectification'}
               </button>
             </div>
           </div>

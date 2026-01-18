@@ -531,6 +531,99 @@ ncrsRouter.post('/:id/rectify', requireAuth, async (req: any, res) => {
   }
 })
 
+// Feature #218: POST /api/ncrs/:id/reject-rectification - Reject rectification and return to RECTIFICATION status
+ncrsRouter.post('/:id/reject-rectification', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id } = req.params
+    const { feedback } = req.body
+
+    if (!feedback || feedback.trim().length === 0) {
+      return res.status(400).json({ message: 'Feedback is required when rejecting rectification' })
+    }
+
+    const ncr = await prisma.nCR.findUnique({
+      where: { id },
+      include: {
+        project: true,
+        responsibleUser: { select: { id: true, fullName: true, email: true } },
+      },
+    })
+
+    if (!ncr) {
+      return res.status(404).json({ message: 'NCR not found' })
+    }
+
+    // Must be in 'verification' status
+    if (ncr.status !== 'verification') {
+      return res.status(400).json({ message: 'NCR must be in verification status to reject rectification' })
+    }
+
+    // Check if user has QM/PM role on this project
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId: ncr.projectId,
+        userId: user.userId,
+        role: { in: ['quality_manager', 'admin', 'project_manager', 'site_manager'] },
+      },
+    })
+
+    if (!projectUser) {
+      return res.status(403).json({
+        message: 'Only Quality Managers, Project Managers, or Admins can reject rectification',
+      })
+    }
+
+    // Get reviewer info for notifications
+    const reviewer = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { fullName: true, email: true },
+    })
+    const reviewerName = reviewer?.fullName || reviewer?.email || 'QM'
+
+    // Return NCR to rectification status
+    const updatedNcr = await prisma.nCR.update({
+      where: { id },
+      data: {
+        status: 'rectification',
+        verificationNotes: feedback,
+        verifiedAt: null,
+        verifiedById: null,
+        revisionRequested: true,
+        revisionRequestedAt: new Date(),
+        revisionCount: { increment: 1 },
+      },
+      include: {
+        project: { select: { name: true } },
+        raisedBy: { select: { fullName: true, email: true } },
+        responsibleUser: { select: { fullName: true, email: true } },
+      },
+    })
+
+    // Notify responsible party about rejection
+    if (ncr.responsibleUserId) {
+      await prisma.notification.create({
+        data: {
+          userId: ncr.responsibleUserId,
+          projectId: ncr.projectId,
+          type: 'ncr_rectification_rejected',
+          title: `Rectification Rejected`,
+          message: `${reviewerName} has rejected the rectification for ${ncr.ncrNumber}. Feedback: ${feedback.substring(0, 100)}${feedback.length > 100 ? '...' : ''}`,
+          linkUrl: `/projects/${ncr.projectId}/ncr`,
+        },
+      })
+    }
+
+    res.json({
+      ncr: updatedNcr,
+      message: 'Rectification rejected, NCR returned to rectification status',
+    })
+  } catch (error) {
+    console.error('Reject rectification error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
 // POST /api/ncrs/:id/qm-approve - QM approval for major NCRs (Quality Manager only)
 ncrsRouter.post('/:id/qm-approve', requireAuth, async (req: any, res) => {
   try {
