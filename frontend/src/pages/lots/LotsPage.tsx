@@ -319,6 +319,10 @@ export function LotsPage() {
   const sortField = searchParams.get('sort') || 'lotNumber'
   const sortDirection = (searchParams.get('dir') || 'asc') as 'asc' | 'desc'
 
+  // Chainage range filter
+  const chainageMinFilter = searchParams.get('chMin') || ''
+  const chainageMaxFilter = searchParams.get('chMax') || ''
+
   // Status filter dropdown state
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
 
@@ -344,6 +348,23 @@ export function LotsPage() {
         const matchesDescription = (lot.description || '').toLowerCase().includes(query)
         if (!matchesLotNumber && !matchesDescription) return false
       }
+
+      // Chainage range filter: lot's chainage range must overlap with filter range
+      const minFilter = chainageMinFilter ? parseFloat(chainageMinFilter) : null
+      const maxFilter = chainageMaxFilter ? parseFloat(chainageMaxFilter) : null
+
+      if (minFilter !== null || maxFilter !== null) {
+        // If lot has no chainage, skip it when chainage filter is active
+        if (lot.chainageStart === null && lot.chainageEnd === null) return false
+
+        const lotStart = lot.chainageStart ?? lot.chainageEnd ?? 0
+        const lotEnd = lot.chainageEnd ?? lot.chainageStart ?? 0
+
+        // Check for overlap: lot range must intersect with filter range
+        if (minFilter !== null && lotEnd < minFilter) return false
+        if (maxFilter !== null && lotStart > maxFilter) return false
+      }
+
       return true
     })
 
@@ -1420,11 +1441,49 @@ export function LotsPage() {
             )}
           </div>
         </div>
-        {(statusFilters.length > 0 || activityFilter || searchQuery) && (
+        {/* Chainage Range Filter */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium">
+            Chainage:
+          </label>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              value={chainageMinFilter}
+              onChange={(e) => updateFilters({ chMin: e.target.value })}
+              placeholder="Min"
+              className="rounded-lg border bg-background px-2 py-1.5 text-sm w-20"
+              aria-label="Minimum chainage"
+            />
+            <span className="text-muted-foreground">-</span>
+            <input
+              type="number"
+              value={chainageMaxFilter}
+              onChange={(e) => updateFilters({ chMax: e.target.value })}
+              placeholder="Max"
+              className="rounded-lg border bg-background px-2 py-1.5 text-sm w-20"
+              aria-label="Maximum chainage"
+            />
+            {(chainageMinFilter || chainageMaxFilter) && (
+              <button
+                onClick={() => updateFilters({ chMin: '', chMax: '' })}
+                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                title="Clear chainage filter"
+                aria-label="Clear chainage filter"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+        {(statusFilters.length > 0 || activityFilter || searchQuery || chainageMinFilter || chainageMaxFilter) && (
           <>
             <button
               onClick={() => {
-                updateFilters({ status: '', activity: '', search: '' })
+                updateFilters({ status: '', activity: '', search: '', chMin: '', chMax: '' })
               }}
               className="text-sm text-primary hover:underline"
             >
