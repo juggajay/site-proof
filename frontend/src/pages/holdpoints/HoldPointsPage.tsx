@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check } from 'lucide-react'
+import { Link2, Check, FileText, Download } from 'lucide-react'
+import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
 
 interface HoldPoint {
   id: string
@@ -51,6 +52,45 @@ export function HoldPointsPage() {
   const [requesting, setRequesting] = useState(false)
   const [requestError, setRequestError] = useState<{message: string, incompleteItems?: PrerequisiteItem[]} | null>(null)
   const [copiedHpId, setCopiedHpId] = useState<string | null>(null)
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null)
+
+  // Generate Evidence Package PDF handler
+  const handleGenerateEvidencePackage = async (hp: HoldPoint) => {
+    if (!hp.id.startsWith('virtual-')) {
+      setGeneratingPdf(hp.id)
+      try {
+        const response = await fetch(`${apiUrl}/api/holdpoints/${hp.id}/evidence-package`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch evidence package data')
+        }
+
+        const data = await response.json()
+        const evidencePackage = data.evidencePackage as HPEvidencePackageData
+
+        // Generate the PDF
+        generateHPEvidencePackagePDF(evidencePackage)
+
+        toast({
+          title: 'Evidence Package Generated',
+          description: `PDF downloaded for ${hp.lotNumber}`,
+        })
+      } catch (err) {
+        console.error('Failed to generate evidence package:', err)
+        toast({
+          title: 'Error',
+          description: 'Failed to generate evidence package PDF',
+          variant: 'destructive',
+        })
+      } finally {
+        setGeneratingPdf(null)
+      }
+    }
+  }
 
   // Copy HP link handler
   const handleCopyHpLink = async (hpId: string, lotNumber: string, description: string) => {
@@ -335,7 +375,29 @@ export function HoldPointsPage() {
                         <span className="text-sm text-amber-600">Awaiting...</span>
                       )}
                       {hp.status === 'released' && (
-                        <span className="text-sm text-green-600">✓ Released</span>
+                        <>
+                          <span className="text-sm text-green-600">✓ Released</span>
+                          {!hp.id.startsWith('virtual-') && (
+                            <button
+                              onClick={() => handleGenerateEvidencePackage(hp)}
+                              disabled={generatingPdf === hp.id}
+                              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Generate Evidence Package PDF"
+                            >
+                              {generatingPdf === hp.id ? (
+                                <>
+                                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
+                                  <span>Generating...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-3 w-3" />
+                                  <span>Evidence PDF</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>
