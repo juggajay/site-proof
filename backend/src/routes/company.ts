@@ -15,6 +15,14 @@ const TIER_PROJECT_LIMITS: Record<string, number> = {
   unlimited: Infinity,
 }
 
+// Subscription tier user limits
+const TIER_USER_LIMITS: Record<string, number> = {
+  basic: 5,
+  professional: 25,
+  enterprise: 100,
+  unlimited: Infinity,
+}
+
 // GET /api/company - Get the current user's company
 companyRouter.get('/', async (req, res) => {
   try {
@@ -53,14 +61,22 @@ companyRouter.get('/', async (req, res) => {
       where: { companyId: user.companyId }
     })
 
+    // Get user count for this company
+    const userCount = await prisma.user.count({
+      where: { companyId: user.companyId }
+    })
+
     const tier = company.subscriptionTier || 'basic'
     const projectLimit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic
+    const userLimit = TIER_USER_LIMITS[tier] || TIER_USER_LIMITS.basic
 
     res.json({
       company: {
         ...company,
         projectCount,
         projectLimit,
+        userCount,
+        userLimit,
       }
     })
   } catch (error) {

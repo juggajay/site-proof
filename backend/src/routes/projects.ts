@@ -579,6 +579,42 @@ projectsRouter.post('/:id/users', async (req, res) => {
       return res.status(403).json({ error: 'Only admins can invite users' })
     }
 
+    // Check user limit for the company
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { companyId: true }
+    })
+
+    if (project?.companyId) {
+      const company = await prisma.company.findUnique({
+        where: { id: project.companyId },
+        select: { subscriptionTier: true }
+      })
+
+      if (company) {
+        const TIER_USER_LIMITS: Record<string, number> = {
+          basic: 5,
+          professional: 25,
+          enterprise: 100,
+          unlimited: Infinity,
+        }
+
+        const tier = company.subscriptionTier || 'basic'
+        const userLimit = TIER_USER_LIMITS[tier] || TIER_USER_LIMITS.basic
+
+        const userCount = await prisma.user.count({
+          where: { companyId: project.companyId }
+        })
+
+        if (userCount >= userLimit) {
+          return res.status(403).json({
+            error: 'User Limit Reached',
+            message: `Your ${tier} subscription allows up to ${userLimit} users. Upgrade your plan to add more team members.`
+          })
+        }
+      }
+    }
+
     // Find the user to invite
     const invitedUser = await prisma.user.findUnique({
       where: { email },
