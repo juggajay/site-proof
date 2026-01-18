@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check, FileText, Download, Eye, X, RefreshCw } from 'lucide-react'
+import { Link2, Check, FileText, Download, Eye, X, RefreshCw, ClipboardCheck } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
 
 interface HoldPoint {
@@ -66,6 +66,8 @@ export function HoldPointsPage() {
   const [copiedHpId, setCopiedHpId] = useState<string | null>(null)
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null)
   const [chasingHpId, setChasingHpId] = useState<string | null>(null)
+  const [showRecordReleaseModal, setShowRecordReleaseModal] = useState(false)
+  const [recordingRelease, setRecordingRelease] = useState(false)
 
   // Generate Evidence Package PDF handler
   const handleGenerateEvidencePackage = async (hp: HoldPoint) => {
@@ -130,6 +132,71 @@ export function HoldPointsPage() {
         description: `Link to HP for ${lotNumber} has been copied.`,
       })
       setTimeout(() => setCopiedHpId(null), 2000)
+    }
+  }
+
+  // Record release handler (Feature #184)
+  const handleRecordRelease = (hp: HoldPoint) => {
+    setSelectedHoldPoint(hp)
+    setShowRecordReleaseModal(true)
+  }
+
+  const handleSubmitRecordRelease = async (
+    releasedByName: string,
+    releasedByOrg: string,
+    releaseDate: string,
+    releaseTime: string,
+    releaseNotes: string
+  ) => {
+    if (!selectedHoldPoint || selectedHoldPoint.id.startsWith('virtual-') || !token) return
+
+    setRecordingRelease(true)
+    try {
+      const response = await fetch(`${apiUrl}/api/holdpoints/${selectedHoldPoint.id}/release`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          releasedByName,
+          releasedByOrg,
+          releaseMethod: 'digital',
+          releaseNotes: releaseNotes || null,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to record release')
+      }
+
+      // Refresh hold points list
+      const refreshResponse = await fetch(`${apiUrl}/api/holdpoints/project/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json()
+        setHoldPoints(refreshData.holdPoints || [])
+      }
+
+      toast({
+        title: 'Release Recorded',
+        description: `Hold point for ${selectedHoldPoint.lotNumber} has been released`,
+      })
+
+      setShowRecordReleaseModal(false)
+      setSelectedHoldPoint(null)
+    } catch (err) {
+      console.error('Failed to record release:', err)
+      toast({
+        title: 'Error',
+        description: 'Failed to record hold point release',
+        variant: 'destructive',
+      })
+    } finally {
+      setRecordingRelease(false)
     }
   }
 
@@ -452,24 +519,34 @@ export function HoldPointsPage() {
                         <>
                           <span className="text-sm text-amber-600">Awaiting...</span>
                           {!hp.id.startsWith('virtual-') && (
-                            <button
-                              onClick={() => handleChaseHoldPoint(hp)}
-                              disabled={chasingHpId === hp.id}
-                              className="flex items-center gap-1 px-2 py-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Send follow-up notification"
-                            >
-                              {chasingHpId === hp.id ? (
-                                <>
-                                  <RefreshCw className="h-3 w-3 animate-spin" />
-                                  <span>Chasing...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <RefreshCw className="h-3 w-3" />
-                                  <span>Chase</span>
-                                </>
-                              )}
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleRecordRelease(hp)}
+                                className="flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100"
+                                title="Record hold point release"
+                              >
+                                <ClipboardCheck className="h-3 w-3" />
+                                <span>Record Release</span>
+                              </button>
+                              <button
+                                onClick={() => handleChaseHoldPoint(hp)}
+                                disabled={chasingHpId === hp.id}
+                                className="flex items-center gap-1 px-2 py-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Send follow-up notification"
+                              >
+                                {chasingHpId === hp.id ? (
+                                  <>
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                    <span>Chasing...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCw className="h-3 w-3" />
+                                    <span>Chase</span>
+                                  </>
+                                )}
+                              </button>
+                            </>
                           )}
                         </>
                       )}
@@ -522,6 +599,19 @@ export function HoldPointsPage() {
             setRequestError(null)
           }}
           onSubmit={handleSubmitRequest}
+        />
+      )}
+
+      {/* Record Release Modal (Feature #184) */}
+      {showRecordReleaseModal && selectedHoldPoint && (
+        <RecordReleaseModal
+          holdPoint={selectedHoldPoint}
+          recording={recordingRelease}
+          onClose={() => {
+            setShowRecordReleaseModal(false)
+            setSelectedHoldPoint(null)
+          }}
+          onSubmit={handleSubmitRecordRelease}
         />
       )}
     </div>
@@ -1053,6 +1143,158 @@ function RequestReleaseModal({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Record Release Modal Component (Feature #184)
+function RecordReleaseModal({
+  holdPoint,
+  recording,
+  onClose,
+  onSubmit,
+}: {
+  holdPoint: HoldPoint
+  recording: boolean
+  onClose: () => void
+  onSubmit: (
+    releasedByName: string,
+    releasedByOrg: string,
+    releaseDate: string,
+    releaseTime: string,
+    releaseNotes: string
+  ) => void
+}) {
+  const [releasedByName, setReleasedByName] = useState('')
+  const [releasedByOrg, setReleasedByOrg] = useState('')
+  const [releaseDate, setReleaseDate] = useState(new Date().toISOString().split('T')[0])
+  const [releaseTime, setReleaseTime] = useState(
+    new Date().toTimeString().slice(0, 5)
+  )
+  const [releaseNotes, setReleaseNotes] = useState('')
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!releasedByName.trim()) {
+      toast({
+        title: 'Name required',
+        description: 'Please enter the name of the person releasing the hold point',
+        variant: 'destructive',
+      })
+      return
+    }
+    onSubmit(releasedByName, releasedByOrg, releaseDate, releaseTime, releaseNotes)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-background rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Record Hold Point Release</h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-muted rounded"
+            disabled={recording}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mb-4 p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">Lot</div>
+          <div className="font-medium">{holdPoint.lotNumber}</div>
+          <div className="text-sm text-muted-foreground mt-2">Hold Point</div>
+          <div className="font-medium">{holdPoint.description}</div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Releaser Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={releasedByName}
+              onChange={(e) => setReleasedByName(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="Enter name of person releasing"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Organization
+            </label>
+            <input
+              type="text"
+              value={releasedByOrg}
+              onChange={(e) => setReleasedByOrg(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="Enter organization (e.g., Superintendent's Rep)"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Release Date</label>
+              <input
+                type="date"
+                value={releaseDate}
+                onChange={(e) => setReleaseDate(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Release Time</label>
+              <input
+                type="time"
+                value={releaseTime}
+                onChange={(e) => setReleaseTime(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Notes</label>
+            <textarea
+              value={releaseNotes}
+              onChange={(e) => setReleaseNotes(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+              rows={3}
+              placeholder="Any additional notes about the release..."
+            />
+          </div>
+
+          {/* Signature placeholder - future enhancement */}
+          <div className="p-4 bg-muted/50 border border-dashed rounded-lg">
+            <div className="text-sm text-muted-foreground text-center">
+              <ClipboardCheck className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+              <p>Digital signature capture</p>
+              <p className="text-xs">(Coming soon)</p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border rounded-lg hover:bg-muted"
+              disabled={recording}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              disabled={recording || !releasedByName.trim()}
+            >
+              {recording ? 'Recording...' : 'Record Release'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
