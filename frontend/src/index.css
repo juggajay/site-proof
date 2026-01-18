@@ -94,8 +94,157 @@
 }
 
 /* Print styles */
+@page {
+  size: A4;
+  margin: 20mm 15mm 25mm 15mm;
+
+  @top-center {
+    content: "SiteProof Report";
+    font-size: 10pt;
+    color: #666;
+  }
+
+  @bottom-left {
+    content: "Generated: " attr(data-generated);
+    font-size: 9pt;
+    color: #888;
+  }
+
+  @bottom-center {
+    content: counter(page) " of " counter(pages);
+    font-size: 9pt;
+    color: #666;
+  }
+
+  @bottom-right {
+    content: "SiteProof v2";
+    font-size: 9pt;
+    color: #888;
+  }
+}
+
 @media print {
-  .no-print {
+  /* Hide non-print elements */
+  .no-print,
+  .print\:hidden,
+  nav,
+  header,
+  aside,
+  [role="complementary"],
+  [role="banner"],
+  button:not(.print-show) {
     display: none !important;
+  }
+
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Reset background and colors for printing */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 10pt;
+    line-height: 1.4;
+  }
+
+  /* Main content takes full width */
+  main {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Table styles for print */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 6px 8px !important;
+    font-size: 9pt;
+  }
+
+  th {
+    background-color: #f5f5f5 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Preserve background colors in print */
+  .bg-green-100, .bg-green-50, .bg-red-100, .bg-red-50,
+  .bg-blue-100, .bg-blue-50, .bg-amber-100, .bg-amber-50,
+  .bg-gray-100, .bg-gray-50 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Page break controls */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+  }
+
+  .avoid-break {
+    page-break-inside: avoid;
+  }
+
+  /* Report header styling */
+  .report-header {
+    border-bottom: 2px solid #333;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+  }
+
+  .report-header h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    margin-bottom: 8px;
+  }
+
+  .report-header .report-meta {
+    font-size: 10pt;
+    color: #666;
+  }
+
+  /* Section headers */
+  h2, h3 {
+    page-break-after: avoid;
+    margin-top: 15px;
+    margin-bottom: 10px;
+  }
+
+  /* Cards in grid - print friendly */
+  .grid {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+
+  .grid > div {
+    flex: 1 1 auto !important;
+    min-width: 100px !important;
+    padding: 8px !important;
+  }
+
+  /* Links - show URL in print */
+  a[href]:after {
+    content: none;
   }
 }

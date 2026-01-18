@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTheme } from '@/lib/theme'
 import { useDateFormat, DateFormat } from '@/lib/dateFormat'
 import { useTimezone, TIMEZONES } from '@/lib/timezone'
 import { getAuthToken, useAuth } from '@/lib/auth'
-import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut } from 'lucide-react'
+import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut, Mail, Bell, Send } from 'lucide-react'
 
 // App version info
 const APP_VERSION = '1.3.0'
@@ -33,6 +33,22 @@ export function SettingsPage() {
   const [isLeavingCompany, setIsLeavingCompany] = useState(false)
   const [leaveCompanyError, setLeaveCompanyError] = useState<string | null>(null)
 
+  // Email notification preferences state
+  const [emailPreferences, setEmailPreferences] = useState({
+    enabled: true,
+    mentions: true,
+    ncrAssigned: true,
+    ncrStatusChange: true,
+    holdPointReminder: true,
+    commentReply: true,
+    scheduledReports: true,
+    dailyDigest: false,
+  })
+  const [isLoadingEmailPrefs, setIsLoadingEmailPrefs] = useState(true)
+  const [isSavingEmailPrefs, setIsSavingEmailPrefs] = useState(false)
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false)
+  const [emailPrefsMessage, setEmailPrefsMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+
   const themeOptions = [
     { value: 'light' as const, label: 'Light', icon: Sun, description: 'Always use light mode' },
     { value: 'dark' as const, label: 'Dark', icon: Moon, description: 'Always use dark mode' },
@@ -47,6 +63,109 @@ export function SettingsPage() {
 
   // Get current timezone label
   const currentTimezoneInfo = TIMEZONES.find(tz => tz.value === timezone)
+
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
+
+  // Load email notification preferences
+  useEffect(() => {
+    const loadEmailPreferences = async () => {
+      try {
+        const token = getAuthToken()
+        if (!token) return
+
+        const response = await fetch(`${apiUrl}/api/notifications/email-preferences`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setEmailPreferences(data.preferences)
+        }
+      } catch (err) {
+        console.error('Failed to load email preferences:', err)
+      } finally {
+        setIsLoadingEmailPrefs(false)
+      }
+    }
+
+    loadEmailPreferences()
+  }, [])
+
+  // Save email notification preferences
+  const saveEmailPreferences = async (newPreferences: typeof emailPreferences) => {
+    setIsSavingEmailPrefs(true)
+    setEmailPrefsMessage(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setEmailPrefsMessage({ type: 'error', text: 'You must be logged in to update preferences' })
+        return
+      }
+
+      const response = await fetch(`${apiUrl}/api/notifications/email-preferences`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ preferences: newPreferences }),
+      })
+
+      if (response.ok) {
+        setEmailPreferences(newPreferences)
+        setEmailPrefsMessage({ type: 'success', text: 'Email preferences saved' })
+        setTimeout(() => setEmailPrefsMessage(null), 3000)
+      } else {
+        throw new Error('Failed to save preferences')
+      }
+    } catch (err) {
+      setEmailPrefsMessage({ type: 'error', text: 'Failed to save email preferences' })
+    } finally {
+      setIsSavingEmailPrefs(false)
+    }
+  }
+
+  // Toggle email preference
+  const toggleEmailPreference = (key: keyof typeof emailPreferences) => {
+    const newPreferences = { ...emailPreferences, [key]: !emailPreferences[key] }
+    saveEmailPreferences(newPreferences)
+  }
+
+  // Send test email
+  const sendTestEmail = async () => {
+    setIsSendingTestEmail(true)
+    setEmailPrefsMessage(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setEmailPrefsMessage({ type: 'error', text: 'You must be logged in to send test email' })
+        return
+      }
+
+      const response = await fetch(`${apiUrl}/api/notifications/send-test-email`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setEmailPrefsMessage({ type: 'success', text: `Test email sent to ${data.sentTo}` })
+        setTimeout(() => setEmailPrefsMessage(null), 5000)
+      } else {
+        setEmailPrefsMessage({ type: 'error', text: data.error || 'Failed to send test email' })
+      }
+    } catch (err) {
+      setEmailPrefsMessage({ type: 'error', text: 'Failed to send test email' })
+    } finally {
+      setIsSendingTestEmail(false)
+    }
+  }
 
   // GDPR Data Export function
   const handleExportData = async () => {
@@ -330,17 +449,111 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Placeholder for other settings sections */}
+      {/* Email Notification Settings */}
       <div className="rounded-lg border bg-card p-6 space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold">Notifications</h2>
-          <p className="text-sm text-muted-foreground">
-            Configure how you receive notifications.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Email Notifications
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Configure which email notifications you receive.
+            </p>
+          </div>
+          <button
+            onClick={sendTestEmail}
+            disabled={isSendingTestEmail || !emailPreferences.enabled}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSendingTestEmail ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Send Test Email
+          </button>
         </div>
-        <p className="text-muted-foreground text-sm">
-          Notification settings coming soon.
-        </p>
+
+        {/* Status Message */}
+        {emailPrefsMessage && (
+          <div className={`flex items-center gap-2 text-sm px-4 py-2 rounded-md ${
+            emailPrefsMessage.type === 'success'
+              ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400'
+              : 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400'
+          }`}>
+            {emailPrefsMessage.type === 'success' ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <AlertTriangle className="h-4 w-4" />
+            )}
+            {emailPrefsMessage.text}
+          </div>
+        )}
+
+        {isLoadingEmailPrefs ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading preferences...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Master Toggle */}
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Bell className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Enable Email Notifications</p>
+                  <p className="text-sm text-muted-foreground">Receive notifications via email</p>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleEmailPreference('enabled')}
+                disabled={isSavingEmailPrefs}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  emailPreferences.enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                  emailPreferences.enabled ? 'translate-x-7' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+
+            {/* Individual Preferences */}
+            <div className={`space-y-3 ${!emailPreferences.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+              <p className="text-sm font-medium text-muted-foreground">Notification Types</p>
+
+              {[
+                { key: 'mentions' as const, label: 'Mentions', description: 'When someone @mentions you in a comment' },
+                { key: 'ncrAssigned' as const, label: 'NCR Assigned', description: 'When you are assigned to an NCR' },
+                { key: 'ncrStatusChange' as const, label: 'NCR Status Changes', description: 'When an NCR you\'re involved with changes status' },
+                { key: 'holdPointReminder' as const, label: 'Hold Point Reminders', description: 'Reminders for upcoming hold points' },
+                { key: 'commentReply' as const, label: 'Comment Replies', description: 'When someone replies to your comment' },
+                { key: 'scheduledReports' as const, label: 'Scheduled Reports', description: 'Delivery of scheduled report emails' },
+                { key: 'dailyDigest' as const, label: 'Daily Digest', description: 'Receive all notifications in a single daily summary email' },
+              ].map((pref) => (
+                <div key={pref.key} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
+                  <div>
+                    <p className="font-medium">{pref.label}</p>
+                    <p className="text-sm text-muted-foreground">{pref.description}</p>
+                  </div>
+                  <button
+                    onClick={() => toggleEmailPreference(pref.key)}
+                    disabled={isSavingEmailPrefs}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      emailPreferences[pref.key] ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      emailPreferences[pref.key] ? 'translate-x-5' : 'translate-x-0.5'
+                    }`} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border bg-card p-6 space-y-4">
