@@ -873,3 +873,191 @@ projectsRouter.get('/:id/audit-logs', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// ============================================================================
+// Project Areas
+// ============================================================================
+
+// GET /api/projects/:id/areas - Get all project areas
+projectsRouter.get('/:id/areas', async (req, res) => {
+  try {
+    const { id: projectId } = req.params
+    const user = req.user!
+
+    // Check user has access to project
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: user.id }
+    })
+
+    if (!projectUser) {
+      return res.status(403).json({ error: 'Not a member of this project' })
+    }
+
+    const areas = await prisma.projectArea.findMany({
+      where: { projectId },
+      orderBy: { chainageStart: 'asc' }
+    })
+
+    res.json({
+      areas: areas.map(area => ({
+        id: area.id,
+        name: area.name,
+        chainageStart: area.chainageStart ? Number(area.chainageStart) : null,
+        chainageEnd: area.chainageEnd ? Number(area.chainageEnd) : null,
+        colour: area.colour,
+        createdAt: area.createdAt
+      }))
+    })
+  } catch (error) {
+    console.error('Get project areas error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/projects/:id/areas - Create a new project area
+projectsRouter.post('/:id/areas', async (req, res) => {
+  try {
+    const { id: projectId } = req.params
+    const user = req.user!
+    const { name, chainageStart, chainageEnd, colour } = req.body
+
+    // Check user has admin access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: user.id }
+    })
+
+    const isAdmin = projectUser?.role === 'admin' ||
+                   projectUser?.role === 'project_manager' ||
+                   user.roleInCompany === 'admin' ||
+                   user.roleInCompany === 'owner'
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only admins can create areas' })
+    }
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Area name is required' })
+    }
+
+    const area = await prisma.projectArea.create({
+      data: {
+        projectId,
+        name: name.trim(),
+        chainageStart: chainageStart != null ? chainageStart : null,
+        chainageEnd: chainageEnd != null ? chainageEnd : null,
+        colour: colour || null
+      }
+    })
+
+    res.status(201).json({
+      area: {
+        id: area.id,
+        name: area.name,
+        chainageStart: area.chainageStart ? Number(area.chainageStart) : null,
+        chainageEnd: area.chainageEnd ? Number(area.chainageEnd) : null,
+        colour: area.colour,
+        createdAt: area.createdAt
+      }
+    })
+  } catch (error) {
+    console.error('Create project area error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PATCH /api/projects/:id/areas/:areaId - Update a project area
+projectsRouter.patch('/:id/areas/:areaId', async (req, res) => {
+  try {
+    const { id: projectId, areaId } = req.params
+    const user = req.user!
+    const { name, chainageStart, chainageEnd, colour } = req.body
+
+    // Check user has admin access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: user.id }
+    })
+
+    const isAdmin = projectUser?.role === 'admin' ||
+                   projectUser?.role === 'project_manager' ||
+                   user.roleInCompany === 'admin' ||
+                   user.roleInCompany === 'owner'
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only admins can update areas' })
+    }
+
+    // Check area exists and belongs to project
+    const existingArea = await prisma.projectArea.findFirst({
+      where: { id: areaId, projectId }
+    })
+
+    if (!existingArea) {
+      return res.status(404).json({ error: 'Area not found' })
+    }
+
+    const updateData: Record<string, unknown> = {}
+    if (name !== undefined) updateData.name = name.trim()
+    if (chainageStart !== undefined) updateData.chainageStart = chainageStart
+    if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd
+    if (colour !== undefined) updateData.colour = colour
+
+    const area = await prisma.projectArea.update({
+      where: { id: areaId },
+      data: updateData
+    })
+
+    res.json({
+      area: {
+        id: area.id,
+        name: area.name,
+        chainageStart: area.chainageStart ? Number(area.chainageStart) : null,
+        chainageEnd: area.chainageEnd ? Number(area.chainageEnd) : null,
+        colour: area.colour,
+        createdAt: area.createdAt
+      }
+    })
+  } catch (error) {
+    console.error('Update project area error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/projects/:id/areas/:areaId - Delete a project area
+projectsRouter.delete('/:id/areas/:areaId', async (req, res) => {
+  try {
+    const { id: projectId, areaId } = req.params
+    const user = req.user!
+
+    // Check user has admin access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: user.id }
+    })
+
+    const isAdmin = projectUser?.role === 'admin' ||
+                   projectUser?.role === 'project_manager' ||
+                   user.roleInCompany === 'admin' ||
+                   user.roleInCompany === 'owner'
+
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only admins can delete areas' })
+    }
+
+    // Check area exists and belongs to project
+    const existingArea = await prisma.projectArea.findFirst({
+      where: { id: areaId, projectId }
+    })
+
+    if (!existingArea) {
+      return res.status(404).json({ error: 'Area not found' })
+    }
+
+    await prisma.projectArea.delete({
+      where: { id: areaId }
+    })
+
+    res.json({ message: 'Area deleted successfully' })
+  } catch (error) {
+    console.error('Delete project area error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})

@@ -30,14 +30,33 @@ const requireAuth = async (req: any, res: any, next: any) => {
 // Get ITP templates for a project
 itpRouter.get('/templates', requireAuth, async (req: any, res) => {
   try {
-    const { projectId } = req.query
+    const { projectId, includeGlobal } = req.query
 
     if (!projectId) {
       return res.status(400).json({ error: 'projectId is required' })
     }
 
+    // Get the project's specification set
+    const project = await prisma.project.findUnique({
+      where: { id: projectId as string },
+      select: { specificationSet: true }
+    })
+
+    // Build the query - include project templates and optionally global templates matching spec
+    const whereClause = includeGlobal === 'true' && project?.specificationSet
+      ? {
+          OR: [
+            { projectId: projectId as string },
+            {
+              projectId: null,
+              stateSpec: project.specificationSet
+            }
+          ]
+        }
+      : { projectId: projectId as string }
+
     const templates = await prisma.iTPTemplate.findMany({
-      where: { projectId: projectId as string },
+      where: whereClause,
       include: {
         checklistItems: {
           orderBy: { sequenceNumber: 'asc' }
@@ -49,6 +68,8 @@ itpRouter.get('/templates', requireAuth, async (req: any, res) => {
     // Transform to frontend-friendly format
     const transformedTemplates = templates.map(t => ({
       ...t,
+      isGlobalTemplate: t.projectId === null,
+      stateSpec: t.stateSpec,
       checklistItems: t.checklistItems.map(item => ({
         id: item.id,
         description: item.description,
@@ -62,7 +83,10 @@ itpRouter.get('/templates', requireAuth, async (req: any, res) => {
       }))
     }))
 
-    res.json({ templates: transformedTemplates })
+    res.json({
+      templates: transformedTemplates,
+      projectSpecificationSet: project?.specificationSet || null
+    })
   } catch (error) {
     console.error('Error fetching ITP templates:', error)
     res.status(500).json({ error: 'Failed to fetch templates' })

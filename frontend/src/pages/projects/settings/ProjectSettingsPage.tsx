@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
-import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive, CheckCircle2 } from 'lucide-react'
+import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive, CheckCircle2, MapPin } from 'lucide-react'
 
 interface Project {
   id: string
@@ -33,7 +33,7 @@ interface TeamMember {
   acceptedAt?: string
 }
 
-type SettingsTab = 'general' | 'team' | 'itp-templates' | 'notifications'
+type SettingsTab = 'general' | 'team' | 'areas' | 'itp-templates' | 'notifications'
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
@@ -490,6 +490,7 @@ export function ProjectSettingsPage() {
   const tabs = [
     { id: 'general' as SettingsTab, label: 'General', icon: Settings },
     { id: 'team' as SettingsTab, label: 'Team', icon: Users },
+    { id: 'areas' as SettingsTab, label: 'Areas', icon: MapPin },
     { id: 'itp-templates' as SettingsTab, label: 'ITP Templates', icon: ClipboardList },
     { id: 'notifications' as SettingsTab, label: 'Notifications', icon: Bell },
   ]
@@ -883,6 +884,24 @@ export function ProjectSettingsPage() {
               <p className="text-sm text-muted-foreground">
                 Configure what each role can access and modify in this project.
               </p>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'areas' && (
+          <div className="space-y-6">
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">Project Areas</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Define areas or zones within your project for organization and reporting.
+              </p>
+              <a
+                href={`/projects/${projectId}/areas`}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                <MapPin className="h-4 w-4" />
+                Manage Areas
+              </a>
             </div>
           </div>
         )}

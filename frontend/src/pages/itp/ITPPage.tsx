@@ -22,6 +22,8 @@ interface ITPTemplate {
   activityType: string
   checklistItems: ChecklistItem[]
   createdAt: string
+  isGlobalTemplate?: boolean
+  stateSpec?: string | null
 }
 
 export function ITPPage() {
@@ -30,6 +32,8 @@ export function ITPPage() {
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [includeGlobalTemplates, setIncludeGlobalTemplates] = useState(true)
+  const [projectSpecificationSet, setProjectSpecificationSet] = useState<string | null>(null)
 
   const token = getAuthToken()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -39,7 +43,8 @@ export function ITPPage() {
       if (!projectId || !token) return
 
       try {
-        const response = await fetch(`${apiUrl}/api/itp/templates?projectId=${projectId}`, {
+        const url = `${apiUrl}/api/itp/templates?projectId=${projectId}&includeGlobal=${includeGlobalTemplates}`
+        const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -48,6 +53,7 @@ export function ITPPage() {
         if (response.ok) {
           const data = await response.json()
           setTemplates(data.templates || [])
+          setProjectSpecificationSet(data.projectSpecificationSet || null)
         }
       } catch (err) {
         console.error('Failed to fetch ITP templates:', err)
@@ -57,7 +63,7 @@ export function ITPPage() {
     }
 
     fetchTemplates()
-  }, [projectId, token, apiUrl])
+  }, [projectId, token, apiUrl, includeGlobalTemplates])
 
   const handleCreateTemplate = async (data: {
     name: string
@@ -100,6 +106,11 @@ export function ITPPage() {
           <h1 className="text-3xl font-bold">Inspection & Test Plans</h1>
           <p className="text-muted-foreground mt-1">
             Manage ITP templates for quality checkpoints
+            {projectSpecificationSet && (
+              <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                {projectSpecificationSet}
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -108,6 +119,21 @@ export function ITPPage() {
         >
           Create ITP Template
         </button>
+      </div>
+
+      {/* Filter toggle for global templates */}
+      <div className="flex items-center gap-3 pb-2 border-b">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeGlobalTemplates}
+            onChange={(e) => setIncludeGlobalTemplates(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          <span className="text-sm">
+            Include {projectSpecificationSet || 'spec'} library templates
+          </span>
+        </label>
       </div>
 
       {loading ? (
@@ -133,7 +159,14 @@ export function ITPPage() {
           {templates.map((template) => (
             <div key={template.id} className="rounded-lg border p-4 hover:border-primary/50 transition-colors">
               <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold">{template.name}</h3>
+                <div>
+                  <h3 className="font-semibold">{template.name}</h3>
+                  {template.isGlobalTemplate && (
+                    <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                      {template.stateSpec || 'Library'} Template
+                    </span>
+                  )}
+                </div>
                 <span className="text-xs bg-muted px-2 py-1 rounded">{template.activityType}</span>
               </div>
               {template.description && (

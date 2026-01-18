@@ -25,6 +25,7 @@ import { ProjectsPage } from '@/pages/projects/ProjectsPage'
 import { ProjectDetailPage } from '@/pages/projects/ProjectDetailPage'
 import { ProjectSettingsPage } from '@/pages/projects/settings/ProjectSettingsPage'
 import { ProjectUsersPage } from '@/pages/projects/settings/ProjectUsersPage'
+import { ProjectAreasPage } from '@/pages/projects/settings/ProjectAreasPage'
 import { LotsPage } from '@/pages/lots/LotsPage'
 import { LotDetailPage } from '@/pages/lots/LotDetailPage'
 import { LotEditPage } from '@/pages/lots/LotEditPage'
@@ -138,6 +139,14 @@ function App() {
             element={
               <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
                 <ProjectUsersPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:projectId/areas"
+            element={
+              <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                <ProjectAreasPage />
               </RoleProtectedRoute>
             }
           />
