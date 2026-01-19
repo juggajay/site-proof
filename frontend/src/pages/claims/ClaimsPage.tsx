@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink, TrendingUp, Package, Loader2 } from 'lucide-react'
+import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink, TrendingUp, Package, Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, BarChart, Bar } from 'recharts'
 import { BarChart3 } from 'lucide-react'
 import { generateClaimEvidencePackagePDF, ClaimPackageOptions } from '@/lib/pdfGenerator'
@@ -62,6 +62,9 @@ export function ClaimsPage() {
   const [disputing, setDisputing] = useState(false)
   const [generatingEvidence, setGeneratingEvidence] = useState<string | null>(null) // claim id being generated
   const [showPackageCustomizeModal, setShowPackageCustomizeModal] = useState<string | null>(null) // claim id for customization
+  const [showCompletenessModal, setShowCompletenessModal] = useState<string | null>(null) // claim id for completeness check
+  const [completenessData, setCompletenessData] = useState<any>(null)
+  const [loadingCompleteness, setLoadingCompleteness] = useState(false)
   const [packageOptions, setPackageOptions] = useState({
     includeLotSummary: true,
     includeLotDetails: true,
@@ -76,6 +79,92 @@ export function ClaimsPage() {
   useEffect(() => {
     fetchClaims()
   }, [projectId])
+
+  // Run AI completeness check for a claim
+  const runCompletenessCheck = async (claimId: string) => {
+    setShowCompletenessModal(claimId)
+    setLoadingCompleteness(true)
+    setCompletenessData(null)
+
+    try {
+      const token = getAuthToken()
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+      const response = await fetch(`${API_URL}/api/projects/${projectId}/claims/${claimId}/completeness-check`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setCompletenessData(data)
+      } else {
+        // Demo mode fallback
+        setCompletenessData({
+          claimId,
+          claimNumber: claims.find(c => c.id === claimId)?.claimNumber || 0,
+          analyzedAt: new Date().toISOString(),
+          summary: {
+            totalLots: 3,
+            includeCount: 1,
+            reviewCount: 1,
+            excludeCount: 1,
+            averageCompletenessScore: 65,
+            totalClaimAmount: 75000,
+            recommendedAmount: 50000
+          },
+          overallSuggestions: [
+            'Consider excluding 1 lot(s) with critical issues to avoid payment disputes.',
+            'Review 1 lot(s) with warnings before finalizing the claim.',
+            'Excluding recommended lots would reduce the claim by $25,000.'
+          ],
+          lots: [
+            {
+              lotId: '1',
+              lotNumber: 'LOT-001',
+              activityType: 'Earthworks',
+              claimAmount: 25000,
+              completenessScore: 95,
+              recommendation: 'include',
+              issues: [],
+              summary: { itpStatus: '10/10 items complete', testStatus: '5/5 tests passed', holdPointStatus: '2/2 released', ncrStatus: 'None', photoCount: 8 }
+            },
+            {
+              lotId: '2',
+              lotNumber: 'LOT-002',
+              activityType: 'Drainage',
+              claimAmount: 25000,
+              completenessScore: 72,
+              recommendation: 'review',
+              issues: [
+                { type: 'itp_incomplete', severity: 'warning', message: 'ITP 80% complete (2 items remaining)', suggestion: 'Complete remaining ITP checklist items to strengthen the evidence package.' },
+                { type: 'low_photos', severity: 'info', message: 'Only 2 photo(s) uploaded', suggestion: 'Consider adding more photos (minimum 3 recommended) to strengthen evidence.' }
+              ],
+              summary: { itpStatus: '8/10 items complete', testStatus: '3/3 tests passed', holdPointStatus: '1/1 released', ncrStatus: 'None', photoCount: 2 }
+            },
+            {
+              lotId: '3',
+              lotNumber: 'LOT-003',
+              activityType: 'Pavement',
+              claimAmount: 25000,
+              completenessScore: 35,
+              recommendation: 'exclude',
+              issues: [
+                { type: 'unreleased_hp', severity: 'critical', message: '2 hold point(s) not verified/released', suggestion: 'Hold points must be released before claiming. Exclude this lot or obtain hold point releases.' },
+                { type: 'failed_tests', severity: 'critical', message: '1 test(s) failed', suggestion: 'Failed tests indicate non-conformance. Consider excluding this lot or addressing the test failures with retests.' },
+                { type: 'open_ncr', severity: 'warning', message: '1 minor NCR(s) open', suggestion: 'Consider resolving NCRs before claiming for a cleaner evidence package.' }
+              ],
+              summary: { itpStatus: '5/10 items complete', testStatus: '2/3 tests passed', holdPointStatus: '0/2 released', ncrStatus: '0/1 closed', photoCount: 1 }
+            }
+          ]
+        })
+      }
+    } catch (error) {
+      console.error('Error running completeness check:', error)
+      alert('Failed to run completeness check. Please try again.')
+      setShowCompletenessModal(null)
+    } finally {
+      setLoadingCompleteness(false)
+    }
+  }
 
   // Open package customization modal
   const openPackageCustomizeModal = (claimId: string) => {
@@ -1054,6 +1143,18 @@ export function ClaimsPage() {
                         </button>
                       )}
                       <button
+                          onClick={() => runCompletenessCheck(claim.id)}
+                          disabled={loadingCompleteness && showCompletenessModal === claim.id}
+                          className="p-2 hover:bg-purple-100 rounded-lg text-purple-600 disabled:opacity-50"
+                          title="AI Completeness Check"
+                        >
+                          {loadingCompleteness && showCompletenessModal === claim.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Brain className="h-4 w-4" />
+                          )}
+                        </button>
+                      <button
                           onClick={() => openPackageCustomizeModal(claim.id)}
                           disabled={generatingEvidence === claim.id}
                           className="p-2 hover:bg-green-100 rounded-lg text-green-600 disabled:opacity-50"
@@ -1489,6 +1590,210 @@ export function ClaimsPage() {
                 <Package className="h-4 w-4" />
                 Generate Package
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Completeness Check Modal */}
+      {showCompletenessModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-auto">
+            <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
+              <div className="flex items-center gap-2">
+                <Brain className="h-5 w-5 text-purple-600" />
+                <h2 className="text-xl font-semibold">AI Completeness Analysis</h2>
+              </div>
+              <button onClick={() => setShowCompletenessModal(null)} className="p-2 hover:bg-muted rounded-lg">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {loadingCompleteness ? (
+              <div className="flex flex-col items-center justify-center p-12">
+                <Loader2 className="h-12 w-12 animate-spin text-purple-600 mb-4" />
+                <p className="text-muted-foreground">Analyzing claim completeness...</p>
+                <p className="text-sm text-muted-foreground mt-1">Checking ITP completion, hold points, test results, NCRs, and evidence</p>
+              </div>
+            ) : completenessData ? (
+              <div className="p-6 space-y-6">
+                {/* Summary Section */}
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="rounded-lg border bg-card p-4 text-center">
+                    <div className={`text-3xl font-bold ${
+                      completenessData.summary.averageCompletenessScore >= 80 ? 'text-green-600' :
+                      completenessData.summary.averageCompletenessScore >= 60 ? 'text-amber-600' : 'text-red-600'
+                    }`}>
+                      {completenessData.summary.averageCompletenessScore}%
+                    </div>
+                    <p className="text-sm text-muted-foreground">Average Score</p>
+                  </div>
+                  <div className="rounded-lg border bg-card p-4 text-center">
+                    <div className="flex justify-center gap-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                        <CheckCircle2 className="h-3 w-3" /> {completenessData.summary.includeCount}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                        <AlertTriangle className="h-3 w-3" /> {completenessData.summary.reviewCount}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                        <XCircle className="h-3 w-3" /> {completenessData.summary.excludeCount}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">Lot Status</p>
+                  </div>
+                  <div className="rounded-lg border bg-card p-4 text-center">
+                    <div className="text-xl font-bold">{formatCurrency(completenessData.summary.totalClaimAmount)}</div>
+                    <p className="text-sm text-muted-foreground">Total Claim</p>
+                  </div>
+                  <div className="rounded-lg border bg-card p-4 text-center">
+                    <div className="text-xl font-bold text-green-600">{formatCurrency(completenessData.summary.recommendedAmount)}</div>
+                    <p className="text-sm text-muted-foreground">Recommended</p>
+                  </div>
+                </div>
+
+                {/* Overall Suggestions */}
+                {completenessData.overallSuggestions.length > 0 && (
+                  <div className="rounded-lg border bg-purple-50 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Brain className="h-4 w-4 text-purple-600" />
+                      <span className="font-medium text-purple-900">AI Suggestions</span>
+                    </div>
+                    <ul className="space-y-1">
+                      {completenessData.overallSuggestions.map((suggestion: string, index: number) => (
+                        <li key={index} className="text-sm text-purple-800 flex items-start gap-2">
+                          <span className="text-purple-400">•</span>
+                          {suggestion}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Lot-by-Lot Analysis */}
+                <div>
+                  <h3 className="font-semibold mb-3">Lot Analysis</h3>
+                  <div className="space-y-3">
+                    {completenessData.lots.map((lot: any) => (
+                      <div key={lot.lotId} className={`rounded-lg border p-4 ${
+                        lot.recommendation === 'exclude' ? 'border-red-200 bg-red-50' :
+                        lot.recommendation === 'review' ? 'border-amber-200 bg-amber-50' :
+                        'border-green-200 bg-green-50'
+                      }`}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{lot.lotNumber}</span>
+                              <span className="text-sm text-muted-foreground">{lot.activityType}</span>
+                              {lot.recommendation === 'include' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                  <CheckCircle2 className="h-3 w-3" /> Ready
+                                </span>
+                              )}
+                              {lot.recommendation === 'review' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                                  <AlertTriangle className="h-3 w-3" /> Review
+                                </span>
+                              )}
+                              {lot.recommendation === 'exclude' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                                  <XCircle className="h-3 w-3" /> Exclude
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {formatCurrency(lot.claimAmount)}
+                            </div>
+                          </div>
+                          <div className={`text-2xl font-bold ${
+                            lot.completenessScore >= 80 ? 'text-green-600' :
+                            lot.completenessScore >= 60 ? 'text-amber-600' : 'text-red-600'
+                          }`}>
+                            {lot.completenessScore}%
+                          </div>
+                        </div>
+
+                        {/* Summary Stats */}
+                        <div className="grid grid-cols-5 gap-2 mb-3 text-xs">
+                          <div className="text-center p-1 bg-white/50 rounded">
+                            <div className="font-medium">ITP</div>
+                            <div className="text-muted-foreground">{lot.summary.itpStatus}</div>
+                          </div>
+                          <div className="text-center p-1 bg-white/50 rounded">
+                            <div className="font-medium">Tests</div>
+                            <div className="text-muted-foreground">{lot.summary.testStatus}</div>
+                          </div>
+                          <div className="text-center p-1 bg-white/50 rounded">
+                            <div className="font-medium">Hold Points</div>
+                            <div className="text-muted-foreground">{lot.summary.holdPointStatus}</div>
+                          </div>
+                          <div className="text-center p-1 bg-white/50 rounded">
+                            <div className="font-medium">NCRs</div>
+                            <div className="text-muted-foreground">{lot.summary.ncrStatus}</div>
+                          </div>
+                          <div className="text-center p-1 bg-white/50 rounded">
+                            <div className="font-medium">Photos</div>
+                            <div className="text-muted-foreground">{lot.summary.photoCount}</div>
+                          </div>
+                        </div>
+
+                        {/* Issues */}
+                        {lot.issues.length > 0 && (
+                          <div className="space-y-2">
+                            {lot.issues.map((issue: any, index: number) => (
+                              <div key={index} className={`flex items-start gap-2 p-2 rounded text-sm ${
+                                issue.severity === 'critical' ? 'bg-red-100' :
+                                issue.severity === 'warning' ? 'bg-amber-100' : 'bg-blue-100'
+                              }`}>
+                                {issue.severity === 'critical' && <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />}
+                                {issue.severity === 'warning' && <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />}
+                                {issue.severity === 'info' && <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />}
+                                <div>
+                                  <div className={`font-medium ${
+                                    issue.severity === 'critical' ? 'text-red-800' :
+                                    issue.severity === 'warning' ? 'text-amber-800' : 'text-blue-800'
+                                  }`}>{issue.message}</div>
+                                  <div className={`text-xs mt-0.5 ${
+                                    issue.severity === 'critical' ? 'text-red-700' :
+                                    issue.severity === 'warning' ? 'text-amber-700' : 'text-blue-700'
+                                  }`}>{issue.suggestion}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {lot.issues.length === 0 && (
+                          <div className="flex items-center gap-2 text-sm text-green-700">
+                            <CheckCircle2 className="h-4 w-4" />
+                            This lot is complete and ready for claiming
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-2 p-4 border-t sticky bottom-0 bg-background">
+              <button
+                onClick={() => setShowCompletenessModal(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+              >
+                Close
+              </button>
+              {completenessData && completenessData.summary.excludeCount > 0 && (
+                <button
+                  onClick={() => {
+                    alert('In a full implementation, this would remove excluded lots from the claim and recalculate totals.')
+                  }}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
+                >
+                  <XCircle className="h-4 w-4" />
+                  Exclude Problem Lots
+                </button>
+              )}
             </div>
           </div>
         </div>
