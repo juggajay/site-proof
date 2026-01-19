@@ -81,6 +81,10 @@ export function DocumentsPage() {
   const [viewerDoc, setViewerDoc] = useState<Document | null>(null)
   const [viewerZoom, setViewerZoom] = useState(100)
 
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (projectId) {
       fetchDocuments()
@@ -292,8 +296,66 @@ export function DocumentsPage() {
   const zoomIn = () => setViewerZoom(prev => Math.min(prev + 25, 200))
   const zoomOut = () => setViewerZoom(prev => Math.max(prev - 25, 50))
 
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only set dragging to false if leaving the drop zone entirely
+    if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      const file = files[0]
+      setSelectedFile(file)
+      // Auto-detect type from file
+      if (file.type.startsWith('image/')) {
+        setUploadForm(prev => ({ ...prev, documentType: 'photo' }))
+      }
+      setShowUploadModal(true)
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div
+      ref={dropZoneRef}
+      className="space-y-6 relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 z-50 bg-blue-500/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+          <div className="rounded-xl border-4 border-dashed border-blue-500 bg-white/90 p-12 text-center shadow-2xl">
+            <svg className="mx-auto h-16 w-16 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <h3 className="mt-4 text-xl font-bold text-blue-700">Drop file here to upload</h3>
+            <p className="mt-2 text-blue-600">Release to start uploading your document</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -449,13 +511,13 @@ export function DocumentsPage() {
         {loading ? (
           <div className="p-8 text-center text-muted-foreground">Loading documents...</div>
         ) : documents.length === 0 ? (
-          <div className="p-12 text-center">
+          <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition-colors">
             <svg className="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             <h3 className="mt-4 text-lg font-medium">No documents found</h3>
             <p className="mt-2 text-muted-foreground">
-              Upload your first document to get started
+              Drag and drop files here or click "Upload Document" to get started
             </p>
           </div>
         ) : (
@@ -564,21 +626,60 @@ export function DocumentsPage() {
             <h2 className="text-xl font-bold mb-4">Upload Document</h2>
 
             <div className="space-y-4">
-              {/* File Input */}
+              {/* File Input with Drag-Drop Zone */}
               <div>
                 <label className="block text-sm font-medium mb-2">Select File</label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={handleFileSelect}
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
-                {selectedFile && (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
-                  </p>
-                )}
+                <div
+                  className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    selectedFile
+                      ? 'border-green-400 bg-green-50'
+                      : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/50'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    const files = e.dataTransfer.files
+                    if (files && files.length > 0) {
+                      const file = files[0]
+                      setSelectedFile(file)
+                      if (file.type.startsWith('image/')) {
+                        setUploadForm(prev => ({ ...prev, documentType: 'photo' }))
+                      }
+                    }
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileSelect}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  {selectedFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <svg className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="text-left">
+                        <p className="font-medium text-green-700">{selectedFile.name}</p>
+                        <p className="text-sm text-green-600">{formatFileSize(selectedFile.size)}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p className="mt-2 text-sm text-gray-600">
+                        <span className="font-medium text-blue-600">Click to browse</span> or drag and drop
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        PDF, DOC, XLS, JPG, PNG up to 50MB
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Document Type */}
