@@ -1,4 +1,5 @@
 import { NavLink, useParams } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   FolderKanban,
@@ -18,9 +19,14 @@ import {
   PieChart,
   HelpCircle,
   ClipboardList,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
+
+// Storage key for persisting sidebar state
+const SIDEBAR_COLLAPSED_KEY = 'siteproof_sidebar_collapsed'
 
 // Role-based access definitions
 const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
@@ -86,6 +92,21 @@ export function Sidebar() {
   const { projectId } = useParams()
   const { user } = useAuth()
 
+  // Initialize collapsed state from localStorage
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
+    return stored === 'true'
+  })
+
+  // Persist collapsed state to localStorage
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed))
+  }, [isCollapsed])
+
+  const toggleSidebar = () => {
+    setIsCollapsed((prev) => !prev)
+  }
+
   const userRole = user?.role || ''
 
   // Role-based access checks
@@ -146,26 +167,44 @@ export function Sidebar() {
     : []
 
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r bg-card">
-      <div className="flex h-16 items-center border-b px-6">
-        <span className="text-xl font-bold text-primary">SiteProof</span>
+    <aside
+      className={cn(
+        'hidden md:flex flex-col border-r bg-card transition-all duration-300 ease-in-out',
+        isCollapsed ? 'w-16' : 'w-64'
+      )}
+      data-testid="sidebar"
+    >
+      <div className={cn(
+        'flex h-16 items-center border-b transition-all duration-300',
+        isCollapsed ? 'justify-center px-2' : 'px-6'
+      )}>
+        {isCollapsed ? (
+          <span className="text-xl font-bold text-primary">SP</span>
+        ) : (
+          <span className="text-xl font-bold text-primary whitespace-nowrap overflow-hidden">SiteProof</span>
+        )}
       </div>
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className={cn(
+        'flex-1 space-y-1 transition-all duration-300',
+        isCollapsed ? 'p-2' : 'p-4'
+      )}>
         {filteredNavigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.href}
+            title={isCollapsed ? item.name : undefined}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'flex items-center rounded-lg py-2 text-sm transition-all duration-200',
+                isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )
             }
           >
-            <item.icon className="h-5 w-5" aria-hidden="true" />
-            {item.name}
+            <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+            {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
           </NavLink>
         ))}
 
@@ -173,25 +212,29 @@ export function Sidebar() {
         {filteredSubcontractorNavigation.length > 0 && (
           <>
             <div className="my-4 border-t pt-4">
-              <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
-                My Company
-              </p>
+              {!isCollapsed && (
+                <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                  My Company
+                </p>
+              )}
             </div>
             {filteredSubcontractorNavigation.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.href}
+                title={isCollapsed ? item.name : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                    'flex items-center rounded-lg py-2 text-sm transition-all duration-200',
+                    isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
                     isActive
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   )
                 }
               >
-                <item.icon className="h-5 w-5" aria-hidden="true" />
-                {item.name}
+                <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
               </NavLink>
             ))}
           </>
@@ -200,48 +243,77 @@ export function Sidebar() {
         {projectId && (
           <>
             <div className="my-4 border-t pt-4">
-              <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
-                Project
-              </p>
+              {!isCollapsed && (
+                <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                  Project
+                </p>
+              )}
             </div>
             {filteredProjectNavigation.map((item) => (
               <NavLink
                 key={item.name}
                 to={`/projects/${projectId}/${item.href}`}
+                title={isCollapsed ? item.name : undefined}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                    'flex items-center rounded-lg py-2 text-sm transition-all duration-200',
+                    isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
                     isActive
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   )
                 }
               >
-                <item.icon className="h-5 w-5" aria-hidden="true" />
-                {item.name}
+                <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
               </NavLink>
             ))}
           </>
         )}
       </nav>
-      <div className="border-t p-4 space-y-1">
+      <div className={cn(
+        'border-t space-y-1 transition-all duration-300',
+        isCollapsed ? 'p-2' : 'p-4'
+      )}>
         {filteredSettingsNavigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.href}
+            title={isCollapsed ? item.name : undefined}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'flex items-center rounded-lg py-2 text-sm transition-all duration-200',
+                isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )
             }
           >
-            <item.icon className="h-5 w-5" aria-hidden="true" />
-            {item.name}
+            <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+            {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
           </NavLink>
         ))}
+
+        {/* Collapse/Expand Toggle Button */}
+        <button
+          onClick={toggleSidebar}
+          className={cn(
+            'flex items-center rounded-lg py-2 text-sm transition-all duration-200 w-full text-muted-foreground hover:bg-muted hover:text-foreground',
+            isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+          )}
+          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          data-testid="sidebar-toggle"
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+          ) : (
+            <>
+              <ChevronLeft className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+              <span className="transition-opacity duration-200">Collapse</span>
+            </>
+          )}
+        </button>
       </div>
     </aside>
   )
