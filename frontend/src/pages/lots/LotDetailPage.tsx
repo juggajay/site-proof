@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
-import { Link2, Check, RefreshCw, FileText, Users } from 'lucide-react'
+import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight } from 'lucide-react'
 import { generateConformanceReportPDF, ConformanceReportData } from '@/lib/pdfGenerator'
 
 // Tab types for lot detail page
@@ -2036,52 +2036,117 @@ export function LotDetailPage() {
               </div>
             )}
 
-            {/* Photo Viewer Modal */}
-            {selectedPhoto && (
-              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setSelectedPhoto(null)}>
-                <div className="relative max-w-4xl max-h-[90vh] p-4" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => setSelectedPhoto(null)}
-                    className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors"
-                  >
-                    ✕
-                  </button>
-                  <img
-                    src={selectedPhoto.document.fileUrl}
-                    alt={selectedPhoto.document.caption || selectedPhoto.document.filename}
-                    className="max-w-full max-h-[80vh] object-contain rounded-lg"
-                  />
-                  <div className="mt-3 text-white text-center">
-                    <p className="font-medium">{selectedPhoto.document.caption || selectedPhoto.document.filename}</p>
-                    {selectedPhoto.document.uploadedBy && (
-                      <p className="text-sm text-white/70 mt-1">
-                        Uploaded by {selectedPhoto.document.uploadedBy.fullName || selectedPhoto.document.uploadedBy.email}
-                        {selectedPhoto.document.uploadedAt && ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
-                      </p>
-                    )}
-                    {/* Show ITP item reference */}
-                    {itpInstance && (() => {
-                      const completion = itpInstance.completions.find(c =>
-                        c.attachments?.some(a => a.id === selectedPhoto.id)
-                      )
-                      if (completion) {
-                        const checklistItem = itpInstance.template.checklistItems.find(
-                          item => item.id === completion.checklistItemId
+            {/* Photo Viewer Modal with Prev/Next Navigation */}
+            {selectedPhoto && (() => {
+              // Collect all photos for navigation
+              const allPhotos: ITPAttachment[] = []
+              if (itpInstance) {
+                itpInstance.completions.forEach(completion => {
+                  if (completion.attachments && completion.attachments.length > 0) {
+                    completion.attachments.forEach(attachment => {
+                      allPhotos.push(attachment)
+                    })
+                  }
+                })
+              }
+              const currentIndex = allPhotos.findIndex(p => p.id === selectedPhoto.id)
+              const hasPrev = currentIndex > 0
+              const hasNext = currentIndex < allPhotos.length - 1
+
+              const goToPrev = () => {
+                if (hasPrev) setSelectedPhoto(allPhotos[currentIndex - 1])
+              }
+              const goToNext = () => {
+                if (hasNext) setSelectedPhoto(allPhotos[currentIndex + 1])
+              }
+
+              return (
+                <div
+                  className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+                  onClick={() => setSelectedPhoto(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowLeft') goToPrev()
+                    else if (e.key === 'ArrowRight') goToNext()
+                    else if (e.key === 'Escape') setSelectedPhoto(null)
+                  }}
+                  tabIndex={0}
+                  data-testid="photo-lightbox"
+                >
+                  {/* Previous Button */}
+                  {hasPrev && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); goToPrev() }}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full p-3 text-white transition-colors z-10"
+                      title="Previous photo"
+                      data-testid="photo-lightbox-prev"
+                    >
+                      <ChevronLeft className="h-6 w-6" />
+                    </button>
+                  )}
+
+                  {/* Next Button */}
+                  {hasNext && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); goToNext() }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full p-3 text-white transition-colors z-10"
+                      title="Next photo"
+                      data-testid="photo-lightbox-next"
+                    >
+                      <ChevronRight className="h-6 w-6" />
+                    </button>
+                  )}
+
+                  <div className="relative max-w-4xl max-h-[90vh] p-4" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setSelectedPhoto(null)}
+                      className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors"
+                      data-testid="photo-lightbox-close"
+                    >
+                      ✕
+                    </button>
+                    <img
+                      src={selectedPhoto.document.fileUrl}
+                      alt={selectedPhoto.document.caption || selectedPhoto.document.filename}
+                      className="max-w-full max-h-[80vh] object-contain rounded-lg"
+                      data-testid="photo-lightbox-image"
+                    />
+                    <div className="mt-3 text-white text-center">
+                      <p className="font-medium">{selectedPhoto.document.caption || selectedPhoto.document.filename}</p>
+                      {allPhotos.length > 1 && (
+                        <p className="text-sm text-white/50 mt-1">
+                          {currentIndex + 1} of {allPhotos.length}
+                        </p>
+                      )}
+                      {selectedPhoto.document.uploadedBy && (
+                        <p className="text-sm text-white/70 mt-1">
+                          Uploaded by {selectedPhoto.document.uploadedBy.fullName || selectedPhoto.document.uploadedBy.email}
+                          {selectedPhoto.document.uploadedAt && ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
+                        </p>
+                      )}
+                      {/* Show ITP item reference */}
+                      {itpInstance && (() => {
+                        const completion = itpInstance.completions.find(c =>
+                          c.attachments?.some(a => a.id === selectedPhoto.id)
                         )
-                        if (checklistItem) {
-                          return (
-                            <p className="text-sm bg-primary/30 px-3 py-1 rounded mt-2 inline-block">
-                              📋 ITP Item: {checklistItem.order}. {checklistItem.description}
-                            </p>
+                        if (completion) {
+                          const checklistItem = itpInstance.template.checklistItems.find(
+                            item => item.id === completion.checklistItemId
                           )
+                          if (checklistItem) {
+                            return (
+                              <p className="text-sm bg-primary/30 px-3 py-1 rounded mt-2 inline-block">
+                                📋 ITP Item: {checklistItem.order}. {checklistItem.description}
+                              </p>
+                            )
+                          }
                         }
-                      }
-                      return null
-                    })()}
+                        return null
+                      })()}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
           </div>
         )}
 
