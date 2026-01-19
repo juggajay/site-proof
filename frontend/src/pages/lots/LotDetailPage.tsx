@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
-import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, CheckCircle, Plus } from 'lucide-react'
+import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, CheckCircle, Plus, Printer } from 'lucide-react'
 import { generateConformanceReportPDF, ConformanceReportData, ConformanceFormat, ConformanceFormatOptions, defaultConformanceOptions } from '@/lib/pdfGenerator'
 
 // Tab types for lot detail page
@@ -1524,6 +1524,14 @@ export function LotDetailPage() {
                 <span>Copy Link</span>
               </>
             )}
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors print:hidden"
+            title="Print lot details"
+          >
+            <Printer className="h-4 w-4" />
+            <span>Print</span>
           </button>
           {canEdit && isEditable && (
             <button
