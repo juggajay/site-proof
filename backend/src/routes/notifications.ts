@@ -264,16 +264,27 @@ notificationsRouter.get('/users', async (req: AuthRequest, res) => {
   }
 })
 
-// Default notification preferences
+// Notification timing options
+export type NotificationTiming = 'immediate' | 'digest'
+
+// Default notification preferences with timing options
 const DEFAULT_EMAIL_PREFERENCES = {
   enabled: true,
   mentions: true,
+  mentionsTiming: 'immediate' as NotificationTiming,
   ncrAssigned: true,
+  ncrAssignedTiming: 'immediate' as NotificationTiming,
   ncrStatusChange: true,
+  ncrStatusChangeTiming: 'immediate' as NotificationTiming,
   holdPointReminder: true,
+  holdPointReminderTiming: 'immediate' as NotificationTiming,
+  holdPointRelease: true,
+  holdPointReleaseTiming: 'immediate' as NotificationTiming,  // HP release - always immediate by default
   commentReply: true,
+  commentReplyTiming: 'immediate' as NotificationTiming,
   scheduledReports: true,
-  dailyDigest: false, // When enabled, batches notifications into a daily email
+  scheduledReportsTiming: 'immediate' as NotificationTiming,
+  dailyDigest: false, // Master toggle for daily digest feature
 }
 
 // In-memory storage for digest items (in production, store in database)
@@ -299,6 +310,14 @@ notificationsRouter.get('/email-preferences', async (req: AuthRequest, res) => {
   }
 })
 
+// Helper to validate timing preference
+function validateTiming(value: any, defaultValue: NotificationTiming): NotificationTiming {
+  if (value === 'immediate' || value === 'digest') {
+    return value
+  }
+  return defaultValue
+}
+
 // PUT /api/notifications/email-preferences - Update email notification preferences
 notificationsRouter.put('/email-preferences', async (req: AuthRequest, res) => {
   try {
@@ -309,15 +328,24 @@ notificationsRouter.put('/email-preferences', async (req: AuthRequest, res) => {
 
     const { preferences } = req.body
 
-    // Validate preferences
+    // Validate preferences with timing options
     const validatedPreferences = {
       enabled: Boolean(preferences?.enabled ?? DEFAULT_EMAIL_PREFERENCES.enabled),
       mentions: Boolean(preferences?.mentions ?? DEFAULT_EMAIL_PREFERENCES.mentions),
+      mentionsTiming: validateTiming(preferences?.mentionsTiming, DEFAULT_EMAIL_PREFERENCES.mentionsTiming),
       ncrAssigned: Boolean(preferences?.ncrAssigned ?? DEFAULT_EMAIL_PREFERENCES.ncrAssigned),
+      ncrAssignedTiming: validateTiming(preferences?.ncrAssignedTiming, DEFAULT_EMAIL_PREFERENCES.ncrAssignedTiming),
       ncrStatusChange: Boolean(preferences?.ncrStatusChange ?? DEFAULT_EMAIL_PREFERENCES.ncrStatusChange),
+      ncrStatusChangeTiming: validateTiming(preferences?.ncrStatusChangeTiming, DEFAULT_EMAIL_PREFERENCES.ncrStatusChangeTiming),
       holdPointReminder: Boolean(preferences?.holdPointReminder ?? DEFAULT_EMAIL_PREFERENCES.holdPointReminder),
+      holdPointReminderTiming: validateTiming(preferences?.holdPointReminderTiming, DEFAULT_EMAIL_PREFERENCES.holdPointReminderTiming),
+      holdPointRelease: Boolean(preferences?.holdPointRelease ?? DEFAULT_EMAIL_PREFERENCES.holdPointRelease),
+      holdPointReleaseTiming: validateTiming(preferences?.holdPointReleaseTiming, DEFAULT_EMAIL_PREFERENCES.holdPointReleaseTiming),
       commentReply: Boolean(preferences?.commentReply ?? DEFAULT_EMAIL_PREFERENCES.commentReply),
+      commentReplyTiming: validateTiming(preferences?.commentReplyTiming, DEFAULT_EMAIL_PREFERENCES.commentReplyTiming),
       scheduledReports: Boolean(preferences?.scheduledReports ?? DEFAULT_EMAIL_PREFERENCES.scheduledReports),
+      scheduledReportsTiming: validateTiming(preferences?.scheduledReportsTiming, DEFAULT_EMAIL_PREFERENCES.scheduledReportsTiming),
+      dailyDigest: Boolean(preferences?.dailyDigest ?? DEFAULT_EMAIL_PREFERENCES.dailyDigest),
     }
 
     userEmailPreferences.set(userId, validatedPreferences)
@@ -422,10 +450,14 @@ notificationsRouter.delete('/email-queue', async (req: AuthRequest, res) => {
   }
 })
 
+// Type for notification types that support timing
+type NotificationTypeWithTiming = 'mentions' | 'ncrAssigned' | 'ncrStatusChange' | 'holdPointReminder' | 'holdPointRelease' | 'commentReply' | 'scheduledReports'
+
 // Helper function to send notification email if user preferences allow
+// Returns: { sent: boolean, queued: boolean } - sent means immediate, queued means added to digest
 export async function sendNotificationIfEnabled(
   userId: string,
-  notificationType: keyof typeof DEFAULT_EMAIL_PREFERENCES,
+  notificationType: NotificationTypeWithTiming | 'enabled',
   data: {
     title: string
     message: string
@@ -433,17 +465,17 @@ export async function sendNotificationIfEnabled(
     projectName?: string
     userName?: string
   }
-): Promise<boolean> {
+): Promise<{ sent: boolean; queued: boolean }> {
   const preferences = userEmailPreferences.get(userId) || DEFAULT_EMAIL_PREFERENCES
 
   // Check if email notifications are enabled
   if (!preferences.enabled) {
-    return false
+    return { sent: false, queued: false }
   }
 
   // Check if specific notification type is enabled
   if (notificationType !== 'enabled' && !preferences[notificationType]) {
-    return false
+    return { sent: false, queued: false }
   }
 
   // Get user email
@@ -453,12 +485,50 @@ export async function sendNotificationIfEnabled(
   })
 
   if (!user) {
-    return false
+    return { sent: false, queued: false }
   }
 
-  // Send the email
+  // Check timing preference for this notification type
+  const timingKey = `${notificationType}Timing` as keyof typeof preferences
+  const timing = (notificationType !== 'enabled' && timingKey in preferences)
+    ? preferences[timingKey] as NotificationTiming
+    : 'immediate'
+
+  if (timing === 'digest') {
+    // Add to digest queue instead of sending immediately
+    const digestItem: DigestItem = {
+      type: notificationType,
+      title: data.title,
+      message: data.message,
+      projectName: data.projectName,
+      linkUrl: data.linkUrl,
+      timestamp: new Date(),
+    }
+
+    const userDigest = digestQueue.get(userId) || []
+    userDigest.push(digestItem)
+    digestQueue.set(userId, userDigest)
+
+    console.log(`[Notifications] Queued ${notificationType} notification for user ${userId} (timing: digest)`)
+    return { sent: false, queued: true }
+  }
+
+  // Send the email immediately
+  console.log(`[Notifications] Sending ${notificationType} notification to user ${userId} immediately (timing: immediate)`)
   const result = await sendNotificationEmail(user.email, notificationType, data)
-  return result.success
+  return { sent: result.success, queued: false }
+}
+
+// Helper function to get notification timing for a specific type
+export function getNotificationTiming(userId: string, notificationType: NotificationTypeWithTiming): NotificationTiming {
+  const preferences = userEmailPreferences.get(userId) || DEFAULT_EMAIL_PREFERENCES
+  const timingKey = `${notificationType}Timing` as keyof typeof preferences
+  return (timingKey in preferences) ? preferences[timingKey] as NotificationTiming : 'immediate'
+}
+
+// Helper function to get digest queue for a user
+export function getUserDigestQueue(userId: string): DigestItem[] {
+  return digestQueue.get(userId) || []
 }
 
 // POST /api/notifications/add-to-digest - Add item to digest queue

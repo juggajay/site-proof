@@ -330,6 +330,77 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
   }
 })
 
+// Feature #636: PATCH /api/ncrs/:id - Update NCR (including redirect to different responsible party)
+ncrsRouter.patch('/:id', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id } = req.params
+    const { responsibleUserId, comments } = req.body
+
+    const ncr = await prisma.nCR.findUnique({
+      where: { id },
+      include: {
+        project: true,
+        responsibleUser: { select: { id: true, fullName: true, email: true } },
+      },
+    })
+
+    if (!ncr) {
+      return res.status(404).json({ message: 'NCR not found' })
+    }
+
+    // Build update data
+    const updateData: any = {}
+
+    // If responsibleUserId is being changed (redirect)
+    if (responsibleUserId !== undefined && responsibleUserId !== ncr.responsibleUserId) {
+      updateData.responsibleUserId = responsibleUserId || null
+
+      // If redirecting to a new user, create a notification
+      if (responsibleUserId) {
+        try {
+          await prisma.notification.create({
+            data: {
+              userId: responsibleUserId,
+              projectId: ncr.projectId,
+              type: 'ncr_redirect',
+              title: 'NCR Redirected to You',
+              message: `NCR #${ncr.ncrNumber} "${ncr.description.substring(0, 50)}..." has been redirected to you for response`,
+              linkUrl: `/projects/${ncr.projectId}/ncr`,
+            }
+          })
+        } catch (notifError) {
+          console.error('Failed to create redirect notification:', notifError)
+        }
+      }
+    }
+
+    // If comments are provided, add them as revision comments
+    if (comments) {
+      updateData.qmComments = comments
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: 'No fields to update' })
+    }
+
+    const updatedNcr = await prisma.nCR.update({
+      where: { id },
+      data: updateData,
+      include: {
+        responsibleUser: { select: { id: true, fullName: true, email: true } },
+        raisedBy: { select: { id: true, fullName: true, email: true } },
+        lot: { select: { id: true, lotNumber: true } },
+      },
+    })
+
+    res.json({ ncr: updatedNcr, message: 'NCR updated' })
+  } catch (error) {
+    console.error('Update NCR error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
 // POST /api/ncrs/:id/respond - Submit response to NCR
 ncrsRouter.post('/:id/respond', requireAuth, async (req: any, res) => {
   try {

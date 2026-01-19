@@ -1328,9 +1328,37 @@ itpRouter.post('/completions/:id/verify', requireAuth, async (req: any, res) => 
         },
         verifiedBy: {
           select: { id: true, fullName: true, email: true }
+        },
+        itpInstance: {
+          include: {
+            lot: {
+              select: { id: true, lotNumber: true, projectId: true }
+            }
+          }
+        },
+        checklistItem: {
+          select: { description: true }
         }
       }
     })
+
+    // Create notification for the user who completed the item (Feature #633)
+    if (completion.completedById && completion.completedById !== user.userId) {
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: completion.completedById,
+            projectId: completion.itpInstance?.lot?.projectId,
+            type: 'itp_verification',
+            title: 'ITP Item Verified',
+            message: `Your ITP item "${completion.checklistItem?.description}" for Lot ${completion.itpInstance?.lot?.lotNumber} has been verified`,
+            linkUrl: `/projects/${completion.itpInstance?.lot?.projectId}/lots/${completion.itpInstance?.lotId}?tab=itp`,
+          }
+        })
+      } catch (notifError) {
+        console.error('Failed to create verification notification:', notifError)
+      }
+    }
 
     // Transform to frontend-friendly format
     const transformedCompletion = {
@@ -1343,6 +1371,79 @@ itpRouter.post('/completions/:id/verify', requireAuth, async (req: any, res) => 
   } catch (error) {
     console.error('Error verifying ITP completion:', error)
     res.status(500).json({ error: 'Failed to verify completion' })
+  }
+})
+
+// Reject a completed checklist item (Feature #634)
+itpRouter.post('/completions/:id/reject', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { id } = req.params
+    const { reason } = req.body
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'Rejection reason is required' })
+    }
+
+    const completion = await prisma.iTPCompletion.update({
+      where: { id },
+      data: {
+        verificationStatus: 'rejected',
+        verifiedAt: new Date(),
+        verifiedById: user.userId,
+        verificationNotes: reason.trim()
+      },
+      include: {
+        completedBy: {
+          select: { id: true, fullName: true, email: true }
+        },
+        verifiedBy: {
+          select: { id: true, fullName: true, email: true }
+        },
+        itpInstance: {
+          include: {
+            lot: {
+              select: { id: true, lotNumber: true, projectId: true }
+            }
+          }
+        },
+        checklistItem: {
+          select: { description: true }
+        }
+      }
+    })
+
+    // Create notification for the user who completed the item
+    if (completion.completedById && completion.completedById !== user.userId) {
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: completion.completedById,
+            projectId: completion.itpInstance?.lot?.projectId,
+            type: 'itp_rejection',
+            title: 'ITP Item Rejected',
+            message: `Your ITP item "${completion.checklistItem?.description}" for Lot ${completion.itpInstance?.lot?.lotNumber} was rejected. Reason: ${reason.trim()}`,
+            linkUrl: `/projects/${completion.itpInstance?.lot?.projectId}/lots/${completion.itpInstance?.lotId}?tab=itp`,
+          }
+        })
+      } catch (notifError) {
+        console.error('Failed to create rejection notification:', notifError)
+      }
+    }
+
+    // Transform to frontend-friendly format
+    const transformedCompletion = {
+      ...completion,
+      isCompleted: completion.status === 'completed',
+      isVerified: false,
+      isRejected: true,
+      rejectionReason: reason.trim()
+    }
+
+    res.json({ completion: transformedCompletion })
+  } catch (error) {
+    console.error('Error rejecting ITP completion:', error)
+    res.status(500).json({ error: 'Failed to reject completion' })
   }
 })
 

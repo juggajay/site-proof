@@ -75,6 +75,9 @@ export function DrawingsPage() {
   const [filterStatus, setFilterStatus] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Download current set state
+  const [downloadingCurrentSet, setDownloadingCurrentSet] = useState(false)
+
   useEffect(() => {
     if (projectId) {
       fetchDrawings()
@@ -263,6 +266,49 @@ export function DrawingsPage() {
     }
   }
 
+  // Download current set - downloads all current (non-superseded) drawings
+  const downloadCurrentSet = async () => {
+    setDownloadingCurrentSet(true)
+    try {
+      const token = getAuthToken()
+      // Get the list of current drawings
+      const res = await fetch(`${API_URL}/api/drawings/${projectId}/current-set`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        if (data.drawings.length === 0) {
+          alert('No current drawings to download')
+          return
+        }
+
+        // Download each file (for a real production app, you'd want to create a ZIP)
+        // For now, we'll open each file in a new tab
+        for (const drawing of data.drawings) {
+          const link = document.createElement('a')
+          link.href = `${API_URL}${drawing.fileUrl}`
+          link.download = `${drawing.drawingNumber}_Rev${drawing.revision || '0'}_${drawing.filename}`
+          link.target = '_blank'
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          // Small delay between downloads
+          await new Promise(resolve => setTimeout(resolve, 300))
+        }
+
+        alert(`Downloaded ${data.drawings.length} current drawing(s)`)
+      } else {
+        alert('Failed to fetch current drawings')
+      }
+    } catch (err) {
+      console.error('Error downloading current set:', err)
+      alert('Failed to download current drawings')
+    } finally {
+      setDownloadingCurrentSet(false)
+    }
+  }
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
     return new Date(dateStr).toLocaleDateString('en-AU', {
@@ -293,15 +339,28 @@ export function DrawingsPage() {
             Manage project drawings and revisions
           </p>
         </div>
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Drawing
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={downloadCurrentSet}
+            disabled={downloadingCurrentSet || drawings.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+            title="Download all current (non-superseded) drawings"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {downloadingCurrentSet ? 'Downloading...' : 'Download Current Set'}
+          </button>
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Drawing
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

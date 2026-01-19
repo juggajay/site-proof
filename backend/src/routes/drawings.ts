@@ -413,4 +413,60 @@ router.post('/:drawingId/supersede', upload.single('file'), async (req: Request,
   }
 })
 
+// GET /api/drawings/:projectId/current-set - Get current (non-superseded) drawings for download
+router.get('/:projectId/current-set', async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    // Get all current (non-superseded) drawings
+    const currentDrawings = await prisma.drawing.findMany({
+      where: {
+        projectId,
+        supersededById: null, // Only current versions (not superseded)
+      },
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+          }
+        },
+      },
+      orderBy: [{ drawingNumber: 'asc' }, { revision: 'desc' }],
+    })
+
+    // Return the list of current drawings with download info
+    res.json({
+      drawings: currentDrawings.map(d => ({
+        id: d.id,
+        drawingNumber: d.drawingNumber,
+        title: d.title,
+        revision: d.revision,
+        status: d.status,
+        fileUrl: d.document.fileUrl,
+        filename: d.document.filename,
+        fileSize: d.document.fileSize,
+      })),
+      totalCount: currentDrawings.length,
+      totalSize: currentDrawings.reduce((sum, d) => sum + (d.document.fileSize || 0), 0),
+    })
+  } catch (error) {
+    console.error('Error fetching current drawings set:', error)
+    res.status(500).json({ error: 'Failed to fetch current drawings set' })
+  }
+})
+
 export const drawingsRouter = router

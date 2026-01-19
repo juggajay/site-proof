@@ -33,15 +33,26 @@ export function SettingsPage() {
   const [isLeavingCompany, setIsLeavingCompany] = useState(false)
   const [leaveCompanyError, setLeaveCompanyError] = useState<string | null>(null)
 
-  // Email notification preferences state
+  // Notification timing type
+  type NotificationTiming = 'immediate' | 'digest'
+
+  // Email notification preferences state with timing options
   const [emailPreferences, setEmailPreferences] = useState({
     enabled: true,
     mentions: true,
+    mentionsTiming: 'immediate' as NotificationTiming,
     ncrAssigned: true,
+    ncrAssignedTiming: 'immediate' as NotificationTiming,
     ncrStatusChange: true,
+    ncrStatusChangeTiming: 'digest' as NotificationTiming,  // Default to digest for NCR status changes
     holdPointReminder: true,
+    holdPointReminderTiming: 'immediate' as NotificationTiming,
+    holdPointRelease: true,
+    holdPointReleaseTiming: 'immediate' as NotificationTiming,  // HP release - immediate by default
     commentReply: true,
+    commentReplyTiming: 'immediate' as NotificationTiming,
     scheduledReports: true,
+    scheduledReportsTiming: 'immediate' as NotificationTiming,
     dailyDigest: false,
   })
 
@@ -534,35 +545,62 @@ export function SettingsPage() {
               </button>
             </div>
 
-            {/* Individual Preferences */}
+            {/* Individual Preferences with Timing Options */}
             <div className={`space-y-3 ${!emailPreferences.enabled ? 'opacity-50 pointer-events-none' : ''}`}>
-              <p className="text-sm font-medium text-muted-foreground">Notification Types</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-muted-foreground">Notification Types</p>
+                <p className="text-xs text-muted-foreground">Timing</p>
+              </div>
 
               {[
-                { key: 'mentions' as const, label: 'Mentions', description: 'When someone @mentions you in a comment' },
-                { key: 'ncrAssigned' as const, label: 'NCR Assigned', description: 'When you are assigned to an NCR' },
-                { key: 'ncrStatusChange' as const, label: 'NCR Status Changes', description: 'When an NCR you\'re involved with changes status' },
-                { key: 'holdPointReminder' as const, label: 'Hold Point Reminders', description: 'Reminders for upcoming hold points' },
-                { key: 'commentReply' as const, label: 'Comment Replies', description: 'When someone replies to your comment' },
-                { key: 'scheduledReports' as const, label: 'Scheduled Reports', description: 'Delivery of scheduled report emails' },
-                { key: 'dailyDigest' as const, label: 'Daily Digest', description: 'Receive all notifications in a single daily summary email' },
+                { key: 'mentions' as const, timingKey: 'mentionsTiming' as const, label: 'Mentions', description: 'When someone @mentions you in a comment', supportsTiming: true },
+                { key: 'ncrAssigned' as const, timingKey: 'ncrAssignedTiming' as const, label: 'NCR Assigned', description: 'When you are assigned to an NCR', supportsTiming: true },
+                { key: 'ncrStatusChange' as const, timingKey: 'ncrStatusChangeTiming' as const, label: 'NCR Status Changes', description: 'When an NCR you\'re involved with changes status', supportsTiming: true },
+                { key: 'holdPointReminder' as const, timingKey: 'holdPointReminderTiming' as const, label: 'Hold Point Reminders', description: 'Reminders for upcoming hold points', supportsTiming: true },
+                { key: 'holdPointRelease' as const, timingKey: 'holdPointReleaseTiming' as const, label: 'Hold Point Released', description: 'When a hold point is released', supportsTiming: true },
+                { key: 'commentReply' as const, timingKey: 'commentReplyTiming' as const, label: 'Comment Replies', description: 'When someone replies to your comment', supportsTiming: true },
+                { key: 'scheduledReports' as const, timingKey: 'scheduledReportsTiming' as const, label: 'Scheduled Reports', description: 'Delivery of scheduled report emails', supportsTiming: false },
+                { key: 'dailyDigest' as const, timingKey: null, label: 'Daily Digest', description: 'Receive digest emails at your preferred time', supportsTiming: false },
               ].map((pref) => (
-                <div key={pref.key} className="flex items-center justify-between py-2 border-b border-border last:border-b-0">
-                  <div>
-                    <p className="font-medium">{pref.label}</p>
-                    <p className="text-sm text-muted-foreground">{pref.description}</p>
+                <div key={pref.key} className="py-3 border-b border-border last:border-b-0">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 mr-4">
+                      <p className="font-medium">{pref.label}</p>
+                      <p className="text-sm text-muted-foreground">{pref.description}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {/* Timing selector for supported notifications */}
+                      {pref.supportsTiming && emailPreferences[pref.key] && pref.timingKey && (
+                        <select
+                          value={emailPreferences[pref.timingKey] || 'immediate'}
+                          onChange={(e) => {
+                            const previousPreferences = { ...emailPreferences }
+                            const newPreferences = { ...emailPreferences, [pref.timingKey!]: e.target.value as NotificationTiming }
+                            setEmailPreferences(newPreferences)
+                            saveEmailPreferences(newPreferences, previousPreferences)
+                          }}
+                          disabled={isSavingEmailPrefs}
+                          className="text-xs px-2 py-1 rounded border bg-background min-w-[90px]"
+                          data-testid={`timing-${pref.key}`}
+                        >
+                          <option value="immediate">Immediate</option>
+                          <option value="digest">Digest</option>
+                        </select>
+                      )}
+                      {/* Enable/disable toggle */}
+                      <button
+                        onClick={() => toggleEmailPreference(pref.key)}
+                        disabled={isSavingEmailPrefs}
+                        className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
+                          emailPreferences[pref.key] ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                        }`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                          emailPreferences[pref.key] ? 'translate-x-5' : 'translate-x-0.5'
+                        }`} />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => toggleEmailPreference(pref.key)}
-                    disabled={isSavingEmailPrefs}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${
-                      emailPreferences[pref.key] ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
-                    }`}
-                  >
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                      emailPreferences[pref.key] ? 'translate-x-5' : 'translate-x-0.5'
-                    }`} />
-                  </button>
                 </div>
               ))}
 
