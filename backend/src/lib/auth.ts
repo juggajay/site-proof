@@ -21,6 +21,7 @@ export interface AuthUser {
   phone?: string | null
   companyId?: string | null
   createdAt?: Date
+  avatarUrl?: string | null
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
@@ -41,7 +42,8 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       company_id: string | null
       created_at: Date
       token_invalidated_at: Date | null
-    }>>`SELECT id, email, full_name, phone, role_in_company, company_id, created_at, token_invalidated_at FROM users WHERE id = ${payload.userId}`
+      avatar_url: string | null
+    }>>`SELECT id, email, full_name, phone, role_in_company, company_id, created_at, token_invalidated_at, avatar_url FROM users WHERE id = ${payload.userId}`
 
     const user = userResult[0]
 
@@ -74,6 +76,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       companyId: user.company_id,
       role: user.role_in_company,
       createdAt: user.created_at,
+      avatarUrl: user.avatar_url,
     }
   } catch (error) {
     console.log('[AUTH DEBUG] Error in verifyToken:', error)

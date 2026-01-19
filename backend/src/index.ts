@@ -3,6 +3,7 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
+import path from 'path'
 import * as trpcExpress from '@trpc/server/adapters/express'
 import { createContext } from './trpc/context.js'
 import { appRouter } from './trpc/router.js'
@@ -80,6 +81,14 @@ app.use(express.urlencoded({ extended: true }))
 
 // Request logging
 app.use(requestLogger)
+
+// Serve static files from uploads directory (for avatars, documents, etc.)
+// Add CORS headers for cross-origin image loading
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  next()
+}, express.static(path.join(process.cwd(), 'uploads')))
 
 // Health check
 app.get('/health', (_req, res) => {

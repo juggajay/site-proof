@@ -1,8 +1,41 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { generateToken, generateExpiredToken, hashPassword, verifyPassword, verifyToken } from '../lib/auth.js'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
 
 export const authRouter = Router()
+
+// Configure multer for avatar uploads
+const avatarUploadDir = path.join(process.cwd(), 'uploads', 'avatars')
+if (!fs.existsSync(avatarUploadDir)) {
+  fs.mkdirSync(avatarUploadDir, { recursive: true })
+}
+
+const avatarStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, avatarUploadDir)
+  },
+  filename: (req, file, cb) => {
+    const userId = (req as any).userId || 'unknown'
+    const ext = path.extname(file.originalname).toLowerCase()
+    cb(null, `avatar-${userId}-${Date.now()}${ext}`)
+  }
+})
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF and WebP are allowed.'))
+    }
+  }
+})
 
 // Current ToS version - update when ToS changes
 const CURRENT_TOS_VERSION = '1.0'
@@ -456,6 +489,135 @@ authRouter.patch('/profile', async (req, res) => {
   } catch (error) {
     console.error('Update profile error:', error)
     res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// POST /api/auth/avatar - Upload user avatar (Feature #690)
+authRouter.post('/avatar', avatarUpload.single('avatar'), async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const token = authHeader.substring(7)
+    const { verifyToken } = await import('../lib/auth.js')
+    const userData = await verifyToken(token)
+
+    if (!userData) {
+      return res.status(401).json({ message: 'Invalid token' })
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' })
+    }
+
+    // Get the old avatar to delete it later
+    const oldUser = await prisma.user.findUnique({
+      where: { id: userData.id },
+      select: { avatarUrl: true }
+    })
+
+    // Build the avatar URL
+    const apiUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 4003}`
+    const avatarUrl = `${apiUrl}/uploads/avatars/${req.file.filename}`
+
+    // Update user with new avatar URL
+    const updatedUser = await prisma.user.update({
+      where: { id: userData.id },
+      data: { avatarUrl },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        avatarUrl: true,
+        phone: true,
+        roleInCompany: true,
+        companyId: true,
+      },
+    })
+
+    // Delete old avatar file if it exists
+    if (oldUser?.avatarUrl) {
+      try {
+        const oldFilename = oldUser.avatarUrl.split('/').pop()
+        if (oldFilename) {
+          const oldFilePath = path.join(avatarUploadDir, oldFilename)
+          if (fs.existsSync(oldFilePath)) {
+            fs.unlinkSync(oldFilePath)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to delete old avatar:', err)
+      }
+    }
+
+    res.json({
+      message: 'Avatar uploaded successfully',
+      avatarUrl: updatedUser.avatarUrl,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        fullName: updatedUser.fullName,
+        name: updatedUser.fullName,
+        avatarUrl: updatedUser.avatarUrl,
+        phone: updatedUser.phone,
+        role: updatedUser.roleInCompany,
+        companyId: updatedUser.companyId,
+      },
+    })
+  } catch (error) {
+    console.error('Avatar upload error:', error)
+    res.status(500).json({ message: 'Failed to upload avatar' })
+  }
+})
+
+// DELETE /api/auth/avatar - Remove user avatar
+authRouter.delete('/avatar', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Unauthorized' })
+    }
+
+    const token = authHeader.substring(7)
+    const { verifyToken } = await import('../lib/auth.js')
+    const userData = await verifyToken(token)
+
+    if (!userData) {
+      return res.status(401).json({ message: 'Invalid token' })
+    }
+
+    // Get the current avatar URL to delete the file
+    const user = await prisma.user.findUnique({
+      where: { id: userData.id },
+      select: { avatarUrl: true }
+    })
+
+    if (user?.avatarUrl) {
+      try {
+        const filename = user.avatarUrl.split('/').pop()
+        if (filename) {
+          const filePath = path.join(avatarUploadDir, filename)
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to delete avatar file:', err)
+      }
+    }
+
+    // Update user to remove avatar URL
+    await prisma.user.update({
+      where: { id: userData.id },
+      data: { avatarUrl: null },
+    })
+
+    res.json({ message: 'Avatar removed successfully' })
+  } catch (error) {
+    console.error('Avatar delete error:', error)
+    res.status(500).json({ message: 'Failed to remove avatar' })
   }
 })
 

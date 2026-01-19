@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth, getAuthToken } from '@/lib/auth'
-import { User, Mail, Shield, Calendar, Building2, Phone, X, Lock, LogOut } from 'lucide-react'
+import { User, Mail, Shield, Calendar, Building2, Phone, X, Lock, LogOut, Camera, Trash2 } from 'lucide-react'
 import { toast } from '@/components/ui/toaster'
 
 export function ProfilePage() {
@@ -27,6 +27,11 @@ export function ProfilePage() {
   // Logout all devices state
   const [loggingOutAll, setLoggingOutAll] = useState(false)
 
+  // Avatar upload state
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
   // Initialize form data when modal opens
   useEffect(() => {
     if (editModalOpen && user) {
@@ -34,6 +39,7 @@ export function ProfilePage() {
         fullName: user.name || user.fullName || '',
         phone: user.phone || '',
       })
+      setAvatarPreview(null) // Reset preview
     }
   }, [editModalOpen, user])
 
@@ -219,6 +225,148 @@ export function ProfilePage() {
     }
   }
 
+  // Handle avatar file selection
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: 'Invalid File Type',
+        description: 'Please select a JPEG, PNG, GIF, or WebP image.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'File Too Large',
+        description: 'Please select an image under 5MB.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Create preview
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setAvatarPreview(e.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Handle avatar upload
+  const handleAvatarUpload = async () => {
+    const file = avatarInputRef.current?.files?.[0]
+    if (!file) {
+      toast({
+        title: 'No Image Selected',
+        description: 'Please select an image to upload.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setUploadingAvatar(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const formData = new FormData()
+      formData.append('avatar', file)
+
+      const response = await fetch(`${apiUrl}/api/auth/avatar`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+
+      if (response.ok) {
+        // Refresh user data
+        if (refreshUser) {
+          await refreshUser()
+        }
+        setAvatarPreview(null)
+        if (avatarInputRef.current) {
+          avatarInputRef.current.value = ''
+        }
+        toast({
+          title: 'Avatar Updated',
+          description: 'Your avatar has been updated successfully.',
+          variant: 'success',
+        })
+      } else {
+        const data = await response.json()
+        toast({
+          title: 'Upload Failed',
+          description: data.message || 'Failed to upload avatar',
+          variant: 'destructive',
+        })
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to upload avatar',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  // Handle avatar removal
+  const handleRemoveAvatar = async () => {
+    if (!confirm('Are you sure you want to remove your avatar?')) {
+      return
+    }
+
+    setUploadingAvatar(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/auth/avatar`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        // Refresh user data
+        if (refreshUser) {
+          await refreshUser()
+        }
+        toast({
+          title: 'Avatar Removed',
+          description: 'Your avatar has been removed.',
+          variant: 'success',
+        })
+      } else {
+        const data = await response.json()
+        toast({
+          title: 'Removal Failed',
+          description: data.message || 'Failed to remove avatar',
+          variant: 'destructive',
+        })
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to remove avatar',
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div>
@@ -361,6 +509,81 @@ export function ProfilePage() {
               >
                 <X className="h-5 w-5" />
               </button>
+            </div>
+
+            {/* Avatar Upload Section */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Profile Picture
+              </label>
+              <div className="flex items-center gap-4">
+                {/* Avatar Preview */}
+                <div className="relative">
+                  {avatarPreview ? (
+                    <img
+                      src={avatarPreview}
+                      alt="Avatar preview"
+                      className="h-20 w-20 rounded-full object-cover border-2 border-gray-200"
+                    />
+                  ) : user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt="Current avatar"
+                      className="h-20 w-20 rounded-full object-cover border-2 border-gray-200"
+                    />
+                  ) : (
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground border-2 border-gray-200">
+                      <span className="text-2xl font-bold">
+                        {(user?.fullName || user?.name || user?.email || 'U').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="absolute -bottom-1 -right-1 rounded-full bg-primary p-1.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    title="Change avatar"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleAvatarSelect}
+                  className="hidden"
+                />
+
+                <div className="flex flex-col gap-2">
+                  {avatarPreview && (
+                    <button
+                      type="button"
+                      onClick={handleAvatarUpload}
+                      disabled={uploadingAvatar}
+                      className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {uploadingAvatar ? 'Uploading...' : 'Save Avatar'}
+                    </button>
+                  )}
+                  {user?.avatarUrl && !avatarPreview && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveAvatar}
+                      disabled={uploadingAvatar}
+                      className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    JPEG, PNG, GIF or WebP. Max 5MB.
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4">
