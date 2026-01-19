@@ -2325,7 +2325,7 @@ export function LotsPage() {
                     </tr>
                     {/* Expanded detail row */}
                     {expandedRows.has(lot.id) && (
-                      <tr className="bg-muted/30 border-b" data-testid={`expanded-row-${lot.id}`}>
+                      <tr className="bg-muted/30 border-b animate-in fade-in slide-in-from-top-2 duration-200" data-testid={`expanded-row-${lot.id}`}>
                         <td colSpan={canDelete ? (isSubcontractor ? 7 : 9) : (isSubcontractor ? 6 : 8)} className="p-4">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             {/* Dates Section */}
