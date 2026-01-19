@@ -1,9 +1,10 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink, TrendingUp } from 'lucide-react'
+import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink, TrendingUp, Package, Loader2 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, BarChart, Bar } from 'recharts'
 import { BarChart3 } from 'lucide-react'
+import { generateClaimEvidencePackagePDF, ClaimPackageOptions } from '@/lib/pdfGenerator'
 
 interface Claim {
   id: string
@@ -59,10 +60,74 @@ export function ClaimsPage() {
   const [showDisputeModal, setShowDisputeModal] = useState<string | null>(null)  // claim id
   const [disputeNotes, setDisputeNotes] = useState('')
   const [disputing, setDisputing] = useState(false)
+  const [generatingEvidence, setGeneratingEvidence] = useState<string | null>(null) // claim id being generated
+  const [showPackageCustomizeModal, setShowPackageCustomizeModal] = useState<string | null>(null) // claim id for customization
+  const [packageOptions, setPackageOptions] = useState({
+    includeLotSummary: true,
+    includeLotDetails: true,
+    includeITPChecklists: true,
+    includeTestResults: true,
+    includeNCRs: true,
+    includeHoldPoints: true,
+    includePhotos: true,
+    includeDeclaration: true,
+  })
 
   useEffect(() => {
     fetchClaims()
   }, [projectId])
+
+  // Open package customization modal
+  const openPackageCustomizeModal = (claimId: string) => {
+    // Reset options to default when opening
+    setPackageOptions({
+      includeLotSummary: true,
+      includeLotDetails: true,
+      includeITPChecklists: true,
+      includeTestResults: true,
+      includeNCRs: true,
+      includeHoldPoints: true,
+      includePhotos: true,
+      includeDeclaration: true,
+    })
+    setShowPackageCustomizeModal(claimId)
+  }
+
+  // Generate evidence package for a claim with customization options
+  const handleGenerateEvidencePackage = async (claimId: string, options = packageOptions) => {
+    setShowPackageCustomizeModal(null)
+    setGeneratingEvidence(claimId)
+    const startTime = Date.now()
+
+    try {
+      const token = getAuthToken()
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+      const response = await fetch(`${API_URL}/api/projects/${projectId}/claims/${claimId}/evidence-package`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch evidence package data')
+      }
+
+      const data = await response.json()
+
+      // Generate the PDF with customization options
+      generateClaimEvidencePackagePDF(data, options)
+
+      const totalTime = Date.now() - startTime
+      console.log(`Total evidence package generation time: ${totalTime}ms`)
+
+      // Show success alert with timing
+      alert(`Evidence package generated successfully!\n\nGeneration time: ${(totalTime / 1000).toFixed(1)} seconds\nLots included: ${data.summary.totalLots}`)
+
+    } catch (error) {
+      console.error('Error generating evidence package:', error)
+      alert('Failed to generate evidence package. Please try again.')
+    } finally {
+      setGeneratingEvidence(null)
+    }
+  }
 
   const fetchClaims = async () => {
     if (!projectId) return
@@ -988,7 +1053,19 @@ export function ClaimsPage() {
                           <AlertCircle className="h-4 w-4" />
                         </button>
                       )}
-                      <button className="p-2 hover:bg-muted rounded-lg" title="Download">
+                      <button
+                          onClick={() => openPackageCustomizeModal(claim.id)}
+                          disabled={generatingEvidence === claim.id}
+                          className="p-2 hover:bg-green-100 rounded-lg text-green-600 disabled:opacity-50"
+                          title="Generate Evidence Package"
+                        >
+                          {generatingEvidence === claim.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Package className="h-4 w-4" />
+                          )}
+                        </button>
+                      <button className="p-2 hover:bg-muted rounded-lg" title="Download CSV">
                         <Download className="h-4 w-4" />
                       </button>
                     </div>
@@ -1235,6 +1312,182 @@ export function ClaimsPage() {
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
                 {disputing ? 'Marking...' : 'Mark as Disputed'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Package Customization Modal */}
+      {showPackageCustomizeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-semibold">Customize Evidence Package</h2>
+              <button onClick={() => setShowPackageCustomizeModal(null)} className="p-2 hover:bg-muted rounded-lg">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-muted-foreground text-sm">
+                Select which sections to include in the evidence package PDF:
+              </p>
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packageOptions.includeLotSummary}
+                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeLotSummary: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <div className="font-medium">Lot Summary Table</div>
+                    <div className="text-sm text-muted-foreground">Overview table of all lots in the claim</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packageOptions.includeLotDetails}
+                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeLotDetails: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <div className="font-medium">Individual Lot Details</div>
+                    <div className="text-sm text-muted-foreground">Detailed breakdown for each lot</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packageOptions.includeITPChecklists}
+                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeITPChecklists: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <div className="font-medium">ITP Checklists</div>
+                    <div className="text-sm text-muted-foreground">Inspection and test plan completions</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packageOptions.includeTestResults}
+                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeTestResults: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <div className="font-medium">Test Results</div>
+                    <div className="text-sm text-muted-foreground">Laboratory test results and pass/fail status</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packageOptions.includeNCRs}
+                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeNCRs: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <div className="font-medium">Non-Conformance Reports</div>
+                    <div className="text-sm text-muted-foreground">NCR status and resolution details</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packageOptions.includeHoldPoints}
+                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeHoldPoints: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <div className="font-medium">Hold Points</div>
+                    <div className="text-sm text-muted-foreground">Hold point release information</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packageOptions.includePhotos}
+                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includePhotos: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <div className="font-medium">Photo Evidence</div>
+                    <div className="text-sm text-muted-foreground">Photo counts and references</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packageOptions.includeDeclaration}
+                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeDeclaration: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <div>
+                    <div className="font-medium">Declaration Page</div>
+                    <div className="text-sm text-muted-foreground">Signature page for verification</div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setPackageOptions({
+                    includeLotSummary: true,
+                    includeLotDetails: true,
+                    includeITPChecklists: true,
+                    includeTestResults: true,
+                    includeNCRs: true,
+                    includeHoldPoints: true,
+                    includePhotos: true,
+                    includeDeclaration: true,
+                  })}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Select All
+                </button>
+                <span className="text-muted-foreground">|</span>
+                <button
+                  onClick={() => setPackageOptions({
+                    includeLotSummary: false,
+                    includeLotDetails: false,
+                    includeITPChecklists: false,
+                    includeTestResults: false,
+                    includeNCRs: false,
+                    includeHoldPoints: false,
+                    includePhotos: false,
+                    includeDeclaration: false,
+                  })}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 p-4 border-t">
+              <button
+                onClick={() => setShowPackageCustomizeModal(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleGenerateEvidencePackage(showPackageCustomizeModal, packageOptions)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+              >
+                <Package className="h-4 w-4" />
+                Generate Package
               </button>
             </div>
           </div>
