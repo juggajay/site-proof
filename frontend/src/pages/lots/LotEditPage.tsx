@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { getAuthToken } from '@/lib/auth'
 import { TagInput } from '@/components/ui/TagInput'
+import { DateTimePicker } from '@/components/ui/DateTimePicker'
 
 interface Lot {
   id: string
@@ -76,6 +77,9 @@ export function LotEditPage() {
 
   // Tags state (client-side only for now - demo feature)
   const [tags, setTags] = useState<string[]>([])
+
+  // Scheduled start datetime (demo feature)
+  const [scheduledStart, setScheduledStart] = useState<string>('')
 
   // Track if form has unsaved changes
   const [isDirty, setIsDirty] = useState(false)
@@ -478,6 +482,22 @@ export function LotEditPage() {
             />
             <p className="text-xs text-muted-foreground mt-1">
               Add up to 5 tags to help categorize this lot
+            </p>
+          </div>
+
+          <div>
+            <DateTimePicker
+              label="Scheduled Start"
+              value={scheduledStart}
+              onChange={(datetime) => {
+                setScheduledStart(datetime)
+                setIsDirty(true)
+              }}
+              minDate={new Date().toISOString().split('T')[0]}
+              disabled={isLocked}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Optional: Schedule when work on this lot should begin
             </p>
           </div>
         </div>
