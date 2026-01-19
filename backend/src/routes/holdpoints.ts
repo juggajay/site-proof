@@ -232,15 +232,20 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: any, r
     const existingHP = lot.holdPoints[0]
 
     // Get HP default recipients from project settings (Feature #697)
+    // Get HP approval requirement from project settings (Feature #698)
     let defaultRecipients: string[] = []
+    let approvalRequirement = 'any'
     if (lot.project.settings) {
       try {
         const settings = JSON.parse(lot.project.settings)
         if (settings.hpRecipients && Array.isArray(settings.hpRecipients)) {
           defaultRecipients = settings.hpRecipients.map((r: any) => r.email).filter(Boolean)
         }
+        if (settings.hpApprovalRequirement) {
+          approvalRequirement = settings.hpApprovalRequirement
+        }
       } catch (e) {
-        // Invalid JSON, use empty array
+        // Invalid JSON, use defaults
       }
     }
 
@@ -262,7 +267,8 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: any, r
       prerequisites,
       incompletePrerequisites,
       canRequestRelease,
-      defaultRecipients // Feature #697 - HP default recipients from project settings
+      defaultRecipients, // Feature #697 - HP default recipients from project settings
+      approvalRequirement // Feature #698 - HP approval requirement from project settings
     })
   } catch (error) {
     console.error('Error fetching hold point details:', error)
@@ -453,6 +459,59 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
   try {
     const { id } = req.params
     const { releasedByName, releasedByOrg, releaseMethod, releaseNotes } = req.body
+
+    // Feature #698 - Check HP approval requirements from project settings
+    const existingHP = await prisma.holdPoint.findUnique({
+      where: { id },
+      include: {
+        lot: {
+          include: {
+            project: true
+          }
+        }
+      }
+    })
+
+    if (!existingHP) {
+      return res.status(404).json({ error: 'Hold point not found' })
+    }
+
+    // Check if project requires superintendent-only release
+    let approvalRequirement = 'any'
+    if (existingHP.lot.project.settings) {
+      try {
+        const settings = JSON.parse(existingHP.lot.project.settings)
+        if (settings.hpApprovalRequirement) {
+          approvalRequirement = settings.hpApprovalRequirement
+        }
+      } catch (e) {
+        // Invalid JSON, use default
+      }
+    }
+
+    // If superintendent-only, check user's role in the project
+    if (approvalRequirement === 'superintendent') {
+      const userId = req.user?.id
+      if (userId) {
+        const teamMember = await prisma.projectTeamMember.findFirst({
+          where: {
+            projectId: existingHP.lot.projectId,
+            userId: userId,
+            status: 'active'
+          }
+        })
+        const userRole = teamMember?.role || req.user?.role
+        // Allow superintendent, admin, and project_manager roles
+        const allowedRoles = ['superintendent', 'admin', 'project_manager', 'owner']
+        if (!userRole || !allowedRoles.includes(userRole)) {
+          return res.status(403).json({
+            error: 'Unauthorized',
+            message: 'This project requires superintendent approval to release hold points.',
+            code: 'SUPERINTENDENT_REQUIRED'
+          })
+        }
+      }
+    }
 
     const holdPoint = await prisma.holdPoint.update({
       where: { id },

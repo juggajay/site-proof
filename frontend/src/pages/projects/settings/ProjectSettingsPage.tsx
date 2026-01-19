@@ -109,6 +109,9 @@ export function ProjectSettingsPage() {
   const [newRecipientEmail, setNewRecipientEmail] = useState('')
   const [savingRecipients, setSavingRecipients] = useState(false)
 
+  // HP Approval Requirement state (Feature #698)
+  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<'any' | 'superintendent'>('any')
+
   const setActiveTab = (tab: SettingsTab) => {
     setSearchParams({ tab })
   }
@@ -142,6 +145,7 @@ export function ProjectSettingsPage() {
             workingHoursEnd: data.project.workingHoursEnd || '18:00',
           })
           // Feature #697 - Load HP recipients from project settings
+          // Feature #698 - Load HP approval requirement
           if (data.project.settings) {
             try {
               const settings = typeof data.project.settings === 'string'
@@ -150,8 +154,11 @@ export function ProjectSettingsPage() {
               if (settings.hpRecipients && Array.isArray(settings.hpRecipients)) {
                 setHpRecipients(settings.hpRecipients)
               }
+              if (settings.hpApprovalRequirement) {
+                setHpApprovalRequirement(settings.hpApprovalRequirement)
+              }
             } catch (e) {
-              // Invalid JSON, use empty array
+              // Invalid JSON, use defaults
             }
           }
         }
@@ -1074,6 +1081,47 @@ export function ProjectSettingsPage() {
                     <option value="2">2 working days</option>
                     <option value="3">3 working days</option>
                     <option value="5">5 working days</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">Hold Point Approval Requirements</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure who can release hold points for this project.
+              </p>
+              <div className="space-y-4">
+                <div className="p-3 rounded-lg bg-muted/30">
+                  <label className="block text-sm font-medium mb-2">Release Authorization</label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Specify who is authorized to release hold points. This affects the Record Release functionality.
+                  </p>
+                  <select
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                    value={hpApprovalRequirement}
+                    onChange={async (e) => {
+                      const newValue = e.target.value as 'any' | 'superintendent'
+                      setHpApprovalRequirement(newValue)
+                      // Save to project settings
+                      const token = getAuthToken()
+                      if (!token || !projectId) return
+                      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                      try {
+                        await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                          method: 'PATCH',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({ settings: { hpApprovalRequirement: newValue } }),
+                        })
+                      } catch (e) {
+                        console.error('Failed to save approval requirement:', e)
+                      }
+                    }}
+                  >
+                    <option value="any">Any Team Member</option>
+                    <option value="superintendent">Superintendent Only</option>
                   </select>
                 </div>
               </div>

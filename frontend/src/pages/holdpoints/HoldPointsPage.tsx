@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check, FileText, Download, Eye, X, RefreshCw, ClipboardCheck } from 'lucide-react'
+import { Link2, Check, FileText, Download, Eye, X, RefreshCw, ClipboardCheck, AlertTriangle } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
 
@@ -41,6 +41,7 @@ interface HoldPointDetails {
   incompletePrerequisites: PrerequisiteItem[]
   canRequestRelease: boolean
   defaultRecipients?: string[] // Feature #697 - HP default recipients
+  approvalRequirement?: 'any' | 'superintendent' // Feature #698 - HP approval requirements
 }
 
 export function HoldPointsPage() {
@@ -794,6 +795,7 @@ export function HoldPointsPage() {
         <RecordReleaseModal
           holdPoint={selectedHoldPoint}
           recording={recordingRelease}
+          approvalRequirement={holdPointDetails?.approvalRequirement}
           onClose={() => {
             setShowRecordReleaseModal(false)
             setSelectedHoldPoint(null)
@@ -1341,15 +1343,17 @@ function RequestReleaseModal({
   )
 }
 
-// Record Release Modal Component (Feature #184, #185)
+// Record Release Modal Component (Feature #184, #185, #698)
 function RecordReleaseModal({
   holdPoint,
   recording,
+  approvalRequirement,
   onClose,
   onSubmit,
 }: {
   holdPoint: HoldPoint
   recording: boolean
+  approvalRequirement?: 'any' | 'superintendent'
   onClose: () => void
   onSubmit: (
     releasedByName: string,
@@ -1415,6 +1419,19 @@ function RecordReleaseModal({
           <div className="text-sm text-muted-foreground mt-2">Hold Point</div>
           <div className="font-medium">{holdPoint.description}</div>
         </div>
+
+        {/* Feature #698 - Superintendent approval requirement notice */}
+        {approvalRequirement === 'superintendent' && (
+          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-sm font-medium">Superintendent Approval Required</span>
+            </div>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              This project requires superintendent-level authorization to release hold points.
+            </p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Release Method Selection (Feature #185) */}
