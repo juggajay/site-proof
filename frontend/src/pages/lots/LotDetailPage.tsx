@@ -1626,7 +1626,7 @@ export function LotDetailPage() {
       <div className="min-h-[300px]" role="tabpanel">
         {/* ITP Checklist Tab */}
         {currentTab === 'itp' && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-200">
             {loadingItp ? (
               <div className="flex justify-center p-8">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -2218,7 +2218,7 @@ export function LotDetailPage() {
 
         {/* Test Results Tab */}
         {currentTab === 'tests' && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Test Results</h2>
               <button
@@ -2291,7 +2291,7 @@ export function LotDetailPage() {
 
         {/* NCRs Tab */}
         {currentTab === 'ncrs' && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Non-Conformance Reports</h2>
               <button
@@ -2360,7 +2360,7 @@ export function LotDetailPage() {
 
         {/* Photos Tab */}
         {currentTab === 'photos' && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Photos</h2>
             </div>
@@ -2445,7 +2445,7 @@ export function LotDetailPage() {
 
         {/* Documents Tab */}
         {currentTab === 'documents' && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Documents</h2>
               <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
@@ -2464,12 +2464,14 @@ export function LotDetailPage() {
 
         {/* Comments Tab */}
         {currentTab === 'comments' && lotId && (
-          <CommentsSection entityType="Lot" entityId={lotId} />
+          <div className="animate-in fade-in duration-200">
+            <CommentsSection entityType="Lot" entityId={lotId} />
+          </div>
         )}
 
         {/* History Tab */}
         {currentTab === 'history' && (
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in duration-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Activity History</h2>
             </div>

@@ -524,7 +524,7 @@ export function ReportsPage() {
 
           {/* Lot Status Report */}
           {activeTab === 'lot-status' && lotReport && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in duration-200">
               {/* Summary Cards with Percentage */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 <div className="bg-gray-100 rounded-lg p-4 text-center">
@@ -707,7 +707,7 @@ export function ReportsPage() {
 
           {/* NCR Report */}
           {activeTab === 'ncr' && ncrReport && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in duration-200">
               {/* Summary Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 <div className="bg-white border rounded-lg p-4">
@@ -906,7 +906,7 @@ export function ReportsPage() {
 
           {/* Test Results Report */}
           {activeTab === 'test' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in duration-200">
               {/* Feature #208: Report Filters */}
               <div className="bg-white border rounded-lg p-6 print:hidden">
                 <h3 className="text-lg font-medium mb-4">Report Options</h3>
@@ -1113,7 +1113,7 @@ export function ReportsPage() {
 
           {/* Diary Report */}
           {activeTab === 'diary' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in duration-200">
               {/* Section Selection */}
               <div className="bg-white border rounded-lg p-6">
                 <h3 className="text-lg font-medium mb-4">Report Options</h3>
@@ -1428,7 +1428,7 @@ export function ReportsPage() {
 
           {/* Advanced Analytics Tab */}
           {activeTab === 'advanced' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in duration-200">
               {!hasAdvancedAnalytics ? (
                 /* Upgrade Prompt for Basic Tier Users */
                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-8 text-center">
