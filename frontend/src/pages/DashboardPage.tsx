@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import {
@@ -16,8 +16,104 @@ import {
   Users,
   Download,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Calendar,
+  ChevronDown
 } from 'lucide-react'
+
+// Date range presets
+type DateRangePreset = 'today' | 'yesterday' | 'last7days' | 'last30days' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'custom'
+
+interface DateRange {
+  preset: DateRangePreset
+  startDate: string
+  endDate: string
+  label: string
+}
+
+const DATE_RANGE_PRESETS: { value: DateRangePreset; label: string; getRange: () => { start: Date; end: Date } }[] = [
+  {
+    value: 'today',
+    label: 'Today',
+    getRange: () => {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const end = new Date()
+      end.setHours(23, 59, 59, 999)
+      return { start: today, end }
+    }
+  },
+  {
+    value: 'yesterday',
+    label: 'Yesterday',
+    getRange: () => {
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+      yesterday.setHours(0, 0, 0, 0)
+      const end = new Date(yesterday)
+      end.setHours(23, 59, 59, 999)
+      return { start: yesterday, end }
+    }
+  },
+  {
+    value: 'last7days',
+    label: 'Last 7 Days',
+    getRange: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - 6)
+      start.setHours(0, 0, 0, 0)
+      return { start, end }
+    }
+  },
+  {
+    value: 'last30days',
+    label: 'Last 30 Days',
+    getRange: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - 29)
+      start.setHours(0, 0, 0, 0)
+      return { start, end }
+    }
+  },
+  {
+    value: 'thisMonth',
+    label: 'This Month',
+    getRange: () => {
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+      const end = new Date()
+      return { start, end }
+    }
+  },
+  {
+    value: 'lastMonth',
+    label: 'Last Month',
+    getRange: () => {
+      const now = new Date()
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const end = new Date(now.getFullYear(), now.getMonth(), 0)
+      end.setHours(23, 59, 59, 999)
+      return { start, end }
+    }
+  },
+  {
+    value: 'thisQuarter',
+    label: 'This Quarter',
+    getRange: () => {
+      const now = new Date()
+      const quarter = Math.floor(now.getMonth() / 3)
+      const start = new Date(now.getFullYear(), quarter * 3, 1)
+      const end = new Date()
+      return { start, end }
+    }
+  },
+]
+
+const formatDateForApi = (date: Date): string => {
+  return date.toISOString().split('T')[0]
+}
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
@@ -87,6 +183,34 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Date range filter state
+  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>('last30days')
+  const [showDateRangeDropdown, setShowDateRangeDropdown] = useState(false)
+
+  // Get current date range based on preset
+  const currentDateRange = useMemo(() => {
+    const preset = DATE_RANGE_PRESETS.find(p => p.value === dateRangePreset)
+    if (preset) {
+      const range = preset.getRange()
+      return {
+        preset: dateRangePreset,
+        startDate: formatDateForApi(range.start),
+        endDate: formatDateForApi(range.end),
+        label: preset.label
+      }
+    }
+    // Default to last 30 days
+    const defaultPreset = DATE_RANGE_PRESETS.find(p => p.value === 'last30days')!
+    const range = defaultPreset.getRange()
+    return {
+      preset: 'last30days' as DateRangePreset,
+      startDate: formatDateForApi(range.start),
+      endDate: formatDateForApi(range.end),
+      label: defaultPreset.label
+    }
+  }, [dateRangePreset])
+
   const [stats, setStats] = useState<DashboardStats>({
     totalProjects: 0,
     activeProjects: 0,
@@ -125,8 +249,14 @@ export function DashboardPage() {
       }
 
       try {
-        // Fetch dashboard stats from new endpoint
-        const statsResponse = await fetch(`${API_URL}/api/dashboard/stats`, {
+        // Build URL with date range parameters
+        const params = new URLSearchParams({
+          startDate: currentDateRange.startDate,
+          endDate: currentDateRange.endDate,
+        })
+
+        // Fetch dashboard stats from new endpoint with date range
+        const statsResponse = await fetch(`${API_URL}/api/dashboard/stats?${params}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -187,7 +317,7 @@ export function DashboardPage() {
     }
 
     fetchDashboardData()
-  }, [])
+  }, [currentDateRange])
 
   const isWidgetVisible = (widgetId: WidgetId) => visibleWidgets.includes(widgetId)
 
@@ -278,6 +408,50 @@ export function DashboardPage() {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 no-print">
+          {/* Date Range Filter */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDateRangeDropdown(!showDateRangeDropdown)}
+              className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
+              title="Filter by date range"
+            >
+              <Calendar className="h-4 w-4" />
+              <span>{currentDateRange.label}</span>
+              <ChevronDown className="h-4 w-4" />
+            </button>
+
+            {showDateRangeDropdown && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowDateRangeDropdown(false)}
+                />
+                <div className="absolute right-0 top-full mt-2 w-48 bg-card border rounded-lg shadow-lg z-20 p-1">
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b mb-1">
+                    Select Date Range
+                  </div>
+                  {DATE_RANGE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.value}
+                      onClick={() => {
+                        setDateRangePreset(preset.value)
+                        setShowDateRangeDropdown(false)
+                      }}
+                      className={`w-full flex items-center justify-between px-2 py-1.5 text-sm hover:bg-muted rounded ${
+                        dateRangePreset === preset.value ? 'bg-muted font-medium' : ''
+                      }`}
+                    >
+                      <span>{preset.label}</span>
+                      {dateRangePreset === preset.value && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Export PDF Button */}
           <button
             onClick={handleExportPDF}
@@ -329,6 +503,12 @@ export function DashboardPage() {
           )}
           </div>
         </div>
+      </div>
+
+      {/* Date Range Indicator */}
+      <div className="text-sm text-muted-foreground flex items-center gap-2">
+        <Calendar className="h-4 w-4" />
+        <span>Showing data from {currentDateRange.startDate} to {currentDateRange.endDate}</span>
       </div>
 
       {/* Items Requiring Attention Widget */}
