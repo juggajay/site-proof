@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth, getAuthToken } from '../../lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check } from 'lucide-react'
+import { Link2, Check, Printer, Download } from 'lucide-react'
+import { generateNCRDetailPDF, NCRDetailData } from '../../lib/pdfGenerator'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
@@ -968,6 +969,55 @@ export function NCRPage() {
                         ) : (
                           <Link2 className="h-3.5 w-3.5" />
                         )}
+                      </button>
+                      {/* Print NCR Button - generates PDF */}
+                      <button
+                        onClick={() => {
+                          // Generate NCR detail PDF
+                          const pdfData: NCRDetailData = {
+                            ncr: {
+                              ncrNumber: ncr.ncrNumber,
+                              description: ncr.description,
+                              category: ncr.category,
+                              severity: ncr.severity,
+                              status: ncr.status,
+                              qmApprovalRequired: ncr.qmApprovalRequired,
+                              qmApprovedAt: ncr.qmApprovedAt,
+                              qmApprovedBy: ncr.qmApprovedBy,
+                              raisedBy: ncr.raisedBy,
+                              responsibleUser: ncr.responsibleUser,
+                              dueDate: ncr.dueDate,
+                              createdAt: ncr.createdAt,
+                            },
+                            project: {
+                              name: ncr.project?.name || 'Unknown Project',
+                              projectNumber: ncr.project?.projectNumber || 'N/A',
+                            },
+                            lots: ncr.ncrLots?.map(nl => ({
+                              lotNumber: nl.lot.lotNumber,
+                              description: nl.lot.description || null,
+                            })) || [],
+                          }
+
+                          try {
+                            generateNCRDetailPDF(pdfData)
+                            toast({
+                              title: 'PDF Generated',
+                              description: `NCR ${ncr.ncrNumber} PDF downloaded successfully`,
+                            })
+                          } catch (error) {
+                            console.error('Error generating NCR PDF:', error)
+                            toast({
+                              title: 'Error',
+                              description: 'Failed to generate NCR PDF',
+                              variant: 'destructive',
+                            })
+                          }
+                        }}
+                        className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors print:hidden"
+                        title="Print NCR details"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
                       </button>
                       {/* Respond Button for open NCRs */}
                       {ncr.status === 'open' && (
