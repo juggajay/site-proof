@@ -18,7 +18,8 @@ import {
   AlertCircle,
   ChevronRight,
   Calendar,
-  ChevronDown
+  ChevronDown,
+  RefreshCw
 } from 'lucide-react'
 
 // Date range presets
@@ -240,6 +241,15 @@ export function DashboardPage() {
 
   const [showWidgetSettings, setShowWidgetSettings] = useState(false)
 
+  // Refresh trigger - increment to force data refresh
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true)
+    setRefreshTrigger(prev => prev + 1)
+  }, [])
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       const token = getAuthToken()
@@ -313,11 +323,12 @@ export function DashboardPage() {
         console.error('Failed to fetch dashboard data:', err)
       } finally {
         setLoading(false)
+        setIsRefreshing(false)
       }
     }
 
     fetchDashboardData()
-  }, [currentDateRange])
+  }, [currentDateRange, refreshTrigger])
 
   const isWidgetVisible = (widgetId: WidgetId) => visibleWidgets.includes(widgetId)
 
@@ -451,6 +462,17 @@ export function DashboardPage() {
               </>
             )}
           </div>
+
+          {/* Refresh Button */}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
+            title="Refresh dashboard data"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
 
           {/* Export PDF Button */}
           <button
