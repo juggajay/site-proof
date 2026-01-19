@@ -73,6 +73,26 @@ const statusColors: Record<string, string> = {
   on_hold: 'bg-red-100 text-red-800',
 }
 
+// Helper function to highlight search terms in text
+function highlightSearchTerm(text: string, searchTerm: string): React.ReactNode {
+  if (!searchTerm || !text) return text
+
+  const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  const parts = text.split(regex)
+
+  if (parts.length === 1) return text
+
+  return parts.map((part, index) =>
+    regex.test(part) ? (
+      <mark key={index} className="bg-yellow-200 text-yellow-900 px-0.5 rounded">
+        {part}
+      </mark>
+    ) : (
+      part
+    )
+  )
+}
+
 // Status options for multi-select filter
 const STATUS_OPTIONS = [
   { value: 'not_started', label: 'Not Started' },
@@ -2052,12 +2072,16 @@ export function LotsPage() {
 
                       switch (columnId) {
                         case 'lotNumber':
-                          return <td key={columnId} className="p-3 font-medium">{lot.lotNumber}</td>
+                          return (
+                            <td key={columnId} className="p-3 font-medium">
+                              {highlightSearchTerm(lot.lotNumber, searchQuery)}
+                            </td>
+                          )
                         case 'description':
                           return (
                             <td key={columnId} className="p-3 max-w-xs">
                               <span className="block truncate" title={lot.description || ''}>
-                                {lot.description || '—'}
+                                {lot.description ? highlightSearchTerm(lot.description, searchQuery) : '—'}
                               </span>
                             </td>
                           )
