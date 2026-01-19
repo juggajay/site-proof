@@ -498,9 +498,19 @@ export function Header() {
             aria-expanded={isUserMenuOpen}
             aria-haspopup="menu"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <User className="h-4 w-4" aria-hidden="true" />
-            </div>
+            {user?.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt=""
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <span className="text-sm font-semibold" aria-hidden="true">
+                  {(user?.fullName || user?.name || user?.email || 'U').charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
             <span className="text-sm font-medium max-w-[150px] truncate hidden sm:block">{user?.email}</span>
             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform hidden sm:block ${isUserMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>

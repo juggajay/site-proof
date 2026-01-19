@@ -11,6 +11,7 @@ interface User {
   companyId?: string | null
   companyName?: string | null
   createdAt?: string
+  avatarUrl?: string | null
 }
 
 interface AuthContextType {

@@ -233,9 +233,19 @@ export function ProfilePage() {
         <div className="p-6">
           <div className="flex items-start gap-6">
             {/* Avatar */}
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <User className="h-10 w-10" />
-            </div>
+            {user?.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt=""
+                className="h-20 w-20 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <span className="text-3xl font-bold">
+                  {(user?.fullName || user?.name || user?.email || 'U').charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
 
             {/* User Info */}
             <div className="flex-1 space-y-1">
