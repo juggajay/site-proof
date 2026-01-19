@@ -659,3 +659,413 @@ notificationsRouter.delete('/digest-queue', async (req: AuthRequest, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// ============================================================================
+// ALERT ESCALATION SYSTEM
+// ============================================================================
+
+// Alert types that can be escalated
+export type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test'
+
+// Alert severity levels
+export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical'
+
+// Alert interface
+export interface Alert {
+  id: string
+  type: AlertType
+  severity: AlertSeverity
+  title: string
+  message: string
+  entityId: string  // ID of the related entity (NCR, hold point, etc.)
+  entityType: string
+  projectId?: string
+  assignedTo: string  // User ID who should resolve this
+  createdAt: Date
+  resolvedAt?: Date
+  escalatedAt?: Date
+  escalationLevel: number  // 0 = not escalated, 1 = first escalation, 2 = second, etc.
+  escalatedTo?: string[]  // User IDs of escalation recipients
+}
+
+// Escalation configuration (in hours)
+const ESCALATION_CONFIG = {
+  overdue_ncr: {
+    firstEscalationAfterHours: 24,      // Escalate after 24 hours
+    secondEscalationAfterHours: 48,     // Second escalation after 48 hours
+    escalationRoles: ['project_manager', 'quality_manager', 'admin'],
+  },
+  stale_hold_point: {
+    firstEscalationAfterHours: 4,       // Escalate after 4 hours (critical workflow)
+    secondEscalationAfterHours: 8,      // Second escalation after 8 hours
+    escalationRoles: ['superintendent', 'project_manager', 'admin'],
+  },
+  pending_approval: {
+    firstEscalationAfterHours: 8,       // Escalate after 8 hours
+    secondEscalationAfterHours: 24,     // Second escalation after 24 hours
+    escalationRoles: ['project_manager', 'admin'],
+  },
+  overdue_test: {
+    firstEscalationAfterHours: 48,      // Escalate after 48 hours
+    secondEscalationAfterHours: 96,     // Second escalation after 96 hours
+    escalationRoles: ['quality_manager', 'project_manager'],
+  },
+}
+
+// In-memory alert store (in production, store in database)
+const alertStore: Map<string, Alert> = new Map()
+
+// Generate unique alert ID
+function generateAlertId(): string {
+  return `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+// POST /api/notifications/alerts - Create a new alert
+notificationsRouter.post('/alerts', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { type, severity, title, message, entityId, entityType, projectId, assignedTo } = req.body
+
+    if (!type || !title || !message || !entityId || !entityType || !assignedTo) {
+      return res.status(400).json({ error: 'Missing required fields: type, title, message, entityId, entityType, assignedTo' })
+    }
+
+    const alert: Alert = {
+      id: generateAlertId(),
+      type: type as AlertType,
+      severity: severity || 'medium',
+      title,
+      message,
+      entityId,
+      entityType,
+      projectId,
+      assignedTo,
+      createdAt: new Date(),
+      escalationLevel: 0,
+    }
+
+    alertStore.set(alert.id, alert)
+
+    // Create in-app notification for assigned user
+    await prisma.notification.create({
+      data: {
+        userId: assignedTo,
+        projectId: projectId || null,
+        type: `alert_${type}`,
+        title,
+        message,
+        linkUrl: `/${entityType}s/${entityId}`,
+      },
+    })
+
+    console.log(`[Alerts] Created alert ${alert.id} of type ${type} assigned to ${assignedTo}`)
+
+    res.json({
+      success: true,
+      alert,
+      message: 'Alert created successfully',
+    })
+  } catch (error) {
+    console.error('Create alert error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/notifications/alerts - Get all active alerts
+notificationsRouter.get('/alerts', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { status, type, assignedTo } = req.query
+
+    let alerts = Array.from(alertStore.values())
+
+    // Filter by status
+    if (status === 'active') {
+      alerts = alerts.filter(a => !a.resolvedAt)
+    } else if (status === 'resolved') {
+      alerts = alerts.filter(a => !!a.resolvedAt)
+    } else if (status === 'escalated') {
+      alerts = alerts.filter(a => a.escalationLevel > 0 && !a.resolvedAt)
+    }
+
+    // Filter by type
+    if (type) {
+      alerts = alerts.filter(a => a.type === type)
+    }
+
+    // Filter by assigned user
+    if (assignedTo) {
+      alerts = alerts.filter(a => a.assignedTo === assignedTo || a.escalatedTo?.includes(assignedTo as string))
+    }
+
+    // Sort by creation date (newest first)
+    alerts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    res.json({
+      alerts,
+      count: alerts.length,
+    })
+  } catch (error) {
+    console.error('Get alerts error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PUT /api/notifications/alerts/:id/resolve - Resolve an alert
+notificationsRouter.put('/alerts/:id/resolve', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { id } = req.params
+    const alert = alertStore.get(id)
+
+    if (!alert) {
+      return res.status(404).json({ error: 'Alert not found' })
+    }
+
+    if (alert.resolvedAt) {
+      return res.status(400).json({ error: 'Alert is already resolved' })
+    }
+
+    alert.resolvedAt = new Date()
+    alertStore.set(id, alert)
+
+    console.log(`[Alerts] Alert ${id} resolved by user ${userId}`)
+
+    res.json({
+      success: true,
+      alert,
+      message: 'Alert resolved successfully',
+    })
+  } catch (error) {
+    console.error('Resolve alert error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/notifications/alerts/check-escalations - Check and process escalations
+// This would typically be called by a cron job or scheduled task
+notificationsRouter.post('/alerts/check-escalations', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const now = new Date()
+    const escalatedAlerts: Alert[] = []
+
+    for (const [id, alert] of alertStore.entries()) {
+      // Skip resolved alerts
+      if (alert.resolvedAt) continue
+
+      const config = ESCALATION_CONFIG[alert.type]
+      if (!config) continue
+
+      const hoursSinceCreation = (now.getTime() - new Date(alert.createdAt).getTime()) / (1000 * 60 * 60)
+
+      // Check if we need to escalate
+      let shouldEscalate = false
+      let newLevel = alert.escalationLevel
+
+      if (alert.escalationLevel === 0 && hoursSinceCreation >= config.firstEscalationAfterHours) {
+        shouldEscalate = true
+        newLevel = 1
+      } else if (alert.escalationLevel === 1 && hoursSinceCreation >= config.secondEscalationAfterHours) {
+        shouldEscalate = true
+        newLevel = 2
+      }
+
+      if (shouldEscalate) {
+        // Find users to escalate to based on roles
+        const escalationUsers = await prisma.user.findMany({
+          where: {
+            role: {
+              in: config.escalationRoles,
+            },
+            // If there's a project, find users in that project
+            ...(alert.projectId ? {
+              projectUsers: {
+                some: {
+                  projectId: alert.projectId,
+                },
+              },
+            } : {}),
+          },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            role: true,
+          },
+        })
+
+        const escalatedToIds = escalationUsers.map(u => u.id)
+
+        // Update alert
+        alert.escalationLevel = newLevel
+        alert.escalatedAt = now
+        alert.escalatedTo = escalatedToIds
+        alertStore.set(id, alert)
+
+        // Create notifications for escalation recipients
+        for (const user of escalationUsers) {
+          await prisma.notification.create({
+            data: {
+              userId: user.id,
+              projectId: alert.projectId || null,
+              type: 'alert_escalation',
+              title: `ESCALATED: ${alert.title}`,
+              message: `Alert has been escalated (Level ${newLevel}): ${alert.message}`,
+              linkUrl: `/${alert.entityType}s/${alert.entityId}`,
+            },
+          })
+
+          // Send email notification for escalation (always immediate for escalations)
+          await sendNotificationIfEnabled(user.id, 'ncrAssigned', {
+            title: `ESCALATED ALERT: ${alert.title}`,
+            message: `This alert has been escalated to you because it was not resolved within ${newLevel === 1 ? config.firstEscalationAfterHours : config.secondEscalationAfterHours} hours.\n\n${alert.message}`,
+            linkUrl: `/${alert.entityType}s/${alert.entityId}`,
+          })
+        }
+
+        escalatedAlerts.push(alert)
+        console.log(`[Alerts] Alert ${id} escalated to level ${newLevel}, notified ${escalationUsers.length} users`)
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Escalation check complete. ${escalatedAlerts.length} alerts escalated.`,
+      escalatedAlerts,
+      totalActiveAlerts: Array.from(alertStore.values()).filter(a => !a.resolvedAt).length,
+    })
+  } catch (error) {
+    console.error('Check escalations error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/notifications/alerts/escalation-config - Get escalation configuration
+notificationsRouter.get('/alerts/escalation-config', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    res.json({
+      config: ESCALATION_CONFIG,
+    })
+  } catch (error) {
+    console.error('Get escalation config error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/notifications/alerts/:id/test-escalate - Force escalate an alert (for testing)
+// This simulates time passing and triggers escalation
+notificationsRouter.post('/alerts/:id/test-escalate', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // Only allow in development
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Not available in production' })
+    }
+
+    const { id } = req.params
+    const alert = alertStore.get(id)
+
+    if (!alert) {
+      return res.status(404).json({ error: 'Alert not found' })
+    }
+
+    if (alert.resolvedAt) {
+      return res.status(400).json({ error: 'Alert is already resolved' })
+    }
+
+    const config = ESCALATION_CONFIG[alert.type]
+    if (!config) {
+      return res.status(400).json({ error: 'Unknown alert type' })
+    }
+
+    // Determine the next escalation level
+    const newLevel = alert.escalationLevel + 1
+    if (newLevel > 2) {
+      return res.status(400).json({ error: 'Alert is already at maximum escalation level' })
+    }
+
+    // Find users to escalate to based on roles
+    const escalationUsers = await prisma.user.findMany({
+      where: {
+        role: {
+          in: config.escalationRoles,
+        },
+        ...(alert.projectId ? {
+          projectUsers: {
+            some: {
+              projectId: alert.projectId,
+            },
+          },
+        } : {}),
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+      },
+    })
+
+    const escalatedToIds = escalationUsers.map(u => u.id)
+
+    // Update alert
+    alert.escalationLevel = newLevel
+    alert.escalatedAt = new Date()
+    alert.escalatedTo = escalatedToIds
+    alertStore.set(id, alert)
+
+    // Create notifications for escalation recipients
+    for (const user of escalationUsers) {
+      await prisma.notification.create({
+        data: {
+          userId: user.id,
+          projectId: alert.projectId || null,
+          type: 'alert_escalation',
+          title: `ESCALATED: ${alert.title}`,
+          message: `Alert has been escalated (Level ${newLevel}): ${alert.message}`,
+          linkUrl: `/${alert.entityType}s/${alert.entityId}`,
+        },
+      })
+
+      console.log(`[Alerts] Sent escalation notification to ${user.email}`)
+    }
+
+    console.log(`[Alerts] TEST: Alert ${id} force-escalated to level ${newLevel}`)
+
+    res.json({
+      success: true,
+      alert,
+      escalatedTo: escalationUsers.map(u => ({ id: u.id, email: u.email, role: u.role })),
+      message: `Alert escalated to level ${newLevel}. Notified ${escalationUsers.length} users.`,
+    })
+  } catch (error) {
+    console.error('Test escalate error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
