@@ -1812,4 +1812,261 @@ export function generateNCRDetailPDF(data: NCRDetailData): void {
   console.log(`NCR detail PDF generated in ${Date.now() - startTime}ms`)
 }
 
-export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData, NCRDetailData }
+// ========================================
+// TEST CERTIFICATE PDF GENERATOR
+// ========================================
+
+export interface TestCertificateData {
+  test: {
+    id: string
+    testType: string
+    testRequestNumber: string | null
+    laboratoryName: string | null
+    laboratoryReportNumber: string | null
+    sampleDate: string | null
+    sampleLocation: string | null
+    testDate: string | null
+    resultDate: string | null
+    resultValue: number | null
+    resultUnit: string | null
+    specificationMin: number | null
+    specificationMax: number | null
+    passFail: string
+    status: string
+    aiExtracted?: boolean
+    createdAt: string
+  }
+  lot: {
+    lotNumber: string
+    description: string | null
+    activityType: string | null
+    chainageStart: number | null
+    chainageEnd: number | null
+  } | null
+  project: {
+    name: string
+    projectNumber: string
+  }
+}
+
+/**
+ * Generate a PDF test certificate for a test result
+ */
+export function generateTestCertificatePDF(data: TestCertificateData): void {
+  const startTime = Date.now()
+  const doc = new jsPDF()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 15
+  const contentWidth = pageWidth - (margin * 2)
+  let yPos = margin
+
+  // Helper functions
+  const formatDate = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return 'Not recorded'
+    return new Date(dateStr).toLocaleDateString('en-AU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
+  }
+
+  const checkPageBreak = (neededHeight: number): void => {
+    if (yPos + neededHeight > pageHeight - 20) {
+      doc.addPage()
+      yPos = margin
+    }
+  }
+
+  const drawSectionHeader = (title: string): void => {
+    checkPageBreak(15)
+    doc.setFillColor(240, 240, 240)
+    doc.rect(margin, yPos - 3, contentWidth, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(50, 50, 50)
+    doc.text(title, margin + 2, yPos + 2)
+    yPos += 10
+    doc.setTextColor(0, 0, 0)
+  }
+
+  const addField = (label: string, value: string | null | undefined): void => {
+    checkPageBreak(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text(`${label}:`, margin, yPos)
+    doc.setFont('helvetica', 'normal')
+    const labelWidth = doc.getTextWidth(`${label}: `)
+    doc.text(value || 'N/A', margin + labelWidth + 2, yPos)
+    yPos += 6
+  }
+
+  // ========== HEADER ==========
+  // Pass/Fail based header color
+  const passFailColors: Record<string, [number, number, number]> = {
+    pass: [34, 197, 94],   // Green
+    fail: [239, 68, 68],    // Red
+    pending: [234, 179, 8]  // Amber
+  }
+  const headerColor = passFailColors[data.test.passFail.toLowerCase()] || [100, 100, 100]
+
+  doc.setFillColor(...headerColor)
+  doc.rect(0, 0, pageWidth, 40, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.text('TEST CERTIFICATE', margin, 15)
+
+  doc.setFontSize(12)
+  doc.text(data.test.testType, margin, 27)
+
+  // Pass/Fail badge
+  const passFailText = data.test.passFail.toUpperCase()
+  doc.setFontSize(14)
+  const badgeX = pageWidth - margin - doc.getTextWidth(passFailText)
+  doc.text(passFailText, badgeX, 27)
+
+  yPos = 50
+  doc.setTextColor(0, 0, 0)
+
+  // ========== TEST IDENTIFICATION ==========
+  drawSectionHeader('Test Identification')
+
+  addField('Test Type', data.test.testType)
+  addField('Request Number', data.test.testRequestNumber)
+  addField('Lab Report Number', data.test.laboratoryReportNumber)
+  addField('Laboratory', data.test.laboratoryName)
+  addField('Status', data.test.status.replace(/_/g, ' ').toUpperCase())
+  if (data.test.aiExtracted) {
+    addField('Data Source', 'AI Extracted from Certificate')
+  }
+
+  yPos += 5
+
+  // ========== PROJECT & LOT ==========
+  drawSectionHeader('Project & Location')
+
+  addField('Project', `${data.project.name} (${data.project.projectNumber})`)
+  if (data.lot) {
+    addField('Lot Number', data.lot.lotNumber)
+    addField('Lot Description', data.lot.description)
+    addField('Activity Type', data.lot.activityType)
+    if (data.lot.chainageStart != null) {
+      const chainageText = data.lot.chainageEnd != null
+        ? `CH ${data.lot.chainageStart} - ${data.lot.chainageEnd}`
+        : `CH ${data.lot.chainageStart}`
+      addField('Chainage', chainageText)
+    }
+  } else {
+    addField('Lot', 'Not linked')
+  }
+  addField('Sample Location', data.test.sampleLocation)
+
+  yPos += 5
+
+  // ========== DATES ==========
+  drawSectionHeader('Test Dates')
+
+  addField('Sample Date', formatDate(data.test.sampleDate))
+  addField('Test Date', formatDate(data.test.testDate))
+  addField('Result Date', formatDate(data.test.resultDate))
+  addField('Record Created', formatDate(data.test.createdAt))
+
+  yPos += 5
+
+  // ========== TEST RESULTS ==========
+  drawSectionHeader('Test Results')
+
+  // Result value box
+  checkPageBreak(40)
+  doc.setFillColor(245, 245, 245)
+  doc.roundedRect(margin, yPos, contentWidth, 35, 3, 3, 'F')
+
+  // Result value
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(24)
+  const resultText = data.test.resultValue != null
+    ? `${data.test.resultValue}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
+    : 'Pending'
+  doc.text(resultText, margin + 10, yPos + 15)
+
+  // Specification range
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  if (data.test.specificationMin != null || data.test.specificationMax != null) {
+    let specText = 'Specification: '
+    if (data.test.specificationMin != null && data.test.specificationMax != null) {
+      specText += `${data.test.specificationMin} - ${data.test.specificationMax}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
+    } else if (data.test.specificationMin != null) {
+      specText += `≥ ${data.test.specificationMin}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
+    } else if (data.test.specificationMax != null) {
+      specText += `≤ ${data.test.specificationMax}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
+    }
+    doc.text(specText, margin + 10, yPos + 25)
+  }
+
+  // Pass/Fail indicator
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  const passFailIndicator = data.test.passFail.toUpperCase()
+  const indicatorColor = passFailColors[data.test.passFail.toLowerCase()] || [100, 100, 100]
+  doc.setTextColor(...indicatorColor)
+  doc.text(passFailIndicator, margin + contentWidth - 40, yPos + 20)
+  doc.setTextColor(0, 0, 0)
+
+  yPos += 45
+
+  // ========== COMPLIANCE STATEMENT ==========
+  checkPageBreak(30)
+  doc.setFillColor(data.test.passFail.toLowerCase() === 'pass' ? 220 : 254, data.test.passFail.toLowerCase() === 'pass' ? 252 : 226, data.test.passFail.toLowerCase() === 'pass' ? 231 : 226)
+  doc.roundedRect(margin, yPos, contentWidth, 20, 3, 3, 'F')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(data.test.passFail.toLowerCase() === 'pass' ? 22 : 153, data.test.passFail.toLowerCase() === 'pass' ? 163 : 27, data.test.passFail.toLowerCase() === 'pass' ? 74 : 27)
+
+  const complianceText = data.test.passFail.toLowerCase() === 'pass'
+    ? '✓ This test result COMPLIES with the specified requirements.'
+    : data.test.passFail.toLowerCase() === 'fail'
+    ? '✗ This test result DOES NOT COMPLY with the specified requirements.'
+    : '⏳ Test result is pending evaluation.'
+
+  doc.text(complianceText, margin + 10, yPos + 12)
+  doc.setTextColor(0, 0, 0)
+
+  yPos += 30
+
+  // ========== SIGNATURE AREA ==========
+  checkPageBreak(50)
+  yPos += 10
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.text('Verified By:', margin, yPos)
+  yPos += 15
+  doc.line(margin, yPos, margin + 60, yPos)
+  yPos += 5
+  doc.text('Signature', margin, yPos)
+
+  doc.text('Date:', margin + 100, yPos - 20)
+  doc.line(margin + 100, yPos - 5, margin + 160, yPos - 5)
+
+  // ========== FOOTER ==========
+  const footerY = pageHeight - 15
+  doc.setDrawColor(200, 200, 200)
+  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+
+  doc.setFontSize(7)
+  doc.setTextColor(128, 128, 128)
+  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY)
+  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY)
+
+  // Save the PDF
+  const filename = `Test-Certificate-${data.test.testRequestNumber || data.test.id}-${new Date().toISOString().split('T')[0]}.pdf`
+  doc.save(filename)
+
+  console.log(`Test certificate PDF generated in ${Date.now() - startTime}ms`)
+}
+
+export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData, NCRDetailData, TestCertificateData }

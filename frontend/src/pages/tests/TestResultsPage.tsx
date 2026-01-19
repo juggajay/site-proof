@@ -1,6 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { getAuthToken } from '@/lib/auth'
+import { generateTestCertificatePDF, TestCertificateData } from '@/lib/pdfGenerator'
+import { toast } from '@/components/ui/toaster'
 
 interface Lot {
   id: string
@@ -137,6 +139,10 @@ export function TestResultsPage() {
   const [rejectingTestId, setRejectingTestId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejecting, setRejecting] = useState(false)
+
+  // Auth token and API URL for PDF generation
+  const token = getAuthToken()
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
   // Feature #205: Test register filtering state
   const [filterTestType, setFilterTestType] = useState('')
@@ -1146,6 +1152,71 @@ export function TestResultsPage() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2 items-center">
+                      {/* Feature #668: Print Certificate button */}
+                      <button
+                        onClick={async () => {
+                          try {
+                            // Fetch project info for the certificate
+                            const projectResponse = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                              headers: { Authorization: `Bearer ${token}` }
+                            })
+                            const projectData = projectResponse.ok ? await projectResponse.json() : null
+
+                            // Get lot info if test is linked to a lot
+                            const lotInfo = test.lot ? {
+                              lotNumber: test.lot.lotNumber,
+                              description: (test.lot as any).description || null,
+                              activityType: (test.lot as any).activityType || null,
+                              chainageStart: (test.lot as any).chainageStart || null,
+                              chainageEnd: (test.lot as any).chainageEnd || null,
+                            } : null
+
+                            const pdfData: TestCertificateData = {
+                              test: {
+                                id: test.id,
+                                testType: test.testType,
+                                testRequestNumber: test.testRequestNumber,
+                                laboratoryName: test.laboratoryName,
+                                laboratoryReportNumber: test.laboratoryReportNumber,
+                                sampleDate: test.sampleDate,
+                                sampleLocation: test.sampleLocation,
+                                testDate: test.testDate,
+                                resultDate: test.resultDate,
+                                resultValue: test.resultValue,
+                                resultUnit: test.resultUnit,
+                                specificationMin: test.specificationMin,
+                                specificationMax: test.specificationMax,
+                                passFail: test.passFail,
+                                status: test.status,
+                                aiExtracted: test.aiExtracted,
+                                createdAt: test.createdAt,
+                              },
+                              lot: lotInfo,
+                              project: {
+                                name: projectData?.name || 'Unknown Project',
+                                projectNumber: projectData?.projectNumber || projectId || 'N/A',
+                              },
+                            }
+
+                            generateTestCertificatePDF(pdfData)
+                            toast({
+                              title: 'Certificate Generated',
+                              description: `Test certificate PDF downloaded successfully`,
+                            })
+                          } catch (error) {
+                            console.error('Error generating test certificate:', error)
+                            toast({
+                              title: 'Error',
+                              description: 'Failed to generate test certificate',
+                              variant: 'destructive',
+                            })
+                          }
+                        }}
+                        className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
+                        title="Print Test Certificate"
+                      >
+                        🖨️
+                      </button>
                       {nextStatusMap[test.status] && (
                         <button
                           onClick={() => handleUpdateStatus(test.id, nextStatusMap[test.status])}
