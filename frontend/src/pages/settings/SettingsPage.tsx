@@ -91,14 +91,16 @@ export function SettingsPage() {
     loadEmailPreferences()
   }, [])
 
-  // Save email notification preferences
-  const saveEmailPreferences = async (newPreferences: typeof emailPreferences) => {
+  // Save email notification preferences with optimistic update
+  const saveEmailPreferences = async (newPreferences: typeof emailPreferences, previousPreferences: typeof emailPreferences) => {
     setIsSavingEmailPrefs(true)
     setEmailPrefsMessage(null)
 
     try {
       const token = getAuthToken()
       if (!token) {
+        // Rollback on auth error
+        setEmailPreferences(previousPreferences)
         setEmailPrefsMessage({ type: 'error', text: 'You must be logged in to update preferences' })
         return
       }
@@ -113,23 +115,32 @@ export function SettingsPage() {
       })
 
       if (response.ok) {
-        setEmailPreferences(newPreferences)
+        // Server confirmed, keep the optimistic update
         setEmailPrefsMessage({ type: 'success', text: 'Email preferences saved' })
         setTimeout(() => setEmailPrefsMessage(null), 3000)
       } else {
+        // Server rejected, rollback to previous state
+        setEmailPreferences(previousPreferences)
         throw new Error('Failed to save preferences')
       }
     } catch (err) {
-      setEmailPrefsMessage({ type: 'error', text: 'Failed to save email preferences' })
+      // Error occurred, rollback to previous state
+      setEmailPreferences(previousPreferences)
+      setEmailPrefsMessage({ type: 'error', text: 'Failed to save email preferences - changes reverted' })
     } finally {
       setIsSavingEmailPrefs(false)
     }
   }
 
-  // Toggle email preference
+  // Toggle email preference with optimistic update
   const toggleEmailPreference = (key: keyof typeof emailPreferences) => {
+    // Store previous state for potential rollback
+    const previousPreferences = { ...emailPreferences }
+    // Optimistically update UI immediately
     const newPreferences = { ...emailPreferences, [key]: !emailPreferences[key] }
-    saveEmailPreferences(newPreferences)
+    setEmailPreferences(newPreferences)
+    // Then persist to server (will rollback on error)
+    saveEmailPreferences(newPreferences, previousPreferences)
   }
 
   // Send test email
