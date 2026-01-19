@@ -105,6 +105,8 @@ interface ITPAttachmentDocument {
   caption: string | null
   uploadedAt: string
   uploadedBy: { id: string; fullName: string; email: string } | null
+  gpsLatitude: number | null
+  gpsLongitude: number | null
 }
 
 interface ITPAttachment {
@@ -2208,6 +2210,40 @@ export function LotDetailPage() {
                         }
                         return null
                       })()}
+                      {/* GPS Location Map */}
+                      {selectedPhoto.document.gpsLatitude && selectedPhoto.document.gpsLongitude && (
+                        <div className="mt-4" data-testid="photo-gps-map">
+                          <div className="flex items-center gap-2 text-white/70 text-sm mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                              <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <span>Photo Location</span>
+                            <span className="text-white/50">
+                              ({Number(selectedPhoto.document.gpsLatitude).toFixed(6)}, {Number(selectedPhoto.document.gpsLongitude).toFixed(6)})
+                            </span>
+                          </div>
+                          <div className="rounded-lg overflow-hidden border border-white/20">
+                            <iframe
+                              src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(selectedPhoto.document.gpsLongitude) - 0.005}%2C${Number(selectedPhoto.document.gpsLatitude) - 0.003}%2C${Number(selectedPhoto.document.gpsLongitude) + 0.005}%2C${Number(selectedPhoto.document.gpsLatitude) + 0.003}&layer=mapnik&marker=${selectedPhoto.document.gpsLatitude}%2C${selectedPhoto.document.gpsLongitude}`}
+                              width="300"
+                              height="200"
+                              style={{ border: 0 }}
+                              title="Photo location map"
+                              loading="lazy"
+                            />
+                          </div>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${selectedPhoto.document.gpsLatitude},${selectedPhoto.document.gpsLongitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Open in Google Maps →
+                          </a>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
