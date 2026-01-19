@@ -1996,9 +1996,9 @@ export function LotsPage() {
 
       {/* Lot Table */}
       {!loading && !error && (
-        <div className="rounded-lg border overflow-x-auto">
+        <div className="rounded-lg border overflow-auto max-h-[calc(100vh-280px)]" data-testid="scrollable-table-container">
           <table className="w-full min-w-[900px]">
-            <thead className="border-b bg-muted/50">
+            <thead className="border-b sticky top-0 z-10 bg-muted" data-testid="sticky-table-header">
               <tr>
                 {canDelete && (
                   <th className="p-3 w-10">
