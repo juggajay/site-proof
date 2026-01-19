@@ -614,7 +614,10 @@ export function DashboardPage() {
       {/* Project Summary Widget */}
       {isWidgetVisible('projectSummary') && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <div className="bg-card rounded-lg border p-4">
+          <button
+            onClick={() => navigate('/projects')}
+            className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
+          >
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <FolderKanban className="h-5 w-5 text-blue-600" />
@@ -624,9 +627,12 @@ export function DashboardPage() {
                 <p className="text-2xl font-bold">{stats.totalProjects}</p>
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-card rounded-lg border p-4">
+          <button
+            onClick={() => navigate('/projects?status=active')}
+            className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
+          >
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 rounded-lg">
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -636,9 +642,13 @@ export function DashboardPage() {
                 <p className="text-2xl font-bold">{stats.activeProjects}</p>
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-card rounded-lg border p-4">
+          <button
+            onClick={() => navigate('/projects')}
+            className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
+            title="View all lots in projects"
+          >
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <ListChecks className="h-5 w-5 text-purple-600" />
@@ -648,9 +658,13 @@ export function DashboardPage() {
                 <p className="text-2xl font-bold">{stats.totalLots}</p>
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-card rounded-lg border p-4">
+          <button
+            onClick={() => navigate('/settings/team')}
+            className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
+            title="Manage team members"
+          >
             <div className="flex items-center gap-3">
               <div className="p-2 bg-amber-100 rounded-lg">
                 <Users className="h-5 w-5 text-amber-600" />
@@ -660,7 +674,7 @@ export function DashboardPage() {
                 <p className="text-2xl font-bold">—</p>
               </div>
             </div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -698,35 +712,47 @@ export function DashboardPage() {
               <ListChecks className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Lot Status Overview</h2>
             </div>
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="p-4 space-y-1">
+              <button
+                onClick={() => navigate('/projects?lotStatus=draft')}
+                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+              >
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-gray-400"></div>
                   <span className="text-sm">Draft</span>
                 </div>
                 <span className="font-medium">0</span>
-              </div>
-              <div className="flex items-center justify-between">
+              </button>
+              <button
+                onClick={() => navigate('/projects?lotStatus=in_progress')}
+                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+              >
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                   <span className="text-sm">In Progress</span>
                 </div>
                 <span className="font-medium">0</span>
-              </div>
-              <div className="flex items-center justify-between">
+              </button>
+              <button
+                onClick={() => navigate('/projects?lotStatus=on_hold')}
+                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+              >
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-amber-500"></div>
                   <span className="text-sm">On Hold</span>
                 </div>
                 <span className="font-medium">0</span>
-              </div>
-              <div className="flex items-center justify-between">
+              </button>
+              <button
+                onClick={() => navigate('/projects?lotStatus=completed')}
+                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+              >
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-green-500"></div>
                   <span className="text-sm">Completed</span>
                 </div>
                 <span className="font-medium">0</span>
-              </div>
+              </button>
             </div>
           </div>
         )}
@@ -739,15 +765,18 @@ export function DashboardPage() {
               <h2 className="text-lg font-semibold">Hold Points</h2>
             </div>
             <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => navigate('/projects?view=holdpoints')}
+                className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
+              >
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-amber-500" />
                   <span>Open Hold Points</span>
                 </div>
                 <span className="text-2xl font-bold">{stats.openHoldPoints}</span>
-              </div>
+              </button>
               <Link
-                to="/projects"
+                to="/projects?view=holdpoints"
                 className="text-sm text-primary hover:underline"
               >
                 View all hold points →
@@ -764,15 +793,18 @@ export function DashboardPage() {
               <h2 className="text-lg font-semibold">Non-Conformance Reports</h2>
             </div>
             <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => navigate('/projects?view=ncrs')}
+                className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
+              >
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 text-red-500" />
                   <span>Open NCRs</span>
                 </div>
                 <span className="text-2xl font-bold">{stats.openNCRs}</span>
-              </div>
+              </button>
               <Link
-                to="/projects"
+                to="/projects?view=ncrs"
                 className="text-sm text-primary hover:underline"
               >
                 View all NCRs →
