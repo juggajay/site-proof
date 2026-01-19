@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
-import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import { generateConformanceReportPDF, ConformanceReportData } from '@/lib/pdfGenerator'
 
 // Tab types for lot detail page
@@ -257,6 +257,7 @@ export function LotDetailPage() {
   const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null)
   const [loadingConformStatus, setLoadingConformStatus] = useState(false)
   const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null)
+  const [photoZoom, setPhotoZoom] = useState(1) // Zoom level: 1 = 100%, 2 = 200%, etc.
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null)
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
@@ -2036,7 +2037,7 @@ export function LotDetailPage() {
               </div>
             )}
 
-            {/* Photo Viewer Modal with Prev/Next Navigation */}
+            {/* Photo Viewer Modal with Prev/Next Navigation and Zoom */}
             {selectedPhoto && (() => {
               // Collect all photos for navigation
               const allPhotos: ITPAttachment[] = []
@@ -2054,20 +2055,44 @@ export function LotDetailPage() {
               const hasNext = currentIndex < allPhotos.length - 1
 
               const goToPrev = () => {
-                if (hasPrev) setSelectedPhoto(allPhotos[currentIndex - 1])
+                if (hasPrev) {
+                  setSelectedPhoto(allPhotos[currentIndex - 1])
+                  setPhotoZoom(1) // Reset zoom when changing photos
+                }
               }
               const goToNext = () => {
-                if (hasNext) setSelectedPhoto(allPhotos[currentIndex + 1])
+                if (hasNext) {
+                  setSelectedPhoto(allPhotos[currentIndex + 1])
+                  setPhotoZoom(1) // Reset zoom when changing photos
+                }
+              }
+
+              const handleZoomIn = () => {
+                setPhotoZoom(prev => Math.min(prev + 0.5, 4)) // Max 4x zoom
+              }
+              const handleZoomOut = () => {
+                setPhotoZoom(prev => Math.max(prev - 0.5, 0.5)) // Min 0.5x zoom
+              }
+              const handleResetZoom = () => {
+                setPhotoZoom(1)
+              }
+
+              const handleClose = () => {
+                setSelectedPhoto(null)
+                setPhotoZoom(1) // Reset zoom on close
               }
 
               return (
                 <div
                   className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
-                  onClick={() => setSelectedPhoto(null)}
+                  onClick={handleClose}
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowLeft') goToPrev()
                     else if (e.key === 'ArrowRight') goToNext()
-                    else if (e.key === 'Escape') setSelectedPhoto(null)
+                    else if (e.key === 'Escape') handleClose()
+                    else if (e.key === '+' || e.key === '=') handleZoomIn()
+                    else if (e.key === '-') handleZoomOut()
+                    else if (e.key === '0') handleResetZoom()
                   }}
                   tabIndex={0}
                   data-testid="photo-lightbox"
@@ -2096,20 +2121,61 @@ export function LotDetailPage() {
                     </button>
                   )}
 
-                  <div className="relative max-w-4xl max-h-[90vh] p-4" onClick={(e) => e.stopPropagation()}>
+                  {/* Zoom Controls */}
+                  <div
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 rounded-lg p-2 z-10"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
-                      onClick={() => setSelectedPhoto(null)}
-                      className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors"
+                      onClick={handleZoomOut}
+                      className="bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom out"
+                      disabled={photoZoom <= 0.5}
+                      data-testid="photo-lightbox-zoom-out"
+                    >
+                      <ZoomOut className="h-5 w-5" />
+                    </button>
+                    <span className="text-white text-sm min-w-[60px] text-center" data-testid="photo-lightbox-zoom-level">
+                      {Math.round(photoZoom * 100)}%
+                    </span>
+                    <button
+                      onClick={handleZoomIn}
+                      className="bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom in"
+                      disabled={photoZoom >= 4}
+                      data-testid="photo-lightbox-zoom-in"
+                    >
+                      <ZoomIn className="h-5 w-5" />
+                    </button>
+                    {photoZoom !== 1 && (
+                      <button
+                        onClick={handleResetZoom}
+                        className="bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors ml-1"
+                        title="Reset zoom"
+                        data-testid="photo-lightbox-zoom-reset"
+                      >
+                        <RotateCcw className="h-5 w-5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative max-w-4xl max-h-[90vh] p-4 overflow-auto" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={handleClose}
+                      className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors z-10"
                       data-testid="photo-lightbox-close"
                     >
                       ✕
                     </button>
-                    <img
-                      src={selectedPhoto.document.fileUrl}
-                      alt={selectedPhoto.document.caption || selectedPhoto.document.filename}
-                      className="max-w-full max-h-[80vh] object-contain rounded-lg"
-                      data-testid="photo-lightbox-image"
-                    />
+                    <div className="flex items-center justify-center min-h-[60vh]">
+                      <img
+                        src={selectedPhoto.document.fileUrl}
+                        alt={selectedPhoto.document.caption || selectedPhoto.document.filename}
+                        className="max-w-full max-h-[80vh] object-contain rounded-lg transition-transform duration-200"
+                        style={{ transform: `scale(${photoZoom})` }}
+                        data-testid="photo-lightbox-image"
+                      />
+                    </div>
                     <div className="mt-3 text-white text-center">
                       <p className="font-medium">{selectedPhoto.document.caption || selectedPhoto.document.filename}</p>
                       {allPhotos.length > 1 && (
