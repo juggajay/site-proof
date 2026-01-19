@@ -245,6 +245,9 @@ export function LotDetailPage() {
   const [loadingTests, setLoadingTests] = useState(false)
   const [ncrs, setNcrs] = useState<NCR[]>([])
   const [loadingNcrs, setLoadingNcrs] = useState(false)
+  // Tab counts for badges
+  const [testsCount, setTestsCount] = useState<number | null>(null)
+  const [ncrsCount, setNcrsCount] = useState<number | null>(null)
   const [itpInstance, setItpInstance] = useState<ITPInstance | null>(null)
   const [loadingItp, setLoadingItp] = useState(false)
   const [templates, setTemplates] = useState<ITPTemplate[]>([])
@@ -446,6 +449,46 @@ export function LotDetailPage() {
     fetchConformStatus()
   }, [lotId, lot])
 
+  // Fetch tab counts on initial load for badges
+  useEffect(() => {
+    async function fetchTabCounts() {
+      if (!projectId || !lotId) return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      // Fetch test results count
+      try {
+        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}&lotId=${lotId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (testsResponse.ok) {
+          const testsData = await testsResponse.json()
+          setTestsCount(testsData.testResults?.length || 0)
+        }
+      } catch (err) {
+        console.error('Failed to fetch tests count:', err)
+      }
+
+      // Fetch NCRs count
+      try {
+        const ncrsResponse = await fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (ncrsResponse.ok) {
+          const ncrsData = await ncrsResponse.json()
+          setNcrsCount(ncrsData.ncrs?.length || 0)
+        }
+      } catch (err) {
+        console.error('Failed to fetch NCRs count:', err)
+      }
+    }
+
+    fetchTabCounts()
+  }, [projectId, lotId])
+
   // Fetch test results when Tests tab is selected
   useEffect(() => {
     async function fetchTestResults() {
@@ -467,6 +510,7 @@ export function LotDetailPage() {
         if (response.ok) {
           const data = await response.json()
           setTestResults(data.testResults || [])
+          setTestsCount(data.testResults?.length || 0)
         }
       } catch (err) {
         console.error('Failed to fetch test results:', err)
@@ -499,6 +543,7 @@ export function LotDetailPage() {
         if (response.ok) {
           const data = await response.json()
           setNcrs(data.ncrs || [])
+          setNcrsCount(data.ncrs?.length || 0)
         }
       } catch (err) {
         console.error('Failed to fetch NCRs:', err)
@@ -946,6 +991,7 @@ export function LotDetailPage() {
         if (ncrsResponse.ok) {
           const ncrsData = await ncrsResponse.json()
           setNcrs(ncrsData.ncrs || [])
+          setNcrsCount(ncrsData.ncrs?.length || 0)
         }
 
         toast({
@@ -1540,21 +1586,38 @@ export function LotDetailPage() {
       {/* Tab Navigation */}
       <div className="border-b">
         <nav className="flex gap-4" aria-label="Lot detail tabs">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                currentTab === tab.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
-              }`}
-              aria-selected={currentTab === tab.id}
-              role="tab"
-            >
-              {tab.label}
-            </button>
-          ))}
+          {tabs.map((tab) => {
+            // Get count for tabs that have badges
+            const count = tab.id === 'tests' ? testsCount : tab.id === 'ncrs' ? ncrsCount : null
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+                  currentTab === tab.id
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+                }`}
+                aria-selected={currentTab === tab.id}
+                role="tab"
+              >
+                {tab.label}
+                {count !== null && count > 0 && (
+                  <span
+                    className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full ${
+                      currentTab === tab.id
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                    data-testid={`${tab.id}-count-badge`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </nav>
       </div>
 
