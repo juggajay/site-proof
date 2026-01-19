@@ -10,7 +10,7 @@ import { ImportLotsModal } from '@/components/lots/ImportLotsModal'
 import { ExportLotsModal } from '@/components/lots/ExportLotsModal'
 import { LotQuickView } from '@/components/lots/LotQuickView'
 import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal'
-import { Settings2, Check, ChevronUp, ChevronDown, ChevronRight, Save, Bookmark, Trash2, Printer, Calendar, FileText, AlertTriangle, TestTube } from 'lucide-react'
+import { Settings2, Check, ChevronUp, ChevronDown, ChevronRight, Save, Bookmark, Trash2, Printer, Calendar, FileText, AlertTriangle, TestTube, LayoutGrid, LayoutList, MapPin } from 'lucide-react'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
 // Roles that can delete lots
@@ -195,6 +195,17 @@ export function LotsPage() {
 
   // Export modal state
   const [exportModalOpen, setExportModalOpen] = useState(false)
+
+  // View mode state (list or card)
+  const [viewMode, setViewMode] = useState<'list' | 'card'>(() => {
+    const stored = localStorage.getItem('siteproof_lot_view_mode')
+    return (stored === 'card' ? 'card' : 'list') as 'list' | 'card'
+  })
+
+  const toggleViewMode = (mode: 'list' | 'card') => {
+    setViewMode(mode)
+    localStorage.setItem('siteproof_lot_view_mode', mode)
+  }
 
   // Expandable rows state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -1952,8 +1963,28 @@ export function LotsPage() {
           Showing {filteredLots.length} of {lots.length} lots
         </span>
 
+        {/* View Mode Toggle */}
+        <div className="flex items-center gap-1 border rounded-lg p-0.5 bg-muted/30">
+          <button
+            onClick={() => toggleViewMode('list')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-background shadow-sm' : 'hover:bg-muted'}`}
+            title="List view"
+            data-testid="view-toggle-list"
+          >
+            <LayoutList className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => toggleViewMode('card')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'card' ? 'bg-background shadow-sm' : 'hover:bg-muted'}`}
+            title="Card view"
+            data-testid="view-toggle-card"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+        </div>
+
         {/* Column Settings */}
-        <div className="relative ml-auto">
+        <div className="relative">
           <button
             onClick={() => setColumnSettingsOpen(!columnSettingsOpen)}
             className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm hover:bg-muted"
@@ -2087,8 +2118,8 @@ export function LotsPage() {
         </div>
       )}
 
-      {/* Lot Table */}
-      {!loading && !error && (
+      {/* Lot Table / Card View */}
+      {!loading && !error && viewMode === 'list' && (
         <div
           className={`rounded-lg border overflow-auto max-h-[calc(100vh-280px)] ${resizingColumn ? 'cursor-col-resize select-none' : ''}`}
           data-testid="scrollable-table-container"
@@ -2357,6 +2388,108 @@ export function LotsPage() {
 
           {/* Infinite Scroll - Load More Indicator */}
           <div ref={loadMoreRef} className="border-t p-4">
+            {loadingMore && (
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="text-sm">Loading more lots...</span>
+              </div>
+            )}
+            {!loadingMore && hasMore && (
+              <div className="text-center text-sm text-muted-foreground">
+                Showing {displayedLots.length} of {filteredLots.length} lots • Scroll down to load more
+              </div>
+            )}
+            {!hasMore && filteredLots.length > 0 && (
+              <div className="text-center text-sm text-muted-foreground">
+                Showing all {filteredLots.length} lots
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Card View */}
+      {!loading && !error && viewMode === 'card' && (
+        <div className="overflow-auto max-h-[calc(100vh-280px)]" data-testid="card-view-container">
+          {displayedLots.length === 0 ? (
+            <div className="rounded-lg border p-12 text-center">
+              {lots.length === 0 ? (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="text-5xl">📋</div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {isSubcontractor ? 'No lots assigned yet' : 'No lots yet'}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {isSubcontractor
+                        ? 'No lots have been assigned to your company for this project.'
+                        : 'Get started by creating your first lot for this project.'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <span className="text-muted-foreground">No lots match the current filters.</span>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="card-grid">
+              {displayedLots.map((lot) => (
+                <div
+                  key={lot.id}
+                  className="rounded-lg border bg-card p-4 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
+                  onContextMenu={(e) => handleContextMenu(e, lot)}
+                  data-testid={`lot-card-${lot.id}`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold text-lg">{lot.lotNumber}</h3>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
+                      {lot.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                    {lot.description || 'No description'}
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    {lot.activityType && (
+                      <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded">
+                        {lot.activityType}
+                      </span>
+                    )}
+                    {(lot.chainageStart != null || lot.chainageEnd != null) && (
+                      <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded">
+                        <MapPin className="h-3 w-3" />
+                        {formatChainage(lot)}
+                      </span>
+                    )}
+                    {lot.areaZone && (
+                      <span className="bg-muted px-2 py-0.5 rounded">
+                        {lot.areaZone}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t text-xs text-muted-foreground">
+                    <div className="flex gap-3">
+                      <span>{lot.itpCount ?? 0} ITPs</span>
+                      <span>{lot.testCount ?? 0} Tests</span>
+                      {(lot.ncrCount ?? 0) > 0 && (
+                        <span className="text-amber-600 flex items-center gap-0.5">
+                          <AlertTriangle className="h-3 w-3" />
+                          {lot.ncrCount} NCRs
+                        </span>
+                      )}
+                    </div>
+                    <span>{lot.createdAt ? new Date(lot.createdAt).toLocaleDateString() : ''}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Infinite Scroll for Card View */}
+          <div ref={loadMoreRef} className="p-4">
             {loadingMore && (
               <div className="flex items-center justify-center gap-2 text-muted-foreground">
                 <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
