@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
+import { RichTextEditor } from '../../components/ui/RichTextEditor'
 
 interface Personnel {
   id: string
@@ -1297,14 +1298,19 @@ export function DailyDiaryPage() {
                 </div>
                 <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-medium">General Notes</label>
-                  <textarea
-                    value={weatherForm.generalNotes}
-                    onChange={(e) => setWeatherForm({ ...weatherForm, generalNotes: e.target.value })}
-                    disabled={diary?.status === 'submitted'}
-                    placeholder="General site notes for the day..."
-                    rows={3}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2"
-                  />
+                  {diary?.status === 'submitted' ? (
+                    <div
+                      className="w-full rounded-md border border-input bg-muted/50 px-3 py-2 prose prose-sm max-w-none dark:prose-invert min-h-[100px]"
+                      dangerouslySetInnerHTML={{ __html: weatherForm.generalNotes || '<span class="text-muted-foreground">No notes</span>' }}
+                    />
+                  ) : (
+                    <RichTextEditor
+                      value={weatherForm.generalNotes}
+                      onChange={(html) => setWeatherForm({ ...weatherForm, generalNotes: html })}
+                      placeholder="General site notes for the day... Use formatting toolbar for bold, italic, and lists."
+                      minHeight="100px"
+                    />
+                  )}
                 </div>
               </div>
               {diary?.status !== 'submitted' && (
