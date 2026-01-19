@@ -397,9 +397,17 @@ export function Header() {
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
             {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-medium text-white">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
+              <>
+                {/* Animated ping effect */}
+                <span className="absolute -right-0.5 -top-0.5 h-5 w-5 rounded-full bg-red-400 animate-ping opacity-75" />
+                {/* Badge with count */}
+                <span
+                  className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-medium text-white"
+                  data-testid="notification-badge"
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              </>
             )}
           </button>
 
