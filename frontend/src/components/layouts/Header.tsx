@@ -330,8 +330,13 @@ export function Header() {
               <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isProjectSelectorOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
 
-            {isProjectSelectorOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 min-w-[260px] rounded-lg border bg-card shadow-lg">
+            <div
+              className={`absolute right-0 top-full z-50 mt-1 min-w-[260px] rounded-lg border bg-card shadow-lg transition-all duration-200 origin-top-right ${
+                isProjectSelectorOpen
+                  ? 'opacity-100 scale-100 translate-y-0'
+                  : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+              }`}
+            >
                 <div className="p-2">
                   <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                     Switch Project
@@ -382,7 +387,6 @@ export function Header() {
                   </ul>
                 </div>
               </div>
-            )}
           </div>
         )}
 
@@ -411,8 +415,13 @@ export function Header() {
             )}
           </button>
 
-          {isNotificationOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card shadow-lg">
+          <div
+            className={`absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card shadow-lg transition-all duration-200 origin-top-right ${
+              isNotificationOpen
+                ? 'opacity-100 scale-100 translate-y-0'
+                : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+            }`}
+          >
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <h3 className="font-semibold">Notifications</h3>
                 <div className="flex items-center gap-2">
@@ -495,7 +504,6 @@ export function Header() {
                 </button>
               </div>
             </div>
-          )}
         </div>
         {/* User Profile Menu */}
         <div ref={userMenuRef} className="relative">
@@ -523,8 +531,13 @@ export function Header() {
             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform hidden sm:block ${isUserMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
 
-          {isUserMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border bg-card shadow-lg">
+          <div
+            className={`absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border bg-card shadow-lg transition-all duration-200 origin-top-right ${
+              isUserMenuOpen
+                ? 'opacity-100 scale-100 translate-y-0'
+                : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
+            }`}
+          >
               <div className="border-b px-4 py-3">
                 <p className="text-sm font-medium">{user?.name || user?.email?.split('@')[0]}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
@@ -567,7 +580,6 @@ export function Header() {
                 </button>
               </div>
             </div>
-          )}
         </div>
       </div>
 
