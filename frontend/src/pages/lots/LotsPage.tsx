@@ -37,7 +37,19 @@ const DEFAULT_COLUMN_ORDER: ColumnId[] = ['lotNumber', 'description', 'chainage'
 
 const COLUMN_STORAGE_KEY = 'siteproof_lot_columns'
 const COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order'
+const COLUMN_WIDTH_STORAGE_KEY = 'siteproof_lot_column_widths'
 const SAVED_FILTERS_STORAGE_KEY = 'siteproof_lot_saved_filters'
+
+// Default column widths in pixels
+const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
+  lotNumber: 140,
+  description: 200,
+  chainage: 100,
+  activityType: 130,
+  status: 110,
+  subcontractor: 140,
+  budget: 100,
+}
 
 interface SavedFilter {
   id: string
@@ -230,6 +242,63 @@ export function LotsPage() {
   })
 
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
+
+  // Column widths state for resizing
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    try {
+      const stored = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY)
+      if (stored) {
+        return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(stored) }
+      }
+    } catch (e) {
+      console.error('Error loading column widths:', e)
+    }
+    return DEFAULT_COLUMN_WIDTHS
+  })
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null)
+  const resizeStartX = useRef<number>(0)
+  const resizeStartWidth = useRef<number>(0)
+
+  // Handle column resize
+  const handleResizeStart = useCallback((e: React.MouseEvent, columnId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setResizingColumn(columnId)
+    resizeStartX.current = e.clientX
+    resizeStartWidth.current = columnWidths[columnId] || DEFAULT_COLUMN_WIDTHS[columnId] || 100
+  }, [columnWidths])
+
+  useEffect(() => {
+    if (!resizingColumn) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const diff = e.clientX - resizeStartX.current
+      const newWidth = Math.max(60, resizeStartWidth.current + diff) // Minimum 60px
+      setColumnWidths(prev => ({
+        ...prev,
+        [resizingColumn]: newWidth,
+      }))
+    }
+
+    const handleMouseUp = () => {
+      if (resizingColumn) {
+        // Save to localStorage
+        setColumnWidths(prev => {
+          localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(prev))
+          return prev
+        })
+        setResizingColumn(null)
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [resizingColumn])
 
   // Saved filters state
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => {
@@ -593,13 +662,15 @@ export function LotsPage() {
     }
   }
 
-  // Sortable column header component
+  // Sortable column header component with resize handle
   const SortableHeader = ({ field, children }: { field: string; children: React.ReactNode }) => (
     <th
-      className="text-left p-3 font-medium cursor-pointer hover:bg-muted/70 select-none"
+      className="text-left p-3 font-medium cursor-pointer hover:bg-muted/70 select-none relative group/resize"
+      style={{ width: columnWidths[field] || DEFAULT_COLUMN_WIDTHS[field] || 'auto', minWidth: 60 }}
       onClick={() => handleSort(field)}
+      data-testid={`column-header-${field}`}
     >
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 pr-2">
         {children}
         <span className="text-muted-foreground">
           {sortField === field ? (
@@ -609,6 +680,13 @@ export function LotsPage() {
           )}
         </span>
       </div>
+      {/* Resize handle */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover/resize:bg-muted-foreground/30"
+        onMouseDown={(e) => handleResizeStart(e, field)}
+        onClick={(e) => e.stopPropagation()}
+        data-testid={`column-resize-${field}`}
+      />
     </th>
   )
 
@@ -1996,8 +2074,11 @@ export function LotsPage() {
 
       {/* Lot Table */}
       {!loading && !error && (
-        <div className="rounded-lg border overflow-auto max-h-[calc(100vh-280px)]" data-testid="scrollable-table-container">
-          <table className="w-full min-w-[900px]">
+        <div
+          className={`rounded-lg border overflow-auto max-h-[calc(100vh-280px)] ${resizingColumn ? 'cursor-col-resize select-none' : ''}`}
+          data-testid="scrollable-table-container"
+        >
+          <table className="w-full min-w-[900px]" style={{ tableLayout: 'fixed' }} data-testid="lots-table">
             <thead className="border-b sticky top-0 z-10 bg-muted" data-testid="sticky-table-header">
               <tr>
                 {canDelete && (
@@ -2028,10 +2109,21 @@ export function LotsPage() {
                     )
                   }
 
-                  // Non-sortable columns
+                  // Non-sortable columns with resize handle
                   return (
-                    <th key={columnId} className="text-left p-3 font-medium">
-                      {column.label}
+                    <th
+                      key={columnId}
+                      className="text-left p-3 font-medium relative group/resize"
+                      style={{ width: columnWidths[columnId] || DEFAULT_COLUMN_WIDTHS[columnId] || 'auto', minWidth: 60 }}
+                      data-testid={`column-header-${columnId}`}
+                    >
+                      <div className="pr-2">{column.label}</div>
+                      {/* Resize handle */}
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover/resize:bg-muted-foreground/30"
+                        onMouseDown={(e) => handleResizeStart(e, columnId)}
+                        data-testid={`column-resize-${columnId}`}
+                      />
                     </th>
                   )
                 })}
