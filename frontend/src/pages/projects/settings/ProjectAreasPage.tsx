@@ -347,7 +347,7 @@ export function ProjectAreasPage() {
                     Colour
                   </div>
                 </label>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap items-center gap-2 mt-2">
                   {COLOUR_OPTIONS.map((colour) => (
                     <button
                       key={colour.value}
@@ -355,13 +355,44 @@ export function ProjectAreasPage() {
                       onClick={() => setFormColour(colour.value)}
                       className={`h-8 w-8 rounded-full border-2 transition-transform ${
                         formColour === colour.value
-                          ? 'border-gray-900 scale-110'
+                          ? 'border-gray-900 dark:border-white scale-110'
                           : 'border-transparent hover:scale-105'
                       }`}
                       style={{ backgroundColor: colour.value }}
                       title={colour.label}
+                      data-testid={`color-preset-${colour.label.toLowerCase()}`}
                     />
                   ))}
+                  {/* Custom color picker */}
+                  <div className="relative">
+                    <input
+                      type="color"
+                      value={formColour}
+                      onChange={(e) => setFormColour(e.target.value)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      data-testid="custom-color-picker"
+                      title="Pick custom colour"
+                    />
+                    <div
+                      className={`h-8 w-8 rounded-full border-2 flex items-center justify-center bg-gradient-to-br from-red-500 via-green-500 to-blue-500 ${
+                        !COLOUR_OPTIONS.some(c => c.value === formColour)
+                          ? 'border-gray-900 dark:border-white scale-110'
+                          : 'border-transparent hover:scale-105'
+                      }`}
+                      title="Custom colour"
+                    >
+                      <Plus className="h-4 w-4 text-white drop-shadow" />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <div
+                    className="h-6 w-6 rounded border"
+                    style={{ backgroundColor: formColour }}
+                  />
+                  <span className="text-sm text-muted-foreground" data-testid="selected-color-value">
+                    Selected: {formColour}
+                  </span>
                 </div>
               </div>
             </div>
