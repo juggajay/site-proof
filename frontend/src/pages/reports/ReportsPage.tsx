@@ -247,6 +247,42 @@ export function ReportsPage() {
   // Project name for print header
   const [projectName, setProjectName] = useState<string>('')
 
+  // Helper function to apply date presets
+  const applyDatePreset = (preset: 'today' | 'this-week' | 'this-month', setStart: (d: string) => void, setEnd: (d: string) => void) => {
+    const today = new Date()
+    // Format date as YYYY-MM-DD using local timezone
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    switch (preset) {
+      case 'today':
+        setStart(formatDate(today))
+        setEnd(formatDate(today))
+        break
+      case 'this-week': {
+        const dayOfWeek = today.getDay()
+        const startOfWeek = new Date(today)
+        startOfWeek.setDate(today.getDate() - dayOfWeek) // Sunday
+        const endOfWeek = new Date(startOfWeek)
+        endOfWeek.setDate(startOfWeek.getDate() + 6) // Saturday
+        setStart(formatDate(startOfWeek))
+        setEnd(formatDate(endOfWeek))
+        break
+      }
+      case 'this-month': {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+        setStart(formatDate(startOfMonth))
+        setEnd(formatDate(endOfMonth))
+        break
+      }
+    }
+  }
+
   const setActiveTab = (tab: string) => {
     setSearchParams({ tab })
   }
@@ -893,6 +929,33 @@ export function ReportsPage() {
                         className="px-3 py-2 border border-gray-300 rounded-md text-sm"
                       />
                     </div>
+                    {/* Date Range Presets */}
+                    <div className="flex gap-1 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => applyDatePreset('today', setTestStartDate, setTestEndDate)}
+                        className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-100 transition-colors"
+                        data-testid="date-preset-today"
+                      >
+                        Today
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyDatePreset('this-week', setTestStartDate, setTestEndDate)}
+                        className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-100 transition-colors"
+                        data-testid="date-preset-this-week"
+                      >
+                        This Week
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyDatePreset('this-month', setTestStartDate, setTestEndDate)}
+                        className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-100 transition-colors"
+                        data-testid="date-preset-this-month"
+                      >
+                        This Month
+                      </button>
+                    </div>
                   </div>
 
                   {/* Test Types Selection */}
@@ -1072,6 +1135,33 @@ export function ReportsPage() {
                         onChange={(e) => setDiaryEndDate(e.target.value)}
                         className="px-3 py-2 border border-gray-300 rounded-md"
                       />
+                    </div>
+                    {/* Date Range Presets */}
+                    <div className="flex gap-1 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => applyDatePreset('today', setDiaryStartDate, setDiaryEndDate)}
+                        className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-100 transition-colors"
+                        data-testid="diary-date-preset-today"
+                      >
+                        Today
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyDatePreset('this-week', setDiaryStartDate, setDiaryEndDate)}
+                        className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-100 transition-colors"
+                        data-testid="diary-date-preset-this-week"
+                      >
+                        This Week
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyDatePreset('this-month', setDiaryStartDate, setDiaryEndDate)}
+                        className="px-2 py-1 text-xs rounded border border-gray-300 hover:bg-gray-100 transition-colors"
+                        data-testid="diary-date-preset-this-month"
+                      >
+                        This Month
+                      </button>
                     </div>
                   </div>
 
