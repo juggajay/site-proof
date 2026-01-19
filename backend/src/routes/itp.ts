@@ -311,6 +311,82 @@ async function updateLotStatusFromITP(itpInstanceId: string) {
   }
 }
 
+// Get ITP templates from other projects (for cross-project import - Feature #682)
+itpRouter.get('/templates/cross-project', requireAuth, async (req: any, res) => {
+  try {
+    const user = req.user as AuthUser
+    const { currentProjectId } = req.query
+
+    if (!currentProjectId) {
+      return res.status(400).json({ error: 'currentProjectId is required' })
+    }
+
+    // Get all projects the user has access to
+    const userProjects = await prisma.projectUser.findMany({
+      where: { userId: user.userId },
+      include: {
+        project: {
+          select: { id: true, name: true, projectNumber: true }
+        }
+      }
+    })
+
+    // Get templates from other projects (not the current one and not global templates)
+    const otherProjectIds = userProjects
+      .filter(pu => pu.project && pu.project.id !== currentProjectId)
+      .map(pu => pu.project.id)
+
+    if (otherProjectIds.length === 0) {
+      return res.json({ projects: [], templates: [] })
+    }
+
+    // Get templates from other projects
+    const templates = await prisma.iTPTemplate.findMany({
+      where: {
+        projectId: { in: otherProjectIds },
+        isActive: true
+      },
+      include: {
+        project: {
+          select: { id: true, name: true, projectNumber: true }
+        },
+        checklistItems: {
+          orderBy: { sequenceNumber: 'asc' }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    // Group templates by project
+    const projectsWithTemplates = userProjects
+      .filter(pu => pu.project && pu.project.id !== currentProjectId)
+      .map(pu => ({
+        id: pu.project.id,
+        name: pu.project.name,
+        code: pu.project.projectNumber,
+        templates: templates
+          .filter(t => t.projectId === pu.project.id)
+          .map(t => ({
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            activityType: t.activityType,
+            checklistItemCount: t.checklistItems.length,
+            holdPointCount: t.checklistItems.filter(item => item.pointType === 'hold_point').length
+          }))
+      }))
+      .filter(p => p.templates.length > 0)
+
+    res.json({
+      projects: projectsWithTemplates,
+      totalTemplates: templates.length
+    })
+  } catch (error) {
+    console.error('Error fetching cross-project templates:', error)
+    res.status(500).json({ error: 'Failed to fetch templates from other projects' })
+  }
+})
+
 // Get ITP templates for a project
 itpRouter.get('/templates', requireAuth, async (req: any, res) => {
   try {
