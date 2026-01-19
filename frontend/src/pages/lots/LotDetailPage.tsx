@@ -1674,7 +1674,17 @@ export function LotDetailPage() {
                 <div className="rounded-lg border p-4">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold">ITP Progress</h2>
-                    <span className="text-sm text-muted-foreground">{itpInstance.template.name}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">{itpInstance.template.name}</span>
+                      <button
+                        onClick={() => window.print()}
+                        className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-muted/50 transition-colors print:hidden"
+                        title="Print ITP Checklist"
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span>Print Checklist</span>
+                      </button>
+                    </div>
                   </div>
                   {(() => {
                     const totalItems = itpInstance.template.checklistItems.length
