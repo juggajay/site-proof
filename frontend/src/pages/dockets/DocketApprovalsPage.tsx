@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuth, getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { X } from 'lucide-react'
+import { X, Printer } from 'lucide-react'
+import { generateDocketDetailPDF, DocketDetailPDFData } from '@/lib/pdfGenerator'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
@@ -384,6 +385,55 @@ export function DocketApprovalsPage() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <div className="flex gap-2">
+                      {/* Print button - always visible */}
+                      <button
+                        onClick={async () => {
+                          try {
+                            const token = getAuthToken()
+                            // Fetch project info
+                            const projectRes = await fetch(`${API_URL}/api/projects/${projectId}`, {
+                              headers: token ? { Authorization: `Bearer ${token}` } : {}
+                            })
+                            const project = projectRes.ok ? await projectRes.json() : { name: 'Unknown Project', projectNumber: null }
+
+                            const pdfData: DocketDetailPDFData = {
+                              docket: {
+                                id: docket.id,
+                                docketNumber: docket.docketNumber,
+                                date: docket.date,
+                                status: docket.status,
+                                notes: docket.notes,
+                                labourHours: docket.labourHours,
+                                plantHours: docket.plantHours,
+                                totalLabourSubmitted: docket.totalLabourSubmitted,
+                                totalLabourApproved: docket.totalLabourApproved,
+                                totalPlantSubmitted: docket.totalPlantSubmitted,
+                                totalPlantApproved: docket.totalPlantApproved,
+                                submittedAt: docket.submittedAt,
+                                approvedAt: docket.approvedAt,
+                                foremanNotes: docket.foremanNotes
+                              },
+                              subcontractor: {
+                                name: docket.subcontractor
+                              },
+                              project: {
+                                name: project.name || 'Unknown Project',
+                                projectNumber: project.projectNumber || null
+                              }
+                            }
+
+                            generateDocketDetailPDF(pdfData)
+                            toast({ title: 'Docket PDF downloaded', variant: 'success' })
+                          } catch (err) {
+                            console.error('Error generating docket PDF:', err)
+                            toast({ title: 'Failed to generate PDF', variant: 'error' })
+                          }
+                        }}
+                        className="rounded border p-1.5 hover:bg-muted"
+                        title="Print docket"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </button>
                       {/* Submit button for draft dockets (subcontractor only) */}
                       {docket.status === 'draft' && isSubcontractor && (
                         <button

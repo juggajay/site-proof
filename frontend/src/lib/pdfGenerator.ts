@@ -2585,4 +2585,310 @@ export function generateDailyDiaryPDF(data: DailyDiaryPDFData): void {
   console.log(`Daily diary PDF generated in ${Date.now() - startTime}ms`)
 }
 
-export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData, NCRDetailData, TestCertificateData, DailyDiaryPDFData }
+// ========================================
+// DOCKET DETAIL PDF GENERATOR
+// ========================================
+
+export interface DocketDetailPDFData {
+  docket: {
+    id: string
+    docketNumber: string
+    date: string
+    status: 'draft' | 'pending_approval' | 'approved' | 'rejected'
+    notes: string | null
+    labourHours: number
+    plantHours: number
+    totalLabourSubmitted: number
+    totalLabourApproved: number
+    totalPlantSubmitted: number
+    totalPlantApproved: number
+    submittedAt: string | null
+    approvedAt: string | null
+    foremanNotes: string | null
+    rejectionReason?: string | null
+    adjustmentReason?: string | null
+  }
+  subcontractor: {
+    name: string
+    abn?: string | null
+  }
+  project: {
+    name: string
+    projectNumber: string | null
+  }
+}
+
+/**
+ * Generate a PDF detail report for a Docket
+ */
+export function generateDocketDetailPDF(data: DocketDetailPDFData): void {
+  const startTime = Date.now()
+  const doc = new jsPDF()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+  const margin = 15
+  const contentWidth = pageWidth - (margin * 2)
+  let yPos = margin
+
+  // Helper functions
+  const formatDate = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return 'Not set'
+    return new Date(dateStr).toLocaleDateString('en-AU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
+  }
+
+  const formatDateTime = (dateStr: string | null | undefined): string => {
+    if (!dateStr) return 'Not set'
+    return new Date(dateStr).toLocaleString('en-AU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const checkPageBreak = (neededHeight: number): void => {
+    if (yPos + neededHeight > pageHeight - 20) {
+      doc.addPage()
+      yPos = margin
+    }
+  }
+
+  const drawSectionHeader = (title: string): void => {
+    checkPageBreak(15)
+    doc.setFillColor(240, 240, 240)
+    doc.rect(margin, yPos - 3, contentWidth, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(50, 50, 50)
+    doc.text(title, margin + 2, yPos + 2)
+    yPos += 10
+    doc.setTextColor(0, 0, 0)
+  }
+
+  const addField = (label: string, value: string | null | undefined): void => {
+    checkPageBreak(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text(`${label}:`, margin, yPos)
+    doc.setFont('helvetica', 'normal')
+    const labelWidth = doc.getTextWidth(`${label}: `)
+    doc.text(value || 'N/A', margin + labelWidth + 2, yPos)
+    yPos += 6
+  }
+
+  // ========== HEADER ==========
+  // Status-based header color
+  const statusColors: Record<string, [number, number, number]> = {
+    draft: [156, 163, 175],        // Gray
+    pending_approval: [234, 179, 8], // Amber
+    approved: [34, 197, 94],       // Green
+    rejected: [239, 68, 68]        // Red
+  }
+  const headerColor = statusColors[data.docket.status] || [100, 100, 100]
+
+  doc.setFillColor(...headerColor)
+  doc.rect(0, 0, pageWidth, 40, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.text('SUBCONTRACTOR DOCKET', margin, 15)
+
+  doc.setFontSize(12)
+  doc.text(data.docket.docketNumber, margin, 27)
+
+  // Status badge
+  doc.setFontSize(10)
+  const statusLabels: Record<string, string> = {
+    draft: 'DRAFT',
+    pending_approval: 'PENDING APPROVAL',
+    approved: 'APPROVED',
+    rejected: 'REJECTED'
+  }
+  const statusText = statusLabels[data.docket.status] || data.docket.status.toUpperCase()
+  const badgeX = pageWidth - margin - doc.getTextWidth(statusText)
+  doc.text(statusText, badgeX, 27)
+
+  yPos = 50
+  doc.setTextColor(0, 0, 0)
+
+  // ========== DOCKET DETAILS ==========
+  drawSectionHeader('Docket Details')
+
+  addField('Docket Number', data.docket.docketNumber)
+  addField('Date', formatDate(data.docket.date))
+  addField('Status', statusLabels[data.docket.status] || data.docket.status)
+  if (data.docket.submittedAt) {
+    addField('Submitted', formatDateTime(data.docket.submittedAt))
+  }
+  if (data.docket.approvedAt) {
+    addField('Approved', formatDateTime(data.docket.approvedAt))
+  }
+
+  yPos += 5
+
+  // ========== PROJECT & SUBCONTRACTOR ==========
+  drawSectionHeader('Project & Subcontractor')
+
+  addField('Project', data.project.name)
+  if (data.project.projectNumber) {
+    addField('Project Number', data.project.projectNumber)
+  }
+  addField('Subcontractor', data.subcontractor.name)
+  if (data.subcontractor.abn) {
+    addField('ABN', data.subcontractor.abn)
+  }
+
+  yPos += 5
+
+  // ========== HOURS SUMMARY ==========
+  drawSectionHeader('Hours Summary')
+
+  // Create a mini table for hours
+  checkPageBreak(40)
+
+  // Table header
+  doc.setFillColor(245, 245, 245)
+  doc.rect(margin, yPos, contentWidth, 7, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text('Category', margin + 5, yPos + 5)
+  doc.text('Submitted', margin + 70, yPos + 5)
+  doc.text('Approved', margin + 110, yPos + 5)
+  doc.text('Variance', margin + 150, yPos + 5)
+  yPos += 9
+
+  // Labour hours row
+  doc.setFont('helvetica', 'normal')
+  doc.text('Labour Hours', margin + 5, yPos + 5)
+  doc.text(`${data.docket.totalLabourSubmitted || data.docket.labourHours} hrs`, margin + 70, yPos + 5)
+  doc.text(`${data.docket.totalLabourApproved || '-'} hrs`, margin + 110, yPos + 5)
+  const labourVariance = (data.docket.totalLabourApproved || 0) - (data.docket.totalLabourSubmitted || data.docket.labourHours)
+  if (data.docket.status === 'approved' && labourVariance !== 0) {
+    doc.setTextColor(labourVariance < 0 ? 239 : 34, labourVariance < 0 ? 68 : 197, labourVariance < 0 ? 68 : 94)
+    doc.text(`${labourVariance > 0 ? '+' : ''}${labourVariance} hrs`, margin + 150, yPos + 5)
+    doc.setTextColor(0, 0, 0)
+  } else {
+    doc.text('-', margin + 150, yPos + 5)
+  }
+  yPos += 7
+
+  // Plant hours row
+  doc.text('Plant Hours', margin + 5, yPos + 5)
+  doc.text(`${data.docket.totalPlantSubmitted || data.docket.plantHours} hrs`, margin + 70, yPos + 5)
+  doc.text(`${data.docket.totalPlantApproved || '-'} hrs`, margin + 110, yPos + 5)
+  const plantVariance = (data.docket.totalPlantApproved || 0) - (data.docket.totalPlantSubmitted || data.docket.plantHours)
+  if (data.docket.status === 'approved' && plantVariance !== 0) {
+    doc.setTextColor(plantVariance < 0 ? 239 : 34, plantVariance < 0 ? 68 : 197, plantVariance < 0 ? 68 : 94)
+    doc.text(`${plantVariance > 0 ? '+' : ''}${plantVariance} hrs`, margin + 150, yPos + 5)
+    doc.setTextColor(0, 0, 0)
+  } else {
+    doc.text('-', margin + 150, yPos + 5)
+  }
+  yPos += 12
+
+  // ========== NOTES ==========
+  if (data.docket.notes) {
+    drawSectionHeader('Docket Notes')
+
+    checkPageBreak(20)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const noteLines = doc.splitTextToSize(data.docket.notes, contentWidth - 5)
+    doc.text(noteLines, margin, yPos)
+    yPos += (noteLines.length * 4) + 5
+  }
+
+  // ========== FOREMAN NOTES (for approved dockets) ==========
+  if (data.docket.foremanNotes) {
+    drawSectionHeader('Foreman Notes')
+
+    checkPageBreak(20)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const foremanLines = doc.splitTextToSize(data.docket.foremanNotes, contentWidth - 5)
+    doc.text(foremanLines, margin, yPos)
+    yPos += (foremanLines.length * 4) + 5
+  }
+
+  // ========== ADJUSTMENT REASON (if hours were adjusted) ==========
+  if (data.docket.adjustmentReason) {
+    drawSectionHeader('Adjustment Reason')
+
+    checkPageBreak(20)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const adjustLines = doc.splitTextToSize(data.docket.adjustmentReason, contentWidth - 5)
+    doc.text(adjustLines, margin, yPos)
+    yPos += (adjustLines.length * 4) + 5
+  }
+
+  // ========== REJECTION REASON (for rejected dockets) ==========
+  if (data.docket.status === 'rejected' && data.docket.rejectionReason) {
+    drawSectionHeader('Rejection Reason')
+
+    checkPageBreak(20)
+    doc.setFillColor(254, 226, 226)
+    doc.rect(margin, yPos - 2, contentWidth, 20, 'F')
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(153, 27, 27)
+    const rejectLines = doc.splitTextToSize(data.docket.rejectionReason, contentWidth - 10)
+    doc.text(rejectLines, margin + 5, yPos + 5)
+    doc.setTextColor(0, 0, 0)
+    yPos += 25
+  }
+
+  // ========== SIGNATURE AREA (for approved dockets) ==========
+  if (data.docket.status === 'approved') {
+    checkPageBreak(60)
+    yPos += 10
+
+    doc.setDrawColor(200, 200, 200)
+    doc.line(margin, yPos, pageWidth - margin, yPos)
+    yPos += 10
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text('APPROVAL CERTIFICATION', margin, yPos)
+    yPos += 10
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.text('I certify that the hours claimed in this docket have been verified and approved.', margin, yPos)
+    yPos += 15
+
+    // Foreman signature
+    doc.text('Approved By:', margin, yPos)
+    yPos += 12
+    doc.line(margin, yPos, margin + 60, yPos)
+    yPos += 5
+    doc.setFontSize(8)
+    doc.text('Signature', margin, yPos)
+    doc.text(`Date: ${formatDate(data.docket.approvedAt)}`, margin + 100, yPos)
+    yPos += 10
+  }
+
+  // ========== FOOTER ==========
+  const footerY = pageHeight - 15
+  doc.setDrawColor(200, 200, 200)
+  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+
+  doc.setFontSize(7)
+  doc.setTextColor(128, 128, 128)
+  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY)
+  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY)
+
+  // Save the PDF
+  const filename = `Docket-${data.docket.docketNumber}-${data.docket.status}.pdf`
+  doc.save(filename)
+
+  console.log(`Docket detail PDF generated in ${Date.now() - startTime}ms`)
+}
+
+export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData, NCRDetailData, TestCertificateData, DailyDiaryPDFData, DocketDetailPDFData }
