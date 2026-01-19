@@ -3791,3 +3791,198 @@ Reached 67.2% completion (696/1035 features passing)
 ================================================================================
 END OF SESSION 40 SUMMARY
 ================================================================================
+
+================================================================================
+Session: 41 (Coding Agent)
+Date: 2026-01-19
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #516: Infinite Scroll Lot Register
+- IMPLEMENTED: Changed lot register from pagination to infinite scroll
+- Modified LotsPage.tsx:
+  - Added Intersection Observer API for scroll detection
+  - Initial display of 20 lots, loads 15 more on scroll
+  - Shows "Loading more..." indicator at bottom
+  - Optimized with useCallback and useMemo
+- Created test data script (create-many-lots.js) with 50 test lots
+- Verified: Scrolling loads more lots automatically
+
+### Feature #517: Optimistic UI Updates
+- IMPLEMENTED: Email notification toggles use optimistic updates
+- Modified SettingsPage.tsx:
+  - Toggle UI updates immediately on click
+  - Previous state stored for potential rollback
+  - Server persistence happens in background
+  - Automatic rollback if server request fails
+  - Error message: "Failed to save email preferences - changes reverted"
+- All 4 test steps verified:
+  1. Toggle setting - PASS
+  2. UI updates immediately - PASS
+  3. Persists to server - PASS (verified after page refresh)
+  4. Error rollback - PASS (tested with simulated network error)
+
+### Regression Testing
+- Verified Feature #15 (Failed login no information leakage) - PASSED
+  - Non-existent email shows generic error
+  - Valid email with wrong password shows same generic error
+
+## FILES MODIFIED
+- frontend/src/pages/lots/LotsPage.tsx - Infinite scroll implementation
+- frontend/src/pages/settings/SettingsPage.tsx - Optimistic UI updates
+
+## FILES CREATED
+- backend/scripts/create-many-lots.js - Test data for infinite scroll
+
+## GIT COMMITS
+- 6d111ba: feat: Implement infinite scroll for lot register (#516)
+- a2eeb6c: feat: Add optimistic UI updates for email preferences (#517)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 710 (68.6%)
+- In Progress: 0
+- Pending: 325
+
+## MILESTONE
+Reached 68.6% completion (710/1035 features passing)
+
+### Feature #520: Drag-drop File Upload
+- IMPLEMENTED: Full drag-and-drop file upload for documents page
+- Changes to DocumentsPage.tsx:
+  - Added full-page drop zone with visual overlay
+  - "Drop file here to upload" indicator when dragging files
+  - Dropping file opens upload modal with file pre-selected
+  - Drag-drop also works within upload modal
+  - Updated empty state to encourage drag-and-drop
+  - Auto-detects image files and sets document type
+
+### Feature #521: Context Menu Actions
+- IMPLEMENTED: Right-click context menu on lot register rows
+- Changes to LotsPage.tsx:
+  - Added contextMenu state and ref
+  - Added handleContextMenu and closeContextMenu functions
+  - Added useEffect for click-outside detection
+  - Added onContextMenu handler to table rows
+  - Context menu with: View Details, Edit Lot, Clone Lot, Copy Link, Delete Lot
+  - Actions respect user permissions (canCreate, canDelete)
+  - Positioned at cursor, closes on outside click
+
+## FILES MODIFIED THIS SESSION
+- frontend/src/pages/lots/LotsPage.tsx - Infinite scroll, context menu
+- frontend/src/pages/settings/SettingsPage.tsx - Optimistic UI updates
+- frontend/src/pages/documents/DocumentsPage.tsx - Drag-drop file upload
+
+## FILES CREATED THIS SESSION
+- backend/scripts/create-many-lots.js - Test data for infinite scroll
+
+## GIT COMMITS
+- 6d111ba: feat: Implement infinite scroll for lot register (#516)
+- a2eeb6c: feat: Add optimistic UI updates for email preferences (#517)
+- 8c12f28: feat: Add drag-and-drop file upload to documents page (#520)
+- 1bf886c: feat: Add context menu (right-click) for lot rows (#521)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 712 (68.8%)
+- In Progress: 0
+- Pending: 323
+
+## MILESTONE
+Reached 68.8% completion (712/1035 features passing)
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing functional features
+
+================================================================================
+END OF SESSION 41 SUMMARY
+================================================================================
+
+================================================================================
+Session: 42 (Coding Agent)
+Date: 2026-01-19
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #523: Search Results Highlighting
+- IMPLEMENTED: Search terms highlighted in lot register results
+- Changes to LotsPage.tsx:
+  - Added highlightSearchTerm helper function with regex matching
+  - Wraps matching text in <mark> tags with yellow highlight
+  - Applied to lot number and description columns
+  - Escapes special regex characters for safety
+
+### Feature #524: Filter Badge Count Display
+- IMPLEMENTED: Badge showing active filter count
+- Changes to LotsPage.tsx:
+  - Added activeFilterCount computed with useMemo
+  - Counts: status, activity, search, chainage, subcontractor, areaZone
+  - Badge displays next to "Filters:" label when > 0
+  - Badge shows tooltip with "N active filter(s)"
+
+### Feature #525: Date Range Picker Presets
+- IMPLEMENTED: Today, This Week, This Month presets for date pickers
+- Changes to ReportsPage.tsx:
+  - Added applyDatePreset helper function
+  - Uses local timezone for correct date formatting
+  - Added preset buttons to Test Results date range
+  - Added preset buttons to Diary Report date range
+
+### Feature #529: File Size Display Formatting
+- VERIFIED: Existing formatFileSize function correct
+- DocumentsPage.tsx already has proper formatting:
+  - Shows B for files < 1KB
+  - Shows KB with 1 decimal for files < 1MB
+  - Shows MB with 1 decimal for files >= 1MB
+
+### Feature #533: Avatar Display for Users
+- IMPLEMENTED: Avatar image or initials fallback
+- Changes:
+  - Added avatarUrl to User interface in auth.tsx
+  - Updated Header to show avatar or first initial
+  - Updated ProfilePage to show avatar or first initial
+  - Initials displayed in styled circle
+
+### Feature #535: Count Badge on Tabs
+- IMPLEMENTED: NCRs and Tests tabs show count badges
+- Changes to LotDetailPage.tsx:
+  - Added testsCount and ncrsCount state variables
+  - Fetch counts on initial page load
+  - Display badge next to tab labels when count > 0
+  - Update counts when visiting tabs or creating NCRs
+
+## FILES MODIFIED THIS SESSION
+- frontend/src/pages/lots/LotsPage.tsx - Search highlighting, filter badge
+- frontend/src/pages/reports/ReportsPage.tsx - Date range presets
+- frontend/src/lib/auth.tsx - Added avatarUrl to User interface
+- frontend/src/components/layouts/Header.tsx - Avatar/initials display
+- frontend/src/pages/profile/ProfilePage.tsx - Avatar/initials display
+- frontend/src/pages/lots/LotDetailPage.tsx - Tab count badges
+
+## GIT COMMITS
+- e3a0fcb: feat: Add search results highlighting for lot register (#523)
+- d6806b3: feat: Add filter badge count display to lot register (#524)
+- 1297aad: feat: Add date range picker presets for reports (#525)
+- a8b3bbd: feat: Add avatar display with initials fallback (#533)
+- 994fe8f: feat: Add count badges to NCRs and Tests tabs on lot detail (#535)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 718 (69.4%)
+- In Progress: 0
+- Pending: 317
+
+## MILESTONE
+Reached 69.4% completion (718/1035 features passing)
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing functional features
+3. Feature #538 (Toggle switch state) is next
+
+================================================================================
+END OF SESSION 42 SUMMARY
+================================================================================

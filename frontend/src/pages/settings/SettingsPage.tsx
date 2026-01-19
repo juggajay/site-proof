@@ -44,6 +44,9 @@ export function SettingsPage() {
     scheduledReports: true,
     dailyDigest: false,
   })
+
+  // Slider state for hold point reminder days
+  const [holdPointReminderDays, setHoldPointReminderDays] = useState(3)
   const [isLoadingEmailPrefs, setIsLoadingEmailPrefs] = useState(true)
   const [isSavingEmailPrefs, setIsSavingEmailPrefs] = useState(false)
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false)
@@ -562,6 +565,39 @@ export function SettingsPage() {
                   </button>
                 </div>
               ))}
+
+              {/* Hold Point Reminder Days Slider */}
+              {emailPreferences.holdPointReminder && (
+                <div className="py-4 border-t border-border">
+                  <div className="mb-3">
+                    <p className="font-medium">Hold Point Reminder Timing</p>
+                    <p className="text-sm text-muted-foreground">
+                      Receive reminders this many days before a hold point is due
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min="1"
+                      max="14"
+                      value={holdPointReminderDays}
+                      onChange={(e) => setHoldPointReminderDays(Number(e.target.value))}
+                      className="flex-1 h-2 rounded-lg appearance-none cursor-pointer bg-gray-200 dark:bg-gray-700 accent-blue-600"
+                      data-testid="reminder-days-slider"
+                    />
+                    <span
+                      className="min-w-[60px] text-center font-semibold text-lg px-3 py-1 rounded-md bg-muted"
+                      data-testid="reminder-days-value"
+                    >
+                      {holdPointReminderDays} {holdPointReminderDays === 1 ? 'day' : 'days'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>1 day</span>
+                    <span>14 days</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

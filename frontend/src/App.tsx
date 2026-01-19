@@ -7,6 +7,7 @@ import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from '@/components/Ke
 import { OnboardingTour } from '@/components/OnboardingTour'
 import { ChangelogNotification } from '@/components/ChangelogNotification'
 import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 // Layouts
 import { MainLayout } from '@/components/layouts/MainLayout'
@@ -86,6 +87,7 @@ function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) 
 
 function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <KeyboardShortcutsProvider>
       <Routes>
@@ -262,6 +264,7 @@ function App() {
       <Toaster />
       </KeyboardShortcutsProvider>
     </AuthProvider>
+    </ErrorBoundary>
   )
 }
 

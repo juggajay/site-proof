@@ -1,0 +1,1 @@
+Test document for Supabase storage verification - Feature 448

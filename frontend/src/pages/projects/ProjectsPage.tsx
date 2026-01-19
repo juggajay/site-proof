@@ -146,8 +146,32 @@ export function ProjectsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-8 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            <div className="h-4 w-64 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          </div>
+          <div className="h-10 w-32 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        </div>
+        {/* Projects grid skeleton */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="h-5 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-6 w-16 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              </div>
+              <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="flex gap-2 pt-2">
+                <div className="h-8 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-8 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
