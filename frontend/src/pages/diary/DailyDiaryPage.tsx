@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 import { RichTextEditor } from '../../components/ui/RichTextEditor'
+import { generateDailyDiaryPDF, DailyDiaryPDFData } from '../../lib/pdfGenerator'
+import { toast } from '../../components/ui/toaster'
 
 interface Personnel {
   id: string
@@ -1796,16 +1798,110 @@ export function DailyDiaryPage() {
             </div>
           )}
 
-          {/* Submit Button */}
-          {diary && diary.status === 'draft' && (
+          {/* Submit Button & Print Button */}
+          {diary && (
             <div className="flex justify-end gap-4">
+              {/* Print Button - Always show if diary exists */}
               <button
-                onClick={handleSubmitClick}
-                disabled={saving}
-                className="rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+                onClick={async () => {
+                  try {
+                    // Fetch project info for PDF
+                    const token = getAuthToken()
+                    const projectRes = await fetch(`${API_URL}/api/projects/${projectId}`, {
+                      headers: { Authorization: `Bearer ${token}` }
+                    })
+                    const project = projectRes.ok ? await projectRes.json() : { name: 'Unknown Project', projectNumber: '' }
+
+                    // Build PDF data
+                    const pdfData: DailyDiaryPDFData = {
+                      diary: {
+                        id: diary.id,
+                        date: diary.date,
+                        status: diary.status,
+                        weatherConditions: diary.weatherConditions,
+                        temperatureMin: diary.temperatureMin,
+                        temperatureMax: diary.temperatureMax,
+                        rainfallMm: diary.rainfallMm,
+                        weatherNotes: diary.weatherNotes,
+                        generalNotes: diary.generalNotes,
+                        isLate: diary.isLate,
+                        submittedBy: diary.submittedBy,
+                        submittedAt: diary.submittedAt,
+                        createdAt: diary.createdAt,
+                        updatedAt: diary.updatedAt
+                      },
+                      project: {
+                        name: project.name || 'Unknown Project',
+                        projectNumber: project.projectNumber || null
+                      },
+                      personnel: diary.personnel.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        company: p.company,
+                        role: p.role,
+                        startTime: p.startTime,
+                        finishTime: p.finishTime,
+                        hours: p.hours
+                      })),
+                      plant: diary.plant.map(p => ({
+                        id: p.id,
+                        description: p.description,
+                        idRego: p.idRego,
+                        company: p.company,
+                        hoursOperated: p.hoursOperated,
+                        notes: p.notes
+                      })),
+                      activities: diary.activities.map(a => ({
+                        id: a.id,
+                        description: a.description,
+                        lot: a.lot ? { lotNumber: a.lot.lotNumber } : null,
+                        quantity: a.quantity,
+                        unit: a.unit,
+                        notes: a.notes
+                      })),
+                      delays: diary.delays.map(d => ({
+                        id: d.id,
+                        delayType: d.delayType,
+                        description: d.description,
+                        startTime: d.startTime,
+                        endTime: d.endTime,
+                        durationHours: d.durationHours,
+                        impact: d.impact
+                      })),
+                      addendums: addendums.map(a => ({
+                        id: a.id,
+                        content: a.content,
+                        addedBy: a.addedBy,
+                        addedAt: a.addedAt
+                      }))
+                    }
+
+                    generateDailyDiaryPDF(pdfData)
+                    toast({ title: 'Daily diary PDF downloaded', variant: 'success' })
+                  } catch (err) {
+                    console.error('Error generating diary PDF:', err)
+                    toast({ title: 'Failed to generate PDF', variant: 'error' })
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-4 py-2 text-sm hover:bg-muted"
+                title="Print daily diary"
               >
-                {saving ? 'Submitting...' : 'Submit Diary'}
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print
               </button>
+
+              {/* Submit Button - Only for draft */}
+              {diary.status === 'draft' && (
+                <button
+                  onClick={handleSubmitClick}
+                  disabled={saving}
+                  className="rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  {saving ? 'Submitting...' : 'Submit Diary'}
+                </button>
+              )}
             </div>
           )}
 
