@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Upload, FileText, AlertCircle, AlertTriangle, CheckCircle2, X, Loader2 } from 'lucide-react'
+import { Upload, FileText, AlertCircle, AlertTriangle, CheckCircle2, X, Loader2, Download } from 'lucide-react'
 
 interface ImportLotsModalProps {
   projectId: string
@@ -239,6 +239,31 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
     e.target.value = ''
   }
 
+  // Download CSV template
+  const handleDownloadTemplate = () => {
+    const headers = ['lot_number', 'description', 'chainage_start', 'chainage_end', 'activity_type']
+    const exampleRows = [
+      ['LOT-001', 'Example lot description', '0', '100', 'Earthworks'],
+      ['LOT-002', 'Another lot with drainage', '100', '200', 'Drainage'],
+      ['LOT-003', 'Pavement section', '200', '350', 'Pavement'],
+    ]
+
+    const csvContent = [
+      headers.join(','),
+      ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'lot-import-template.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+
+    toast({ variant: 'success', description: 'Template downloaded successfully' })
+  }
+
   // Import lots via API
   const handleImport = async () => {
     if (!validationResult || !validationResult.isValid) return
@@ -379,12 +404,21 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-              >
-                Select CSV File
-              </button>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                >
+                  Select CSV File
+                </button>
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="px-4 py-2 border rounded-md hover:bg-muted flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Template
+                </button>
+              </div>
             </div>
 
             <div className="text-sm text-muted-foreground">
