@@ -4043,3 +4043,80 @@ Reached 74.1% completion (767/1035 features passing)
 ================================================================================
 END OF SESSION 43 SUMMARY
 ================================================================================
+
+================================================================================
+Session: 44 (Coding Agent)
+Date: 2026-01-20
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #667: Print NCR detail
+- IMPLEMENTED: NCR detail PDF generation
+- Added generateNCRDetailPDF function to pdfGenerator.ts
+- PDF includes:
+  - NCR identification (number, status, category, severity, dates)
+  - Project & affected lots
+  - Non-conformance description
+  - Investigation & resolution (root cause, actions, preventative measures)
+  - QM approval status (for major NCRs)
+  - Closure details
+  - Activity timeline (optional)
+- Severity-based header colors (red for major, amber for minor)
+- Updated NCRPage.tsx to use PDF generator instead of window.print()
+- PDF downloads directly instead of opening print dialog
+
+### Feature #668: Print test certificate
+- IMPLEMENTED: Test certificate PDF generation
+- Added generateTestCertificatePDF function to pdfGenerator.ts
+- PDF includes:
+  - Test identification (type, request#, lab, status)
+  - Project & lot location details
+  - Sample dates (sample, test, result)
+  - Test results with large result value box
+  - Specification comparison (min/max)
+  - Compliance statement (pass/fail/pending)
+  - Signature area for verification
+- Pass/fail based header colors (green/red/amber)
+- Added 🖨️ Print Certificate button to TestResultsPage Actions column
+- Button fetches project info dynamically and generates certificate
+
+### Test Data Created
+- Test result: TR-PRINT-TEST-001 (Compaction test, 98.5% MDD, Pass)
+- Linked to lot ATT-LOT-001 in Attention Test Project
+
+## FILES MODIFIED/CREATED
+- frontend/src/lib/pdfGenerator.ts
+  - Added NCRDetailData interface and generateNCRDetailPDF function (~260 lines)
+  - Added TestCertificateData interface and generateTestCertificatePDF function (~220 lines)
+  - Updated exports
+- frontend/src/pages/ncr/NCRPage.tsx
+  - Added imports for PDF generator
+  - Replaced window.print() with generateNCRDetailPDF call
+  - Added toast notifications for success/error
+- frontend/src/pages/tests/TestResultsPage.tsx
+  - Added imports for PDF generator and toast
+  - Added token and apiUrl at component level
+  - Added Print Certificate button (🖨️) with async PDF generation
+
+## GIT COMMITS
+- 595ba00: feat(ncr): Add NCR detail PDF generation (Feature #667)
+- 731ce68: feat(tests): Add test certificate PDF generation (Feature #668)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 778 (75.2%)
+- In Progress: 0
+- Pending: 257
+
+## MILESTONE
+Reached 75.2% completion (778/1035 features passing)
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing print/PDF features
+3. Run regression tests on PDF functionality
+
+================================================================================
+END OF SESSION 44 SUMMARY
+================================================================================
