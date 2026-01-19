@@ -36,6 +36,46 @@ const SPEC_SET_OPTIONS = [
   { value: 'custom', label: 'Custom' },
 ]
 
+// Status configuration with colors and descriptions
+const STATUS_CONFIG: Record<string, { color: string; bgColor: string; description: string }> = {
+  active: {
+    color: 'text-green-800 dark:text-green-300',
+    bgColor: 'bg-green-100 dark:bg-green-900/30',
+    description: 'Project is currently in progress with ongoing work',
+  },
+  completed: {
+    color: 'text-blue-800 dark:text-blue-300',
+    bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+    description: 'Project has been completed successfully',
+  },
+  on_hold: {
+    color: 'text-amber-800 dark:text-amber-300',
+    bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+    description: 'Project is temporarily paused',
+  },
+  pending: {
+    color: 'text-purple-800 dark:text-purple-300',
+    bgColor: 'bg-purple-100 dark:bg-purple-900/30',
+    description: 'Project is awaiting approval or resources to start',
+  },
+  cancelled: {
+    color: 'text-red-800 dark:text-red-300',
+    bgColor: 'bg-red-100 dark:bg-red-900/30',
+    description: 'Project has been cancelled',
+  },
+  draft: {
+    color: 'text-gray-800 dark:text-gray-300',
+    bgColor: 'bg-gray-100 dark:bg-gray-700',
+    description: 'Project is in draft status, not yet active',
+  },
+}
+
+const DEFAULT_STATUS_CONFIG = {
+  color: 'text-gray-800 dark:text-gray-300',
+  bgColor: 'bg-gray-100 dark:bg-gray-700',
+  description: 'Project status',
+}
+
 export function ProjectsPage() {
   const { user } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
@@ -389,11 +429,28 @@ export function ProjectsPage() {
               <h3 className="text-lg font-semibold">{project.name}</h3>
               <p className="text-sm text-muted-foreground mt-1">{project.projectNumber}</p>
               <div className="mt-4 flex items-center justify-between">
-                <span className={`px-2 py-1 rounded-full text-xs ${
-                  project.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {project.status}
-                </span>
+                {(() => {
+                  const statusKey = project.status?.toLowerCase() || 'draft'
+                  const config = STATUS_CONFIG[statusKey] || DEFAULT_STATUS_CONFIG
+                  return (
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${config.bgColor} ${config.color} cursor-help`}
+                      title={config.description}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        <span className={`inline-block w-2 h-2 rounded-full ${
+                          statusKey === 'active' ? 'bg-green-500' :
+                          statusKey === 'completed' ? 'bg-blue-500' :
+                          statusKey === 'on_hold' ? 'bg-amber-500' :
+                          statusKey === 'pending' ? 'bg-purple-500' :
+                          statusKey === 'cancelled' ? 'bg-red-500' :
+                          'bg-gray-500'
+                        }`} />
+                        {project.status || 'Draft'}
+                      </span>
+                    </span>
+                  )
+                })()}
                 <span className="text-xs text-muted-foreground">
                   Click to view NCRs
                 </span>
