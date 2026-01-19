@@ -175,6 +175,7 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: any, r
     const lot = await prisma.lot.findUnique({
       where: { id: lotId },
       include: {
+        project: true, // Include project to get HP recipients from settings
         itpInstance: {
           include: {
             template: {
@@ -230,6 +231,19 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: any, r
     // Get existing hold point record
     const existingHP = lot.holdPoints[0]
 
+    // Get HP default recipients from project settings (Feature #697)
+    let defaultRecipients: string[] = []
+    if (lot.project.settings) {
+      try {
+        const settings = JSON.parse(lot.project.settings)
+        if (settings.hpRecipients && Array.isArray(settings.hpRecipients)) {
+          defaultRecipients = settings.hpRecipients.map((r: any) => r.email).filter(Boolean)
+        }
+      } catch (e) {
+        // Invalid JSON, use empty array
+      }
+    }
+
     res.json({
       holdPoint: {
         id: existingHP?.id || null,
@@ -247,7 +261,8 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: any, r
       },
       prerequisites,
       incompletePrerequisites,
-      canRequestRelease
+      canRequestRelease,
+      defaultRecipients // Feature #697 - HP default recipients from project settings
     })
   } catch (error) {
     console.error('Error fetching hold point details:', error)

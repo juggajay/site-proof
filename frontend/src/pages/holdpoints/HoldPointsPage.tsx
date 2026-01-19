@@ -40,6 +40,7 @@ interface HoldPointDetails {
   prerequisites: PrerequisiteItem[]
   incompletePrerequisites: PrerequisiteItem[]
   canRequestRelease: boolean
+  defaultRecipients?: string[] // Feature #697 - HP default recipients
 }
 
 export function HoldPointsPage() {
@@ -841,6 +842,13 @@ function RequestReleaseModal({
 
   const token = getAuthToken()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+  // Feature #697 - Pre-fill notification email with default recipients from project settings
+  useEffect(() => {
+    if (details?.defaultRecipients && details.defaultRecipients.length > 0 && !notificationSentTo) {
+      setNotificationSentTo(details.defaultRecipients.join(', '))
+    }
+  }, [details?.defaultRecipients])
 
   // Check if we have a notice period warning that needs override
   const hasNoticePeriodWarning = error?.code === 'NOTICE_PERIOD_WARNING'

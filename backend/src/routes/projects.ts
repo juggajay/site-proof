@@ -138,6 +138,7 @@ projectsRouter.get('/:id', async (req, res) => {
         workingDays: true,
         chainageStart: true,
         chainageEnd: true,
+        settings: true, // Feature #697 - HP recipients stored in JSON settings
         createdAt: true,
         updatedAt: true,
       },
@@ -297,7 +298,7 @@ projectsRouter.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { name, code, lotPrefix, lotStartingNumber, ncrPrefix, ncrStartingNumber, workingHoursStart, workingHoursEnd, workingDays, chainageStart, chainageEnd, status } = req.body
+    const { name, code, lotPrefix, lotStartingNumber, ncrPrefix, ncrStartingNumber, workingHoursStart, workingHoursEnd, workingDays, chainageStart, chainageEnd, status, settings } = req.body
 
     // Validate required fields
     if (name !== undefined && !name.trim()) {
@@ -383,6 +384,24 @@ projectsRouter.patch('/:id', async (req, res) => {
         return res.status(400).json({ message: 'Invalid status value' })
       }
       updateData.status = status
+    }
+    // Feature #697 - Store HP recipients and other notification settings in JSON settings field
+    if (settings !== undefined) {
+      // Merge with existing settings
+      const existingProject = await prisma.project.findUnique({
+        where: { id },
+        select: { settings: true }
+      })
+      let existingSettings: Record<string, unknown> = {}
+      if (existingProject?.settings) {
+        try {
+          existingSettings = JSON.parse(existingProject.settings)
+        } catch (e) {
+          // Invalid JSON, start fresh
+        }
+      }
+      const mergedSettings = { ...existingSettings, ...settings }
+      updateData.settings = JSON.stringify(mergedSettings)
     }
 
     // Update the project

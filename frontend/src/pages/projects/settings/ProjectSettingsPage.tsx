@@ -102,6 +102,13 @@ export function ProjectSettingsPage() {
   const [inviteError, setInviteError] = useState('')
   const [inviteSuccess, setInviteSuccess] = useState('')
 
+  // HP Recipients state (Feature #697)
+  const [hpRecipients, setHpRecipients] = useState<Array<{ role: string; email: string }>>([])
+  const [showAddRecipientModal, setShowAddRecipientModal] = useState(false)
+  const [newRecipientRole, setNewRecipientRole] = useState('')
+  const [newRecipientEmail, setNewRecipientEmail] = useState('')
+  const [savingRecipients, setSavingRecipients] = useState(false)
+
   const setActiveTab = (tab: SettingsTab) => {
     setSearchParams({ tab })
   }
@@ -134,6 +141,19 @@ export function ProjectSettingsPage() {
             workingHoursStart: data.project.workingHoursStart || '06:00',
             workingHoursEnd: data.project.workingHoursEnd || '18:00',
           })
+          // Feature #697 - Load HP recipients from project settings
+          if (data.project.settings) {
+            try {
+              const settings = typeof data.project.settings === 'string'
+                ? JSON.parse(data.project.settings)
+                : data.project.settings
+              if (settings.hpRecipients && Array.isArray(settings.hpRecipients)) {
+                setHpRecipients(settings.hpRecipients)
+              }
+            } catch (e) {
+              // Invalid JSON, use empty array
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to fetch project:', error)
@@ -1061,19 +1081,51 @@ export function ProjectSettingsPage() {
             <div className="rounded-lg border p-4">
               <h2 className="text-lg font-semibold mb-2">Hold Point Recipients</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Default recipients for hold point notifications.
+                Default recipients for hold point notifications. These will be pre-filled when requesting a hold point release.
               </p>
               <div className="space-y-2">
-                <div className="flex items-center gap-2 p-2 rounded bg-muted/50 text-sm">
-                  <span className="font-medium">Superintendent:</span>
-                  <span className="text-muted-foreground">superintendent@client.com</span>
-                </div>
-                <div className="flex items-center gap-2 p-2 rounded bg-muted/50 text-sm">
-                  <span className="font-medium">Quality Manager:</span>
-                  <span className="text-muted-foreground">qm@company.com</span>
-                </div>
+                {hpRecipients.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">No default recipients configured.</p>
+                ) : (
+                  hpRecipients.map((recipient, index) => (
+                    <div key={index} className="flex items-center justify-between gap-2 p-2 rounded bg-muted/50 text-sm">
+                      <div>
+                        <span className="font-medium">{recipient.role}:</span>
+                        <span className="text-muted-foreground ml-2">{recipient.email}</span>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const newRecipients = hpRecipients.filter((_, i) => i !== index)
+                          setHpRecipients(newRecipients)
+                          // Save to project settings
+                          const token = getAuthToken()
+                          if (!token || !projectId) return
+                          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                          try {
+                            await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                              method: 'PATCH',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({ settings: { hpRecipients: newRecipients } }),
+                            })
+                          } catch (e) {
+                            console.error('Failed to save recipients:', e)
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-700 text-xs"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
-              <button className="mt-4 rounded-lg border px-4 py-2 text-sm hover:bg-muted">
+              <button
+                onClick={() => setShowAddRecipientModal(true)}
+                className="mt-4 rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+              >
                 + Add Recipient
               </button>
             </div>
@@ -1290,6 +1342,94 @@ export function ProjectSettingsPage() {
                 {completing
                   ? (project?.status === 'completed' ? 'Reactivating...' : 'Completing...')
                   : (project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add HP Recipient Modal (Feature #697) */}
+      {showAddRecipientModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
+            <h3 className="text-xl font-bold mb-4">Add HP Recipient</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Add a default recipient for hold point release notifications.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Role/Title</label>
+                <input
+                  type="text"
+                  value={newRecipientRole}
+                  onChange={(e) => setNewRecipientRole(e.target.value)}
+                  placeholder="e.g., Superintendent, Quality Manager"
+                  className="w-full rounded-lg border bg-background px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Email Address</label>
+                <input
+                  type="email"
+                  value={newRecipientEmail}
+                  onChange={(e) => setNewRecipientEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="w-full rounded-lg border bg-background px-3 py-2"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowAddRecipientModal(false)
+                  setNewRecipientRole('')
+                  setNewRecipientEmail('')
+                }}
+                disabled={savingRecipients}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!newRecipientRole.trim() || !newRecipientEmail.trim()) return
+                  setSavingRecipients(true)
+                  const newRecipient = { role: newRecipientRole, email: newRecipientEmail }
+                  const newRecipients = [...hpRecipients, newRecipient]
+
+                  const token = getAuthToken()
+                  if (!token || !projectId) {
+                    setSavingRecipients(false)
+                    return
+                  }
+                  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                  try {
+                    const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                      method: 'PATCH',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({ settings: { hpRecipients: newRecipients } }),
+                    })
+                    if (response.ok) {
+                      setHpRecipients(newRecipients)
+                      setShowAddRecipientModal(false)
+                      setNewRecipientRole('')
+                      setNewRecipientEmail('')
+                    }
+                  } catch (e) {
+                    console.error('Failed to save recipient:', e)
+                  } finally {
+                    setSavingRecipients(false)
+                  }
+                }}
+                disabled={savingRecipients || !newRecipientRole.trim() || !newRecipientEmail.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {savingRecipients ? 'Adding...' : 'Add Recipient'}
               </button>
             </div>
           </div>
