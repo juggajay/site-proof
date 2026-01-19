@@ -500,6 +500,18 @@ export function LotsPage() {
     setDisplayedCount(INITIAL_DISPLAY_COUNT)
   }, [statusFilters.join(','), activityFilter, searchQuery, sortField, sortDirection, chainageMinFilter, chainageMaxFilter, subcontractorFilter, areaZoneFilter])
 
+  // Calculate active filter count for badge display
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (statusFilters.length > 0) count++
+    if (activityFilter) count++
+    if (searchQuery) count++
+    if (chainageMinFilter || chainageMaxFilter) count++ // Chainage range counts as 1 filter
+    if (subcontractorFilter) count++
+    if (areaZoneFilter) count++
+    return count
+  }, [statusFilters, activityFilter, searchQuery, chainageMinFilter, chainageMaxFilter, subcontractorFilter, areaZoneFilter])
+
   // Intersection Observer for infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -1515,6 +1527,19 @@ export function LotsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4">
+        {/* Filter label with badge count */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium text-muted-foreground">Filters:</span>
+          {activeFilterCount > 0 && (
+            <span
+              className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground"
+              data-testid="filter-badge"
+              title={`${activeFilterCount} active filter${activeFilterCount > 1 ? 's' : ''}`}
+            >
+              {activeFilterCount}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <label htmlFor="search-input" className="text-sm font-medium">
             Search:
