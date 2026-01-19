@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
@@ -10,7 +10,7 @@ import { ImportLotsModal } from '@/components/lots/ImportLotsModal'
 import { ExportLotsModal } from '@/components/lots/ExportLotsModal'
 import { LotQuickView } from '@/components/lots/LotQuickView'
 import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal'
-import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2, Printer } from 'lucide-react'
+import { Settings2, Check, ChevronUp, ChevronDown, ChevronRight, Save, Bookmark, Trash2, Printer, Calendar, FileText, AlertTriangle, TestTube } from 'lucide-react'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
 // Roles that can delete lots
@@ -195,6 +195,21 @@ export function LotsPage() {
 
   // Export modal state
   const [exportModalOpen, setExportModalOpen] = useState(false)
+
+  // Expandable rows state
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  const toggleRowExpansion = (lotId: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(lotId)) {
+        next.delete(lotId)
+      } else {
+        next.add(lotId)
+      }
+      return next
+    })
+  }
 
   // Bulk delete state
   const [selectedLots, setSelectedLots] = useState<Set<string>>(new Set())
@@ -2163,25 +2178,42 @@ export function LotsPage() {
                 </tr>
               ) : (
                 displayedLots.map((lot) => (
-                  <tr
-                    key={lot.id}
-                    className="border-b hover:bg-muted/25 cursor-pointer"
-                    onMouseEnter={(e) => handleLotMouseEnter(lot.id, e)}
-                    onMouseLeave={handleLotMouseLeave}
-                    onContextMenu={(e) => handleContextMenu(e, lot)}
-                  >
-                    {canDelete && (
-                      <td className="p-3">
-                        {lot.status !== 'conformed' && lot.status !== 'claimed' && (
-                          <input
-                            type="checkbox"
-                            checked={selectedLots.has(lot.id)}
-                            onChange={() => handleSelectLot(lot.id)}
-                            className="h-4 w-4 rounded border-gray-300"
-                          />
-                        )}
-                      </td>
-                    )}
+                  <React.Fragment key={lot.id}>
+                    <tr
+                      className="border-b hover:bg-muted/25 cursor-pointer"
+                      onMouseEnter={(e) => handleLotMouseEnter(lot.id, e)}
+                      onMouseLeave={handleLotMouseLeave}
+                      onContextMenu={(e) => handleContextMenu(e, lot)}
+                    >
+                      {canDelete && (
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleRowExpansion(lot.id)
+                              }}
+                              className="p-1 hover:bg-muted rounded transition-transform"
+                              data-testid={`expand-row-${lot.id}`}
+                              title={expandedRows.has(lot.id) ? 'Collapse details' : 'Expand details'}
+                            >
+                              {expandedRows.has(lot.id) ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </button>
+                            {lot.status !== 'conformed' && lot.status !== 'claimed' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedLots.has(lot.id)}
+                                onChange={() => handleSelectLot(lot.id)}
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                            )}
+                          </div>
+                        </td>
+                      )}
                     {orderedVisibleColumns.map((columnId) => {
                       // Skip subcontractor for subcontractors, budget for non-commercial
                       if (columnId === 'subcontractor' && isSubcontractor) return null
@@ -2259,7 +2291,65 @@ export function LotsPage() {
                         )}
                       </div>
                     </td>
-                  </tr>
+                    </tr>
+                    {/* Expanded detail row */}
+                    {expandedRows.has(lot.id) && (
+                      <tr className="bg-muted/30 border-b" data-testid={`expanded-row-${lot.id}`}>
+                        <td colSpan={canDelete ? (isSubcontractor ? 7 : 9) : (isSubcontractor ? 6 : 8)} className="p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            {/* Dates Section */}
+                            <div className="space-y-2">
+                              <h4 className="font-semibold flex items-center gap-2">
+                                <Calendar className="h-4 w-4" />
+                                Dates
+                              </h4>
+                              <div className="space-y-1 text-muted-foreground">
+                                <p>Created: {lot.createdAt ? new Date(lot.createdAt).toLocaleDateString() : '—'}</p>
+                                <p>Updated: {lot.updatedAt ? new Date(lot.updatedAt).toLocaleDateString() : '—'}</p>
+                              </div>
+                            </div>
+
+                            {/* Linked Items Section */}
+                            <div className="space-y-2">
+                              <h4 className="font-semibold flex items-center gap-2">
+                                <FileText className="h-4 w-4" />
+                                Linked Items
+                              </h4>
+                              <div className="space-y-1 text-muted-foreground">
+                                <p>ITPs: {lot.itpCount ?? 0}</p>
+                                <p>Test Results: {lot.testCount ?? 0}</p>
+                                <p>Documents: {lot.documentCount ?? 0}</p>
+                              </div>
+                            </div>
+
+                            {/* Status & Quality Section */}
+                            <div className="space-y-2">
+                              <h4 className="font-semibold flex items-center gap-2">
+                                <TestTube className="h-4 w-4" />
+                                Quality
+                              </h4>
+                              <div className="space-y-1 text-muted-foreground">
+                                <p className="flex items-center gap-1">
+                                  {(lot.ncrCount ?? 0) > 0 && (
+                                    <AlertTriangle className="h-3 w-3 text-amber-500" />
+                                  )}
+                                  NCRs: {lot.ncrCount ?? 0}
+                                </p>
+                                <p>Hold Points: {lot.holdPointCount ?? 0}</p>
+                                {lot.areaZone && <p>Area/Zone: {lot.areaZone}</p>}
+                              </div>
+                            </div>
+                          </div>
+                          {lot.notes && (
+                            <div className="mt-3 pt-3 border-t">
+                              <h4 className="font-semibold text-sm mb-1">Notes</h4>
+                              <p className="text-sm text-muted-foreground">{lot.notes}</p>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
