@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
@@ -10,14 +10,15 @@ import { ImportLotsModal } from '@/components/lots/ImportLotsModal'
 import { ExportLotsModal } from '@/components/lots/ExportLotsModal'
 import { LotQuickView } from '@/components/lots/LotQuickView'
 import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal'
-import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2 } from 'lucide-react'
+import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2, Printer } from 'lucide-react'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager']
 
-// Pagination settings
-const PAGE_SIZE = 5
+// Infinite scroll settings
+const INITIAL_DISPLAY_COUNT = 20
+const LOAD_MORE_COUNT = 15
 
 // Column configuration
 const COLUMN_CONFIG = [
@@ -95,9 +96,17 @@ export function LotsPage() {
   const [lots, setLots] = useState<Lot[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Infinite scroll state
+  const [displayedCount, setDisplayedCount] = useState(INITIAL_DISPLAY_COUNT)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [lotToDelete, setLotToDelete] = useState<Lot | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Project name for print header
+  const [projectName, setProjectName] = useState<string>('')
 
   // Quick view state
   const [quickViewLot, setQuickViewLot] = useState<{ id: string; position: { x: number; y: number } } | null>(null)
@@ -444,12 +453,46 @@ export function LotsPage() {
     })
   }, [lots, statusFilters, activityFilter, searchQuery, sortField, sortDirection])
 
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredLots.length / PAGE_SIZE)
-  const paginatedLots = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE
-    return filteredLots.slice(start, start + PAGE_SIZE)
-  }, [filteredLots, currentPage])
+  // Calculate displayed lots for infinite scroll
+  const displayedLots = useMemo(() => {
+    return filteredLots.slice(0, displayedCount)
+  }, [filteredLots, displayedCount])
+
+  const hasMore = displayedCount < filteredLots.length
+
+  // Load more lots when scrolling to bottom
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    // Simulate a brief loading delay for smooth UX
+    setTimeout(() => {
+      setDisplayedCount(prev => Math.min(prev + LOAD_MORE_COUNT, filteredLots.length))
+      setLoadingMore(false)
+    }, 200)
+  }, [loadingMore, hasMore, filteredLots.length])
+
+  // Reset displayed count when filters change
+  useEffect(() => {
+    setDisplayedCount(INITIAL_DISPLAY_COUNT)
+  }, [statusFilters.join(','), activityFilter, searchQuery, sortField, sortDirection, chainageMinFilter, chainageMaxFilter, subcontractorFilter, areaZoneFilter])
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMore()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [hasMore, loadingMore, loadMore])
 
   // Update URL params
   const updateFilters = (newParams: Record<string, string>) => {
@@ -569,6 +612,35 @@ export function LotsPage() {
   useEffect(() => {
     fetchLots()
   }, [projectId, navigate])
+
+  // Fetch project name for print header
+  useEffect(() => {
+    const fetchProjectName = async () => {
+      if (!projectId) return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setProjectName(data.project?.name || data.name || '')
+        }
+      } catch (err) {
+        console.error('Error fetching project name:', err)
+      }
+    }
+
+    fetchProjectName()
+  }, [projectId])
 
   // Fetch subcontractors on mount for the filter dropdown
   useEffect(() => {
@@ -1069,8 +1141,8 @@ export function LotsPage() {
 
   // Get deletable lots from current page (not conformed or claimed)
   const deletableLots = useMemo(() => {
-    return paginatedLots.filter(lot => lot.status !== 'conformed' && lot.status !== 'claimed')
-  }, [paginatedLots])
+    return displayedLots.filter(lot => lot.status !== 'conformed' && lot.status !== 'claimed')
+  }, [displayedLots])
 
   // Check if all deletable lots on current page are selected
   const allDeletableSelected = deletableLots.length > 0 && deletableLots.every(lot => selectedLots.has(lot.id))
@@ -1286,7 +1358,28 @@ export function LotsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+      {/* Print-only Header */}
+      <div className="hidden print:block report-header mb-6 text-center">
+        <h1 className="text-2xl font-bold mb-2">Lot Register</h1>
+        {projectName && <p className="text-gray-600 mb-1">{projectName}</p>}
+        <div className="text-sm text-gray-500">
+          Generated: {new Date().toLocaleDateString('en-AU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </div>
+        <div className="text-xs text-gray-400 mt-2">SiteProof - Quality Management System</div>
+      </div>
+
+      {/* Print-only Footer */}
+      <div className="hidden print:block report-footer fixed bottom-0 left-0 right-0 text-center text-xs text-gray-400 py-2 bg-white border-t">
+        © {new Date().getFullYear()} SiteProof - Confidential
+      </div>
+
+      <div className="flex items-center justify-between print:hidden">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold">Lot Register</h1>
           <ContextHelp
@@ -1300,6 +1393,13 @@ export function LotsPage() {
             className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
           >
             Export CSV
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="rounded-lg border border-gray-500 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 print:hidden"
+          >
+            <Printer className="h-4 w-4" />
+            Print Register
           </button>
           {canCreate && selectedLots.size > 0 && (
             <>
@@ -1782,10 +1882,35 @@ export function LotsPage() {
         </div>
       </div>
 
-      {/* Loading State */}
+      {/* Loading State - Skeleton */}
       {loading && (
-        <div className="flex h-32 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="rounded-lg border overflow-hidden">
+          {/* Table header skeleton */}
+          <div className="bg-muted/50 border-b px-4 py-3">
+            <div className="flex gap-4">
+              <div className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="h-4 w-24 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="h-4 w-32 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="h-4 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="h-4 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="h-4 w-24 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              <div className="h-4 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+          </div>
+          {/* Table row skeletons */}
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+              <div className="flex gap-4 items-center">
+                <div className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-4 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-4 w-40 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-4 w-16 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-6 w-20 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-4 w-24 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+                <div className="h-4 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -1841,7 +1966,7 @@ export function LotsPage() {
               </tr>
             </thead>
             <tbody>
-              {paginatedLots.length === 0 ? (
+              {displayedLots.length === 0 ? (
                 <tr>
                   <td colSpan={canDelete ? (isSubcontractor ? 7 : 9) : (isSubcontractor ? 6 : 8)} className="p-12 text-center">
                     {lots.length === 0 ? (
@@ -1872,7 +1997,7 @@ export function LotsPage() {
                   </td>
                 </tr>
               ) : (
-                paginatedLots.map((lot) => (
+                displayedLots.map((lot) => (
                   <tr
                     key={lot.id}
                     className="border-b hover:bg-muted/25 cursor-pointer"
@@ -1970,43 +2095,28 @@ export function LotsPage() {
             </tbody>
           </table>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t p-4">
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="rounded-lg border px-3 py-2 min-h-[44px] text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-                >
-                  Previous
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => handlePageChange(page)}
-                    className={`rounded-lg px-3 py-2 min-h-[44px] min-w-[44px] text-sm touch-manipulation ${
-                      page === currentPage
-                        ? 'bg-primary text-primary-foreground'
-                        : 'border hover:bg-muted'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="rounded-lg border px-3 py-2 min-h-[44px] text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-                >
-                  Next
-                </button>
+          {/* Infinite Scroll - Load More Indicator */}
+          <div ref={loadMoreRef} className="border-t p-4">
+            {loadingMore && (
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="text-sm">Loading more lots...</span>
               </div>
-            </div>
-          )}
+            )}
+            {!loadingMore && hasMore && (
+              <div className="text-center text-sm text-muted-foreground">
+                Showing {displayedLots.length} of {filteredLots.length} lots • Scroll down to load more
+              </div>
+            )}
+            {!hasMore && filteredLots.length > 0 && (
+              <div className="text-center text-sm text-muted-foreground">
+                Showing all {filteredLots.length} lots
+              </div>
+            )}
+          </div>
         </div>
       )}
 
