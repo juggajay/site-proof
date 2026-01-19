@@ -1,5 +1,72 @@
 import { jsPDF } from 'jspdf'
 
+// Conformance package format types for Australian road authorities
+export type ConformanceFormat = 'standard' | 'tmr' | 'tfnsw' | 'vicroads'
+
+export interface ConformanceFormatOptions {
+  format: ConformanceFormat
+  includeITPChecklist: boolean
+  includeTestResults: boolean
+  includeHoldPoints: boolean
+  includeNCRs: boolean
+  includePhotos: boolean
+  clientName?: string
+  contractNumber?: string
+}
+
+// Default format options
+export const defaultConformanceOptions: ConformanceFormatOptions = {
+  format: 'standard',
+  includeITPChecklist: true,
+  includeTestResults: true,
+  includeHoldPoints: true,
+  includeNCRs: true,
+  includePhotos: true,
+}
+
+// Format-specific configurations
+const FORMAT_CONFIGS: Record<ConformanceFormat, {
+  title: string
+  subtitle: string
+  headerColor: [number, number, number]
+  requiresSignature: boolean
+  includesSpecReference: boolean
+  specPrefix: string
+}> = {
+  standard: {
+    title: 'LOT CONFORMANCE REPORT',
+    subtitle: 'Quality Conformance Documentation',
+    headerColor: [37, 99, 235], // Blue
+    requiresSignature: false,
+    includesSpecReference: false,
+    specPrefix: '',
+  },
+  tmr: {
+    title: 'LOT CONFORMANCE CERTIFICATE',
+    subtitle: 'Transport and Main Roads Queensland - MRTS Compliance',
+    headerColor: [0, 83, 159], // TMR Blue
+    requiresSignature: true,
+    includesSpecReference: true,
+    specPrefix: 'MRTS',
+  },
+  tfnsw: {
+    title: 'LOT CONFORMANCE CERTIFICATE',
+    subtitle: 'Transport for NSW - QA Specification Compliance',
+    headerColor: [0, 38, 100], // TfNSW Navy
+    requiresSignature: true,
+    includesSpecReference: true,
+    specPrefix: 'TfNSW Q',
+  },
+  vicroads: {
+    title: 'LOT CONFORMANCE CERTIFICATE',
+    subtitle: 'Department of Transport Victoria - Section Compliance',
+    headerColor: [0, 70, 127], // VicRoads Blue
+    requiresSignature: true,
+    includesSpecReference: true,
+    specPrefix: 'Section',
+  },
+}
+
 // Types for conformance report data
 interface ITPChecklistItem {
   order: number
@@ -80,14 +147,21 @@ interface ConformanceReportData {
 
 /**
  * Generate a PDF conformance report for a lot
+ * Supports multiple formats: standard, TMR (Queensland), TfNSW (NSW), VicRoads
  */
-export function generateConformanceReportPDF(data: ConformanceReportData): void {
+export function generateConformanceReportPDF(
+  data: ConformanceReportData,
+  options: ConformanceFormatOptions = defaultConformanceOptions
+): void {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 20
   const contentWidth = pageWidth - margin * 2
   let yPos = margin
+
+  // Get format-specific configuration
+  const formatConfig = FORMAT_CONFIGS[options.format]
 
   // Helper to add a new page if needed
   const checkPageBreak = (requiredSpace: number) => {
@@ -106,11 +180,31 @@ export function generateConformanceReportPDF(data: ConformanceReportData): void 
     yPos += 5
   }
 
-  // ========== HEADER ==========
-  doc.setFontSize(20)
-  doc.setFont('helvetica', 'bold')
-  doc.text('LOT CONFORMANCE REPORT', pageWidth / 2, yPos, { align: 'center' })
-  yPos += 10
+  // ========== HEADER (Format-specific) ==========
+  // Colored header bar for road authority formats
+  if (options.format !== 'standard') {
+    doc.setFillColor(...formatConfig.headerColor)
+    doc.rect(0, 0, pageWidth, 25, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text(formatConfig.title, pageWidth / 2, 15, { align: 'center' })
+    doc.setTextColor(0, 0, 0)
+    yPos = 35
+  } else {
+    doc.setFontSize(20)
+    doc.setFont('helvetica', 'bold')
+    doc.text(formatConfig.title, pageWidth / 2, yPos, { align: 'center' })
+    yPos += 10
+  }
+
+  // Subtitle for road authority formats
+  if (options.format !== 'standard') {
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'italic')
+    doc.text(formatConfig.subtitle, pageWidth / 2, yPos, { align: 'center' })
+    yPos += 8
+  }
 
   doc.setFontSize(14)
   doc.setFont('helvetica', 'normal')
@@ -416,6 +510,57 @@ export function generateConformanceReportPDF(data: ConformanceReportData): void 
   doc.text('(Photo images available in the SiteProof system)', margin, yPos)
   yPos += 10
 
+  // ========== SIGNATURE BLOCK (Road Authority Formats) ==========
+  if (formatConfig.requiresSignature) {
+    checkPageBreak(70)
+    drawLine()
+    yPos += 5
+
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(0, 0, 0)
+    doc.text('CONFORMANCE CERTIFICATION', margin, yPos)
+    yPos += 10
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text('I hereby certify that this lot has been constructed in accordance with the contract', margin, yPos)
+    yPos += 5
+    doc.text('documents and relevant specifications.', margin, yPos)
+    yPos += 15
+
+    // Contractor signature
+    doc.text('Contractor Representative:', margin, yPos)
+    yPos += 12
+    doc.line(margin, yPos, margin + 70, yPos)
+    yPos += 5
+    doc.setFontSize(8)
+    doc.text('Signature', margin, yPos)
+    doc.text('Date: _______________', margin + 80, yPos - 5)
+    yPos += 8
+    doc.line(margin, yPos, margin + 70, yPos)
+    yPos += 5
+    doc.text('Print Name', margin, yPos)
+    yPos += 15
+
+    // Superintendent signature (for TMR/TfNSW)
+    if (options.format === 'tmr' || options.format === 'tfnsw') {
+      doc.setFontSize(10)
+      doc.text('Superintendent / Client Representative:', margin, yPos)
+      yPos += 12
+      doc.line(margin, yPos, margin + 70, yPos)
+      yPos += 5
+      doc.setFontSize(8)
+      doc.text('Signature', margin, yPos)
+      doc.text('Date: _______________', margin + 80, yPos - 5)
+      yPos += 8
+      doc.line(margin, yPos, margin + 70, yPos)
+      yPos += 5
+      doc.text('Print Name', margin, yPos)
+      yPos += 10
+    }
+  }
+
   // ========== FOOTER ==========
   checkPageBreak(20)
   drawLine()
@@ -428,10 +573,21 @@ export function generateConformanceReportPDF(data: ConformanceReportData): void 
   })
   doc.text(`Generated: ${generatedDate}`, margin, yPos)
   yPos += 4
-  doc.text('This report was generated by SiteProof v2 - Construction Quality Management System', margin, yPos)
 
-  // Save the PDF
-  const filename = `Conformance-Report-${data.lot.lotNumber}-${new Date().toISOString().split('T')[0]}.pdf`
+  // Format-specific footer text
+  if (options.format === 'tmr') {
+    doc.text('Prepared in accordance with TMR MRTS Standards - SiteProof v2', margin, yPos)
+  } else if (options.format === 'tfnsw') {
+    doc.text('Prepared in accordance with TfNSW QA Specifications - SiteProof v2', margin, yPos)
+  } else if (options.format === 'vicroads') {
+    doc.text('Prepared in accordance with DOT Victoria Section Specifications - SiteProof v2', margin, yPos)
+  } else {
+    doc.text('This report was generated by SiteProof v2 - Construction Quality Management System', margin, yPos)
+  }
+
+  // Save the PDF with format-specific filename
+  const formatSuffix = options.format !== 'standard' ? `-${options.format.toUpperCase()}` : ''
+  const filename = `Conformance-Report-${data.lot.lotNumber}${formatSuffix}-${new Date().toISOString().split('T')[0]}.pdf`
   doc.save(filename)
 }
 
@@ -1352,4 +1508,4 @@ export function generateClaimEvidencePackagePDF(data: ClaimEvidencePackageData, 
   console.log(`Claim evidence package PDF generated in ${Date.now() - startTime}ms`)
 }
 
-export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData, ClaimPackageOptions }
+export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData }

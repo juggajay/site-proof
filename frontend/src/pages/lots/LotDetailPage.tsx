@@ -6,8 +6,8 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
-import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
-import { generateConformanceReportPDF, ConformanceReportData } from '@/lib/pdfGenerator'
+import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, CheckCircle, Plus } from 'lucide-react'
+import { generateConformanceReportPDF, ConformanceReportData, ConformanceFormat, ConformanceFormatOptions, defaultConformanceOptions } from '@/lib/pdfGenerator'
 
 // Tab types for lot detail page
 type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'comments' | 'history'
@@ -96,6 +96,7 @@ interface ITPChecklistItem {
   evidenceRequired: 'none' | 'photo' | 'test' | 'document'
   order: number
   testType?: string | null
+  acceptanceCriteria?: string | null
 }
 
 interface ITPAttachmentDocument {
@@ -261,6 +262,15 @@ export function LotDetailPage() {
   const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null)
   const [photoZoom, setPhotoZoom] = useState(1) // Zoom level: 1 = 100%, 2 = 200%, etc.
   const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null)
+  // Batch photo selection state
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
+  const [showBatchCaptionModal, setShowBatchCaptionModal] = useState(false)
+  const [batchCaption, setBatchCaption] = useState('')
+  const [applyingBatchCaption, setApplyingBatchCaption] = useState(false)
+  // Add to Evidence modal state
+  const [showAddToEvidenceModal, setShowAddToEvidenceModal] = useState(false)
+  const [selectedEvidenceItem, setSelectedEvidenceItem] = useState<string | null>(null)
+  const [addingToEvidence, setAddingToEvidence] = useState(false)
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
@@ -269,6 +279,8 @@ export function LotDetailPage() {
   const [overrideReason, setOverrideReason] = useState('')
   const [overriding, setOverriding] = useState(false)
   const [generatingReport, setGeneratingReport] = useState(false)
+  const [showReportFormatDialog, setShowReportFormatDialog] = useState(false)
+  const [selectedReportFormat, setSelectedReportFormat] = useState<ConformanceFormat>('standard')
   const [showSubcontractorModal, setShowSubcontractorModal] = useState(false)
   const [subcontractors, setSubcontractors] = useState<SubcontractorCompany[]>([])
   const [selectedSubcontractor, setSelectedSubcontractor] = useState<string>('')
@@ -1288,10 +1300,19 @@ export function LotDetailPage() {
     }
   }
 
-  // Handle generating conformance report PDF
-  const handleGenerateReport = async () => {
-    if (!lot || lot.status !== 'conformed') return
+  // Show format selection dialog before generating report
+  const handleShowReportDialog = () => {
+    // Allow generating report for conformed or claimed lots (claimed lots were previously conformed)
+    if (!lot || (lot.status !== 'conformed' && lot.status !== 'claimed')) return
+    setShowReportFormatDialog(true)
+  }
 
+  // Handle generating conformance report PDF with selected format
+  const handleGenerateReport = async () => {
+    // Allow generating report for conformed or claimed lots (claimed lots were previously conformed)
+    if (!lot || (lot.status !== 'conformed' && lot.status !== 'claimed')) return
+
+    setShowReportFormatDialog(false)
     setGeneratingReport(true)
     const token = getAuthToken()
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -1365,7 +1386,7 @@ export function LotDetailPage() {
         },
         project: {
           name: projectData.project?.name || 'Unknown Project',
-          contractNumber: projectData.project?.contractNumber || null,
+          projectNumber: projectData.project?.projectNumber || null,
         },
         itp: itpData.instance ? {
           templateName: itpData.instance.template?.name || 'Unknown Template',
@@ -1378,12 +1399,19 @@ export function LotDetailPage() {
         photoCount,
       }
 
-      // Generate PDF
-      generateConformanceReportPDF(reportData)
+      // Generate PDF with selected format
+      const formatOptions: ConformanceFormatOptions = {
+        ...defaultConformanceOptions,
+        format: selectedReportFormat,
+        clientName: projectData.project?.clientName || undefined,
+        contractNumber: projectData.project?.projectNumber || undefined,
+      }
+      generateConformanceReportPDF(reportData, formatOptions)
 
+      const formatName = selectedReportFormat === 'standard' ? '' : ` (${selectedReportFormat.toUpperCase()} format)`
       toast({
         title: 'Report generated',
-        description: 'The conformance report PDF has been downloaded.',
+        description: `The conformance report PDF${formatName} has been downloaded.`,
       })
     } catch (err) {
       console.error('Failed to generate report:', err)
@@ -1794,6 +1822,13 @@ export function LotDetailPage() {
                                   </span>
                                 )}
                               </div>
+                              {/* Acceptance Criteria (Feature #632) */}
+                              {item.acceptanceCriteria && (
+                                <div className="mt-2 text-sm bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-md p-2">
+                                  <span className="font-medium text-blue-700 dark:text-blue-300">Acceptance Criteria:</span>
+                                  <span className="ml-1 text-blue-600 dark:text-blue-400">{item.acceptanceCriteria}</span>
+                                </div>
+                              )}
                               <div className="mt-2">
                                 <input
                                   type="text"
@@ -2442,37 +2477,403 @@ export function LotDetailPage() {
                 )
               }
 
+              // Helper function to toggle photo selection
+              const togglePhotoSelection = (photoId: string, e: React.MouseEvent) => {
+                e.stopPropagation()
+                setSelectedPhotos(prev => {
+                  const newSet = new Set(prev)
+                  if (newSet.has(photoId)) {
+                    newSet.delete(photoId)
+                  } else {
+                    newSet.add(photoId)
+                  }
+                  return newSet
+                })
+              }
+
+              // Helper function to select/deselect all photos
+              const toggleSelectAll = () => {
+                if (selectedPhotos.size === itpPhotos.length) {
+                  setSelectedPhotos(new Set())
+                } else {
+                  setSelectedPhotos(new Set(itpPhotos.map(p => p.attachment.document.id)))
+                }
+              }
+
+              // Function to apply batch caption to selected photos
+              const applyBatchCaptionToPhotos = async () => {
+                if (selectedPhotos.size === 0 || !batchCaption.trim()) return
+
+                setApplyingBatchCaption(true)
+                try {
+                  const token = getAuthToken()
+                  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+                  const updatePromises = Array.from(selectedPhotos).map(documentId =>
+                    fetch(`${apiUrl}/api/documents/${documentId}`, {
+                      method: 'PATCH',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({ caption: batchCaption.trim() })
+                    })
+                  )
+
+                  const results = await Promise.all(updatePromises)
+                  const failed = results.filter(r => !r.ok)
+
+                  if (failed.length > 0) {
+                    toast({
+                      title: 'Partial Success',
+                      description: `Updated ${results.length - failed.length} of ${results.length} photos`,
+                      variant: 'warning'
+                    })
+                  } else {
+                    toast({
+                      title: 'Success',
+                      description: `Caption applied to ${selectedPhotos.size} photo${selectedPhotos.size !== 1 ? 's' : ''}`,
+                    })
+                  }
+
+                  // Refresh ITP data to show updated captions
+                  const itpRes = await fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  })
+                  if (itpRes.ok) {
+                    const data = await itpRes.json()
+                    setItpInstance(data.instance)
+                  }
+
+                  // Clear selections and close modal
+                  setSelectedPhotos(new Set())
+                  setBatchCaption('')
+                  setShowBatchCaptionModal(false)
+                } catch (error) {
+                  console.error('Error applying batch caption:', error)
+                  toast({
+                    title: 'Error',
+                    description: 'Failed to apply caption to photos',
+                    variant: 'destructive'
+                  })
+                } finally {
+                  setApplyingBatchCaption(false)
+                }
+              }
+
+              // Function to add selected photos to an ITP checklist item as evidence
+              const addPhotosToEvidence = async () => {
+                if (selectedPhotos.size === 0 || !selectedEvidenceItem) return
+
+                setAddingToEvidence(true)
+                try {
+                  const token = getAuthToken()
+                  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+                  // First, ensure there's a completion for this checklist item
+                  let completionId: string | null = null
+                  const existingCompletion = itpInstance?.completions?.find(
+                    c => c.checklistItemId === selectedEvidenceItem
+                  )
+
+                  if (existingCompletion) {
+                    completionId = existingCompletion.id
+                  } else {
+                    // Create a pending completion first
+                    const createRes = await fetch(`${apiUrl}/api/itp/completions`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({
+                        itpInstanceId: itpInstance?.id,
+                        checklistItemId: selectedEvidenceItem,
+                        isCompleted: false,
+                        notes: ''
+                      })
+                    })
+                    if (createRes.ok) {
+                      const data = await createRes.json()
+                      completionId = data.completion.id
+                    }
+                  }
+
+                  if (!completionId) {
+                    throw new Error('Could not find or create completion')
+                  }
+
+                  // Now add each selected photo as an attachment
+                  const attachmentPromises = Array.from(selectedPhotos).map(async (documentId) => {
+                    // Find the document details
+                    const photoDoc = itpPhotos.find(p => p.attachment.document.id === documentId)
+                    if (!photoDoc) return null
+
+                    const res = await fetch(`${apiUrl}/api/itp/completions/${completionId}/attachments`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({
+                        filename: photoDoc.attachment.document.filename,
+                        fileUrl: photoDoc.attachment.document.fileUrl,
+                        caption: photoDoc.attachment.document.caption || `Evidence photo added ${new Date().toLocaleString()}`
+                      })
+                    })
+                    return res.ok
+                  })
+
+                  const results = await Promise.all(attachmentPromises)
+                  const successCount = results.filter(r => r === true).length
+
+                  if (successCount > 0) {
+                    toast({
+                      title: 'Success',
+                      description: `Added ${successCount} photo${successCount !== 1 ? 's' : ''} as evidence`,
+                    })
+
+                    // Refresh ITP data
+                    const itpRes = await fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
+                      headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                    if (itpRes.ok) {
+                      const data = await itpRes.json()
+                      setItpInstance(data.instance)
+                    }
+                  } else {
+                    toast({
+                      title: 'Error',
+                      description: 'Failed to add photos as evidence',
+                      variant: 'destructive'
+                    })
+                  }
+
+                  // Clear selections and close modal
+                  setSelectedPhotos(new Set())
+                  setSelectedEvidenceItem(null)
+                  setShowAddToEvidenceModal(false)
+                } catch (error) {
+                  console.error('Error adding photos to evidence:', error)
+                  toast({
+                    title: 'Error',
+                    description: 'Failed to add photos as evidence',
+                    variant: 'destructive'
+                  })
+                } finally {
+                  setAddingToEvidence(false)
+                }
+              }
+
               return (
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    {itpPhotos.length} photo{itpPhotos.length !== 1 ? 's' : ''} attached to ITP checklist items
-                  </p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {itpPhotos.map(({ attachment, checklistItem }) => (
-                      <div
-                        key={attachment.id}
-                        className="relative group cursor-pointer rounded-lg border overflow-hidden hover:border-primary transition-colors"
-                        onClick={() => setSelectedPhoto(attachment)}
-                      >
-                        <img
-                          src={attachment.document.fileUrl}
-                          alt={attachment.document.caption || attachment.document.filename}
-                          className="w-full h-40 object-cover"
+                  {/* Header with selection controls */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      {itpPhotos.length} photo{itpPhotos.length !== 1 ? 's' : ''} attached to ITP checklist items
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {/* Select All checkbox */}
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedPhotos.size === itpPhotos.length && itpPhotos.length > 0}
+                          onChange={toggleSelectAll}
+                          className="h-4 w-4 rounded border-gray-300"
                         />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <span className="text-white text-sm font-medium">View</span>
+                        Select All
+                      </label>
+                      {/* Bulk Caption button - only show when photos selected */}
+                      {selectedPhotos.size > 0 && (
+                        <>
+                          <button
+                            onClick={() => setShowBatchCaptionModal(true)}
+                            className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 flex items-center gap-1"
+                          >
+                            <FileText className="h-4 w-4" />
+                            Bulk Caption ({selectedPhotos.size})
+                          </button>
+                          <button
+                            onClick={() => setShowAddToEvidenceModal(true)}
+                            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 flex items-center gap-1"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Add to Evidence ({selectedPhotos.size})
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Photo grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {itpPhotos.map(({ attachment, checklistItem }) => {
+                      const isSelected = selectedPhotos.has(attachment.document.id)
+                      return (
+                        <div
+                          key={attachment.id}
+                          className={`relative group cursor-pointer rounded-lg border overflow-hidden transition-colors ${
+                            isSelected ? 'border-primary border-2 ring-2 ring-primary/20' : 'hover:border-primary'
+                          }`}
+                          onClick={() => setSelectedPhoto(attachment)}
+                        >
+                          {/* Selection checkbox */}
+                          <div
+                            className="absolute top-2 left-2 z-10"
+                            onClick={(e) => togglePhotoSelection(attachment.document.id, e)}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="h-5 w-5 rounded border-2 border-white bg-white/80 cursor-pointer"
+                            />
+                          </div>
+                          <img
+                            src={attachment.document.fileUrl}
+                            alt={attachment.document.caption || attachment.document.filename}
+                            className="w-full h-40 object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span className="text-white text-sm font-medium">View</span>
+                          </div>
+                          {/* Caption badge if exists */}
+                          {attachment.document.caption && (
+                            <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">
+                              Captioned
+                            </div>
+                          )}
+                          {/* ITP Reference Badge */}
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                            <p className="text-xs text-white truncate flex items-center gap-1">
+                              <span>📋</span>
+                              <span className="font-medium">ITP {checklistItem.order}:</span>
+                              <span className="truncate">{checklistItem.description}</span>
+                            </p>
+                            {attachment.document.caption && (
+                              <p className="text-xs text-white/80 truncate mt-0.5">
+                                📝 {attachment.document.caption}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        {/* ITP Reference Badge */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                          <p className="text-xs text-white truncate flex items-center gap-1">
-                            <span>📋</span>
-                            <span className="font-medium">ITP {checklistItem.order}:</span>
-                            <span className="truncate">{checklistItem.description}</span>
-                          </p>
+                      )
+                    })}
+                  </div>
+
+                  {/* Batch Caption Modal */}
+                  {showBatchCaptionModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                      <div className="bg-background rounded-lg shadow-lg w-full max-w-md p-6">
+                        <h3 className="text-lg font-semibold mb-4">Bulk Caption Photos</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Apply caption to {selectedPhotos.size} selected photo{selectedPhotos.size !== 1 ? 's' : ''}
+                        </p>
+                        <textarea
+                          value={batchCaption}
+                          onChange={(e) => setBatchCaption(e.target.value)}
+                          placeholder="Enter caption for all selected photos..."
+                          className="w-full h-24 rounded-lg border p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-2 mt-4">
+                          <button
+                            onClick={() => {
+                              setShowBatchCaptionModal(false)
+                              setBatchCaption('')
+                            }}
+                            className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
+                            disabled={applyingBatchCaption}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={applyBatchCaptionToPhotos}
+                            disabled={!batchCaption.trim() || applyingBatchCaption}
+                            className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {applyingBatchCaption ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                Applying...
+                              </>
+                            ) : (
+                              'Apply Caption'
+                            )}
+                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+
+                  {/* Add to Evidence Modal */}
+                  {showAddToEvidenceModal && itpInstance?.template?.checklistItems && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                      <div className="bg-background rounded-lg shadow-lg w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
+                        <h3 className="text-lg font-semibold mb-4">Add Photos to Evidence</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Select an ITP checklist item to attach {selectedPhotos.size} photo{selectedPhotos.size !== 1 ? 's' : ''} as evidence
+                        </p>
+                        <div className="space-y-2 mb-4">
+                          {itpInstance.template.checklistItems.map((item: ITPChecklistItem) => {
+                            const completion = itpInstance.completions?.find(c => c.checklistItemId === item.id)
+                            const isSelected = selectedEvidenceItem === item.id
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => setSelectedEvidenceItem(item.id)}
+                                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                                  isSelected
+                                    ? 'border-green-500 bg-green-50 dark:bg-green-950/30'
+                                    : 'hover:border-primary hover:bg-muted/50'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm truncate">
+                                      {item.order}. {item.description}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {item.evidenceRequired !== 'none' ? `Requires: ${item.evidenceRequired}` : 'No evidence required'}
+                                      {completion?.attachments?.length > 0 && ` • ${completion.attachments.length} attached`}
+                                    </p>
+                                  </div>
+                                  {isSelected && (
+                                    <CheckCircle className="h-5 w-5 text-green-500 ml-2 flex-shrink-0" />
+                                  )}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => {
+                              setShowAddToEvidenceModal(false)
+                              setSelectedEvidenceItem(null)
+                            }}
+                            className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
+                            disabled={addingToEvidence}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={addPhotosToEvidence}
+                            disabled={!selectedEvidenceItem || addingToEvidence}
+                            className="px-4 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {addingToEvidence ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                Adding...
+                              </>
+                            ) : (
+                              'Add to Evidence'
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })()}
@@ -2699,21 +3100,25 @@ export function LotDetailPage() {
         </div>
       )}
 
-      {/* Conformed Status Display */}
-      {lot.status === 'conformed' && (
-        <div className="mt-6 rounded-lg border border-green-400 bg-green-100 p-4">
+      {/* Conformed Status Display (also show for claimed lots as they were previously conformed) */}
+      {(lot.status === 'conformed' || lot.status === 'claimed') && (
+        <div className={`mt-6 rounded-lg border p-4 ${lot.status === 'claimed' ? 'border-blue-400 bg-blue-100' : 'border-green-400 bg-green-100'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">✅</span>
+              <span className="text-2xl">{lot.status === 'claimed' ? '💰' : '✅'}</span>
               <div>
-                <h2 className="text-lg font-semibold text-green-800">Lot Conformed</h2>
-                <p className="text-sm text-green-700">
-                  This lot has been quality-approved and is ready for claiming.
+                <h2 className={`text-lg font-semibold ${lot.status === 'claimed' ? 'text-blue-800' : 'text-green-800'}`}>
+                  {lot.status === 'claimed' ? 'Lot Claimed' : 'Lot Conformed'}
+                </h2>
+                <p className={`text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}>
+                  {lot.status === 'claimed'
+                    ? 'This lot has been included in a progress claim.'
+                    : 'This lot has been quality-approved and is ready for claiming.'}
                 </p>
                 {/* Conformance Details */}
                 {(lot.conformedAt || lot.conformedBy) && (
-                  <div className="mt-2 pt-2 border-t border-green-300">
-                    <div className="flex flex-wrap gap-4 text-sm text-green-700">
+                  <div className={`mt-2 pt-2 border-t ${lot.status === 'claimed' ? 'border-blue-300' : 'border-green-300'}`}>
+                    <div className={`flex flex-wrap gap-4 text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}>
                       {lot.conformedBy && (
                         <div className="flex items-center gap-1">
                           <span className="font-medium">Conformed by:</span>
@@ -2738,13 +3143,118 @@ export function LotDetailPage() {
             </div>
             {/* Generate Conformance Report Button */}
             <button
-              onClick={handleGenerateReport}
+              onClick={handleShowReportDialog}
               disabled={generatingReport}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <FileText className="h-4 w-4" />
               {generatingReport ? 'Generating...' : 'Generate Conformance Report'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Conformance Report Format Selection Modal */}
+      {showReportFormatDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg p-6 w-full max-w-lg shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-600">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold">Generate Conformance Package</h2>
+                <p className="text-sm text-muted-foreground">Select output format for the conformance report</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Report Format
+                </label>
+                <div className="space-y-2">
+                  {/* Standard format */}
+                  <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${selectedReportFormat === 'standard' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}`}>
+                    <input
+                      type="radio"
+                      name="reportFormat"
+                      value="standard"
+                      checked={selectedReportFormat === 'standard'}
+                      onChange={(e) => setSelectedReportFormat(e.target.value as ConformanceFormat)}
+                      className="mt-1"
+                    />
+                    <div>
+                      <div className="font-medium">Standard</div>
+                      <p className="text-sm text-muted-foreground">Generic conformance report format suitable for most clients</p>
+                    </div>
+                  </label>
+
+                  {/* TMR format */}
+                  <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${selectedReportFormat === 'tmr' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}`}>
+                    <input
+                      type="radio"
+                      name="reportFormat"
+                      value="tmr"
+                      checked={selectedReportFormat === 'tmr'}
+                      onChange={(e) => setSelectedReportFormat(e.target.value as ConformanceFormat)}
+                      className="mt-1"
+                    />
+                    <div>
+                      <div className="font-medium">TMR (Queensland)</div>
+                      <p className="text-sm text-muted-foreground">Transport and Main Roads format - MRTS compliant with contractor/superintendent signature blocks</p>
+                    </div>
+                  </label>
+
+                  {/* TfNSW format */}
+                  <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${selectedReportFormat === 'tfnsw' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}`}>
+                    <input
+                      type="radio"
+                      name="reportFormat"
+                      value="tfnsw"
+                      checked={selectedReportFormat === 'tfnsw'}
+                      onChange={(e) => setSelectedReportFormat(e.target.value as ConformanceFormat)}
+                      className="mt-1"
+                    />
+                    <div>
+                      <div className="font-medium">TfNSW (New South Wales)</div>
+                      <p className="text-sm text-muted-foreground">Transport for NSW QA Specification compliant format with signature blocks</p>
+                    </div>
+                  </label>
+
+                  {/* VicRoads format */}
+                  <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${selectedReportFormat === 'vicroads' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}`}>
+                    <input
+                      type="radio"
+                      name="reportFormat"
+                      value="vicroads"
+                      checked={selectedReportFormat === 'vicroads'}
+                      onChange={(e) => setSelectedReportFormat(e.target.value as ConformanceFormat)}
+                      className="mt-1"
+                    />
+                    <div>
+                      <div className="font-medium">VicRoads (Victoria)</div>
+                      <p className="text-sm text-muted-foreground">Department of Transport Victoria Section Specification format</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowReportFormatDialog(false)}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateReport}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Generate PDF
+              </button>
+            </div>
           </div>
         </div>
       )}
