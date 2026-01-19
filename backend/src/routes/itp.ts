@@ -652,6 +652,178 @@ itpRouter.get('/templates/:id/lots', requireAuth, async (req: any, res) => {
   }
 })
 
+// Delete ITP template with usage validation (Feature #575)
+itpRouter.delete('/templates/:id', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+    const { force } = req.query // If force=true, delete even if in use
+
+    // Check if template exists
+    const template = await prisma.iTPTemplate.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { instances: true }
+        }
+      }
+    })
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    // Check if template is in use by any lots
+    const instanceCount = template._count.instances
+
+    if (instanceCount > 0 && force !== 'true') {
+      // Get the lots using this template for the warning message
+      const instances = await prisma.iTPInstance.findMany({
+        where: { templateId: id },
+        include: {
+          lot: {
+            select: {
+              id: true,
+              lotNumber: true,
+              description: true,
+              status: true
+            }
+          }
+        },
+        take: 5 // Limit to first 5 for the warning
+      })
+
+      const lotsInUse = instances.map(inst => ({
+        id: inst.lot.id,
+        lotNumber: inst.lot.lotNumber,
+        description: inst.lot.description,
+        status: inst.lot.status
+      }))
+
+      return res.status(409).json({
+        error: 'Template is in use',
+        message: `This template is assigned to ${instanceCount} lot(s). You can archive it instead, or force delete to remove the template (lots will keep their snapshots).`,
+        usageCount: instanceCount,
+        lotsInUse,
+        canArchive: true,
+        canForceDelete: true
+      })
+    }
+
+    // If force delete, first unlink all instances (they keep their snapshots)
+    if (instanceCount > 0 && force === 'true') {
+      // We don't delete the instances - they keep working with their snapshots
+      // Just remove the template reference
+      console.log(`Force deleting template ${template.name} - ${instanceCount} instances will retain their snapshots`)
+    }
+
+    // Delete checklist items first
+    await prisma.iTPChecklistItem.deleteMany({
+      where: { templateId: id }
+    })
+
+    // Delete the template
+    await prisma.iTPTemplate.delete({
+      where: { id }
+    })
+
+    res.json({
+      success: true,
+      message: force === 'true' && instanceCount > 0
+        ? `Template deleted. ${instanceCount} lot(s) will continue using their snapshots.`
+        : 'Template deleted successfully'
+    })
+  } catch (error) {
+    console.error('Error deleting ITP template:', error)
+    res.status(500).json({ error: 'Failed to delete template' })
+  }
+})
+
+// Archive ITP template (soft delete alternative) (Feature #575)
+itpRouter.post('/templates/:id/archive', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+
+    const template = await prisma.iTPTemplate.update({
+      where: { id },
+      data: { isActive: false },
+      include: {
+        checklistItems: {
+          orderBy: { sequenceNumber: 'asc' }
+        }
+      }
+    })
+
+    // Transform response
+    const transformedTemplate = {
+      ...template,
+      isActive: template.isActive,
+      checklistItems: template.checklistItems.map(item => ({
+        id: item.id,
+        description: item.description,
+        category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
+        isHoldPoint: item.pointType === 'hold_point',
+        pointType: item.pointType || 'standard',
+        evidenceRequired: item.evidenceRequired || 'none',
+        order: item.sequenceNumber,
+        acceptanceCriteria: item.acceptanceCriteria
+      }))
+    }
+
+    res.json({
+      success: true,
+      message: 'Template archived. It will no longer appear in template selection but existing lots will continue working.',
+      template: transformedTemplate
+    })
+  } catch (error) {
+    console.error('Error archiving ITP template:', error)
+    res.status(500).json({ error: 'Failed to archive template' })
+  }
+})
+
+// Restore archived ITP template (Feature #575)
+itpRouter.post('/templates/:id/restore', requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params
+
+    const template = await prisma.iTPTemplate.update({
+      where: { id },
+      data: { isActive: true },
+      include: {
+        checklistItems: {
+          orderBy: { sequenceNumber: 'asc' }
+        }
+      }
+    })
+
+    // Transform response
+    const transformedTemplate = {
+      ...template,
+      isActive: template.isActive,
+      checklistItems: template.checklistItems.map(item => ({
+        id: item.id,
+        description: item.description,
+        category: item.responsibleParty || 'general',
+        responsibleParty: item.responsibleParty || 'contractor',
+        isHoldPoint: item.pointType === 'hold_point',
+        pointType: item.pointType || 'standard',
+        evidenceRequired: item.evidenceRequired || 'none',
+        order: item.sequenceNumber,
+        acceptanceCriteria: item.acceptanceCriteria
+      }))
+    }
+
+    res.json({
+      success: true,
+      message: 'Template restored and is now active.',
+      template: transformedTemplate
+    })
+  } catch (error) {
+    console.error('Error restoring ITP template:', error)
+    res.status(500).json({ error: 'Failed to restore template' })
+  }
+})
+
 // Propagate template changes to selected lots
 itpRouter.post('/templates/:id/propagate', requireAuth, async (req: any, res) => {
   try {
