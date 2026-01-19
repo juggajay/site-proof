@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { getAuthToken } from '@/lib/auth'
+import { TagInput } from '@/components/ui/TagInput'
 
 interface Lot {
   id: string
@@ -72,6 +73,9 @@ export function LotEditPage() {
     budgetAmount: '',
     assignedSubcontractorId: '',
   })
+
+  // Tags state (client-side only for now - demo feature)
+  const [tags, setTags] = useState<string[]>([])
 
   // Track if form has unsaved changes
   const [isDirty, setIsDirty] = useState(false)
@@ -457,6 +461,24 @@ export function LotEditPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Tags
+            </label>
+            <TagInput
+              value={tags}
+              onChange={(newTags) => {
+                setTags(newTags)
+                setIsDirty(true)
+              }}
+              placeholder="Add tags and press Enter..."
+              maxTags={5}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Add up to 5 tags to help categorize this lot
+            </p>
           </div>
         </div>
 
