@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 interface ModalProps {
@@ -17,6 +17,28 @@ interface ModalProps {
  * - Closes on Escape key (optional)
  */
 export function Modal({ children, onClose, className = '' }: ModalProps) {
+  const [isVisible, setIsVisible] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+
+  // Trigger entrance animation on mount
+  useEffect(() => {
+    // Small delay to ensure CSS transition works
+    requestAnimationFrame(() => {
+      setIsVisible(true)
+    })
+  }, [])
+
+  // Handle close with animation
+  const handleClose = () => {
+    if (onClose) {
+      setIsClosing(true)
+      // Wait for animation to complete before calling onClose
+      setTimeout(() => {
+        onClose()
+      }, 200) // Match transition duration
+    }
+  }
+
   // Prevent body scroll when modal is open
   useEffect(() => {
     const originalOverflow = document.body.style.overflow
@@ -28,31 +50,40 @@ export function Modal({ children, onClose, className = '' }: ModalProps) {
 
   // Handle escape key
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
+    const handleEscapeKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && onClose) {
-        onClose()
+        handleClose()
       }
     }
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
+    document.addEventListener('keydown', handleEscapeKey)
+    return () => document.removeEventListener('keydown', handleEscapeKey)
   }, [onClose])
 
   // Handle backdrop click
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget && onClose) {
-      onClose()
+      handleClose()
     }
   }
 
+  // Determine animation state
+  const shouldShow = isVisible && !isClosing
+
   const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200 ${
+        shouldShow ? 'bg-black/50' : 'bg-black/0'
+      }`}
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className={`bg-white rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto ${className}`}
+        className={`bg-white rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto transition-all duration-200 ${
+          shouldShow
+            ? 'opacity-100 scale-100 translate-y-0'
+            : 'opacity-0 scale-95 -translate-y-4'
+        } ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
