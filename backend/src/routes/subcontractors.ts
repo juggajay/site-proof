@@ -3,6 +3,45 @@ import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { sendSubcontractorInvitationEmail } from '../lib/email.js'
 
+// Feature #483: ABN (Australian Business Number) validation
+// ABN is an 11-digit number with a specific checksum algorithm
+function validateABN(abn: string): { valid: boolean; error?: string } {
+  if (!abn) {
+    return { valid: true } // ABN is optional
+  }
+
+  // Remove spaces and dashes
+  const cleanABN = abn.replace(/[\s-]/g, '')
+
+  // Must be exactly 11 digits
+  if (!/^\d{11}$/.test(cleanABN)) {
+    return { valid: false, error: 'ABN must be exactly 11 digits' }
+  }
+
+  // ABN validation algorithm (ATO specification)
+  // 1. Subtract 1 from the first digit
+  // 2. Multiply each digit by its weighting factor
+  // 3. Sum the results
+  // 4. If divisible by 89, ABN is valid
+  const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+  const digits = cleanABN.split('').map(Number)
+
+  // Subtract 1 from first digit
+  digits[0] = digits[0] - 1
+
+  // Calculate weighted sum
+  let sum = 0
+  for (let i = 0; i < 11; i++) {
+    sum += digits[i] * weights[i]
+  }
+
+  if (sum % 89 !== 0) {
+    return { valid: false, error: 'Invalid ABN - checksum failed' }
+  }
+
+  return { valid: true }
+}
+
 export const subcontractorsRouter = Router()
 
 // Apply authentication middleware to all routes
@@ -29,6 +68,18 @@ subcontractorsRouter.post('/invite', async (req, res) => {
         error: 'Bad Request',
         message: 'projectId, companyName, primaryContactName, and primaryContactEmail are required'
       })
+    }
+
+    // Feature #483: Validate ABN if provided
+    if (abn) {
+      const abnValidation = validateABN(abn)
+      if (!abnValidation.valid) {
+        return res.status(400).json({
+          error: 'Invalid ABN',
+          message: abnValidation.error,
+          code: 'INVALID_ABN'
+        })
+      }
     }
 
     // Verify project exists and user has access
@@ -943,3 +994,36 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// Feature #483: POST /api/subcontractors/validate-abn - Validate an ABN
+subcontractorsRouter.post('/validate-abn', async (req, res) => {
+  try {
+    const { abn } = req.body
+
+    if (!abn) {
+      return res.status(400).json({
+        error: 'ABN required',
+        message: 'Please provide an ABN to validate'
+      })
+    }
+
+    const validation = validateABN(abn)
+
+    res.json({
+      abn: abn.replace(/[\s-]/g, ''),
+      valid: validation.valid,
+      error: validation.error || null,
+      formatted: validation.valid ? formatABN(abn.replace(/[\s-]/g, '')) : null
+    })
+  } catch (error) {
+    console.error('ABN validation error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Helper to format ABN with spaces: XX XXX XXX XXX
+function formatABN(abn: string): string {
+  const clean = abn.replace(/[\s-]/g, '')
+  if (clean.length !== 11) return abn
+  return `${clean.slice(0, 2)} ${clean.slice(2, 5)} ${clean.slice(5, 8)} ${clean.slice(8, 11)}`
+}
