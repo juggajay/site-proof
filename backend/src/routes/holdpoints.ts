@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
 import { sendNotificationIfEnabled } from './notifications.js'
-import { sendHPReleaseRequestEmail, sendHPChaseEmail } from '../lib/email.js'
+import { sendHPReleaseRequestEmail, sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../lib/email.js'
 
 const prisma = new PrismaClient()
 const holdpointsRouter = Router()
@@ -669,6 +669,67 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
     console.log(`  Subject: Hold Point Released - ${holdPoint.lot.lotNumber}`)
     console.log(`  Hold Point: ${holdPoint.description}`)
     console.log(`  Released By: ${releasedByName || 'Unknown'}`)
+
+    // Feature #948 - Send HP release confirmation emails to contractor and superintendent
+    try {
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+      const lotUrl = `${baseUrl}/projects/${existingHP.lot.projectId}/lots/${existingHP.lot.id}`
+      const releasedAt = new Date().toLocaleString('en-AU', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+
+      // Send to contractors (site_engineer, foreman roles)
+      const contractorRoles = ['site_engineer', 'foreman', 'engineer']
+      const contractors = projectUsers.filter(pu => contractorRoles.includes(pu.role))
+
+      for (const contractor of contractors) {
+        await sendHPReleaseConfirmationEmail({
+          to: contractor.user.email,
+          recipientName: contractor.user.fullName || 'Site Team',
+          recipientRole: 'contractor',
+          projectName: existingHP.lot.project.name,
+          lotNumber: holdPoint.lot.lotNumber,
+          holdPointDescription: holdPoint.description,
+          releasedByName: releasedByName || 'Unknown',
+          releasedByOrg: releasedByOrg || undefined,
+          releaseMethod: releaseMethod || undefined,
+          releaseNotes: releaseNotes || undefined,
+          releasedAt,
+          lotUrl
+        })
+      }
+
+      // Send to superintendents
+      const superintendentRoles = ['superintendent', 'project_manager']
+      const superintendents = projectUsers.filter(pu => superintendentRoles.includes(pu.role))
+
+      for (const superintendent of superintendents) {
+        await sendHPReleaseConfirmationEmail({
+          to: superintendent.user.email,
+          recipientName: superintendent.user.fullName || 'Superintendent',
+          recipientRole: 'superintendent',
+          projectName: existingHP.lot.project.name,
+          lotNumber: holdPoint.lot.lotNumber,
+          holdPointDescription: holdPoint.description,
+          releasedByName: releasedByName || 'Unknown',
+          releasedByOrg: releasedByOrg || undefined,
+          releaseMethod: releaseMethod || undefined,
+          releaseNotes: releaseNotes || undefined,
+          releasedAt,
+          lotUrl
+        })
+      }
+
+      console.log(`[HP Release] Sent confirmation emails to ${contractors.length} contractors and ${superintendents.length} superintendents`)
+    } catch (emailError) {
+      console.error('[HP Release] Failed to send confirmation emails:', emailError)
+      // Don't fail the main request
+    }
 
     res.json({
       success: true,
