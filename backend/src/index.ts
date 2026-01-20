@@ -8,7 +8,7 @@ import * as trpcExpress from '@trpc/server/adapters/express'
 import { createContext } from './trpc/context.js'
 import { appRouter } from './trpc/router.js'
 import { errorHandler } from './middleware/errorHandler.js'
-import { requestLogger } from './middleware/requestLogger.js'
+import { requestLogger, getPerformanceMetrics } from './middleware/requestLogger.js'
 import { rateLimiter, authRateLimiter } from './middleware/rateLimiter.js'
 import { authRouter } from './routes/auth.js'
 import { projectsRouter } from './routes/projects.js'
@@ -112,6 +112,12 @@ app.use('/uploads', (req, res, next) => {
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+// Feature #751: Performance metrics endpoint
+app.get('/api/metrics', (_req, res) => {
+  const metrics = getPerformanceMetrics()
+  res.json(metrics)
 })
 
 // Feature #747: API key authentication middleware (checked before JWT)
