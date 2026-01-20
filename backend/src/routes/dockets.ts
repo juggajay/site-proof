@@ -300,6 +300,14 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        },
+        project: {
+          select: { id: true, name: true }
+        }
+      }
     })
 
     if (!docket) {
@@ -341,6 +349,64 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
       }
     })
 
+    // Feature #927 - Notify subcontractor users about docket approval
+    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`
+    const docketDate = docket.date.toISOString().split('T')[0]
+    const approverName = user.fullName || user.email
+
+    // Get all subcontractor users linked to this subcontractor company
+    const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
+      where: {
+        subcontractorCompanyId: docket.subcontractorCompanyId
+      }
+    })
+
+    // Get user details for these subcontractor users
+    const subcontractorUserIds = subcontractorUserLinks.map(su => su.userId)
+    const subcontractorUsers = subcontractorUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: subcontractorUserIds } },
+          select: { id: true, email: true, fullName: true }
+        })
+      : []
+
+    // Create notifications for subcontractor users
+    const notificationsToCreate = subcontractorUsers.map(su => ({
+      userId: su.id,
+      projectId: docket.projectId,
+      type: 'docket_approved',
+      title: 'Docket Approved',
+      message: `Your docket ${docketNumber} (${docketDate}) has been approved by ${approverName}. Status: Approved${adjustmentReason ? ` (with adjustments)` : ''}.`,
+      linkUrl: `/projects/${docket.projectId}/dockets`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+      console.log(`[Docket Approval] Created ${notificationsToCreate.length} in-app notifications for subcontractor`)
+    }
+
+    // Send email notifications to subcontractor users
+    for (const su of subcontractorUsers) {
+      try {
+        await sendNotificationIfEnabled(su.id, 'enabled', {
+          title: 'Docket Approved',
+          message: `Your docket ${docketNumber} (${docketDate}) has been approved by ${approverName}.\n\nProject: ${docket.project.name}\nStatus: Approved\n${foremanNotes ? `Notes: ${foremanNotes}` : ''}\n${adjustmentReason ? `Adjustment Reason: ${adjustmentReason}` : ''}`,
+          projectName: docket.project.name,
+          linkUrl: `/projects/${docket.projectId}/dockets`
+        })
+      } catch (emailError) {
+        console.error(`[Docket Approval] Failed to send email to user ${su.id}:`, emailError)
+      }
+    }
+
+    // Log for development
+    console.log(`[Docket Approval] Notification details:`)
+    console.log(`  Docket: ${docketNumber}`)
+    console.log(`  Approved by: ${approverName}`)
+    console.log(`  Notified: ${subcontractorUsers.map(su => su.email).join(', ')}`)
+
     res.json({
       message: 'Docket approved successfully',
       docket: {
@@ -349,7 +415,11 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
         subcontractor: updatedDocket.subcontractorCompany.companyName,
         status: updatedDocket.status,
         approvedAt: updatedDocket.approvedAt,
-      }
+      },
+      notifiedUsers: subcontractorUsers.map(su => ({
+        email: su.email,
+        fullName: su.fullName
+      }))
     })
   } catch (error) {
     console.error('Approve docket error:', error)
