@@ -7,8 +7,65 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import exifr from 'exifr'
+import crypto from 'crypto'
 
 const prisma = new PrismaClient()
+
+// Feature #741: Signed URL system for secure file downloads
+// Store signed URL tokens with expiration times
+interface SignedUrlToken {
+  documentId: string
+  userId: string
+  expiresAt: Date
+  createdAt: Date
+}
+
+const signedUrlTokens: Map<string, SignedUrlToken> = new Map()
+
+// Clean expired tokens periodically (every 5 minutes)
+setInterval(() => {
+  const now = new Date()
+  for (const [token, data] of signedUrlTokens.entries()) {
+    if (data.expiresAt < now) {
+      signedUrlTokens.delete(token)
+    }
+  }
+}, 5 * 60 * 1000)
+
+// Generate a signed URL token
+function generateSignedUrlToken(documentId: string, userId: string, expiresInMinutes: number = 15): string {
+  const token = crypto.randomBytes(32).toString('hex')
+  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000)
+
+  signedUrlTokens.set(token, {
+    documentId,
+    userId,
+    expiresAt,
+    createdAt: new Date()
+  })
+
+  return token
+}
+
+// Validate a signed URL token
+function validateSignedUrlToken(token: string, documentId: string): { valid: boolean; expired?: boolean; userId?: string } {
+  const data = signedUrlTokens.get(token)
+
+  if (!data) {
+    return { valid: false }
+  }
+
+  if (data.documentId !== documentId) {
+    return { valid: false }
+  }
+
+  if (data.expiresAt < new Date()) {
+    signedUrlTokens.delete(token)
+    return { valid: false, expired: true }
+  }
+
+  return { valid: true, userId: data.userId }
+}
 
 // Feature #479: Extract EXIF metadata from image files
 async function extractPhotoMetadata(filePath: string, mimeType: string): Promise<{
@@ -69,7 +126,114 @@ async function extractPhotoMetadata(filePath: string, mimeType: string): Promise
 }
 const router = Router()
 
-// Apply auth middleware
+// Feature #741: Public route for signed URL download (no auth required)
+// This MUST be defined BEFORE the requireAuth middleware
+router.get('/download/:documentId', async (req: Request, res: Response) => {
+  try {
+    const { documentId } = req.params
+    const { token } = req.query
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({
+        error: 'Token is required',
+        message: 'Please provide a valid signed URL token'
+      })
+    }
+
+    // Validate the signed token
+    const validation = validateSignedUrlToken(token, documentId)
+
+    if (!validation.valid) {
+      if (validation.expired) {
+        return res.status(410).json({
+          error: 'URL expired',
+          message: 'This signed URL has expired. Please request a new one.'
+        })
+      }
+      return res.status(403).json({
+        error: 'Invalid token',
+        message: 'The signed URL token is invalid or does not match this document.'
+      })
+    }
+
+    // Get document
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+    })
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' })
+    }
+
+    const filePath = path.join(process.cwd(), 'uploads', 'documents', path.basename(document.fileUrl))
+    if (!fs.existsSync(filePath)) {
+      // Try alternative path structure
+      const altPath = path.join(process.cwd(), document.fileUrl)
+      if (!fs.existsSync(altPath)) {
+        return res.status(404).json({ error: 'File not found on server' })
+      }
+      // Set content disposition header for download
+      res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`)
+      res.setHeader('Content-Type', document.mimeType || 'application/octet-stream')
+      console.log(`[Signed URL Download] Document ${documentId} downloaded using signed URL by user ${validation.userId}`)
+      return res.sendFile(altPath)
+    }
+
+    // Set content disposition header for download
+    res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`)
+    res.setHeader('Content-Type', document.mimeType || 'application/octet-stream')
+
+    // Log the download for audit purposes
+    console.log(`[Signed URL Download] Document ${documentId} downloaded using signed URL by user ${validation.userId}`)
+
+    res.sendFile(filePath)
+  } catch (error) {
+    console.error('Error downloading document via signed URL:', error)
+    res.status(500).json({ error: 'Failed to download document' })
+  }
+})
+
+// Feature #741: Public route for token validation (no auth required)
+router.get('/signed-url/validate', async (req: Request, res: Response) => {
+  try {
+    const { token, documentId } = req.query
+
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Token is required' })
+    }
+
+    if (!documentId || typeof documentId !== 'string') {
+      return res.status(400).json({ error: 'Document ID is required' })
+    }
+
+    const validation = validateSignedUrlToken(token, documentId)
+
+    if (!validation.valid) {
+      return res.json({
+        valid: false,
+        expired: validation.expired || false,
+        message: validation.expired ? 'Token has expired' : 'Token is invalid'
+      })
+    }
+
+    // Get token data for response
+    const tokenData = signedUrlTokens.get(token)
+
+    res.json({
+      valid: true,
+      expired: false,
+      documentId,
+      expiresAt: tokenData?.expiresAt.toISOString(),
+      createdAt: tokenData?.createdAt.toISOString(),
+      message: 'Token is valid'
+    })
+  } catch (error) {
+    console.error('Error validating signed URL:', error)
+    res.status(500).json({ error: 'Failed to validate token' })
+  }
+})
+
+// Apply auth middleware for all subsequent routes
 router.use(requireAuth)
 
 // Configure multer for file uploads
@@ -435,7 +599,7 @@ router.get('/:documentId/versions', async (req: Request, res: Response) => {
   }
 })
 
-// GET /api/documents/file/:documentId - Get document file
+// GET /api/documents/file/:documentId - Get document file (requires auth)
 router.get('/file/:documentId', async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
@@ -467,6 +631,58 @@ router.get('/file/:documentId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching document file:', error)
     res.status(500).json({ error: 'Failed to fetch document file' })
+  }
+})
+
+// Feature #741: POST /api/documents/:documentId/signed-url - Generate a signed URL for file download
+// This creates a time-limited, secure URL that can be shared without requiring auth
+router.post('/:documentId/signed-url', async (req: Request, res: Response) => {
+  try {
+    const { documentId } = req.params
+    const { expiresInMinutes = 15 } = req.body
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+    })
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, document.projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    // Validate expiry time (1 minute to 24 hours)
+    const validExpiry = Math.max(1, Math.min(1440, parseInt(String(expiresInMinutes)) || 15))
+
+    // Generate signed token
+    const token = generateSignedUrlToken(documentId, userId, validExpiry)
+    const expiresAt = new Date(Date.now() + validExpiry * 60 * 1000)
+
+    // Construct the signed URL
+    const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 4007}`
+    const signedUrl = `${baseUrl}/api/documents/download/${documentId}?token=${token}`
+
+    res.json({
+      signedUrl,
+      token,
+      documentId,
+      filename: document.filename,
+      mimeType: document.mimeType,
+      expiresAt: expiresAt.toISOString(),
+      expiresInMinutes: validExpiry,
+      message: `Signed URL valid for ${validExpiry} minutes`
+    })
+  } catch (error) {
+    console.error('Error generating signed URL:', error)
+    res.status(500).json({ error: 'Failed to generate signed URL' })
   }
 })
 
