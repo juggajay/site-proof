@@ -192,6 +192,115 @@ subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
   }
 })
 
+// Feature #484: GET /api/subcontractors/invitation/:id - Get invitation details (no auth required)
+// This allows the frontend to display invitation info before user creates account
+subcontractorsRouter.get('/invitation/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      include: {
+        project: { select: { id: true, name: true, companyId: true } }
+      }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Invitation not found or expired' })
+    }
+
+    // Get the head contractor company name
+    const headContractor = await prisma.company.findUnique({
+      where: { id: subcontractor.project.companyId },
+      select: { name: true }
+    })
+
+    res.json({
+      invitation: {
+        id: subcontractor.id,
+        companyName: subcontractor.companyName,
+        projectName: subcontractor.project.name,
+        headContractorName: headContractor?.name || 'Unknown',
+        primaryContactEmail: subcontractor.primaryContactEmail,
+        status: subcontractor.status
+      }
+    })
+  } catch (error) {
+    console.error('Get invitation error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Feature #484: POST /api/subcontractors/invitation/:id/accept - Accept invitation and link user
+subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+
+    // Find the subcontractor company
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      include: {
+        project: { select: { id: true, name: true } }
+      }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Invitation not found or expired' })
+    }
+
+    // Check if user is already linked to a subcontractor company
+    const existingLink = await prisma.subcontractorUser.findFirst({
+      where: { userId: user.id }
+    })
+
+    if (existingLink) {
+      return res.status(400).json({
+        error: 'Already linked',
+        message: 'Your account is already linked to a subcontractor company'
+      })
+    }
+
+    // Link user to subcontractor company
+    await prisma.subcontractorUser.create({
+      data: {
+        userId: user.id,
+        subcontractorCompanyId: subcontractor.id,
+        role: 'admin' // First user is admin
+      }
+    })
+
+    // Update user's role to subcontractor_admin
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { roleInCompany: 'subcontractor_admin' }
+    })
+
+    // Update subcontractor status to approved if pending
+    if (subcontractor.status === 'pending_approval') {
+      await prisma.subcontractorCompany.update({
+        where: { id: subcontractor.id },
+        data: { status: 'approved' }
+      })
+    }
+
+    console.log(`[Invitation Accept] User ${user.email} accepted invitation for ${subcontractor.companyName}`)
+
+    res.json({
+      message: 'Invitation accepted successfully',
+      subcontractor: {
+        id: subcontractor.id,
+        companyName: subcontractor.companyName,
+        projectName: subcontractor.project.name,
+        status: 'approved'
+      }
+    })
+  } catch (error) {
+    console.error('Accept invitation error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/subcontractors/my-company - Get the current user's subcontractor company
 subcontractorsRouter.get('/my-company', async (req, res) => {
   try {
