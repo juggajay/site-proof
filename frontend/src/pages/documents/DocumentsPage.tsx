@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 import { AlertTriangle } from 'lucide-react'
+import { PDFViewer } from '../../components/ui/PDFViewer'  // Feature #446: React-PDF viewer
 
 interface Document {
   id: string
@@ -983,15 +984,11 @@ export function DocumentsPage() {
           {/* Content Area */}
           <div className="flex-1 overflow-auto flex items-center justify-center p-4">
             {isPdf(viewerDoc.mimeType) ? (
-              <iframe
-                src={`${API_URL}${viewerDoc.fileUrl}#toolbar=1&navpanes=0`}
-                className="bg-white rounded shadow-lg"
-                style={{
-                  width: `${viewerZoom}%`,
-                  height: '90vh',
-                  maxWidth: '100%',
-                }}
-                title={viewerDoc.filename}
+              /* Feature #446: Use React-PDF viewer for better PDF rendering */
+              <PDFViewer
+                url={`${API_URL}${viewerDoc.fileUrl}`}
+                filename={viewerDoc.filename}
+                className="w-full h-full max-w-5xl"
               />
             ) : isImage(viewerDoc.mimeType) ? (
               <div
