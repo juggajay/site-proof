@@ -798,6 +798,50 @@ projectsRouter.patch('/:id/users/:userId', async (req, res) => {
       req
     })
 
+    // Feature #940 - Send role change notification to the user
+    if (oldRole !== role) {
+      try {
+        // Get project details for the notification
+        const projectDetails = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { id: true, name: true, projectNumber: true }
+        })
+
+        const changerName = currentUser.fullName || currentUser.email || 'An administrator'
+        const formattedOldRole = oldRole.replace(/_/g, ' ')
+        const formattedNewRole = role.replace(/_/g, ' ')
+
+        // Create in-app notification
+        await prisma.notification.create({
+          data: {
+            userId: targetUserId,
+            projectId,
+            type: 'role_change',
+            title: 'Role Changed',
+            message: `Your role on ${projectDetails?.name || 'a project'} has been changed from ${formattedOldRole} to ${formattedNewRole} by ${changerName}.`,
+            linkUrl: `/projects/${projectId}`
+          }
+        })
+
+        // Send email notification
+        await sendNotificationIfEnabled(
+          targetUserId,
+          'mentions', // Using mentions type for role changes
+          {
+            title: 'Role Changed',
+            message: `Your role on ${projectDetails?.name || 'a project'} has been changed from ${formattedOldRole} to ${formattedNewRole}.`,
+            projectName: projectDetails?.name,
+            linkUrl: `/projects/${projectId}`
+          }
+        )
+
+        console.log(`[Role Change] Notification sent to ${targetProjectUser.user.email} for project ${projectDetails?.name}: ${formattedOldRole} -> ${formattedNewRole}`)
+      } catch (notifError) {
+        console.error('[Role Change] Failed to send notification:', notifError)
+        // Don't fail the main request if notifications fail
+      }
+    }
+
     res.json({
       message: 'User role updated successfully',
       projectUser: {
