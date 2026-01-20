@@ -347,6 +347,11 @@ docketsRouter.post('/:id/submit', async (req, res) => {
         },
         project: {
           select: { id: true, name: true }
+        },
+        labourEntries: {
+          include: {
+            lotAllocations: true
+          }
         }
       }
     })
@@ -360,6 +365,21 @@ docketsRouter.post('/:id/submit', async (req, res) => {
         error: 'Bad Request',
         message: 'Only draft dockets can be submitted'
       })
+    }
+
+    // Feature #890: Require lot selection for docket submission
+    // Check if docket has labour entries that need lot allocation
+    if (docket.labourEntries.length > 0) {
+      const hasAnyLotAllocation = docket.labourEntries.some(
+        entry => entry.lotAllocations && entry.lotAllocations.length > 0
+      )
+      if (!hasAnyLotAllocation) {
+        return res.status(400).json({
+          error: 'Lot required',
+          message: 'At least one labour entry must be allocated to a lot before submitting the docket.',
+          code: 'LOT_REQUIRED'
+        })
+      }
     }
 
     const updatedDocket = await prisma.dailyDocket.update({
