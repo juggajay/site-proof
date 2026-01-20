@@ -805,6 +805,114 @@ Project: ${data.projectName}
 }
 
 /**
+ * Send magic link login email (Feature #1005)
+ * Passwordless login via email link
+ */
+export async function sendMagicLinkEmail(data: {
+  to: string
+  userName?: string
+  magicLinkUrl: string
+  expiresInMinutes: number
+}): Promise<EmailResult> {
+  const subject = `[SiteProof] Your Login Link`
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+    .button { display: inline-block; background: #16a34a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; font-size: 16px; }
+    .button:hover { opacity: 0.9; }
+    .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; background: #f3f4f6; border-radius: 0 0 8px 8px; }
+    .warning { background: #fef3c7; padding: 12px; border-radius: 6px; border-left: 4px solid #f59e0b; margin: 15px 0; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔐 Sign In to SiteProof</h1>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0;">Hi${data.userName ? ` ${data.userName}` : ''},</h2>
+
+      <p>Click the button below to sign in to your SiteProof account. No password needed!</p>
+
+      <div style="text-align: center;">
+        <a href="${data.magicLinkUrl}" class="button">
+          Sign In to SiteProof
+        </a>
+      </div>
+
+      <div class="warning">
+        <strong>⏰ This link expires in ${data.expiresInMinutes} minutes.</strong><br>
+        If you didn't request this link, you can safely ignore this email.
+      </div>
+
+      <p style="color: #6b7280; font-size: 14px;">
+        If the button doesn't work, copy and paste this link into your browser:<br>
+        <span style="word-break: break-all;">${data.magicLinkUrl}</span>
+      </p>
+    </div>
+    <div class="footer">
+      <p>This login link was requested from SiteProof.</p>
+      <p>For security, this link can only be used once.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `
+
+  const text = `
+Hi${data.userName ? ` ${data.userName}` : ''},
+
+Sign In to SiteProof
+--------------------
+
+Click the link below to sign in to your account. No password needed!
+
+${data.magicLinkUrl}
+
+This link expires in ${data.expiresInMinutes} minutes.
+
+If you didn't request this link, you can safely ignore this email.
+For security, this link can only be used once.
+
+---
+This login link was requested from SiteProof.
+  `
+
+  // Also log to console in dev mode for easy testing
+  console.log('\n========================================')
+  console.log('📧 MAGIC LINK LOGIN EMAIL')
+  console.log('========================================')
+  console.log('To:', data.to)
+  console.log('Subject:', subject)
+  console.log('----------------------------------------')
+  console.log('Hi' + (data.userName ? ` ${data.userName}` : '') + ',')
+  console.log('')
+  console.log('Click the link below to sign in (no password needed):')
+  console.log(data.magicLinkUrl)
+  console.log('')
+  console.log('Expires in:', data.expiresInMinutes, 'minutes')
+  console.log('========================================\n')
+
+  return sendEmail({
+    to: data.to,
+    subject,
+    html,
+    text,
+  })
+}
+
+/**
  * Digest notification item
  */
 export interface DigestItem {

@@ -1,9 +1,11 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { generateToken, generateExpiredToken, hashPassword, verifyPassword, verifyToken } from '../lib/auth.js'
+import { sendMagicLinkEmail } from '../lib/email.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
+import crypto from 'crypto'
 
 export const authRouter = Router()
 
@@ -202,6 +204,161 @@ authRouter.post('/login', async (req, res) => {
     })
   } catch (error) {
     console.error('Login error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// Magic link expiry time in minutes
+const MAGIC_LINK_EXPIRY_MINUTES = 15
+
+// POST /api/auth/magic-link/request - Request a magic link login email (Feature #1005)
+authRouter.post('/magic-link/request', async (req, res) => {
+  try {
+    const { email } = req.body
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' })
+    }
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+      },
+    })
+
+    // Always return success to prevent email enumeration
+    if (!user) {
+      console.log(`[Magic Link] Request for non-existent email: ${email}`)
+      return res.json({
+        message: 'If an account exists with this email, a login link has been sent.',
+      })
+    }
+
+    // Generate magic link token
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000)
+
+    // Store token using password reset token table (reusing existing infrastructure)
+    // Delete any existing tokens for this user first
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id }
+    })
+
+    // Create new magic link token
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        token: `magic_${token}`, // Prefix to distinguish from password reset tokens
+        expiresAt,
+      },
+    })
+
+    // Generate magic link URL
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+    const magicLinkUrl = `${baseUrl}/auth/magic-link?token=magic_${token}`
+
+    // Send magic link email
+    await sendMagicLinkEmail({
+      to: user.email,
+      userName: user.fullName || undefined,
+      magicLinkUrl,
+      expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
+    })
+
+    console.log(`[Magic Link] Sent login link to ${user.email}`)
+
+    res.json({
+      message: 'If an account exists with this email, a login link has been sent.',
+    })
+  } catch (error) {
+    console.error('Magic link request error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
+// POST /api/auth/magic-link/verify - Verify magic link and login (Feature #1005)
+authRouter.post('/magic-link/verify', async (req, res) => {
+  try {
+    const { token } = req.body
+
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' })
+    }
+
+    // Only accept magic_ prefixed tokens
+    if (!token.startsWith('magic_')) {
+      return res.status(400).json({ message: 'Invalid token format' })
+    }
+
+    // Find the token
+    const tokenRecord = await prisma.passwordResetToken.findUnique({
+      where: { token },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            roleInCompany: true,
+            companyId: true,
+            company: {
+              select: { name: true },
+            },
+          },
+        },
+      },
+    })
+
+    if (!tokenRecord) {
+      return res.status(400).json({ message: 'Invalid or expired link' })
+    }
+
+    // Check if token has expired
+    if (tokenRecord.expiresAt < new Date()) {
+      // Delete expired token
+      await prisma.passwordResetToken.delete({
+        where: { token },
+      })
+      return res.status(400).json({ message: 'This link has expired. Please request a new one.' })
+    }
+
+    // Check if token has already been used
+    if (tokenRecord.usedAt) {
+      return res.status(400).json({ message: 'This link has already been used. Please request a new one.' })
+    }
+
+    // Mark token as used
+    await prisma.passwordResetToken.update({
+      where: { token },
+      data: { usedAt: new Date() },
+    })
+
+    // Generate JWT token for the user
+    const authToken = generateToken({
+      userId: tokenRecord.user.id,
+      email: tokenRecord.user.email,
+      role: tokenRecord.user.roleInCompany,
+    })
+
+    console.log(`[Magic Link] User ${tokenRecord.user.email} logged in via magic link`)
+
+    res.json({
+      user: {
+        id: tokenRecord.user.id,
+        email: tokenRecord.user.email,
+        fullName: tokenRecord.user.fullName,
+        role: tokenRecord.user.roleInCompany,
+        companyId: tokenRecord.user.companyId,
+        companyName: tokenRecord.user.company?.name || null,
+      },
+      token: authToken,
+    })
+  } catch (error) {
+    console.error('Magic link verify error:', error)
     res.status(500).json({ message: 'Internal server error' })
   }
 })
