@@ -353,6 +353,84 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
       }
     }
 
+    // Feature #932 - Notify relevant users when a claim is paid
+    if (status === 'paid' && previousStatus !== 'paid' && paidAmount !== undefined) {
+      try {
+        // Get the user who recorded the payment
+        const payer = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, email: true, fullName: true }
+        })
+        const payerName = payer?.fullName || payer?.email || 'Unknown'
+
+        // Get all project managers on this project
+        const projectManagers = await prisma.projectUser.findMany({
+          where: {
+            projectId,
+            role: 'project_manager',
+            status: { in: ['active', 'accepted'] }
+          }
+        })
+
+        // Get user details for project managers
+        const pmUserIds = projectManagers.map(pm => pm.userId)
+        const pmUsers = pmUserIds.length > 0
+          ? await prisma.user.findMany({
+              where: { id: { in: pmUserIds } },
+              select: { id: true, email: true, fullName: true }
+            })
+          : []
+
+        // Format paid amount for display
+        const formattedAmount = new Intl.NumberFormat('en-AU', {
+          style: 'currency',
+          currency: 'AUD'
+        }).format(paidAmount)
+
+        // Create notifications for project managers
+        const notificationsToCreate = pmUsers.map(pm => ({
+          userId: pm.id,
+          projectId,
+          type: 'claim_paid',
+          title: 'Claim Payment Received',
+          message: `Claim #${claim.claimNumber} payment of ${formattedAmount} has been recorded${paymentReference ? ` (Ref: ${paymentReference})` : ''}.`,
+          linkUrl: `/projects/${projectId}/claims`
+        }))
+
+        if (notificationsToCreate.length > 0) {
+          await prisma.notification.createMany({
+            data: notificationsToCreate
+          })
+          console.log(`[Claim Payment] Created ${notificationsToCreate.length} in-app notifications for project managers`)
+        }
+
+        // Send email notifications to project managers
+        for (const pm of pmUsers) {
+          try {
+            await sendNotificationIfEnabled(pm.id, 'enabled', {
+              title: 'Claim Payment Received',
+              message: `Claim #${claim.claimNumber} payment has been recorded.\n\nProject: ${claim.project.name}\nPaid Amount: ${formattedAmount}${paymentReference ? `\nPayment Reference: ${paymentReference}` : ''}\n\nPlease review the payment details in the system.`,
+              projectName: claim.project.name,
+              linkUrl: `/projects/${projectId}/claims`
+            })
+          } catch (emailError) {
+            console.error(`[Claim Payment] Failed to send email to PM ${pm.id}:`, emailError)
+          }
+        }
+
+        // Log for development
+        console.log(`[Claim Payment] Notification details:`)
+        console.log(`  Claim: #${claim.claimNumber}`)
+        console.log(`  Recorded by: ${payerName}`)
+        console.log(`  Paid amount: ${formattedAmount}`)
+        console.log(`  Payment ref: ${paymentReference || 'N/A'}`)
+        console.log(`  Notified PMs: ${pmUsers.map(pm => pm.email).join(', ') || 'None'}`)
+      } catch (notifError) {
+        console.error('[Claim Payment] Failed to send notifications:', notifError)
+        // Don't fail the main request if notifications fail
+      }
+    }
+
     res.json({ claim: updatedClaim })
   } catch (error) {
     console.error('Error updating claim:', error)
