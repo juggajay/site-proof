@@ -154,6 +154,17 @@ router.post('/:projectId/claims', async (req, res) => {
       return res.status(400).json({ error: 'No valid conformed lots found' })
     }
 
+    // Feature #894: Verify all lots have a rate (budgetAmount) set
+    const lotsWithoutRate = lots.filter(lot => !lot.budgetAmount || Number(lot.budgetAmount) <= 0)
+    if (lotsWithoutRate.length > 0) {
+      return res.status(400).json({
+        error: 'Rate required',
+        message: `The following lots do not have a rate set: ${lotsWithoutRate.map(l => l.lotNumber).join(', ')}. Please set a budget amount for each lot before adding to a claim.`,
+        code: 'RATE_REQUIRED',
+        lotsWithoutRate: lotsWithoutRate.map(l => ({ id: l.id, lotNumber: l.lotNumber }))
+      })
+    }
+
     // Calculate total claimed amount from lot budget amounts
     const totalClaimedAmount = lots.reduce((sum, lot) => {
       return sum + (lot.budgetAmount ? Number(lot.budgetAmount) : 0)
