@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { sendSubcontractorInvitationEmail } from '../lib/email.js'
 
 export const subcontractorsRouter = Router()
 
@@ -69,24 +70,28 @@ subcontractorsRouter.post('/invite', async (req, res) => {
 
     console.log(`Subcontractor ${companyName} invited to project ${project.name} by ${user.email}`)
 
-    // Log email invitation (in production, this would send an actual email)
-    const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:5175'}/subcontractor-portal/accept-invite?id=${subcontractor.id}`
-    console.log('\n========================================')
-    console.log('📧 SUBCONTRACTOR INVITATION EMAIL')
-    console.log('========================================')
-    console.log(`To: ${primaryContactEmail}`)
-    console.log(`Subject: Invitation to join ${project.name} on SiteProof`)
-    console.log('----------------------------------------')
-    console.log(`Hi ${primaryContactName},`)
-    console.log('')
-    console.log(`You have been invited to join the project "${project.name}" on SiteProof`)
-    console.log(`as a subcontractor for ${companyName}.`)
-    console.log('')
-    console.log(`Click the link below to accept your invitation and set up your account:`)
-    console.log(`${inviteUrl}`)
-    console.log('')
-    console.log(`This invitation was sent by ${user.email}.`)
-    console.log('========================================\n')
+    // Feature #942 - Send subcontractor invitation email with setup link
+    const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/subcontractor-portal/accept-invite?id=${subcontractor.id}`
+
+    try {
+      const emailResult = await sendSubcontractorInvitationEmail({
+        to: primaryContactEmail,
+        contactName: primaryContactName,
+        companyName,
+        projectName: project.name,
+        inviterEmail: user.email,
+        inviteUrl
+      })
+
+      if (emailResult.success) {
+        console.log(`[Subcontractor Invite] Email sent successfully to ${primaryContactEmail}`)
+      } else {
+        console.log(`[Subcontractor Invite] Email failed: ${emailResult.error}`)
+      }
+    } catch (emailError) {
+      console.error('[Subcontractor Invite] Failed to send email:', emailError)
+      // Don't fail the invite if email fails
+    }
 
     res.status(201).json({
       message: 'Subcontractor invited successfully',
