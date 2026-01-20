@@ -642,6 +642,44 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
       data: updateData
     })
 
+    // Feature #943 - Send notification when employee rate is approved
+    if (status === 'approved') {
+      try {
+        // Get subcontractor company and project details
+        const subcontractor = await prisma.subcontractorCompany.findUnique({
+          where: { id },
+          include: {
+            project: { select: { id: true, name: true } }
+          }
+        })
+
+        // Get subcontractor users to notify
+        const subcontractorUsers = await prisma.subcontractorUser.findMany({
+          where: { subcontractorCompanyId: id },
+          include: { user: { select: { id: true, email: true } } }
+        })
+
+        // Create notification for each subcontractor user
+        for (const su of subcontractorUsers) {
+          await prisma.notification.create({
+            data: {
+              userId: su.user.id,
+              projectId: subcontractor?.project?.id || null,
+              type: 'rate_approved',
+              title: 'Employee Rate Approved',
+              message: `The rate for ${updated.name} ($${Number(updated.hourlyRate).toFixed(2)}/hr) has been approved. You can now include this employee in your dockets.`,
+              linkUrl: `/subcontractor-portal`
+            }
+          })
+        }
+
+        console.log(`[Rate Approval] Employee ${updated.name} rate approved for ${subcontractor?.companyName}, notified ${subcontractorUsers.length} users`)
+      } catch (notifError) {
+        console.error('[Rate Approval] Failed to send notification:', notifError)
+        // Don't fail the main request
+      }
+    }
+
     res.json({
       employee: {
         id: updated.id,
@@ -739,6 +777,49 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
       where: { id: plantId },
       data: updateData
     })
+
+    // Feature #943 - Send notification when plant rate is approved
+    if (status === 'approved') {
+      try {
+        // Get subcontractor company and project details
+        const subcontractor = await prisma.subcontractorCompany.findUnique({
+          where: { id },
+          include: {
+            project: { select: { id: true, name: true } }
+          }
+        })
+
+        // Get subcontractor users to notify
+        const subcontractorUsers = await prisma.subcontractorUser.findMany({
+          where: { subcontractorCompanyId: id },
+          include: { user: { select: { id: true, email: true } } }
+        })
+
+        // Format rates for display
+        const dryRateStr = `$${Number(updated.dryRate).toFixed(2)}`
+        const wetRateStr = updated.wetRate ? `/$${Number(updated.wetRate).toFixed(2)}` : ''
+        const rateDisplay = `${dryRateStr}${wetRateStr}/hr (dry${wetRateStr ? '/wet' : ''})`
+
+        // Create notification for each subcontractor user
+        for (const su of subcontractorUsers) {
+          await prisma.notification.create({
+            data: {
+              userId: su.user.id,
+              projectId: subcontractor?.project?.id || null,
+              type: 'rate_approved',
+              title: 'Plant Rate Approved',
+              message: `The rate for ${updated.type}${updated.description ? ` - ${updated.description}` : ''} (${rateDisplay}) has been approved. You can now include this plant in your dockets.`,
+              linkUrl: `/subcontractor-portal`
+            }
+          })
+        }
+
+        console.log(`[Rate Approval] Plant ${updated.type} rate approved for ${subcontractor?.companyName}, notified ${subcontractorUsers.length} users`)
+      } catch (notifError) {
+        console.error('[Rate Approval] Failed to send notification:', notifError)
+        // Don't fail the main request
+      }
+    }
 
     res.json({
       plant: {
