@@ -297,6 +297,16 @@ lotsRouter.post('/', async (req, res) => {
       })
     }
 
+    // Feature #854: Structure ID required for structure lot type
+    const structureId = req.body.structureId
+    if (lotType === 'structure' && !structureId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Structure ID is required for structure lot type',
+        code: 'STRUCTURE_ID_REQUIRED'
+      })
+    }
+
     // Check if user has creator role - either via company role or project membership
     let hasPermission = LOT_CREATORS.includes(user.roleInCompany || '')
 
@@ -333,6 +343,8 @@ lotsRouter.post('/', async (req, res) => {
         chainageEnd,
         assignedSubcontractorId: assignedSubcontractorId || null,
         areaZone: areaZone || null,
+        structureId: structureId || null,  // Feature #854
+        structureElement: req.body.structureElement || null,  // Feature #854
       },
       select: {
         id: true,
@@ -633,16 +645,26 @@ lotsRouter.patch('/:id', async (req, res) => {
       assignedSubcontractorId,
     } = req.body
 
-    // Feature #853: Validate area zone if changing to area lot type
-    const existingLot = await prisma.lot.findUnique({ where: { id }, select: { lotType: true, areaZone: true } })
+    // Feature #853 & #854: Validate area zone and structure ID for respective lot types
+    const existingLot = await prisma.lot.findUnique({ where: { id }, select: { lotType: true, areaZone: true, structureId: true } })
     const newLotType = req.body.lotType ?? existingLot?.lotType
     const newAreaZone = areaZone ?? existingLot?.areaZone
+    const newStructureId = req.body.structureId ?? existingLot?.structureId
 
     if (newLotType === 'area' && !newAreaZone) {
       return res.status(400).json({
         error: 'Bad Request',
         message: 'Area zone is required for area lot type',
         code: 'AREA_ZONE_REQUIRED'
+      })
+    }
+
+    // Feature #854: Structure ID required for structure lot type
+    if (newLotType === 'structure' && !newStructureId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Structure ID is required for structure lot type',
+        code: 'STRUCTURE_ID_REQUIRED'
       })
     }
 
@@ -658,6 +680,8 @@ lotsRouter.patch('/:id', async (req, res) => {
     if (offsetCustom !== undefined) updateData.offsetCustom = offsetCustom
     if (layer !== undefined) updateData.layer = layer
     if (areaZone !== undefined) updateData.areaZone = areaZone
+    if (req.body.structureId !== undefined) updateData.structureId = req.body.structureId  // Feature #854
+    if (req.body.structureElement !== undefined) updateData.structureElement = req.body.structureElement  // Feature #854
     if (status !== undefined) updateData.status = status
     // Only PMs and above can set budget
     if (budgetAmount !== undefined && ['owner', 'admin', 'project_manager'].includes(userProjectRole)) {
