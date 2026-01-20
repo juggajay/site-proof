@@ -9,6 +9,7 @@ import { createContext } from './trpc/context.js'
 import { appRouter } from './trpc/router.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestLogger } from './middleware/requestLogger.js'
+import { rateLimiter, authRateLimiter } from './middleware/rateLimiter.js'
 import { authRouter } from './routes/auth.js'
 import { projectsRouter } from './routes/projects.js'
 import { lotsRouter } from './routes/lots.js'
@@ -35,43 +36,57 @@ const PORT = process.env.PORT || 3001
 
 // Security middleware
 app.use(helmet())
+// Use a function for CORS origin to ensure proper handling
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5175',
-    'http://localhost:5176',
-    'http://localhost:5177',
-    'http://localhost:5178',
-    'http://localhost:5179',
-    'http://localhost:5180',
-    'http://localhost:5181',
-    'http://localhost:5182',
-    'http://localhost:5183',
-    'http://localhost:5184',
-    'http://localhost:5185',
-    'http://localhost:5186',
-    'http://localhost:5187',
-    'http://localhost:5188',
-    'http://localhost:5189',
-    'http://localhost:5190',
-    'http://localhost:5191',
-    'http://localhost:5192',
-    'http://localhost:5193',
-    'http://localhost:5194',
-    'http://localhost:5195',
-    'http://localhost:5196',
-    'http://localhost:5197',
-    'http://localhost:5198',
-    'http://localhost:5199',
-    'http://localhost:5200',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174',
-    'http://127.0.0.1:5177',
-    'http://127.0.0.1:5179',
-    'http://127.0.0.1:5182',
-    process.env.FRONTEND_URL || ''
-  ].filter(Boolean),
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5175',
+      'http://localhost:5176',
+      'http://localhost:5177',
+      'http://localhost:5178',
+      'http://localhost:5179',
+      'http://localhost:5180',
+      'http://localhost:5181',
+      'http://localhost:5182',
+      'http://localhost:5183',
+      'http://localhost:5184',
+      'http://localhost:5185',
+      'http://localhost:5186',
+      'http://localhost:5187',
+      'http://localhost:5188',
+      'http://localhost:5189',
+      'http://localhost:5190',
+      'http://localhost:5191',
+      'http://localhost:5192',
+      'http://localhost:5193',
+      'http://localhost:5194',
+      'http://localhost:5195',
+      'http://localhost:5196',
+      'http://localhost:5197',
+      'http://localhost:5198',
+      'http://localhost:5199',
+      'http://localhost:5200',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174',
+      'http://127.0.0.1:5177',
+      'http://127.0.0.1:5179',
+      'http://127.0.0.1:5182',
+      'http://127.0.0.1:5185',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(null, false);
+    }
+  },
   credentials: true
 }))
 
@@ -81,6 +96,9 @@ app.use(express.urlencoded({ extended: true }))
 
 // Request logging
 app.use(requestLogger)
+
+// Rate limiting (Feature #742)
+app.use(rateLimiter)
 
 // Serve static files from uploads directory (for avatars, documents, etc.)
 // Add CORS headers for cross-origin image loading
@@ -96,7 +114,8 @@ app.get('/health', (_req, res) => {
 })
 
 // REST API routes
-app.use('/api/auth', authRouter)
+// Auth routes have stricter rate limiting to prevent brute force attacks
+app.use('/api/auth', authRateLimiter, authRouter)
 app.use('/api/projects', projectsRouter)
 app.use('/api/lots', lotsRouter)
 app.use('/api/ncrs', ncrsRouter)
