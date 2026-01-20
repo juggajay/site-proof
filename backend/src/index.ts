@@ -35,6 +35,7 @@ import { consentRouter } from './routes/consent.js'
 import { mfaRouter } from './routes/mfa.js'
 import { oauthRouter } from './routes/oauth.js'
 import webhooksRouter from './routes/webhooks.js'
+import { pushNotificationsRouter } from './routes/pushNotifications.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -194,6 +195,7 @@ app.use('/api/consent', consentRouter)  // Feature #776: Privacy consent trackin
 app.use('/api/mfa', mfaRouter)  // Feature #22, #420, #421: MFA/2FA support
 app.use('/api/auth', oauthRouter)  // Feature #414, #1004: Google OAuth support
 app.use('/api/webhooks', webhooksRouter)  // Feature #746: Webhook external integration
+app.use('/api/push', pushNotificationsRouter)  // Feature #657: Mobile push notifications
 
 // tRPC
 app.use(

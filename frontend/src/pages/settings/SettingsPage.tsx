@@ -5,6 +5,7 @@ import { useDateFormat, DateFormat } from '@/lib/dateFormat'
 import { useTimezone, TIMEZONES } from '@/lib/timezone'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut, Mail, Bell, Send, Lock, Smartphone, Key, Eye, EyeOff, Copy, CheckCircle2 } from 'lucide-react'
+import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings'
 
 // App version info
 const APP_VERSION = '1.3.0'
@@ -808,6 +809,9 @@ export function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Push Notification Settings (Feature #657) */}
+      <PushNotificationSettings />
 
       {/* Security Section - Two-Factor Authentication (Feature #22, #420, #421) */}
       <div className="rounded-lg border bg-card p-6 space-y-4">
