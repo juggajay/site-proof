@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { sendNotificationIfEnabled } from './notifications.js'
 
 export const testResultsRouter = Router()
 
@@ -1519,6 +1520,79 @@ testResultsRouter.post('/:id/status', async (req, res) => {
         },
       },
     })
+
+    // Feature #933 - Notify engineers when test results are received (pending verification)
+    if (status === 'results_received' && currentStatus !== 'results_received') {
+      try {
+        // Get project info
+        const project = await prisma.project.findUnique({
+          where: { id: testResult.projectId },
+          select: { id: true, name: true }
+        })
+
+        // Get site engineers with active or accepted status
+        const siteEngineers = await prisma.projectUser.findMany({
+          where: {
+            projectId: testResult.projectId,
+            role: 'site_engineer',
+            status: { in: ['active', 'accepted'] }
+          }
+        })
+
+        // Get user details for engineers
+        const engineerUserIds = siteEngineers.map(se => se.userId)
+        const engineerUsers = engineerUserIds.length > 0
+          ? await prisma.user.findMany({
+              where: { id: { in: engineerUserIds } },
+              select: { id: true, email: true, fullName: true }
+            })
+          : []
+
+        // Get laboratory name for more context
+        const testWithLab = await prisma.testResult.findUnique({
+          where: { id },
+          select: { laboratoryName: true, testRequestNumber: true }
+        })
+        const labName = testWithLab?.laboratoryName || 'laboratory'
+        const requestNum = testWithLab?.testRequestNumber || id.substring(0, 8).toUpperCase()
+
+        // Create in-app notifications for site engineers
+        const notificationsToCreate = engineerUsers.map(eng => ({
+          userId: eng.id,
+          projectId: testResult.projectId,
+          type: 'test_result_received',
+          title: 'Test Result Received',
+          message: `Test result for ${testResult.testType} (${requestNum}) has been received from ${labName}. Pending verification.`,
+          linkUrl: `/projects/${testResult.projectId}/test-results`
+        }))
+
+        if (notificationsToCreate.length > 0) {
+          await prisma.notification.createMany({
+            data: notificationsToCreate
+          })
+        }
+
+        // Send email notifications
+        for (const eng of engineerUsers) {
+          await sendNotificationIfEnabled(
+            eng.id,
+            testResult.projectId,
+            'test_result_received',
+            'Test Result Received',
+            `Test result for ${testResult.testType} (${requestNum}) from ${labName} is pending verification.`,
+            eng.email
+          )
+        }
+
+        console.log(`[Test Result Received] Notification sent for test ${id}`)
+        console.log(`  Test Type: ${testResult.testType}`)
+        console.log(`  Project: ${project?.name || testResult.projectId}`)
+        console.log(`  Notified Engineers: ${engineerUsers.map(e => e.email).join(', ') || 'None'}`)
+      } catch (notifError) {
+        console.error('[Test Result Received] Failed to send notifications:', notifError)
+        // Don't fail the main request if notifications fail
+      }
+    }
 
     res.json({
       message: `Test result status updated to '${STATUS_LABELS[status] || status}'`,
