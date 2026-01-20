@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { createAuditLog, AuditAction } from '../lib/auditLog.js'
+import { sendNotificationIfEnabled } from './notifications.js'
 
 export const projectsRouter = Router()
 
@@ -243,10 +244,13 @@ projectsRouter.post('/', async (req, res) => {
         }
       })
       companyId = company.id
-      // Update user's company
+      // Update user's company and set them as owner
       await prisma.user.update({
         where: { id: user.id },
-        data: { companyId: company.id }
+        data: {
+          companyId: company.id,
+          roleInCompany: 'owner'  // Make them owner of the new company
+        }
       })
     }
 
@@ -678,6 +682,44 @@ projectsRouter.post('/:id/users', async (req, res) => {
       },
       req
     })
+
+    // Feature #939 - Send team invitation notification to invited user
+    try {
+      // Get project details for the notification
+      const projectDetails = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, name: true, projectNumber: true }
+      })
+
+      const inviterName = currentUser.fullName || currentUser.email || 'A team member'
+
+      // Create in-app notification
+      await prisma.notification.create({
+        data: {
+          userId: invitedUser.id,
+          projectId,
+          type: 'team_invitation',
+          title: 'Team Invitation',
+          message: `${inviterName} has invited you to join ${projectDetails?.name || 'a project'} as ${role.replace('_', ' ')}.`,
+          linkUrl: `/projects/${projectId}`
+        }
+      })
+
+      // Send email notification
+      await sendNotificationIfEnabled(
+        invitedUser.id,
+        projectId,
+        'mentions', // Using mentions type for team invitations
+        'Team Invitation',
+        `You've been invited to join ${projectDetails?.name || 'a project'} as ${role.replace('_', ' ')}. Project: ${projectDetails?.projectNumber || 'N/A'}`,
+        invitedUser.email
+      )
+
+      console.log(`[Team Invitation] Notification sent to ${invitedUser.email} for project ${projectDetails?.name}`)
+    } catch (notifError) {
+      console.error('[Team Invitation] Failed to send notification:', notifError)
+      // Don't fail the main request if notifications fail
+    }
 
     res.status(201).json({
       message: 'User invited successfully',
