@@ -895,10 +895,16 @@ model Document {
   tags             String?   // Stored as JSON string for SQLite
   isFavourite      Boolean   @default(false) @map("is_favourite")
   createdAt        DateTime  @default(now()) @map("created_at")
+  // Feature #481: Document version tracking
+  version          Int       @default(1)
+  parentDocumentId String?   @map("parent_document_id")
+  isLatestVersion  Boolean   @default(true) @map("is_latest_version")
 
-  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lot        Lot?    @relation(fields: [lotId], references: [id])
-  uploadedBy User?   @relation(fields: [uploadedById], references: [id])
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lot            Lot?      @relation(fields: [lotId], references: [id])
+  uploadedBy     User?     @relation(fields: [uploadedById], references: [id])
+  parentDocument Document? @relation("DocumentVersions", fields: [parentDocumentId], references: [id])
+  childVersions  Document[] @relation("DocumentVersions")
 
   itpCompletionAttachments ITPCompletionAttachment[]
   ncrEvidence              NCREvidence[]

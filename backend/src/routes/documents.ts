@@ -280,6 +280,161 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
   }
 })
 
+// Feature #481: POST /api/documents/:documentId/version - Upload a new version of a document
+router.post('/:documentId/version', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const { documentId } = req.params
+    const userId = (req as any).user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' })
+    }
+
+    // Find the original document
+    const originalDocument = await prisma.document.findUnique({
+      where: { id: documentId },
+    })
+
+    if (!originalDocument) {
+      fs.unlinkSync(req.file.path)
+      return res.status(404).json({ error: 'Original document not found' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, originalDocument.projectId)
+    if (!hasAccess) {
+      fs.unlinkSync(req.file.path)
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    // Find the root document (first version)
+    let rootDocumentId = originalDocument.id
+    let currentVersion = originalDocument.version
+    if (originalDocument.parentDocumentId) {
+      // This is already a version, find the root
+      const rootDocument = await prisma.document.findUnique({
+        where: { id: originalDocument.parentDocumentId },
+      })
+      if (rootDocument) {
+        rootDocumentId = rootDocument.id
+      }
+    }
+
+    // Get highest version number for this document chain
+    const allVersions = await prisma.document.findMany({
+      where: {
+        OR: [
+          { id: rootDocumentId },
+          { parentDocumentId: rootDocumentId }
+        ]
+      },
+      select: { version: true }
+    })
+    const highestVersion = Math.max(...allVersions.map(v => v.version))
+    const newVersion = highestVersion + 1
+
+    // Extract EXIF metadata for images
+    const photoMetadata = await extractPhotoMetadata(req.file.path, req.file.mimetype)
+
+    // Mark all previous versions as not latest
+    await prisma.document.updateMany({
+      where: {
+        OR: [
+          { id: rootDocumentId },
+          { parentDocumentId: rootDocumentId }
+        ]
+      },
+      data: { isLatestVersion: false }
+    })
+
+    // Create new version
+    const newDocument = await prisma.document.create({
+      data: {
+        projectId: originalDocument.projectId,
+        lotId: originalDocument.lotId,
+        documentType: originalDocument.documentType,
+        category: originalDocument.category,
+        filename: req.file.originalname,
+        fileUrl: `/uploads/documents/${req.file.filename}`,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        uploadedById: userId,
+        caption: originalDocument.caption,
+        tags: originalDocument.tags,
+        version: newVersion,
+        parentDocumentId: rootDocumentId,
+        isLatestVersion: true,
+        gpsLatitude: photoMetadata.gpsLatitude,
+        gpsLongitude: photoMetadata.gpsLongitude,
+        captureTimestamp: photoMetadata.captureTimestamp,
+        aiClassification: photoMetadata.deviceInfo ? JSON.stringify({ deviceInfo: photoMetadata.deviceInfo }) : null,
+      },
+      include: {
+        lot: { select: { id: true, lotNumber: true } },
+        uploadedBy: { select: { id: true, fullName: true, email: true } },
+      },
+    })
+
+    res.status(201).json(newDocument)
+  } catch (error) {
+    console.error('Error uploading document version:', error)
+    res.status(500).json({ error: 'Failed to upload document version' })
+  }
+})
+
+// Feature #481: GET /api/documents/:documentId/versions - Get all versions of a document
+router.get('/:documentId/versions', async (req: Request, res: Response) => {
+  try {
+    const { documentId } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+    })
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, document.projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    // Find the root document ID
+    let rootDocumentId = document.parentDocumentId || document.id
+
+    // Get all versions
+    const versions = await prisma.document.findMany({
+      where: {
+        OR: [
+          { id: rootDocumentId },
+          { parentDocumentId: rootDocumentId }
+        ]
+      },
+      include: {
+        uploadedBy: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { version: 'desc' }
+    })
+
+    res.json({
+      documentId: rootDocumentId,
+      totalVersions: versions.length,
+      versions,
+    })
+  } catch (error) {
+    console.error('Error getting document versions:', error)
+    res.status(500).json({ error: 'Failed to get document versions' })
+  }
+})
+
 // GET /api/documents/file/:documentId - Get document file
 router.get('/file/:documentId', async (req: Request, res: Response) => {
   try {
