@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { getAuthToken } from '@/lib/auth'
 import { Plus, Users, Building2, CheckCircle, Clock, X, DollarSign, Truck, ChevronDown, ChevronUp } from 'lucide-react'
+import { validateABN, formatABN } from '@/lib/abnValidation'
 
 interface Employee {
   id: string
@@ -49,6 +50,7 @@ export function SubcontractorsPage() {
     phone: ''
   })
   const [inviting, setInviting] = useState(false)
+  const [abnError, setAbnError] = useState<string | null>(null)
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState<string | null>(null)
   const [employeeData, setEmployeeData] = useState({
     name: '',
@@ -417,6 +419,7 @@ export function SubcontractorsPage() {
         setSubcontractors(prev => [...prev, data.subcontractor])
         setShowInviteModal(false)
         setInviteData({ companyName: '', abn: '', contactName: '', email: '', phone: '' })
+        setAbnError(null)
       } else {
         const error = await response.json()
         alert(error.message || 'Failed to invite subcontractor')
@@ -766,10 +769,28 @@ export function SubcontractorsPage() {
                 <input
                   type="text"
                   value={inviteData.abn}
-                  onChange={(e) => setInviteData(prev => ({ ...prev, abn: e.target.value }))}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setInviteData(prev => ({ ...prev, abn: value }))
+                    // Validate ABN on change
+                    const error = validateABN(value)
+                    setAbnError(error)
+                  }}
+                  onBlur={(e) => {
+                    // Format ABN on blur if valid
+                    if (inviteData.abn && !abnError) {
+                      setInviteData(prev => ({ ...prev, abn: formatABN(prev.abn) }))
+                    }
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                    abnError ? 'border-red-500 focus:ring-red-500' : ''
+                  }`}
                   placeholder="12 345 678 901"
+                  data-testid="abn-input"
                 />
+                {abnError && (
+                  <p className="text-sm text-red-500 mt-1" data-testid="abn-error">{abnError}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Primary Contact Name *</label>
@@ -812,7 +833,7 @@ export function SubcontractorsPage() {
               </button>
               <button
                 onClick={inviteSubcontractor}
-                disabled={inviting || !inviteData.companyName || !inviteData.contactName || !inviteData.email}
+                disabled={inviting || !inviteData.companyName || !inviteData.contactName || !inviteData.email || !!abnError}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
                 {inviting ? 'Sending...' : 'Send Invitation'}
