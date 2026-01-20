@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { sendNotificationIfEnabled } from './notifications.js'
 
 const router = Router()
 
@@ -222,9 +223,15 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
   try {
     const { projectId, claimId } = req.params
     const { status, certifiedAmount, paidAmount, paymentReference, disputeNotes } = req.body
+    const userId = (req as any).userId
 
     const claim = await prisma.progressClaim.findFirst({
-      where: { id: claimId, projectId }
+      where: { id: claimId, projectId },
+      include: {
+        project: {
+          select: { id: true, name: true }
+        }
+      }
     })
 
     if (!claim) {
@@ -237,6 +244,7 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
     }
 
     const updateData: any = {}
+    const previousStatus = claim.status
 
     if (status) {
       updateData.status = status
@@ -267,6 +275,83 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
         }
       }
     })
+
+    // Feature #931 - Notify project managers when a claim is certified
+    if (status === 'certified' && previousStatus !== 'certified' && certifiedAmount !== undefined) {
+      try {
+        // Get the user who certified the claim
+        const certifier = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, email: true, fullName: true }
+        })
+        const certifierName = certifier?.fullName || certifier?.email || 'Unknown'
+
+        // Get all project managers on this project
+        const projectManagers = await prisma.projectUser.findMany({
+          where: {
+            projectId,
+            role: 'project_manager',
+            status: { in: ['active', 'accepted'] }
+          }
+        })
+
+        // Get user details for project managers
+        const pmUserIds = projectManagers.map(pm => pm.userId)
+        const pmUsers = pmUserIds.length > 0
+          ? await prisma.user.findMany({
+              where: { id: { in: pmUserIds } },
+              select: { id: true, email: true, fullName: true }
+            })
+          : []
+
+        // Format certified amount for display
+        const formattedAmount = new Intl.NumberFormat('en-AU', {
+          style: 'currency',
+          currency: 'AUD'
+        }).format(certifiedAmount)
+
+        // Create notifications for project managers
+        const notificationsToCreate = pmUsers.map(pm => ({
+          userId: pm.id,
+          projectId,
+          type: 'claim_certified',
+          title: 'Claim Certified',
+          message: `Claim #${claim.claimNumber} has been certified by ${certifierName}. Certified amount: ${formattedAmount}.`,
+          linkUrl: `/projects/${projectId}/claims`
+        }))
+
+        if (notificationsToCreate.length > 0) {
+          await prisma.notification.createMany({
+            data: notificationsToCreate
+          })
+          console.log(`[Claim Certification] Created ${notificationsToCreate.length} in-app notifications for project managers`)
+        }
+
+        // Send email notifications to project managers
+        for (const pm of pmUsers) {
+          try {
+            await sendNotificationIfEnabled(pm.id, 'enabled', {
+              title: 'Claim Certified',
+              message: `Claim #${claim.claimNumber} has been certified by ${certifierName}.\n\nProject: ${claim.project.name}\nCertified Amount: ${formattedAmount}\n\nPlease review the claim details in the system.`,
+              projectName: claim.project.name,
+              linkUrl: `/projects/${projectId}/claims`
+            })
+          } catch (emailError) {
+            console.error(`[Claim Certification] Failed to send email to PM ${pm.id}:`, emailError)
+          }
+        }
+
+        // Log for development
+        console.log(`[Claim Certification] Notification details:`)
+        console.log(`  Claim: #${claim.claimNumber}`)
+        console.log(`  Certified by: ${certifierName}`)
+        console.log(`  Certified amount: ${formattedAmount}`)
+        console.log(`  Notified PMs: ${pmUsers.map(pm => pm.email).join(', ') || 'None'}`)
+      } catch (notifError) {
+        console.error('[Claim Certification] Failed to send notifications:', notifError)
+        // Don't fail the main request if notifications fail
+      }
+    }
 
     res.json({ claim: updatedClaim })
   } catch (error) {
