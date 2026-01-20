@@ -8,6 +8,8 @@ import { OnboardingTour } from '@/components/OnboardingTour'
 import { ChangelogNotification } from '@/components/ChangelogNotification'
 import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { OfflineIndicator } from '@/components/OfflineIndicator'
+import { CookieConsentBanner } from '@/components/CookieConsentBanner'
 
 // Layouts
 import { MainLayout } from '@/components/layouts/MainLayout'
@@ -262,6 +264,8 @@ function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       <Toaster />
+      <OfflineIndicator />
+      <CookieConsentBanner />
       </KeyboardShortcutsProvider>
     </AuthProvider>
     </ErrorBoundary>
