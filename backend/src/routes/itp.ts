@@ -1207,7 +1207,9 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       // Witness point details
       witnessPresent,
       witnessName,
-      witnessCompany
+      witnessCompany,
+      // Feature #463: Signature capture
+      signatureDataUrl
     } = req.body
 
     if (!itpInstanceId || !checklistItemId) {
@@ -1278,6 +1280,8 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           notes: notes ?? existingCompletion.notes,
           completedAt: isFinished ? new Date() : null,
           completedById: isFinished ? user.userId : null,
+          // Feature #463: Signature capture
+          ...(signatureDataUrl !== undefined ? { signatureUrl: signatureDataUrl } : {}),
           // Feature #271: Set pending_verification for subcontractor completions
           ...(verificationStatus ? { verificationStatus } : {}),
           ...witnessData
@@ -1303,6 +1307,8 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           notes: notes || null,
           completedAt: isFinished ? new Date() : null,
           completedById: isFinished ? user.userId : null,
+          // Feature #463: Signature capture
+          signatureUrl: signatureDataUrl || null,
           // Feature #271: Set pending_verification for subcontractor completions
           ...(verificationStatus ? { verificationStatus } : {}),
           ...witnessData
