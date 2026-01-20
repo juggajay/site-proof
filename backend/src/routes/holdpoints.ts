@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
 import { sendNotificationIfEnabled } from './notifications.js'
-import { sendHPReleaseRequestEmail } from '../lib/email.js'
+import { sendHPReleaseRequestEmail, sendHPChaseEmail } from '../lib/email.js'
 
 const prisma = new PrismaClient()
 const holdpointsRouter = Router()
@@ -690,6 +690,22 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
   try {
     const { id } = req.params
 
+    // Get the hold point with lot and project details before updating
+    const existingHP = await prisma.holdPoint.findUnique({
+      where: { id },
+      include: {
+        lot: {
+          include: {
+            project: true
+          }
+        }
+      }
+    })
+
+    if (!existingHP) {
+      return res.status(404).json({ error: 'Hold point not found' })
+    }
+
     const holdPoint = await prisma.holdPoint.update({
       where: { id },
       data: {
@@ -697,6 +713,71 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
         lastChasedAt: new Date()
       }
     })
+
+    // Feature #947 - Send HP chase email to superintendent
+    try {
+      // Get project users with superintendent role to notify
+      const superintendents = await prisma.projectUser.findMany({
+        where: {
+          projectId: existingHP.lot.project.id,
+          role: 'superintendent',
+          status: 'active'
+        },
+        include: {
+          user: { select: { id: true, email: true, fullName: true } }
+        }
+      })
+
+      // If no superintendents, also check for project managers
+      const recipientsToNotify = superintendents.length > 0 ? superintendents : await prisma.projectUser.findMany({
+        where: {
+          projectId: existingHP.lot.project.id,
+          role: 'project_manager',
+          status: 'active'
+        },
+        include: {
+          user: { select: { id: true, email: true, fullName: true } }
+        }
+      })
+
+      // Get the original requester info (from who created the HP request)
+      const requestedBy = existingHP.notificationSentTo || 'Site Team'
+
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+      const releaseUrl = `${baseUrl}/projects/${existingHP.lot.project.id}/lots/${existingHP.lot.id}?tab=itp`
+      const evidencePackageUrl = `${baseUrl}/projects/${existingHP.lot.project.id}/lots/${existingHP.lot.id}/evidence-preview?holdPointId=${existingHP.id}`
+
+      // Calculate days since original request
+      const originalRequestDate = existingHP.notificationSentAt || existingHP.createdAt
+      const daysSinceRequest = Math.floor((Date.now() - originalRequestDate.getTime()) / (1000 * 60 * 60 * 24))
+      const formattedRequestDate = originalRequestDate.toLocaleDateString('en-AU', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+
+      for (const recipient of recipientsToNotify) {
+        await sendHPChaseEmail({
+          to: recipient.user.email,
+          superintendentName: recipient.user.fullName || 'Superintendent',
+          projectName: existingHP.lot.project.name,
+          lotNumber: existingHP.lot.lotNumber,
+          holdPointDescription: existingHP.description,
+          originalRequestDate: formattedRequestDate,
+          chaseCount: holdPoint.chaseCount || 1,
+          daysSinceRequest,
+          evidencePackageUrl,
+          releaseUrl,
+          requestedBy
+        })
+      }
+
+      console.log(`[HP Chase] Sent chase email #${holdPoint.chaseCount} to ${recipientsToNotify.length} superintendent(s)/PM(s) for HP on lot ${existingHP.lot.lotNumber}`)
+    } catch (emailError) {
+      console.error('[HP Chase] Failed to send chase email:', emailError)
+      // Don't fail the main request
+    }
 
     res.json({
       success: true,

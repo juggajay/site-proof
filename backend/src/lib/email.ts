@@ -479,6 +479,178 @@ Project: ${data.projectName}
 }
 
 /**
+ * Send HP chase email to superintendent (Feature #947)
+ * Follow-up reminder for hold points that haven't been released
+ */
+export async function sendHPChaseEmail(data: {
+  to: string
+  superintendentName: string
+  projectName: string
+  lotNumber: string
+  holdPointDescription: string
+  originalRequestDate: string
+  chaseCount: number
+  daysSinceRequest: number
+  evidencePackageUrl?: string
+  releaseUrl: string
+  requestedBy: string
+}): Promise<EmailResult> {
+  const subject = `[SiteProof] REMINDER: Hold Point Awaiting Release - ${data.lotNumber} (Chase #${data.chaseCount})`
+
+  const urgencyMessage = data.daysSinceRequest > 5
+    ? `<strong style="color: #dc2626;">This hold point has been awaiting release for ${data.daysSinceRequest} days.</strong>`
+    : `This hold point has been awaiting release for ${data.daysSinceRequest} days.`
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #f59e0b; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+    .message-box { background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0; }
+    .detail-row { padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+    .detail-row:last-child { border-bottom: none; }
+    .button { display: inline-block; background: #16a34a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 10px 5px; font-size: 16px; }
+    .button.secondary { background: #2563eb; }
+    .button:hover { opacity: 0.9; }
+    .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 12px; background: #f3f4f6; border-radius: 0 0 8px 8px; }
+    .highlight { background: #fef3c7; padding: 12px; border-radius: 6px; border-left: 4px solid #f59e0b; margin: 15px 0; }
+    .urgent { background: #fee2e2; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626; margin: 15px 0; }
+    .chase-badge { display: inline-block; background: #f59e0b; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⏰ Hold Point Reminder</h1>
+      <p style="margin: 5px 0 0 0;"><span class="chase-badge">Chase #${data.chaseCount}</span></p>
+    </div>
+    <div class="content">
+      <h2 style="margin-top: 0;">Hi ${data.superintendentName},</h2>
+
+      <div class="urgent">
+        ${urgencyMessage}
+      </div>
+
+      <p>This is a reminder about a hold point release request on project <strong>${data.projectName}</strong> that is still awaiting your action.</p>
+
+      <div class="message-box">
+        <div class="detail-row">
+          <strong>📍 Lot:</strong> ${data.lotNumber}
+        </div>
+        <div class="detail-row">
+          <strong>🔒 Hold Point:</strong> ${data.holdPointDescription}
+        </div>
+        <div class="detail-row">
+          <strong>📅 Originally Requested:</strong> ${data.originalRequestDate}
+        </div>
+        <div class="detail-row">
+          <strong>👤 Requested By:</strong> ${data.requestedBy}
+        </div>
+      </div>
+
+      ${data.evidencePackageUrl ? `
+      <div class="highlight">
+        <strong>📋 Evidence Package Available</strong><br>
+        The original evidence package is still available for your review.
+      </div>
+      ` : ''}
+
+      <div style="text-align: center; margin: 25px 0;">
+        ${data.evidencePackageUrl ? `
+        <a href="${data.evidencePackageUrl}" class="button secondary">
+          View Evidence Package
+        </a>
+        ` : ''}
+        <a href="${data.releaseUrl}" class="button">
+          Review & Release Hold Point
+        </a>
+      </div>
+
+      <p style="color: #6b7280; font-size: 14px;">
+        Please review and release the hold point, or contact the requestor if you require additional information.
+      </p>
+    </div>
+    <div class="footer">
+      <p>This is reminder #${data.chaseCount} for this hold point release request.</p>
+      <p>Project: ${data.projectName}</p>
+    </div>
+  </div>
+</body>
+</html>
+  `
+
+  const text = `
+Hi ${data.superintendentName},
+
+REMINDER: Hold Point Awaiting Release (Chase #${data.chaseCount})
+
+This hold point has been awaiting release for ${data.daysSinceRequest} days.
+
+HOLD POINT DETAILS
+------------------
+Lot: ${data.lotNumber}
+Hold Point: ${data.holdPointDescription}
+Originally Requested: ${data.originalRequestDate}
+Requested By: ${data.requestedBy}
+
+${data.evidencePackageUrl ? `
+EVIDENCE PACKAGE
+----------------
+The original evidence package is still available for your review.
+View evidence package: ${data.evidencePackageUrl}
+` : ''}
+
+ACTIONS
+-------
+Review & Release Hold Point: ${data.releaseUrl}
+
+Please review and release the hold point, or contact the requestor if you require additional information.
+
+---
+This is reminder #${data.chaseCount} for this hold point release request.
+Project: ${data.projectName}
+  `
+
+  // Also log to console in dev mode for easy testing
+  console.log('\n========================================')
+  console.log('📧 HP CHASE EMAIL (Reminder #' + data.chaseCount + ')')
+  console.log('========================================')
+  console.log('To:', data.to)
+  console.log('Subject:', subject)
+  console.log('----------------------------------------')
+  console.log('Hi ' + data.superintendentName + ',')
+  console.log('')
+  console.log('REMINDER: Hold point awaiting release for ' + data.daysSinceRequest + ' days')
+  console.log('')
+  console.log('Lot:', data.lotNumber)
+  console.log('Hold Point:', data.holdPointDescription)
+  console.log('Originally Requested:', data.originalRequestDate)
+  console.log('Requested By:', data.requestedBy)
+  if (data.evidencePackageUrl) {
+    console.log('')
+    console.log('Evidence Package:', data.evidencePackageUrl)
+  }
+  console.log('')
+  console.log('Release URL:', data.releaseUrl)
+  console.log('========================================\n')
+
+  return sendEmail({
+    to: data.to,
+    subject,
+    html,
+    text,
+  })
+}
+
+/**
  * Digest notification item
  */
 export interface DigestItem {
