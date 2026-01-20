@@ -1370,6 +1370,15 @@ testResultsRouter.post('/:id/verify', async (req, res) => {
       })
     }
 
+    // Feature #883: Require certificate before verification
+    if (!testResult.certificateDocId) {
+      return res.status(400).json({
+        error: 'Certificate required',
+        message: 'A test certificate must be uploaded before the test result can be verified.',
+        code: 'CERTIFICATE_REQUIRED'
+      })
+    }
+
     const updatedTestResult = await prisma.testResult.update({
       where: { id },
       data: {
@@ -1479,6 +1488,15 @@ testResultsRouter.post('/:id/status', async (req, res) => {
         message: `Cannot transition from '${STATUS_LABELS[currentStatus] || currentStatus}' to '${STATUS_LABELS[status] || status}'`,
         currentStatus: currentStatus,
         allowedTransitions: allowedTransitions.map(s => ({ status: s, label: STATUS_LABELS[s] || s }))
+      })
+    }
+
+    // Feature #883: Require certificate before verification
+    if (status === 'verified' && !testResult.certificateDocId) {
+      return res.status(400).json({
+        error: 'Certificate required',
+        message: 'A test certificate must be uploaded before the test result can be verified.',
+        code: 'CERTIFICATE_REQUIRED'
       })
     }
 
