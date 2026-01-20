@@ -1417,3 +1417,158 @@ notificationsRouter.post('/diary-reminder/check-alerts', async (req: AuthRequest
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// ============================================================================
+// Feature #938: Docket Backlog Alert Notification
+// ============================================================================
+
+// POST /api/notifications/docket-backlog/check - Check for dockets pending >48 hours and alert foreman/PM
+notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { projectId: specificProjectId } = req.body
+
+    // Calculate 48 hours ago
+    const cutoffTime = new Date()
+    cutoffTime.setHours(cutoffTime.getHours() - 48)
+
+    console.log(`[Docket Backlog Alert] Checking for dockets pending since before ${cutoffTime.toISOString()}`)
+
+    // Get all dockets that have been pending_approval for more than 48 hours
+    const whereClause: any = {
+      status: 'pending_approval',
+      submittedAt: {
+        lt: cutoffTime
+      }
+    }
+
+    if (specificProjectId) {
+      whereClause.projectId = specificProjectId
+    }
+
+    const overdueDockers = await prisma.dailyDocket.findMany({
+      where: whereClause,
+      include: {
+        project: {
+          select: { id: true, name: true }
+        },
+        submittedBy: {
+          select: { id: true, email: true, fullName: true }
+        }
+      }
+    })
+
+    console.log(`   Found ${overdueDockers.length} docket(s) pending >48 hours`)
+
+    const alertsCreated: any[] = []
+    const usersNotified = new Set<string>()
+
+    // Group dockets by project for efficient notification
+    const docketsByProject = new Map<string, typeof overdueDockers>()
+    for (const docket of overdueDockers) {
+      const projectDockets = docketsByProject.get(docket.projectId) || []
+      projectDockets.push(docket)
+      docketsByProject.set(docket.projectId, projectDockets)
+    }
+
+    for (const [projectId, dockets] of docketsByProject.entries()) {
+      const project = dockets[0].project
+
+      // Check if we already sent an alert for these specific dockets today
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      const existingAlert = await prisma.notification.findFirst({
+        where: {
+          projectId,
+          type: 'docket_backlog_alert',
+          createdAt: { gte: today }
+        }
+      })
+
+      if (existingAlert) {
+        // Already sent an alert today for this project
+        continue
+      }
+
+      // Get foremen and project managers to alert
+      const projectUsers = await prisma.projectUser.findMany({
+        where: {
+          projectId,
+          role: { in: ['foreman', 'project_manager', 'admin'] },
+          status: { in: ['active', 'accepted'] }
+        }
+      })
+
+      const userIds = projectUsers.map(pu => pu.userId)
+      const users = userIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, email: true, fullName: true }
+          })
+        : []
+
+      // Format docket list for notification
+      const docketCount = dockets.length
+      const docketNumbers = dockets.slice(0, 3).map(d => d.docketNumber).join(', ')
+      const moreText = docketCount > 3 ? ` and ${docketCount - 3} more` : ''
+
+      // Create alert notifications
+      const alertsToCreate = users.map(user => ({
+        userId: user.id,
+        projectId,
+        type: 'docket_backlog_alert',
+        title: 'Docket Backlog Alert',
+        message: `${docketCount} docket(s) have been pending approval for more than 48 hours on ${project.name}: ${docketNumbers}${moreText}. Please review.`,
+        linkUrl: `/projects/${projectId}/dockets`
+      }))
+
+      if (alertsToCreate.length > 0) {
+        await prisma.notification.createMany({
+          data: alertsToCreate
+        })
+
+        for (const user of users) {
+          usersNotified.add(user.id)
+
+          // Send email notification
+          await sendNotificationIfEnabled(
+            user.id,
+            projectId,
+            'holdPointReminder', // Using existing type for backlog alerts
+            'Docket Backlog Alert',
+            `${docketCount} docket(s) have been pending approval for more than 48 hours on ${project.name}. Please review.`,
+            user.email
+          )
+        }
+
+        alertsCreated.push({
+          projectId,
+          projectName: project.name,
+          docketCount,
+          docketNumbers: dockets.map(d => d.docketNumber),
+          usersNotified: users.map(u => u.email)
+        })
+      }
+    }
+
+    console.log(`[Docket Backlog Alert] Created ${alertsCreated.length} alert(s) for ${usersNotified.size} user(s)`)
+
+    res.json({
+      success: true,
+      cutoffTime: cutoffTime.toISOString(),
+      totalOverdueDockets: overdueDockers.length,
+      projectsWithBacklog: docketsByProject.size,
+      alertsCreated: alertsCreated.length,
+      uniqueUsersNotified: usersNotified.size,
+      details: alertsCreated
+    })
+  } catch (error) {
+    console.error('Docket backlog alert check error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
