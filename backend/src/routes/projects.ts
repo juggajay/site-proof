@@ -1085,6 +1085,35 @@ projectsRouter.post('/:id/areas', async (req, res) => {
       return res.status(400).json({ error: 'Area name is required' })
     }
 
+    // Feature #906: Require chainage range for areas
+    if (chainageStart == null || chainageEnd == null) {
+      return res.status(400).json({
+        error: 'Chainage range required',
+        message: 'Both chainage start and chainage end are required for project areas.',
+        code: 'CHAINAGE_REQUIRED'
+      })
+    }
+
+    // Validate chainage values are numbers
+    const startVal = Number(chainageStart)
+    const endVal = Number(chainageEnd)
+    if (isNaN(startVal) || isNaN(endVal)) {
+      return res.status(400).json({
+        error: 'Invalid chainage',
+        message: 'Chainage values must be valid numbers.',
+        code: 'INVALID_CHAINAGE'
+      })
+    }
+
+    // Validate start is less than end
+    if (startVal >= endVal) {
+      return res.status(400).json({
+        error: 'Invalid chainage range',
+        message: 'Chainage start must be less than chainage end.',
+        code: 'INVALID_CHAINAGE_RANGE'
+      })
+    }
+
     const area = await prisma.projectArea.create({
       data: {
         projectId,
@@ -1139,6 +1168,40 @@ projectsRouter.patch('/:id/areas/:areaId', async (req, res) => {
 
     if (!existingArea) {
       return res.status(404).json({ error: 'Area not found' })
+    }
+
+    // Feature #906: Validate chainage if being updated
+    const newChainageStart = chainageStart !== undefined ? chainageStart : existingArea.chainageStart
+    const newChainageEnd = chainageEnd !== undefined ? chainageEnd : existingArea.chainageEnd
+
+    // If either chainage is being set to null, reject
+    if ((chainageStart !== undefined && chainageStart == null) ||
+        (chainageEnd !== undefined && chainageEnd == null)) {
+      return res.status(400).json({
+        error: 'Chainage range required',
+        message: 'Both chainage start and chainage end are required for project areas.',
+        code: 'CHAINAGE_REQUIRED'
+      })
+    }
+
+    // Validate chainage range if both are present
+    if (newChainageStart != null && newChainageEnd != null) {
+      const startVal = Number(newChainageStart)
+      const endVal = Number(newChainageEnd)
+      if (isNaN(startVal) || isNaN(endVal)) {
+        return res.status(400).json({
+          error: 'Invalid chainage',
+          message: 'Chainage values must be valid numbers.',
+          code: 'INVALID_CHAINAGE'
+        })
+      }
+      if (startVal >= endVal) {
+        return res.status(400).json({
+          error: 'Invalid chainage range',
+          message: 'Chainage start must be less than chainage end.',
+          code: 'INVALID_CHAINAGE_RANGE'
+        })
+      }
     }
 
     const updateData: Record<string, unknown> = {}
