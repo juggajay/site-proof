@@ -55,6 +55,14 @@ const addDelaySchema = z.object({
   impact: z.string().optional(),
 })
 
+// Feature #477: Visitor recording schema
+const addVisitorSchema = z.object({
+  name: z.string().min(1),
+  company: z.string().optional(),
+  purpose: z.string().optional(),
+  timeInOut: z.string().optional(),
+})
+
 // Helper to check project access
 async function checkProjectAccess(userId: string, projectId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId } })
@@ -427,6 +435,122 @@ router.delete('/:diaryId/plant/:plantId', async (req: Request, res: Response) =>
   } catch (error) {
     console.error('Error removing plant:', error)
     res.status(500).json({ error: 'Failed to remove plant' })
+  }
+})
+
+// Feature #477: POST /api/diary/:diaryId/visitors - Add visitor to diary
+router.post('/:diaryId/visitors', async (req: Request, res: Response) => {
+  try {
+    const { diaryId } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } })
+    if (!diary) {
+      return res.status(404).json({ error: 'Diary not found' })
+    }
+
+    if (diary.status === 'submitted') {
+      return res.status(400).json({ error: 'Cannot modify submitted diary' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    const data = addVisitorSchema.parse(req.body)
+
+    const visitor = await prisma.diaryVisitor.create({
+      data: {
+        diaryId,
+        ...data,
+      }
+    })
+
+    res.status(201).json(visitor)
+  } catch (error) {
+    console.error('Error adding visitor:', error)
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid data', details: error.errors })
+    }
+    res.status(500).json({ error: 'Failed to add visitor' })
+  }
+})
+
+// Feature #477: PUT /api/diary/:diaryId/visitors/:visitorId - Update visitor
+router.put('/:diaryId/visitors/:visitorId', async (req: Request, res: Response) => {
+  try {
+    const { diaryId, visitorId } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } })
+    if (!diary) {
+      return res.status(404).json({ error: 'Diary not found' })
+    }
+
+    if (diary.status === 'submitted') {
+      return res.status(400).json({ error: 'Cannot modify submitted diary' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    const data = addVisitorSchema.partial().parse(req.body)
+
+    const visitor = await prisma.diaryVisitor.update({
+      where: { id: visitorId },
+      data,
+    })
+
+    res.json(visitor)
+  } catch (error) {
+    console.error('Error updating visitor:', error)
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid data', details: error.errors })
+    }
+    res.status(500).json({ error: 'Failed to update visitor' })
+  }
+})
+
+// Feature #477: DELETE /api/diary/:diaryId/visitors/:visitorId - Remove visitor
+router.delete('/:diaryId/visitors/:visitorId', async (req: Request, res: Response) => {
+  try {
+    const { diaryId, visitorId } = req.params
+    const userId = (req as any).user?.id
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } })
+    if (!diary) {
+      return res.status(404).json({ error: 'Diary not found' })
+    }
+
+    if (diary.status === 'submitted') {
+      return res.status(400).json({ error: 'Cannot modify submitted diary' })
+    }
+
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    await prisma.diaryVisitor.delete({ where: { id: visitorId } })
+    res.status(204).send()
+  } catch (error) {
+    console.error('Error removing visitor:', error)
+    res.status(500).json({ error: 'Failed to remove visitor' })
   }
 })
 
