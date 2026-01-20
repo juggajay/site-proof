@@ -26,6 +26,9 @@ interface NCR {
   ncrLots: Array<{ lot: { lotNumber: string; description: string } }>
   clientNotificationRequired?: boolean // Feature #213
   clientNotifiedAt?: string | null // Feature #213
+  lessonsLearned?: string | null // Feature #474
+  closedAt?: string | null
+  verificationNotes?: string | null
 }
 
 interface UserRole {
@@ -207,6 +210,70 @@ export function NCRPage() {
     }
   }, [token, projectId])
 
+  // Feature #733: Real-time NCR status update polling
+  // Poll for updates every 30 seconds when the tab is visible
+  useEffect(() => {
+    if (!token) return
+
+    let pollInterval: NodeJS.Timeout | null = null
+
+    const silentFetchNcrs = async () => {
+      const url = projectId
+        ? `${API_URL}/api/ncrs?projectId=${projectId}`
+        : `${API_URL}/api/ncrs`
+
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          // Only update if there are actual changes
+          setNcrs((prevNcrs: NCR[]) => {
+            const newNcrs = data.ncrs || []
+            const hasChanges = newNcrs.length !== prevNcrs.length ||
+              newNcrs.some((newNcr: NCR, index: number) =>
+                !prevNcrs[index] ||
+                newNcr.id !== prevNcrs[index].id ||
+                newNcr.status !== prevNcrs[index].status ||
+                newNcr.closedAt !== prevNcrs[index].closedAt ||
+                newNcr.qmApprovedAt !== prevNcrs[index].qmApprovedAt
+              )
+            return hasChanges ? newNcrs : prevNcrs
+          })
+        }
+      } catch (err) {
+        // Silent fail for background polling
+        console.debug('Background NCR fetch failed:', err)
+      }
+    }
+
+    const startPolling = () => {
+      pollInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          silentFetchNcrs()
+        }
+      }, 30000) // 30 seconds
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        silentFetchNcrs()
+      }
+    }
+
+    startPolling()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [token, projectId])
+
   // Create NCR
   const handleCreateNcr = async (formData: {
     description: string
@@ -318,7 +385,7 @@ export function NCRPage() {
   }
 
   // Close NCR
-  const handleCloseNcr = async (ncrId: string, verificationNotes: string) => {
+  const handleCloseNcr = async (ncrId: string, closeData: { verificationNotes: string; lessonsLearned: string }) => {
     setActionLoading(true)
     try {
       const response = await fetch(`${API_URL}/api/ncrs/${ncrId}/close`, {
@@ -327,22 +394,22 @@ export function NCRPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ verificationNotes }),
+        body: JSON.stringify({ verificationNotes: closeData.verificationNotes, lessonsLearned: closeData.lessonsLearned }),
       })
 
-      const data = await response.json()
+      const responseData = await response.json()
 
       if (!response.ok) {
         // Handle specific error for major NCR requiring QM approval
-        if (data.requiresQmApproval) {
+        if (responseData.requiresQmApproval) {
           throw new Error('Major NCRs require Quality Manager approval before closure. Please request QM approval first.')
         }
-        throw new Error(data.message || 'Failed to close NCR')
+        throw new Error(responseData.message || 'Failed to close NCR')
       }
 
       setShowCloseModal(false)
       setSelectedNcr(null)
-      setSuccessMessage(data.message || 'NCR closed successfully')
+      setSuccessMessage(responseData.message || 'NCR closed successfully')
       fetchNcrs()
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err) {
@@ -1179,7 +1246,7 @@ export function NCRPage() {
             setShowCloseModal(false)
             setSelectedNcr(null)
           }}
-          onSubmit={(notes) => handleCloseNcr(selectedNcr.id, notes)}
+          onSubmit={(data) => handleCloseNcr(selectedNcr.id, data)}
           loading={actionLoading}
         />
       )}
@@ -1800,14 +1867,15 @@ function CloseNCRModal({
 }: {
   ncr: NCR
   onClose: () => void
-  onSubmit: (notes: string) => void
+  onSubmit: (data: { verificationNotes: string; lessonsLearned: string }) => void
   loading: boolean
 }) {
   const [verificationNotes, setVerificationNotes] = useState('')
+  const [lessonsLearned, setLessonsLearned] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(verificationNotes)
+    onSubmit({ verificationNotes, lessonsLearned })
   }
 
   return createPortal(
@@ -1843,6 +1911,20 @@ function CloseNCRModal({
               rows={3}
               placeholder="Notes about the verification and closure..."
             />
+          </div>
+          {/* Feature #474: Lessons Learned Recording */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Lessons Learned</label>
+            <textarea
+              value={lessonsLearned}
+              onChange={(e) => setLessonsLearned(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+              rows={3}
+              placeholder="What lessons can be learned from this NCR? How can similar issues be prevented in the future?"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Document insights for continuous improvement and future reference.
+            </p>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button
