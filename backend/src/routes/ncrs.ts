@@ -1356,6 +1356,8 @@ ncrsRouter.get('/analytics/:projectId', requireAuth, async (req: any, res) => {
         raisedAt: true,
         closedAt: true,
         dueDate: true,
+        responsibleSubcontractorId: true,
+        description: true,
       },
     })
 
@@ -1453,6 +1455,75 @@ ncrsRouter.get('/analytics/:projectId', requireAuth, async (req: any, res) => {
       .map(([month, count]) => ({ month, count }))
       .sort((a, b) => a.month.localeCompare(b.month))
 
+    // Feature #475: Repeat issue identification
+    // Group NCRs by category + root cause to identify repeat issues
+    const repeatIssueGroups: Record<string, {
+      category: string
+      rootCause: string
+      ncrs: { id: string; ncrNumber: string; raisedAt: Date; status: string }[]
+      count: number
+    }> = {}
+
+    ncrs.forEach(ncr => {
+      const category = ncr.category || 'Uncategorized'
+      const rootCause = ncr.rootCauseCategory || 'Not categorized'
+      const key = `${category}::${rootCause}`
+
+      if (!repeatIssueGroups[key]) {
+        repeatIssueGroups[key] = {
+          category,
+          rootCause,
+          ncrs: [],
+          count: 0
+        }
+      }
+      repeatIssueGroups[key].ncrs.push({
+        id: ncr.id,
+        ncrNumber: ncr.ncrNumber,
+        raisedAt: ncr.raisedAt,
+        status: ncr.status
+      })
+      repeatIssueGroups[key].count++
+    })
+
+    // Filter to only show groups with 2+ NCRs (actual repeats)
+    const repeatIssues = Object.values(repeatIssueGroups)
+      .filter(group => group.count >= 2)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10) // Top 10 repeat issues
+
+    // Also identify subcontractors with repeat issues
+    const subcontractorIssues: Record<string, {
+      subcontractorId: string
+      ncrCount: number
+      ncrIds: string[]
+      categories: string[]
+    }> = {}
+
+    ncrs.forEach(ncr => {
+      if (ncr.responsibleSubcontractorId) {
+        const subId = ncr.responsibleSubcontractorId
+        if (!subcontractorIssues[subId]) {
+          subcontractorIssues[subId] = {
+            subcontractorId: subId,
+            ncrCount: 0,
+            ncrIds: [],
+            categories: []
+          }
+        }
+        subcontractorIssues[subId].ncrCount++
+        subcontractorIssues[subId].ncrIds.push(ncr.id)
+        if (!subcontractorIssues[subId].categories.includes(ncr.category || 'Uncategorized')) {
+          subcontractorIssues[subId].categories.push(ncr.category || 'Uncategorized')
+        }
+      }
+    })
+
+    // Filter to subcontractors with 2+ NCRs
+    const repeatOffenders = Object.values(subcontractorIssues)
+      .filter(sub => sub.ncrCount >= 2)
+      .sort((a, b) => b.ncrCount - a.ncrCount)
+
     res.json({
       summary: {
         total: totalNCRs,
@@ -1513,6 +1584,18 @@ ncrsRouter.get('/analytics/:projectId', requireAuth, async (req: any, res) => {
             ncrs.filter(n => (n.category || 'Uncategorized') === cat).map(n => n.id)
           ])
         ),
+      },
+      // Feature #475: Repeat issue identification
+      repeatIssues: {
+        title: 'Repeat Issues',
+        description: 'NCRs grouped by category and root cause showing recurring problems',
+        data: repeatIssues,
+        totalRepeatGroups: repeatIssues.length,
+      },
+      repeatOffenders: {
+        title: 'Subcontractors with Multiple NCRs',
+        description: 'Subcontractors responsible for 2 or more NCRs',
+        data: repeatOffenders,
       },
     })
   } catch (error) {
