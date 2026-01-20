@@ -611,12 +611,17 @@ subcontractorsRouter.post('/:id/employees', async (req, res) => {
 subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
   try {
     const { id, empId } = req.params
-    const { status } = req.body
+    const { status, counterRate } = req.body
     const userId = (req as any).user?.userId
 
-    const validStatuses = ['pending', 'approved', 'inactive']
+    const validStatuses = ['pending', 'approved', 'inactive', 'counter']
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be: pending, approved, or inactive' })
+      return res.status(400).json({ error: 'Invalid status. Must be: pending, approved, inactive, or counter' })
+    }
+
+    // Counter-proposals require a counter rate
+    if (status === 'counter' && (counterRate === undefined || counterRate === null)) {
+      return res.status(400).json({ error: 'Counter-proposal requires a counterRate value' })
     }
 
     // Verify employee belongs to this subcontractor
@@ -680,13 +685,55 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
       }
     }
 
+    // Feature #944 - Send notification when PM counter-proposes employee rate
+    if (status === 'counter' && counterRate !== undefined) {
+      try {
+        // Get subcontractor company and project details
+        const subcontractor = await prisma.subcontractorCompany.findUnique({
+          where: { id },
+          include: {
+            project: { select: { id: true, name: true } }
+          }
+        })
+
+        // Get subcontractor users to notify
+        const subcontractorUsers = await prisma.subcontractorUser.findMany({
+          where: { subcontractorCompanyId: id },
+          include: { user: { select: { id: true, email: true } } }
+        })
+
+        const originalRate = Number(employee.hourlyRate).toFixed(2)
+        const proposedRate = Number(counterRate).toFixed(2)
+
+        // Create notification for each subcontractor user
+        for (const su of subcontractorUsers) {
+          await prisma.notification.create({
+            data: {
+              userId: su.user.id,
+              projectId: subcontractor?.project?.id || null,
+              type: 'rate_counter',
+              title: 'Rate Counter-Proposal',
+              message: `A counter-proposal has been made for ${updated.name}. Original rate: $${originalRate}/hr, Proposed rate: $${proposedRate}/hr. Please review and respond.`,
+              linkUrl: `/subcontractor-portal`
+            }
+          })
+        }
+
+        console.log(`[Rate Counter] Employee ${updated.name} counter-proposed ($${originalRate} -> $${proposedRate}) for ${subcontractor?.companyName}, notified ${subcontractorUsers.length} users`)
+      } catch (notifError) {
+        console.error('[Rate Counter] Failed to send notification:', notifError)
+        // Don't fail the main request
+      }
+    }
+
     res.json({
       employee: {
         id: updated.id,
         name: updated.name,
         role: updated.role || '',
         hourlyRate: Number(updated.hourlyRate),
-        status: updated.status
+        status: updated.status,
+        ...(status === 'counter' && counterRate !== undefined && { counterRate: Number(counterRate) })
       }
     })
   } catch (error) {
@@ -747,12 +794,17 @@ subcontractorsRouter.post('/:id/plant', async (req, res) => {
 subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
   try {
     const { id, plantId } = req.params
-    const { status } = req.body
+    const { status, counterDryRate, counterWetRate } = req.body
     const userId = (req as any).user?.userId
 
-    const validStatuses = ['pending', 'approved', 'inactive']
+    const validStatuses = ['pending', 'approved', 'inactive', 'counter']
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be: pending, approved, or inactive' })
+      return res.status(400).json({ error: 'Invalid status. Must be: pending, approved, inactive, or counter' })
+    }
+
+    // Counter-proposals require at least a counter dry rate
+    if (status === 'counter' && (counterDryRate === undefined || counterDryRate === null)) {
+      return res.status(400).json({ error: 'Counter-proposal requires a counterDryRate value' })
     }
 
     // Verify plant belongs to this subcontractor
@@ -821,6 +873,56 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
       }
     }
 
+    // Feature #944 - Send notification when PM counter-proposes plant rate
+    if (status === 'counter' && counterDryRate !== undefined) {
+      try {
+        // Get subcontractor company and project details
+        const subcontractor = await prisma.subcontractorCompany.findUnique({
+          where: { id },
+          include: {
+            project: { select: { id: true, name: true } }
+          }
+        })
+
+        // Get subcontractor users to notify
+        const subcontractorUsers = await prisma.subcontractorUser.findMany({
+          where: { subcontractorCompanyId: id },
+          include: { user: { select: { id: true, email: true } } }
+        })
+
+        // Format original rates
+        const origDryRate = Number(plant.dryRate).toFixed(2)
+        const origWetRate = plant.wetRate ? Number(plant.wetRate).toFixed(2) : null
+        const originalRates = origWetRate ? `$${origDryRate}/$${origWetRate}/hr` : `$${origDryRate}/hr`
+
+        // Format proposed rates
+        const propDryRate = Number(counterDryRate).toFixed(2)
+        const propWetRate = counterWetRate ? Number(counterWetRate).toFixed(2) : null
+        const proposedRates = propWetRate ? `$${propDryRate}/$${propWetRate}/hr` : `$${propDryRate}/hr`
+
+        const plantDesc = `${updated.type}${updated.description ? ` - ${updated.description}` : ''}`
+
+        // Create notification for each subcontractor user
+        for (const su of subcontractorUsers) {
+          await prisma.notification.create({
+            data: {
+              userId: su.user.id,
+              projectId: subcontractor?.project?.id || null,
+              type: 'rate_counter',
+              title: 'Plant Rate Counter-Proposal',
+              message: `A counter-proposal has been made for ${plantDesc}. Original: ${originalRates}, Proposed: ${proposedRates}. Please review and respond.`,
+              linkUrl: `/subcontractor-portal`
+            }
+          })
+        }
+
+        console.log(`[Rate Counter] Plant ${updated.type} counter-proposed (${originalRates} -> ${proposedRates}) for ${subcontractor?.companyName}, notified ${subcontractorUsers.length} users`)
+      } catch (notifError) {
+        console.error('[Rate Counter] Failed to send notification:', notifError)
+        // Don't fail the main request
+      }
+    }
+
     res.json({
       plant: {
         id: updated.id,
@@ -829,7 +931,11 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
         idRego: updated.idRego || '',
         dryRate: Number(updated.dryRate),
         wetRate: Number(updated.wetRate) || 0,
-        status: updated.status
+        status: updated.status,
+        ...(status === 'counter' && {
+          counterDryRate: Number(counterDryRate),
+          ...(counterWetRate !== undefined && { counterWetRate: Number(counterWetRate) })
+        })
       }
     })
   } catch (error) {
