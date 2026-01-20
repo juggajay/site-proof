@@ -885,3 +885,292 @@ docketsRouter.delete('/:id/labour/:entryId', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// ============================================================================
+// Feature #262 - Plant Entry Management
+// ============================================================================
+
+// GET /api/dockets/:id/plant - Get plant entries for a docket
+docketsRouter.get('/:id/plant', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const docket = await prisma.dailyDocket.findUnique({
+      where: { id },
+      include: {
+        plantEntries: {
+          include: {
+            plant: {
+              select: { id: true, type: true, description: true, idRego: true, dryRate: true, wetRate: true }
+            }
+          },
+          orderBy: { hoursOperated: 'desc' }
+        }
+      }
+    })
+
+    if (!docket) {
+      return res.status(404).json({ error: 'Docket not found' })
+    }
+
+    // Format plant entries
+    const plantEntries = docket.plantEntries.map(entry => ({
+      id: entry.id,
+      plant: {
+        id: entry.plant.id,
+        type: entry.plant.type,
+        description: entry.plant.description,
+        idRego: entry.plant.idRego,
+        dryRate: Number(entry.plant.dryRate) || 0,
+        wetRate: Number(entry.plant.wetRate) || 0
+      },
+      hoursOperated: Number(entry.hoursOperated) || 0,
+      wetOrDry: entry.wetOrDry || 'dry',
+      hourlyRate: Number(entry.hourlyRate) || 0,
+      submittedCost: Number(entry.submittedCost) || 0,
+      approvedCost: Number(entry.approvedCost) || 0,
+      adjustmentReason: entry.adjustmentReason
+    }))
+
+    // Calculate totals
+    const totalHours = plantEntries.reduce((sum, e) => sum + e.hoursOperated, 0)
+    const totalSubmittedCost = plantEntries.reduce((sum, e) => sum + e.submittedCost, 0)
+    const totalApprovedCost = plantEntries.reduce((sum, e) => sum + e.approvedCost, 0)
+
+    res.json({
+      plantEntries,
+      totals: {
+        hours: totalHours,
+        submittedCost: totalSubmittedCost,
+        approvedCost: totalApprovedCost
+      }
+    })
+  } catch (error) {
+    console.error('Get plant entries error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/dockets/:id/plant - Add a plant entry to a docket
+docketsRouter.post('/:id/plant', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { plantId, hoursOperated, wetOrDry } = req.body
+
+    if (!plantId) {
+      return res.status(400).json({ error: 'plantId is required' })
+    }
+
+    if (hoursOperated === undefined || hoursOperated === null) {
+      return res.status(400).json({ error: 'hoursOperated is required' })
+    }
+
+    // Get docket
+    const docket = await prisma.dailyDocket.findUnique({
+      where: { id },
+      include: {
+        subcontractorCompany: { select: { id: true } }
+      }
+    })
+
+    if (!docket) {
+      return res.status(404).json({ error: 'Docket not found' })
+    }
+
+    if (docket.status !== 'draft') {
+      return res.status(400).json({ error: 'Can only add plant to draft dockets' })
+    }
+
+    // Get plant from register
+    const plant = await prisma.plantRegister.findFirst({
+      where: {
+        id: plantId,
+        subcontractorCompanyId: docket.subcontractorCompanyId
+      }
+    })
+
+    if (!plant) {
+      return res.status(404).json({ error: 'Plant not found in register' })
+    }
+
+    // Determine rate based on wet/dry
+    const isWet = wetOrDry === 'wet'
+    const hourlyRate = isWet ? (Number(plant.wetRate) || Number(plant.dryRate) || 0) : (Number(plant.dryRate) || 0)
+    const cost = Number(hoursOperated) * hourlyRate
+
+    // Create plant entry
+    const entry = await prisma.docketPlant.create({
+      data: {
+        docketId: id,
+        plantId,
+        hoursOperated,
+        wetOrDry: wetOrDry || 'dry',
+        hourlyRate,
+        submittedCost: cost
+      },
+      include: {
+        plant: {
+          select: { id: true, type: true, description: true, idRego: true, dryRate: true, wetRate: true }
+        }
+      }
+    })
+
+    // Update docket totals
+    const allEntries = await prisma.docketPlant.findMany({
+      where: { docketId: id }
+    })
+    const totalHours = allEntries.reduce((sum, e) => sum + (Number(e.hoursOperated) || 0), 0)
+    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0)
+
+    await prisma.dailyDocket.update({
+      where: { id },
+      data: {
+        totalPlantSubmitted: totalCost
+      }
+    })
+
+    res.status(201).json({
+      plantEntry: {
+        id: entry.id,
+        plant: {
+          id: entry.plant.id,
+          type: entry.plant.type,
+          description: entry.plant.description,
+          idRego: entry.plant.idRego,
+          dryRate: Number(entry.plant.dryRate) || 0,
+          wetRate: Number(entry.plant.wetRate) || 0
+        },
+        hoursOperated: Number(entry.hoursOperated) || 0,
+        wetOrDry: entry.wetOrDry || 'dry',
+        hourlyRate: Number(entry.hourlyRate) || 0,
+        submittedCost: Number(entry.submittedCost) || 0
+      },
+      runningTotal: {
+        hours: totalHours,
+        cost: totalCost
+      }
+    })
+  } catch (error) {
+    console.error('Add plant entry error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PUT /api/dockets/:id/plant/:entryId - Update a plant entry
+docketsRouter.put('/:id/plant/:entryId', async (req, res) => {
+  try {
+    const { id, entryId } = req.params
+    const { hoursOperated, wetOrDry } = req.body
+
+    const entry = await prisma.docketPlant.findFirst({
+      where: { id: entryId, docketId: id },
+      include: {
+        plant: { select: { dryRate: true, wetRate: true } }
+      }
+    })
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Plant entry not found' })
+    }
+
+    const docket = await prisma.dailyDocket.findUnique({ where: { id } })
+    if (docket?.status !== 'draft') {
+      return res.status(400).json({ error: 'Can only update plant in draft dockets' })
+    }
+
+    // Recalculate cost
+    const hours = hoursOperated !== undefined ? Number(hoursOperated) : Number(entry.hoursOperated)
+    const isWet = (wetOrDry || entry.wetOrDry) === 'wet'
+    const hourlyRate = isWet
+      ? (Number(entry.plant.wetRate) || Number(entry.plant.dryRate) || 0)
+      : (Number(entry.plant.dryRate) || 0)
+    const cost = hours * hourlyRate
+
+    // Update entry
+    const updated = await prisma.docketPlant.update({
+      where: { id: entryId },
+      data: {
+        hoursOperated: hours,
+        wetOrDry: wetOrDry || entry.wetOrDry,
+        hourlyRate,
+        submittedCost: cost
+      },
+      include: {
+        plant: {
+          select: { id: true, type: true, description: true, idRego: true, dryRate: true, wetRate: true }
+        }
+      }
+    })
+
+    // Update docket totals
+    const allEntries = await prisma.docketPlant.findMany({
+      where: { docketId: id }
+    })
+    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0)
+
+    await prisma.dailyDocket.update({
+      where: { id },
+      data: { totalPlantSubmitted: totalCost }
+    })
+
+    res.json({
+      plantEntry: {
+        id: updated.id,
+        plant: {
+          id: updated.plant.id,
+          type: updated.plant.type,
+          description: updated.plant.description,
+          idRego: updated.plant.idRego,
+          dryRate: Number(updated.plant.dryRate) || 0,
+          wetRate: Number(updated.plant.wetRate) || 0
+        },
+        hoursOperated: Number(updated.hoursOperated) || 0,
+        wetOrDry: updated.wetOrDry || 'dry',
+        hourlyRate: Number(updated.hourlyRate) || 0,
+        submittedCost: Number(updated.submittedCost) || 0
+      }
+    })
+  } catch (error) {
+    console.error('Update plant entry error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/dockets/:id/plant/:entryId - Delete a plant entry
+docketsRouter.delete('/:id/plant/:entryId', async (req, res) => {
+  try {
+    const { id, entryId } = req.params
+
+    const entry = await prisma.docketPlant.findFirst({
+      where: { id: entryId, docketId: id }
+    })
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Plant entry not found' })
+    }
+
+    const docket = await prisma.dailyDocket.findUnique({ where: { id } })
+    if (docket?.status !== 'draft') {
+      return res.status(400).json({ error: 'Can only delete plant from draft dockets' })
+    }
+
+    // Delete entry
+    await prisma.docketPlant.delete({ where: { id: entryId } })
+
+    // Update docket totals
+    const allEntries = await prisma.docketPlant.findMany({
+      where: { docketId: id }
+    })
+    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0)
+
+    await prisma.dailyDocket.update({
+      where: { id },
+      data: { totalPlantSubmitted: totalCost }
+    })
+
+    res.json({ message: 'Plant entry deleted' })
+  } catch (error) {
+    console.error('Delete plant entry error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
