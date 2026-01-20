@@ -3,18 +3,30 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  const notifications = await prisma.notification.findMany({
+  // Check for HP release notifications
+  const hpNotifications = await prisma.notification.findMany({
     where: {
-      projectId: '28490410-acc1-4d6d-8638-6bfb3f339d92',
-      type: 'ncr_raised'
+      OR: [
+        { type: 'hold_point_release' },
+        { title: { contains: 'Hold Point' } }
+      ]
     },
     include: {
       user: { select: { email: true, fullName: true } }
     },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    take: 10
   })
-  console.log('NCR Raised Notifications:')
-  console.log(JSON.stringify(notifications, null, 2))
+  console.log('HP Release Notifications:')
+  console.log(JSON.stringify(hpNotifications, null, 2))
+
+  // Show all recent notifications
+  const allRecent = await prisma.notification.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 5
+  })
+  console.log('\nMost recent 5 notifications:')
+  console.log(JSON.stringify(allRecent, null, 2))
 }
 
 main()

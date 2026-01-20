@@ -1,0 +1,615 @@
+%PDF-1.3
+%ºß¬à
+3 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/MediaBox [0 0 595.2799999999999727 841.8899999999999864]
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 4793
+>>
+stream
+0.5670000000000001 w
+0 G
+BT
+/F2 20 Tf
+23. TL
+0. g
+129.8399999999999181 785.1970866141732586 Td
+(HOLD POINT EVIDENCE PACKAGE) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0. g
+240.4499999999999602 751.1813385826771992 Td
+(Lot: HP-TEST-001) Tj
+ET
+0.78 G
+56.6929133858267775 708.6616535433070112 m
+538.5870866141731312 708.6616535433070112 l
+S
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0. g
+56.6929133858267775 694.4884251968503577 Td
+(1. Hold Point Identification) Tj
+ET
+0.13 0.77 0.37 rg
+56.6929133858267775 671.8112598425196893 481.8941732283464034 -34.0157480314960665 re
+f
+BT
+/F2 10 Tf
+11.5 TL
+1. g
+247.6399999999999864 649.1340944881889072 Td
+(STATUS: RELEASED) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 623.6222834645668627 Td
+(Hold Point Description: Subgrade inspection - Hold Point) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 606.614409448818833 Td
+(Scheduled Date: 21 Jan 2026, 11:00 am) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 589.6065354330708033 Td
+(Released: 20 Jan 2026, 3:35 am) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 572.5986614173227736 Td
+(Released By: John Smith) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 555.5907874015747439 Td
+(Release Notes: Inspection completed satisfactorily. Released via mobile.) Tj
+ET
+0.78 G
+56.6929133858267775 524.4096850393700606 m
+538.5870866141731312 524.4096850393700606 l
+S
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0. g
+56.6929133858267775 510.2364566929133503 Td
+(2. Lot Details) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 487.559291338582625 Td
+(Project: Attention Test Project) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 473.3860629921259147 Td
+(Project Number: ATT-001) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 459.2128346456692611 Td
+(Lot Number: HP-TEST-001) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 445.0396062992125508 Td
+(Description: Lot for testing HP release on mobile) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 430.8663779527558404 Td
+(Activity Type: Earthworks) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 416.69314960629913 Td
+(ITP Template: Mobile HP Test ITP) Tj
+ET
+0.78 G
+56.6929133858267775 388.3466929133857661 m
+538.5870866141731312 388.3466929133857661 l
+S
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0. g
+56.6929133858267775 374.1734645669290558 Td
+(3. Completed Checklist Items) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 351.4962992125983874 Td
+(Completion Status: 1 / 1 items completed) Tj
+ET
+0.94 g
+56.6929133858267775 328.8191338582676622 481.8941732283464034 -19.8425196850393704 re
+f
+BT
+/F2 8 Tf
+9.1999999999999993 TL
+0. g
+62.3622047244094517 314.6459055118109518 Td
+(#) Tj
+ET
+BT
+/F2 8 Tf
+9.1999999999999993 TL
+0. g
+90.708661417322844 314.6459055118109518 Td
+(Description) Tj
+ET
+BT
+/F2 8 Tf
+9.1999999999999993 TL
+0. g
+303.3070866141732722 314.6459055118109518 Td
+(Type) Tj
+ET
+BT
+/F2 8 Tf
+9.1999999999999993 TL
+0. g
+360.0000000000000568 314.6459055118109518 Td
+(Status) Tj
+ET
+BT
+/F2 8 Tf
+9.1999999999999993 TL
+0. g
+430.866141732283495 314.6459055118109518 Td
+(Completed By) Tj
+ET
+BT
+/F1 8 Tf
+9.1999999999999993 TL
+0. g
+62.3622047244094517 291.9687401574802834 Td
+(1) Tj
+ET
+BT
+/F1 8 Tf
+9.1999999999999993 TL
+0. g
+90.708661417322844 291.9687401574802834 Td
+(Subgrade inspection - Hold Point) Tj
+ET
+BT
+/F1 8 Tf
+9.1999999999999993 TL
+0. g
+303.3070866141732722 291.9687401574802834 Td
+(HP) Tj
+ET
+BT
+/F1 8 Tf
+9.1999999999999993 TL
+0. g
+360.0000000000000568 291.9687401574802834 Td
+(Done) Tj
+ET
+BT
+/F1 8 Tf
+9.1999999999999993 TL
+0. g
+430.866141732283495 291.9687401574802834 Td
+(Admin User Updated) Tj
+ET
+0.78 G
+56.6929133858267775 263.6222834645668627 m
+538.5870866141731312 263.6222834645668627 l
+S
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0. g
+56.6929133858267775 249.4490551181102092 Td
+(4. Test Results) Tj
+ET
+BT
+/F3 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 226.7718897637794271 Td
+(No test results recorded for this lot.) Tj
+ET
+0.78 G
+56.6929133858267775 189.9214960629920199 m
+538.5870866141731312 189.9214960629920199 l
+S
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0. g
+56.6929133858267775 175.748267716535338 Td
+(5. Photos & Evidence) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 153.0711023622046696 Td
+(Photos: 1) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 138.8978740157479024 Td
+(Checklist Attachments: 1) Tj
+ET
+BT
+/F2 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 116.220708661417234 Td
+(Photo List:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+70.8661417322834666 102.0474803149605805 Td
+(- lot-created-before-refresh.png \(ITP Evidence Photo - 1/20/2026, 3:49:24 AM\) 20/01/2026) Tj
+ET
+BT
+/F3 9 Tf
+10.3499999999999996 TL
+0. g
+56.6929133858267775 87.8742519685038133 Td
+(\(Full photo images available in SiteProof system\)) Tj
+ET
+0.78 G
+56.6929133858267775 59.5277952755904423 m
+538.5870866141731312 59.5277952755904423 l
+S
+endstream
+endobj
+5 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/MediaBox [0 0 595.2799999999999727 841.8899999999999864]
+/Contents 6 0 R
+>>
+endobj
+6 0 obj
+<<
+/Length 1513
+>>
+stream
+0.5670000000000001 w
+0.78 G
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0. g
+56.6929133858267775 785.1970866141732586 Td
+(6. Survey Data) Tj
+ET
+BT
+/F3 10 Tf
+11.5 TL
+0. g
+56.6929133858267775 762.5199212598424765 Td
+(\(Survey coordinates and as-built data available in SiteProof system\)) Tj
+ET
+0.78 G
+56.6929133858267775 734.1734645669290558 m
+538.5870866141731312 734.1734645669290558 l
+S
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0. g
+56.6929133858267775 720.0002362204724022 Td
+(7. Evidence Summary) Tj
+ET
+0.96 g
+56.6929133858267775 697.3230708661417339 481.8941732283464034 -99.2125984251968589 re
+f
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+70.8661417322834666 680.3151968503937042 Td
+(Checklist Items Completed: 1 / 1) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+70.8661417322834666 666.1419685039369369 Td
+(Items Verified: 0) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+70.8661417322834666 651.9687401574802834 Td
+(Test Results: 0 \(0 passing\)) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+70.8661417322834666 637.7955118110235162 Td
+(Photos: 1) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0. g
+70.8661417322834666 623.6222834645668627 Td
+(Attachments: 1) Tj
+ET
+0.78 G
+56.6929133858267775 581.1025984251967884 m
+538.5870866141731312 581.1025984251967884 l
+S
+BT
+/F1 8 Tf
+9.1999999999999993 TL
+0.502 g
+56.6929133858267775 566.9293700787401349 Td
+(Generated: Tuesday, 20 January 2026 at 7:30:47 pm) Tj
+ET
+BT
+/F1 8 Tf
+9.1999999999999993 TL
+0.502 g
+56.6929133858267775 555.5907874015747439 Td
+(This evidence package was generated by SiteProof v2 - Civil Execution and Conformance Platform) Tj
+ET
+endstream
+endobj
+1 0 obj
+<</Type /Pages
+/Kids [3 0 R 5 0 R ]
+/Count 2
+>>
+endobj
+7 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+8 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+9 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-Oblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+10 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-BoldOblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+11 0 obj
+<<
+/Type /Font
+/BaseFont /Courier
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+12 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+13 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-Oblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+14 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-BoldOblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+15 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Roman
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+16 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+17 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Italic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+18 0 obj
+<<
+/Type /Font
+/BaseFont /Times-BoldItalic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+19 0 obj
+<<
+/Type /Font
+/BaseFont /ZapfDingbats
+/Subtype /Type1
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+20 0 obj
+<<
+/Type /Font
+/BaseFont /Symbol
+/Subtype /Type1
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+2 0 obj
+<<
+/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]
+/Font <<
+/F1 7 0 R
+/F2 8 0 R
+/F3 9 0 R
+/F4 10 0 R
+/F5 11 0 R
+/F6 12 0 R
+/F7 13 0 R
+/F8 14 0 R
+/F9 15 0 R
+/F10 16 0 R
+/F11 17 0 R
+/F12 18 0 R
+/F13 19 0 R
+/F14 20 0 R
+>>
+/XObject <<
+>>
+>>
+endobj
+21 0 obj
+<<
+/Producer (jsPDF 2.5.2)
+/CreationDate (D:20260120193047+11'00')
+>>
+endobj
+22 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/OpenAction [3 0 R /FitH null]
+/PageLayout /OneColumn
+>>
+endobj
+xref
+0 23
+0000000000 65535 f 
+0000006699 00000 n 
+0000008524 00000 n 
+0000000015 00000 n 
+0000000152 00000 n 
+0000004997 00000 n 
+0000005134 00000 n 
+0000006762 00000 n 
+0000006887 00000 n 
+0000007017 00000 n 
+0000007150 00000 n 
+0000007288 00000 n 
+0000007412 00000 n 
+0000007541 00000 n 
+0000007673 00000 n 
+0000007809 00000 n 
+0000007937 00000 n 
+0000008064 00000 n 
+0000008193 00000 n 
+0000008326 00000 n 
+0000008428 00000 n 
+0000008774 00000 n 
+0000008860 00000 n 
+trailer
+<<
+/Size 23
+/Root 22 0 R
+/Info 21 0 R
+/ID [ <B6EBA241036A94AF3746D64F96BE6AB2> <B6EBA241036A94AF3746D64F96BE6AB2> ]
+>>
+startxref
+8964
+%%EOF

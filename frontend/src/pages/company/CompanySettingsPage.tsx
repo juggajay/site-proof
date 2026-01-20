@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { getAuthToken, useAuth } from '@/lib/auth'
-import { Building2, Save, AlertTriangle, Upload, Crown, UserCog, Loader2, X } from 'lucide-react'
+import { Building2, Save, AlertTriangle, Upload, Crown, UserCog, Loader2, X, DollarSign } from 'lucide-react'
 
 interface CompanyMember {
   id: string
@@ -533,6 +533,82 @@ export function CompanySettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Billing & Subscription - Only visible to owners (Feature #703) */}
+      {user?.role === 'owner' && (
+        <div className="rounded-lg border bg-card p-6 space-y-4" data-testid="billing-section">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Billing & Subscription
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Manage your subscription and billing details.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="p-4 rounded-lg bg-muted/50 border">
+              <label className="block text-sm font-medium">Current Plan</label>
+              <p className="text-2xl font-bold capitalize mt-1">
+                {company?.subscriptionTier || 'Basic'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {company?.subscriptionTier === 'enterprise' ? 'Custom pricing' :
+                 company?.subscriptionTier === 'professional' ? '$99/month' :
+                 company?.subscriptionTier === 'starter' ? '$29/month' : 'Free'}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-lg bg-muted/50 border">
+              <label className="block text-sm font-medium">Billing Cycle</label>
+              <p className="text-lg font-semibold mt-1">Monthly</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Next billing date: {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+              </p>
+            </div>
+
+            <div className="sm:col-span-2 p-4 rounded-lg bg-muted/50 border">
+              <label className="block text-sm font-medium mb-2">Plan Limits</label>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Projects</span>
+                  <span>{company?.projectCount || 0} / {company?.projectLimit === Infinity ? 'Unlimited' : company?.projectLimit || 3}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Team Members</span>
+                  <span>{company?.userCount || 0} / {company?.userLimit === Infinity ? 'Unlimited' : company?.userLimit || 5}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Storage</span>
+                  <span>
+                    {company?.subscriptionTier === 'enterprise' ? 'Unlimited' :
+                     company?.subscriptionTier === 'professional' ? '100 GB' :
+                     company?.subscriptionTier === 'starter' ? '10 GB' : '1 GB'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+              onClick={() => alert('Contact sales@siteproof.com to upgrade your plan')}
+            >
+              Upgrade Plan
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-md border px-4 py-2 hover:bg-muted"
+              onClick={() => alert('Contact billing@siteproof.com for billing inquiries')}
+            >
+              Manage Payment Method
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Transfer Ownership - Only visible to owners */}
       {user?.role === 'owner' && (

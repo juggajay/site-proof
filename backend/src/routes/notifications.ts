@@ -1514,7 +1514,7 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
 
       // Format docket list for notification
       const docketCount = dockets.length
-      const docketNumbers = dockets.slice(0, 3).map(d => d.docketNumber).join(', ')
+      const docketIds = dockets.slice(0, 3).map(d => d.id.substring(0, 8)).join(', ')
       const moreText = docketCount > 3 ? ` and ${docketCount - 3} more` : ''
 
       // Create alert notifications
@@ -1523,7 +1523,7 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
         projectId,
         type: 'docket_backlog_alert',
         title: 'Docket Backlog Alert',
-        message: `${docketCount} docket(s) have been pending approval for more than 48 hours on ${project.name}: ${docketNumbers}${moreText}. Please review.`,
+        message: `${docketCount} docket(s) have been pending approval for more than 48 hours on ${project.name}: ${docketIds}${moreText}. Please review.`,
         linkUrl: `/projects/${projectId}/dockets`
       }))
 
@@ -1550,7 +1550,7 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
           projectId,
           projectName: project.name,
           docketCount,
-          docketNumbers: dockets.map(d => d.docketNumber),
+          docketIds: dockets.map(d => d.id),
           usersNotified: users.map(u => u.email)
         })
       }
@@ -1569,6 +1569,346 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
     })
   } catch (error) {
     console.error('Docket backlog alert check error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ============================================================================
+// Feature #303: System Alerts for Critical Issues
+// ============================================================================
+
+// POST /api/notifications/system-alerts/check - Check and generate system alerts for critical issues
+// This is the main endpoint that checks for all critical issues and creates appropriate alerts
+// It should be called periodically (e.g., every hour) by a scheduled task or cron job
+notificationsRouter.post('/system-alerts/check', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { projectId: specificProjectId } = req.body
+    const now = new Date()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    console.log(`[System Alerts] Running critical issues check at ${now.toISOString()}`)
+
+    const alertsGenerated: any[] = []
+
+    // Get projects to check
+    const projectQuery: any = { status: 'active' }
+    if (specificProjectId) {
+      projectQuery.id = specificProjectId
+    }
+
+    const projects = await prisma.project.findMany({
+      where: projectQuery,
+      select: { id: true, name: true }
+    })
+
+    for (const project of projects) {
+      // ==========================================
+      // 1. CHECK FOR OVERDUE NCRs
+      // ==========================================
+      const overdueNCRs = await prisma.nCR.findMany({
+        where: {
+          projectId: project.id,
+          status: { notIn: ['closed', 'closed_concession'] },
+          dueDate: { lt: now }
+        },
+        select: { id: true, ncrNumber: true, description: true, dueDate: true, responsibleUserId: true }
+      })
+
+      for (const ncr of overdueNCRs) {
+        // Check if an alert already exists for this NCR (avoid duplicates)
+        const existingAlert = Array.from(alertStore.values()).find(
+          a => a.entityId === ncr.id && a.type === 'overdue_ncr' && !a.resolvedAt
+        )
+
+        if (!existingAlert) {
+          const daysOverdue = ncr.dueDate
+            ? Math.ceil((now.getTime() - new Date(ncr.dueDate).getTime()) / (1000 * 60 * 60 * 24))
+            : 0
+
+          const severity: AlertSeverity = daysOverdue > 7 ? 'critical' : daysOverdue > 3 ? 'high' : 'medium'
+
+          const alert: Alert = {
+            id: generateAlertId(),
+            type: 'overdue_ncr',
+            severity,
+            title: `NCR ${ncr.ncrNumber} is overdue`,
+            message: `NCR ${ncr.ncrNumber} is ${daysOverdue} day(s) overdue. ${ncr.description?.substring(0, 100) || 'No description'}`,
+            entityId: ncr.id,
+            entityType: 'ncr',
+            projectId: project.id,
+            assignedTo: ncr.responsibleUserId || userId,
+            createdAt: now,
+            escalationLevel: 0,
+          }
+
+          alertStore.set(alert.id, alert)
+
+          // Create in-app notification
+          if (ncr.responsibleUserId) {
+            await prisma.notification.create({
+              data: {
+                userId: ncr.responsibleUserId,
+                projectId: project.id,
+                type: 'alert_overdue_ncr',
+                title: alert.title,
+                message: alert.message,
+                linkUrl: `/ncrs/${ncr.id}`,
+              },
+            })
+          }
+
+          alertsGenerated.push({
+            type: 'overdue_ncr',
+            alertId: alert.id,
+            entityId: ncr.id,
+            projectName: project.name,
+            severity,
+            message: alert.title
+          })
+
+          console.log(`[System Alerts] Created overdue NCR alert: ${ncr.ncrNumber} (${daysOverdue} days overdue)`)
+        }
+      }
+
+      // ==========================================
+      // 2. CHECK FOR STALE HOLD POINTS
+      // ==========================================
+      // Stale = requested/scheduled but not released within 24 hours
+      const staleThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24 hours ago
+
+      const staleHoldPoints = await prisma.holdPoint.findMany({
+        where: {
+          lot: { projectId: project.id },
+          status: { in: ['requested', 'scheduled'] },
+          scheduledDate: { lt: staleThreshold }
+        },
+        include: {
+          lot: { select: { id: true, lotNumber: true } },
+          itpItem: { select: { id: true, description: true } }
+        }
+      })
+
+      for (const hp of staleHoldPoints) {
+        const existingAlert = Array.from(alertStore.values()).find(
+          a => a.entityId === hp.id && a.type === 'stale_hold_point' && !a.resolvedAt
+        )
+
+        if (!existingAlert) {
+          const hoursStale = hp.scheduledDate
+            ? Math.ceil((now.getTime() - new Date(hp.scheduledDate).getTime()) / (1000 * 60 * 60))
+            : 0
+
+          const severity: AlertSeverity = hoursStale > 48 ? 'critical' : hoursStale > 24 ? 'high' : 'medium'
+
+          const alert: Alert = {
+            id: generateAlertId(),
+            type: 'stale_hold_point',
+            severity,
+            title: `Hold Point stale: Lot ${hp.lot.lotNumber}`,
+            message: `Hold Point for Lot ${hp.lot.lotNumber} has been ${hp.status} for ${hoursStale} hours. ${hp.itpItem?.description?.substring(0, 80) || ''}`,
+            entityId: hp.id,
+            entityType: 'holdpoint',
+            projectId: project.id,
+            assignedTo: userId, // Will be escalated to appropriate role
+            createdAt: now,
+            escalationLevel: 0,
+          }
+
+          alertStore.set(alert.id, alert)
+
+          // Notify project managers and superintendents
+          const pmUsers = await prisma.projectUser.findMany({
+            where: {
+              projectId: project.id,
+              role: { in: ['project_manager', 'superintendent', 'quality_manager'] },
+              status: { in: ['active', 'accepted'] }
+            },
+            select: { userId: true }
+          })
+
+          for (const pu of pmUsers) {
+            await prisma.notification.create({
+              data: {
+                userId: pu.userId,
+                projectId: project.id,
+                type: 'alert_stale_hold_point',
+                title: alert.title,
+                message: alert.message,
+                linkUrl: `/lots/${hp.lot.id}?tab=holdpoints`,
+              },
+            })
+          }
+
+          alertsGenerated.push({
+            type: 'stale_hold_point',
+            alertId: alert.id,
+            entityId: hp.id,
+            projectName: project.name,
+            severity,
+            message: alert.title
+          })
+
+          console.log(`[System Alerts] Created stale HP alert: Lot ${hp.lot.lotNumber} (${hoursStale} hours stale)`)
+        }
+      }
+
+      // ==========================================
+      // 3. CHECK FOR MISSED DIARY SUBMISSIONS
+      // ==========================================
+      // Check if yesterday's diary is missing
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayEnd = new Date(yesterday.getTime() + 24 * 60 * 60 * 1000)
+
+      const existingDiary = await prisma.dailyDiary.findFirst({
+        where: {
+          projectId: project.id,
+          date: { gte: yesterday, lt: yesterdayEnd }
+        }
+      })
+
+      if (!existingDiary) {
+        // Check if we already created an alert for this
+        const existingMissingAlert = Array.from(alertStore.values()).find(
+          a => a.type === 'pending_approval' &&
+               a.entityType === 'diary' &&
+               a.projectId === project.id &&
+               a.message.includes(yesterday.toISOString().split('T')[0]) &&
+               !a.resolvedAt
+        )
+
+        if (!existingMissingAlert) {
+          const dateString = yesterday.toISOString().split('T')[0]
+
+          const alert: Alert = {
+            id: generateAlertId(),
+            type: 'pending_approval', // Using pending_approval for missing diary
+            severity: 'high',
+            title: `Missing Daily Diary: ${project.name}`,
+            message: `No daily diary was submitted for ${project.name} on ${dateString}. This affects project records and compliance.`,
+            entityId: `diary-${project.id}-${dateString}`,
+            entityType: 'diary',
+            projectId: project.id,
+            assignedTo: userId,
+            createdAt: now,
+            escalationLevel: 0,
+          }
+
+          alertStore.set(alert.id, alert)
+
+          // Notify site engineers, foremen, and project managers
+          const diaryUsers = await prisma.projectUser.findMany({
+            where: {
+              projectId: project.id,
+              role: { in: ['site_engineer', 'foreman', 'project_manager'] },
+              status: { in: ['active', 'accepted'] }
+            },
+            select: { userId: true }
+          })
+
+          for (const pu of diaryUsers) {
+            await prisma.notification.create({
+              data: {
+                userId: pu.userId,
+                projectId: project.id,
+                type: 'alert_missing_diary',
+                title: alert.title,
+                message: alert.message,
+                linkUrl: `/projects/${project.id}/diary`,
+              },
+            })
+          }
+
+          alertsGenerated.push({
+            type: 'missing_diary',
+            alertId: alert.id,
+            projectName: project.name,
+            severity: 'high',
+            message: alert.title
+          })
+
+          console.log(`[System Alerts] Created missing diary alert for ${project.name} on ${dateString}`)
+        }
+      }
+    }
+
+    // Summary
+    const summary = {
+      overdueNCRs: alertsGenerated.filter(a => a.type === 'overdue_ncr').length,
+      staleHoldPoints: alertsGenerated.filter(a => a.type === 'stale_hold_point').length,
+      missingDiaries: alertsGenerated.filter(a => a.type === 'missing_diary').length,
+    }
+
+    console.log(`[System Alerts] Check complete. Generated ${alertsGenerated.length} new alerts:`)
+    console.log(`   - Overdue NCRs: ${summary.overdueNCRs}`)
+    console.log(`   - Stale Hold Points: ${summary.staleHoldPoints}`)
+    console.log(`   - Missing Diaries: ${summary.missingDiaries}`)
+
+    res.json({
+      success: true,
+      timestamp: now.toISOString(),
+      projectsChecked: projects.length,
+      alertsGenerated: alertsGenerated.length,
+      summary,
+      alerts: alertsGenerated,
+      activeAlerts: Array.from(alertStore.values()).filter(a => !a.resolvedAt).length
+    })
+  } catch (error) {
+    console.error('System alerts check error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/notifications/system-alerts/summary - Get summary of all active system alerts
+notificationsRouter.get('/system-alerts/summary', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { projectId } = req.query
+
+    let activeAlerts = Array.from(alertStore.values()).filter(a => !a.resolvedAt)
+
+    if (projectId) {
+      activeAlerts = activeAlerts.filter(a => a.projectId === projectId)
+    }
+
+    const bySeverity = {
+      critical: activeAlerts.filter(a => a.severity === 'critical').length,
+      high: activeAlerts.filter(a => a.severity === 'high').length,
+      medium: activeAlerts.filter(a => a.severity === 'medium').length,
+      low: activeAlerts.filter(a => a.severity === 'low').length,
+    }
+
+    const byType = {
+      overdue_ncr: activeAlerts.filter(a => a.type === 'overdue_ncr').length,
+      stale_hold_point: activeAlerts.filter(a => a.type === 'stale_hold_point').length,
+      pending_approval: activeAlerts.filter(a => a.type === 'pending_approval').length,
+      overdue_test: activeAlerts.filter(a => a.type === 'overdue_test').length,
+    }
+
+    const escalated = activeAlerts.filter(a => a.escalationLevel > 0).length
+
+    res.json({
+      totalActive: activeAlerts.length,
+      bySeverity,
+      byType,
+      escalated,
+      criticalItems: activeAlerts
+        .filter(a => a.severity === 'critical')
+        .slice(0, 5)
+        .map(a => ({ id: a.id, type: a.type, title: a.title, createdAt: a.createdAt }))
+    })
+  } catch (error) {
+    console.error('System alerts summary error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

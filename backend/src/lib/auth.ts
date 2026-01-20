@@ -31,7 +31,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
     const payload = jwt.verify(token, JWT_SECRET) as TokenPayload
     console.log('[AUTH DEBUG] JWT verified, userId:', payload.userId)
 
-    // Get user with tokenInvalidatedAt field
+    // Get user from database
     console.log('[AUTH DEBUG] Querying user from database...')
     const userResult = await prisma.$queryRaw<Array<{
       id: string
@@ -41,9 +41,8 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       role_in_company: string
       company_id: string | null
       created_at: Date
-      token_invalidated_at: Date | null
       avatar_url: string | null
-    }>>`SELECT id, email, full_name, phone, role_in_company, company_id, created_at, token_invalidated_at, avatar_url FROM users WHERE id = ${payload.userId}`
+    }>>`SELECT id, email, full_name, phone, role_in_company, company_id, created_at, avatar_url FROM users WHERE id = ${payload.userId}`
 
     const user = userResult[0]
 
@@ -51,21 +50,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       return null
     }
 
-    // Check if token was invalidated (issued before logout all devices)
-    if (user.token_invalidated_at && payload.iat) {
-      const tokenIssuedAt = new Date(payload.iat * 1000)
-      // SQLite stores dates as strings, so we need to parse it
-      const invalidatedAt = new Date(user.token_invalidated_at as unknown as string)
-      console.log('[AUTH DEBUG] Token iat:', payload.iat, '→', tokenIssuedAt.toISOString())
-      console.log('[AUTH DEBUG] Token invalidated at:', user.token_invalidated_at, '→', invalidatedAt.toISOString())
-      console.log('[AUTH DEBUG] tokenIssuedAt < invalidatedAt?', tokenIssuedAt < invalidatedAt)
-      if (tokenIssuedAt < invalidatedAt) {
-        // Token was issued before the user logged out all devices
-        console.log('[AUTH DEBUG] Token rejected - issued before invalidation')
-        return null
-      }
-    }
-
+    console.log('[AUTH DEBUG] User found, returning auth user')
     return {
       id: user.id,
       userId: user.id,

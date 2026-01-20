@@ -1,0 +1,4 @@
+lot_number,description,chainage_start,chainage_end,activity_type
+"LOT-001","Example lot description","0","100","Earthworks"
+"LOT-002","Another lot with drainage","100","200","Drainage"
+"LOT-003","Pavement section","200","350","Pavement"

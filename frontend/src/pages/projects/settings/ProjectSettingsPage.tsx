@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
-import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive, CheckCircle2, MapPin } from 'lucide-react'
+import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive, CheckCircle2, MapPin, Puzzle } from 'lucide-react'
 
 interface Project {
   id: string
@@ -33,7 +33,7 @@ interface TeamMember {
   acceptedAt?: string
 }
 
-type SettingsTab = 'general' | 'team' | 'areas' | 'itp-templates' | 'notifications'
+type SettingsTab = 'general' | 'team' | 'areas' | 'itp-templates' | 'notifications' | 'modules'
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
@@ -112,6 +112,21 @@ export function ProjectSettingsPage() {
   // HP Approval Requirement state (Feature #698)
   const [hpApprovalRequirement, setHpApprovalRequirement] = useState<'any' | 'superintendent'>('any')
 
+  // Project Modules state (Feature #700)
+  const [enabledModules, setEnabledModules] = useState<{
+    costTracking: boolean
+    progressClaims: boolean
+    subcontractors: boolean
+    dockets: boolean
+    dailyDiary: boolean
+  }>({
+    costTracking: true,
+    progressClaims: true,
+    subcontractors: true,
+    dockets: true,
+    dailyDiary: true,
+  })
+
   const setActiveTab = (tab: SettingsTab) => {
     setSearchParams({ tab })
   }
@@ -146,6 +161,7 @@ export function ProjectSettingsPage() {
           })
           // Feature #697 - Load HP recipients from project settings
           // Feature #698 - Load HP approval requirement
+          // Feature #700 - Load enabled modules
           if (data.project.settings) {
             try {
               const settings = typeof data.project.settings === 'string'
@@ -156,6 +172,9 @@ export function ProjectSettingsPage() {
               }
               if (settings.hpApprovalRequirement) {
                 setHpApprovalRequirement(settings.hpApprovalRequirement)
+              }
+              if (settings.enabledModules) {
+                setEnabledModules(prev => ({ ...prev, ...settings.enabledModules }))
               }
             } catch (e) {
               // Invalid JSON, use defaults
@@ -520,6 +539,7 @@ export function ProjectSettingsPage() {
     { id: 'areas' as SettingsTab, label: 'Areas', icon: MapPin },
     { id: 'itp-templates' as SettingsTab, label: 'ITP Templates', icon: ClipboardList },
     { id: 'notifications' as SettingsTab, label: 'Notifications', icon: Bell },
+    { id: 'modules' as SettingsTab, label: 'Modules', icon: Puzzle },
   ]
 
   return (
@@ -1176,6 +1196,64 @@ export function ProjectSettingsPage() {
               >
                 + Add Recipient
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modules Tab - Feature #700 */}
+        {activeTab === 'modules' && (
+          <div className="space-y-6">
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">Project Modules</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Enable or disable modules for this project. Disabled modules will be hidden from the navigation.
+              </p>
+              <div className="space-y-3">
+                {[
+                  { key: 'costTracking' as const, label: 'Cost Tracking', description: 'Track project costs and budget' },
+                  { key: 'progressClaims' as const, label: 'Progress Claims', description: 'Manage progress claims and payments' },
+                  { key: 'subcontractors' as const, label: 'Subcontractors', description: 'Manage subcontractor information' },
+                  { key: 'dockets' as const, label: 'Docket Approvals', description: 'Approve and track delivery dockets' },
+                  { key: 'dailyDiary' as const, label: 'Daily Diary', description: 'Record daily site activities' },
+                ].map((module) => (
+                  <div
+                    key={module.key}
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50"
+                    onClick={async () => {
+                      const newValue = !enabledModules[module.key]
+                      const newModules = { ...enabledModules, [module.key]: newValue }
+                      setEnabledModules(newModules)
+                      // Save to project settings
+                      const token = getAuthToken()
+                      if (!token || !projectId) return
+                      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                      try {
+                        await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                          method: 'PATCH',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({ settings: { enabledModules: newModules } }),
+                        })
+                      } catch (e) {
+                        console.error('Failed to save module settings:', e)
+                      }
+                    }}
+                  >
+                    <div>
+                      <p className="font-medium">{module.label}</p>
+                      <p className="text-sm text-muted-foreground">{module.description}</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={enabledModules[module.key]}
+                      onChange={() => {}} // Handled by parent onClick
+                      className="h-5 w-5 cursor-pointer"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

@@ -1,0 +1,7 @@
+lot_number,description,chainage_start,chainage_end,activity_type
+IMPORT-LOT-001,Valid lot with all fields,0,100,Earthworks
+IMPORT-LOT-002,Another valid lot,100,200,Drainage
+AB,Too short lot number,200,300,Pavement
+IMPORT-LOT-003,,300,400,
+IMPORT-LOT-001,Duplicate lot number,400,500,Concrete
+IMPORT-LOT-004,Invalid chainage range,500,400,Structures

@@ -229,6 +229,9 @@ export function ReportsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [subscriptionTier, setSubscriptionTier] = useState<string>('basic')
+  // Feature #702: Company logo on reports
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null)
+  const [companyName, setCompanyName] = useState<string>('')
 
   // Diary report specific state
   const [diarySections, setDiarySections] = useState<string[]>(['weather', 'personnel', 'plant', 'activities', 'delays'])
@@ -308,6 +311,13 @@ export function ReportsPage() {
         if (response.ok) {
           const data = await response.json()
           setSubscriptionTier(data.company?.subscriptionTier || 'basic')
+          // Feature #702: Company logo on reports
+          if (data.company?.logoUrl) {
+            setCompanyLogo(data.company.logoUrl)
+          }
+          if (data.company?.name) {
+            setCompanyName(data.company.name)
+          }
         }
       } catch (err) {
         console.error('Failed to fetch subscription tier:', err)
@@ -511,9 +521,19 @@ export function ReportsPage() {
                 </h1>
                 <p className="text-lg text-gray-700 mt-1">{projectName}</p>
               </div>
-              <div className="text-right">
-                <div className="text-xl font-semibold text-blue-700">SiteProof</div>
-                <div className="text-sm text-gray-500">Quality Management System</div>
+              {/* Feature #702: Company logo on reports */}
+              <div className="text-right flex items-center gap-3">
+                {companyLogo ? (
+                  <img
+                    src={companyLogo.startsWith('http') ? companyLogo : `${API_URL}${companyLogo}`}
+                    alt={companyName || 'Company Logo'}
+                    className="h-12 w-auto object-contain"
+                  />
+                ) : null}
+                <div>
+                  <div className="text-xl font-semibold text-blue-700">{companyName || 'SiteProof'}</div>
+                  <div className="text-sm text-gray-500">Quality Management System</div>
+                </div>
               </div>
             </div>
             <div className="flex justify-between text-sm text-gray-600 mt-3">

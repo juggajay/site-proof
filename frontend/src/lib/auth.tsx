@@ -254,3 +254,22 @@ export function getAuthToken(): string | null {
   }
   return null
 }
+
+// Helper to get the current user from stored auth
+export function getCurrentUser(): { id: string; email: string; role?: string } | null {
+  // Check localStorage first (remember me), then sessionStorage
+  let storedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
+  if (!storedAuth) {
+    storedAuth = sessionStorage.getItem(AUTH_STORAGE_KEY)
+  }
+
+  if (storedAuth) {
+    try {
+      const parsed = JSON.parse(storedAuth)
+      return parsed.user || null
+    } catch {
+      return null
+    }
+  }
+  return null
+}

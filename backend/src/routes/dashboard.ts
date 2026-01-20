@@ -696,3 +696,761 @@ dashboardRouter.get('/cost-trend', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// Feature #292: GET /api/dashboard/foreman - Simplified dashboard for foreman role
+// Shows today's diary status, pending dockets, inspections due today, and weather
+dashboardRouter.get('/foreman', async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found'
+      })
+    }
+
+    // Get accessible projects
+    const projectAccess = await prisma.projectUser.findMany({
+      where: { userId },
+      select: { projectId: true, project: { select: { id: true, name: true, projectNumber: true, status: true } } },
+      orderBy: { project: { updatedAt: 'desc' } }
+    })
+
+    const activeProjects = projectAccess
+      .filter(pa => pa.project.status === 'active')
+      .map(pa => pa.project)
+
+    // Use the most recently updated active project, or first project if none active
+    const primaryProject = activeProjects[0] || (projectAccess[0]?.project || null)
+    const projectId = primaryProject?.id
+
+    // Return empty data if no project access
+    if (!projectId) {
+      return res.json({
+        todayDiary: { exists: false, status: null, id: null },
+        pendingDockets: { count: 0, totalLabourHours: 0, totalPlantHours: 0 },
+        inspectionsDueToday: { count: 0, items: [] },
+        weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
+        project: null
+      })
+    }
+
+    // Get today's date range
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    // 1. Today's Diary Status
+    const todayDiary = await prisma.dailyDiary.findFirst({
+      where: {
+        projectId,
+        date: {
+          gte: today,
+          lt: tomorrow
+        }
+      },
+      select: {
+        id: true,
+        status: true
+      }
+    })
+
+    // 2. Pending Dockets
+    const pendingDockets = await prisma.dailyDocket.findMany({
+      where: {
+        projectId,
+        status: 'pending_approval'
+      },
+      select: {
+        labourHours: true,
+        totalLabourSubmitted: true,
+        totalPlantSubmitted: true
+      }
+    })
+
+    const docketStats = {
+      count: pendingDockets.length,
+      totalLabourHours: pendingDockets.reduce((sum, d) => sum + Number(d.totalLabourSubmitted || d.labourHours || 0), 0),
+      totalPlantHours: pendingDockets.reduce((sum, d) => sum + Number(d.totalPlantSubmitted || 0), 0)
+    }
+
+    // 3. Inspections Due Today (Hold Points + ITPs that are scheduled for today)
+    const holdPointsDueToday = await prisma.holdPoint.findMany({
+      where: {
+        lot: { projectId },
+        status: { in: ['scheduled', 'requested'] },
+        scheduledDate: {
+          gte: today,
+          lt: tomorrow
+        }
+      },
+      include: {
+        lot: { select: { lotNumber: true, id: true, projectId: true } }
+      },
+      take: 10
+    })
+
+    // Also check ITP completions due today
+    const itpsDueToday = await prisma.iTPChecklistItem.findMany({
+      where: {
+        template: {
+          instances: {
+            some: {
+              lot: { projectId }
+            }
+          }
+        },
+        scheduledDate: {
+          gte: today,
+          lt: tomorrow
+        }
+      },
+      include: {
+        template: {
+          include: {
+            instances: {
+              where: {
+                lot: { projectId }
+              },
+              include: {
+                lot: { select: { lotNumber: true, id: true, projectId: true } }
+              },
+              take: 1
+            }
+          }
+        }
+      },
+      take: 10
+    })
+
+    const inspectionItems = [
+      ...holdPointsDueToday.map(hp => ({
+        id: hp.id,
+        type: 'Hold Point',
+        description: hp.description || 'Hold Point',
+        lotNumber: hp.lot.lotNumber,
+        link: `/projects/${hp.lot.projectId}/lots/${hp.lot.id}/holdpoints?hp=${hp.id}`
+      })),
+      ...itpsDueToday.map(item => ({
+        id: item.id,
+        type: 'ITP',
+        description: item.description,
+        lotNumber: item.template?.instances?.[0]?.lot?.lotNumber || 'Unknown',
+        link: `/projects/${projectId}/itp`
+      }))
+    ]
+
+    // 4. Weather from today's diary or recent diary
+    let weather = {
+      conditions: null as string | null,
+      temperatureMin: null as number | null,
+      temperatureMax: null as number | null,
+      rainfallMm: null as number | null
+    }
+
+    const recentDiary = await prisma.dailyDiary.findFirst({
+      where: {
+        projectId,
+        date: {
+          gte: today,
+          lt: tomorrow
+        }
+      },
+      select: {
+        weatherConditions: true,
+        temperatureMin: true,
+        temperatureMax: true,
+        rainfallMm: true
+      }
+    })
+
+    if (recentDiary) {
+      weather = {
+        conditions: recentDiary.weatherConditions,
+        temperatureMin: recentDiary.temperatureMin ? Number(recentDiary.temperatureMin) : null,
+        temperatureMax: recentDiary.temperatureMax ? Number(recentDiary.temperatureMax) : null,
+        rainfallMm: recentDiary.rainfallMm ? Number(recentDiary.rainfallMm) : null
+      }
+    }
+
+    res.json({
+      todayDiary: {
+        exists: !!todayDiary,
+        status: todayDiary?.status || null,
+        id: todayDiary?.id || null
+      },
+      pendingDockets: docketStats,
+      inspectionsDueToday: {
+        count: inspectionItems.length,
+        items: inspectionItems
+      },
+      weather,
+      project: primaryProject
+    })
+  } catch (error) {
+    console.error('Foreman dashboard error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Feature #293: GET /api/dashboard/quality-manager - Dashboard for QM role
+// Shows conformance rate, NCRs by category, pending verifications, HP release rate, ITP trends, audit readiness
+dashboardRouter.get('/quality-manager', async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found'
+      })
+    }
+
+    // Get accessible projects
+    const projectAccess = await prisma.projectUser.findMany({
+      where: { userId },
+      select: { projectId: true, project: { select: { id: true, name: true, projectNumber: true, status: true } } },
+      orderBy: { project: { updatedAt: 'desc' } }
+    })
+
+    const activeProjects = projectAccess
+      .filter(pa => pa.project.status === 'active')
+      .map(pa => pa.project)
+
+    const primaryProject = activeProjects[0] || (projectAccess[0]?.project || null)
+    const projectId = primaryProject?.id
+
+    // Default empty response
+    const emptyResponse = {
+      lotConformance: { totalLots: 0, conformingLots: 0, nonConformingLots: 0, rate: 100 },
+      ncrsByCategory: { major: 0, minor: 0, observation: 0, total: 0 },
+      openNCRs: [],
+      pendingVerifications: { count: 0, items: [] },
+      holdPointMetrics: { totalReleased: 0, totalPending: 0, releaseRate: 100, avgTimeToRelease: 0 },
+      itpTrends: { completedThisWeek: 0, completedLastWeek: 0, trend: 'stable' as const, completionRate: 100 },
+      auditReadiness: { score: 100, status: 'ready' as const, issues: [] },
+      project: null
+    }
+
+    if (!projectId) {
+      return res.json(emptyResponse)
+    }
+
+    // 1. Lot Conformance Rate
+    const totalLots = await prisma.lot.count({ where: { projectId } })
+    // Count lots that have at least one open NCR via the ncrLots junction table
+    const nonConformingLots = await prisma.lot.count({
+      where: {
+        projectId,
+        ncrLots: { some: { ncr: { status: { notIn: ['closed', 'closed_concession'] } } } }
+      }
+    })
+    const conformingLots = totalLots - nonConformingLots
+    const conformanceRate = totalLots > 0 ? (conformingLots / totalLots) * 100 : 100
+
+    // 2. NCRs by Category
+    const majorNCRs = await prisma.nCR.count({
+      where: { projectId, category: 'major', status: { notIn: ['closed', 'closed_concession'] } }
+    })
+    const minorNCRs = await prisma.nCR.count({
+      where: { projectId, category: 'minor', status: { notIn: ['closed', 'closed_concession'] } }
+    })
+    const observationNCRs = await prisma.nCR.count({
+      where: { projectId, category: 'observation', status: { notIn: ['closed', 'closed_concession'] } }
+    })
+
+    // Get open NCRs list
+    const openNCRs = await prisma.nCR.findMany({
+      where: {
+        projectId,
+        status: { notIn: ['closed', 'closed_concession'] }
+      },
+      select: {
+        id: true,
+        ncrNumber: true,
+        description: true,
+        category: true,
+        status: true,
+        dueDate: true,
+        createdAt: true
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    })
+
+    const formattedNCRs = openNCRs.map(ncr => ({
+      id: ncr.id,
+      ncrNumber: ncr.ncrNumber,
+      description: ncr.description,
+      category: ncr.category,
+      status: ncr.status,
+      dueDate: ncr.dueDate?.toISOString() || null,
+      daysOpen: Math.floor((Date.now() - ncr.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
+      link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`
+    }))
+
+    // 3. Pending Verifications (ITP items pending HC verification)
+    const pendingVerifications = await prisma.iTPCompletion.findMany({
+      where: {
+        verificationStatus: 'pending_verification',
+        itpInstance: {
+          lot: { projectId }
+        }
+      },
+      include: {
+        checklistItem: { select: { description: true } },
+        itpInstance: {
+          include: {
+            lot: { select: { lotNumber: true, id: true } }
+          }
+        }
+      },
+      take: 20
+    })
+
+    const pendingVerificationItems = pendingVerifications.map(pv => ({
+      id: pv.id,
+      description: pv.checklistItem.description,
+      lotNumber: pv.itpInstance.lot?.lotNumber || 'Unknown',
+      link: `/projects/${projectId}/lots/${pv.itpInstance.lot?.id}/itp`
+    }))
+
+    // 4. Hold Point Metrics
+    const releasedHPs = await prisma.holdPoint.count({
+      where: { lot: { projectId }, status: 'released' }
+    })
+    const pendingHPs = await prisma.holdPoint.count({
+      where: { lot: { projectId }, status: { in: ['pending', 'scheduled', 'requested'] } }
+    })
+    const totalHPs = releasedHPs + pendingHPs
+    const releaseRate = totalHPs > 0 ? (releasedHPs / totalHPs) * 100 : 100
+
+    // Calculate avg time to release (simplified - would need more complex logic for accuracy)
+    const recentReleased = await prisma.holdPoint.findMany({
+      where: {
+        lot: { projectId },
+        status: 'released',
+        releasedAt: { not: null }
+      },
+      select: { createdAt: true, releasedAt: true },
+      take: 20,
+      orderBy: { releasedAt: 'desc' }
+    })
+
+    let avgTimeToRelease = 0
+    if (recentReleased.length > 0) {
+      const totalHours = recentReleased.reduce((sum, hp) => {
+        if (hp.releasedAt) {
+          return sum + (hp.releasedAt.getTime() - hp.createdAt.getTime()) / (1000 * 60 * 60)
+        }
+        return sum
+      }, 0)
+      avgTimeToRelease = Math.round(totalHours / recentReleased.length)
+    }
+
+    // 5. ITP Completion Trends
+    const now = new Date()
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+
+    const completedThisWeek = await prisma.iTPCompletion.count({
+      where: {
+        itpInstance: { lot: { projectId } },
+        completedAt: { gte: oneWeekAgo }
+      }
+    })
+
+    const completedLastWeek = await prisma.iTPCompletion.count({
+      where: {
+        itpInstance: { lot: { projectId } },
+        completedAt: { gte: twoWeeksAgo, lt: oneWeekAgo }
+      }
+    })
+
+    const totalITPItems = await prisma.iTPChecklistItem.count({
+      where: {
+        template: {
+          itpInstances: { some: { lot: { projectId } } }
+        }
+      }
+    })
+
+    const completedITPItems = await prisma.iTPCompletion.count({
+      where: {
+        itpInstance: { lot: { projectId } },
+        verificationStatus: 'verified'
+      }
+    })
+
+    const itpCompletionRate = totalITPItems > 0 ? (completedITPItems / totalITPItems) * 100 : 100
+    const trend = completedThisWeek > completedLastWeek ? 'up' : completedThisWeek < completedLastWeek ? 'down' : 'stable'
+
+    // 6. Audit Readiness Score
+    const auditIssues: string[] = []
+    let auditScore = 100
+
+    // Check for major NCRs
+    if (majorNCRs > 0) {
+      auditIssues.push(`${majorNCRs} major NCR(s) open`)
+      auditScore -= majorNCRs * 10
+    }
+
+    // Check for pending verifications
+    if (pendingVerifications.length > 5) {
+      auditIssues.push(`${pendingVerifications.length} ITP items pending verification`)
+      auditScore -= 15
+    }
+
+    // Check for low conformance rate
+    if (conformanceRate < 90) {
+      auditIssues.push('Lot conformance rate below 90%')
+      auditScore -= 15
+    }
+
+    // Check for pending hold points
+    if (pendingHPs > 10) {
+      auditIssues.push(`${pendingHPs} hold points pending release`)
+      auditScore -= 10
+    }
+
+    // Check for low ITP completion
+    if (itpCompletionRate < 80) {
+      auditIssues.push('ITP completion rate below 80%')
+      auditScore -= 10
+    }
+
+    auditScore = Math.max(0, auditScore)
+    const auditStatus = auditScore >= 80 ? 'ready' : auditScore >= 50 ? 'needs_attention' : 'not_ready'
+
+    res.json({
+      lotConformance: {
+        totalLots,
+        conformingLots,
+        nonConformingLots,
+        rate: Math.round(conformanceRate * 10) / 10
+      },
+      ncrsByCategory: {
+        major: majorNCRs,
+        minor: minorNCRs,
+        observation: observationNCRs,
+        total: majorNCRs + minorNCRs + observationNCRs
+      },
+      openNCRs: formattedNCRs,
+      pendingVerifications: {
+        count: pendingVerifications.length,
+        items: pendingVerificationItems
+      },
+      holdPointMetrics: {
+        totalReleased: releasedHPs,
+        totalPending: pendingHPs,
+        releaseRate: Math.round(releaseRate * 10) / 10,
+        avgTimeToRelease
+      },
+      itpTrends: {
+        completedThisWeek,
+        completedLastWeek,
+        trend,
+        completionRate: Math.round(itpCompletionRate * 10) / 10
+      },
+      auditReadiness: {
+        score: auditScore,
+        status: auditStatus,
+        issues: auditIssues
+      },
+      project: primaryProject
+    })
+  } catch (error) {
+    console.error('Quality manager dashboard error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Feature #294: GET /api/dashboard/project-manager - Dashboard for PM role
+// Shows lot progress, NCRs, HP pipeline, claims, cost tracking, attention items
+dashboardRouter.get('/project-manager', async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found'
+      })
+    }
+
+    // Get accessible projects
+    const projectAccess = await prisma.projectUser.findMany({
+      where: { userId },
+      select: { projectId: true, project: { select: { id: true, name: true, projectNumber: true, status: true } } },
+      orderBy: { project: { updatedAt: 'desc' } }
+    })
+
+    const activeProjects = projectAccess
+      .filter(pa => pa.project.status === 'active')
+      .map(pa => pa.project)
+
+    const primaryProject = activeProjects[0] || (projectAccess[0]?.project || null)
+    const projectId = primaryProject?.id
+
+    // Default empty response
+    const emptyResponse = {
+      lotProgress: { total: 0, notStarted: 0, inProgress: 0, onHold: 0, completed: 0, progressPercentage: 0 },
+      openNCRs: { total: 0, major: 0, minor: 0, overdue: 0, items: [] },
+      holdPointPipeline: { pending: 0, scheduled: 0, requested: 0, released: 0, thisWeek: 0, items: [] },
+      claimStatus: { totalClaimed: 0, totalCertified: 0, totalPaid: 0, outstanding: 0, pendingClaims: 0, recentClaims: [] },
+      costTracking: { budgetTotal: 0, actualSpend: 0, variance: 0, variancePercentage: 0, labourCost: 0, plantCost: 0, trend: 'on_track' as const },
+      attentionItems: [],
+      project: null
+    }
+
+    if (!projectId) {
+      return res.json(emptyResponse)
+    }
+
+    // 1. Lot Progress
+    const lotStats = await prisma.lot.groupBy({
+      by: ['status'],
+      where: { projectId },
+      _count: true
+    })
+
+    const lotProgress = {
+      total: 0,
+      notStarted: 0,
+      inProgress: 0,
+      onHold: 0,
+      completed: 0,
+      progressPercentage: 0
+    }
+
+    lotStats.forEach(stat => {
+      lotProgress.total += stat._count
+      switch (stat.status) {
+        case 'not_started':
+          lotProgress.notStarted = stat._count
+          break
+        case 'in_progress':
+          lotProgress.inProgress = stat._count
+          break
+        case 'on_hold':
+          lotProgress.onHold = stat._count
+          break
+        case 'completed':
+        case 'conformed':
+          lotProgress.completed += stat._count
+          break
+      }
+    })
+
+    lotProgress.progressPercentage = lotProgress.total > 0
+      ? (lotProgress.completed / lotProgress.total) * 100
+      : 0
+
+    // 2. Open NCRs
+    const today = new Date()
+    const majorNCRs = await prisma.nCR.count({
+      where: { projectId, category: 'major', status: { notIn: ['closed', 'closed_concession'] } }
+    })
+    const minorNCRs = await prisma.nCR.count({
+      where: { projectId, category: 'minor', status: { notIn: ['closed', 'closed_concession'] } }
+    })
+    const overdueNCRs = await prisma.nCR.count({
+      where: { projectId, status: { notIn: ['closed', 'closed_concession'] }, dueDate: { lt: today } }
+    })
+
+    const recentNCRs = await prisma.nCR.findMany({
+      where: { projectId, status: { notIn: ['closed', 'closed_concession'] } },
+      select: { id: true, ncrNumber: true, description: true, category: true, status: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    })
+
+    // 3. HP Pipeline
+    const hpPending = await prisma.holdPoint.count({ where: { lot: { projectId }, status: 'pending' } })
+    const hpScheduled = await prisma.holdPoint.count({ where: { lot: { projectId }, status: 'scheduled' } })
+    const hpRequested = await prisma.holdPoint.count({ where: { lot: { projectId }, status: 'requested' } })
+    const hpReleased = await prisma.holdPoint.count({ where: { lot: { projectId }, status: 'released' } })
+
+    const oneWeekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const hpThisWeek = await prisma.holdPoint.count({
+      where: {
+        lot: { projectId },
+        status: { in: ['scheduled', 'requested'] },
+        scheduledDate: { gte: today, lte: oneWeekFromNow }
+      }
+    })
+
+    const upcomingHPs = await prisma.holdPoint.findMany({
+      where: { lot: { projectId }, status: { in: ['pending', 'scheduled', 'requested'] } },
+      include: { lot: { select: { lotNumber: true, id: true, projectId: true } } },
+      orderBy: { scheduledDate: 'asc' },
+      take: 5
+    })
+
+    // 4. Claims Status
+    const claims = await prisma.progressClaim.findMany({
+      where: { projectId },
+      select: {
+        id: true,
+        claimNumber: true,
+        totalClaimedAmount: true,
+        certifiedAmount: true,
+        paidAmount: true,
+        status: true
+      }
+    })
+
+    let totalClaimed = 0
+    let totalCertified = 0
+    let totalPaid = 0
+    let pendingClaims = 0
+
+    claims.forEach(claim => {
+      totalClaimed += Number(claim.totalClaimedAmount || 0)
+      totalCertified += Number(claim.certifiedAmount || 0)
+      totalPaid += Number(claim.paidAmount || 0)
+      if (claim.status === 'submitted' || claim.status === 'pending') {
+        pendingClaims++
+      }
+    })
+
+    const recentClaims = await prisma.progressClaim.findMany({
+      where: { projectId },
+      select: { id: true, claimNumber: true, totalClaimedAmount: true, status: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5
+    })
+
+    // 5. Cost Tracking
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { contractValue: true }
+    })
+
+    const dockets = await prisma.dailyDocket.findMany({
+      where: { projectId, status: 'approved' },
+      select: { totalLabourSubmitted: true, totalPlantSubmitted: true }
+    })
+
+    let labourCost = 0
+    let plantCost = 0
+    dockets.forEach(d => {
+      labourCost += Number(d.totalLabourSubmitted || 0)
+      plantCost += Number(d.totalPlantSubmitted || 0)
+    })
+
+    const budgetTotal = Number(project?.contractValue || 0)
+    const actualSpend = labourCost + plantCost
+    const variance = actualSpend - budgetTotal
+    const variancePercentage = budgetTotal > 0 ? (variance / budgetTotal) * 100 : 0
+    const trend = variancePercentage < -5 ? 'under' : variancePercentage > 5 ? 'over' : 'on_track'
+
+    // 6. Attention Items
+    const attentionItems: Array<{
+      id: string
+      type: 'ncr' | 'holdpoint' | 'claim' | 'diary'
+      title: string
+      description: string
+      urgency: 'critical' | 'warning' | 'info'
+      link: string
+    }> = []
+
+    // Add overdue NCRs
+    const overdueNCRList = await prisma.nCR.findMany({
+      where: { projectId, status: { notIn: ['closed', 'closed_concession'] }, dueDate: { lt: today } },
+      select: { id: true, ncrNumber: true, description: true },
+      take: 3
+    })
+    overdueNCRList.forEach(ncr => {
+      attentionItems.push({
+        id: `ncr-${ncr.id}`,
+        type: 'ncr',
+        title: `NCR ${ncr.ncrNumber} overdue`,
+        description: ncr.description,
+        urgency: 'critical',
+        link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`
+      })
+    })
+
+    // Add major NCRs
+    const majorNCRList = await prisma.nCR.findMany({
+      where: { projectId, category: 'major', status: { notIn: ['closed', 'closed_concession'] }, dueDate: { gte: today } },
+      select: { id: true, ncrNumber: true, description: true },
+      take: 2
+    })
+    majorNCRList.forEach(ncr => {
+      attentionItems.push({
+        id: `ncr-major-${ncr.id}`,
+        type: 'ncr',
+        title: `Major NCR: ${ncr.ncrNumber}`,
+        description: ncr.description,
+        urgency: 'warning',
+        link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`
+      })
+    })
+
+    res.json({
+      lotProgress,
+      openNCRs: {
+        total: majorNCRs + minorNCRs,
+        major: majorNCRs,
+        minor: minorNCRs,
+        overdue: overdueNCRs,
+        items: recentNCRs.map(ncr => ({
+          id: ncr.id,
+          ncrNumber: ncr.ncrNumber,
+          description: ncr.description,
+          category: ncr.category,
+          status: ncr.status,
+          daysOpen: Math.floor((Date.now() - ncr.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
+          link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`
+        }))
+      },
+      holdPointPipeline: {
+        pending: hpPending,
+        scheduled: hpScheduled,
+        requested: hpRequested,
+        released: hpReleased,
+        thisWeek: hpThisWeek,
+        items: upcomingHPs.map(hp => ({
+          id: hp.id,
+          description: hp.description || 'Hold Point',
+          lotNumber: hp.lot.lotNumber,
+          status: hp.status,
+          scheduledDate: hp.scheduledDate?.toISOString() || null,
+          link: `/projects/${hp.lot.projectId}/lots/${hp.lot.id}/holdpoints?hp=${hp.id}`
+        }))
+      },
+      claimStatus: {
+        totalClaimed,
+        totalCertified,
+        totalPaid,
+        outstanding: totalCertified - totalPaid,
+        pendingClaims,
+        recentClaims: recentClaims.map(c => ({
+          id: c.id,
+          claimNumber: c.claimNumber,
+          amount: Number(c.totalClaimedAmount || 0),
+          status: c.status,
+          link: `/projects/${projectId}/claims/${c.id}`
+        }))
+      },
+      costTracking: {
+        budgetTotal,
+        actualSpend,
+        variance,
+        variancePercentage: Math.round(variancePercentage * 10) / 10,
+        labourCost,
+        plantCost,
+        trend
+      },
+      attentionItems,
+      project: primaryProject
+    })
+  } catch (error) {
+    console.error('Project manager dashboard error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})

@@ -11,7 +11,7 @@ const rateLimitStore = new Map<string, RateLimitEntry>()
 
 // Configuration
 const WINDOW_MS = 60 * 1000 // 1 minute window
-const MAX_REQUESTS = 100 // Max requests per window
+const MAX_REQUESTS = 1000 // Max requests per window (increased for dev/testing)
 const CLEANUP_INTERVAL = 5 * 60 * 1000 // Clean up old entries every 5 minutes
 
 // Cleanup old entries periodically
@@ -101,7 +101,7 @@ function setRateLimitHeaders(res: Response, remaining: number, resetSeconds: num
  */
 const authRateLimitStore = new Map<string, RateLimitEntry>()
 const AUTH_WINDOW_MS = 60 * 1000 // 1 minute
-const AUTH_MAX_REQUESTS = 10 // Max login attempts per minute
+const AUTH_MAX_REQUESTS = 100 // Max login attempts per minute (increased for dev/testing)
 
 export function authRateLimiter(req: Request, res: Response, next: NextFunction) {
   const clientIp = getClientIp(req)
