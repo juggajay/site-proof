@@ -285,6 +285,8 @@ const DEFAULT_EMAIL_PREFERENCES = {
   scheduledReports: true,
   scheduledReportsTiming: 'immediate' as NotificationTiming,
   dailyDigest: false, // Master toggle for daily digest feature
+  diaryReminder: true, // Feature #934: Daily diary reminder notification
+  diaryReminderTiming: 'immediate' as NotificationTiming,
 }
 
 // In-memory storage for digest items (in production, store in database)
@@ -346,6 +348,8 @@ notificationsRouter.put('/email-preferences', async (req: AuthRequest, res) => {
       scheduledReports: Boolean(preferences?.scheduledReports ?? DEFAULT_EMAIL_PREFERENCES.scheduledReports),
       scheduledReportsTiming: validateTiming(preferences?.scheduledReportsTiming, DEFAULT_EMAIL_PREFERENCES.scheduledReportsTiming),
       dailyDigest: Boolean(preferences?.dailyDigest ?? DEFAULT_EMAIL_PREFERENCES.dailyDigest),
+      diaryReminder: Boolean(preferences?.diaryReminder ?? DEFAULT_EMAIL_PREFERENCES.diaryReminder),
+      diaryReminderTiming: validateTiming(preferences?.diaryReminderTiming, DEFAULT_EMAIL_PREFERENCES.diaryReminderTiming),
     }
 
     userEmailPreferences.set(userId, validatedPreferences)
@@ -1066,6 +1070,216 @@ notificationsRouter.post('/alerts/:id/test-escalate', async (req: AuthRequest, r
     })
   } catch (error) {
     console.error('Test escalate error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ============================================================================
+// Feature #934: Daily Diary Reminder Notification
+// ============================================================================
+
+// POST /api/notifications/diary-reminder/check - Check for missing diaries and send reminders
+// This would typically be called by a cron job at end of day (e.g., 5pm local time)
+notificationsRouter.post('/diary-reminder/check', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // Get today's date (or allow override for testing)
+    const { date: dateOverride, projectId: specificProjectId } = req.body
+    const targetDate = dateOverride ? new Date(dateOverride) : new Date()
+    targetDate.setHours(0, 0, 0, 0)
+    const dateString = targetDate.toISOString().split('T')[0]
+
+    console.log(`[Diary Reminder] Checking for missing diaries on ${dateString}`)
+
+    // Get all active projects
+    const projectQuery: any = { status: 'active' }
+    if (specificProjectId) {
+      projectQuery.id = specificProjectId
+    }
+
+    const projects = await prisma.project.findMany({
+      where: projectQuery,
+      select: { id: true, name: true }
+    })
+
+    const remindersCreated: any[] = []
+    const usersNotified = new Set<string>()
+
+    for (const project of projects) {
+      // Check if a diary exists for this project on the target date
+      const existingDiary = await prisma.dailyDiary.findFirst({
+        where: {
+          projectId: project.id,
+          date: {
+            gte: targetDate,
+            lt: new Date(targetDate.getTime() + 24 * 60 * 60 * 1000)
+          }
+        }
+      })
+
+      if (existingDiary) {
+        // Diary exists, no reminder needed
+        continue
+      }
+
+      // No diary - find users who should be reminded (site engineers and foremen)
+      const projectUsers = await prisma.projectUser.findMany({
+        where: {
+          projectId: project.id,
+          role: { in: ['site_engineer', 'foreman', 'project_manager'] },
+          status: { in: ['active', 'accepted'] }
+        }
+      })
+
+      const userIds = projectUsers.map(pu => pu.userId)
+      const users = userIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, email: true, fullName: true }
+          })
+        : []
+
+      // Create reminder notifications
+      const notificationsToCreate = users.map(user => ({
+        userId: user.id,
+        projectId: project.id,
+        type: 'diary_reminder',
+        title: 'Daily Diary Reminder',
+        message: `No daily diary entry found for ${project.name} on ${dateString}. Please complete your site diary.`,
+        linkUrl: `/projects/${project.id}/diary`
+      }))
+
+      if (notificationsToCreate.length > 0) {
+        await prisma.notification.createMany({
+          data: notificationsToCreate
+        })
+
+        for (const user of users) {
+          usersNotified.add(user.id)
+
+          // Send email notification
+          await sendNotificationIfEnabled(
+            user.id,
+            project.id,
+            'diary_reminder',
+            'Daily Diary Reminder',
+            `No daily diary entry found for ${project.name} on ${dateString}. Please complete your site diary.`,
+            user.email
+          )
+        }
+
+        remindersCreated.push({
+          projectId: project.id,
+          projectName: project.name,
+          date: dateString,
+          usersNotified: users.map(u => u.email)
+        })
+      }
+    }
+
+    console.log(`[Diary Reminder] Created ${remindersCreated.length} reminder(s) for ${usersNotified.size} user(s)`)
+
+    res.json({
+      success: true,
+      date: dateString,
+      projectsChecked: projects.length,
+      remindersCreated: remindersCreated.length,
+      uniqueUsersNotified: usersNotified.size,
+      details: remindersCreated
+    })
+  } catch (error) {
+    console.error('Diary reminder check error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/notifications/diary-reminder/send - Manually send a diary reminder for a specific project
+notificationsRouter.post('/diary-reminder/send', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const { projectId, date } = req.body
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' })
+    }
+
+    const targetDate = date ? new Date(date) : new Date()
+    targetDate.setHours(0, 0, 0, 0)
+    const dateString = targetDate.toISOString().split('T')[0]
+
+    // Get project info
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, name: true }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    // Get users to notify
+    const projectUsers = await prisma.projectUser.findMany({
+      where: {
+        projectId,
+        role: { in: ['site_engineer', 'foreman', 'project_manager'] },
+        status: { in: ['active', 'accepted'] }
+      }
+    })
+
+    const userIds = projectUsers.map(pu => pu.userId)
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, email: true, fullName: true }
+        })
+      : []
+
+    // Create notifications
+    const notificationsToCreate = users.map(user => ({
+      userId: user.id,
+      projectId: project.id,
+      type: 'diary_reminder',
+      title: 'Daily Diary Reminder',
+      message: `Reminder: Please complete the daily diary for ${project.name} on ${dateString}.`,
+      linkUrl: `/projects/${project.id}/diary`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+
+      // Send email notifications
+      for (const user of users) {
+        await sendNotificationIfEnabled(
+          user.id,
+          project.id,
+          'diary_reminder',
+          'Daily Diary Reminder',
+          `Reminder: Please complete the daily diary for ${project.name} on ${dateString}.`,
+          user.email
+        )
+      }
+    }
+
+    res.json({
+      success: true,
+      projectId: project.id,
+      projectName: project.name,
+      date: dateString,
+      usersNotified: users.map(u => ({ id: u.id, email: u.email })),
+      notificationCount: notificationsToCreate.length
+    })
+  } catch (error) {
+    console.error('Send diary reminder error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
