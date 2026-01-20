@@ -570,8 +570,8 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
       'Plant/Equipment'
     ]
 
-    let suggestedClassification: string
-    let confidence: number
+    // Feature #729: Multi-label classification support
+    let suggestedClassifications: Array<{ label: string; confidence: number }> = []
 
     // Try to use real AI classification if API key is available
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY
@@ -598,7 +598,7 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
           base64Image = imageData.toString('base64')
         }
 
-        // Call Anthropic API for image classification
+        // Call Anthropic API for multi-label image classification
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -608,7 +608,7 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
           },
           body: JSON.stringify({
             model: 'claude-3-haiku-20240307',
-            max_tokens: 100,
+            max_tokens: 200,
             messages: [
               {
                 role: 'user',
@@ -623,15 +623,19 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
                   },
                   {
                     type: 'text',
-                    text: `Classify this civil construction photo into exactly ONE of these categories: ${CLASSIFICATION_CATEGORIES.join(', ')}.
+                    text: `Classify this civil construction photo. A photo may show multiple things happening.
 
-Respond with ONLY the category name (exactly as written above) followed by a confidence percentage (0-100).
-Format: CategoryName|Confidence
+Available categories: ${CLASSIFICATION_CATEGORIES.join(', ')}
 
-Example responses:
-Compaction|95
-Excavation|80
-General Progress|60`
+List ALL applicable categories with confidence percentages (0-100), up to 3 categories.
+Format each on a new line: CategoryName|Confidence
+
+Example response for a photo showing excavation with safety equipment:
+Excavation|90
+Safety|75
+Plant/Equipment|60
+
+Respond with ONLY the category lines, nothing else.`
                   }
                 ]
               }
@@ -642,40 +646,54 @@ General Progress|60`
         if (response.ok) {
           const result = await response.json() as { content: { type: string; text: string }[] }
           const aiResponse = result.content[0]?.text?.trim() || ''
-          const [category, confidenceStr] = aiResponse.split('|')
+          const lines = aiResponse.split('\n').filter(line => line.trim())
 
-          // Validate the category
-          const matchedCategory = CLASSIFICATION_CATEGORIES.find(
-            c => c.toLowerCase() === category?.toLowerCase().trim()
-          )
+          for (const line of lines) {
+            const [category, confidenceStr] = line.split('|')
+            const matchedCategory = CLASSIFICATION_CATEGORIES.find(
+              c => c.toLowerCase() === category?.toLowerCase().trim()
+            )
 
-          if (matchedCategory) {
-            suggestedClassification = matchedCategory
-            confidence = parseInt(confidenceStr) || 70
-          } else {
-            // Fallback if AI response doesn't match expected format
-            suggestedClassification = 'General Progress'
-            confidence = 50
+            if (matchedCategory) {
+              suggestedClassifications.push({
+                label: matchedCategory,
+                confidence: parseInt(confidenceStr) || 70
+              })
+            }
+          }
+
+          // Ensure at least one classification
+          if (suggestedClassifications.length === 0) {
+            suggestedClassifications = [{ label: 'General Progress', confidence: 50 }]
           }
         } else {
           throw new Error('Anthropic API request failed')
         }
       } catch (aiError) {
         console.error('AI classification error:', aiError)
-        // Fall back to simulated classification
-        suggestedClassification = simulateClassification(document.filename, document.caption)
-        confidence = 65
+        // Fall back to simulated multi-label classification
+        suggestedClassifications = simulateMultiLabelClassification(document.filename, document.caption)
       }
     } else {
-      // Use simulated classification when no API key
-      suggestedClassification = simulateClassification(document.filename, document.caption)
-      confidence = 70
+      // Use simulated multi-label classification when no API key
+      suggestedClassifications = simulateMultiLabelClassification(document.filename, document.caption)
     }
+
+    // Sort by confidence and limit to top 3
+    suggestedClassifications.sort((a, b) => b.confidence - a.confidence)
+    suggestedClassifications = suggestedClassifications.slice(0, 3)
+
+    // Primary classification is the highest confidence one (for backward compatibility)
+    const primaryClassification = suggestedClassifications[0] || { label: 'General Progress', confidence: 50 }
 
     res.json({
       documentId,
-      suggestedClassification,
-      confidence,
+      // Backward compatible single classification
+      suggestedClassification: primaryClassification.label,
+      confidence: primaryClassification.confidence,
+      // Feature #729: Multi-label classifications
+      suggestedClassifications,
+      isMultiLabel: suggestedClassifications.length > 1,
       categories: CLASSIFICATION_CATEGORIES
     })
   } catch (error) {
@@ -685,60 +703,84 @@ General Progress|60`
 })
 
 // Helper function to simulate AI classification based on filename/caption keywords
+// Feature #729: Returns multiple classifications for multi-label support
 function simulateClassification(filename: string, caption: string | null): string {
+  const results = simulateMultiLabelClassification(filename, caption)
+  return results.length > 0 ? results[0].label : 'General Progress'
+}
+
+// Feature #729: Multi-label classification based on keywords
+function simulateMultiLabelClassification(
+  filename: string,
+  caption: string | null
+): Array<{ label: string; confidence: number }> {
   const text = `${filename} ${caption || ''}`.toLowerCase()
+  const matches: Array<{ label: string; confidence: number }> = []
 
-  // Keyword-based classification
-  if (text.includes('survey') || text.includes('level') || text.includes('gps') || text.includes('theodolite')) {
-    return 'Survey'
-  }
-  if (text.includes('compact') || text.includes('roller') || text.includes('density') || text.includes('proctor')) {
-    return 'Compaction'
-  }
-  if (text.includes('delivery') || text.includes('truck') || text.includes('material') || text.includes('stockpile')) {
-    return 'Material Delivery'
-  }
-  if (text.includes('excavat') || text.includes('dig') || text.includes('trench') || text.includes('dozer')) {
-    return 'Excavation'
-  }
-  if (text.includes('form') || text.includes('boxing') || text.includes('rebar') || text.includes('reinforce')) {
-    return 'Formwork'
-  }
-  if (text.includes('concrete') || text.includes('pour') || text.includes('slump') || text.includes('agitator')) {
-    return 'Concrete Pour'
-  }
-  if (text.includes('pipe') || text.includes('culvert') || text.includes('drain') || text.includes('stormwater')) {
-    return 'Pipe Laying'
-  }
-  if (text.includes('inspect') || text.includes('check') || text.includes('review')) {
-    return 'Inspection'
-  }
-  if (text.includes('test') || text.includes('sample') || text.includes('lab')) {
-    return 'Testing'
-  }
-  if (text.includes('safety') || text.includes('ppe') || text.includes('hazard') || text.includes('sign')) {
-    return 'Safety'
-  }
-  if (text.includes('plant') || text.includes('machine') || text.includes('equipment') || text.includes('excavator')) {
-    return 'Plant/Equipment'
+  // Keyword-based classification with confidence scores
+  const classificationRules: Array<{ label: string; keywords: string[]; baseConfidence: number }> = [
+    { label: 'Survey', keywords: ['survey', 'level', 'gps', 'theodolite', 'setout', 'peg'], baseConfidence: 85 },
+    { label: 'Compaction', keywords: ['compact', 'roller', 'density', 'proctor', 'ndd'], baseConfidence: 85 },
+    { label: 'Material Delivery', keywords: ['delivery', 'truck', 'material', 'stockpile', 'load'], baseConfidence: 80 },
+    { label: 'Excavation', keywords: ['excavat', 'dig', 'trench', 'dozer', 'cut'], baseConfidence: 85 },
+    { label: 'Formwork', keywords: ['form', 'boxing', 'rebar', 'reinforce', 'steel'], baseConfidence: 85 },
+    { label: 'Concrete Pour', keywords: ['concrete', 'pour', 'slump', 'agitator', 'pump'], baseConfidence: 90 },
+    { label: 'Pipe Laying', keywords: ['pipe', 'culvert', 'drain', 'stormwater', 'sewer'], baseConfidence: 85 },
+    { label: 'Inspection', keywords: ['inspect', 'check', 'review', 'witness', 'audit'], baseConfidence: 75 },
+    { label: 'Testing', keywords: ['test', 'sample', 'lab', 'specimen'], baseConfidence: 80 },
+    { label: 'Safety', keywords: ['safety', 'ppe', 'hazard', 'sign', 'barrier', 'swms'], baseConfidence: 80 },
+    { label: 'Plant/Equipment', keywords: ['plant', 'machine', 'equipment', 'excavator', 'grader', 'crane'], baseConfidence: 75 },
+    { label: 'General Progress', keywords: ['progress', 'site', 'work', 'general'], baseConfidence: 60 },
+  ]
+
+  for (const rule of classificationRules) {
+    let matchCount = 0
+    for (const keyword of rule.keywords) {
+      if (text.includes(keyword)) {
+        matchCount++
+      }
+    }
+
+    if (matchCount > 0) {
+      // Confidence increases with more keyword matches
+      const confidenceBoost = Math.min((matchCount - 1) * 5, 10)
+      matches.push({
+        label: rule.label,
+        confidence: Math.min(rule.baseConfidence + confidenceBoost, 95)
+      })
+    }
   }
 
-  // Default to General Progress
-  return 'General Progress'
+  // Sort by confidence descending
+  matches.sort((a, b) => b.confidence - a.confidence)
+
+  // If no matches, default to General Progress
+  if (matches.length === 0) {
+    matches.push({ label: 'General Progress', confidence: 50 })
+  }
+
+  // Return top 3 matches
+  return matches.slice(0, 3)
 }
 
 // POST /api/documents/:documentId/save-classification - Save the classification
+// Feature #729: Supports both single classification and multi-label classifications
 router.post('/:documentId/save-classification', async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
-    const { classification } = req.body
+    const { classification, classifications } = req.body
     const userId = (req as any).user?.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    if (!classification) {
+    // Support both single classification (backward compat) and multi-label
+    const finalClassification = classification || (classifications && classifications.length > 0
+      ? classifications.map((c: { label: string }) => c.label).join(', ')
+      : null)
+
+    if (!finalClassification) {
       return res.status(400).json({ error: 'Classification is required' })
     }
 
@@ -756,10 +798,11 @@ router.post('/:documentId/save-classification', async (req: Request, res: Respon
     }
 
     // Update the document with the classification
+    // If multiple classifications provided, store as comma-separated for display
     const updatedDocument = await prisma.document.update({
       where: { id: documentId },
       data: {
-        aiClassification: classification
+        aiClassification: finalClassification
       },
       include: {
         lot: { select: { id: true, lotNumber: true } },
@@ -767,7 +810,11 @@ router.post('/:documentId/save-classification', async (req: Request, res: Respon
       },
     })
 
-    res.json(updatedDocument)
+    res.json({
+      ...updatedDocument,
+      // Feature #729: Return parsed classifications array for convenience
+      classificationLabels: finalClassification.split(', ').filter(Boolean)
+    })
   } catch (error) {
     console.error('Error saving classification:', error)
     res.status(500).json({ error: 'Failed to save classification' })
