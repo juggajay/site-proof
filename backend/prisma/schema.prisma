@@ -43,6 +43,9 @@ model User {
   emailVerifiedAt DateTime? @map("email_verified_at")
   tosAcceptedAt DateTime? @map("tos_accepted_at")
   tosVersion    String?  @map("tos_version")
+  // MFA fields (Feature #22, #420, #421)
+  twoFactorEnabled Boolean @default(false) @map("two_factor_enabled")
+  twoFactorSecret  String? @map("two_factor_secret")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

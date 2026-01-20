@@ -151,54 +151,81 @@ authRouter.post('/register', async (req, res) => {
 // POST /api/auth/login
 authRouter.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body
+    const { email, password, mfaCode } = req.body
 
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' })
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        passwordHash: true,
-        fullName: true,
-        roleInCompany: true,
-        companyId: true,
-        company: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    })
+    // Find user with MFA fields using raw SQL
+    const userResult = await prisma.$queryRaw<Array<{
+      id: string
+      email: string
+      password_hash: string | null
+      full_name: string | null
+      role_in_company: string
+      company_id: string | null
+      two_factor_enabled: number
+      two_factor_secret: string | null
+    }>>`SELECT id, email, password_hash, full_name, role_in_company, company_id, two_factor_enabled, two_factor_secret FROM users WHERE email = ${email}`
 
-    if (!user || !user.passwordHash) {
+    const user = userResult[0]
+
+    if (!user || !user.password_hash) {
       return res.status(401).json({ message: 'Invalid email or password' })
     }
 
     // Verify password
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ message: 'Invalid email or password' })
+    }
+
+    // Check if MFA is enabled
+    if (user.two_factor_enabled && user.two_factor_secret) {
+      // If MFA code provided, verify it
+      if (mfaCode) {
+        const { verify: verifyOtp } = await import('otplib')
+        const isValid = await verifyOtp({
+          token: mfaCode,
+          secret: user.two_factor_secret,
+        })
+
+        if (!isValid) {
+          return res.status(401).json({ message: 'Invalid MFA code' })
+        }
+        // MFA verified, continue to generate token
+      } else {
+        // MFA required but no code provided
+        return res.status(200).json({
+          mfaRequired: true,
+          userId: user.id,
+          message: 'MFA verification required',
+        })
+      }
+    }
+
+    // Get company name
+    let companyName: string | null = null
+    if (user.company_id) {
+      const companyResult = await prisma.$queryRaw<Array<{ name: string }>>`SELECT name FROM companies WHERE id = ${user.company_id}`
+      companyName = companyResult[0]?.name || null
     }
 
     // Generate token
     const token = generateToken({
       userId: user.id,
       email: user.email,
-      role: user.roleInCompany,
+      role: user.role_in_company,
     })
 
     res.json({
       user: {
         id: user.id,
         email: user.email,
-        fullName: user.fullName,
-        role: user.roleInCompany,
-        companyId: user.companyId,
-        companyName: user.company?.name || null,
+        fullName: user.full_name,
+        role: user.role_in_company,
+        companyId: user.company_id,
+        companyName,
       },
       token,
     })

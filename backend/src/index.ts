@@ -32,6 +32,7 @@ import { drawingsRouter } from './routes/drawings.js'
 import { dashboardRouter } from './routes/dashboard.js'
 import apiKeysRouter, { authenticateApiKey } from './routes/apiKeys.js'
 import { consentRouter } from './routes/consent.js'
+import { mfaRouter } from './routes/mfa.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -188,6 +189,7 @@ app.use('/api/documents', documentsRouter)
 app.use('/api/drawings', drawingsRouter)
 app.use('/api/dashboard', dashboardRouter)
 app.use('/api/consent', consentRouter)  // Feature #776: Privacy consent tracking
+app.use('/api/mfa', mfaRouter)  // Feature #22, #420, #421: MFA/2FA support
 
 // tRPC
 app.use(

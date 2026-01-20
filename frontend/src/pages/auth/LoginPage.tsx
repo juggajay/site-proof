@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
+import { useAuth, MfaRequiredError } from '@/lib/auth'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
@@ -12,6 +12,9 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [magicLinkMode, setMagicLinkMode] = useState(false) // Feature #415: Magic link mode
   const [magicLinkSent, setMagicLinkSent] = useState(false)
+  // MFA state (Feature #22, #421)
+  const [mfaRequired, setMfaRequired] = useState(false)
+  const [mfaCode, setMfaCode] = useState('')
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -25,12 +28,20 @@ export function LoginPage() {
     setLoading(true)
 
     try {
-      await signIn(email, password, rememberMe)
+      await signIn(email, password, rememberMe, mfaRequired ? mfaCode : undefined)
       // Navigate to the original destination or dashboard
       const from = location.state?.from?.pathname || '/dashboard'
       navigate(from, { replace: true })
     } catch (err) {
-      setError('Invalid email or password')
+      // Check for MFA challenge (Feature #22, #421)
+      if (err instanceof MfaRequiredError) {
+        setMfaRequired(true)
+        setError('')
+      } else if (err instanceof Error) {
+        setError(err.message || 'Invalid email or password')
+      } else {
+        setError('Invalid email or password')
+      }
     } finally {
       setLoading(false)
     }
@@ -139,6 +150,70 @@ export function LoginPage() {
           className="w-full text-center text-sm text-primary hover:underline"
         >
           Sign in with password instead
+        </button>
+      </form>
+    )
+  }
+
+  // Feature #22, #421: MFA verification mode
+  if (mfaRequired) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-full bg-primary/10">
+            <svg className="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold">Two-Factor Authentication</h2>
+        </div>
+
+        <p className="text-sm text-muted-foreground">
+          Enter the 6-digit code from your authenticator app to continue.
+        </p>
+
+        {error && (
+          <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert" aria-live="assertive">
+            {error}
+          </div>
+        )}
+
+        <div>
+          <label htmlFor="mfaCode" className="block text-sm font-medium mb-2">
+            Verification Code
+          </label>
+          <input
+            id="mfaCode"
+            type="text"
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="000000"
+            className="w-full rounded-lg border bg-background px-3 py-3 text-center text-2xl font-mono tracking-widest"
+            maxLength={6}
+            autoComplete="one-time-code"
+            autoFocus
+            required
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading || mfaCode.length !== 6}
+          className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {loading ? 'Verifying...' : 'Verify'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMfaRequired(false)
+            setMfaCode('')
+            setError('')
+          }}
+          className="w-full text-center text-sm text-primary hover:underline"
+        >
+          Back to sign in
         </button>
       </form>
     )

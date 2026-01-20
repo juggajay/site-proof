@@ -4,7 +4,7 @@ import { useTheme } from '@/lib/theme'
 import { useDateFormat, DateFormat } from '@/lib/dateFormat'
 import { useTimezone, TIMEZONES } from '@/lib/timezone'
 import { getAuthToken, useAuth } from '@/lib/auth'
-import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut, Mail, Bell, Send } from 'lucide-react'
+import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut, Mail, Bell, Send, Lock, Smartphone, Key, Eye, EyeOff, Copy, CheckCircle2 } from 'lucide-react'
 
 // App version info
 const APP_VERSION = '1.3.0'
@@ -63,6 +63,21 @@ export function SettingsPage() {
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false)
   const [emailPrefsMessage, setEmailPrefsMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
+  // MFA state (Feature #22, #420, #421)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [isLoadingMfa, setIsLoadingMfa] = useState(true)
+  const [showMfaSetup, setShowMfaSetup] = useState(false)
+  const [mfaSetupData, setMfaSetupData] = useState<{ secret: string; qrCode: string } | null>(null)
+  const [mfaVerifyCode, setMfaVerifyCode] = useState('')
+  const [isMfaLoading, setIsMfaLoading] = useState(false)
+  const [mfaMessage, setMfaMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [backupCodes, setBackupCodes] = useState<string[]>([])
+  const [showBackupCodes, setShowBackupCodes] = useState(false)
+  const [showDisableMfa, setShowDisableMfa] = useState(false)
+  const [disableMfaPassword, setDisableMfaPassword] = useState('')
+  const [showSecret, setShowSecret] = useState(false)
+  const [copiedSecret, setCopiedSecret] = useState(false)
+
   const themeOptions = [
     { value: 'light' as const, label: 'Light', icon: Sun, description: 'Always use light mode' },
     { value: 'dark' as const, label: 'Dark', icon: Moon, description: 'Always use dark mode' },
@@ -104,6 +119,159 @@ export function SettingsPage() {
 
     loadEmailPreferences()
   }, [])
+
+  // Load MFA status (Feature #22)
+  useEffect(() => {
+    const loadMfaStatus = async () => {
+      try {
+        const token = getAuthToken()
+        if (!token) return
+
+        const response = await fetch(`${apiUrl}/api/mfa/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setMfaEnabled(data.mfaEnabled)
+        }
+      } catch (err) {
+        console.error('Failed to load MFA status:', err)
+      } finally {
+        setIsLoadingMfa(false)
+      }
+    }
+
+    loadMfaStatus()
+  }, [])
+
+  // MFA setup handler (Feature #420)
+  const handleMfaSetup = async () => {
+    setIsMfaLoading(true)
+    setMfaMessage(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setMfaMessage({ type: 'error', text: 'You must be logged in' })
+        return
+      }
+
+      const response = await fetch(`${apiUrl}/api/mfa/setup`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMfaSetupData({ secret: data.secret, qrCode: data.qrCode })
+        setShowMfaSetup(true)
+      } else {
+        setMfaMessage({ type: 'error', text: data.message || 'Failed to start MFA setup' })
+      }
+    } catch (err) {
+      setMfaMessage({ type: 'error', text: 'Failed to start MFA setup' })
+    } finally {
+      setIsMfaLoading(false)
+    }
+  }
+
+  // MFA verify setup handler (Feature #420)
+  const handleMfaVerify = async () => {
+    if (!mfaVerifyCode || mfaVerifyCode.length !== 6) {
+      setMfaMessage({ type: 'error', text: 'Please enter a 6-digit code' })
+      return
+    }
+
+    setIsMfaLoading(true)
+    setMfaMessage(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setMfaMessage({ type: 'error', text: 'You must be logged in' })
+        return
+      }
+
+      const response = await fetch(`${apiUrl}/api/mfa/verify-setup`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: mfaVerifyCode }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMfaEnabled(true)
+        setBackupCodes(data.backupCodes || [])
+        setShowBackupCodes(true)
+        setShowMfaSetup(false)
+        setMfaSetupData(null)
+        setMfaVerifyCode('')
+        setMfaMessage({ type: 'success', text: 'Two-factor authentication enabled!' })
+      } else {
+        setMfaMessage({ type: 'error', text: data.message || 'Invalid verification code' })
+      }
+    } catch (err) {
+      setMfaMessage({ type: 'error', text: 'Failed to verify code' })
+    } finally {
+      setIsMfaLoading(false)
+    }
+  }
+
+  // MFA disable handler (Feature #22)
+  const handleMfaDisable = async () => {
+    setIsMfaLoading(true)
+    setMfaMessage(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        setMfaMessage({ type: 'error', text: 'You must be logged in' })
+        return
+      }
+
+      const response = await fetch(`${apiUrl}/api/mfa/disable`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: disableMfaPassword }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMfaEnabled(false)
+        setShowDisableMfa(false)
+        setDisableMfaPassword('')
+        setMfaMessage({ type: 'success', text: 'Two-factor authentication disabled' })
+      } else {
+        setMfaMessage({ type: 'error', text: data.message || 'Failed to disable MFA' })
+      }
+    } catch (err) {
+      setMfaMessage({ type: 'error', text: 'Failed to disable MFA' })
+    } finally {
+      setIsMfaLoading(false)
+    }
+  }
+
+  // Copy secret to clipboard
+  const copySecret = () => {
+    if (mfaSetupData?.secret) {
+      navigator.clipboard.writeText(mfaSetupData.secret)
+      setCopiedSecret(true)
+      setTimeout(() => setCopiedSecret(false), 2000)
+    }
+  }
 
   // Save email notification preferences with optimistic update
   const saveEmailPreferences = async (newPreferences: typeof emailPreferences, previousPreferences: typeof emailPreferences) => {
@@ -640,6 +808,312 @@ export function SettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Security Section - Two-Factor Authentication (Feature #22, #420, #421) */}
+      <div className="rounded-lg border bg-card p-6 space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            Security
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Manage your account security settings.
+          </p>
+        </div>
+
+        {/* MFA Status Message */}
+        {mfaMessage && (
+          <div className={`flex items-center gap-2 text-sm px-4 py-2 rounded-md ${
+            mfaMessage.type === 'success'
+              ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400'
+              : 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400'
+          }`}>
+            {mfaMessage.type === 'success' ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : (
+              <AlertTriangle className="h-4 w-4" />
+            )}
+            {mfaMessage.text}
+          </div>
+        )}
+
+        {/* Two-Factor Authentication */}
+        <div className="border-t pt-4">
+          <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
+            <Smartphone className="h-5 w-5" />
+            Two-Factor Authentication (2FA)
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Add an extra layer of security to your account. When enabled, you'll need to enter a code from your authenticator app when signing in.
+          </p>
+
+          {isLoadingMfa ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading security settings...
+            </div>
+          ) : mfaEnabled ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-green-100 dark:bg-green-900">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-green-700 dark:text-green-300">Two-Factor Authentication Enabled</p>
+                    <p className="text-sm text-green-600 dark:text-green-400">Your account is protected with 2FA</p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowDisableMfa(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <Lock className="h-4 w-4" />
+                Disable 2FA
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleMfaSetup}
+              disabled={isMfaLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isMfaLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Key className="h-4 w-4" />
+              )}
+              Enable Two-Factor Authentication
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* MFA Setup Modal */}
+      {showMfaSetup && mfaSetupData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-primary/10">
+                <Smartphone className="h-6 w-6 text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold">Set Up Two-Factor Authentication</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground">
+                <p className="mb-2">1. Install an authenticator app like Google Authenticator, Authy, or Microsoft Authenticator.</p>
+                <p>2. Scan the QR code below with your authenticator app:</p>
+              </div>
+
+              {/* QR Code */}
+              <div className="flex justify-center p-4 bg-white rounded-lg">
+                <img src={mfaSetupData.qrCode} alt="MFA QR Code" className="w-48 h-48" />
+              </div>
+
+              {/* Manual Entry */}
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Can't scan? Enter this code manually:</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 font-mono text-sm bg-background px-2 py-1 rounded break-all">
+                    {showSecret ? mfaSetupData.secret : '••••••••••••••••••••••••••••••••'}
+                  </code>
+                  <button
+                    onClick={() => setShowSecret(!showSecret)}
+                    className="p-1 hover:bg-background rounded"
+                    title={showSecret ? 'Hide secret' : 'Show secret'}
+                  >
+                    {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={copySecret}
+                    className="p-1 hover:bg-background rounded"
+                    title="Copy to clipboard"
+                  >
+                    {copiedSecret ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Verification Code Input */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  3. Enter the 6-digit code from your authenticator:
+                </label>
+                <input
+                  type="text"
+                  value={mfaVerifyCode}
+                  onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  className="w-full rounded-md border bg-background px-3 py-2 text-center text-2xl font-mono tracking-widest"
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                />
+              </div>
+
+              {/* Error message */}
+              {mfaMessage?.type === 'error' && (
+                <div className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                  {mfaMessage.text}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowMfaSetup(false)
+                    setMfaSetupData(null)
+                    setMfaVerifyCode('')
+                    setMfaMessage(null)
+                  }}
+                  disabled={isMfaLoading}
+                  className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleMfaVerify}
+                  disabled={isMfaLoading || mfaVerifyCode.length !== 6}
+                  className="flex-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {isMfaLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify & Enable'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backup Codes Modal */}
+      {showBackupCodes && backupCodes.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-green-100 dark:bg-green-900">
+                <CheckCircle2 className="h-6 w-6 text-green-600" />
+              </div>
+              <h2 className="text-xl font-semibold">2FA Enabled Successfully!</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-2">
+                  Important: Save your backup codes!
+                </p>
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  If you lose access to your authenticator app, you can use these codes to regain access to your account. Each code can only be used once.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 p-4 bg-muted rounded-lg">
+                {backupCodes.map((code, index) => (
+                  <code key={index} className="font-mono text-sm text-center py-1">
+                    {code}
+                  </code>
+                ))}
+              </div>
+
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(backupCodes.join('\n'))
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border hover:bg-muted"
+              >
+                <Copy className="h-4 w-4" />
+                Copy All Codes
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowBackupCodes(false)
+                  setBackupCodes([])
+                }}
+                className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                I've Saved My Codes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disable MFA Modal */}
+      {showDisableMfa && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <h2 className="text-xl font-semibold">Disable Two-Factor Authentication</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-sm text-red-800 dark:text-red-200">
+                  <strong>Warning:</strong> Disabling 2FA will make your account less secure. Are you sure you want to continue?
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Enter your password to confirm:
+                </label>
+                <input
+                  type="password"
+                  value={disableMfaPassword}
+                  onChange={(e) => setDisableMfaPassword(e.target.value)}
+                  placeholder="Your password"
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </div>
+
+              {mfaMessage?.type === 'error' && (
+                <div className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                  {mfaMessage.text}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowDisableMfa(false)
+                    setDisableMfaPassword('')
+                    setMfaMessage(null)
+                  }}
+                  disabled={isMfaLoading}
+                  className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleMfaDisable}
+                  disabled={isMfaLoading || !disableMfaPassword}
+                  className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {isMfaLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Disabling...
+                    </>
+                  ) : (
+                    'Disable 2FA'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-lg border bg-card p-6 space-y-4">
         <div>

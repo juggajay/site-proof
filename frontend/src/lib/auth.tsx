@@ -14,11 +14,21 @@ interface User {
   avatarUrl?: string | null
 }
 
+// MFA Challenge error class (Feature #22, #421)
+export class MfaRequiredError extends Error {
+  userId: string
+  constructor(userId: string) {
+    super('MFA verification required')
+    this.name = 'MfaRequiredError'
+    this.userId = userId
+  }
+}
+
 interface AuthContextType {
   user: User | null
   loading: boolean
   sessionExpired: boolean
-  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>
+  signIn: (email: string, password: string, rememberMe?: boolean, mfaCode?: string) => Promise<void>
   signUp: (email: string, password: string, metadata?: object) => Promise<void>
   signOut: () => Promise<void>
   handleSessionExpired: () => void
@@ -98,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     verifySession()
   }, [])
 
-  const signIn = async (email: string, password: string, rememberMe: boolean = true) => {
+  const signIn = async (email: string, password: string, rememberMe: boolean = true, mfaCode?: string) => {
     // For local development, use backend API for auth
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
@@ -108,15 +118,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, mfaCode }),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Login failed')
+      const data = await response.json()
+
+      // Check for MFA challenge (Feature #22, #421)
+      if (response.ok && data.mfaRequired) {
+        throw new MfaRequiredError(data.userId)
       }
 
-      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed')
+      }
 
       // Clear any existing auth from both storages first
       clearAuthFromAllStorages()
