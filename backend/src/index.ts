@@ -36,7 +36,26 @@ const app = express()
 const PORT = process.env.PORT || 3001
 
 // Security middleware
-app.use(helmet())
+// Feature #762: HTTPS enforcement and HSTS
+app.use(helmet({
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  },
+}))
+
+// Feature #762: HTTPS redirect in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    // Check x-forwarded-proto (common when behind reverse proxy/load balancer)
+    const proto = req.headers['x-forwarded-proto'] || req.protocol
+    if (proto !== 'https') {
+      return res.redirect(301, `https://${req.headers.host}${req.url}`)
+    }
+    next()
+  })
+}
 // Use a function for CORS origin to ensure proper handling
 app.use(cors({
   origin: function(origin, callback) {
