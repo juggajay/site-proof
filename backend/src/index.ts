@@ -31,6 +31,7 @@ import documentsRouter from './routes/documents.js'
 import { drawingsRouter } from './routes/drawings.js'
 import { dashboardRouter } from './routes/dashboard.js'
 import apiKeysRouter, { authenticateApiKey } from './routes/apiKeys.js'
+import { consentRouter } from './routes/consent.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -186,6 +187,7 @@ app.use('/api/notifications', notificationsRouter)
 app.use('/api/documents', documentsRouter)
 app.use('/api/drawings', drawingsRouter)
 app.use('/api/dashboard', dashboardRouter)
+app.use('/api/consent', consentRouter)  // Feature #776: Privacy consent tracking
 
 // tRPC
 app.use(

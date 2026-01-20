@@ -74,6 +74,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   comments             Comment[]
   apiKeys              ApiKey[]   // Feature #747: External API access
+  consentRecords       ConsentRecord[]  // Feature #776: Privacy consent tracking
 
   @@map("users")
 }
@@ -94,6 +95,23 @@ model ApiKey {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("api_keys")
+}
+
+// Feature #776: Privacy Consent Tracking
+model ConsentRecord {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  consentType String    @map("consent_type") // marketing, analytics, data_processing, terms_of_service
+  version     String    // Version of the consent/policy
+  granted     Boolean   // true = granted, false = withdrawn
+  ipAddress   String?   @map("ip_address")
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consentType])
+  @@map("consent_records")
 }
 
 model Project {
