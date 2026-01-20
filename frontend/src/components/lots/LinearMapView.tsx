@@ -1,6 +1,6 @@
 // Feature #151 - Linear Map Visualization for Lots
-import { useMemo, useState, useRef, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, X, ExternalLink } from 'lucide-react'
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, X, ExternalLink, Printer, Download } from 'lucide-react'
 
 interface Lot {
   id: string
@@ -65,6 +65,9 @@ export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewP
   // Feature #153 - Popup state for lot click
   const [popup, setPopup] = useState<PopupState | null>(null)
   const popupRef = useRef<HTMLDivElement>(null)
+
+  // Feature #155 - Map container ref for print/export
+  const mapContainerRef = useRef<HTMLDivElement>(null)
 
   // Close popup when clicking outside
   useEffect(() => {
@@ -135,6 +138,39 @@ export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewP
   const handlePanLeft = () => setPanOffset(Math.max(panOffset - 20, 0))
   const handlePanRight = () => setPanOffset(Math.min(panOffset + 20, (zoomLevel - 1) * 100))
 
+  // Feature #155 - Print handler
+  const handlePrint = useCallback(() => {
+    setPopup(null) // Close any open popup first
+    window.print()
+  }, [])
+
+  // Feature #155 - Export as PNG handler
+  const handleExport = useCallback(async () => {
+    setPopup(null) // Close any open popup first
+
+    if (!mapContainerRef.current) return
+
+    try {
+      // Use html2canvas if available, otherwise fall back to print
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(mapContainerRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Higher resolution
+        logging: false,
+      })
+
+      // Create download link
+      const link = document.createElement('a')
+      link.download = `linear-map-${new Date().toISOString().split('T')[0]}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } catch (error) {
+      // Fallback to print if html2canvas is not available
+      console.warn('html2canvas not available, falling back to print:', error)
+      window.print()
+    }
+  }, [])
+
   const ROW_HEIGHT = 48
   const HEADER_HEIGHT = 40
   const LABEL_WIDTH = 140
@@ -183,11 +219,29 @@ export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewP
           >
             <ChevronRight className="h-4 w-4" />
           </button>
+          {/* Feature #155 - Print/Export buttons */}
+          <div className="w-px h-5 bg-border mx-1" />
+          <button
+            onClick={handlePrint}
+            className="p-1.5 rounded hover:bg-muted"
+            title="Print map"
+            data-testid="linear-map-print"
+          >
+            <Printer className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleExport}
+            className="p-1.5 rounded hover:bg-muted"
+            title="Download as PNG"
+            data-testid="linear-map-export"
+          >
+            <Download className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
-      {/* Map Container */}
-      <div className="relative overflow-x-auto" style={{ minHeight: HEADER_HEIGHT + layers.length * ROW_HEIGHT + 20 }}>
+      {/* Map Container - Feature #155: ref for print/export */}
+      <div ref={mapContainerRef} className="relative overflow-x-auto" style={{ minHeight: HEADER_HEIGHT + layers.length * ROW_HEIGHT + 20 }}>
         {/* Chainage Axis (Header) */}
         <div
           className="sticky top-0 z-20 bg-muted/50 border-b"
