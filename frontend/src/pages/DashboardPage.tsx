@@ -1,6 +1,9 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
+import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard'
+import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard'
+import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard'
 import {
   FolderKanban,
   AlertTriangle,
@@ -19,7 +22,10 @@ import {
   ChevronRight,
   Calendar,
   ChevronDown,
-  RefreshCw
+  RefreshCw,
+  Camera,
+  Plus,
+  FlaskConical
 } from 'lucide-react'
 
 // Date range presets
@@ -184,6 +190,27 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Feature #292, #293, #294: Check user role for role-specific dashboards
+  const userRole = (user as any)?.roleInCompany || (user as any)?.role
+  const isForeman = userRole === 'foreman'
+  const isQualityManager = userRole === 'quality_manager'
+  const isProjectManager = userRole === 'project_manager'
+
+  // Render simplified foreman dashboard for foreman role
+  if (isForeman) {
+    return <ForemanDashboard />
+  }
+
+  // Feature #293: Render quality manager dashboard for QM role
+  if (isQualityManager) {
+    return <QualityManagerDashboard />
+  }
+
+  // Feature #294: Render project manager dashboard for PM role
+  if (isProjectManager) {
+    return <ProjectManagerDashboard />
+  }
 
   // Date range filter state
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>('last30days')
@@ -849,6 +876,33 @@ export function DashboardPage() {
               <Settings2 className="h-5 w-5 text-gray-600" />
               <span className="font-medium">Settings</span>
             </Link>
+          </div>
+          {/* Feature #500: Quick Actions */}
+          <div className="px-4 pb-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Actions</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Link
+                to="/projects?action=photo"
+                className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-colors"
+              >
+                <Camera className="h-5 w-5 text-orange-600" />
+                <span className="font-medium text-orange-700">Quick Photo</span>
+              </Link>
+              <Link
+                to="/projects?action=create-lot"
+                className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
+              >
+                <Plus className="h-5 w-5 text-blue-600" />
+                <span className="font-medium text-blue-700">Create Lot</span>
+              </Link>
+              <Link
+                to="/projects?action=add-test"
+                className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+              >
+                <FlaskConical className="h-5 w-5 text-green-600" />
+                <span className="font-medium text-green-700">Add Test</span>
+              </Link>
+            </div>
           </div>
         </div>
       )}
