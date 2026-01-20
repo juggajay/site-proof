@@ -697,6 +697,41 @@ router.get('/:projectId/claims/:claimId/evidence-package', async (req, res) => {
         conformedLots: claim.claimedLots.filter(cl => cl.lot.status === 'conformed' || cl.lot.status === 'claimed').length
       },
 
+      // Feature #493: Group lots by activity type with subtotals
+      lotsByActivity: (() => {
+        const grouped: Record<string, {
+          activityType: string
+          lotCount: number
+          subtotal: number
+          lots: { id: string; lotNumber: string; amount: number }[]
+        }> = {}
+
+        claim.claimedLots.forEach(claimedLot => {
+          const activityType = claimedLot.lot.activityType || 'Uncategorized'
+          const amount = claimedLot.amountClaimed ? Number(claimedLot.amountClaimed) : 0
+
+          if (!grouped[activityType]) {
+            grouped[activityType] = {
+              activityType,
+              lotCount: 0,
+              subtotal: 0,
+              lots: []
+            }
+          }
+
+          grouped[activityType].lotCount++
+          grouped[activityType].subtotal += amount
+          grouped[activityType].lots.push({
+            id: claimedLot.lot.id,
+            lotNumber: claimedLot.lot.lotNumber,
+            amount
+          })
+        })
+
+        // Convert to sorted array
+        return Object.values(grouped).sort((a, b) => b.subtotal - a.subtotal)
+      })(),
+
       generatedAt: new Date().toISOString(),
       generationTimeMs: Date.now() - startTime
     }
