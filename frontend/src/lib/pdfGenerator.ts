@@ -591,6 +591,23 @@ export function generateConformanceReportPDF(
   doc.save(filename)
 }
 
+// Options for customizing the HP evidence package (Feature #466)
+export interface HPPackageOptions {
+  includeChecklistDetails: boolean
+  includeTestResults: boolean
+  includePhotos: boolean
+  includeReleaseDetails: boolean
+  includeSummary: boolean
+}
+
+export const defaultHPPackageOptions: HPPackageOptions = {
+  includeChecklistDetails: true,
+  includeTestResults: true,
+  includePhotos: true,
+  includeReleaseDetails: true,
+  includeSummary: true
+}
+
 // Types for HP Evidence Package
 interface HPEvidencePackageData {
   holdPoint: {
@@ -674,8 +691,10 @@ interface HPEvidencePackageData {
 
 /**
  * Generate a PDF evidence package for a Hold Point release
+ * @param data - The HP evidence package data
+ * @param options - Customization options (Feature #466)
  */
-export function generateHPEvidencePackagePDF(data: HPEvidencePackageData): void {
+export function generateHPEvidencePackagePDF(data: HPEvidencePackageData, options: HPPackageOptions = defaultHPPackageOptions): void {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -1523,6 +1542,7 @@ export interface NCRDetailData {
     proposedAction?: string | null
     actionTaken?: string | null
     preventativeMeasures?: string | null
+    lessonsLearned?: string | null // Feature #474
     qmApprovalRequired: boolean
     qmApprovedAt: string | null
     qmApprovedBy?: { fullName: string; email: string } | null
@@ -1695,7 +1715,7 @@ export function generateNCRDetailPDF(data: NCRDetailData): void {
   yPos += (descLines.length * 4) + 5
 
   // ========== ROOT CAUSE & ACTIONS ==========
-  if (data.ncr.rootCause || data.ncr.proposedAction || data.ncr.actionTaken || data.ncr.preventativeMeasures) {
+  if (data.ncr.rootCause || data.ncr.proposedAction || data.ncr.actionTaken || data.ncr.preventativeMeasures || data.ncr.lessonsLearned) {
     drawSectionHeader('Investigation & Resolution')
 
     if (data.ncr.rootCause) {
@@ -1744,6 +1764,19 @@ export function generateNCRDetailPDF(data: NCRDetailData): void {
       const preventativeLines = doc.splitTextToSize(data.ncr.preventativeMeasures, contentWidth - 5)
       doc.text(preventativeLines, margin + 3, yPos)
       yPos += (preventativeLines.length * 4) + 4
+    }
+
+    // Feature #474: Lessons Learned
+    if (data.ncr.lessonsLearned) {
+      checkPageBreak(15)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.text('Lessons Learned:', margin, yPos)
+      yPos += 4
+      doc.setFont('helvetica', 'normal')
+      const lessonsLines = doc.splitTextToSize(data.ncr.lessonsLearned, contentWidth - 5)
+      doc.text(lessonsLines, margin + 3, yPos)
+      yPos += (lessonsLines.length * 4) + 4
     }
 
     yPos += 3
@@ -2891,4 +2924,4 @@ export function generateDocketDetailPDF(data: DocketDetailPDFData): void {
   console.log(`Docket detail PDF generated in ${Date.now() - startTime}ms`)
 }
 
-export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData, NCRDetailData, TestCertificateData, DailyDiaryPDFData, DocketDetailPDFData }
+export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData, NCRDetailData, TestCertificateData, DailyDiaryPDFData, DocketDetailPDFData, HPPackageOptions }
