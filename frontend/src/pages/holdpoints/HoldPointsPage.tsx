@@ -5,6 +5,7 @@ import { toast } from '@/components/ui/toaster'
 import { Link2, Check, FileText, Download, Eye, X, RefreshCw, ClipboardCheck, AlertTriangle } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
+import { SignaturePad } from '@/components/ui/SignaturePad'
 
 interface HoldPoint {
   id: string
@@ -151,7 +152,8 @@ export function HoldPointsPage() {
     releaseDate: string,
     releaseTime: string,
     releaseNotes: string,
-    releaseMethod: string = 'digital'
+    releaseMethod: string = 'digital',
+    signatureDataUrl: string | null = null
   ) => {
     if (!selectedHoldPoint || selectedHoldPoint.id.startsWith('virtual-') || !token) return
 
@@ -168,6 +170,7 @@ export function HoldPointsPage() {
           releasedByOrg,
           releaseMethod,
           releaseNotes: releaseNotes || null,
+          signatureDataUrl: signatureDataUrl || null,
         }),
       })
 
@@ -1361,7 +1364,8 @@ function RecordReleaseModal({
     releaseDate: string,
     releaseTime: string,
     releaseNotes: string,
-    releaseMethod: string
+    releaseMethod: string,
+    signatureDataUrl: string | null
   ) => void
 }) {
   const [releasedByName, setReleasedByName] = useState('')
@@ -1373,6 +1377,8 @@ function RecordReleaseModal({
   const [releaseNotes, setReleaseNotes] = useState('')
   const [releaseMethod, setReleaseMethod] = useState<'digital' | 'email' | 'paper'>('digital')
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
+  // Feature #884: Signature capture state
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -1390,13 +1396,22 @@ function RecordReleaseModal({
       })
       return
     }
+    // Feature #884: Require signature for digital release
+    if (releaseMethod === 'digital' && !signatureDataUrl) {
+      toast({
+        title: 'Signature required',
+        description: 'Please provide your signature to release the hold point',
+        variant: 'destructive',
+      })
+      return
+    }
     // Note: File upload would be handled separately in a production system
     // For now, we'll include the filename in the notes if a file was selected
     let notes = releaseNotes
     if ((releaseMethod === 'email' || releaseMethod === 'paper') && evidenceFile) {
       notes = `${releaseNotes}\n[Evidence attached: ${evidenceFile.name}]`.trim()
     }
-    onSubmit(releasedByName, releasedByOrg, releaseDate, releaseTime, notes, releaseMethod)
+    onSubmit(releasedByName, releasedByOrg, releaseDate, releaseTime, notes, releaseMethod, signatureDataUrl)
   }
 
   return (
@@ -1535,12 +1550,17 @@ function RecordReleaseModal({
 
           {/* Signature or Evidence based on method */}
           {releaseMethod === 'digital' ? (
-            <div className="p-4 bg-muted/50 border border-dashed rounded-lg">
-              <div className="text-sm text-muted-foreground text-center">
-                <ClipboardCheck className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
-                <p>Digital signature capture</p>
-                <p className="text-xs">(Coming soon)</p>
-              </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Digital Signature <span className="text-red-500">*</span></label>
+              <SignaturePad
+                onChange={setSignatureDataUrl}
+                width={380}
+                height={150}
+                className="mx-auto"
+              />
+              <p className="text-xs text-muted-foreground">
+                Draw your signature above to authorize this release
+              </p>
             </div>
           ) : releaseMethod === 'email' ? (
             <div className="space-y-2">
