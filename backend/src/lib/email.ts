@@ -335,6 +335,7 @@ export async function sendHPReleaseRequestEmail(data: {
   scheduledTime?: string
   evidencePackageUrl?: string
   releaseUrl: string
+  secureReleaseUrl?: string // Feature #23 - secure link for external release
   requestedBy: string
   noticeOverrideReason?: string
 }): Promise<EmailResult> {
@@ -416,6 +417,16 @@ export async function sendHPReleaseRequestEmail(data: {
         <a href="${data.releaseUrl}" class="button">
           Review & Release Hold Point
         </a>
+        ${data.secureReleaseUrl ? `
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+          <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">
+            Or release without logging in:
+          </p>
+          <a href="${data.secureReleaseUrl}" class="button" style="background: #7c3aed;">
+            🔐 Release via Secure Link
+          </a>
+        </div>
+        ` : ''}
       </div>
 
       <p style="color: #6b7280; font-size: 14px;">
@@ -453,7 +464,7 @@ View evidence package: ${data.evidencePackageUrl}
 ACTIONS
 -------
 Review & Release Hold Point: ${data.releaseUrl}
-
+${data.secureReleaseUrl ? `\nOr release without logging in (secure link):\n${data.secureReleaseUrl}\n` : ''}
 Please review the submission and release the hold point when satisfied, or contact the requestor if additional information is required.
 
 ---

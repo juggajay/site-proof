@@ -1,8 +1,12 @@
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
 import { sendNotificationIfEnabled } from './notifications.js'
 import { sendHPReleaseRequestEmail, sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../lib/email.js'
+
+// Secure link expiry time (48 hours)
+const SECURE_LINK_EXPIRY_HOURS = 48
 
 const prisma = new PrismaClient()
 const holdpointsRouter = Router()
@@ -493,6 +497,24 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
         : undefined
 
       for (const recipient of recipientsToNotify) {
+        // Feature #23 - Generate secure release token for each recipient
+        const secureToken = crypto.randomBytes(32).toString('hex')
+        const tokenExpiry = new Date(Date.now() + SECURE_LINK_EXPIRY_HOURS * 60 * 60 * 1000)
+
+        // Store the secure token
+        await prisma.holdPointReleaseToken.create({
+          data: {
+            holdPointId: holdPoint.id,
+            recipientEmail: recipient.user.email,
+            recipientName: recipient.user.fullName,
+            token: secureToken,
+            expiresAt: tokenExpiry
+          }
+        })
+
+        // Generate secure release URL
+        const secureReleaseUrl = `${baseUrl}/hp-release/${secureToken}`
+
         await sendHPReleaseRequestEmail({
           to: recipient.user.email,
           superintendentName: recipient.user.fullName || 'Superintendent',
@@ -503,12 +525,13 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
           scheduledTime: scheduledTime || undefined,
           evidencePackageUrl,
           releaseUrl,
+          secureReleaseUrl, // Feature #23 - Include secure release link
           requestedBy,
           noticeOverrideReason: noticePeriodOverrideReason || undefined
         })
       }
 
-      console.log(`[HP Release Request] Sent email to ${recipientsToNotify.length} superintendent(s)/PM(s) for HP on lot ${lot.lotNumber}`)
+      console.log(`[HP Release Request] Sent email with secure release links to ${recipientsToNotify.length} superintendent(s)/PM(s) for HP on lot ${lot.lotNumber}`)
     } catch (emailError) {
       console.error('[HP Release Request] Failed to send superintendent email:', emailError)
       // Don't fail the main request
@@ -1403,6 +1426,447 @@ holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: any,
   } catch (error) {
     console.error('Error generating evidence package preview:', error)
     res.status(500).json({ error: 'Failed to generate evidence package preview' })
+  }
+})
+
+// ============================================================================
+// PUBLIC ENDPOINTS - No authentication required (Feature #23)
+// These endpoints use secure time-limited tokens for superintendent access
+// ============================================================================
+
+// Get hold point and evidence package via secure link (no auth required)
+holdpointsRouter.get('/public/:token', async (req: any, res) => {
+  try {
+    const { token } = req.params
+
+    // Find the token and validate it
+    const releaseToken = await prisma.holdPointReleaseToken.findUnique({
+      where: { token },
+      include: {
+        holdPoint: {
+          include: {
+            itpChecklistItem: true,
+            lot: {
+              include: {
+                project: true,
+                itpInstance: {
+                  include: {
+                    template: {
+                      include: {
+                        checklistItems: {
+                          orderBy: { sequenceNumber: 'asc' }
+                        }
+                      }
+                    },
+                    completions: {
+                      include: {
+                        completedBy: {
+                          select: { id: true, fullName: true, email: true }
+                        },
+                        verifiedBy: {
+                          select: { id: true, fullName: true, email: true }
+                        },
+                        attachments: {
+                          include: {
+                            document: true
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                testResults: {
+                  include: {
+                    verifiedBy: {
+                      select: { id: true, fullName: true, email: true }
+                    }
+                  }
+                },
+                documents: {
+                  where: {
+                    OR: [
+                      { documentType: 'photo' },
+                      { category: 'itp_evidence' }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!releaseToken) {
+      return res.status(404).json({ error: 'Invalid or expired link' })
+    }
+
+    // Check if token has expired
+    if (new Date() > releaseToken.expiresAt) {
+      return res.status(410).json({
+        error: 'Link has expired',
+        code: 'TOKEN_EXPIRED',
+        message: 'This secure release link has expired. Please contact the site team for a new link.'
+      })
+    }
+
+    // Check if token has been used (hold point already released via this token)
+    if (releaseToken.usedAt) {
+      return res.status(410).json({
+        error: 'Link already used',
+        code: 'TOKEN_USED',
+        message: 'This hold point has already been released using this link.',
+        releasedAt: releaseToken.usedAt,
+        releasedByName: releaseToken.releasedByName
+      })
+    }
+
+    const holdPoint = releaseToken.holdPoint
+    const lot = holdPoint.lot
+    const itpInstance = lot.itpInstance
+
+    if (!itpInstance) {
+      return res.status(400).json({ error: 'No ITP assigned to this lot' })
+    }
+
+    // Get all checklist items up to and including the hold point
+    const holdPointItem = holdPoint.itpChecklistItem
+    const itemsUpToHP = itpInstance.template.checklistItems.filter(
+      item => item.sequenceNumber <= holdPointItem.sequenceNumber
+    )
+
+    // Map completions to items
+    const checklistWithStatus = itemsUpToHP.map(item => {
+      const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
+      return {
+        sequenceNumber: item.sequenceNumber,
+        description: item.description,
+        pointType: item.pointType,
+        responsibleParty: item.responsibleParty,
+        isCompleted: completion?.status === 'completed',
+        completedAt: completion?.completedAt,
+        completedBy: completion?.completedBy?.fullName || null,
+        isVerified: completion?.verificationStatus === 'verified',
+        verifiedAt: completion?.verifiedAt,
+        verifiedBy: completion?.verifiedBy?.fullName || null,
+        notes: completion?.notes,
+        attachments: completion?.attachments?.map(a => ({
+          id: a.id,
+          filename: a.document.filename,
+          fileUrl: a.document.fileUrl,
+          caption: a.document.caption
+        })) || []
+      }
+    })
+
+    // Get test results
+    const testResults = lot.testResults.map(t => ({
+      id: t.id,
+      testType: t.testType,
+      testRequestNumber: t.testRequestNumber,
+      laboratoryName: t.laboratoryName,
+      resultValue: t.resultValue,
+      resultUnit: t.resultUnit,
+      passFail: t.passFail,
+      status: t.status,
+      isVerified: t.status === 'verified',
+      verifiedBy: t.verifiedBy?.fullName || null,
+      createdAt: t.createdAt
+    }))
+
+    // Get photos/evidence documents
+    const photos = lot.documents.map(d => ({
+      id: d.id,
+      filename: d.filename,
+      fileUrl: d.fileUrl,
+      caption: d.caption,
+      uploadedAt: d.uploadedAt
+    }))
+
+    // Build evidence package response
+    const evidencePackage = {
+      holdPoint: {
+        id: holdPoint.id,
+        description: holdPoint.description,
+        status: holdPoint.status,
+        notificationSentAt: holdPoint.notificationSentAt,
+        scheduledDate: holdPoint.scheduledDate,
+        scheduledTime: holdPoint.scheduledTime,
+        releasedAt: holdPoint.releasedAt,
+        releasedByName: holdPoint.releasedByName,
+        releaseNotes: holdPoint.releaseNotes
+      },
+      lot: {
+        id: lot.id,
+        lotNumber: lot.lotNumber,
+        description: lot.description,
+        activityType: lot.activityType,
+        chainageStart: lot.chainageStart,
+        chainageEnd: lot.chainageEnd
+      },
+      project: {
+        id: lot.project.id,
+        name: lot.project.name,
+        projectNumber: lot.project.projectNumber
+      },
+      itpTemplate: {
+        id: itpInstance.template.id,
+        name: itpInstance.template.name,
+        activityType: itpInstance.template.activityType
+      },
+      checklist: checklistWithStatus,
+      testResults,
+      photos,
+      summary: {
+        totalChecklistItems: checklistWithStatus.length,
+        completedItems: checklistWithStatus.filter(i => i.isCompleted).length,
+        verifiedItems: checklistWithStatus.filter(i => i.isVerified).length,
+        totalTestResults: testResults.length,
+        passingTests: testResults.filter(t => t.passFail === 'pass').length,
+        totalPhotos: photos.length,
+        totalAttachments: checklistWithStatus.reduce((sum, i) => sum + i.attachments.length, 0)
+      },
+      generatedAt: new Date().toISOString()
+    }
+
+    // Token info for the UI
+    const tokenInfo = {
+      recipientEmail: releaseToken.recipientEmail,
+      recipientName: releaseToken.recipientName,
+      expiresAt: releaseToken.expiresAt,
+      canRelease: holdPoint.status !== 'released'
+    }
+
+    res.json({
+      evidencePackage,
+      tokenInfo,
+      isPublicAccess: true
+    })
+  } catch (error) {
+    console.error('Error fetching HP via secure link:', error)
+    res.status(500).json({ error: 'Failed to fetch hold point details' })
+  }
+})
+
+// Release hold point via secure link (no auth required)
+holdpointsRouter.post('/public/:token/release', async (req: any, res) => {
+  try {
+    const { token } = req.params
+    const { releasedByName, releasedByOrg, releaseNotes, signatureDataUrl } = req.body
+
+    if (!releasedByName) {
+      return res.status(400).json({ error: 'Released by name is required' })
+    }
+
+    // Find the token and validate it
+    const releaseToken = await prisma.holdPointReleaseToken.findUnique({
+      where: { token },
+      include: {
+        holdPoint: {
+          include: {
+            lot: {
+              include: {
+                project: true
+              }
+            },
+            itpChecklistItem: true
+          }
+        }
+      }
+    })
+
+    if (!releaseToken) {
+      return res.status(404).json({ error: 'Invalid or expired link' })
+    }
+
+    // Check if token has expired
+    if (new Date() > releaseToken.expiresAt) {
+      return res.status(410).json({
+        error: 'Link has expired',
+        code: 'TOKEN_EXPIRED',
+        message: 'This secure release link has expired. Please contact the site team for a new link.'
+      })
+    }
+
+    // Check if token has been used
+    if (releaseToken.usedAt) {
+      return res.status(410).json({
+        error: 'Link already used',
+        code: 'TOKEN_USED',
+        message: 'This hold point has already been released using this link.',
+        releasedAt: releaseToken.usedAt,
+        releasedByName: releaseToken.releasedByName
+      })
+    }
+
+    // Check if hold point is already released
+    if (releaseToken.holdPoint.status === 'released') {
+      return res.status(400).json({
+        error: 'Hold point already released',
+        code: 'ALREADY_RELEASED',
+        message: 'This hold point has already been released.',
+        releasedAt: releaseToken.holdPoint.releasedAt,
+        releasedByName: releaseToken.holdPoint.releasedByName
+      })
+    }
+
+    // Update the release token as used
+    await prisma.holdPointReleaseToken.update({
+      where: { token },
+      data: {
+        usedAt: new Date(),
+        releasedByName,
+        releasedByOrg: releasedByOrg || null,
+        releaseSignatureUrl: signatureDataUrl || null,
+        releaseNotes: releaseNotes || null
+      }
+    })
+
+    // Release the hold point
+    const holdPoint = await prisma.holdPoint.update({
+      where: { id: releaseToken.holdPoint.id },
+      data: {
+        status: 'released',
+        releasedAt: new Date(),
+        releasedByName,
+        releasedByOrg: releasedByOrg || null,
+        releaseMethod: 'secure_link',
+        releaseSignatureUrl: signatureDataUrl || null,
+        releaseNotes: releaseNotes || null
+      },
+      include: {
+        lot: true,
+        itpChecklistItem: true
+      }
+    })
+
+    // Also mark the ITP completion as verified
+    const itpInstance = await prisma.iTPInstance.findUnique({
+      where: { lotId: holdPoint.lotId }
+    })
+
+    if (itpInstance) {
+      await prisma.iTPCompletion.updateMany({
+        where: {
+          itpInstanceId: itpInstance.id,
+          checklistItemId: holdPoint.itpChecklistItemId
+        },
+        data: {
+          verificationStatus: 'verified',
+          verifiedAt: new Date()
+        }
+      })
+    }
+
+    // Create in-app notifications for project team members
+    const projectUsers = await prisma.projectUser.findMany({
+      where: {
+        projectId: releaseToken.holdPoint.lot.projectId
+      },
+      include: {
+        user: {
+          select: { id: true, email: true, fullName: true }
+        }
+      }
+    })
+
+    const notificationsToCreate = projectUsers.map(pu => ({
+      userId: pu.userId,
+      projectId: releaseToken.holdPoint.lot.projectId,
+      type: 'hold_point_release',
+      title: 'Hold Point Released (via Secure Link)',
+      message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been released by ${releasedByName} via secure link.`,
+      linkUrl: `/projects/${releaseToken.holdPoint.lot.projectId}/hold-points`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+    }
+
+    // Send confirmation emails
+    try {
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+      const lotUrl = `${baseUrl}/projects/${releaseToken.holdPoint.lot.projectId}/lots/${releaseToken.holdPoint.lot.id}`
+      const releasedAt = new Date().toLocaleString('en-AU', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+
+      // Send to contractors (site_engineer, foreman roles)
+      const contractorRoles = ['site_engineer', 'foreman', 'engineer']
+      const contractors = projectUsers.filter(pu => contractorRoles.includes(pu.role))
+
+      for (const contractor of contractors) {
+        await sendHPReleaseConfirmationEmail({
+          to: contractor.user.email,
+          recipientName: contractor.user.fullName || 'Site Team',
+          recipientRole: 'contractor',
+          projectName: releaseToken.holdPoint.lot.project.name,
+          lotNumber: holdPoint.lot.lotNumber,
+          holdPointDescription: holdPoint.description,
+          releasedByName,
+          releasedByOrg: releasedByOrg || undefined,
+          releaseMethod: 'secure_link',
+          releaseNotes: releaseNotes || undefined,
+          releasedAt,
+          lotUrl
+        })
+      }
+
+      // Send to superintendents
+      const superintendentRoles = ['superintendent', 'project_manager']
+      const superintendents = projectUsers.filter(pu => superintendentRoles.includes(pu.role))
+
+      for (const superintendent of superintendents) {
+        await sendHPReleaseConfirmationEmail({
+          to: superintendent.user.email,
+          recipientName: superintendent.user.fullName || 'Superintendent',
+          recipientRole: 'superintendent',
+          projectName: releaseToken.holdPoint.lot.project.name,
+          lotNumber: holdPoint.lot.lotNumber,
+          holdPointDescription: holdPoint.description,
+          releasedByName,
+          releasedByOrg: releasedByOrg || undefined,
+          releaseMethod: 'secure_link',
+          releaseNotes: releaseNotes || undefined,
+          releasedAt,
+          lotUrl
+        })
+      }
+
+      console.log(`[HP Secure Release] Sent confirmation emails to ${contractors.length} contractors and ${superintendents.length} superintendents`)
+    } catch (emailError) {
+      console.error('[HP Secure Release] Failed to send confirmation emails:', emailError)
+      // Don't fail the main request
+    }
+
+    console.log(`[HP Secure Release] Hold point ${holdPoint.id} released via secure link by ${releasedByName}`)
+
+    res.json({
+      success: true,
+      message: 'Hold point released successfully via secure link',
+      holdPoint: {
+        id: holdPoint.id,
+        description: holdPoint.description,
+        status: holdPoint.status,
+        releasedAt: holdPoint.releasedAt,
+        releasedByName: holdPoint.releasedByName,
+        releaseMethod: holdPoint.releaseMethod
+      },
+      lot: {
+        id: holdPoint.lot.id,
+        lotNumber: holdPoint.lot.lotNumber
+      }
+    })
+  } catch (error) {
+    console.error('Error releasing HP via secure link:', error)
+    res.status(500).json({ error: 'Failed to release hold point' })
   }
 })
 

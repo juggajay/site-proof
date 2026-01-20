@@ -346,8 +346,29 @@ model HoldPoint {
 
   lot               Lot              @relation(fields: [lotId], references: [id], onDelete: Cascade)
   itpChecklistItem  ITPChecklistItem @relation(fields: [itpChecklistItemId], references: [id])
+  releaseTokens     HoldPointReleaseToken[]
 
   @@map("hold_points")
+}
+
+// Hold Point Release Tokens for external superintendent release (Feature #23)
+model HoldPointReleaseToken {
+  id                 String    @id @default(uuid())
+  holdPointId        String    @map("hold_point_id")
+  recipientEmail     String    @map("recipient_email")
+  recipientName      String?   @map("recipient_name")
+  token              String    @unique
+  expiresAt          DateTime  @map("expires_at")
+  usedAt             DateTime? @map("used_at")
+  releasedByName     String?   @map("released_by_name")
+  releasedByOrg      String?   @map("released_by_org")
+  releaseSignatureUrl String?  @map("release_signature_url")
+  releaseNotes       String?   @map("release_notes")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  holdPoint HoldPoint @relation(fields: [holdPointId], references: [id], onDelete: Cascade)
+
+  @@map("hold_point_release_tokens")
 }
 
 // ============================================================================
