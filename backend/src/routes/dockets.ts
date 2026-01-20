@@ -705,6 +705,223 @@ docketsRouter.post('/:id/reject', requireRole(DOCKET_APPROVERS), async (req, res
   }
 })
 
+// POST /api/dockets/:id/query - Query a docket (Feature #268)
+docketsRouter.post('/:id/query', requireRole(DOCKET_APPROVERS), async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { questions } = req.body
+
+    if (!questions || questions.trim() === '') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Questions/issues are required'
+      })
+    }
+
+    const docket = await prisma.dailyDocket.findUnique({
+      where: { id },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        },
+        project: {
+          select: { id: true, name: true }
+        }
+      }
+    })
+
+    if (!docket) {
+      return res.status(404).json({ error: 'Docket not found' })
+    }
+
+    if (docket.status !== 'pending_approval') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Only pending dockets can be queried'
+      })
+    }
+
+    // Step 5 - Update status to 'queried'
+    const updatedDocket = await prisma.dailyDocket.update({
+      where: { id },
+      data: {
+        status: 'queried',
+        foremanNotes: questions, // Store the query in foreman notes
+      },
+    })
+
+    // Step 6 - Notify subcontractor users
+    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`
+    const docketDate = docket.date.toISOString().split('T')[0]
+    const querierName = user.fullName || user.email
+
+    // Get all subcontractor users linked to this subcontractor company
+    const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
+      where: {
+        subcontractorCompanyId: docket.subcontractorCompanyId
+      }
+    })
+
+    const subcontractorUserIds = subcontractorUserLinks.map(su => su.userId)
+    const subcontractorUsers = subcontractorUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: subcontractorUserIds } },
+          select: { id: true, email: true, fullName: true }
+        })
+      : []
+
+    // Create notifications for subcontractor users
+    const notificationsToCreate = subcontractorUsers.map(su => ({
+      userId: su.id,
+      projectId: docket.projectId,
+      type: 'docket_queried',
+      title: 'Docket Query',
+      message: `${querierName} has raised a query on docket ${docketNumber} (${docketDate}).\n\nQuestions: ${questions.substring(0, 200)}${questions.length > 200 ? '...' : ''}\n\nPlease review and respond or amend the docket.`,
+      linkUrl: `/projects/${docket.projectId}/dockets`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+      console.log(`[Docket Query] Created ${notificationsToCreate.length} in-app notifications for subcontractor`)
+    }
+
+    // Send email notifications to subcontractor users
+    for (const su of subcontractorUsers) {
+      try {
+        await sendNotificationIfEnabled(su.id, 'enabled', {
+          title: 'Docket Query - Response Required',
+          message: `${querierName} has raised a query on docket ${docketNumber} (${docketDate}).\n\nProject: ${docket.project.name}\n\nQuestions/Issues:\n${questions}\n\nPlease review and respond or amend the docket.`,
+          projectName: docket.project.name,
+          linkUrl: `/projects/${docket.projectId}/dockets`
+        })
+      } catch (emailError) {
+        console.error(`[Docket Query] Failed to send email to user ${su.id}:`, emailError)
+      }
+    }
+
+    // Log for development
+    console.log(`[Docket Query] Notification details:`)
+    console.log(`  Docket: ${docketNumber}`)
+    console.log(`  Queried by: ${querierName}`)
+    console.log(`  Questions: ${questions.substring(0, 100)}...`)
+    console.log(`  Notified: ${subcontractorUsers.map(su => su.email).join(', ')}`)
+
+    res.json({
+      message: 'Docket queried successfully',
+      docket: {
+        id: updatedDocket.id,
+        status: updatedDocket.status,
+      },
+      notifiedUsers: subcontractorUsers.map(su => ({
+        email: su.email,
+        fullName: su.fullName
+      }))
+    })
+  } catch (error) {
+    console.error('Query docket error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/dockets/:id/respond - Respond to a docket query (Feature #268 Step 7)
+docketsRouter.post('/:id/respond', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { response } = req.body
+
+    if (!response || response.trim() === '') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Response is required'
+      })
+    }
+
+    const docket = await prisma.dailyDocket.findUnique({
+      where: { id },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        },
+        project: {
+          select: { id: true, name: true }
+        }
+      }
+    })
+
+    if (!docket) {
+      return res.status(404).json({ error: 'Docket not found' })
+    }
+
+    if (docket.status !== 'queried') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Only queried dockets can be responded to'
+      })
+    }
+
+    // Update status back to pending_approval and append response to notes
+    const existingNotes = docket.notes || ''
+    const existingForemanNotes = docket.foremanNotes || ''
+    const newNotes = existingNotes
+      ? `${existingNotes}\n\n--- Response to Query ---\n${response}`
+      : `--- Response to Query ---\n${response}`
+
+    const updatedDocket = await prisma.dailyDocket.update({
+      where: { id },
+      data: {
+        status: 'pending_approval', // Back to pending for re-review
+        notes: newNotes,
+      },
+    })
+
+    // Notify project approvers about the response
+    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`
+    const docketDate = docket.date.toISOString().split('T')[0]
+    const responderName = user.fullName || user.email
+
+    const projectUsers = await prisma.projectUser.findMany({
+      where: {
+        projectId: docket.projectId,
+        role: { in: DOCKET_APPROVERS }
+      },
+      include: {
+        user: { select: { id: true, email: true, fullName: true } }
+      }
+    })
+
+    const notificationsToCreate = projectUsers.map(pu => ({
+      userId: pu.userId,
+      projectId: docket.projectId,
+      type: 'docket_query_response',
+      title: 'Docket Query Response',
+      message: `${responderName} has responded to the query on docket ${docketNumber} (${docketDate}).\n\nResponse: ${response.substring(0, 200)}${response.length > 200 ? '...' : ''}\n\nThe docket is ready for review.`,
+      linkUrl: `/projects/${docket.projectId}/dockets`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+      console.log(`[Docket Query Response] Created ${notificationsToCreate.length} notifications for approvers`)
+    }
+
+    res.json({
+      message: 'Query response submitted',
+      docket: {
+        id: updatedDocket.id,
+        status: updatedDocket.status,
+      }
+    })
+  } catch (error) {
+    console.error('Respond to docket query error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // ============================================================================
 // Feature #261 - Labour Entry Management
 // ============================================================================
