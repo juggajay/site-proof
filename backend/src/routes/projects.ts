@@ -914,6 +914,47 @@ projectsRouter.delete('/:id/users/:userId', async (req, res) => {
       req
     })
 
+    // Feature #941 - Send removal notification to the removed user
+    try {
+      // Get project details for the notification
+      const projectDetails = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, name: true, projectNumber: true }
+      })
+
+      const removerName = currentUser.fullName || currentUser.email || 'An administrator'
+      const formattedRole = targetProjectUser.role.replace(/_/g, ' ')
+
+      // Create in-app notification
+      await prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          projectId: null, // Project access has been removed, so we don't link to the project
+          type: 'project_removal',
+          title: 'Removed from Project',
+          message: `You have been removed from ${projectDetails?.name || 'a project'} by ${removerName}. Your previous role was ${formattedRole}.`,
+          linkUrl: '/projects' // Link to projects list since they no longer have access to this project
+        }
+      })
+
+      // Send email notification
+      await sendNotificationIfEnabled(
+        targetUserId,
+        'mentions', // Using mentions type for removal notifications
+        {
+          title: 'Removed from Project',
+          message: `You have been removed from ${projectDetails?.name || 'a project'}. Your previous role was ${formattedRole}.`,
+          projectName: projectDetails?.name,
+          linkUrl: '/projects'
+        }
+      )
+
+      console.log(`[Project Removal] Notification sent to ${targetProjectUser.user.email} - removed from ${projectDetails?.name}`)
+    } catch (notifError) {
+      console.error('[Project Removal] Failed to send notification:', notifError)
+      // Don't fail the main request if notifications fail
+    }
+
     res.json({
       message: 'User removed successfully',
       removedUser: {
