@@ -2,12 +2,16 @@ import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
+
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(true) // Default to checked
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [magicLinkMode, setMagicLinkMode] = useState(false) // Feature #415: Magic link mode
+  const [magicLinkSent, setMagicLinkSent] = useState(false)
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -30,6 +34,114 @@ export function LoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Feature #415: Magic link login handler
+  const handleMagicLinkRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email) {
+      setError('Please enter your email address')
+      return
+    }
+    setError('')
+    setLoading(true)
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/magic-link/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMagicLinkSent(true)
+      } else {
+        setError(data.error || 'Failed to send magic link')
+      }
+    } catch (err) {
+      setError('Failed to send magic link. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Feature #415: Magic link sent confirmation
+  if (magicLinkSent) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+          <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-bold">Check Your Email</h2>
+        <p className="text-muted-foreground">
+          We've sent a magic link to <strong>{email}</strong>. Click the link in the email to sign in.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          The link will expire in 15 minutes.
+        </p>
+        <button
+          onClick={() => {
+            setMagicLinkSent(false)
+            setMagicLinkMode(false)
+          }}
+          className="text-primary hover:underline text-sm"
+        >
+          Back to sign in
+        </button>
+      </div>
+    )
+  }
+
+  // Feature #415: Magic link mode
+  if (magicLinkMode) {
+    return (
+      <form onSubmit={handleMagicLinkRequest} className="space-y-4">
+        <h2 className="text-2xl font-bold">Sign In with Magic Link</h2>
+        <p className="text-sm text-muted-foreground">
+          Enter your email and we'll send you a link to sign in instantly.
+        </p>
+
+        {error && (
+          <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert" aria-live="assertive">
+            {error}
+          </div>
+        )}
+
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
+            required
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {loading ? 'Sending link...' : 'Send Magic Link'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMagicLinkMode(false)}
+          className="w-full text-center text-sm text-primary hover:underline"
+        >
+          Sign in with password instead
+        </button>
+      </form>
+    )
   }
 
   return (
@@ -95,6 +207,24 @@ export function LoginPage() {
         className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
         {loading ? 'Signing in...' : 'Sign In'}
+      </button>
+
+      {/* Feature #415: Magic link option */}
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-300"></div>
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="bg-background px-2 text-muted-foreground">or</span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setMagicLinkMode(true)}
+        className="w-full rounded-lg border border-primary py-2 text-primary hover:bg-primary/5"
+      >
+        Sign in with Magic Link
       </button>
 
       <div className="flex justify-between text-sm">

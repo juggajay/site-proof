@@ -21,6 +21,7 @@ import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
+import { MagicLinkPage } from '@/pages/auth/MagicLinkPage'  // Feature #415
 
 // Main Pages
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -100,6 +101,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/auth/magic-link" element={<MagicLinkPage />} />  {/* Feature #415 */}
         </Route>
 
         {/* Legal Pages (public, no layout) */}
