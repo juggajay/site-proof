@@ -22,6 +22,8 @@ import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
 import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 import { MagicLinkPage } from '@/pages/auth/MagicLinkPage'  // Feature #415
+import { OAuthCallbackPage } from '@/pages/auth/OAuthCallbackPage'  // Feature #414
+import { OAuthMockPage } from '@/pages/auth/OAuthMockPage'  // Feature #414 (dev only)
 
 // Main Pages
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -102,6 +104,8 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/auth/magic-link" element={<MagicLinkPage />} />  {/* Feature #415 */}
+          <Route path="/auth/oauth-callback" element={<OAuthCallbackPage />} />  {/* Feature #414 */}
+          <Route path="/auth/oauth-mock" element={<OAuthMockPage />} />  {/* Feature #414 dev mode */}
         </Route>
 
         {/* Legal Pages (public, no layout) */}

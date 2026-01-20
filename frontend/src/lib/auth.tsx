@@ -33,6 +33,7 @@ interface AuthContextType {
   signOut: () => Promise<void>
   handleSessionExpired: () => void
   refreshUser: () => Promise<void>
+  setToken: (token: string) => Promise<void>  // Feature #414: OAuth callback support
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -235,8 +236,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Feature #414: Set token from OAuth callback
+  const setToken = async (token: string) => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      // Verify the token and get user info
+      const response = await fetch(`${apiUrl}/api/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+
+        // Clear any existing auth from both storages
+        clearAuthFromAllStorages()
+
+        // Store with remember me (OAuth users typically want persistent sessions)
+        localStorage.setItem(REMEMBER_ME_KEY, 'true')
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+          user: data.user,
+          token: token,
+        }))
+
+        setUser(data.user)
+        setSessionExpired(false)
+      } else {
+        throw new Error('Invalid token')
+      }
+    } catch (error) {
+      clearAuthFromAllStorages()
+      throw error
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, sessionExpired, signIn, signUp, signOut, handleSessionExpired, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, sessionExpired, signIn, signUp, signOut, handleSessionExpired, refreshUser, setToken }}>
       {children}
     </AuthContext.Provider>
   )
