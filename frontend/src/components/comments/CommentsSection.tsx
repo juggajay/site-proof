@@ -71,6 +71,68 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     fetchComments()
   }, [entityType, entityId])
 
+  // Feature #736: Real-time comment notification polling
+  // Poll for new comments every 15 seconds (more frequent for chat-like experience)
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout | null = null
+
+    const silentFetchComments = async () => {
+      try {
+        const token = getAuthToken()
+        const response = await fetch(
+          `${API_URL}/api/comments?entityType=${entityType}&entityId=${entityId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        )
+
+        if (response.ok) {
+          const data = await response.json()
+          const newComments = data.comments || []
+
+          // Only update if there are actual changes
+          setComments((prevComments: Comment[]) => {
+            // Check if comments have changed by comparing lengths and IDs
+            const hasChanges = newComments.length !== prevComments.length ||
+              newComments.some((newComment: Comment, index: number) =>
+                !prevComments[index] ||
+                newComment.id !== prevComments[index].id ||
+                newComment.isEdited !== prevComments[index].isEdited ||
+                (newComment.replies?.length || 0) !== (prevComments[index].replies?.length || 0)
+              )
+            return hasChanges ? newComments : prevComments
+          })
+        }
+      } catch (err) {
+        // Silent fail for background polling
+        console.debug('Background comments fetch failed:', err)
+      }
+    }
+
+    const startPolling = () => {
+      // Poll every 15 seconds for comments (more frequent for chat-like experience)
+      pollInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          silentFetchComments()
+        }
+      }, 15000)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        silentFetchComments()
+      }
+    }
+
+    startPolling()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [entityType, entityId])
+
   const fetchComments = async () => {
     setLoading(true)
     setError(null)
