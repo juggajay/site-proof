@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, AuthRequest } from '../middleware/authMiddleware.js'
-import { sendNotificationEmail, sendDailyDigestEmail, getQueuedEmails, clearEmailQueue, NotificationTypes, DigestItem } from '../lib/email.js'
+import { sendNotificationEmail, sendDailyDigestEmail, getQueuedEmails, clearEmailQueue, NotificationTypes, DigestItem, isResendConfigured } from '../lib/email.js'
 
 export const notificationsRouter = Router()
 
@@ -399,15 +399,43 @@ notificationsRouter.post('/send-test-email', async (req: AuthRequest, res) => {
     if (result.success) {
       res.json({
         success: true,
-        message: 'Test email sent successfully',
+        message: result.provider === 'resend'
+          ? 'Test email sent successfully via Resend API'
+          : 'Test email logged to console (Resend API not configured)',
         messageId: result.messageId,
         sentTo: user.email,
+        provider: result.provider || 'mock',
       })
     } else {
-      res.status(500).json({ error: 'Failed to send test email', details: result.error })
+      res.status(500).json({ error: 'Failed to send test email', details: result.error, provider: result.provider })
     }
   } catch (error) {
     console.error('Send test email error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/notifications/email-service-status - Get email service configuration status
+notificationsRouter.get('/email-service-status', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    const resendConfigured = isResendConfigured()
+
+    res.json({
+      provider: resendConfigured ? 'resend' : 'mock',
+      resendConfigured,
+      emailEnabled: process.env.EMAIL_ENABLED !== 'false',
+      status: resendConfigured ? 'production' : 'development',
+      message: resendConfigured
+        ? 'Resend API is configured and emails will be delivered to real recipients.'
+        : 'Resend API not configured. Emails are logged to console only. Set RESEND_API_KEY in .env for production email delivery.',
+    })
+  } catch (error) {
+    console.error('Get email service status error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

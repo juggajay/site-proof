@@ -1,8 +1,9 @@
 // Email Service for SiteProof
-// This is a mock email service for development. In production, integrate with:
-// - SendGrid
-// - AWS SES
-// - Nodemailer with SMTP
+// Uses Resend API for production email delivery
+// Falls back to console logging in development mode
+
+import { Resend } from 'resend'
+import * as fs from 'fs'
 
 interface EmailAttachment {
   filename: string
@@ -24,6 +25,7 @@ interface EmailResult {
   success: boolean
   messageId?: string
   error?: string
+  provider?: 'resend' | 'mock'
 }
 
 // Email queue for testing/development
@@ -33,12 +35,27 @@ const emailQueue: EmailOptions[] = []
 const EMAIL_CONFIG = {
   from: process.env.EMAIL_FROM || 'noreply@siteproof.app',
   enabled: process.env.EMAIL_ENABLED === 'true' || true, // Enable by default for dev
+  resendApiKey: process.env.RESEND_API_KEY,
+}
+
+// Initialize Resend client if API key is provided and valid
+const resend = EMAIL_CONFIG.resendApiKey &&
+  EMAIL_CONFIG.resendApiKey !== 'RESEND_API_KEY' &&
+  EMAIL_CONFIG.resendApiKey !== 're_placeholder' &&
+  EMAIL_CONFIG.resendApiKey.startsWith('re_')
+    ? new Resend(EMAIL_CONFIG.resendApiKey)
+    : null
+
+/**
+ * Check if Resend is configured and available
+ */
+export function isResendConfigured(): boolean {
+  return resend !== null
 }
 
 /**
  * Send an email
- * In development, this logs to console and stores in memory queue
- * In production, integrate with actual email provider
+ * Uses Resend API when configured, otherwise falls back to console logging
  */
 export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   const email = {
@@ -51,17 +68,79 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
     return { success: false, error: 'Email sending disabled' }
   }
 
-  // In development, log and queue the email
-  console.log('[Email Service] Sending email:')
+  // Store in queue for testing regardless of provider
+  emailQueue.push(email)
+
+  // Try to use Resend if configured
+  if (resend) {
+    try {
+      console.log('[Email Service] Sending email via Resend API:')
+      console.log('  To:', email.to)
+      console.log('  Subject:', email.subject)
+      console.log('  From:', email.from)
+
+      // Prepare attachments for Resend format
+      const resendAttachments = email.attachments?.map(att => {
+        if (att.content) {
+          return {
+            filename: att.filename,
+            content: typeof att.content === 'string'
+              ? Buffer.from(att.content)
+              : att.content,
+          }
+        } else if (att.path) {
+          return {
+            filename: att.filename,
+            content: fs.readFileSync(att.path),
+          }
+        }
+        return null
+      }).filter(Boolean) as { filename: string; content: Buffer }[] | undefined
+
+      const response = await resend.emails.send({
+        from: email.from,
+        to: Array.isArray(email.to) ? email.to : [email.to],
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        attachments: resendAttachments,
+      })
+
+      if (response.error) {
+        console.error('[Email Service] Resend API error:', response.error)
+        return {
+          success: false,
+          error: response.error.message,
+          provider: 'resend',
+        }
+      }
+
+      console.log('[Email Service] Email sent successfully via Resend')
+      console.log('  Message ID:', response.data?.id)
+
+      return {
+        success: true,
+        messageId: response.data?.id,
+        provider: 'resend',
+      }
+    } catch (error) {
+      console.error('[Email Service] Resend API exception:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        provider: 'resend',
+      }
+    }
+  }
+
+  // Fallback to mock/console logging
+  console.log('[Email Service] Sending email (MOCK - Resend not configured):')
   console.log('  To:', email.to)
   console.log('  Subject:', email.subject)
   console.log('  From:', email.from)
 
-  // Store in queue for testing
-  emailQueue.push(email)
-
   // Generate a mock message ID
-  const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const messageId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
   // Log HTML content in dev mode
   if (email.html) {
@@ -80,6 +159,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   return {
     success: true,
     messageId,
+    provider: 'mock',
   }
 }
 
