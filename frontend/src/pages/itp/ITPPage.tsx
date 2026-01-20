@@ -50,10 +50,13 @@ export function ITPPage() {
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)  // Feature #128
+  const [editingTemplate, setEditingTemplate] = useState<ITPTemplate | null>(null)  // Feature #128
   const [creating, setCreating] = useState(false)
   const [includeGlobalTemplates, setIncludeGlobalTemplates] = useState(true)
   const [projectSpecificationSet, setProjectSpecificationSet] = useState<string | null>(null)
   const [activityTypeFilter, setActivityTypeFilter] = useState<string>('')
+  const [responsiblePartyFilter, setResponsiblePartyFilter] = useState<string>('')  // Feature #711
 
   const token = getAuthToken()
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -169,8 +172,49 @@ export function ITPPage() {
     }
   }
 
-  const handleImportTemplate = async (templateId: string) => {
-    if (!token || !projectId) return
+  // Feature #128 - Edit template handler
+  const handleEditTemplate = (template: ITPTemplate) => {
+    setEditingTemplate(template)
+    setShowEditModal(true)
+  }
+
+  // Feature #128 - Update template after edit
+  const handleUpdateTemplate = async (templateId: string, data: {
+    name: string
+    description: string
+    activityType: string
+    checklistItems: Omit<ChecklistItem, 'id'>[]
+  }) => {
+    if (!token) return
+
+    setCreating(true)
+    try {
+      const response = await fetch(`${apiUrl}/api/itp/templates/${templateId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setTemplates(prev =>
+          prev.map(t => t.id === templateId ? result.template : t)
+        )
+        setShowEditModal(false)
+        setEditingTemplate(null)
+      }
+    } catch (err) {
+      console.error('Failed to update template:', err)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleImportTemplate = async (templateId: string): Promise<boolean> => {
+    if (!token || !projectId) return false
 
     try {
       const response = await fetch(`${apiUrl}/api/itp/templates/${templateId}/clone`, {
@@ -254,6 +298,22 @@ export function ITPPage() {
             ))}
           </select>
         </div>
+
+        {/* Responsible Party Filter - Feature #711 */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted-foreground">Responsible:</label>
+          <select
+            value={responsiblePartyFilter}
+            onChange={(e) => setResponsiblePartyFilter(e.target.value)}
+            className="text-sm border rounded px-2 py-1"
+          >
+            <option value="">All Parties</option>
+            <option value="contractor">Contractor</option>
+            <option value="subcontractor">Subcontractor</option>
+            <option value="superintendent">Superintendent</option>
+            <option value="general">General</option>
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -278,6 +338,7 @@ export function ITPPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {templates
             .filter(t => !activityTypeFilter || t.activityType === activityTypeFilter)
+            .filter(t => !responsiblePartyFilter || t.checklistItems.some(i => i.responsibleParty === responsiblePartyFilter))  // Feature #711
             .map((template) => (
             <div
               key={template.id}
@@ -308,20 +369,34 @@ export function ITPPage() {
               )}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {template.checklistItems.length} checklist items
+                  {responsiblePartyFilter
+                    ? `${template.checklistItems.filter(i => i.responsibleParty === responsiblePartyFilter).length} ${responsiblePartyFilter} items`
+                    : `${template.checklistItems.length} checklist items`}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {template.checklistItems.filter(i => i.isHoldPoint).length} hold points
+                  {template.checklistItems.filter(i => i.isHoldPoint && (!responsiblePartyFilter || i.responsibleParty === responsiblePartyFilter)).length} hold points
                 </span>
               </div>
               <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                <button
-                  onClick={() => handleCloneTemplate(template)}
-                  className="text-xs px-2 py-1 rounded border hover:bg-muted"
-                  title="Clone template"
-                >
-                  Copy
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleCloneTemplate(template)}
+                    className="text-xs px-2 py-1 rounded border hover:bg-muted"
+                    title="Clone template"
+                  >
+                    Copy
+                  </button>
+                  {/* Feature #128 - Edit button */}
+                  {!template.isGlobalTemplate && (
+                    <button
+                      onClick={() => handleEditTemplate(template)}
+                      className="text-xs px-2 py-1 rounded border hover:bg-muted"
+                      title="Edit template"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
                 {!template.isGlobalTemplate && (
                   <button
                     onClick={() => handleToggleActive(template)}
@@ -355,6 +430,19 @@ export function ITPPage() {
           currentProjectId={projectId}
           apiUrl={apiUrl}
           token={token || ''}
+        />
+      )}
+
+      {/* Feature #128 - Edit Template Modal */}
+      {showEditModal && editingTemplate && (
+        <EditTemplateModal
+          template={editingTemplate}
+          onClose={() => {
+            setShowEditModal(false)
+            setEditingTemplate(null)
+          }}
+          onSubmit={(data) => handleUpdateTemplate(editingTemplate.id, data)}
+          loading={creating}
         />
       )}
     </div>
@@ -393,6 +481,25 @@ function CreateTemplateModal({
   const handleItemChange = (index: number, field: string, value: any) => {
     const updated = [...checklistItems]
     updated[index] = { ...updated[index], [field]: value }
+    setChecklistItems(updated)
+  }
+
+  // Feature #128 - Drag-and-drop reorder functions
+  const handleMoveUp = (index: number) => {
+    if (index === 0) return
+    const updated = [...checklistItems]
+    const temp = updated[index - 1]
+    updated[index - 1] = updated[index]
+    updated[index] = temp
+    setChecklistItems(updated)
+  }
+
+  const handleMoveDown = (index: number) => {
+    if (index === checklistItems.length - 1) return
+    const updated = [...checklistItems]
+    const temp = updated[index + 1]
+    updated[index + 1] = updated[index]
+    updated[index] = temp
     setChecklistItems(updated)
   }
 
@@ -461,6 +568,28 @@ function CreateTemplateModal({
             <div className="space-y-3">
               {checklistItems.map((item, index) => (
                 <div key={index} className="flex items-start gap-2 p-3 border rounded-lg">
+                  {/* Feature #128 - Reorder controls */}
+                  <div className="flex flex-col gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleMoveUp(index)}
+                      disabled={index === 0}
+                      className="w-6 h-6 rounded border text-xs hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move up"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveDown(index)}
+                      disabled={index === checklistItems.length - 1}
+                      className="w-6 h-6 rounded border text-xs hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move down"
+                    >
+                      ↓
+                    </button>
+                    <span className="text-xs text-muted-foreground text-center w-6">{index + 1}</span>
+                  </div>
                   <div className="flex-1 space-y-2">
                     <input
                       type="text"
@@ -697,6 +826,263 @@ function ImportFromProjectModal({
             Close
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Feature #128 - Edit Template Modal with reorder functionality
+function EditTemplateModal({
+  template,
+  onClose,
+  onSubmit,
+  loading,
+}: {
+  template: ITPTemplate
+  onClose: () => void
+  onSubmit: (data: {
+    name: string
+    description: string
+    activityType: string
+    checklistItems: Omit<ChecklistItem, 'id'>[]
+  }) => void
+  loading: boolean
+}) {
+  const [name, setName] = useState(template.name)
+  const [description, setDescription] = useState(template.description || '')
+  const [activityType, setActivityType] = useState(template.activityType)
+  const [checklistItems, setChecklistItems] = useState<Omit<ChecklistItem, 'id'>[]>(
+    template.checklistItems.map(item => ({
+      description: item.description,
+      category: item.category,
+      responsibleParty: item.responsibleParty,
+      isHoldPoint: item.isHoldPoint,
+      pointType: item.pointType,
+      evidenceRequired: item.evidenceRequired,
+      verificationMethod: item.verificationMethod,
+      acceptanceCriteria: item.acceptanceCriteria,
+      testType: item.testType,
+      order: item.order
+    })).sort((a, b) => a.order - b.order)
+  )
+
+  const handleAddItem = () => {
+    setChecklistItems([...checklistItems, {
+      description: '',
+      category: 'general',
+      responsibleParty: 'contractor',
+      isHoldPoint: false,
+      pointType: 'standard',
+      evidenceRequired: 'none',
+      order: checklistItems.length
+    }])
+  }
+
+  const handleRemoveItem = (index: number) => {
+    setChecklistItems(checklistItems.filter((_, i) => i !== index))
+  }
+
+  const handleItemChange = (index: number, field: string, value: any) => {
+    const updated = [...checklistItems]
+    updated[index] = { ...updated[index], [field]: value }
+    setChecklistItems(updated)
+  }
+
+  // Feature #128 - Reorder functions
+  const handleMoveUp = (index: number) => {
+    if (index === 0) return
+    const updated = [...checklistItems]
+    const temp = updated[index - 1]
+    updated[index - 1] = updated[index]
+    updated[index] = temp
+    setChecklistItems(updated)
+  }
+
+  const handleMoveDown = (index: number) => {
+    if (index === checklistItems.length - 1) return
+    const updated = [...checklistItems]
+    const temp = updated[index + 1]
+    updated[index + 1] = updated[index]
+    updated[index] = temp
+    setChecklistItems(updated)
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const validItems = checklistItems.filter(item => item.description.trim())
+    // Update order based on position in array
+    const orderedItems = validItems.map((item, idx) => ({ ...item, order: idx }))
+    onSubmit({ name, description, activityType, checklistItems: orderedItems })
+  }
+
+  const activityTypes = ['Earthworks', 'Drainage', 'Pavement', 'Concrete', 'Structures', 'General']
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-background rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-semibold mb-4">Edit ITP Template</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium mb-1">Template Name *</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                placeholder="e.g., Earthworks ITP"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Activity Type *</label>
+              <select
+                value={activityType}
+                onChange={(e) => setActivityType(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg"
+                required
+              >
+                <option value="">Select activity type</option>
+                {activityTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+              rows={2}
+              placeholder="Optional description of this ITP template"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium">Checklist Items (drag to reorder)</label>
+              <button
+                type="button"
+                onClick={handleAddItem}
+                className="text-sm text-primary hover:underline"
+              >
+                + Add Item
+              </button>
+            </div>
+            <div className="space-y-3">
+              {checklistItems.map((item, index) => (
+                <div key={index} className="flex items-start gap-2 p-3 border rounded-lg">
+                  {/* Reorder controls */}
+                  <div className="flex flex-col gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleMoveUp(index)}
+                      disabled={index === 0}
+                      className="w-6 h-6 rounded border text-xs hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move up"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveDown(index)}
+                      disabled={index === checklistItems.length - 1}
+                      className="w-6 h-6 rounded border text-xs hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Move down"
+                    >
+                      ↓
+                    </button>
+                    <span className="text-xs text-muted-foreground text-center w-6">{index + 1}</span>
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <input
+                      type="text"
+                      value={item.description}
+                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                      placeholder="Checklist item description"
+                    />
+                    <div className="flex items-center gap-4">
+                      <select
+                        value={item.responsibleParty || 'contractor'}
+                        onChange={(e) => {
+                          handleItemChange(index, 'responsibleParty', e.target.value)
+                          handleItemChange(index, 'category', e.target.value)
+                        }}
+                        className="px-2 py-1 border rounded text-sm"
+                      >
+                        <option value="contractor">Contractor</option>
+                        <option value="subcontractor">Subcontractor</option>
+                        <option value="superintendent">Superintendent</option>
+                      </select>
+                      <select
+                        value={item.pointType || 'standard'}
+                        onChange={(e) => {
+                          const newPointType = e.target.value as 'standard' | 'witness' | 'hold_point'
+                          handleItemChange(index, 'pointType', newPointType)
+                          handleItemChange(index, 'isHoldPoint', newPointType === 'hold_point')
+                        }}
+                        className="px-2 py-1 text-sm border rounded"
+                      >
+                        <option value="standard">S - Standard</option>
+                        <option value="witness">W - Witness</option>
+                        <option value="hold_point">H - Hold Point</option>
+                      </select>
+                      <select
+                        value={item.evidenceRequired || 'none'}
+                        onChange={(e) => handleItemChange(index, 'evidenceRequired', e.target.value)}
+                        className="px-2 py-1 text-sm border rounded"
+                      >
+                        <option value="none">No Evidence</option>
+                        <option value="photo">📷 Photo</option>
+                        <option value="test">🧪 Test</option>
+                        <option value="document">📄 Document</option>
+                      </select>
+                      {item.evidenceRequired === 'test' && (
+                        <input
+                          type="text"
+                          value={item.testType || ''}
+                          onChange={(e) => handleItemChange(index, 'testType', e.target.value)}
+                          className="px-2 py-1 text-sm border rounded w-28"
+                          placeholder="Test type"
+                        />
+                      )}
+                    </div>
+                  </div>
+                  {checklistItems.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(index)}
+                      className="text-red-500 hover:text-red-700 p-1"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border rounded-lg hover:bg-muted"
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+              disabled={loading || !name || !activityType}
+            >
+              {loading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )
