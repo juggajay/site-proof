@@ -14,10 +14,20 @@ interface Lot {
   areaZone: string | null
 }
 
+// Feature #708 - Project Area for background highlighting
+interface ProjectArea {
+  id: string
+  name: string
+  chainageStart: number | null
+  chainageEnd: number | null
+  colour: string | null
+}
+
 interface LinearMapViewProps {
   lots: Lot[]
   onLotClick: (lot: Lot) => void
   statusColors: Record<string, string>
+  areas?: ProjectArea[]  // Feature #708 - Optional areas for background highlighting
 }
 
 // Feature #153 - Popup state
@@ -58,7 +68,7 @@ const getActivityColor = (activityType: string | null) => {
   return colors[activityType || ''] || '#9ca3af'
 }
 
-export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewProps) {
+export function LinearMapView({ lots, onLotClick, statusColors, areas = [] }: LinearMapViewProps) {
   const [zoomLevel, setZoomLevel] = useState(1)
   const [panOffset, setPanOffset] = useState(0)
 
@@ -291,6 +301,31 @@ export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewP
 
               {/* Lot Blocks */}
               <div className="flex-1 relative" data-testid={`layer-content-${layerName}`}>
+                {/* Feature #708 - Area background highlighting */}
+                {areas.filter(area => area.chainageStart !== null && area.chainageEnd !== null && area.colour).map((area) => {
+                  const areaStart = area.chainageStart!
+                  const areaEnd = area.chainageEnd!
+                  const left = chainageToX(Math.min(areaStart, areaEnd))
+                  const right = chainageToX(Math.max(areaStart, areaEnd))
+                  const width = right - left
+
+                  if (left > 100 * zoomLevel || right < 0 || width <= 0) return null
+
+                  return (
+                    <div
+                      key={`area-${area.id}`}
+                      className="absolute top-0 h-full opacity-20"
+                      style={{
+                        left: `${Math.max(left, 0)}%`,
+                        width: `${Math.min(width, 100 * zoomLevel - Math.max(left, 0))}%`,
+                        backgroundColor: area.colour || undefined,
+                      }}
+                      title={`Area: ${area.name}`}
+                      data-testid={`area-highlight-${area.id}`}
+                    />
+                  )
+                })}
+
                 {/* Grid lines */}
                 {chainageTicks.map((tick, idx) => {
                   const x = chainageToX(tick)
@@ -380,6 +415,23 @@ export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewP
             <span>{label}</span>
           </div>
         ))}
+
+        {/* Feature #708 - Areas legend */}
+        {areas.filter(a => a.colour).length > 0 && (
+          <>
+            <div className="w-px h-4 bg-border mx-2" />
+            <span className="font-medium">Areas:</span>
+            {areas.filter(a => a.colour).map(area => (
+              <div key={area.id} className="flex items-center gap-1" data-testid={`area-legend-${area.id}`}>
+                <div
+                  className="w-3 h-3 rounded opacity-50"
+                  style={{ backgroundColor: area.colour || '#9ca3af' }}
+                />
+                <span>{area.name}</span>
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Feature #153 - Lot Popup */}

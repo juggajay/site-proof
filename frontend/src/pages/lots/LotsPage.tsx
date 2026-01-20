@@ -79,11 +79,13 @@ interface Lot {
   assignedSubcontractor?: { companyName: string } | null
 }
 
+// Feature #438: Okabe-Ito color-blind safe palette
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  on_hold: 'bg-red-100 text-red-800',
+  pending: 'bg-amber-100 text-amber-800',
+  in_progress: 'bg-sky-100 text-sky-800',
+  completed: 'bg-emerald-100 text-emerald-800',
+  on_hold: 'bg-orange-100 text-orange-800',
+  not_started: 'bg-gray-100 text-gray-700',
 }
 
 // Helper function to highlight search terms in text
@@ -239,6 +241,9 @@ export function LotsPage() {
   const [bulkAssigning, setBulkAssigning] = useState(false)
   const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>('')
   const [subcontractors, setSubcontractors] = useState<{ id: string; companyName: string }[]>([])
+
+  // Feature #708 - Project areas for linear map highlighting
+  const [projectAreas, setProjectAreas] = useState<{ id: string; name: string; chainageStart: number | null; chainageEnd: number | null; colour: string | null }[]>([])
 
   // Print labels state
   const [printLabelsModalOpen, setPrintLabelsModalOpen] = useState(false)
@@ -790,6 +795,35 @@ export function LotsPage() {
       fetchSubcontractors()
     }
   }, [projectId, isSubcontractor])
+
+  // Feature #708 - Fetch project areas for linear map highlighting
+  useEffect(() => {
+    const fetchProjectAreas = async () => {
+      if (!projectId) return
+
+      const token = getAuthToken()
+      if (!token) return
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+      try {
+        const response = await fetch(`${apiUrl}/api/projects/${projectId}/areas`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setProjectAreas(data.areas || [])
+        }
+      } catch (err) {
+        console.error('Error fetching project areas:', err)
+      }
+    }
+
+    fetchProjectAreas()
+  }, [projectId])
 
   // Close status dropdown when clicking outside
   useEffect(() => {
@@ -2540,6 +2574,7 @@ export function LotsPage() {
               lots={filteredLots}
               onLotClick={(lot) => navigate(`/projects/${projectId}/lots/${lot.id}`)}
               statusColors={statusColors}
+              areas={projectAreas}  // Feature #708 - Pass project areas for background highlighting
             />
           )}
         </div>
