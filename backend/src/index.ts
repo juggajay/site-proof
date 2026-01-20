@@ -30,6 +30,7 @@ import { notificationsRouter } from './routes/notifications.js'
 import documentsRouter from './routes/documents.js'
 import { drawingsRouter } from './routes/drawings.js'
 import { dashboardRouter } from './routes/dashboard.js'
+import apiKeysRouter, { authenticateApiKey } from './routes/apiKeys.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -113,9 +114,13 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
+// Feature #747: API key authentication middleware (checked before JWT)
+app.use(authenticateApiKey)
+
 // REST API routes
 // Auth routes have stricter rate limiting to prevent brute force attacks
 app.use('/api/auth', authRateLimiter, authRouter)
+app.use('/api/api-keys', apiKeysRouter)  // Feature #747: API key management
 app.use('/api/projects', projectsRouter)
 app.use('/api/lots', lotsRouter)
 app.use('/api/ncrs', ncrsRouter)
