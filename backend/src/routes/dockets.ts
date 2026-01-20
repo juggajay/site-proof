@@ -171,6 +171,168 @@ docketsRouter.post('/', async (req, res) => {
   }
 })
 
+// GET /api/dockets/:id - Get single docket with full details (Feature #265)
+docketsRouter.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+
+    const docket = await prisma.dailyDocket.findUnique({
+      where: { id },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        },
+        project: {
+          select: { id: true, name: true }
+        },
+        labourEntries: {
+          include: {
+            employee: { select: { id: true, name: true, role: true, hourlyRate: true } },
+            lotAllocations: {
+              include: { lot: { select: { id: true, lotNumber: true } } }
+            }
+          },
+          orderBy: { startTime: 'asc' }
+        },
+        plantEntries: {
+          include: {
+            plant: { select: { id: true, type: true, description: true, idRego: true, dryRate: true, wetRate: true } }
+          },
+          orderBy: { hoursOperated: 'desc' }
+        },
+        submittedBy: { select: { id: true, fullName: true, email: true } },
+        approvedBy: { select: { id: true, fullName: true, email: true } }
+      }
+    })
+
+    if (!docket) {
+      return res.status(404).json({ error: 'Docket not found' })
+    }
+
+    // Get foreman diary for the same date to compare (Feature #265 Step 3)
+    let foremanDiary = null
+    let discrepancies: string[] = []
+
+    const diary = await prisma.dailyDiary.findFirst({
+      where: {
+        projectId: docket.projectId,
+        date: docket.date
+      },
+      select: {
+        id: true,
+        date: true,
+        status: true,
+        sitePersonnel: true,
+        equipmentOnSite: true,
+        weatherConditions: true,
+        weatherHoursLost: true,
+        workPerformed: true
+      }
+    })
+
+    if (diary) {
+      foremanDiary = {
+        id: diary.id,
+        date: diary.date.toISOString().split('T')[0],
+        status: diary.status,
+        sitePersonnel: diary.sitePersonnel,
+        equipmentOnSite: diary.equipmentOnSite,
+        weatherConditions: diary.weatherConditions,
+        weatherHoursLost: Number(diary.weatherHoursLost) || 0,
+        workPerformed: diary.workPerformed
+      }
+
+      // Feature #265 Step 4 - Highlight discrepancies
+      const docketPersonnelCount = docket.labourEntries.length
+      const diaryPersonnel = diary.sitePersonnel || ''
+      if (docketPersonnelCount > 0 && !diaryPersonnel.includes(String(docketPersonnelCount))) {
+        discrepancies.push(`Personnel count may differ: docket has ${docketPersonnelCount} entries`)
+      }
+
+      const docketPlantCount = docket.plantEntries.length
+      const diaryEquipment = diary.equipmentOnSite || ''
+      if (docketPlantCount > 0 && !diaryEquipment.includes(String(docketPlantCount))) {
+        discrepancies.push(`Plant/equipment count may differ: docket has ${docketPlantCount} entries`)
+      }
+
+      if (diary.weatherHoursLost && Number(diary.weatherHoursLost) > 0) {
+        discrepancies.push(`Weather hours lost noted in diary: ${diary.weatherHoursLost} hours`)
+      }
+    }
+
+    // Format labour entries
+    const labourEntries = docket.labourEntries.map(entry => ({
+      id: entry.id,
+      employee: {
+        id: entry.employee.id,
+        name: entry.employee.name,
+        role: entry.employee.role,
+        hourlyRate: Number(entry.employee.hourlyRate) || 0
+      },
+      startTime: entry.startTime,
+      finishTime: entry.finishTime,
+      submittedHours: Number(entry.submittedHours) || 0,
+      approvedHours: Number(entry.approvedHours) || 0,
+      hourlyRate: Number(entry.hourlyRate) || 0,
+      submittedCost: Number(entry.submittedCost) || 0,
+      approvedCost: Number(entry.approvedCost) || 0,
+      lotAllocations: entry.lotAllocations.map(a => ({
+        lotId: a.lotId,
+        lotNumber: a.lot.lotNumber,
+        hours: Number(a.hours) || 0
+      }))
+    }))
+
+    // Format plant entries
+    const plantEntries = docket.plantEntries.map(entry => ({
+      id: entry.id,
+      plant: {
+        id: entry.plant.id,
+        type: entry.plant.type,
+        description: entry.plant.description,
+        idRego: entry.plant.idRego,
+        dryRate: Number(entry.plant.dryRate) || 0,
+        wetRate: Number(entry.plant.wetRate) || 0
+      },
+      hoursOperated: Number(entry.hoursOperated) || 0,
+      wetOrDry: entry.wetOrDry || 'dry',
+      hourlyRate: Number(entry.hourlyRate) || 0,
+      submittedCost: Number(entry.submittedCost) || 0,
+      approvedCost: Number(entry.approvedCost) || 0
+    }))
+
+    res.json({
+      docket: {
+        id: docket.id,
+        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        date: docket.date.toISOString().split('T')[0],
+        status: docket.status,
+        project: docket.project,
+        subcontractor: docket.subcontractorCompany,
+        notes: docket.notes,
+        foremanNotes: docket.foremanNotes,
+        rejectionReason: docket.rejectionReason,
+        submittedAt: docket.submittedAt,
+        submittedBy: docket.submittedBy,
+        approvedAt: docket.approvedAt,
+        approvedBy: docket.approvedBy,
+        totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
+        totalLabourApproved: Number(docket.totalLabourApproved) || 0,
+        totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
+        totalPlantApproved: Number(docket.totalPlantApproved) || 0,
+        labourEntries,
+        plantEntries
+      },
+      foremanDiary,
+      discrepancies: discrepancies.length > 0 ? discrepancies : null
+    })
+  } catch (error) {
+    console.error('Get docket details error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // POST /api/dockets/:id/submit - Submit a docket for approval
 docketsRouter.post('/:id/submit', async (req, res) => {
   try {
