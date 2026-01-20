@@ -102,12 +102,33 @@ app.use(requestLogger)
 app.use(rateLimiter)
 
 // Serve static files from uploads directory (for avatars, documents, etc.)
-// Add CORS headers for cross-origin image loading
+// Feature #755: CDN-friendly cache headers for static assets
 app.use('/uploads', (req, res, next) => {
+  // CORS headers for cross-origin image loading
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
   res.setHeader('Access-Control-Allow-Origin', '*')
+
+  // Feature #755: Cache control headers for CDN and browser caching
+  // Images and documents can be cached for 1 day, CDN can revalidate with stale-while-revalidate
+  const cacheableExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.pdf', '.ico']
+  const ext = path.extname(req.path).toLowerCase()
+
+  if (cacheableExtensions.includes(ext)) {
+    // Cache for 1 day, allow CDN to serve stale for 1 hour while revalidating
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=3600')
+    // Add ETag support for conditional requests
+    res.setHeader('Vary', 'Accept-Encoding')
+  } else {
+    // Other files: shorter cache, require revalidation
+    res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate')
+  }
+
   next()
-}, express.static(path.join(process.cwd(), 'uploads')))
+}, express.static(path.join(process.cwd(), 'uploads'), {
+  etag: true,
+  lastModified: true,
+  immutable: false,
+}))
 
 // Health check
 app.get('/health', (_req, res) => {
