@@ -352,7 +352,8 @@ docketsRouter.post('/:id/submit', async (req, res) => {
           include: {
             lotAllocations: true
           }
-        }
+        },
+        plantEntries: true
       }
     })
 
@@ -364,6 +365,17 @@ docketsRouter.post('/:id/submit', async (req, res) => {
       return res.status(400).json({
         error: 'Bad Request',
         message: 'Only draft dockets can be submitted'
+      })
+    }
+
+    // Feature #891: Require at least one entry before submission
+    const hasLabourEntries = docket.labourEntries && docket.labourEntries.length > 0
+    const hasPlantEntries = docket.plantEntries && docket.plantEntries.length > 0
+    if (!hasLabourEntries && !hasPlantEntries) {
+      return res.status(400).json({
+        error: 'Entry required',
+        message: 'At least one labour or plant entry is required before submitting the docket.',
+        code: 'ENTRY_REQUIRED'
       })
     }
 
