@@ -760,6 +760,70 @@ export function LotsPage() {
     fetchLots()
   }, [projectId, navigate])
 
+  // Feature #732: Real-time lot update polling
+  // Poll for updates every 30 seconds when the tab is visible
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout | null = null
+
+    const startPolling = () => {
+      // Poll every 30 seconds
+      pollInterval = setInterval(() => {
+        // Only poll if document is visible (not in background tab)
+        if (document.visibilityState === 'visible' && projectId) {
+          // Silent fetch without setting loading state to avoid UI flicker
+          const silentFetchLots = async () => {
+            const token = getAuthToken()
+            if (!token) return
+
+            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+            try {
+              const response = await fetch(`${apiUrl}/api/lots?projectId=${projectId}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              })
+
+              if (response.ok) {
+                const data = await response.json()
+                // Only update if there are actual changes
+                const newLots = data.lots || []
+                setLots(prevLots => {
+                  // Check if lots have changed by comparing IDs and updated timestamps
+                  const hasChanges = newLots.length !== prevLots.length ||
+                    newLots.some((newLot: Lot, index: number) =>
+                      !prevLots[index] || newLot.id !== prevLots[index].id ||
+                      newLot.status !== prevLots[index].status
+                    )
+                  return hasChanges ? newLots : prevLots
+                })
+              }
+            } catch (err) {
+              // Silent fail for background polling
+              console.debug('Background lot fetch failed:', err)
+            }
+          }
+          silentFetchLots()
+        }
+      }, 30000) // 30 seconds
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && projectId) {
+        // Fetch immediately when tab becomes visible
+        fetchLots()
+      }
+    }
+
+    startPolling()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [projectId])
+
   // Fetch project name for print header
   useEffect(() => {
     const fetchProjectName = async () => {
