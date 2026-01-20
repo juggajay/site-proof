@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
 import { sendNotificationIfEnabled } from './notifications.js'
+import { sendHPReleaseRequestEmail } from '../lib/email.js'
 
 const prisma = new PrismaClient()
 const holdpointsRouter = Router()
@@ -442,6 +443,75 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
         },
         include: { itpChecklistItem: true }
       })
+    }
+
+    // Feature #946 - Send HP release request email to superintendent
+    try {
+      // Get the requesting user's details
+      const requestingUser = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        select: { fullName: true, email: true }
+      })
+
+      // Get project users with superintendent role to notify
+      const superintendents = await prisma.projectUser.findMany({
+        where: {
+          projectId: lot.project.id,
+          role: 'superintendent',
+          status: 'active'
+        },
+        include: {
+          user: { select: { id: true, email: true, fullName: true } }
+        }
+      })
+
+      // If no superintendents, also check for project managers
+      const recipientsToNotify = superintendents.length > 0 ? superintendents : await prisma.projectUser.findMany({
+        where: {
+          projectId: lot.project.id,
+          role: 'project_manager',
+          status: 'active'
+        },
+        include: {
+          user: { select: { id: true, email: true, fullName: true } }
+        }
+      })
+
+      const requestedBy = requestingUser?.fullName || requestingUser?.email || 'Unknown'
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+      const releaseUrl = `${baseUrl}/projects/${lot.project.id}/lots/${lot.id}?tab=itp`
+      const evidencePackageUrl = `${baseUrl}/projects/${lot.project.id}/lots/${lot.id}/evidence-preview?holdPointId=${holdPoint.id}`
+
+      // Format scheduled date for display
+      const formattedScheduledDate = scheduledDate
+        ? new Date(scheduledDate).toLocaleDateString('en-AU', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        : undefined
+
+      for (const recipient of recipientsToNotify) {
+        await sendHPReleaseRequestEmail({
+          to: recipient.user.email,
+          superintendentName: recipient.user.fullName || 'Superintendent',
+          projectName: lot.project.name,
+          lotNumber: lot.lotNumber,
+          holdPointDescription: holdPointItem.description,
+          scheduledDate: formattedScheduledDate,
+          scheduledTime: scheduledTime || undefined,
+          evidencePackageUrl,
+          releaseUrl,
+          requestedBy,
+          noticeOverrideReason: noticePeriodOverrideReason || undefined
+        })
+      }
+
+      console.log(`[HP Release Request] Sent email to ${recipientsToNotify.length} superintendent(s)/PM(s) for HP on lot ${lot.lotNumber}`)
+    } catch (emailError) {
+      console.error('[HP Release Request] Failed to send superintendent email:', emailError)
+      // Don't fail the main request
     }
 
     res.json({
