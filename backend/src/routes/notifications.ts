@@ -1283,3 +1283,137 @@ notificationsRouter.post('/diary-reminder/send', async (req: AuthRequest, res) =
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// POST /api/notifications/diary-reminder/check-alerts - Check for diaries missing 24+ hours and generate alerts (Feature #937)
+// This is an escalation - generates alerts (higher severity) for diaries missing more than 24 hours
+notificationsRouter.post('/diary-reminder/check-alerts', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    // Check for diaries missing from yesterday or earlier
+    const { projectId: specificProjectId } = req.body
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    yesterday.setHours(0, 0, 0, 0)
+    const yesterdayString = yesterday.toISOString().split('T')[0]
+
+    console.log(`[Missing Diary Alert] Checking for missing diaries before ${yesterdayString}`)
+
+    // Get all active projects
+    const projectQuery: any = { status: 'active' }
+    if (specificProjectId) {
+      projectQuery.id = specificProjectId
+    }
+
+    const projects = await prisma.project.findMany({
+      where: projectQuery,
+      select: { id: true, name: true }
+    })
+
+    const alertsCreated: any[] = []
+    const usersNotified = new Set<string>()
+
+    for (const project of projects) {
+      // Check if a diary exists for yesterday
+      const existingDiary = await prisma.dailyDiary.findFirst({
+        where: {
+          projectId: project.id,
+          date: {
+            gte: yesterday,
+            lt: new Date(yesterday.getTime() + 24 * 60 * 60 * 1000)
+          }
+        }
+      })
+
+      if (existingDiary) {
+        // Diary exists, no alert needed
+        continue
+      }
+
+      // Check if we already sent an alert for this date
+      const existingAlert = await prisma.notification.findFirst({
+        where: {
+          projectId: project.id,
+          type: 'diary_missing_alert',
+          message: { contains: yesterdayString }
+        }
+      })
+
+      if (existingAlert) {
+        // Alert already sent for this date
+        continue
+      }
+
+      // No diary and no previous alert - find users to alert (escalate to project managers and admins)
+      const projectUsers = await prisma.projectUser.findMany({
+        where: {
+          projectId: project.id,
+          role: { in: ['project_manager', 'admin', 'owner'] },
+          status: { in: ['active', 'accepted'] }
+        }
+      })
+
+      const userIds = projectUsers.map(pu => pu.userId)
+      const users = userIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, email: true, fullName: true }
+          })
+        : []
+
+      // Create alert notifications (higher severity than reminders)
+      const alertsToCreate = users.map(user => ({
+        userId: user.id,
+        projectId: project.id,
+        type: 'diary_missing_alert',
+        title: 'Missing Diary Alert',
+        message: `ALERT: No daily diary entry was completed for ${project.name} on ${yesterdayString}. This is more than 24 hours overdue.`,
+        linkUrl: `/projects/${project.id}/diary`
+      }))
+
+      if (alertsToCreate.length > 0) {
+        await prisma.notification.createMany({
+          data: alertsToCreate
+        })
+
+        for (const user of users) {
+          usersNotified.add(user.id)
+
+          // Send email notification for alerts (always immediate for escalations)
+          await sendNotificationIfEnabled(
+            user.id,
+            project.id,
+            'diary_reminder',
+            'Missing Diary Alert',
+            `ALERT: No daily diary entry was completed for ${project.name} on ${yesterdayString}. This is more than 24 hours overdue.`,
+            user.email
+          )
+        }
+
+        alertsCreated.push({
+          projectId: project.id,
+          projectName: project.name,
+          missingDate: yesterdayString,
+          usersNotified: users.map(u => u.email)
+        })
+      }
+    }
+
+    console.log(`[Missing Diary Alert] Created ${alertsCreated.length} alert(s) for ${usersNotified.size} user(s)`)
+
+    res.json({
+      success: true,
+      missingDate: yesterdayString,
+      projectsChecked: projects.length,
+      alertsCreated: alertsCreated.length,
+      uniqueUsersNotified: usersNotified.size,
+      details: alertsCreated
+    })
+  } catch (error) {
+    console.error('Missing diary alert check error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
