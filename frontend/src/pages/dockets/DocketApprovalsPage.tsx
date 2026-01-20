@@ -4,6 +4,7 @@ import { useAuth, getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { X, Printer } from 'lucide-react'
 import { generateDocketDetailPDF, DocketDetailPDFData } from '@/lib/pdfGenerator'
+import { VoiceInputButton } from '@/components/ui/VoiceInputButton'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
@@ -70,6 +71,27 @@ export function DocketApprovalsPage() {
   // Role checks - use roleInCompany which is the field returned from the backend
   const userRole = (user as any)?.roleInCompany || user?.role
   const isSubcontractor = userRole === 'subcontractor' || userRole === 'subcontractor_admin'
+
+  // Hours validation helper - warn if hours > 24
+  const validateHours = (hours: string): { isValid: boolean; warning: string | null } => {
+    const numHours = parseFloat(hours)
+    if (isNaN(numHours) || hours === '') {
+      return { isValid: true, warning: null }
+    }
+    if (numHours < 0) {
+      return { isValid: false, warning: 'Hours cannot be negative' }
+    }
+    if (numHours > 24) {
+      return { isValid: true, warning: 'Warning: Hours exceed 24 - please verify this is correct' }
+    }
+    return { isValid: true, warning: null }
+  }
+
+  // Validation state for hours inputs
+  const labourHoursValidation = validateHours(newDocketLabourHours)
+  const plantHoursValidation = validateHours(newDocketPlantHours)
+  const adjustedLabourValidation = validateHours(adjustedLabourHours)
+  const adjustedPlantValidation = validateHours(adjustedPlantHours)
   const canApprove = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'].includes(userRole || '')
 
   // Computed values
@@ -518,11 +540,21 @@ export function DocketApprovalsPage() {
                   type="number"
                   value={newDocketLabourHours}
                   onChange={(e) => setNewDocketLabourHours(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                    labourHoursValidation.warning ? 'border-amber-500' : ''
+                  }`}
                   placeholder="0"
                   min="0"
                   step="0.5"
                 />
+                {labourHoursValidation.warning && (
+                  <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {labourHoursValidation.warning}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Plant Hours</label>
@@ -530,14 +562,31 @@ export function DocketApprovalsPage() {
                   type="number"
                   value={newDocketPlantHours}
                   onChange={(e) => setNewDocketPlantHours(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                    plantHoursValidation.warning ? 'border-amber-500' : ''
+                  }`}
                   placeholder="0"
                   min="0"
                   step="0.5"
                 />
+                {plantHoursValidation.warning && (
+                  <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {plantHoursValidation.warning}
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Notes</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium">Notes</label>
+                  {/* Feature #289: Voice-to-text for docket notes */}
+                  <VoiceInputButton
+                    onTranscript={(text) => setNewDocketNotes((prev) => prev ? prev + ' ' + text : text)}
+                    appendMode={true}
+                  />
+                </div>
                 <textarea
                   value={newDocketNotes}
                   onChange={(e) => setNewDocketNotes(e.target.value)}
@@ -613,13 +662,23 @@ export function DocketApprovalsPage() {
                         type="number"
                         value={adjustedLabourHours}
                         onChange={(e) => setAdjustedLabourHours(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                          adjustedLabourValidation.warning ? 'border-amber-500' : ''
+                        }`}
                         min="0"
                         step="0.5"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         Submitted: {selectedDocket?.labourHours || 0}h
                       </p>
+                      {adjustedLabourValidation.warning && (
+                        <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          {adjustedLabourValidation.warning}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">
@@ -629,13 +688,23 @@ export function DocketApprovalsPage() {
                         type="number"
                         value={adjustedPlantHours}
                         onChange={(e) => setAdjustedPlantHours(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+                          adjustedPlantValidation.warning ? 'border-amber-500' : ''
+                        }`}
                         min="0"
                         step="0.5"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         Submitted: {selectedDocket?.plantHours || 0}h
                       </p>
+                      {adjustedPlantValidation.warning && (
+                        <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          {adjustedPlantValidation.warning}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -654,10 +723,17 @@ export function DocketApprovalsPage() {
               )}
 
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  {actionType === 'approve' ? 'Approval Notes' : 'Rejection Reason'}
-                  {actionType === 'reject' && ' *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium">
+                    {actionType === 'approve' ? 'Approval Notes' : 'Rejection Reason'}
+                    {actionType === 'reject' && ' *'}
+                  </label>
+                  {/* Feature #289: Voice-to-text for approval/rejection notes */}
+                  <VoiceInputButton
+                    onTranscript={(text) => setActionNotes((prev) => prev ? prev + ' ' + text : text)}
+                    appendMode={true}
+                  />
+                </div>
                 <textarea
                   value={actionNotes}
                   onChange={(e) => setActionNotes(e.target.value)}

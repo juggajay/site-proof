@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 import { RichTextEditor } from '../../components/ui/RichTextEditor'
+import { VoiceInputButton } from '../../components/ui/VoiceInputButton'
 import { generateDailyDiaryPDF, DailyDiaryPDFData } from '../../lib/pdfGenerator'
 import { toast } from '../../components/ui/toaster'
 
@@ -217,6 +218,25 @@ export function DailyDiaryPage() {
   // Submit confirmation state
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [submitWarnings, setSubmitWarnings] = useState<string[]>([])
+
+  // Hours validation helper - warn if hours > 24
+  const validateHours = (hours: string): { isValid: boolean; warning: string | null } => {
+    const numHours = parseFloat(hours)
+    if (isNaN(numHours) || hours === '') {
+      return { isValid: true, warning: null }
+    }
+    if (numHours < 0) {
+      return { isValid: false, warning: 'Hours cannot be negative' }
+    }
+    if (numHours > 24) {
+      return { isValid: true, warning: 'Warning: Hours exceed 24 - please verify this is correct' }
+    }
+    return { isValid: true, warning: null }
+  }
+
+  // Validation state for hours inputs
+  const plantHoursValidation = validateHours(plantForm.hoursOperated)
+  const delayHoursValidation = validateHours(delayForm.durationHours)
 
   // Calendar state
   const [showCalendar, setShowCalendar] = useState(false)
@@ -1289,17 +1309,43 @@ export function DailyDiaryPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium">Weather Notes</label>
-                  <input
-                    type="text"
-                    value={weatherForm.weatherNotes}
-                    onChange={(e) => setWeatherForm({ ...weatherForm, weatherNotes: e.target.value })}
-                    disabled={diary?.status === 'submitted'}
-                    placeholder="Additional weather notes..."
-                    className="w-full rounded-md border border-input bg-background px-3 py-2"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={weatherForm.weatherNotes}
+                      onChange={(e) => setWeatherForm({ ...weatherForm, weatherNotes: e.target.value })}
+                      disabled={diary?.status === 'submitted'}
+                      placeholder="Additional weather notes..."
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-2"
+                    />
+                    {/* Feature #288: Voice-to-text for weather notes */}
+                    {diary?.status !== 'submitted' && (
+                      <VoiceInputButton
+                        onTranscript={(text) => setWeatherForm({ ...weatherForm, weatherNotes: (weatherForm.weatherNotes ? weatherForm.weatherNotes + ' ' : '') + text })}
+                        appendMode={true}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-medium">General Notes</label>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-sm font-medium">General Notes</label>
+                    {/* Feature #288: Voice-to-text for general notes */}
+                    {diary?.status !== 'submitted' && (
+                      <VoiceInputButton
+                        onTranscript={(text) => {
+                          // Append transcribed text to existing HTML content
+                          const currentContent = weatherForm.generalNotes || ''
+                          const newContent = currentContent
+                            ? `${currentContent}<p>${text}</p>`
+                            : `<p>${text}</p>`
+                          setWeatherForm({ ...weatherForm, generalNotes: newContent })
+                        }}
+                        appendMode={true}
+                        className="flex-shrink-0"
+                      />
+                    )}
+                  </div>
                   {diary?.status === 'submitted' ? (
                     <div
                       className="w-full rounded-md border border-input bg-muted/50 px-3 py-2 prose prose-sm max-w-none dark:prose-invert min-h-[100px]"
@@ -1566,13 +1612,25 @@ export function DailyDiaryPage() {
                       placeholder="Company"
                       className="rounded-md border border-input bg-background px-3 py-2"
                     />
-                    <input
-                      type="number"
-                      value={plantForm.hoursOperated}
-                      onChange={(e) => setPlantForm({ ...plantForm, hoursOperated: e.target.value })}
-                      placeholder="Hours"
-                      className="rounded-md border border-input bg-background px-3 py-2"
-                    />
+                    <div className="flex flex-col">
+                      <input
+                        type="number"
+                        value={plantForm.hoursOperated}
+                        onChange={(e) => setPlantForm({ ...plantForm, hoursOperated: e.target.value })}
+                        placeholder="Hours"
+                        className={`rounded-md border bg-background px-3 py-2 ${
+                          plantHoursValidation.warning ? 'border-amber-500' : 'border-input'
+                        }`}
+                      />
+                      {plantHoursValidation.warning && (
+                        <p className="mt-1 text-xs text-amber-600 flex items-center gap-1">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          {plantHoursValidation.warning}
+                        </p>
+                      )}
+                    </div>
                     <button
                       onClick={addPlant}
                       disabled={!plantForm.description || saving}
@@ -1764,13 +1822,25 @@ export function DailyDiaryPage() {
                       placeholder="Description *"
                       className="rounded-md border border-input bg-background px-3 py-2"
                     />
-                    <input
-                      type="number"
-                      value={delayForm.durationHours}
-                      onChange={(e) => setDelayForm({ ...delayForm, durationHours: e.target.value })}
-                      placeholder="Duration (hours)"
-                      className="rounded-md border border-input bg-background px-3 py-2"
-                    />
+                    <div className="flex flex-col">
+                      <input
+                        type="number"
+                        value={delayForm.durationHours}
+                        onChange={(e) => setDelayForm({ ...delayForm, durationHours: e.target.value })}
+                        placeholder="Duration (hours)"
+                        className={`rounded-md border bg-background px-3 py-2 ${
+                          delayHoursValidation.warning ? 'border-amber-500' : 'border-input'
+                        }`}
+                      />
+                      {delayHoursValidation.warning && (
+                        <p className="mt-1 text-xs text-amber-600 flex items-center gap-1">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          {delayHoursValidation.warning}
+                        </p>
+                      )}
+                    </div>
                     <input
                       type="time"
                       value={delayForm.startTime}
