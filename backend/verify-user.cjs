@@ -2,18 +2,20 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
+  const email = process.argv[2] || 'regression66@siteproof.test';
+
   const user = await prisma.user.findUnique({
-    where: { email: 'regression65@siteproof.test' }
+    where: { email }
   });
 
   if (user) {
     await prisma.user.update({
-      where: { email: 'regression65@siteproof.test' },
+      where: { email },
       data: { emailVerified: true }
     });
-    console.log('Email verified for regression65@siteproof.test');
+    console.log(`Email verified for ${email}`);
   } else {
-    console.log('User not found');
+    console.log(`User not found: ${email}`);
   }
 
   await prisma.$disconnect();
