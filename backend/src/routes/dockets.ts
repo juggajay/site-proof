@@ -436,6 +436,14 @@ docketsRouter.post('/:id/reject', requireRole(DOCKET_APPROVERS), async (req, res
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        },
+        project: {
+          select: { id: true, name: true }
+        }
+      }
     })
 
     if (!docket) {
@@ -459,12 +467,75 @@ docketsRouter.post('/:id/reject', requireRole(DOCKET_APPROVERS), async (req, res
       },
     })
 
+    // Feature #928 - Notify subcontractor users about docket rejection
+    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`
+    const docketDate = docket.date.toISOString().split('T')[0]
+    const rejectorName = user.fullName || user.email
+
+    // Get all subcontractor users linked to this subcontractor company
+    const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
+      where: {
+        subcontractorCompanyId: docket.subcontractorCompanyId
+      }
+    })
+
+    // Get user details for these subcontractor users
+    const subcontractorUserIds = subcontractorUserLinks.map(su => su.userId)
+    const subcontractorUsers = subcontractorUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: subcontractorUserIds } },
+          select: { id: true, email: true, fullName: true }
+        })
+      : []
+
+    // Create notifications for subcontractor users
+    const notificationsToCreate = subcontractorUsers.map(su => ({
+      userId: su.id,
+      projectId: docket.projectId,
+      type: 'docket_rejected',
+      title: 'Docket Rejected',
+      message: `Your docket ${docketNumber} (${docketDate}) has been rejected by ${rejectorName}.${reason ? ` Reason: ${reason}` : ''}`,
+      linkUrl: `/projects/${docket.projectId}/dockets`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+      console.log(`[Docket Rejection] Created ${notificationsToCreate.length} in-app notifications for subcontractor`)
+    }
+
+    // Send email notifications to subcontractor users
+    for (const su of subcontractorUsers) {
+      try {
+        await sendNotificationIfEnabled(su.id, 'enabled', {
+          title: 'Docket Rejected',
+          message: `Your docket ${docketNumber} (${docketDate}) has been rejected by ${rejectorName}.\n\nProject: ${docket.project.name}\nStatus: Rejected\n${reason ? `Reason: ${reason}` : 'No reason provided.'}\n\nPlease review and resubmit if necessary.`,
+          projectName: docket.project.name,
+          linkUrl: `/projects/${docket.projectId}/dockets`
+        })
+      } catch (emailError) {
+        console.error(`[Docket Rejection] Failed to send email to user ${su.id}:`, emailError)
+      }
+    }
+
+    // Log for development
+    console.log(`[Docket Rejection] Notification details:`)
+    console.log(`  Docket: ${docketNumber}`)
+    console.log(`  Rejected by: ${rejectorName}`)
+    console.log(`  Reason: ${reason || 'Not provided'}`)
+    console.log(`  Notified: ${subcontractorUsers.map(su => su.email).join(', ')}`)
+
     res.json({
       message: 'Docket rejected',
       docket: {
         id: updatedDocket.id,
         status: updatedDocket.status,
-      }
+      },
+      notifiedUsers: subcontractorUsers.map(su => ({
+        email: su.email,
+        fullName: su.fullName
+      }))
     })
   } catch (error) {
     console.error('Reject docket error:', error)
