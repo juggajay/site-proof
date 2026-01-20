@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
+import { sendNotificationIfEnabled } from './notifications.js'
 
 const prisma = new PrismaClient()
 const holdpointsRouter = Router()
@@ -547,10 +548,66 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
       })
     }
 
+    // Feature #925 - HP release notification to team
+    // Get project team members to notify about HP release
+    const projectUsers = await prisma.projectUser.findMany({
+      where: {
+        projectId: existingHP.lot.projectId
+      },
+      include: {
+        user: {
+          select: { id: true, email: true, fullName: true }
+        }
+      }
+    })
+
+    // Create in-app notifications for all project team members
+    const notificationsToCreate = projectUsers.map(pu => ({
+      userId: pu.userId,
+      projectId: existingHP.lot.projectId,
+      type: 'hold_point_release',
+      title: 'Hold Point Released',
+      message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been released by ${releasedByName || 'Unknown'}.`,
+      linkUrl: `/projects/${existingHP.lot.projectId}/hold-points`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+      console.log(`[HP Release] Created ${notificationsToCreate.length} in-app notifications for HP release`)
+    }
+
+    // Send email notifications to team members (if configured)
+    for (const pu of projectUsers) {
+      try {
+        await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', {
+          title: 'Hold Point Released',
+          message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been released by ${releasedByName || 'Unknown'}.\n\nProject: ${existingHP.lot.project.name}\nRelease Method: ${releaseMethod || 'Digital'}\nNotes: ${releaseNotes || 'None'}`,
+          projectName: existingHP.lot.project.name,
+          linkUrl: `/projects/${existingHP.lot.projectId}/hold-points`
+        })
+      } catch (emailError) {
+        console.error(`[HP Release] Failed to send email to user ${pu.userId}:`, emailError)
+        // Continue with other notifications even if one fails
+      }
+    }
+
+    // Log email notification details for development (emails are logged to console)
+    console.log(`[HP Release] Email notification details:`)
+    console.log(`  To: ${projectUsers.map(pu => pu.user.email).join(', ')}`)
+    console.log(`  Subject: Hold Point Released - ${holdPoint.lot.lotNumber}`)
+    console.log(`  Hold Point: ${holdPoint.description}`)
+    console.log(`  Released By: ${releasedByName || 'Unknown'}`)
+
     res.json({
       success: true,
       message: 'Hold point released successfully',
-      holdPoint
+      holdPoint,
+      notifiedUsers: projectUsers.map(pu => ({
+        email: pu.user.email,
+        fullName: pu.user.fullName
+      }))
     })
   } catch (error) {
     console.error('Error releasing hold point:', error)
