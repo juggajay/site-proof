@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
+import { AlertTriangle } from 'lucide-react'
 
 interface Document {
   id: string
@@ -87,6 +88,12 @@ export function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false)
   const dropZoneRef = useRef<HTMLDivElement>(null)
 
+  // Image dimension validation state
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [dimensionWarning, setDimensionWarning] = useState<string | null>(null)
+  const MIN_IMAGE_WIDTH = 100
+  const MIN_IMAGE_HEIGHT = 100
+
   useEffect(() => {
     if (projectId) {
       fetchDocuments()
@@ -146,9 +153,32 @@ export function DocumentsPage() {
     const file = e.target.files?.[0]
     if (file) {
       setSelectedFile(file)
-      // Auto-detect type from file
+      setImageDimensions(null)
+      setDimensionWarning(null)
+
+      // Auto-detect type from file and check image dimensions
       if (file.type.startsWith('image/')) {
         setUploadForm(prev => ({ ...prev, documentType: 'photo' }))
+
+        // Check image dimensions
+        const objectUrl = URL.createObjectURL(file)
+        const img = new window.Image()
+        img.onload = () => {
+          const width = img.naturalWidth
+          const height = img.naturalHeight
+          setImageDimensions({ width, height })
+
+          if (width < MIN_IMAGE_WIDTH || height < MIN_IMAGE_HEIGHT) {
+            setDimensionWarning(
+              `Warning: Image dimensions (${width}x${height}) are below recommended minimum (${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}). Photo may lack detail for documentation.`
+            )
+          }
+          URL.revokeObjectURL(objectUrl)
+        }
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl)
+        }
+        img.src = objectUrl
       } else if (file.type === 'application/pdf') {
         // Keep current or let user choose
       }
@@ -704,8 +734,26 @@ export function DocumentsPage() {
                     if (files && files.length > 0) {
                       const file = files[0]
                       setSelectedFile(file)
+                      setImageDimensions(null)
+                      setDimensionWarning(null)
                       if (file.type.startsWith('image/')) {
                         setUploadForm(prev => ({ ...prev, documentType: 'photo' }))
+                        // Check image dimensions
+                        const objectUrl = URL.createObjectURL(file)
+                        const img = new window.Image()
+                        img.onload = () => {
+                          const width = img.naturalWidth
+                          const height = img.naturalHeight
+                          setImageDimensions({ width, height })
+                          if (width < MIN_IMAGE_WIDTH || height < MIN_IMAGE_HEIGHT) {
+                            setDimensionWarning(
+                              `Warning: Image dimensions (${width}x${height}) are below recommended minimum (${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}). Photo may lack detail for documentation.`
+                            )
+                          }
+                          URL.revokeObjectURL(objectUrl)
+                        }
+                        img.onerror = () => URL.revokeObjectURL(objectUrl)
+                        img.src = objectUrl
                       }
                     }
                   }}
@@ -741,6 +789,21 @@ export function DocumentsPage() {
                     </>
                   )}
                 </div>
+
+                {/* Image dimension info and warning */}
+                {imageDimensions && (
+                  <p className="mt-2 text-sm text-gray-500">
+                    Image dimensions: {imageDimensions.width} x {imageDimensions.height} pixels
+                  </p>
+                )}
+                {dimensionWarning && (
+                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-700 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                      <span>{dimensionWarning}</span>
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Document Type */}
