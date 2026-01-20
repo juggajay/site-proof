@@ -542,3 +542,346 @@ docketsRouter.post('/:id/reject', requireRole(DOCKET_APPROVERS), async (req, res
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// ============================================================================
+// Feature #261 - Labour Entry Management
+// ============================================================================
+
+// GET /api/dockets/:id/labour - Get labour entries for a docket
+docketsRouter.get('/:id/labour', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const docket = await prisma.dailyDocket.findUnique({
+      where: { id },
+      include: {
+        labourEntries: {
+          include: {
+            employee: {
+              select: { id: true, name: true, role: true, hourlyRate: true }
+            },
+            lotAllocations: {
+              include: {
+                lot: { select: { id: true, lotNumber: true } }
+              }
+            }
+          },
+          orderBy: { startTime: 'asc' }
+        }
+      }
+    })
+
+    if (!docket) {
+      return res.status(404).json({ error: 'Docket not found' })
+    }
+
+    // Format labour entries
+    const labourEntries = docket.labourEntries.map(entry => ({
+      id: entry.id,
+      employee: {
+        id: entry.employee.id,
+        name: entry.employee.name,
+        role: entry.employee.role,
+        hourlyRate: Number(entry.employee.hourlyRate) || 0
+      },
+      startTime: entry.startTime,
+      finishTime: entry.finishTime,
+      submittedHours: Number(entry.submittedHours) || 0,
+      approvedHours: Number(entry.approvedHours) || 0,
+      hourlyRate: Number(entry.hourlyRate) || 0,
+      submittedCost: Number(entry.submittedCost) || 0,
+      approvedCost: Number(entry.approvedCost) || 0,
+      adjustmentReason: entry.adjustmentReason,
+      lotAllocations: entry.lotAllocations.map(alloc => ({
+        lotId: alloc.lotId,
+        lotNumber: alloc.lot.lotNumber,
+        hours: Number(alloc.hours) || 0
+      }))
+    }))
+
+    // Calculate totals
+    const totalSubmittedHours = labourEntries.reduce((sum, e) => sum + e.submittedHours, 0)
+    const totalSubmittedCost = labourEntries.reduce((sum, e) => sum + e.submittedCost, 0)
+    const totalApprovedHours = labourEntries.reduce((sum, e) => sum + e.approvedHours, 0)
+    const totalApprovedCost = labourEntries.reduce((sum, e) => sum + e.approvedCost, 0)
+
+    res.json({
+      labourEntries,
+      totals: {
+        submittedHours: totalSubmittedHours,
+        submittedCost: totalSubmittedCost,
+        approvedHours: totalApprovedHours,
+        approvedCost: totalApprovedCost
+      }
+    })
+  } catch (error) {
+    console.error('Get labour entries error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/dockets/:id/labour - Add a labour entry to a docket
+docketsRouter.post('/:id/labour', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { employeeId, startTime, finishTime, lotAllocations } = req.body
+
+    if (!employeeId) {
+      return res.status(400).json({ error: 'employeeId is required' })
+    }
+
+    // Get docket
+    const docket = await prisma.dailyDocket.findUnique({
+      where: { id },
+      include: {
+        subcontractorCompany: { select: { id: true } }
+      }
+    })
+
+    if (!docket) {
+      return res.status(404).json({ error: 'Docket not found' })
+    }
+
+    if (docket.status !== 'draft') {
+      return res.status(400).json({ error: 'Can only add labour to draft dockets' })
+    }
+
+    // Get employee from roster
+    const employee = await prisma.employeeRoster.findFirst({
+      where: {
+        id: employeeId,
+        subcontractorCompanyId: docket.subcontractorCompanyId
+      }
+    })
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found in roster' })
+    }
+
+    // Calculate hours from start/finish time
+    let hours = 0
+    if (startTime && finishTime) {
+      const [startH, startM] = startTime.split(':').map(Number)
+      const [finishH, finishM] = finishTime.split(':').map(Number)
+      hours = (finishH + finishM / 60) - (startH + startM / 60)
+      if (hours < 0) hours += 24 // Handle overnight shifts
+    }
+
+    // Calculate cost
+    const hourlyRate = Number(employee.hourlyRate) || 0
+    const cost = hours * hourlyRate
+
+    // Create labour entry
+    const entry = await prisma.docketLabour.create({
+      data: {
+        docketId: id,
+        employeeId,
+        startTime,
+        finishTime,
+        submittedHours: hours,
+        hourlyRate,
+        submittedCost: cost,
+        lotAllocations: lotAllocations?.length ? {
+          create: lotAllocations.map((alloc: { lotId: string; hours: number }) => ({
+            lotId: alloc.lotId,
+            hours: alloc.hours
+          }))
+        } : undefined
+      },
+      include: {
+        employee: {
+          select: { id: true, name: true, role: true, hourlyRate: true }
+        },
+        lotAllocations: {
+          include: {
+            lot: { select: { id: true, lotNumber: true } }
+          }
+        }
+      }
+    })
+
+    // Update docket totals
+    const allEntries = await prisma.docketLabour.findMany({
+      where: { docketId: id }
+    })
+    const totalHours = allEntries.reduce((sum, e) => sum + (Number(e.submittedHours) || 0), 0)
+    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0)
+
+    await prisma.dailyDocket.update({
+      where: { id },
+      data: {
+        totalLabourSubmitted: totalCost
+      }
+    })
+
+    res.status(201).json({
+      labourEntry: {
+        id: entry.id,
+        employee: {
+          id: entry.employee.id,
+          name: entry.employee.name,
+          role: entry.employee.role,
+          hourlyRate: Number(entry.employee.hourlyRate) || 0
+        },
+        startTime: entry.startTime,
+        finishTime: entry.finishTime,
+        submittedHours: Number(entry.submittedHours) || 0,
+        hourlyRate: Number(entry.hourlyRate) || 0,
+        submittedCost: Number(entry.submittedCost) || 0,
+        lotAllocations: entry.lotAllocations.map(alloc => ({
+          lotId: alloc.lotId,
+          lotNumber: alloc.lot.lotNumber,
+          hours: Number(alloc.hours) || 0
+        }))
+      },
+      runningTotal: {
+        hours: totalHours,
+        cost: totalCost
+      }
+    })
+  } catch (error) {
+    console.error('Add labour entry error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PUT /api/dockets/:id/labour/:entryId - Update a labour entry
+docketsRouter.put('/:id/labour/:entryId', async (req, res) => {
+  try {
+    const { id, entryId } = req.params
+    const { startTime, finishTime, lotAllocations } = req.body
+
+    const entry = await prisma.docketLabour.findFirst({
+      where: { id: entryId, docketId: id },
+      include: {
+        employee: { select: { hourlyRate: true } }
+      }
+    })
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Labour entry not found' })
+    }
+
+    const docket = await prisma.dailyDocket.findUnique({ where: { id } })
+    if (docket?.status !== 'draft') {
+      return res.status(400).json({ error: 'Can only update labour in draft dockets' })
+    }
+
+    // Recalculate hours
+    let hours = Number(entry.submittedHours) || 0
+    if (startTime && finishTime) {
+      const [startH, startM] = startTime.split(':').map(Number)
+      const [finishH, finishM] = finishTime.split(':').map(Number)
+      hours = (finishH + finishM / 60) - (startH + startM / 60)
+      if (hours < 0) hours += 24
+    }
+
+    const hourlyRate = Number(entry.hourlyRate) || Number(entry.employee.hourlyRate) || 0
+    const cost = hours * hourlyRate
+
+    // Update entry
+    const updated = await prisma.docketLabour.update({
+      where: { id: entryId },
+      data: {
+        startTime,
+        finishTime,
+        submittedHours: hours,
+        submittedCost: cost
+      },
+      include: {
+        employee: {
+          select: { id: true, name: true, role: true, hourlyRate: true }
+        },
+        lotAllocations: {
+          include: {
+            lot: { select: { id: true, lotNumber: true } }
+          }
+        }
+      }
+    })
+
+    // Update lot allocations if provided
+    if (lotAllocations) {
+      await prisma.docketLabourLot.deleteMany({ where: { docketLabourId: entryId } })
+      if (lotAllocations.length > 0) {
+        await prisma.docketLabourLot.createMany({
+          data: lotAllocations.map((alloc: { lotId: string; hours: number }) => ({
+            docketLabourId: entryId,
+            lotId: alloc.lotId,
+            hours: alloc.hours
+          }))
+        })
+      }
+    }
+
+    // Update docket totals
+    const allEntries = await prisma.docketLabour.findMany({
+      where: { docketId: id }
+    })
+    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0)
+
+    await prisma.dailyDocket.update({
+      where: { id },
+      data: { totalLabourSubmitted: totalCost }
+    })
+
+    res.json({
+      labourEntry: {
+        id: updated.id,
+        employee: {
+          id: updated.employee.id,
+          name: updated.employee.name,
+          role: updated.employee.role,
+          hourlyRate: Number(updated.employee.hourlyRate) || 0
+        },
+        startTime: updated.startTime,
+        finishTime: updated.finishTime,
+        submittedHours: Number(updated.submittedHours) || 0,
+        hourlyRate: Number(updated.hourlyRate) || 0,
+        submittedCost: Number(updated.submittedCost) || 0
+      }
+    })
+  } catch (error) {
+    console.error('Update labour entry error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/dockets/:id/labour/:entryId - Delete a labour entry
+docketsRouter.delete('/:id/labour/:entryId', async (req, res) => {
+  try {
+    const { id, entryId } = req.params
+
+    const entry = await prisma.docketLabour.findFirst({
+      where: { id: entryId, docketId: id }
+    })
+
+    if (!entry) {
+      return res.status(404).json({ error: 'Labour entry not found' })
+    }
+
+    const docket = await prisma.dailyDocket.findUnique({ where: { id } })
+    if (docket?.status !== 'draft') {
+      return res.status(400).json({ error: 'Can only delete labour from draft dockets' })
+    }
+
+    // Delete entry (cascade deletes lot allocations)
+    await prisma.docketLabour.delete({ where: { id: entryId } })
+
+    // Update docket totals
+    const allEntries = await prisma.docketLabour.findMany({
+      where: { docketId: id }
+    })
+    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0)
+
+    await prisma.dailyDocket.update({
+      where: { id },
+      data: { totalLabourSubmitted: totalCost }
+    })
+
+    res.json({ message: 'Labour entry deleted' })
+  } catch (error) {
+    console.error('Delete labour entry error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
