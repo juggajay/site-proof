@@ -1846,6 +1846,89 @@ const simulateAIExtraction = (filename: string) => {
   return extractedData
 }
 
+// Feature #727: Parse chainage from location string and suggest matching lots
+async function suggestLotsFromLocation(projectId: string, locationString: string): Promise<{
+  suggestedLots: Array<{ id: string; lotNumber: string; chainageStart: number; chainageEnd: number; matchScore: number }>
+  extractedChainage: number | null
+}> {
+  // Try to extract chainage from various formats: "CH 1234+50", "1234.50", "CH1234", etc.
+  const chainagePatterns = [
+    /CH\s*(\d+)\+(\d+)/i,           // CH 1234+50 format
+    /CH\s*(\d+)\.(\d+)/i,           // CH 1234.50 format
+    /(\d+)\+(\d+)/,                  // 1234+50 format
+    /(\d+)\.(\d+)/,                  // 1234.50 format (could be chainage or coordinates)
+    /CH\s*(\d+)/i,                   // CH 1234 format
+    /chainage\s*(\d+)/i,             // "chainage 1234"
+  ]
+
+  let extractedChainage: number | null = null
+
+  for (const pattern of chainagePatterns) {
+    const match = locationString.match(pattern)
+    if (match) {
+      if (match[2]) {
+        // Format with decimal/offset: 1234+50 means 1234.50
+        extractedChainage = parseFloat(match[1]) + parseFloat(match[2]) / 100
+      } else {
+        extractedChainage = parseFloat(match[1])
+      }
+      break
+    }
+  }
+
+  if (extractedChainage === null) {
+    return { suggestedLots: [], extractedChainage: null }
+  }
+
+  // Find lots in the project that match this chainage range
+  const lots = await prisma.lot.findMany({
+    where: {
+      projectId,
+      chainageStart: { not: null },
+      chainageEnd: { not: null },
+    },
+    select: {
+      id: true,
+      lotNumber: true,
+      chainageStart: true,
+      chainageEnd: true,
+    },
+  })
+
+  // Score each lot based on how well it matches the extracted chainage
+  const scoredLots = lots
+    .map(lot => {
+      const start = Number(lot.chainageStart)
+      const end = Number(lot.chainageEnd)
+      let matchScore = 0
+
+      if (extractedChainage! >= start && extractedChainage! <= end) {
+        // Perfect match - chainage is within the lot's range
+        matchScore = 100
+      } else {
+        // Calculate proximity score
+        const distanceToStart = Math.abs(extractedChainage! - start)
+        const distanceToEnd = Math.abs(extractedChainage! - end)
+        const minDistance = Math.min(distanceToStart, distanceToEnd)
+        // Score decreases with distance (max 50m tolerance for 50 score)
+        matchScore = Math.max(0, 50 - minDistance)
+      }
+
+      return {
+        id: lot.id,
+        lotNumber: lot.lotNumber,
+        chainageStart: start,
+        chainageEnd: end,
+        matchScore,
+      }
+    })
+    .filter(lot => lot.matchScore > 0)
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, 5) // Top 5 suggestions
+
+  return { suggestedLots: scoredLots, extractedChainage }
+}
+
 // POST /api/test-results/upload-certificate - Upload a test certificate PDF for AI extraction
 testResultsRouter.post('/upload-certificate', upload.single('certificate'), async (req, res) => {
   try {
@@ -1948,6 +2031,9 @@ testResultsRouter.post('/upload-certificate', upload.single('certificate'), asyn
       .filter(([_, conf]) => conf < lowConfidenceThreshold)
       .map(([field, conf]) => ({ field, confidence: conf }))
 
+    // Feature #727: Suggest lots based on extracted location
+    const locationSuggestion = await suggestLotsFromLocation(projectId, extractedData.sampleLocation.value)
+
     res.status(201).json({
       message: 'Certificate uploaded and processed successfully',
       testResult: {
@@ -1966,6 +2052,16 @@ testResultsRouter.post('/upload-certificate', upload.single('certificate'), asyn
         reviewMessage: lowConfidenceFields.length > 0
           ? `${lowConfidenceFields.length} field(s) need manual verification due to low AI confidence`
           : 'All fields extracted with high confidence'
+      },
+      // Feature #727: Lot suggestion based on extracted location
+      lotSuggestion: {
+        extractedLocation: extractedData.sampleLocation.value,
+        extractedChainage: locationSuggestion.extractedChainage,
+        suggestedLots: locationSuggestion.suggestedLots,
+        hasSuggestion: locationSuggestion.suggestedLots.length > 0,
+        message: locationSuggestion.suggestedLots.length > 0
+          ? `Found ${locationSuggestion.suggestedLots.length} lot(s) matching the extracted location`
+          : 'No matching lots found for the extracted location'
       }
     })
   } catch (error) {
