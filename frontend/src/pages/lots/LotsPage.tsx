@@ -10,6 +10,7 @@ import { ImportLotsModal } from '@/components/lots/ImportLotsModal'
 import { ExportLotsModal } from '@/components/lots/ExportLotsModal'
 import { LotQuickView } from '@/components/lots/LotQuickView'
 import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal'
+import { LinearMapView } from '@/components/lots/LinearMapView'  // Feature #151
 import { Settings2, Check, ChevronUp, ChevronDown, ChevronRight, Save, Bookmark, Trash2, Printer, Calendar, FileText, AlertTriangle, TestTube, LayoutGrid, LayoutList, MapPin } from 'lucide-react'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
@@ -196,13 +197,14 @@ export function LotsPage() {
   // Export modal state
   const [exportModalOpen, setExportModalOpen] = useState(false)
 
-  // View mode state (list or card)
-  const [viewMode, setViewMode] = useState<'list' | 'card'>(() => {
+  // View mode state (list, card, or linear map) - Feature #151
+  const [viewMode, setViewMode] = useState<'list' | 'card' | 'linear'>(() => {
     const stored = localStorage.getItem('siteproof_lot_view_mode')
-    return (stored === 'card' ? 'card' : 'list') as 'list' | 'card'
+    if (stored === 'card' || stored === 'linear') return stored
+    return 'list'
   })
 
-  const toggleViewMode = (mode: 'list' | 'card') => {
+  const toggleViewMode = (mode: 'list' | 'card' | 'linear') => {
     setViewMode(mode)
     localStorage.setItem('siteproof_lot_view_mode', mode)
   }
@@ -1981,6 +1983,15 @@ export function LotsPage() {
           >
             <LayoutGrid className="h-4 w-4" />
           </button>
+          {/* Feature #151 - Linear Map View */}
+          <button
+            onClick={() => toggleViewMode('linear')}
+            className={`p-1.5 rounded transition-colors ${viewMode === 'linear' ? 'bg-background shadow-sm' : 'hover:bg-muted'}`}
+            title="Linear map view"
+            data-testid="view-toggle-linear"
+          >
+            <MapPin className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Column Settings */}
@@ -2510,6 +2521,27 @@ export function LotsPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Feature #151 - Linear Map View */}
+      {!loading && !error && viewMode === 'linear' && (
+        <div className="rounded-lg border overflow-hidden" data-testid="linear-map-view">
+          {filteredLots.filter(l => l.chainageStart !== null || l.chainageEnd !== null).length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="text-5xl mb-4">🗺️</div>
+              <h3 className="text-lg font-semibold text-gray-900">No chainage data</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add chainage values to lots to see them on the linear map.
+              </p>
+            </div>
+          ) : (
+            <LinearMapView
+              lots={filteredLots}
+              onLotClick={(lot) => navigate(`/projects/${projectId}/lots/${lot.id}`)}
+              statusColors={statusColors}
+            />
+          )}
         </div>
       )}
 

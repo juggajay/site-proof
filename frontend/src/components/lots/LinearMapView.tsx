@@ -1,0 +1,298 @@
+// Feature #151 - Linear Map Visualization for Lots
+import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react'
+
+interface Lot {
+  id: string
+  lotNumber: string
+  description: string | null
+  status: string
+  activityType: string | null
+  chainageStart: number | null
+  chainageEnd: number | null
+  layer: string | null
+  areaZone: string | null
+}
+
+interface LinearMapViewProps {
+  lots: Lot[]
+  onLotClick: (lot: Lot) => void
+  statusColors: Record<string, string>
+}
+
+// Get color based on lot status
+const getStatusColor = (status: string) => {
+  const colors: Record<string, string> = {
+    active: '#3b82f6',      // blue-500
+    in_progress: '#f59e0b', // amber-500
+    completed: '#22c55e',   // green-500
+    approved: '#10b981',    // emerald-500
+    on_hold: '#ef4444',     // red-500
+    cancelled: '#6b7280',   // gray-500
+    pending: '#8b5cf6',     // violet-500
+  }
+  return colors[status] || '#9ca3af' // gray-400 default
+}
+
+// Get activity type color
+const getActivityColor = (activityType: string | null) => {
+  const colors: Record<string, string> = {
+    Earthworks: '#8b5cf6',    // violet
+    Drainage: '#3b82f6',      // blue
+    Pavement: '#6b7280',      // gray
+    Concrete: '#78716c',      // stone
+    Structures: '#f59e0b',    // amber
+    General: '#10b981',       // emerald
+    Landscaping: '#22c55e',   // green
+    Utilities: '#ef4444',     // red
+    Fencing: '#f97316',       // orange
+    Signage: '#ec4899',       // pink
+  }
+  return colors[activityType || ''] || '#9ca3af'
+}
+
+export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewProps) {
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [panOffset, setPanOffset] = useState(0)
+
+  // Calculate chainage range and scale
+  const { minChainage, maxChainage, totalRange, layers, lotsWithChainage } = useMemo(() => {
+    const lotsWithCh = lots.filter(l => l.chainageStart !== null || l.chainageEnd !== null)
+
+    if (lotsWithCh.length === 0) {
+      return { minChainage: 0, maxChainage: 1000, totalRange: 1000, layers: [], lotsWithChainage: [] }
+    }
+
+    const chainageValues = lotsWithCh.flatMap(l => [l.chainageStart, l.chainageEnd].filter(v => v !== null) as number[])
+    const min = Math.min(...chainageValues)
+    const max = Math.max(...chainageValues)
+    const range = max - min || 1000 // Avoid division by zero
+
+    // Group lots by layer/activity type for rows
+    const layerMap = new Map<string, Lot[]>()
+    lotsWithCh.forEach(lot => {
+      const layerKey = lot.activityType || lot.layer || 'Uncategorized'
+      if (!layerMap.has(layerKey)) {
+        layerMap.set(layerKey, [])
+      }
+      layerMap.get(layerKey)!.push(lot)
+    })
+
+    return {
+      minChainage: min,
+      maxChainage: max,
+      totalRange: range,
+      layers: Array.from(layerMap.entries()).sort((a, b) => a[0].localeCompare(b[0])),
+      lotsWithChainage: lotsWithCh
+    }
+  }, [lots])
+
+  // Calculate chainage tick marks
+  const chainageTicks = useMemo(() => {
+    const tickCount = 10
+    const interval = totalRange / tickCount
+    const roundedInterval = Math.ceil(interval / 100) * 100 || 100 // Round to nearest 100
+    const ticks: number[] = []
+    const startTick = Math.floor(minChainage / roundedInterval) * roundedInterval
+    for (let i = startTick; i <= maxChainage + roundedInterval; i += roundedInterval) {
+      ticks.push(i)
+    }
+    return ticks
+  }, [minChainage, maxChainage, totalRange])
+
+  // Convert chainage to x position (percentage)
+  const chainageToX = (chainage: number) => {
+    return ((chainage - minChainage) / totalRange) * 100 * zoomLevel - panOffset
+  }
+
+  // Handle zoom
+  const handleZoomIn = () => setZoomLevel(Math.min(zoomLevel + 0.5, 5))
+  const handleZoomOut = () => setZoomLevel(Math.max(zoomLevel - 0.5, 1))
+  const handlePanLeft = () => setPanOffset(Math.max(panOffset - 20, 0))
+  const handlePanRight = () => setPanOffset(Math.min(panOffset + 20, (zoomLevel - 1) * 100))
+
+  const ROW_HEIGHT = 48
+  const HEADER_HEIGHT = 40
+  const LABEL_WIDTH = 140
+
+  return (
+    <div className="bg-background">
+      {/* Controls */}
+      <div className="flex items-center justify-between p-3 border-b bg-muted/30">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">Linear Map</span>
+          <span className="text-xs text-muted-foreground">
+            Chainage: {minChainage.toLocaleString()} - {maxChainage.toLocaleString()}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handlePanLeft}
+            disabled={panOffset === 0}
+            className="p-1.5 rounded hover:bg-muted disabled:opacity-40"
+            title="Pan left"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleZoomOut}
+            disabled={zoomLevel <= 1}
+            className="p-1.5 rounded hover:bg-muted disabled:opacity-40"
+            title="Zoom out"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </button>
+          <span className="text-xs text-muted-foreground px-2">{Math.round(zoomLevel * 100)}%</span>
+          <button
+            onClick={handleZoomIn}
+            disabled={zoomLevel >= 5}
+            className="p-1.5 rounded hover:bg-muted disabled:opacity-40"
+            title="Zoom in"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handlePanRight}
+            disabled={panOffset >= (zoomLevel - 1) * 100}
+            className="p-1.5 rounded hover:bg-muted disabled:opacity-40"
+            title="Pan right"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Map Container */}
+      <div className="relative overflow-x-auto" style={{ minHeight: HEADER_HEIGHT + layers.length * ROW_HEIGHT + 20 }}>
+        {/* Chainage Axis (Header) */}
+        <div
+          className="sticky top-0 z-20 bg-muted/50 border-b"
+          style={{ height: HEADER_HEIGHT, marginLeft: LABEL_WIDTH }}
+        >
+          <div className="relative h-full" data-testid="chainage-axis">
+            {chainageTicks.map((tick, idx) => {
+              const x = chainageToX(tick)
+              if (x < 0 || x > 100 * zoomLevel) return null
+              return (
+                <div
+                  key={idx}
+                  className="absolute top-0 h-full flex flex-col items-center"
+                  style={{ left: `${x}%` }}
+                >
+                  <div className="h-2 w-px bg-border" />
+                  <span className="text-[10px] text-muted-foreground mt-1 whitespace-nowrap">
+                    {tick.toLocaleString()}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Layers (Rows) */}
+        <div className="relative" data-testid="layer-rows">
+          {layers.map(([layerName, layerLots], layerIdx) => (
+            <div
+              key={layerName}
+              className="flex border-b last:border-b-0"
+              style={{ height: ROW_HEIGHT }}
+            >
+              {/* Layer Label */}
+              <div
+                className="flex-shrink-0 flex items-center px-3 bg-muted/20 border-r font-medium text-sm truncate"
+                style={{ width: LABEL_WIDTH }}
+                title={layerName}
+                data-testid={`layer-label-${layerName}`}
+              >
+                <span
+                  className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
+                  style={{ backgroundColor: getActivityColor(layerName) }}
+                />
+                {layerName}
+              </div>
+
+              {/* Lot Blocks */}
+              <div className="flex-1 relative" data-testid={`layer-content-${layerName}`}>
+                {/* Grid lines */}
+                {chainageTicks.map((tick, idx) => {
+                  const x = chainageToX(tick)
+                  if (x < 0 || x > 100 * zoomLevel) return null
+                  return (
+                    <div
+                      key={idx}
+                      className="absolute top-0 h-full w-px bg-border/30"
+                      style={{ left: `${x}%` }}
+                    />
+                  )
+                })}
+
+                {/* Lots as colored blocks */}
+                {layerLots.map((lot) => {
+                  const start = lot.chainageStart ?? lot.chainageEnd ?? 0
+                  const end = lot.chainageEnd ?? lot.chainageStart ?? 0
+                  const left = chainageToX(Math.min(start, end))
+                  const right = chainageToX(Math.max(start, end))
+                  const width = Math.max(right - left, 0.5) // Minimum width for visibility
+
+                  if (left > 100 * zoomLevel || right < 0) return null
+
+                  return (
+                    <div
+                      key={lot.id}
+                      className="absolute top-1 bottom-1 rounded cursor-pointer hover:ring-2 hover:ring-primary transition-all group"
+                      style={{
+                        left: `${Math.max(left, 0)}%`,
+                        width: `${width}%`,
+                        backgroundColor: getStatusColor(lot.status),
+                        minWidth: 16,
+                      }}
+                      onClick={() => onLotClick(lot)}
+                      title={`${lot.lotNumber}: ${lot.description || 'No description'}\nChainage: ${start}-${end}\nStatus: ${lot.status}`}
+                      data-testid={`lot-block-${lot.id}`}
+                    >
+                      {/* Lot label (shown on hover or if wide enough) */}
+                      <div className="absolute inset-0 flex items-center justify-center overflow-hidden px-1">
+                        <span className="text-[10px] text-white font-medium truncate drop-shadow-sm">
+                          {lot.lotNumber}
+                        </span>
+                      </div>
+
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-30">
+                        <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                          <div className="font-medium">{lot.lotNumber}</div>
+                          <div className="text-gray-300">{lot.description || 'No description'}</div>
+                          <div className="text-gray-400">Ch. {start.toLocaleString()} - {end.toLocaleString()}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-4 p-3 border-t bg-muted/20 text-xs">
+        <span className="font-medium">Status:</span>
+        {Object.entries({
+          active: 'Active',
+          in_progress: 'In Progress',
+          completed: 'Completed',
+          approved: 'Approved',
+          on_hold: 'On Hold',
+        }).map(([status, label]) => (
+          <div key={status} className="flex items-center gap-1">
+            <div
+              className="w-3 h-3 rounded"
+              style={{ backgroundColor: getStatusColor(status) }}
+            />
+            <span>{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
