@@ -540,3 +540,159 @@ dashboardRouter.get('/portfolio-risks', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// Feature #275: GET /api/dashboard/cost-trend - Get daily cost trend chart data
+// Shows daily costs with labour vs plant split, filterable by subcontractor
+dashboardRouter.get('/cost-trend', async (req, res) => {
+  try {
+    const { projectId, subcontractorId, startDate, endDate, days } = req.query
+    const userId = req.user?.userId || req.user?.id
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found'
+      })
+    }
+
+    // Get accessible projects
+    const projectAccess = await prisma.projectUser.findMany({
+      where: { userId },
+      select: { projectId: true }
+    })
+    const accessibleProjectIds = projectAccess.map(pa => pa.projectId)
+
+    // Determine which project(s) to query
+    let targetProjectIds: string[] = []
+    if (projectId) {
+      // Verify user has access to specified project
+      if (!accessibleProjectIds.includes(projectId as string)) {
+        return res.status(403).json({ error: 'Access denied to project' })
+      }
+      targetProjectIds = [projectId as string]
+    } else {
+      targetProjectIds = accessibleProjectIds
+    }
+
+    if (targetProjectIds.length === 0) {
+      return res.json({
+        dailyCosts: [],
+        totals: { labour: 0, plant: 0, combined: 0 },
+        runningAverage: 0,
+        subcontractors: []
+      })
+    }
+
+    // Calculate date range
+    const daysToFetch = days ? parseInt(days as string) : 30
+    const end = endDate ? new Date(endDate as string) : new Date()
+    const start = startDate ? new Date(startDate as string) : new Date(end.getTime() - daysToFetch * 24 * 60 * 60 * 1000)
+
+    // Build docket filter
+    const docketWhere: any = {
+      projectId: { in: targetProjectIds },
+      date: {
+        gte: start,
+        lte: end
+      },
+      status: { in: ['approved', 'pending_approval'] } // Only approved or pending dockets
+    }
+
+    if (subcontractorId) {
+      docketWhere.subcontractorCompanyId = subcontractorId as string
+    }
+
+    // Get dockets grouped by date
+    const dockets = await prisma.dailyDocket.findMany({
+      where: docketWhere,
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        }
+      },
+      orderBy: { date: 'asc' }
+    })
+
+    // Aggregate by date
+    const dailyMap = new Map<string, { date: string; labour: number; plant: number; combined: number }>()
+    const subcontractorTotals = new Map<string, { id: string; name: string; labour: number; plant: number }>()
+
+    for (const docket of dockets) {
+      const dateKey = docket.date.toISOString().split('T')[0]
+      const labour = Number(docket.totalLabourSubmitted || 0)
+      const plant = Number(docket.totalPlantSubmitted || 0)
+
+      // Aggregate by date
+      const existing = dailyMap.get(dateKey) || { date: dateKey, labour: 0, plant: 0, combined: 0 }
+      existing.labour += labour
+      existing.plant += plant
+      existing.combined += labour + plant
+      dailyMap.set(dateKey, existing)
+
+      // Track subcontractor totals
+      if (docket.subcontractorCompany) {
+        const subKey = docket.subcontractorCompanyId
+        const subExisting = subcontractorTotals.get(subKey) || {
+          id: subKey,
+          name: docket.subcontractorCompany.companyName,
+          labour: 0,
+          plant: 0
+        }
+        subExisting.labour += labour
+        subExisting.plant += plant
+        subcontractorTotals.set(subKey, subExisting)
+      }
+    }
+
+    // Convert to sorted array
+    const dailyCosts = Array.from(dailyMap.values()).sort((a, b) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    )
+
+    // Calculate totals
+    const totals = dailyCosts.reduce(
+      (acc, day) => ({
+        labour: acc.labour + day.labour,
+        plant: acc.plant + day.plant,
+        combined: acc.combined + day.combined
+      }),
+      { labour: 0, plant: 0, combined: 0 }
+    )
+
+    // Calculate running average (average daily cost)
+    const runningAverage = dailyCosts.length > 0 ? totals.combined / dailyCosts.length : 0
+
+    // Add cumulative and running average to each day
+    let cumulative = 0
+    let runningSum = 0
+    const dailyCostsWithTrend = dailyCosts.map((day, index) => {
+      cumulative += day.combined
+      runningSum += day.combined
+      const dayRunningAverage = runningSum / (index + 1)
+      return {
+        ...day,
+        cumulative,
+        runningAverage: Math.round(dayRunningAverage * 100) / 100
+      }
+    })
+
+    // Format subcontractor breakdown
+    const subcontractors = Array.from(subcontractorTotals.values())
+      .sort((a, b) => (b.labour + b.plant) - (a.labour + a.plant)) // Sort by total cost descending
+
+    res.json({
+      dailyCosts: dailyCostsWithTrend,
+      totals,
+      runningAverage: Math.round(runningAverage * 100) / 100,
+      subcontractors,
+      dateRange: {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0],
+        daysWithData: dailyCosts.length
+      }
+    })
+  } catch (error) {
+    console.error('Cost trend error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})

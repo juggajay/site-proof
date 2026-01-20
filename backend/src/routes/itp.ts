@@ -1065,8 +1065,13 @@ itpRouter.post('/instances', requireAuth, async (req: any, res) => {
   }
 })
 
-// Get ITP instance for a lot
+// Feature #271: Get ITP instance for a lot with subcontractor filtering
+// Subcontractors only see items where responsibleParty = 'subcontractor'
 itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
+  const user = req.user as AuthUser
+  const { subcontractorView } = req.query // If true, filter to subcontractor items only
+
+
   try {
     const { lotId } = req.params
 
@@ -1147,22 +1152,35 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
       }
     }
 
+    // Feature #271: Filter to subcontractor-assigned items only if subcontractorView is true
+    if (subcontractorView === 'true') {
+      templateData.checklistItems = templateData.checklistItems.filter(
+        (item: any) => item.responsibleParty === 'subcontractor'
+      )
+    }
+
+    // Get item IDs for filtered items (used to filter completions)
+    const filteredItemIds = new Set(templateData.checklistItems.map((item: any) => item.id))
+
     // Transform to frontend-friendly format
     const transformedInstance = {
       ...instance,
       template: templateData,
-      completions: instance.completions.map(c => ({
-        ...c,
-        isCompleted: c.status === 'completed' || c.status === 'not_applicable',
-        isNotApplicable: c.status === 'not_applicable',
-        isFailed: c.status === 'failed',
-        isVerified: c.verificationStatus === 'verified',
-        attachments: (c as any).attachments?.map((a: any) => ({
-          id: a.id,
-          documentId: a.documentId,
-          document: a.document
-        })) || []
-      }))
+      completions: instance.completions
+        .filter(c => subcontractorView !== 'true' || filteredItemIds.has(c.checklistItemId))
+        .map(c => ({
+          ...c,
+          isCompleted: c.status === 'completed' || c.status === 'not_applicable',
+          isNotApplicable: c.status === 'not_applicable',
+          isFailed: c.status === 'failed',
+          isVerified: c.verificationStatus === 'verified',
+          isPendingVerification: c.verificationStatus === 'pending_verification',
+          attachments: (c as any).attachments?.map((a: any) => ({
+            id: a.id,
+            documentId: a.documentId,
+            document: a.document
+          })) || []
+        }))
     }
 
     res.json({ instance: transformedInstance })
@@ -1214,6 +1232,13 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       newStatus = isCompleted ? 'completed' : 'pending'
     }
 
+    // Feature #271: Check if user is a subcontractor
+    const subcontractorUser = await prisma.subcontractorUser.findFirst({
+      where: { userId: user.userId },
+      include: { subcontractorCompany: { select: { id: true, companyName: true } } }
+    })
+    const isSubcontractor = !!subcontractorUser
+
     // Check if completion already exists
     const existingCompletion = await prisma.iTPCompletion.findFirst({
       where: {
@@ -1224,6 +1249,12 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
 
     // Determine completedAt and completedById based on status
     const isFinished = newStatus === 'completed' || newStatus === 'not_applicable' || newStatus === 'failed'
+
+    // Feature #271: Subcontractor completions require head contractor verification
+    let verificationStatus: string | undefined
+    if (isSubcontractor && isFinished && newStatus === 'completed') {
+      verificationStatus = 'pending_verification'
+    }
 
     // Build witness data object (only include if values provided)
     const witnessData: Record<string, unknown> = {}
@@ -1247,6 +1278,8 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           notes: notes ?? existingCompletion.notes,
           completedAt: isFinished ? new Date() : null,
           completedById: isFinished ? user.userId : null,
+          // Feature #271: Set pending_verification for subcontractor completions
+          ...(verificationStatus ? { verificationStatus } : {}),
           ...witnessData
         },
         include: {
@@ -1270,6 +1303,8 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           notes: notes || null,
           completedAt: isFinished ? new Date() : null,
           completedById: isFinished ? user.userId : null,
+          // Feature #271: Set pending_verification for subcontractor completions
+          ...(verificationStatus ? { verificationStatus } : {}),
           ...witnessData
         },
         include: {
@@ -1367,6 +1402,65 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       )
     }
 
+    // Feature #271: Notify head contractor when subcontractor completes an item
+    let subbieCompletionNotification = null
+    if (isSubcontractor && isFinished && newStatus === 'completed') {
+      try {
+        // Get the ITP instance with lot and project info
+        const itpInstance = await prisma.iTPInstance.findUnique({
+          where: { id: itpInstanceId },
+          include: {
+            lot: {
+              include: {
+                project: { select: { id: true, name: true } }
+              }
+            }
+          }
+        })
+
+        if (itpInstance && itpInstance.lot && itpInstance.lot.project) {
+          const lot = itpInstance.lot
+          const project = lot.project
+          const itemDescription = (completion as any).checklistItem?.description || 'ITP item'
+          const subbieName = subcontractorUser?.subcontractorCompany?.companyName || 'Subcontractor'
+
+          // Find project managers and superintendents to notify
+          const projectManagers = await prisma.projectUser.findMany({
+            where: {
+              projectId: project.id,
+              role: { in: ['project_manager', 'admin', 'superintendent'] }
+            },
+            select: { userId: true }
+          })
+
+          // Create notifications for head contractor team
+          if (projectManagers.length > 0) {
+            await prisma.notification.createMany({
+              data: projectManagers.map(pm => ({
+                userId: pm.userId,
+                projectId: project.id,
+                type: 'itp_subbie_completion',
+                title: 'Subcontractor ITP Item Completed',
+                message: `${subbieName} has completed ITP item "${itemDescription}" on lot ${lot.lotNumber}. Verification required.`,
+                linkUrl: `/projects/${project.id}/lots/${lot.id}?tab=itp&highlight=${checklistItemId}`
+              }))
+            })
+
+            subbieCompletionNotification = {
+              notificationsSent: projectManagers.length,
+              subcontractorCompany: subbieName,
+              lotNumber: lot.lotNumber,
+              itemDescription
+            }
+
+            console.log(`Feature #271: Notified ${projectManagers.length} head contractor users about subcontractor ITP completion`)
+          }
+        }
+      } catch (notifError) {
+        console.error('Failed to send subcontractor completion notification:', notifError)
+      }
+    }
+
     // Transform to frontend-friendly format
     const transformedCompletion = {
       ...completion,
@@ -1374,11 +1468,17 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       isNotApplicable: completion.status === 'not_applicable',
       isFailed: completion.status === 'failed',
       isVerified: completion.verificationStatus === 'verified',
+      isPendingVerification: completion.verificationStatus === 'pending_verification',
       attachments: (completion as any).attachments || [],
       linkedNcr: createdNcr
     }
 
-    res.json({ completion: transformedCompletion, ncr: createdNcr, witnessPointNotification })
+    res.json({
+      completion: transformedCompletion,
+      ncr: createdNcr,
+      witnessPointNotification,
+      subbieCompletionNotification
+    })
   } catch (error) {
     console.error('Error updating ITP completion:', error)
     res.status(500).json({ error: 'Failed to update completion' })
@@ -1523,15 +1623,117 @@ itpRouter.post('/completions/:id/reject', requireAuth, async (req: any, res) => 
   }
 })
 
+// Feature #272: Get pending verifications for a project
+// Head contractor can view all ITP items completed by subcontractors that need verification
+itpRouter.get('/pending-verifications', requireAuth, async (req: any, res) => {
+  try {
+    const { projectId } = req.query
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' })
+    }
+
+    // Find all completions with pending_verification status for this project
+    const pendingCompletions = await prisma.iTPCompletion.findMany({
+      where: {
+        verificationStatus: 'pending_verification',
+        itpInstance: {
+          lot: {
+            projectId: projectId as string
+          }
+        }
+      },
+      include: {
+        completedBy: {
+          select: { id: true, fullName: true, email: true }
+        },
+        checklistItem: {
+          select: { id: true, description: true, responsibleParty: true }
+        },
+        itpInstance: {
+          include: {
+            lot: {
+              select: { id: true, lotNumber: true, description: true, assignedSubcontractorId: true },
+              include: {
+                assignedSubcontractor: {
+                  select: { id: true, companyName: true }
+                }
+              }
+            },
+            template: {
+              select: { id: true, name: true }
+            }
+          }
+        },
+        attachments: {
+          include: {
+            document: {
+              select: { id: true, filename: true, fileUrl: true, caption: true }
+            }
+          }
+        }
+      },
+      orderBy: { completedAt: 'asc' }
+    })
+
+    // Transform for frontend
+    const transformed = pendingCompletions.map(c => ({
+      id: c.id,
+      status: c.status,
+      verificationStatus: c.verificationStatus,
+      completedAt: c.completedAt,
+      notes: c.notes,
+      completedBy: c.completedBy,
+      checklistItem: c.checklistItem,
+      lot: c.itpInstance.lot,
+      template: c.itpInstance.template,
+      subcontractor: (c.itpInstance.lot as any)?.assignedSubcontractor || null,
+      attachments: c.attachments.map(a => ({
+        id: a.id,
+        document: a.document
+      }))
+    }))
+
+    res.json({
+      pendingVerifications: transformed,
+      count: transformed.length
+    })
+  } catch (error) {
+    console.error('Error fetching pending verifications:', error)
+    res.status(500).json({ error: 'Failed to fetch pending verifications' })
+  }
+})
+
 // Add photo attachment to ITP completion
 itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req: any, res) => {
   try {
     const user = req.user as AuthUser
     const { completionId } = req.params
-    const { filename, fileUrl, caption, gpsLatitude, gpsLongitude } = req.body
+    const { filename, fileUrl, caption, gpsLatitude, gpsLongitude, mimeType } = req.body
 
     if (!filename || !fileUrl) {
       return res.status(400).json({ error: 'filename and fileUrl are required' })
+    }
+
+    // Determine mimeType from various sources
+    let determinedMimeType = mimeType
+    if (!determinedMimeType) {
+      // Try to extract from base64 data URL
+      const dataUrlMatch = fileUrl.match(/^data:([^;]+);base64,/)
+      if (dataUrlMatch) {
+        determinedMimeType = dataUrlMatch[1]
+      } else {
+        // Try to determine from filename extension
+        const ext = filename.split('.').pop()?.toLowerCase()
+        const mimeMap: Record<string, string> = {
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'gif': 'image/gif',
+          'webp': 'image/webp'
+        }
+        determinedMimeType = mimeMap[ext || ''] || null
+      }
     }
 
     // Get the completion to find projectId
@@ -1561,15 +1763,20 @@ itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req
       include: { lot: true }
     })
 
+    // Use the lot's projectId (important for cross-project template imports)
+    // Fall back to template's projectId if lot is not found
+    const documentProjectId = itpInstance?.lot?.projectId || completion.itpInstance.template.projectId
+
     // Create a document record for the photo
     const document = await prisma.document.create({
       data: {
-        projectId: completion.itpInstance.template.projectId,
+        projectId: documentProjectId,
         lotId: itpInstance?.lotId || null,
         documentType: 'photo',
         category: 'itp_evidence',
         filename,
         fileUrl,
+        mimeType: determinedMimeType,
         uploadedById: user.userId,
         caption: caption || `ITP Evidence: ${completion.checklistItem.description}`,
         gpsLatitude: gpsLatitude ? parseFloat(gpsLatitude) : null,

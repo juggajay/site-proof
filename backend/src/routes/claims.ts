@@ -1019,6 +1019,384 @@ router.get('/:projectId/claims/:claimId/completeness-check', async (req, res) =>
   }
 })
 
+// Feature #284: POST /api/projects/:projectId/claims/:claimId/certify - Record certification
+// Dedicated endpoint for recording claim certification with all details
+router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
+  try {
+    const { projectId, claimId } = req.params
+    const {
+      certifiedAmount,
+      certificationDate,
+      variationNotes,
+      certificationDocumentId,
+      certificationDocumentUrl,
+      certificationDocumentFilename
+    } = req.body
+    const userId = (req as any).userId
+
+    // Validate required fields
+    if (certifiedAmount === undefined || certifiedAmount === null) {
+      return res.status(400).json({ error: 'Certified amount is required' })
+    }
+
+    // Get the claim
+    const claim = await prisma.progressClaim.findFirst({
+      where: { id: claimId, projectId },
+      include: {
+        project: { select: { id: true, name: true } }
+      }
+    })
+
+    if (!claim) {
+      return res.status(404).json({ error: 'Claim not found' })
+    }
+
+    // Only allow certification of submitted claims
+    if (claim.status !== 'submitted' && claim.status !== 'disputed') {
+      return res.status(400).json({
+        error: 'Invalid claim status',
+        message: `Can only certify submitted or disputed claims. Current status: ${claim.status}`
+      })
+    }
+
+    const previousStatus = claim.status
+
+    // Create certification document record if URL provided
+    let certDocId = certificationDocumentId
+    if (certificationDocumentUrl && !certDocId) {
+      const certDoc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'certificate',
+          category: 'certification',
+          filename: certificationDocumentFilename || `certification-claim-${claim.claimNumber}.pdf`,
+          fileUrl: certificationDocumentUrl,
+          uploadedById: userId,
+          caption: `Certification document for Claim #${claim.claimNumber}`
+        }
+      })
+      certDocId = certDoc.id
+    }
+
+    // Update the claim with certification details
+    const updatedClaim = await prisma.progressClaim.update({
+      where: { id: claimId },
+      data: {
+        status: 'certified',
+        certifiedAmount: certifiedAmount,
+        certifiedAt: certificationDate ? new Date(certificationDate) : new Date(),
+        // Store variation notes and document reference in a JSON field or notes
+        notes: variationNotes ? JSON.stringify({
+          variationNotes,
+          certificationDocumentId: certDocId,
+          certifiedBy: userId
+        }) : claim.notes
+      },
+      include: {
+        _count: { select: { claimedLots: true } }
+      }
+    })
+
+    // Send notifications to project managers
+    try {
+      const certifier = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, fullName: true }
+      })
+      const certifierName = certifier?.fullName || certifier?.email || 'Unknown'
+
+      const projectManagers = await prisma.projectUser.findMany({
+        where: {
+          projectId,
+          role: 'project_manager',
+          status: { in: ['active', 'accepted'] }
+        }
+      })
+
+      const pmUserIds = projectManagers.map(pm => pm.userId)
+      const pmUsers = pmUserIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: pmUserIds } },
+            select: { id: true, email: true, fullName: true }
+          })
+        : []
+
+      const formattedAmount = new Intl.NumberFormat('en-AU', {
+        style: 'currency',
+        currency: 'AUD'
+      }).format(certifiedAmount)
+
+      // Create in-app notifications
+      if (pmUsers.length > 0) {
+        await prisma.notification.createMany({
+          data: pmUsers.map(pm => ({
+            userId: pm.id,
+            projectId,
+            type: 'claim_certified',
+            title: 'Claim Certified',
+            message: `Claim #${claim.claimNumber} has been certified by ${certifierName}. Certified amount: ${formattedAmount}.${variationNotes ? ` Variations: ${variationNotes.substring(0, 100)}${variationNotes.length > 100 ? '...' : ''}` : ''}`,
+            linkUrl: `/projects/${projectId}/claims`
+          }))
+        })
+      }
+
+      // Send email notifications
+      for (const pm of pmUsers) {
+        try {
+          await sendNotificationIfEnabled(pm.id, 'enabled', {
+            title: 'Claim Certified',
+            message: `Claim #${claim.claimNumber} has been certified.\n\nProject: ${claim.project.name}\nCertified Amount: ${formattedAmount}${variationNotes ? `\nVariations: ${variationNotes}` : ''}\n\nPlease review the claim details in the system.`,
+            projectName: claim.project.name,
+            linkUrl: `/projects/${projectId}/claims`
+          })
+        } catch (emailError) {
+          console.error(`Failed to send certification email to PM ${pm.id}:`, emailError)
+        }
+      }
+    } catch (notifError) {
+      console.error('Failed to send certification notifications:', notifError)
+    }
+
+    // Transform response
+    const response = {
+      claim: {
+        id: updatedClaim.id,
+        claimNumber: updatedClaim.claimNumber,
+        periodStart: updatedClaim.claimPeriodStart.toISOString().split('T')[0],
+        periodEnd: updatedClaim.claimPeriodEnd.toISOString().split('T')[0],
+        status: updatedClaim.status,
+        totalClaimedAmount: updatedClaim.totalClaimedAmount ? Number(updatedClaim.totalClaimedAmount) : 0,
+        certifiedAmount: updatedClaim.certifiedAmount ? Number(updatedClaim.certifiedAmount) : null,
+        certifiedAt: updatedClaim.certifiedAt?.toISOString() || null,
+        paidAmount: updatedClaim.paidAmount ? Number(updatedClaim.paidAmount) : null,
+        lotCount: updatedClaim._count.claimedLots,
+        variationNotes: variationNotes || null,
+        certificationDocumentId: certDocId || null
+      },
+      previousStatus,
+      message: 'Claim certified successfully'
+    }
+
+    const formattedAmountLog = new Intl.NumberFormat('en-AU', {
+      style: 'currency',
+      currency: 'AUD'
+    }).format(certifiedAmount)
+    console.log(`[Claim Certification] Claim #${claim.claimNumber} certified for ${formattedAmountLog}`)
+
+    res.json(response)
+  } catch (error) {
+    console.error('Error certifying claim:', error)
+    res.status(500).json({ error: 'Failed to certify claim' })
+  }
+})
+
+// Feature #285: POST /api/projects/:projectId/claims/:claimId/payment - Record payment
+// Dedicated endpoint for recording claim payment with support for partial payments
+router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
+  try {
+    const { projectId, claimId } = req.params
+    const {
+      paidAmount,
+      paymentDate,
+      paymentReference,
+      paymentNotes
+    } = req.body
+    const userId = (req as any).userId
+
+    // Validate required fields
+    if (paidAmount === undefined || paidAmount === null) {
+      return res.status(400).json({ error: 'Payment amount is required' })
+    }
+
+    if (paidAmount <= 0) {
+      return res.status(400).json({ error: 'Payment amount must be greater than zero' })
+    }
+
+    // Get the claim
+    const claim = await prisma.progressClaim.findFirst({
+      where: { id: claimId, projectId },
+      include: {
+        project: { select: { id: true, name: true } }
+      }
+    })
+
+    if (!claim) {
+      return res.status(404).json({ error: 'Claim not found' })
+    }
+
+    // Only allow payment of certified or partially paid claims
+    if (claim.status !== 'certified' && claim.status !== 'partially_paid') {
+      return res.status(400).json({
+        error: 'Invalid claim status',
+        message: `Can only record payment for certified or partially paid claims. Current status: ${claim.status}`
+      })
+    }
+
+    const previousStatus = claim.status
+    const certifiedAmount = claim.certifiedAmount ? Number(claim.certifiedAmount) : 0
+    const previousPaidAmount = claim.paidAmount ? Number(claim.paidAmount) : 0
+    const totalPaid = previousPaidAmount + paidAmount
+    const outstanding = certifiedAmount - totalPaid
+
+    // Determine new status
+    let newStatus: string
+    if (outstanding <= 0) {
+      newStatus = 'paid'
+    } else {
+      newStatus = 'partially_paid'
+    }
+
+    // Build notes with payment history
+    let paymentHistory: any[] = []
+    if (claim.notes) {
+      try {
+        const existingNotes = JSON.parse(claim.notes)
+        paymentHistory = existingNotes.paymentHistory || []
+      } catch (e) {
+        // Not JSON, start fresh
+      }
+    }
+
+    paymentHistory.push({
+      amount: paidAmount,
+      date: paymentDate || new Date().toISOString().split('T')[0],
+      reference: paymentReference || null,
+      notes: paymentNotes || null,
+      recordedAt: new Date().toISOString(),
+      recordedBy: userId
+    })
+
+    // Update the claim
+    const updatedClaim = await prisma.progressClaim.update({
+      where: { id: claimId },
+      data: {
+        status: newStatus,
+        paidAmount: totalPaid,
+        paidAt: paymentDate ? new Date(paymentDate) : new Date(),
+        paymentReference: paymentReference || claim.paymentReference,
+        notes: JSON.stringify({
+          ...JSON.parse(claim.notes || '{}'),
+          paymentHistory,
+          lastPaymentNotes: paymentNotes
+        })
+      },
+      include: {
+        _count: { select: { claimedLots: true } }
+      }
+    })
+
+    // Send notifications to project managers
+    try {
+      const payer = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, fullName: true }
+      })
+      const payerName = payer?.fullName || payer?.email || 'Unknown'
+
+      const projectManagers = await prisma.projectUser.findMany({
+        where: {
+          projectId,
+          role: 'project_manager',
+          status: { in: ['active', 'accepted'] }
+        }
+      })
+
+      const pmUserIds = projectManagers.map(pm => pm.userId)
+      const pmUsers = pmUserIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: pmUserIds } },
+            select: { id: true, email: true, fullName: true }
+          })
+        : []
+
+      const formattedPaidAmount = new Intl.NumberFormat('en-AU', {
+        style: 'currency',
+        currency: 'AUD'
+      }).format(paidAmount)
+
+      const formattedOutstanding = new Intl.NumberFormat('en-AU', {
+        style: 'currency',
+        currency: 'AUD'
+      }).format(Math.max(0, outstanding))
+
+      const notificationType = newStatus === 'paid' ? 'claim_paid' : 'claim_partial_payment'
+      const notificationTitle = newStatus === 'paid' ? 'Claim Payment Complete' : 'Partial Payment Received'
+      const notificationMessage = newStatus === 'paid'
+        ? `Claim #${claim.claimNumber} payment of ${formattedPaidAmount} has been recorded${paymentReference ? ` (Ref: ${paymentReference})` : ''}. Claim is now fully paid.`
+        : `Partial payment of ${formattedPaidAmount} recorded for Claim #${claim.claimNumber}${paymentReference ? ` (Ref: ${paymentReference})` : ''}. Outstanding: ${formattedOutstanding}.`
+
+      // Create in-app notifications
+      if (pmUsers.length > 0) {
+        await prisma.notification.createMany({
+          data: pmUsers.map(pm => ({
+            userId: pm.id,
+            projectId,
+            type: notificationType,
+            title: notificationTitle,
+            message: notificationMessage,
+            linkUrl: `/projects/${projectId}/claims`
+          }))
+        })
+      }
+
+      // Send email notifications
+      for (const pm of pmUsers) {
+        try {
+          await sendNotificationIfEnabled(pm.id, 'enabled', {
+            title: notificationTitle,
+            message: `${notificationMessage}\n\nProject: ${claim.project.name}\nRecorded by: ${payerName}\n\nPlease review the payment details in the system.`,
+            projectName: claim.project.name,
+            linkUrl: `/projects/${projectId}/claims`
+          })
+        } catch (emailError) {
+          console.error(`Failed to send payment email to PM ${pm.id}:`, emailError)
+        }
+      }
+    } catch (notifError) {
+      console.error('Failed to send payment notifications:', notifError)
+    }
+
+    // Transform response
+    const response = {
+      claim: {
+        id: updatedClaim.id,
+        claimNumber: updatedClaim.claimNumber,
+        periodStart: updatedClaim.claimPeriodStart.toISOString().split('T')[0],
+        periodEnd: updatedClaim.claimPeriodEnd.toISOString().split('T')[0],
+        status: updatedClaim.status,
+        totalClaimedAmount: updatedClaim.totalClaimedAmount ? Number(updatedClaim.totalClaimedAmount) : 0,
+        certifiedAmount: updatedClaim.certifiedAmount ? Number(updatedClaim.certifiedAmount) : null,
+        paidAmount: updatedClaim.paidAmount ? Number(updatedClaim.paidAmount) : null,
+        paidAt: updatedClaim.paidAt?.toISOString() || null,
+        paymentReference: updatedClaim.paymentReference || null,
+        lotCount: updatedClaim._count.claimedLots
+      },
+      payment: {
+        amount: paidAmount,
+        date: paymentDate || new Date().toISOString().split('T')[0],
+        reference: paymentReference || null,
+        notes: paymentNotes || null
+      },
+      outstanding: Math.max(0, outstanding),
+      isFullyPaid: outstanding <= 0,
+      previousStatus,
+      paymentHistory,
+      message: outstanding <= 0 ? 'Claim fully paid' : `Partial payment recorded. Outstanding: $${outstanding.toFixed(2)}`
+    }
+
+    const formattedLog = new Intl.NumberFormat('en-AU', {
+      style: 'currency',
+      currency: 'AUD'
+    }).format(paidAmount)
+    console.log(`[Claim Payment] Claim #${claim.claimNumber} payment recorded: ${formattedLog} (${newStatus})`)
+
+    res.json(response)
+  } catch (error) {
+    console.error('Error recording payment:', error)
+    res.status(500).json({ error: 'Failed to record payment' })
+  }
+})
+
 // DELETE /api/projects/:projectId/claims/:claimId - Delete a draft claim
 router.delete('/:projectId/claims/:claimId', async (req, res) => {
   try {
