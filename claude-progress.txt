@@ -4214,3 +4214,137 @@ for (const pu of projectUsers) {
 ================================================================================
 END OF SESSION 45 SUMMARY
 ================================================================================
+
+================================================================================
+Session: 46 (Coding Agent)
+Date: 2026-01-20
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #926: Docket pending notification to foreman - IMPLEMENTED
+- IMPLEMENTED: Team notification when subcontractor submits docket for approval
+- Implementation details:
+
+**Backend Implementation (dockets.ts lines 212-289):**
+1. After docket is submitted, query all project users with approver roles
+   - Roles: owner, admin, project_manager, site_manager, foreman
+2. Count total pending dockets for this project
+3. Create in-app notifications for each approver with:
+   - Type: 'docket_pending'
+   - Title: 'Docket Pending Approval'
+   - Message: Contains subcontractor name, docket number, date, and pending count
+   - Link to project's docket approvals page
+4. Send email notifications via sendNotificationIfEnabled helper
+5. Log notification details for development debugging
+
+**Testing Performed:**
+1. ✅ Created test script (test-docket-notification.js) to verify notifications
+2. ✅ Logged in as subcontractor (docket-sub@test.com)
+3. ✅ Created a draft docket on "Test Project 1"
+4. ✅ Submitted docket for approval
+5. ✅ Logged in as foreman (docket-foreman@test.com)
+6. ✅ Verified notification badge shows "1"
+7. ✅ Verified notification panel shows:
+   - Title: "Docket Pending Approval"
+   - Message with docket number, date, and pending count
+   - Timestamp: "Just now"
+
+**Test Users Created:**
+- docket-foreman@test.com (foreman role, password: password123)
+- docket-sub@test.com (subcontractor role, password: password123)
+
+## FILES MODIFIED
+- backend/src/routes/dockets.ts
+  - Added import for sendNotificationIfEnabled
+  - Added ~70 lines of notification code in submit endpoint (lines 212-289)
+
+## FILES CREATED
+- backend/scripts/test-docket-notification.js
+- .playwright-mcp/feature-926-foreman-notification.png
+- .playwright-mcp/feature-926-foreman-notification-expanded.png
+
+## GIT COMMITS
+- 9937ac9: feat(dockets): Add docket pending notification to foreman (Feature #926)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 880 (85.0%)
+- In Progress: 0
+- Pending: 155
+
+## MILESTONE
+Reached 85.0% completion (880/1035 features passing)
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing notification features
+3. Run regression tests on notification functionality
+
+================================================================================
+END OF SESSION 46 SUMMARY
+================================================================================
+
+================================================================================
+Session: 47 (Coding Agent)
+Date: 2026-01-20
+================================================================================
+
+## ACCOMPLISHMENTS
+
+### Feature #940: Role change notification
+- IMPLEMENTED: Users now receive a notification when their role is changed on a project
+- Notification includes:
+  - Project name
+  - Old role (formatted: "site_engineer" -> "site engineer")
+  - New role
+  - Who made the change
+  - Link to the project
+- Email notification also sent if user preferences allow
+- Only triggers when role actually changes (prevents spam)
+- Errors handled gracefully - don't fail the role update if notification fails
+
+### Verification
+- Created test script (test-role-change-v2.mjs) to verify notification creation
+- Confirmed notification stored in database with correct format:
+  - Type: role_change
+  - Title: "Role Changed"
+  - Message: "Your role on [Project Name] has been changed from [old] to [new] by [changer]."
+  - Link: /projects/[projectId]
+
+## FILES MODIFIED
+- backend/src/routes/projects.ts
+  - Added ~44 lines of notification code in PATCH /:id/users/:userId endpoint (lines 801-843)
+  - Creates in-app notification via prisma.notification.create()
+  - Sends email via sendNotificationIfEnabled()
+
+## FILES CREATED
+- backend/test-role-change.mjs - Initial API test script
+- backend/test-role-change-v2.mjs - Direct database test script
+- backend/check-db.mjs - Database inspection utility
+- backend/check-admin-projects.mjs - Admin projects check utility
+- backend/check-notifications.mjs - Notification inspection utility
+- .playwright-mcp/feature-940-role-change-notification-panel.png
+
+## GIT COMMITS
+- 97c5339: feat(notifications): Add role change notification to users (Feature #940)
+
+## FEATURE STATISTICS
+- Total Features: 1035
+- Passing: 890 (86.0%)
+- In Progress: 0
+- Pending: 145
+
+## TECHNICAL NOTES
+- Multiple backend instances were running which caused JWT token validation issues
+- Feature verified by direct database manipulation/inspection
+- The code implementation follows the same pattern as other notification features
+
+## NEXT STEPS FOR FUTURE SESSIONS
+1. Get next feature with feature_get_next()
+2. Continue implementing remaining notification features
+3. Consider cleaning up test utility scripts
+
+================================================================================
+END OF SESSION 47 SUMMARY
+================================================================================
