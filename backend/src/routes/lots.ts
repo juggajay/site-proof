@@ -288,6 +288,15 @@ lotsRouter.post('/', async (req, res) => {
       })
     }
 
+    // Feature #853: Area zone required for area lot type
+    if (lotType === 'area' && !areaZone) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Area zone is required for area lot type',
+        code: 'AREA_ZONE_REQUIRED'
+      })
+    }
+
     // Check if user has creator role - either via company role or project membership
     let hasPermission = LOT_CREATORS.includes(user.roleInCompany || '')
 
@@ -624,8 +633,22 @@ lotsRouter.patch('/:id', async (req, res) => {
       assignedSubcontractorId,
     } = req.body
 
+    // Feature #853: Validate area zone if changing to area lot type
+    const existingLot = await prisma.lot.findUnique({ where: { id }, select: { lotType: true, areaZone: true } })
+    const newLotType = req.body.lotType ?? existingLot?.lotType
+    const newAreaZone = areaZone ?? existingLot?.areaZone
+
+    if (newLotType === 'area' && !newAreaZone) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Area zone is required for area lot type',
+        code: 'AREA_ZONE_REQUIRED'
+      })
+    }
+
     // Build update data - only include fields that were provided
     const updateData: any = {}
+    if (req.body.lotType !== undefined) updateData.lotType = req.body.lotType
     if (lotNumber !== undefined) updateData.lotNumber = lotNumber
     if (description !== undefined) updateData.description = description
     if (activityType !== undefined) updateData.activityType = activityType
