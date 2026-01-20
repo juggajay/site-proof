@@ -218,6 +218,53 @@ testResultsRouter.get('/specifications/:testType', async (req, res) => {
   }
 })
 
+// GET /api/test-results/laboratories - Get recent laboratory names for auto-population (Feature #470)
+testResultsRouter.get('/laboratories', async (req, res) => {
+  try {
+    const { projectId, search } = req.query
+
+    // Build where clause for recent test results with laboratory names
+    const whereClause: any = {
+      laboratoryName: { not: null }
+    }
+
+    if (projectId) {
+      whereClause.projectId = projectId as string
+    }
+
+    if (search) {
+      whereClause.laboratoryName = {
+        contains: search as string,
+        mode: 'insensitive'
+      }
+    }
+
+    // Get distinct laboratory names, ordered by most recently used
+    const recentLabs = await prisma.testResult.groupBy({
+      by: ['laboratoryName'],
+      where: whereClause,
+      _max: {
+        createdAt: true
+      },
+      orderBy: {
+        _max: {
+          createdAt: 'desc'
+        }
+      },
+      take: 20
+    })
+
+    const laboratories = recentLabs
+      .filter(lab => lab.laboratoryName)
+      .map(lab => lab.laboratoryName)
+
+    res.json({ laboratories })
+  } catch (error) {
+    console.error('Error fetching laboratories:', error)
+    res.status(500).json({ error: 'Failed to fetch laboratories' })
+  }
+})
+
 // GET /api/test-results - List all test results for a project
 testResultsRouter.get('/', async (req, res) => {
   try {
