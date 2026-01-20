@@ -1,9 +1,13 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
-import { getAuthToken } from '@/lib/auth'
+import { getAuthToken, getCurrentUser } from '@/lib/auth'
 import { TagInput } from '@/components/ui/TagInput'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
+import { useOfflineStatus } from '@/lib/useOfflineStatus'
+import { cacheLotForOfflineEdit, saveLotEditOffline, getOfflineLot, type OfflineLotEdit } from '@/lib/offlineDb'
+import { SyncStatusBadge } from '@/components/OfflineIndicator'
+import { toast } from '@/components/ui/toaster'
 
 interface Lot {
   id: string
@@ -52,12 +56,15 @@ export function LotEditPage() {
   const { projectId, lotId } = useParams()
   const navigate = useNavigate()
   const { canViewBudgets } = useCommercialAccess()
+  const { isOnline } = useOfflineStatus()
   const [lot, setLot] = useState<Lot | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([])
+  const [offlineSyncStatus, setOfflineSyncStatus] = useState<'synced' | 'pending' | 'conflict' | 'error'>('synced')
+  const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -88,6 +95,10 @@ export function LotEditPage() {
   // State for showing unsaved changes dialog
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const pendingNavigationRef = useRef<string | null>(null)
+
+  // Feature #871: State for concurrent edit warning
+  const [showConcurrentEditWarning, setShowConcurrentEditWarning] = useState(false)
+  const [concurrentEditInfo, setConcurrentEditInfo] = useState<{ serverUpdatedAt: string } | null>(null)
 
   // Handle browser refresh/close
   useEffect(() => {
@@ -127,10 +138,62 @@ export function LotEditPage() {
 
   useEffect(() => {
     async function fetchLot() {
-      if (!lotId) return
+      if (!lotId || !projectId) return
 
       const token = getAuthToken()
+      const user = getCurrentUser()
+
+      // First, check if we have an offline version with pending changes
+      const offlineLot = await getOfflineLot(lotId)
+      if (offlineLot && offlineLot.syncStatus !== 'synced') {
+        // We have pending offline changes
+        setOfflineSyncStatus(offlineLot.syncStatus)
+
+        // Populate form with offline data
+        const initialData = {
+          lotNumber: offlineLot.lotNumber || '',
+          description: offlineLot.description || '',
+          activityType: offlineLot.activityType || '',
+          chainageStart: offlineLot.chainageStart?.toString() || '',
+          chainageEnd: offlineLot.chainageEnd?.toString() || '',
+          offset: offlineLot.offset || '',
+          offsetCustom: offlineLot.offsetCustom || '',
+          layer: offlineLot.layer || '',
+          areaZone: offlineLot.areaZone || '',
+          status: offlineLot.status || '',
+          budgetAmount: offlineLot.budget?.toString() || '',
+          assignedSubcontractorId: '',
+        }
+        setFormData(initialData)
+        initialFormData.current = initialData
+        setLot({
+          id: offlineLot.id,
+          lotNumber: offlineLot.lotNumber,
+          description: offlineLot.description || null,
+          status: offlineLot.status || 'not_started',
+          activityType: offlineLot.activityType || null,
+          chainageStart: offlineLot.chainageStart ? parseFloat(offlineLot.chainageStart) : null,
+          chainageEnd: offlineLot.chainageEnd ? parseFloat(offlineLot.chainageEnd) : null,
+          offset: offlineLot.offset || null,
+          offsetCustom: offlineLot.offsetCustom || null,
+          layer: offlineLot.layer || null,
+          areaZone: offlineLot.areaZone || null,
+          budgetAmount: offlineLot.budget,
+          assignedSubcontractorId: null,
+        })
+        setLoading(false)
+
+        // If online, still try to fetch from server to check for conflicts
+        if (!isOnline) {
+          return
+        }
+      }
+
       if (!token) {
+        if (!isOnline && offlineLot) {
+          // Offline mode with cached data - already handled above
+          return
+        }
         navigate('/login')
         return
       }
@@ -162,6 +225,12 @@ export function LotEditPage() {
 
         const data = await response.json()
         setLot(data.lot)
+        setServerUpdatedAt(data.lot.updatedAt)
+
+        // Cache lot for offline editing
+        if (user) {
+          await cacheLotForOfflineEdit(data.lot, projectId, user.id)
+        }
 
         // Populate form with lot data
         const initialData = {
@@ -181,6 +250,14 @@ export function LotEditPage() {
         setFormData(initialData)
         initialFormData.current = initialData
       } catch (err) {
+        // If offline and we have cached data, use it
+        if (!isOnline && offlineLot) {
+          toast({
+            title: 'Offline mode',
+            description: 'Working with cached data'
+          })
+          return
+        }
         setError('Failed to load lot')
       } finally {
         setLoading(false)
@@ -188,7 +265,7 @@ export function LotEditPage() {
     }
 
     fetchLot()
-  }, [lotId, navigate])
+  }, [lotId, projectId, navigate, isOnline])
 
   // Fetch subcontractors for this project
   useEffect(() => {
@@ -240,12 +317,7 @@ export function LotEditPage() {
     setSaveError(null)
 
     const token = getAuthToken()
-    if (!token) {
-      navigate('/login')
-      return
-    }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+    const user = getCurrentUser()
 
     // Build update payload
     const updatePayload: any = {
@@ -271,6 +343,58 @@ export function LotEditPage() {
       updatePayload.assignedSubcontractorId = formData.assignedSubcontractorId || null
     }
 
+    // Feature #871: Include expected version for concurrent edit detection
+    if (serverUpdatedAt) {
+      updatePayload.expectedUpdatedAt = serverUpdatedAt
+    }
+
+    // If offline, save to IndexedDB and queue for sync
+    if (!isOnline && lotId && projectId && user) {
+      try {
+        await saveLotEditOffline({
+          id: lotId,
+          projectId,
+          lotNumber: formData.lotNumber,
+          description: formData.description || undefined,
+          chainage: formData.chainageStart || undefined,
+          chainageStart: formData.chainageStart || undefined,
+          chainageEnd: formData.chainageEnd || undefined,
+          offset: formData.offset || undefined,
+          layer: formData.layer || undefined,
+          areaZone: formData.areaZone || undefined,
+          activityType: formData.activityType || undefined,
+          status: formData.status || undefined,
+          budget: formData.budgetAmount ? parseFloat(formData.budgetAmount) : undefined,
+          notes: undefined,
+          syncStatus: 'pending',
+          localUpdatedAt: new Date().toISOString(),
+          serverUpdatedAt: serverUpdatedAt || undefined,
+          editedBy: user.id,
+        })
+
+        toast({
+          title: 'Changes saved offline',
+          description: 'Your changes will sync when you\'re back online.',
+          variant: 'success'
+        })
+        setOfflineSyncStatus('pending')
+        setIsDirty(false)
+        navigate(`/projects/${projectId}/lots/${lotId}`)
+        return
+      } catch (err) {
+        setSaveError('Failed to save changes offline')
+        setSaving(false)
+        return
+      }
+    }
+
+    if (!token) {
+      navigate('/login')
+      return
+    }
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
     try {
       const response = await fetch(`${apiUrl}/api/lots/${lotId}`, {
         method: 'PATCH',
@@ -283,6 +407,15 @@ export function LotEditPage() {
 
       if (!response.ok) {
         const data = await response.json()
+
+        // Feature #871: Handle concurrent edit conflict
+        if (response.status === 409) {
+          setConcurrentEditInfo({ serverUpdatedAt: data.serverUpdatedAt })
+          setShowConcurrentEditWarning(true)
+          setSaving(false)
+          return
+        }
+
         throw new Error(data.message || 'Failed to update lot')
       }
 
@@ -291,6 +424,43 @@ export function LotEditPage() {
       // Navigate back to lot detail page
       navigate(`/projects/${projectId}/lots/${lotId}`)
     } catch (err) {
+      // If network error and we're actually offline, save offline
+      if (!navigator.onLine && lotId && projectId && user) {
+        try {
+          await saveLotEditOffline({
+            id: lotId,
+            projectId,
+            lotNumber: formData.lotNumber,
+            description: formData.description || undefined,
+            chainage: formData.chainageStart || undefined,
+            chainageStart: formData.chainageStart || undefined,
+            chainageEnd: formData.chainageEnd || undefined,
+            offset: formData.offset || undefined,
+            layer: formData.layer || undefined,
+            areaZone: formData.areaZone || undefined,
+            activityType: formData.activityType || undefined,
+            status: formData.status || undefined,
+            budget: formData.budgetAmount ? parseFloat(formData.budgetAmount) : undefined,
+            notes: undefined,
+            syncStatus: 'pending',
+            localUpdatedAt: new Date().toISOString(),
+            serverUpdatedAt: serverUpdatedAt || undefined,
+            editedBy: user.id,
+          })
+
+          toast({
+            title: 'Changes saved offline',
+            description: 'Your changes will sync when you\'re back online.',
+            variant: 'success'
+          })
+          setOfflineSyncStatus('pending')
+          setIsDirty(false)
+          navigate(`/projects/${projectId}/lots/${lotId}`)
+          return
+        } catch (offlineErr) {
+          // Fall through to regular error
+        }
+      }
       setSaveError(err instanceof Error ? err.message : 'Failed to save changes')
     } finally {
       setSaving(false)
@@ -333,7 +503,17 @@ export function LotEditPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Edit Lot</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">Edit Lot</h1>
+            {offlineSyncStatus !== 'synced' && (
+              <SyncStatusBadge status={offlineSyncStatus} />
+            )}
+            {!isOnline && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                Offline Mode
+              </span>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">
             Editing lot {lot.lotNumber}
           </p>
@@ -380,6 +560,45 @@ export function LotEditPage() {
                 className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Leave Page
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feature #871: Concurrent Edit Warning Dialog */}
+      {showConcurrentEditWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold">Concurrent Edit Detected</h3>
+            </div>
+            <p className="text-muted-foreground mb-2">
+              This lot has been modified by another user while you were editing.
+            </p>
+            <p className="text-sm text-muted-foreground mb-6">
+              Last modified: {concurrentEditInfo?.serverUpdatedAt ? new Date(concurrentEditInfo.serverUpdatedAt).toLocaleString() : 'Unknown'}
+            </p>
+            <p className="text-sm mb-6">
+              Your changes could not be saved. Please refresh the page to see the latest version, then re-apply your changes.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowConcurrentEditWarning(false)}
+                className="px-4 py-2 rounded-lg border hover:bg-muted"
+              >
+                Continue Editing
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Refresh Page
               </button>
             </div>
           </div>

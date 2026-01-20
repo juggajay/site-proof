@@ -554,6 +554,7 @@ lotsRouter.patch('/:id', async (req, res) => {
         id: true,
         projectId: true,
         status: true,
+        updatedAt: true,
       },
     })
 
@@ -586,6 +587,25 @@ lotsRouter.patch('/:id', async (req, res) => {
         error: 'Bad Request',
         message: `Cannot edit a ${lot.status} lot`
       })
+    }
+
+    // Feature #871: Concurrent edit detection (optimistic locking)
+    // If client sends expectedUpdatedAt, check if lot was modified since
+    const { expectedUpdatedAt } = req.body
+    if (expectedUpdatedAt) {
+      const clientExpectedTime = new Date(expectedUpdatedAt).getTime()
+      const serverUpdatedTime = lot.updatedAt.getTime()
+      const timeDiff = Math.abs(clientExpectedTime - serverUpdatedTime)
+
+      // Allow 1 second tolerance for timing differences
+      if (timeDiff > 1000) {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: 'This lot has been modified by another user. Please refresh and try again.',
+          serverUpdatedAt: lot.updatedAt.toISOString(),
+          clientExpectedAt: expectedUpdatedAt
+        })
+      }
     }
 
     // Extract allowed fields from request body
