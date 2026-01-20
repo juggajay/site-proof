@@ -6,8 +6,10 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
-import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, CheckCircle, Plus, Printer } from 'lucide-react'
+import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, CheckCircle, Plus, Printer, WifiOff, CloudOff } from 'lucide-react'
 import { generateConformanceReportPDF, ConformanceReportData, ConformanceFormat, ConformanceFormatOptions, defaultConformanceOptions } from '@/lib/pdfGenerator'
+import { useOfflineStatus } from '@/lib/useOfflineStatus'
+import { cacheITPChecklist, getCachedITPChecklist, updateChecklistItemOffline, getPendingSyncCount, OfflineChecklistItem } from '@/lib/offlineDb'
 
 // Tab types for lot detail page
 type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'comments' | 'history'
@@ -254,6 +256,10 @@ export function LotDetailPage() {
   const [itpInstance, setItpInstance] = useState<ITPInstance | null>(null)
   const [loadingItp, setLoadingItp] = useState(false)
   const [templates, setTemplates] = useState<ITPTemplate[]>([])
+  // Offline state
+  const { isOnline, pendingSyncCount } = useOfflineStatus()
+  const [isOfflineData, setIsOfflineData] = useState(false)
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [assigningTemplate, setAssigningTemplate] = useState(false)
   const [updatingCompletion, setUpdatingCompletion] = useState<string | null>(null)
@@ -292,6 +298,7 @@ export function LotDetailPage() {
     currentNotes: string | null
   } | null>(null)
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
+  const [itpStatusFilter, setItpStatusFilter] = useState<'all' | 'pending' | 'completed' | 'na' | 'failed'>('all')
   const [naModal, setNaModal] = useState<{
     checklistItemId: string
     itemDescription: string
@@ -319,6 +326,21 @@ export function LotDetailPage() {
   const [witnessName, setWitnessName] = useState('')
   const [witnessCompany, setWitnessCompany] = useState('')
   const [submittingWitness, setSubmittingWitness] = useState(false)
+
+  // AI Photo Classification modal state (Feature #247)
+  const [classificationModal, setClassificationModal] = useState<{
+    documentId: string
+    filename: string
+    suggestedClassification: string
+    confidence: number
+    categories: string[]
+    attachmentData: any
+    completionId: string
+    checklistItemId: string
+  } | null>(null)
+  const [selectedClassification, setSelectedClassification] = useState<string>('')
+  const [savingClassification, setSavingClassification] = useState(false)
+  const [classifying, setClassifying] = useState(false)
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -570,7 +592,7 @@ export function LotDetailPage() {
     fetchNcrs()
   }, [projectId, lotId, currentTab])
 
-  // Fetch ITP instance when ITP tab is selected
+  // Fetch ITP instance when ITP tab is selected (with offline support)
   useEffect(() => {
     async function fetchItpInstance() {
       if (!projectId || !lotId || currentTab !== 'itp') return
@@ -579,9 +601,15 @@ export function LotDetailPage() {
       if (!token) return
 
       setLoadingItp(true)
+      setIsOfflineData(false)
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
+      // Check offline pending count
+      const pendingCount = await getPendingSyncCount()
+      setOfflinePendingCount(pendingCount)
+
       try {
+        // Try to fetch from server first
         const response = await fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -591,6 +619,32 @@ export function LotDetailPage() {
         if (response.ok) {
           const data = await response.json()
           setItpInstance(data.instance)
+          setIsOfflineData(false)
+
+          // Cache the ITP data for offline use
+          if (data.instance?.template) {
+            const items: OfflineChecklistItem[] = data.instance.template.checklistItems.map((item: ITPChecklistItem) => {
+              const completion = data.instance.completions.find((c: ITPCompletion) => c.checklistItemId === item.id)
+              let status: 'pending' | 'completed' | 'na' | 'failed' = 'pending'
+              if (completion?.isCompleted) status = 'completed'
+              else if (completion?.isNotApplicable) status = 'na'
+              else if (completion?.isFailed) status = 'failed'
+
+              return {
+                id: item.id,
+                name: item.description,
+                description: item.acceptanceCriteria || undefined,
+                responsibleParty: item.responsibleParty,
+                isHoldPoint: item.isHoldPoint,
+                status,
+                notes: completion?.notes || undefined,
+                completedAt: completion?.completedAt || undefined,
+                completedBy: completion?.completedBy?.fullName || undefined
+              }
+            })
+
+            await cacheITPChecklist(lotId, data.instance.template.id, data.instance.template.name, items)
+          }
         } else if (response.status === 404) {
           // No ITP assigned - fetch available templates
           const templatesResponse = await fetch(`${apiUrl}/api/itp/templates?projectId=${projectId}`, {
@@ -602,14 +656,133 @@ export function LotDetailPage() {
           }
         }
       } catch (err) {
-        console.error('Failed to fetch ITP instance:', err)
+        console.error('Failed to fetch ITP instance, trying offline cache:', err)
+
+        // Try to load from offline cache
+        const cachedData = await getCachedITPChecklist(lotId)
+        if (cachedData) {
+          // Convert cached data to ITPInstance format
+          const offlineInstance: ITPInstance = {
+            id: `offline-${cachedData.id}`,
+            template: {
+              id: cachedData.templateId,
+              name: cachedData.templateName,
+              checklistItems: cachedData.items.map((item, index) => ({
+                id: item.id,
+                description: item.name,
+                category: 'General',
+                responsibleParty: item.responsibleParty as any,
+                isHoldPoint: item.isHoldPoint,
+                pointType: item.isHoldPoint ? 'hold_point' : 'standard' as any,
+                evidenceRequired: 'none' as any,
+                order: index,
+                acceptanceCriteria: item.description || null,
+                testType: null
+              }))
+            },
+            completions: cachedData.items
+              .filter(item => item.status !== 'pending')
+              .map(item => ({
+                id: `offline-${item.id}`,
+                checklistItemId: item.id,
+                isCompleted: item.status === 'completed',
+                isNotApplicable: item.status === 'na',
+                isFailed: item.status === 'failed',
+                notes: item.notes || null,
+                completedAt: item.completedAt || null,
+                completedBy: item.completedBy ? { id: 'offline', fullName: item.completedBy, email: '' } : null,
+                isVerified: false,
+                verifiedAt: null,
+                verifiedBy: null,
+                attachments: []
+              }))
+          }
+          setItpInstance(offlineInstance)
+          setIsOfflineData(true)
+          toast({
+            title: 'Offline Mode',
+            description: `Showing cached data from ${new Date(cachedData.cachedAt).toLocaleDateString()}`,
+            variant: 'default'
+          })
+        }
       } finally {
         setLoadingItp(false)
       }
     }
 
     fetchItpInstance()
-  }, [projectId, lotId, currentTab])
+  }, [projectId, lotId, currentTab, isOnline])
+
+  // Feature #734: Real-time HP release notification polling
+  // Poll for ITP updates every 20 seconds to catch holdpoint releases quickly
+  useEffect(() => {
+    if (!lotId || currentTab !== 'itp' || !isOnline) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    let pollInterval: NodeJS.Timeout | null = null
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    const silentFetchItpUpdates = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          // Only update if there are actual changes in completions
+          setItpInstance(prevInstance => {
+            if (!prevInstance || !data.instance) return data.instance || prevInstance
+
+            const prevCompletions = prevInstance.completions || []
+            const newCompletions = data.instance.completions || []
+
+            // Check if completions have changed
+            const hasChanges = newCompletions.length !== prevCompletions.length ||
+              newCompletions.some((newComp: ITPCompletion) => {
+                const prevComp = prevCompletions.find(p => p.checklistItemId === newComp.checklistItemId)
+                return !prevComp ||
+                  prevComp.isCompleted !== newComp.isCompleted ||
+                  prevComp.isVerified !== newComp.isVerified ||
+                  prevComp.completedAt !== newComp.completedAt
+              })
+
+            return hasChanges ? data.instance : prevInstance
+          })
+        }
+      } catch (err) {
+        // Silent fail for background polling
+        console.debug('Background ITP fetch failed:', err)
+      }
+    }
+
+    const startPolling = () => {
+      // Poll every 20 seconds for ITP (more frequent for HP releases)
+      pollInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          silentFetchItpUpdates()
+        }
+      }, 20000)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        silentFetchItpUpdates()
+      }
+    }
+
+    startPolling()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [lotId, currentTab, isOnline])
 
   // Fetch activity history when History tab is selected
   useEffect(() => {
@@ -816,9 +989,64 @@ export function LotDetailPage() {
           }
           return { ...prev, completions: newCompletions }
         })
+
+        // Update offline cache with the new completion status
+        if (lotId) {
+          const newStatus = !currentlyCompleted ? 'completed' : 'pending'
+          await updateChecklistItemOffline(lotId, checklistItemId, newStatus, existingNotes || undefined, 'Current User')
+        }
       }
     } catch (err) {
       console.error('Failed to update completion:', err)
+
+      // If offline, save to IndexedDB and update local state
+      if (!navigator.onLine && lotId) {
+        const newStatus = !currentlyCompleted ? 'completed' : 'pending'
+        await updateChecklistItemOffline(lotId, checklistItemId, newStatus, existingNotes || undefined, 'Current User (Offline)')
+
+        // Update local state optimistically
+        setItpInstance(prev => {
+          if (!prev) return prev
+          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+          const newCompletions = [...prev.completions]
+          const newCompletion: ITPCompletion = {
+            id: `offline-${checklistItemId}-${Date.now()}`,
+            checklistItemId,
+            isCompleted: !currentlyCompleted,
+            isNotApplicable: false,
+            isFailed: false,
+            notes: existingNotes,
+            completedAt: !currentlyCompleted ? new Date().toISOString() : null,
+            completedBy: !currentlyCompleted ? { id: 'offline', fullName: 'You (Offline)', email: '' } : null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: []
+          }
+          if (existingIndex >= 0) {
+            newCompletions[existingIndex] = newCompletion
+          } else {
+            newCompletions.push(newCompletion)
+          }
+          return { ...prev, completions: newCompletions }
+        })
+
+        // Update offline pending count
+        const pendingCount = await getPendingSyncCount()
+        setOfflinePendingCount(pendingCount)
+
+        toast({
+          title: 'Saved Offline',
+          description: 'Your change will sync when you\'re back online.',
+          variant: 'default'
+        })
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to update checklist item. Please try again.',
+          variant: 'destructive'
+        })
+      }
     } finally {
       setUpdatingCompletion(null)
       setEvidenceWarning(null)
@@ -1134,12 +1362,40 @@ export function LotDetailPage() {
     setUploadingPhoto(checklistItemId)
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
+    // Helper function to get GPS location
+    const getGPSLocation = (): Promise<{ latitude: number; longitude: number } | null> => {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          console.log('Geolocation not supported')
+          resolve(null)
+          return
+        }
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            })
+          },
+          (error) => {
+            console.log('GPS location unavailable:', error.message)
+            resolve(null)
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        )
+      })
+    }
+
     try {
+      // Get GPS location in parallel with file reading
+      const gpsPromise = getGPSLocation()
+
       // For demo purposes, we'll create a data URL from the file
       // In production, you would upload to Supabase Storage or similar
       const reader = new FileReader()
       reader.onloadend = async () => {
         const fileUrl = reader.result as string
+        const gpsLocation = await gpsPromise
 
         const response = await fetch(`${apiUrl}/api/itp/completions/${completionId}/attachments`, {
           method: 'POST',
@@ -1151,6 +1407,8 @@ export function LotDetailPage() {
             filename: file.name,
             fileUrl,
             caption: `ITP Evidence Photo - ${new Date().toLocaleString()}`,
+            gpsLatitude: gpsLocation?.latitude ?? null,
+            gpsLongitude: gpsLocation?.longitude ?? null,
           }),
         })
 
@@ -1171,6 +1429,49 @@ export function LotDetailPage() {
             }
             return prev
           })
+
+          // Feature #247: AI Photo Classification
+          // Call the AI classification endpoint after successful upload
+          setClassifying(true)
+          try {
+            const classifyResponse = await fetch(`${apiUrl}/api/documents/${data.attachment.documentId}/classify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            })
+
+            if (classifyResponse.ok) {
+              const classificationData = await classifyResponse.json()
+              // Show the classification modal
+              setClassificationModal({
+                documentId: classificationData.documentId,
+                filename: file.name,
+                suggestedClassification: classificationData.suggestedClassification,
+                confidence: classificationData.confidence,
+                categories: classificationData.categories,
+                attachmentData: data.attachment,
+                completionId,
+                checklistItemId
+              })
+              setSelectedClassification(classificationData.suggestedClassification)
+            } else {
+              console.warn('AI classification failed, photo uploaded without classification')
+              toast({
+                title: 'Photo uploaded',
+                description: 'Photo was uploaded but AI classification is unavailable.',
+              })
+            }
+          } catch (classifyErr) {
+            console.warn('AI classification error:', classifyErr)
+            toast({
+              title: 'Photo uploaded',
+              description: 'Photo was uploaded but AI classification failed.',
+            })
+          } finally {
+            setClassifying(false)
+          }
         } else {
           console.error('Failed to upload photo')
           alert('Failed to upload photo. Please try again.')
@@ -1186,6 +1487,62 @@ export function LotDetailPage() {
 
     // Reset the input
     event.target.value = ''
+  }
+
+  // Feature #247: Handle saving the photo classification
+  const handleSaveClassification = async () => {
+    if (!classificationModal || !selectedClassification) return
+
+    setSavingClassification(true)
+    const token = getAuthToken()
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      const response = await fetch(`${apiUrl}/api/documents/${classificationModal.documentId}/save-classification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          classification: selectedClassification
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: 'Classification saved',
+          description: `Photo classified as "${selectedClassification}"`,
+        })
+        setClassificationModal(null)
+        setSelectedClassification('')
+      } else {
+        toast({
+          title: 'Failed to save',
+          description: 'Could not save the classification. Please try again.',
+          variant: 'error'
+        })
+      }
+    } catch (err) {
+      console.error('Error saving classification:', err)
+      toast({
+        title: 'Error',
+        description: 'Failed to save classification.',
+        variant: 'error'
+      })
+    } finally {
+      setSavingClassification(false)
+    }
+  }
+
+  // Skip classification and just close the modal
+  const handleSkipClassification = () => {
+    setClassificationModal(null)
+    setSelectedClassification('')
+    toast({
+      title: 'Photo uploaded',
+      description: 'Photo was uploaded without classification.',
+    })
   }
 
   const handleConformLot = async () => {
@@ -1672,6 +2029,36 @@ export function LotDetailPage() {
             ) : itpInstance ? (
               <>
                 <div className="rounded-lg border p-4">
+                  {/* Offline indicator */}
+                  {(isOfflineData || !isOnline || offlinePendingCount > 0) && (
+                    <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+                      !isOnline ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                      isOfflineData ? 'bg-blue-50 text-blue-800 border border-blue-200' :
+                      'bg-green-50 text-green-800 border border-green-200'
+                    }`}>
+                      {!isOnline ? (
+                        <>
+                          <WifiOff className="h-4 w-4" />
+                          <span>Offline Mode - Changes will sync when online</span>
+                          {offlinePendingCount > 0 && (
+                            <span className="ml-auto bg-amber-200 px-2 py-0.5 rounded-full text-xs font-medium">
+                              {offlinePendingCount} pending
+                            </span>
+                          )}
+                        </>
+                      ) : isOfflineData ? (
+                        <>
+                          <CloudOff className="h-4 w-4" />
+                          <span>Showing cached data</span>
+                        </>
+                      ) : offlinePendingCount > 0 ? (
+                        <>
+                          <RefreshCw className="h-4 w-4" />
+                          <span>{offlinePendingCount} changes pending sync</span>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold">ITP Progress</h2>
                     <div className="flex items-center gap-3">
@@ -1706,8 +2093,25 @@ export function LotDetailPage() {
                     )
                   })()}
                 </div>
-                {/* Filter toggle */}
-                <div className="flex items-center justify-end">
+                {/* Status filter dropdown */}
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="itp-status-filter" className="text-sm font-medium text-muted-foreground">
+                      Filter by status:
+                    </label>
+                    <select
+                      id="itp-status-filter"
+                      value={itpStatusFilter}
+                      onChange={(e) => setItpStatusFilter(e.target.value as typeof itpStatusFilter)}
+                      className="text-sm border rounded-md px-2 py-1 bg-background"
+                    >
+                      <option value="all">All Items</option>
+                      <option value="pending">Pending</option>
+                      <option value="completed">Completed</option>
+                      <option value="na">N/A</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </div>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input
                       type="checkbox"
@@ -1722,10 +2126,22 @@ export function LotDetailPage() {
                   <div className="divide-y">
                     {itpInstance.template.checklistItems
                       .filter((item) => {
-                        if (!showIncompleteOnly) return true
                         const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
-                        // Treat completed, N/A, and failed items as "finished"
-                        return !completion?.isCompleted && !completion?.isNotApplicable && !completion?.isFailed
+                        const isCompleted = completion?.isCompleted || false
+                        const isNotApplicable = completion?.isNotApplicable || false
+                        const isFailed = completion?.isFailed || false
+                        const isPending = !isCompleted && !isNotApplicable && !isFailed
+
+                        // Apply status filter
+                        if (itpStatusFilter === 'pending' && !isPending) return false
+                        if (itpStatusFilter === 'completed' && !isCompleted) return false
+                        if (itpStatusFilter === 'na' && !isNotApplicable) return false
+                        if (itpStatusFilter === 'failed' && !isFailed) return false
+
+                        // Apply "show incomplete only" filter (legacy compatibility)
+                        if (showIncompleteOnly && !isPending) return false
+
+                        return true
                       })
                       .map((item) => {
                       const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
@@ -3758,6 +4174,88 @@ export function LotDetailPage() {
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submittingWitness ? 'Saving...' : 'Complete Witness Point'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feature #247: AI Photo Classification Modal */}
+      {classificationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" data-testid="ai-classification-modal">
+          <div className="bg-background rounded-lg p-6 w-full max-w-lg shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400">
+                <span className="text-xl">🤖</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">AI Photo Classification</h3>
+                <p className="text-sm text-muted-foreground">{classificationModal.filename}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* AI Suggestion */}
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-300">AI Suggested Classification</span>
+                  <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300">
+                    {classificationModal.confidence}% confidence
+                  </span>
+                </div>
+                <p className="text-lg font-semibold text-blue-900 dark:text-blue-100" data-testid="ai-suggested-classification">
+                  {classificationModal.suggestedClassification}
+                </p>
+              </div>
+
+              {/* Classification Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Select Classification <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto" data-testid="classification-options">
+                  {classificationModal.categories.map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => setSelectedClassification(category)}
+                      className={`px-3 py-2 text-sm rounded-lg border transition-colors text-left ${
+                        selectedClassification === category
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border hover:bg-muted'
+                      }`}
+                      data-testid={`classification-option-${category.toLowerCase().replace(/[\/\s]+/g, '-')}`}
+                    >
+                      {category === classificationModal.suggestedClassification && (
+                        <span className="mr-1">✨</span>
+                      )}
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Info text */}
+              <p className="text-xs text-muted-foreground">
+                The AI analyzes photos to suggest a classification. You can accept the suggestion or choose a different category.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={handleSkipClassification}
+                className="px-4 py-2 border rounded-lg hover:bg-muted"
+                disabled={savingClassification}
+                data-testid="skip-classification-btn"
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleSaveClassification}
+                disabled={savingClassification || !selectedClassification}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="save-classification-btn"
+              >
+                {savingClassification ? 'Saving...' : 'Save Classification'}
               </button>
             </div>
           </div>
