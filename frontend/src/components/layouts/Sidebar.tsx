@@ -23,10 +23,8 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/lib/auth'
-
-// Storage key for persisting sidebar state
-const SIDEBAR_COLLAPSED_KEY = 'siteproof_sidebar_collapsed'
+import { useAuth, getAuthToken } from '@/lib/auth'
+import { useUIStore } from '@/stores/uiStore'  // Feature #442: Zustand client state
 
 // Role-based access definitions
 const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
@@ -88,24 +86,80 @@ const subcontractorNavigation: NavigationItem[] = [
   { name: 'My Company', href: '/my-company', icon: Building2, allowedRoles: SUBCONTRACTOR_ROLES },
 ]
 
+// Module to navigation mapping (Feature #700)
+const MODULE_NAV_MAPPING: Record<string, string[]> = {
+  costTracking: ['Costs'],
+  progressClaims: ['Progress Claims'],
+  subcontractors: ['Subcontractors'],
+  dockets: ['Docket Approvals'],
+  dailyDiary: ['Daily Diary'],
+}
+
 export function Sidebar() {
   const { projectId } = useParams()
   const { user } = useAuth()
 
-  // Initialize collapsed state from localStorage
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
-    return stored === 'true'
+  // Feature #442: Use Zustand store for sidebar state (persists during navigation)
+  const { sidebar, toggleSidebar: zustandToggleSidebar, setCurrentProject } = useUIStore()
+  const isCollapsed = sidebar.isCollapsed
+
+  // Feature #700 - Enabled modules state
+  const [enabledModules, setEnabledModules] = useState<Record<string, boolean>>({
+    costTracking: true,
+    progressClaims: true,
+    subcontractors: true,
+    dockets: true,
+    dailyDiary: true,
   })
 
-  // Persist collapsed state to localStorage
+  // Fetch project's enabled modules when projectId changes
   useEffect(() => {
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed))
-  }, [isCollapsed])
+    async function fetchProjectModules() {
+      if (!projectId) return
 
-  const toggleSidebar = () => {
-    setIsCollapsed((prev) => !prev)
-  }
+      try {
+        const token = getAuthToken()
+        if (!token) return
+
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+        const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log('[Sidebar] Project data received:', data.project?.name)
+          if (data.project?.settings) {
+            try {
+              const settings = typeof data.project.settings === 'string'
+                ? JSON.parse(data.project.settings)
+                : data.project.settings
+              console.log('[Sidebar] Parsed settings.enabledModules:', settings.enabledModules)
+              if (settings.enabledModules) {
+                console.log('[Sidebar] Setting enabledModules state:', settings.enabledModules)
+                setEnabledModules(prev => ({ ...prev, ...settings.enabledModules }))
+              }
+            } catch (e) {
+              console.error('[Sidebar] Failed to parse settings:', e)
+              // Invalid JSON, use defaults
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch project modules:', error)
+      }
+    }
+
+    fetchProjectModules()
+  }, [projectId])
+
+  // Feature #442: Update current project in Zustand store when projectId changes
+  useEffect(() => {
+    setCurrentProject(projectId || null)
+  }, [projectId, setCurrentProject])
+
+  // Use Zustand toggle instead of local state
+  const toggleSidebar = zustandToggleSidebar
 
   const userRole = user?.role || ''
 
@@ -154,6 +208,19 @@ export function Sidebar() {
       (item) => FOREMAN_MENU_ITEMS.includes(item.name)
     )
   }
+
+  // Feature #700 - Filter by enabled modules
+  filteredProjectNavigation = filteredProjectNavigation.filter((item) => {
+    // Check if this nav item is controlled by a module
+    for (const [moduleKey, navNames] of Object.entries(MODULE_NAV_MAPPING)) {
+      if (navNames.includes(item.name)) {
+        // If the module is disabled, hide the nav item
+        return enabledModules[moduleKey] !== false
+      }
+    }
+    // If not controlled by a module, always show
+    return true
+  })
 
   // Viewer gets read-only items (no create/edit features - just viewing)
   // For now, viewers can see most items but actions will be disabled elsewhere
