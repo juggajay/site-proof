@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
+import { sendNotificationIfEnabled } from './notifications.js'
 
 export const docketsRouter = Router()
 
@@ -178,6 +179,14 @@ docketsRouter.post('/:id/submit', async (req, res) => {
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
+      include: {
+        subcontractorCompany: {
+          select: { companyName: true }
+        },
+        project: {
+          select: { id: true, name: true }
+        }
+      }
     })
 
     if (!docket) {
@@ -200,13 +209,81 @@ docketsRouter.post('/:id/submit', async (req, res) => {
       },
     })
 
+    // Feature #926 - Notify foremen and approvers about pending docket
+    // Get all project users who can approve dockets (foreman, site_manager, project_manager, admin, owner)
+    const projectUsers = await prisma.projectUser.findMany({
+      where: {
+        projectId: docket.projectId,
+        role: { in: ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'] }
+      },
+      include: {
+        user: {
+          select: { id: true, email: true, fullName: true }
+        }
+      }
+    })
+
+    // Count total pending dockets for this project
+    const pendingCount = await prisma.dailyDocket.count({
+      where: {
+        projectId: docket.projectId,
+        status: 'pending_approval'
+      }
+    })
+
+    // Create in-app notifications for approvers
+    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`
+    const docketDate = docket.date.toISOString().split('T')[0]
+    const subcontractorName = docket.subcontractorCompany.companyName
+
+    const notificationsToCreate = projectUsers.map(pu => ({
+      userId: pu.userId,
+      projectId: docket.projectId,
+      type: 'docket_pending',
+      title: 'Docket Pending Approval',
+      message: `${subcontractorName} has submitted docket ${docketNumber} (${docketDate}) for approval. ${pendingCount} docket${pendingCount !== 1 ? 's' : ''} pending.`,
+      linkUrl: `/projects/${docket.projectId}/dockets`
+    }))
+
+    if (notificationsToCreate.length > 0) {
+      await prisma.notification.createMany({
+        data: notificationsToCreate
+      })
+      console.log(`[Docket Submit] Created ${notificationsToCreate.length} in-app notifications for pending docket`)
+    }
+
+    // Send email notifications to approvers (if configured)
+    for (const pu of projectUsers) {
+      try {
+        await sendNotificationIfEnabled(pu.userId, 'enabled', {
+          title: 'Docket Pending Approval',
+          message: `${subcontractorName} has submitted docket ${docketNumber} (${docketDate}) for approval.\n\nProject: ${docket.project.name}\nPending Dockets: ${pendingCount}\n\nPlease review and approve at your earliest convenience.`,
+          projectName: docket.project.name,
+          linkUrl: `/projects/${docket.projectId}/dockets`
+        })
+      } catch (emailError) {
+        console.error(`[Docket Submit] Failed to send email to user ${pu.userId}:`, emailError)
+      }
+    }
+
+    // Log for development
+    console.log(`[Docket Submit] Notification details:`)
+    console.log(`  Docket: ${docketNumber}`)
+    console.log(`  Subcontractor: ${subcontractorName}`)
+    console.log(`  Notified: ${projectUsers.map(pu => pu.user.email).join(', ')}`)
+    console.log(`  Pending Count: ${pendingCount}`)
+
     res.json({
       message: 'Docket submitted for approval',
       docket: {
         id: updatedDocket.id,
         status: updatedDocket.status,
         submittedAt: updatedDocket.submittedAt,
-      }
+      },
+      notifiedUsers: projectUsers.map(pu => ({
+        email: pu.user.email,
+        fullName: pu.user.fullName
+      }))
     })
   } catch (error) {
     console.error('Submit docket error:', error)
