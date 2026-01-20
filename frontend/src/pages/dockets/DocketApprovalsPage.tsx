@@ -285,6 +285,71 @@ export function DocketApprovalsPage() {
     fetchDockets()
   }, [projectId])
 
+  // Feature #735: Real-time docket approval notification polling
+  // Poll for updates every 30 seconds when the tab is visible
+  useEffect(() => {
+    if (!projectId) return
+
+    let pollInterval: NodeJS.Timeout | null = null
+
+    const silentFetchDockets = async () => {
+      const token = getAuthToken()
+
+      try {
+        const queryParams = new URLSearchParams()
+        queryParams.append('projectId', projectId)
+        if (statusFilter !== 'all') queryParams.append('status', statusFilter)
+
+        const response = await fetch(`${API_URL}/api/dockets?${queryParams.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          const newDockets = data.dockets || data || []
+
+          // Only update if there are actual changes
+          setDockets((prevDockets: Docket[]) => {
+            const hasChanges = newDockets.length !== prevDockets.length ||
+              newDockets.some((newDocket: Docket, index: number) =>
+                !prevDockets[index] ||
+                newDocket.id !== prevDockets[index].id ||
+                newDocket.status !== prevDockets[index].status ||
+                newDocket.approvedAt !== prevDockets[index].approvedAt ||
+                newDocket.totalLabourApproved !== prevDockets[index].totalLabourApproved
+              )
+            return hasChanges ? newDockets : prevDockets
+          })
+        }
+      } catch (err) {
+        // Silent fail for background polling
+        console.debug('Background docket fetch failed:', err)
+      }
+    }
+
+    const startPolling = () => {
+      pollInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          silentFetchDockets()
+        }
+      }, 30000) // 30 seconds
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        silentFetchDockets()
+      }
+    }
+
+    startPolling()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [projectId, statusFilter])
+
   // Export dockets to CSV
   const handleExportCSV = () => {
     const headers = ['Docket #', 'Subcontractor', 'Date', 'Notes', 'Labour Hours', 'Plant Hours', 'Status', 'Submitted At', 'Approved At']
