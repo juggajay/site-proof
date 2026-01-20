@@ -149,11 +149,71 @@ app.use(
 app.use(errorHandler)
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 SiteProof API server running on http://localhost:${PORT}`)
   console.log(`📊 tRPC endpoint: http://localhost:${PORT}/trpc`)
   console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`)
   console.log(`❤️  Health check: http://localhost:${PORT}/health`)
 })
+
+// Feature #757: Graceful shutdown handling
+let isShuttingDown = false
+
+// Health check returns 503 during shutdown to stop receiving new traffic
+app.get('/ready', (_req, res) => {
+  if (isShuttingDown) {
+    res.status(503).json({ status: 'shutting_down', message: 'Server is shutting down' })
+  } else {
+    res.json({ status: 'ready' })
+  }
+})
+
+async function gracefulShutdown(signal: string) {
+  if (isShuttingDown) {
+    console.log(`[${signal}] Shutdown already in progress...`)
+    return
+  }
+
+  isShuttingDown = true
+  console.log(`\n[${signal}] Initiating graceful shutdown...`)
+
+  // Set a hard timeout for shutdown (30 seconds)
+  const shutdownTimeout = setTimeout(() => {
+    console.error('Shutdown timeout exceeded, forcing exit')
+    process.exit(1)
+  }, 30000)
+
+  try {
+    // Stop accepting new connections
+    server.close((err) => {
+      if (err) {
+        console.error('Error closing server:', err)
+      } else {
+        console.log('Server closed, no longer accepting connections')
+      }
+    })
+
+    // Wait a bit for in-flight requests to complete
+    console.log('Waiting for in-flight requests to complete...')
+    await new Promise(resolve => setTimeout(resolve, 5000))
+
+    // Close database connections (Prisma)
+    console.log('Closing database connections...')
+    const { prisma } = await import('./lib/prisma.js')
+    await prisma.$disconnect()
+
+    console.log('Graceful shutdown complete')
+    clearTimeout(shutdownTimeout)
+    process.exit(0)
+  } catch (error) {
+    console.error('Error during shutdown:', error)
+    clearTimeout(shutdownTimeout)
+    process.exit(1)
+  }
+}
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
 
 export type { AppRouter } from './trpc/router.js'
