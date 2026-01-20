@@ -1,6 +1,6 @@
 // Feature #151 - Linear Map Visualization for Lots
-import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, X, ExternalLink } from 'lucide-react'
 
 interface Lot {
   id: string
@@ -18,6 +18,13 @@ interface LinearMapViewProps {
   lots: Lot[]
   onLotClick: (lot: Lot) => void
   statusColors: Record<string, string>
+}
+
+// Feature #153 - Popup state
+interface PopupState {
+  lot: Lot
+  x: number
+  y: number
 }
 
 // Get color based on lot status
@@ -54,6 +61,23 @@ const getActivityColor = (activityType: string | null) => {
 export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewProps) {
   const [zoomLevel, setZoomLevel] = useState(1)
   const [panOffset, setPanOffset] = useState(0)
+
+  // Feature #153 - Popup state for lot click
+  const [popup, setPopup] = useState<PopupState | null>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+
+  // Close popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setPopup(null)
+      }
+    }
+    if (popup) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [popup])
 
   // Calculate chainage range and scale
   const { minChainage, maxChainage, totalRange, layers, lotsWithChainage } = useMemo(() => {
@@ -246,7 +270,15 @@ export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewP
                         backgroundColor: getStatusColor(lot.status),
                         minWidth: 16,
                       }}
-                      onClick={() => onLotClick(lot)}
+                      onClick={(e) => {
+                        // Feature #153 - Show popup on click
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        setPopup({
+                          lot,
+                          x: rect.left + rect.width / 2,
+                          y: rect.top
+                        })
+                      }}
                       title={`${lot.lotNumber}: ${lot.description || 'No description'}\nChainage: ${start}-${end}\nStatus: ${lot.status}`}
                       data-testid={`lot-block-${lot.id}`}
                     >
@@ -257,14 +289,16 @@ export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewP
                         </span>
                       </div>
 
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-30">
-                        <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
-                          <div className="font-medium">{lot.lotNumber}</div>
-                          <div className="text-gray-300">{lot.description || 'No description'}</div>
-                          <div className="text-gray-400">Ch. {start.toLocaleString()} - {end.toLocaleString()}</div>
+                      {/* Tooltip on hover (only when popup not shown) */}
+                      {!popup && (
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-30">
+                          <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                            <div className="font-medium">{lot.lotNumber}</div>
+                            <div className="text-gray-300">{lot.description || 'No description'}</div>
+                            <div className="text-gray-400">Ch. {start.toLocaleString()} - {end.toLocaleString()}</div>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   )
                 })}
@@ -293,6 +327,88 @@ export function LinearMapView({ lots, onLotClick, statusColors }: LinearMapViewP
           </div>
         ))}
       </div>
+
+      {/* Feature #153 - Lot Popup */}
+      {popup && (
+        <div
+          ref={popupRef}
+          className="fixed z-50 bg-background border rounded-lg shadow-xl p-4 min-w-[280px]"
+          style={{
+            left: Math.min(popup.x, window.innerWidth - 300),
+            top: Math.max(popup.y - 10, 10),
+            transform: 'translate(-50%, -100%)'
+          }}
+          data-testid="lot-popup"
+        >
+          {/* Close button */}
+          <button
+            onClick={() => setPopup(null)}
+            className="absolute top-2 right-2 p-1 rounded hover:bg-muted"
+            title="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          {/* Lot info */}
+          <div className="pr-6">
+            <div className="flex items-center gap-2 mb-2">
+              <div
+                className="w-4 h-4 rounded"
+                style={{ backgroundColor: getStatusColor(popup.lot.status) }}
+              />
+              <h3 className="font-semibold text-lg">{popup.lot.lotNumber}</h3>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-3">
+              {popup.lot.description || 'No description'}
+            </p>
+
+            <div className="space-y-1 text-sm mb-4">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Chainage:</span>
+                <span className="font-medium">
+                  {(popup.lot.chainageStart ?? 0).toLocaleString()} - {(popup.lot.chainageEnd ?? 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Status:</span>
+                <span className="font-medium capitalize">{popup.lot.status.replace('_', ' ')}</span>
+              </div>
+              {popup.lot.activityType && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Activity:</span>
+                  <span className="font-medium">{popup.lot.activityType}</span>
+                </div>
+              )}
+              {popup.lot.layer && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Layer:</span>
+                  <span className="font-medium">{popup.lot.layer}</span>
+                </div>
+              )}
+              {popup.lot.areaZone && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Area/Zone:</span>
+                  <span className="font-medium">{popup.lot.areaZone}</span>
+                </div>
+              )}
+            </div>
+
+            {/* View Details button */}
+            <button
+              onClick={() => {
+                onLotClick(popup.lot)
+                setPopup(null)
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              data-testid="lot-popup-view-details"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View Details
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
