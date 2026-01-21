@@ -128,8 +128,8 @@ authRouter.post('/register', async (req, res) => {
     })
 
     // Record ToS acceptance using parameterized query
-    const tosAcceptedAt = new Date().toISOString()
-    await prisma.$executeRaw`UPDATE users SET tos_accepted_at = ${tosAcceptedAt}, tos_version = ${CURRENT_TOS_VERSION} WHERE id = ${user.id}`
+    // Use PostgreSQL NOW() function for timestamp compatibility
+    await prisma.$executeRaw`UPDATE users SET tos_accepted_at = NOW(), tos_version = ${CURRENT_TOS_VERSION} WHERE id = ${user.id}`
 
     // Generate email verification token
     const crypto = await import('crypto')
@@ -474,9 +474,10 @@ authRouter.post('/logout-all-devices', async (req, res) => {
     }
 
     // Update the token_invalidated_at timestamp to invalidate all existing tokens
-    const now = new Date().toISOString()
-    await prisma.$executeRaw`UPDATE users SET token_invalidated_at = ${now} WHERE id = ${user.userId}`
+    // Use PostgreSQL NOW() function for timestamp compatibility
+    await prisma.$executeRaw`UPDATE users SET token_invalidated_at = NOW() WHERE id = ${user.userId}`
 
+    const now = new Date().toISOString()
     console.log(`User ${user.email} logged out from all devices at ${now}`)
 
     res.json({
