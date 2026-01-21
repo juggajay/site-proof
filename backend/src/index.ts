@@ -1,4 +1,16 @@
 // Feature #171 N/A trigger
+
+// Global error handlers - must be registered BEFORE any async code runs
+process.on('uncaughtException', (error) => {
+  console.error('[FATAL] Uncaught Exception:', error)
+  process.exit(1)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason)
+  process.exit(1)
+})
+
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
