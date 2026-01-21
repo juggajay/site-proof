@@ -20,8 +20,8 @@ async function initOAuthStatesTable() {
         id TEXT PRIMARY KEY,
         state TEXT UNIQUE NOT NULL,
         redirect_uri TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        expires_at DATETIME NOT NULL
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
       )
     `
     // Create index for faster lookups
