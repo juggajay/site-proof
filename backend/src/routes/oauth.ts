@@ -5,52 +5,148 @@ import crypto from 'crypto'
 
 export const oauthRouter = Router()
 
-// Store OAuth state tokens temporarily (in production, use Redis or database)
-const oauthStates = new Map<string, { createdAt: number; redirectUri?: string }>()
+// ============================================================================
+// Database-backed OAuth State Storage
+// Replaces in-memory Map for production reliability and multi-instance support
+// ============================================================================
 
-// Clean up expired states every 5 minutes
-setInterval(() => {
-  const now = Date.now()
-  for (const [state, data] of oauthStates.entries()) {
-    if (now - data.createdAt > 10 * 60 * 1000) { // 10 minutes expiry
-      oauthStates.delete(state)
-    }
+/**
+ * Initialize the oauth_states table if it doesn't exist
+ */
+async function initOAuthStatesTable() {
+  try {
+    await prisma.$executeRaw`
+      CREATE TABLE IF NOT EXISTS oauth_states (
+        id TEXT PRIMARY KEY,
+        state TEXT UNIQUE NOT NULL,
+        redirect_uri TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME NOT NULL
+      )
+    `
+    // Create index for faster lookups
+    await prisma.$executeRaw`
+      CREATE INDEX IF NOT EXISTS idx_oauth_states_state ON oauth_states(state)
+    `
+    await prisma.$executeRaw`
+      CREATE INDEX IF NOT EXISTS idx_oauth_states_expires ON oauth_states(expires_at)
+    `
+  } catch (error) {
+    console.error('[OAuth] Failed to initialize oauth_states table:', error)
   }
+}
+
+// Initialize table on module load
+initOAuthStatesTable()
+
+/**
+ * Create a new OAuth state token in the database
+ * @param redirectUri Optional redirect URI to store with the state
+ * @returns The generated state token
+ */
+async function createOAuthState(redirectUri?: string): Promise<string> {
+  const state = crypto.randomBytes(16).toString('hex')
+  const id = crypto.randomUUID()
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes expiry
+
+  await prisma.$executeRaw`
+    INSERT INTO oauth_states (id, state, redirect_uri, expires_at)
+    VALUES (${id}, ${state}, ${redirectUri || null}, ${expiresAt.toISOString()})
+  `
+
+  return state
+}
+
+/**
+ * Verify and consume an OAuth state token
+ * @param state The state token to verify
+ * @returns The stored redirect URI if valid, null if invalid or expired
+ */
+async function verifyOAuthState(state: string): Promise<{ valid: boolean; redirectUri?: string }> {
+  // Clean up expired states first
+  await cleanupExpiredStates()
+
+  // Find the state record
+  const results = await prisma.$queryRaw<Array<{ id: string; redirect_uri: string | null; expires_at: string }>>`
+    SELECT id, redirect_uri, expires_at FROM oauth_states
+    WHERE state = ${state}
+  `
+
+  if (!results || results.length === 0) {
+    return { valid: false }
+  }
+
+  const record = results[0]
+  const expiresAt = new Date(record.expires_at)
+
+  // Check if expired
+  if (expiresAt < new Date()) {
+    // Delete the expired record
+    await prisma.$executeRaw`DELETE FROM oauth_states WHERE id = ${record.id}`
+    return { valid: false }
+  }
+
+  // Delete the used state (one-time use)
+  await prisma.$executeRaw`DELETE FROM oauth_states WHERE id = ${record.id}`
+
+  return {
+    valid: true,
+    redirectUri: record.redirect_uri || undefined
+  }
+}
+
+/**
+ * Clean up expired OAuth states from the database
+ */
+async function cleanupExpiredStates(): Promise<void> {
+  const now = new Date().toISOString()
+  await prisma.$executeRaw`DELETE FROM oauth_states WHERE expires_at < ${now}`
+}
+
+// Schedule periodic cleanup every 5 minutes
+setInterval(() => {
+  cleanupExpiredStates().catch(err => {
+    console.error('[OAuth] Failed to cleanup expired states:', err)
+  })
 }, 5 * 60 * 1000)
 
 // GET /api/auth/google - Initiate Google OAuth flow
-oauthRouter.get('/google', (_req, res) => {
+oauthRouter.get('/google', async (_req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4007/api/auth/google/callback'
 
-  if (!clientId || clientId === 'mock-google-client-id.apps.googleusercontent.com') {
-    // Development mode: Redirect to a mock OAuth flow
-    console.log('[OAuth] Google OAuth not configured, using development mock flow')
+  try {
+    if (!clientId || clientId === 'mock-google-client-id.apps.googleusercontent.com') {
+      // Development mode: Redirect to a mock OAuth flow
+      console.log('[OAuth] Google OAuth not configured, using development mock flow')
 
-    // Generate a state token for security
-    const state = crypto.randomBytes(16).toString('hex')
-    oauthStates.set(state, { createdAt: Date.now() })
+      // Generate a state token for security (using database storage)
+      const state = await createOAuthState()
 
-    // Redirect to our mock callback with a test user
+      // Redirect to our mock callback with a test user
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+      return res.redirect(`${frontendUrl}/auth/oauth-mock?provider=google&state=${state}`)
+    }
+
+    // Production mode: Redirect to actual Google OAuth
+    const state = await createOAuthState()
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state: state,
+      access_type: 'offline',
+      prompt: 'consent'
+    })
+
+    res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)
+  } catch (error) {
+    console.error('[OAuth] Failed to initiate OAuth flow:', error)
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
-    return res.redirect(`${frontendUrl}/auth/oauth-mock?provider=google&state=${state}`)
+    res.redirect(`${frontendUrl}/login?error=oauth_init_failed`)
   }
-
-  // Production mode: Redirect to actual Google OAuth
-  const state = crypto.randomBytes(16).toString('hex')
-  oauthStates.set(state, { createdAt: Date.now() })
-
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'openid email profile',
-    state: state,
-    access_type: 'offline',
-    prompt: 'consent'
-  })
-
-  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)
 })
 
 // GET /api/auth/google/callback - Handle Google OAuth callback
@@ -64,12 +160,17 @@ oauthRouter.get('/google/callback', async (req, res) => {
     return res.redirect(`${frontendUrl}/login?error=oauth_failed&message=${encodeURIComponent(String(error))}`)
   }
 
-  // Verify state token
-  if (!state || !oauthStates.has(String(state))) {
-    console.error('[OAuth] Invalid state token')
+  // Verify state token using database storage
+  if (!state) {
+    console.error('[OAuth] No state token provided')
     return res.redirect(`${frontendUrl}/login?error=invalid_state`)
   }
-  oauthStates.delete(String(state))
+
+  const stateVerification = await verifyOAuthState(String(state))
+  if (!stateVerification.valid) {
+    console.error('[OAuth] Invalid or expired state token')
+    return res.redirect(`${frontendUrl}/login?error=invalid_state`)
+  }
 
   if (!code) {
     console.error('[OAuth] No authorization code received')

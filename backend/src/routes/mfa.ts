@@ -7,6 +7,7 @@ import { verifyPassword } from '../lib/auth.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { generateSecret, verify as verifyOtp, generateURI } from 'otplib'
 import QRCode from 'qrcode'
+import { encrypt, decrypt } from '../lib/encryption.js'
 
 export const mfaRouter = Router()
 
@@ -57,8 +58,11 @@ mfaRouter.post('/setup', requireAuth, async (req: any, res) => {
     // Generate a new secret using otplib v13 functional API
     const secret = await generateSecret()
 
-    // Store the secret temporarily (not enabled yet until verified)
-    await prisma.$executeRaw`UPDATE users SET two_factor_secret = ${secret} WHERE id = ${userId}`
+    // Encrypt the secret before storing
+    const encryptedSecret = encrypt(secret)
+
+    // Store the encrypted secret temporarily (not enabled yet until verified)
+    await prisma.$executeRaw`UPDATE users SET two_factor_secret = ${encryptedSecret} WHERE id = ${userId}`
 
     // Generate the otpauth URL using otplib v13 generateURI
     const otpAuthUrl = await generateURI({
@@ -111,10 +115,13 @@ mfaRouter.post('/verify-setup', requireAuth, async (req: any, res) => {
       return res.status(400).json({ message: 'No MFA setup in progress. Please start setup first.' })
     }
 
+    // Decrypt the secret before verifying
+    const decryptedSecret = decrypt(user.two_factor_secret)
+
     // Verify the code using otplib v13 functional API
     const isValid = await verifyOtp({
       token: code,
-      secret: user.two_factor_secret,
+      secret: decryptedSecret,
     })
 
     if (!isValid) {
@@ -174,9 +181,11 @@ mfaRouter.post('/disable', requireAuth, async (req: any, res) => {
     }
 
     if (!verified && code && user.two_factor_secret) {
+      // Decrypt the secret before verifying
+      const decryptedSecret = decrypt(user.two_factor_secret)
       const verifyResult = await verifyOtp({
         token: code,
-        secret: user.two_factor_secret,
+        secret: decryptedSecret,
       })
       verified = typeof verifyResult === 'boolean' ? verifyResult : verifyResult.valid
     }
@@ -227,10 +236,13 @@ mfaRouter.post('/verify', async (req, res) => {
       return res.status(400).json({ message: 'MFA is not enabled for this user' })
     }
 
+    // Decrypt the secret before verifying
+    const decryptedSecret = decrypt(user.two_factor_secret)
+
     // Verify the code using otplib v13 functional API
     const isValid = await verifyOtp({
       token: code,
-      secret: user.two_factor_secret,
+      secret: decryptedSecret,
     })
 
     if (!isValid) {
