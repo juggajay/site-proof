@@ -20,11 +20,57 @@ interface SpeechToTextReturn {
   clearTranscript: () => void
 }
 
+// Web Speech API type definitions for browser compatibility
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean
+  readonly length: number
+  item(index: number): SpeechRecognitionAlternative
+  [index: number]: SpeechRecognitionAlternative
+}
+
+interface SpeechRecognitionAlternative {
+  readonly transcript: string
+  readonly confidence: number
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number
+  item(index: number): SpeechRecognitionResult
+  [index: number]: SpeechRecognitionResult
+}
+
+interface ISpeechRecognitionEvent extends Event {
+  readonly resultIndex: number
+  readonly results: SpeechRecognitionResultList
+}
+
+interface ISpeechRecognitionErrorEvent extends Event {
+  readonly error: string
+  readonly message: string
+}
+
+interface ISpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onstart: ((this: ISpeechRecognition, ev: Event) => void) | null
+  onend: ((this: ISpeechRecognition, ev: Event) => void) | null
+  onresult: ((this: ISpeechRecognition, ev: ISpeechRecognitionEvent) => void) | null
+  onerror: ((this: ISpeechRecognition, ev: ISpeechRecognitionErrorEvent) => void) | null
+  start(): void
+  stop(): void
+  abort(): void
+}
+
+interface ISpeechRecognitionConstructor {
+  new (): ISpeechRecognition
+}
+
 // Extend window with webkitSpeechRecognition for browser compatibility
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition
-    webkitSpeechRecognition: typeof SpeechRecognition
+    SpeechRecognition: ISpeechRecognitionConstructor
+    webkitSpeechRecognition: ISpeechRecognitionConstructor
   }
 }
 
@@ -43,7 +89,7 @@ export function useSpeechToText(options: SpeechToTextOptions = {}): SpeechToText
   const [interimTranscript, setInterimTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<ISpeechRecognition | null>(null)
 
   // Check browser support on mount
   useEffect(() => {
@@ -75,7 +121,7 @@ export function useSpeechToText(options: SpeechToTextOptions = {}): SpeechToText
       console.log('Voice recognition ended')
     }
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: ISpeechRecognitionEvent) => {
       let finalTranscript = ''
       let interimText = ''
 
@@ -98,7 +144,7 @@ export function useSpeechToText(options: SpeechToTextOptions = {}): SpeechToText
       }
     }
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error)
       let errorMessage = 'Speech recognition error'
 

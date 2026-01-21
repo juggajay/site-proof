@@ -129,7 +129,7 @@ interface AccordionProps {
 export function Accordion({
   children,
   className = '',
-  allowMultiple = true,
+  allowMultiple: _allowMultiple = true,
 }: AccordionProps) {
   return (
     <div

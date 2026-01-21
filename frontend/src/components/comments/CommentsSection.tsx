@@ -203,7 +203,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       toast({
         title: 'Some files could not be added',
         description: errors.join(' '),
-        variant: 'destructive'
+        variant: 'error'
       })
     }
 
@@ -240,7 +240,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       toast({
         title: 'Some files could not be added',
         description: errors.join(' '),
-        variant: 'destructive'
+        variant: 'error'
       })
     }
 
@@ -479,32 +479,32 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       // Order matters: check more specific patterns first
       const patterns = [
         // Bold + Italic (***text*** or ___text___)
-        { regex: /(\*\*\*|___)(.+?)\1/g, render: (match: string, _: string, text: string) =>
+        { regex: /(\*\*\*|___)(.+?)\1/g, render: (_match: string, _: string, text: string) =>
           <strong key={keyIndex++} className="font-bold italic">{text}</strong>
         },
         // Bold (**text** or __text__)
-        { regex: /(\*\*|__)(.+?)\1/g, render: (match: string, _: string, text: string) =>
+        { regex: /(\*\*|__)(.+?)\1/g, render: (_match: string, _: string, text: string) =>
           <strong key={keyIndex++} className="font-semibold">{text}</strong>
         },
         // Italic (*text* or _text_)
-        { regex: /(\*|_)(.+?)\1/g, render: (match: string, _: string, text: string) =>
+        { regex: /(\*|_)(.+?)\1/g, render: (_match: string, _: string, text: string) =>
           <em key={keyIndex++} className="italic">{text}</em>
         },
         // Inline code (`code`)
-        { regex: /`([^`]+)`/g, render: (match: string, text: string) =>
+        { regex: /`([^`]+)`/g, render: (_match: string, text: string) =>
           <code key={keyIndex++} className="px-1.5 py-0.5 bg-muted rounded text-sm font-mono">{text}</code>
         },
         // Strikethrough (~~text~~)
-        { regex: /~~(.+?)~~/g, render: (match: string, text: string) =>
+        { regex: /~~(.+?)~~/g, render: (_match: string, text: string) =>
           <span key={keyIndex++} className="line-through">{text}</span>
         },
         // Links ([text](url))
-        { regex: /\[([^\]]+)\]\(([^)]+)\)/g, render: (match: string, text: string, url: string) =>
+        { regex: /\[([^\]]+)\]\(([^)]+)\)/g, render: (_match: string, text: string, url: string) =>
           <a key={keyIndex++} href={url} target="_blank" rel="noopener noreferrer"
              className="text-primary underline hover:no-underline">{text}</a>
         },
         // @mentions
-        { regex: /@([\w.+-]+@[\w.-]+|[\w]+)/g, render: (match: string, name: string) =>
+        { regex: /@([\w.+-]+@[\w.-]+|[\w]+)/g, render: (_match: string, name: string) =>
           <span key={keyIndex++} className="text-primary font-medium bg-primary/10 px-0.5 rounded">@{name}</span>
         },
       ]

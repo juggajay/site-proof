@@ -1,10 +1,10 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, ExternalLink, TrendingUp, Package, Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, BarChart, Bar } from 'recharts'
+import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, TrendingUp, Package, Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react'
+import { XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, BarChart, Bar } from 'recharts'
 import { BarChart3 } from 'lucide-react'
-import { generateClaimEvidencePackagePDF, ClaimPackageOptions } from '@/lib/pdfGenerator'
+import { generateClaimEvidencePackagePDF } from '@/lib/pdfGenerator'
 
 interface Claim {
   id: string
@@ -423,6 +423,8 @@ export function ClaimsPage() {
           certifiedAmount: null,
           paidAmount: null,
           submittedAt: null,
+          disputeNotes: null,
+          disputedAt: null,
           lotCount: selectedLots.length
         }])
         setShowCreateModal(false)
@@ -442,6 +444,8 @@ export function ClaimsPage() {
         certifiedAmount: null,
         paidAmount: null,
         submittedAt: null,
+        disputeNotes: null,
+        disputedAt: null,
         lotCount: selectedLots.length
       }])
       setShowCreateModal(false)

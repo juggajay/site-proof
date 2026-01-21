@@ -84,7 +84,8 @@ interface QMDashboardData {
 }
 
 export function QualityManagerDashboard() {
-  const { user } = useAuth()
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { user: _user } = useAuth()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)

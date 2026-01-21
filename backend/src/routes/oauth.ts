@@ -19,7 +19,7 @@ setInterval(() => {
 }, 5 * 60 * 1000)
 
 // GET /api/auth/google - Initiate Google OAuth flow
-oauthRouter.get('/google', (req, res) => {
+oauthRouter.get('/google', (_req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4007/api/auth/google/callback'
 
@@ -272,14 +272,8 @@ async function findOrCreateOAuthUser(params: {
   })
 
   if (user) {
-    // Update OAuth provider info using raw SQL
-    await prisma.$executeRawUnsafe(
-      `UPDATE users SET oauth_provider = ?, oauth_provider_id = ?, avatar_url = COALESCE(?, avatar_url) WHERE id = ?`,
-      provider,
-      providerId,
-      avatarUrl,
-      user.id
-    )
+    // Update OAuth provider info using parameterized query
+    await prisma.$executeRaw`UPDATE users SET oauth_provider = ${provider}, oauth_provider_id = ${providerId}, avatar_url = COALESCE(${avatarUrl}, avatar_url) WHERE id = ${user.id}`
 
     // If user wasn't verified before, mark as verified now (OAuth verifies email)
     if (!user.emailVerified && emailVerified) {
@@ -306,13 +300,8 @@ async function findOrCreateOAuthUser(params: {
       }
     })
 
-    // Update OAuth fields using raw SQL (to handle fields not in Prisma schema)
-    await prisma.$executeRawUnsafe(
-      `UPDATE users SET oauth_provider = ?, oauth_provider_id = ? WHERE id = ?`,
-      provider,
-      providerId,
-      user.id
-    )
+    // Update OAuth fields using parameterized query (to handle fields not in Prisma schema)
+    await prisma.$executeRaw`UPDATE users SET oauth_provider = ${provider}, oauth_provider_id = ${providerId} WHERE id = ${user.id}`
 
     console.log(`[OAuth] Created new user: ${email}`)
   }

@@ -401,14 +401,14 @@ reportsRouter.get('/diary', async (req, res) => {
         plant: selectedSections.includes('plant'),
         activities: selectedSections.includes('activities')
           ? { include: { lot: { select: { id: true, lotNumber: true } } } }
-          : false,
+          : undefined,
         delays: selectedSections.includes('delays'),
         submittedBy: {
           select: { id: true, fullName: true, email: true }
         },
       },
       orderBy: { date: 'desc' },
-    })
+    }) as any[]
 
     // Calculate summary statistics
     const totalDiaries = diaries.length

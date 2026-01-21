@@ -1,10 +1,10 @@
 // Feature #592 trigger - ITP instance snapshot from template
 // Feature #175 - Auto-notification before witness point
 import { Router } from 'express'
-import { PrismaClient } from '@prisma/client'
-import jwt from 'jsonwebtoken'
+import { prisma } from '../lib/prisma.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
+import { type AuthUser } from '../lib/auth.js'
 
-const prisma = new PrismaClient()
 const itpRouter = Router()
 
 /**
@@ -179,27 +179,6 @@ async function checkAndNotifyWitnessPoint(
   } catch (error) {
     console.error('Error checking witness point notification:', error)
     return null
-  }
-}
-
-interface AuthUser {
-  userId: string
-  email: string
-}
-
-// Auth middleware
-const requireAuth = async (req: any, res: any, next: any) => {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Authentication required' })
-    }
-    const token = authHeader.split(' ')[1]
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret') as AuthUser
-    req.user = decoded
-    next()
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' })
   }
 }
 
@@ -739,7 +718,7 @@ itpRouter.delete('/templates/:id', requireAuth, async (req: any, res) => {
       where: { id },
       include: {
         _count: {
-          select: { instances: true }
+          select: { itpInstances: true }
         }
       }
     })
@@ -749,7 +728,7 @@ itpRouter.delete('/templates/:id', requireAuth, async (req: any, res) => {
     }
 
     // Check if template is in use by any lots
-    const instanceCount = template._count.instances
+    const instanceCount = template._count.itpInstances
 
     if (instanceCount > 0 && force !== 'true') {
       // Get the lots using this template for the warning message
@@ -1068,9 +1047,8 @@ itpRouter.post('/instances', requireAuth, async (req: any, res) => {
 // Feature #271: Get ITP instance for a lot with subcontractor filtering
 // Subcontractors only see items where responsibleParty = 'subcontractor'
 itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
-  const user = req.user as AuthUser
+  // User available on req.user for future permission checks
   const { subcontractorView } = req.query // If true, filter to subcontractor items only
-
 
   try {
     const { lotId } = req.params
@@ -1773,11 +1751,15 @@ itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req
     // Fall back to template's projectId if lot is not found
     const documentProjectId = itpInstance?.lot?.projectId || completion.itpInstance.template.projectId
 
+    if (!documentProjectId) {
+      return res.status(400).json({ error: 'Unable to determine project for attachment' })
+    }
+
     // Create a document record for the photo
     const document = await prisma.document.create({
       data: {
         projectId: documentProjectId,
-        lotId: itpInstance?.lotId || null,
+        lotId: itpInstance?.lotId ?? undefined,
         documentType: 'photo',
         category: 'itp_evidence',
         filename,

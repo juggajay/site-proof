@@ -43,7 +43,7 @@ const AUTH_STORAGE_KEY = 'siteproof_auth'
 const REMEMBER_ME_KEY = 'siteproof_remember_me'
 
 // Helper to get the appropriate storage based on remember me preference
-function getAuthStorage(): Storage {
+export function getAuthStorage(): Storage {
   // Check if user chose to be remembered
   const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true'
   return rememberMe ? localStorage : sessionStorage

@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { DollarSign, TrendingUp, Users, Truck, Calendar, Download, Filter } from 'lucide-react'
+import { DollarSign, TrendingUp, Users, Truck, Download, Filter } from 'lucide-react'
 
 interface CostSummary {
   totalLabourCost: number
@@ -38,7 +38,6 @@ export function CostsPage() {
   const [subcontractorCosts, setSubcontractorCosts] = useState<SubcontractorCost[]>([])
   const [lotCosts, setLotCosts] = useState<LotCost[]>([])
   const [activeTab, setActiveTab] = useState<'summary' | 'subcontractors' | 'lots'>('summary')
-  const [dateRange, setDateRange] = useState({ start: '', end: '' })
 
   useEffect(() => {
     fetchCostData()

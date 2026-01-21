@@ -1,9 +1,8 @@
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 import { z } from 'zod'
 import { requireAuth } from '../middleware/authMiddleware.js'
 
-const prisma = new PrismaClient()
 const router = Router()
 
 // Apply auth middleware to all diary routes
@@ -653,7 +652,7 @@ router.get('/project/:projectId/activity-suggestions', async (req: Request, res:
         suggestions.push({
           description: item.description,
           source: 'ITP Template',
-          category: template.activityType
+          category: template.activityType ?? undefined
         })
       }
     }

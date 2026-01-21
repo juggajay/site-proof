@@ -6,7 +6,7 @@ interface Lot {
   lotNumber: string
   description: string | null
   status: string
-  activityType?: string
+  activityType?: string | null
   chainageStart?: number | null
   chainageEnd?: number | null
   layer?: string | null
@@ -188,17 +188,12 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
   const handleDownloadSVGs = () => {
     // Create a zip-like structure by downloading each SVG
     // For simplicity, we'll create a single HTML file with all SVGs
-    const svgContent = lots.map(lot => {
-      const qrUrl = `${window.location.origin}/projects/${projectId}/lots/${lot.id}`
-      return generateQRSVG(qrUrl, 200)
-    }).join('\n\n')
-
     const blob = new Blob([`
       <!DOCTYPE html>
       <html>
         <head><title>QR Codes - ${projectName || 'Project'}</title></head>
         <body style="display: flex; flex-wrap: wrap; gap: 20px; padding: 20px;">
-          ${lots.map((lot, i) => {
+          ${lots.map((lot) => {
             const qrUrl = `${window.location.origin}/projects/${projectId}/lots/${lot.id}`
             return `
               <div style="text-align: center; border: 1px solid #ccc; padding: 10px; border-radius: 8px;">

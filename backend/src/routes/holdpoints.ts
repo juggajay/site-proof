@@ -1,14 +1,13 @@
 import { Router } from 'express'
-import { PrismaClient } from '@prisma/client'
-import jwt from 'jsonwebtoken'
+import { prisma } from '../lib/prisma.js'
 import crypto from 'crypto'
 import { sendNotificationIfEnabled } from './notifications.js'
 import { sendHPReleaseRequestEmail, sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../lib/email.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
 
 // Secure link expiry time (48 hours)
 const SECURE_LINK_EXPIRY_HOURS = 48
 
-const prisma = new PrismaClient()
 const holdpointsRouter = Router()
 
 // Utility function to calculate appropriate notification time based on working hours
@@ -72,27 +71,6 @@ function calculateNotificationTime(
   }
 
   return { scheduledTime: notificationTime, adjustedForWorkingHours, reason }
-}
-
-interface AuthUser {
-  userId: string
-  email: string
-}
-
-// Auth middleware
-const requireAuth = async (req: any, res: any, next: any) => {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Authentication required' })
-    }
-    const token = authHeader.split(' ')[1]
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret') as AuthUser
-    req.user = decoded
-    next()
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' })
-  }
 }
 
 // Get all hold points for a project
@@ -587,7 +565,7 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
     if (approvalRequirement === 'superintendent') {
       const userId = req.user?.id
       if (userId) {
-        const teamMember = await prisma.projectTeamMember.findFirst({
+        const teamMember = await prisma.projectUser.findFirst({
           where: {
             projectId: existingHP.lot.projectId,
             userId: userId,
@@ -717,7 +695,7 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
           recipientRole: 'contractor',
           projectName: existingHP.lot.project.name,
           lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description,
+          holdPointDescription: holdPoint.description || 'Hold Point',
           releasedByName: releasedByName || 'Unknown',
           releasedByOrg: releasedByOrg || undefined,
           releaseMethod: releaseMethod || undefined,
@@ -738,7 +716,7 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
           recipientRole: 'superintendent',
           projectName: existingHP.lot.project.name,
           lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description,
+          holdPointDescription: holdPoint.description || 'Hold Point',
           releasedByName: releasedByName || 'Unknown',
           releasedByOrg: releasedByOrg || undefined,
           releaseMethod: releaseMethod || undefined,
@@ -847,7 +825,7 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
           superintendentName: recipient.user.fullName || 'Superintendent',
           projectName: existingHP.lot.project.name,
           lotNumber: existingHP.lot.lotNumber,
-          holdPointDescription: existingHP.description,
+          holdPointDescription: existingHP.description || 'Hold Point',
           originalRequestDate: formattedRequestDate,
           chaseCount: holdPoint.chaseCount || 1,
           daysSinceRequest,
@@ -1809,7 +1787,7 @@ holdpointsRouter.post('/public/:token/release', async (req: any, res) => {
           recipientRole: 'contractor',
           projectName: releaseToken.holdPoint.lot.project.name,
           lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description,
+          holdPointDescription: holdPoint.description || 'Hold Point',
           releasedByName,
           releasedByOrg: releasedByOrg || undefined,
           releaseMethod: 'secure_link',
@@ -1830,7 +1808,7 @@ holdpointsRouter.post('/public/:token/release', async (req: any, res) => {
           recipientRole: 'superintendent',
           projectName: releaseToken.holdPoint.lot.project.name,
           lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description,
+          holdPointDescription: holdPoint.description || 'Hold Point',
           releasedByName,
           releasedByOrg: releasedByOrg || undefined,
           releaseMethod: 'secure_link',

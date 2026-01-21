@@ -1,11 +1,10 @@
 // Feature #747: API Keys for external REST access
 import { Router, Request, Response, NextFunction } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 import crypto from 'crypto'
 import { z } from 'zod'
 
 const router = Router()
-const prisma = new PrismaClient()
 
 // Generate secure random API key
 function generateApiKey(): string {

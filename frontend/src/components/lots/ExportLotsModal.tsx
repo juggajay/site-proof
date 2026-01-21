@@ -15,12 +15,6 @@ interface ExportLotsModalProps {
   onClose: () => void
 }
 
-// Helper to format date for input
-const formatDateForInput = (date: Date | null): string => {
-  if (!date) return ''
-  return date.toISOString().split('T')[0]
-}
-
 // Helper to parse date from input
 const parseDateFromInput = (value: string): Date | null => {
   if (!value) return null

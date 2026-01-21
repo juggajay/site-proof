@@ -1,6 +1,6 @@
 // Feature #311: Quick Photo Capture Component for Offline Use
 import { useState, useRef, useCallback } from 'react';
-import { Camera, Upload, X, Check, MapPin, Tag, Image, AlertTriangle } from 'lucide-react';
+import { Camera, X, Check, MapPin, Tag, Image, AlertTriangle } from 'lucide-react';
 import { capturePhotoOffline, OfflinePhoto } from '@/lib/offlineDb';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { SyncStatusBadge } from '@/components/OfflineIndicator';
@@ -338,7 +338,7 @@ export function QuickPhotoCaptureButton({
   variant = 'default'
 }: QuickPhotoCaptureProps & { variant?: 'default' | 'icon' | 'small' }) {
   const { user } = useAuth();
-  const { isOnline } = useOfflineStatus();
+  const { isOnline: _isOnline } = useOfflineStatus();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {

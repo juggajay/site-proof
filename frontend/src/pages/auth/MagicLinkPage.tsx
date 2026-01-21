@@ -10,7 +10,7 @@ export function MagicLinkPage() {
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying')
   const [error, setError] = useState('')
   const navigate = useNavigate()
-  const { refreshAuth } = useAuth()
+  const { refreshUser } = useAuth()
 
   useEffect(() => {
     const token = searchParams.get('token')
@@ -39,7 +39,7 @@ export function MagicLinkPage() {
           }
 
           // Refresh auth state
-          await refreshAuth()
+          await refreshUser()
 
           setStatus('success')
 
@@ -58,7 +58,7 @@ export function MagicLinkPage() {
     }
 
     verifyMagicLink()
-  }, [searchParams, navigate, refreshAuth])
+  }, [searchParams, navigate, refreshUser])
 
   if (status === 'verifying') {
     return (

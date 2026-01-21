@@ -1,31 +1,9 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
-import { verifyToken, type AuthUser } from '../lib/auth.js'
+import { type AuthUser } from '../lib/auth.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
 
 export const ncrsRouter = Router()
-
-// Middleware to verify auth and attach user
-const requireAuth = async (req: any, res: any, next: any) => {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized' })
-    }
-
-    const token = authHeader.substring(7)
-    const user = await verifyToken(token)
-
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid token' })
-    }
-
-    req.user = user
-    next()
-  } catch (error) {
-    console.error('Auth error:', error)
-    res.status(401).json({ message: 'Unauthorized' })
-  }
-}
 
 // GET /api/ncrs - List all NCRs for user's projects
 ncrsRouter.get('/', requireAuth, async (req: any, res) => {
@@ -333,7 +311,7 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
 // Feature #636: PATCH /api/ncrs/:id - Update NCR (including redirect to different responsible party)
 ncrsRouter.patch('/:id', requireAuth, async (req: any, res) => {
   try {
-    const user = req.user as AuthUser
+    // Note: user authenticated via requireAuth middleware
     const { id } = req.params
     const { responsibleUserId, comments } = req.body
 
@@ -390,7 +368,11 @@ ncrsRouter.patch('/:id', requireAuth, async (req: any, res) => {
       include: {
         responsibleUser: { select: { id: true, fullName: true, email: true } },
         raisedBy: { select: { id: true, fullName: true, email: true } },
-        lot: { select: { id: true, lotNumber: true } },
+        ncrLots: {
+          include: {
+            lot: { select: { id: true, lotNumber: true } },
+          },
+        },
       },
     })
 
@@ -975,7 +957,7 @@ ncrsRouter.post('/:id/notify-client', requireAuth, async (req: any, res) => {
         action: 'NCR_CLIENT_NOTIFIED',
         entityType: 'NCR',
         entityId: ncr.id,
-        details: JSON.stringify({
+        changes: JSON.stringify({
           ncrNumber: ncr.ncrNumber,
           recipientEmail: recipientEmail || 'Not specified',
           notificationPackage,
@@ -1053,7 +1035,7 @@ ncrsRouter.post('/:id/evidence', requireAuth, async (req: any, res) => {
   try {
     const user = req.user as AuthUser
     const { id } = req.params
-    const { documentId, evidenceType, filename, fileUrl, fileSize, mimeType, caption, projectId: providedProjectId } = req.body
+    const { documentId, evidenceType, filename, fileUrl, fileSize, mimeType, caption, projectId: _providedProjectId } = req.body
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },

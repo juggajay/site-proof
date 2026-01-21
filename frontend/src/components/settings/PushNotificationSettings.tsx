@@ -6,13 +6,14 @@ import {
   getNotificationPermission,
   subscribeToPush,
   unsubscribeFromPush,
-  isSubscribedToPush,
   sendTestPush,
   getPushStatus
 } from '@/lib/pushNotifications'
 
 export function PushNotificationSettings() {
-  const { token } = useAuth()
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { user: _user } = useAuth()
+  const token = localStorage.getItem('auth_token')
   const [loading, setLoading] = useState(true)
   const [subscribing, setSubscribing] = useState(false)
   const [sendingTest, setSendingTest] = useState(false)

@@ -523,7 +523,7 @@ export async function getPendingPhotosCount(): Promise<number> {
 }
 
 // Mark photo as synced
-export async function markPhotoSynced(photoId: string, serverDocumentId?: string): Promise<void> {
+export async function markPhotoSynced(photoId: string, _serverDocumentId?: string): Promise<void> {
   await offlineDb.photos.update(photoId, {
     syncStatus: 'synced',
     localUpdatedAt: new Date().toISOString()
@@ -815,7 +815,7 @@ export async function getPendingDockets(): Promise<OfflineDocket[]> {
 }
 
 // Mark docket as synced
-export async function markDocketSynced(docketId: string, serverId?: string): Promise<void> {
+export async function markDocketSynced(docketId: string, _serverId?: string): Promise<void> {
   await offlineDb.dockets.update(docketId, {
     syncStatus: 'synced',
     localUpdatedAt: new Date().toISOString()

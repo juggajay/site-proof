@@ -942,7 +942,7 @@ export function DailyDiaryPage() {
     }
   }
 
-  const submitDiary = async () => {
+  const handleSubmitDiary = async () => {
     if (!diary) return
     setSaving(true)
     try {
@@ -967,6 +967,8 @@ export function DailyDiaryPage() {
       setSaving(false)
     }
   }
+  // Export for potential use
+  void handleSubmitDiary
 
   // Fetch addendums when diary changes
   const fetchAddendums = async (diaryId: string) => {

@@ -1131,15 +1131,15 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
         status: 'certified',
         certifiedAmount: certifiedAmount,
         certifiedAt: certificationDate ? new Date(certificationDate) : new Date(),
-        // Store variation notes and document reference in a JSON field or notes
-        notes: variationNotes ? JSON.stringify({
+        // Store variation notes and document reference in disputeNotes field as JSON
+        disputeNotes: variationNotes ? JSON.stringify({
           variationNotes,
           certificationDocumentId: certDocId,
           certifiedBy: userId
-        }) : claim.notes
+        }) : claim.disputeNotes
       },
       include: {
-        _count: { select: { claimedLots: true } }
+        claimedLots: true
       }
     })
 
@@ -1215,7 +1215,7 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
         certifiedAmount: updatedClaim.certifiedAmount ? Number(updatedClaim.certifiedAmount) : null,
         certifiedAt: updatedClaim.certifiedAt?.toISOString() || null,
         paidAmount: updatedClaim.paidAmount ? Number(updatedClaim.paidAmount) : null,
-        lotCount: updatedClaim._count.claimedLots,
+        lotCount: updatedClaim.claimedLots.length,
         variationNotes: variationNotes || null,
         certificationDocumentId: certDocId || null
       },
@@ -1292,11 +1292,11 @@ router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
       newStatus = 'partially_paid'
     }
 
-    // Build notes with payment history
+    // Build notes with payment history using disputeNotes field
     let paymentHistory: any[] = []
-    if (claim.notes) {
+    if (claim.disputeNotes) {
       try {
-        const existingNotes = JSON.parse(claim.notes)
+        const existingNotes = JSON.parse(claim.disputeNotes)
         paymentHistory = existingNotes.paymentHistory || []
       } catch (e) {
         // Not JSON, start fresh
@@ -1320,14 +1320,14 @@ router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
         paidAmount: totalPaid,
         paidAt: paymentDate ? new Date(paymentDate) : new Date(),
         paymentReference: paymentReference || claim.paymentReference,
-        notes: JSON.stringify({
-          ...JSON.parse(claim.notes || '{}'),
+        disputeNotes: JSON.stringify({
+          ...JSON.parse(claim.disputeNotes || '{}'),
           paymentHistory,
           lastPaymentNotes: paymentNotes
         })
       },
       include: {
-        _count: { select: { claimedLots: true } }
+        claimedLots: true
       }
     })
 
@@ -1415,7 +1415,7 @@ router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
         paidAmount: updatedClaim.paidAmount ? Number(updatedClaim.paidAmount) : null,
         paidAt: updatedClaim.paidAt?.toISOString() || null,
         paymentReference: updatedClaim.paymentReference || null,
-        lotCount: updatedClaim._count.claimedLots
+        lotCount: updatedClaim.claimedLots.length
       },
       payment: {
         amount: paidAmount,

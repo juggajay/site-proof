@@ -1,7 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../lib/prisma.js'
 
 export const supportRouter = Router()
 
@@ -47,11 +45,13 @@ supportRouter.post('/request', async (req: Request, res: Response) => {
         })
 
         if (user) {
-          await prisma.activityLog.create({
+          await prisma.auditLog.create({
             data: {
               userId: user.id,
               action: 'SUPPORT_REQUEST_SUBMITTED',
-              details: JSON.stringify({
+              entityType: 'support_request',
+              entityId: `SP-${Date.now()}`,
+              changes: JSON.stringify({
                 subject,
                 category,
                 messagePreview: message.substring(0, 100),

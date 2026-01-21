@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react'
-import { getAuthToken } from '@/lib/auth'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4015'
 

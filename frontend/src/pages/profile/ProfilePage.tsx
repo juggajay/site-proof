@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth, getAuthToken } from '@/lib/auth'
-import { User, Mail, Shield, Calendar, Building2, Phone, X, Lock, LogOut, Camera, Trash2 } from 'lucide-react'
+import { Mail, Shield, Calendar, Building2, Phone, X, Lock, LogOut, Camera, Trash2 } from 'lucide-react'
 import { toast } from '@/components/ui/toaster'
 
 export function ProfilePage() {
@@ -110,14 +110,14 @@ export function ProfilePage() {
         toast({
           title: 'Update Failed',
           description: data.message || 'Failed to update profile',
-          variant: 'destructive',
+          variant: 'error',
         })
       }
     } catch (err) {
       toast({
         title: 'Error',
         description: 'Failed to update profile',
-        variant: 'destructive',
+        variant: 'error',
       })
     } finally {
       setSaving(false)
@@ -211,14 +211,14 @@ export function ProfilePage() {
         toast({
           title: 'Error',
           description: data.message || 'Failed to logout from all devices',
-          variant: 'destructive',
+          variant: 'error',
         })
       }
     } catch (err) {
       toast({
         title: 'Error',
         description: 'Failed to logout from all devices',
-        variant: 'destructive',
+        variant: 'error',
       })
     } finally {
       setLoggingOutAll(false)
@@ -236,7 +236,7 @@ export function ProfilePage() {
       toast({
         title: 'Invalid File Type',
         description: 'Please select a JPEG, PNG, GIF, or WebP image.',
-        variant: 'destructive',
+        variant: 'error',
       })
       return
     }
@@ -246,7 +246,7 @@ export function ProfilePage() {
       toast({
         title: 'File Too Large',
         description: 'Please select an image under 5MB.',
-        variant: 'destructive',
+        variant: 'error',
       })
       return
     }
@@ -266,7 +266,7 @@ export function ProfilePage() {
       toast({
         title: 'No Image Selected',
         description: 'Please select an image to upload.',
-        variant: 'destructive',
+        variant: 'error',
       })
       return
     }
@@ -306,14 +306,14 @@ export function ProfilePage() {
         toast({
           title: 'Upload Failed',
           description: data.message || 'Failed to upload avatar',
-          variant: 'destructive',
+          variant: 'error',
         })
       }
     } catch (err) {
       toast({
         title: 'Error',
         description: 'Failed to upload avatar',
-        variant: 'destructive',
+        variant: 'error',
       })
     } finally {
       setUploadingAvatar(false)
@@ -353,14 +353,14 @@ export function ProfilePage() {
         toast({
           title: 'Removal Failed',
           description: data.message || 'Failed to remove avatar',
-          variant: 'destructive',
+          variant: 'error',
         })
       }
     } catch (err) {
       toast({
         title: 'Error',
         description: 'Failed to remove avatar',
-        variant: 'destructive',
+        variant: 'error',
       })
     } finally {
       setUploadingAvatar(false)

@@ -586,7 +586,7 @@ export function SubcontractorsPage() {
                       </button>
                     </>
                   )}
-                  {(sub.status === 'suspended' || sub.status === 'removed') && (
+                  {sub.status === 'suspended' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); reinstateSubcontractor(sub.id); }}
                       className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
@@ -776,7 +776,7 @@ export function SubcontractorsPage() {
                     const error = validateABN(value)
                     setAbnError(error)
                   }}
-                  onBlur={(e) => {
+                  onBlur={() => {
                     // Format ABN on blur if valid
                     if (inviteData.abn && !abnError) {
                       setInviteData(prev => ({ ...prev, abn: formatABN(prev.abn) }))

@@ -239,7 +239,7 @@ export function LotDetailPage() {
       navigate(basePath)
     }
   }
-  const { canViewBudgets } = useCommercialAccess()
+  const { canViewBudgets: _canViewBudgets } = useCommercialAccess()
   const { canCreate: canEdit } = useViewerAccess()
   const [lot, setLot] = useState<Lot | null>(null)
   const [loading, setLoading] = useState(true)
@@ -257,7 +257,7 @@ export function LotDetailPage() {
   const [loadingItp, setLoadingItp] = useState(false)
   const [templates, setTemplates] = useState<ITPTemplate[]>([])
   // Offline state
-  const { isOnline, pendingSyncCount } = useOfflineStatus()
+  const { isOnline, pendingSyncCount: _pendingSyncCount } = useOfflineStatus()
   const [isOfflineData, setIsOfflineData] = useState(false)
   const [offlinePendingCount, setOfflinePendingCount] = useState(0)
   const [showAssignModal, setShowAssignModal] = useState(false)
@@ -267,7 +267,7 @@ export function LotDetailPage() {
   const [loadingConformStatus, setLoadingConformStatus] = useState(false)
   const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null)
   const [photoZoom, setPhotoZoom] = useState(1) // Zoom level: 1 = 100%, 2 = 200%, etc.
-  const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null)
+  const [_uploadingPhoto, setUploadingPhoto] = useState<string | null>(null)
   // Batch photo selection state
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
   const [showBatchCaptionModal, setShowBatchCaptionModal] = useState(false)
@@ -340,7 +340,7 @@ export function LotDetailPage() {
   } | null>(null)
   const [selectedClassification, setSelectedClassification] = useState<string>('')
   const [savingClassification, setSavingClassification] = useState(false)
-  const [classifying, setClassifying] = useState(false)
+  const [_classifying, setClassifying] = useState(false)
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -1044,7 +1044,7 @@ export function LotDetailPage() {
         toast({
           title: 'Error',
           description: 'Failed to update checklist item. Please try again.',
-          variant: 'destructive'
+          variant: 'error'
         })
       }
     } finally {
@@ -2987,7 +2987,7 @@ export function LotDetailPage() {
                   toast({
                     title: 'Error',
                     description: 'Failed to apply caption to photos',
-                    variant: 'destructive'
+                    variant: 'error'
                   })
                 } finally {
                   setApplyingBatchCaption(false)
@@ -3078,7 +3078,7 @@ export function LotDetailPage() {
                     toast({
                       title: 'Error',
                       description: 'Failed to add photos as evidence',
-                      variant: 'destructive'
+                      variant: 'error'
                     })
                   }
 
@@ -3091,7 +3091,7 @@ export function LotDetailPage() {
                   toast({
                     title: 'Error',
                     description: 'Failed to add photos as evidence',
-                    variant: 'destructive'
+                    variant: 'error'
                   })
                 } finally {
                   setAddingToEvidence(false)
@@ -3268,7 +3268,7 @@ export function LotDetailPage() {
                                     </p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                       {item.evidenceRequired !== 'none' ? `Requires: ${item.evidenceRequired}` : 'No evidence required'}
-                                      {completion?.attachments?.length > 0 && ` • ${completion.attachments.length} attached`}
+                                      {(completion?.attachments?.length ?? 0) > 0 && ` • ${completion?.attachments?.length ?? 0} attached`}
                                     </p>
                                   </div>
                                   {isSelected && (
@@ -3363,7 +3363,7 @@ export function LotDetailPage() {
                 {/* Timeline */}
                 <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
                 <div className="space-y-4">
-                  {activityLogs.map((log, index) => {
+                  {activityLogs.map((log, _index) => {
                     const isCreate = log.action.includes('create') || log.action.includes('add')
                     const isDelete = log.action.includes('delete') || log.action.includes('remove')
                     const isUpdate = log.action.includes('update') || log.action.includes('edit')

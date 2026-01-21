@@ -66,7 +66,7 @@ const isConfigured = initializeWebPush()
 pushNotificationsRouter.use(requireAuth)
 
 // GET /api/push/vapid-public-key - Get VAPID public key for client subscription
-pushNotificationsRouter.get('/vapid-public-key', async (req: AuthRequest, res) => {
+pushNotificationsRouter.get('/vapid-public-key', async (_req: AuthRequest, res) => {
   try {
     const keys = getVapidKeys()
 
@@ -305,7 +305,7 @@ pushNotificationsRouter.get('/status', async (req: AuthRequest, res) => {
       return res.status(401).json({ error: 'Unauthorized' })
     }
 
-    const keys = getVapidKeys()
+    getVapidKeys() // Ensure keys are initialized
     const userSubscriptionCount = Array.from(pushSubscriptions.values())
       .filter(sub => sub.userId === userId).length
 
@@ -418,7 +418,7 @@ export async function broadcastPushNotification(
 }
 
 // GET /api/push/generate-vapid-keys - Generate new VAPID keys (development only)
-pushNotificationsRouter.get('/generate-vapid-keys', async (req: AuthRequest, res) => {
+pushNotificationsRouter.get('/generate-vapid-keys', async (_req: AuthRequest, res) => {
   try {
     // Only allow in development
     if (process.env.NODE_ENV === 'production') {

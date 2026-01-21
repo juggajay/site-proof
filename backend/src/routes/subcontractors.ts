@@ -646,7 +646,6 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
 // GET /api/subcontractors/project/:projectId - Get all subcontractors for a project (head contractor view)
 subcontractorsRouter.get('/project/:projectId', async (req, res) => {
   try {
-    const user = req.user!
     const { projectId } = req.params
     const { includeRemoved } = req.query
 
@@ -820,15 +819,21 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
 
         // Get subcontractor users to notify
         const subcontractorUsers = await prisma.subcontractorUser.findMany({
-          where: { subcontractorCompanyId: id },
-          include: { user: { select: { id: true, email: true } } }
+          where: { subcontractorCompanyId: id }
+        })
+
+        // Get user details for each subcontractor user
+        const userIds = subcontractorUsers.map(su => su.userId)
+        const users = await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, email: true }
         })
 
         // Create notification for each subcontractor user
-        for (const su of subcontractorUsers) {
+        for (const u of users) {
           await prisma.notification.create({
             data: {
-              userId: su.user.id,
+              userId: u.id,
               projectId: subcontractor?.project?.id || null,
               type: 'rate_approved',
               title: 'Employee Rate Approved',
@@ -838,7 +843,7 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
           })
         }
 
-        console.log(`[Rate Approval] Employee ${updated.name} rate approved for ${subcontractor?.companyName}, notified ${subcontractorUsers.length} users`)
+        console.log(`[Rate Approval] Employee ${updated.name} rate approved for ${subcontractor?.companyName}, notified ${users.length} users`)
       } catch (notifError) {
         console.error('[Rate Approval] Failed to send notification:', notifError)
         // Don't fail the main request
@@ -858,18 +863,24 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
 
         // Get subcontractor users to notify
         const subcontractorUsers = await prisma.subcontractorUser.findMany({
-          where: { subcontractorCompanyId: id },
-          include: { user: { select: { id: true, email: true } } }
+          where: { subcontractorCompanyId: id }
+        })
+
+        // Get user details for each subcontractor user
+        const userIds2 = subcontractorUsers.map(su => su.userId)
+        const users2 = await prisma.user.findMany({
+          where: { id: { in: userIds2 } },
+          select: { id: true, email: true }
         })
 
         const originalRate = Number(employee.hourlyRate).toFixed(2)
         const proposedRate = Number(counterRate).toFixed(2)
 
         // Create notification for each subcontractor user
-        for (const su of subcontractorUsers) {
+        for (const u of users2) {
           await prisma.notification.create({
             data: {
-              userId: su.user.id,
+              userId: u.id,
               projectId: subcontractor?.project?.id || null,
               type: 'rate_counter',
               title: 'Rate Counter-Proposal',
@@ -879,7 +890,7 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
           })
         }
 
-        console.log(`[Rate Counter] Employee ${updated.name} counter-proposed ($${originalRate} -> $${proposedRate}) for ${subcontractor?.companyName}, notified ${subcontractorUsers.length} users`)
+        console.log(`[Rate Counter] Employee ${updated.name} counter-proposed ($${originalRate} -> $${proposedRate}) for ${subcontractor?.companyName}, notified ${users2.length} users`)
       } catch (notifError) {
         console.error('[Rate Counter] Failed to send notification:', notifError)
         // Don't fail the main request
@@ -1003,8 +1014,14 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
 
         // Get subcontractor users to notify
         const subcontractorUsers = await prisma.subcontractorUser.findMany({
-          where: { subcontractorCompanyId: id },
-          include: { user: { select: { id: true, email: true } } }
+          where: { subcontractorCompanyId: id }
+        })
+
+        // Get user details for each subcontractor user
+        const userIds3 = subcontractorUsers.map(su => su.userId)
+        const users3 = await prisma.user.findMany({
+          where: { id: { in: userIds3 } },
+          select: { id: true, email: true }
         })
 
         // Format rates for display
@@ -1013,10 +1030,10 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
         const rateDisplay = `${dryRateStr}${wetRateStr}/hr (dry${wetRateStr ? '/wet' : ''})`
 
         // Create notification for each subcontractor user
-        for (const su of subcontractorUsers) {
+        for (const u of users3) {
           await prisma.notification.create({
             data: {
-              userId: su.user.id,
+              userId: u.id,
               projectId: subcontractor?.project?.id || null,
               type: 'rate_approved',
               title: 'Plant Rate Approved',
@@ -1026,7 +1043,7 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
           })
         }
 
-        console.log(`[Rate Approval] Plant ${updated.type} rate approved for ${subcontractor?.companyName}, notified ${subcontractorUsers.length} users`)
+        console.log(`[Rate Approval] Plant ${updated.type} rate approved for ${subcontractor?.companyName}, notified ${users3.length} users`)
       } catch (notifError) {
         console.error('[Rate Approval] Failed to send notification:', notifError)
         // Don't fail the main request
@@ -1045,9 +1062,15 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
         })
 
         // Get subcontractor users to notify
-        const subcontractorUsers = await prisma.subcontractorUser.findMany({
-          where: { subcontractorCompanyId: id },
-          include: { user: { select: { id: true, email: true } } }
+        const subcontractorUsers4 = await prisma.subcontractorUser.findMany({
+          where: { subcontractorCompanyId: id }
+        })
+
+        // Get user details for each subcontractor user
+        const userIds4 = subcontractorUsers4.map(su => su.userId)
+        const users4 = await prisma.user.findMany({
+          where: { id: { in: userIds4 } },
+          select: { id: true, email: true }
         })
 
         // Format original rates
@@ -1063,10 +1086,10 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
         const plantDesc = `${updated.type}${updated.description ? ` - ${updated.description}` : ''}`
 
         // Create notification for each subcontractor user
-        for (const su of subcontractorUsers) {
+        for (const u of users4) {
           await prisma.notification.create({
             data: {
-              userId: su.user.id,
+              userId: u.id,
               projectId: subcontractor?.project?.id || null,
               type: 'rate_counter',
               title: 'Plant Rate Counter-Proposal',
@@ -1076,7 +1099,7 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
           })
         }
 
-        console.log(`[Rate Counter] Plant ${updated.type} counter-proposed (${originalRates} -> ${proposedRates}) for ${subcontractor?.companyName}, notified ${subcontractorUsers.length} users`)
+        console.log(`[Rate Counter] Plant ${updated.type} counter-proposed (${originalRates} -> ${proposedRates}) for ${subcontractor?.companyName}, notified ${users4.length} users`)
       } catch (notifError) {
         console.error('[Rate Counter] Failed to send notification:', notifError)
         // Don't fail the main request

@@ -17,7 +17,7 @@ export function Breadcrumbs() {
   const location = useLocation()
   const { projectId, lotId } = useParams()
   const [lotNumber, setLotNumber] = useState<string | null>(null)
-  const [projectName, setProjectName] = useState<string | null>(null)
+  const [_projectName, setProjectName] = useState<string | null>(null)
 
   // Get return filters from navigation state (passed from LotsPage)
   const locationState = location.state as LocationState | null
@@ -241,7 +241,7 @@ export function Breadcrumbs() {
       >
         <Home className="h-4 w-4" aria-hidden="true" />
       </Link>
-      {breadcrumbs.slice(1).map((item, index) => (
+      {breadcrumbs.slice(1).map((item, _index) => (
         <div key={item.path} className="flex items-center gap-1">
           <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           {item.isLast ? (

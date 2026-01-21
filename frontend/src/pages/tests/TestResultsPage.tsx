@@ -1208,7 +1208,7 @@ export function TestResultsPage() {
                             toast({
                               title: 'Error',
                               description: 'Failed to generate test certificate',
-                              variant: 'destructive',
+                              variant: 'error',
                             })
                           }
                         }}

@@ -101,7 +101,7 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
         from: email.from,
         to: Array.isArray(email.to) ? email.to : [email.to],
         subject: email.subject,
-        text: email.text,
+        text: email.text || '',
         html: email.html,
         attachments: resendAttachments,
       })

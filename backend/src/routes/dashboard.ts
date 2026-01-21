@@ -11,7 +11,6 @@ dashboardRouter.use(requireAuth)
 dashboardRouter.get('/stats', async (req, res) => {
   try {
     const userId = req.user?.userId || req.user?.id
-    const companyId = req.user?.companyId
 
     if (!userId) {
       return res.status(401).json({
@@ -764,7 +763,6 @@ dashboardRouter.get('/foreman', async (req, res) => {
         status: 'pending_approval'
       },
       select: {
-        labourHours: true,
         totalLabourSubmitted: true,
         totalPlantSubmitted: true
       }
@@ -772,7 +770,7 @@ dashboardRouter.get('/foreman', async (req, res) => {
 
     const docketStats = {
       count: pendingDockets.length,
-      totalLabourHours: pendingDockets.reduce((sum, d) => sum + Number(d.totalLabourSubmitted || d.labourHours || 0), 0),
+      totalLabourHours: pendingDockets.reduce((sum, d) => sum + Number(d.totalLabourSubmitted || 0), 0),
       totalPlantHours: pendingDockets.reduce((sum, d) => sum + Number(d.totalPlantSubmitted || 0), 0)
     }
 
@@ -796,21 +794,17 @@ dashboardRouter.get('/foreman', async (req, res) => {
     const itpsDueToday = await prisma.iTPChecklistItem.findMany({
       where: {
         template: {
-          instances: {
+          itpInstances: {
             some: {
               lot: { projectId }
             }
           }
-        },
-        scheduledDate: {
-          gte: today,
-          lt: tomorrow
         }
       },
       include: {
         template: {
           include: {
-            instances: {
+            itpInstances: {
               where: {
                 lot: { projectId }
               },
@@ -837,7 +831,7 @@ dashboardRouter.get('/foreman', async (req, res) => {
         id: item.id,
         type: 'ITP',
         description: item.description,
-        lotNumber: item.template?.instances?.[0]?.lot?.lotNumber || 'Unknown',
+        lotNumber: item.template?.itpInstances?.[0]?.lot?.lotNumber || 'Unknown',
         link: `/projects/${projectId}/itp`
       }))
     ]

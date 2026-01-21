@@ -1,10 +1,9 @@
 // Feature #776: Privacy Consent Tracking
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma.js'
 import { z } from 'zod'
 
 const router = Router()
-const prisma = new PrismaClient()
 
 // Consent types supported
 const CONSENT_TYPES = [

@@ -7,7 +7,7 @@ interface Lot {
   lotNumber: string
   description: string | null
   status: string
-  activityType: string | null
+  activityType?: string | null
   chainageStart: number | null
   chainageEnd: number | null
   layer: string | null
@@ -68,7 +68,9 @@ const getActivityColor = (activityType: string | null) => {
   return colors[activityType || ''] || '#9ca3af'
 }
 
-export function LinearMapView({ lots, onLotClick, statusColors, areas = [] }: LinearMapViewProps) {
+export function LinearMapView({ lots, onLotClick, statusColors: _statusColors, areas = [] }: LinearMapViewProps) {
+  // Note: _statusColors is received from props but we use the local getStatusColor function instead
+  void _statusColors
   const [zoomLevel, setZoomLevel] = useState(1)
   const [panOffset, setPanOffset] = useState(0)
 
@@ -93,11 +95,11 @@ export function LinearMapView({ lots, onLotClick, statusColors, areas = [] }: Li
   }, [popup])
 
   // Calculate chainage range and scale
-  const { minChainage, maxChainage, totalRange, layers, lotsWithChainage } = useMemo(() => {
+  const { minChainage, maxChainage, totalRange, layers } = useMemo(() => {
     const lotsWithCh = lots.filter(l => l.chainageStart !== null || l.chainageEnd !== null)
 
     if (lotsWithCh.length === 0) {
-      return { minChainage: 0, maxChainage: 1000, totalRange: 1000, layers: [], lotsWithChainage: [] }
+      return { minChainage: 0, maxChainage: 1000, totalRange: 1000, layers: [] }
     }
 
     const chainageValues = lotsWithCh.flatMap(l => [l.chainageStart, l.chainageEnd].filter(v => v !== null) as number[])
@@ -119,8 +121,7 @@ export function LinearMapView({ lots, onLotClick, statusColors, areas = [] }: Li
       minChainage: min,
       maxChainage: max,
       totalRange: range,
-      layers: Array.from(layerMap.entries()).sort((a, b) => a[0].localeCompare(b[0])),
-      lotsWithChainage: lotsWithCh
+      layers: Array.from(layerMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
     }
   }, [lots])
 
@@ -279,7 +280,7 @@ export function LinearMapView({ lots, onLotClick, statusColors, areas = [] }: Li
 
         {/* Layers (Rows) */}
         <div className="relative" data-testid="layer-rows">
-          {layers.map(([layerName, layerLots], layerIdx) => (
+          {layers.map(([layerName, layerLots]) => (
             <div
               key={layerName}
               className="flex border-b last:border-b-0"

@@ -42,6 +42,38 @@ const avatarUpload = multer({
 // Current ToS version - update when ToS changes
 const CURRENT_TOS_VERSION = '1.0'
 
+// Password validation schema
+const PASSWORD_MIN_LENGTH = 12
+const PASSWORD_REQUIREMENTS = {
+  minLength: PASSWORD_MIN_LENGTH,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumber: true,
+  requireSpecial: true,
+}
+
+function validatePassword(password: string): { valid: boolean; errors: string[] } {
+  const errors: string[] = []
+
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    errors.push(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+  }
+  if (PASSWORD_REQUIREMENTS.requireUppercase && !/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter')
+  }
+  if (PASSWORD_REQUIREMENTS.requireLowercase && !/[a-z]/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter')
+  }
+  if (PASSWORD_REQUIREMENTS.requireNumber && !/[0-9]/.test(password)) {
+    errors.push('Password must contain at least one number')
+  }
+  if (PASSWORD_REQUIREMENTS.requireSpecial && !/[^A-Za-z0-9]/.test(password)) {
+    errors.push('Password must contain at least one special character')
+  }
+
+  return { valid: errors.length === 0, errors }
+}
+
 // POST /api/auth/register
 authRouter.post('/register', async (req, res) => {
   try {
@@ -49,6 +81,15 @@ authRouter.post('/register', async (req, res) => {
 
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' })
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password)
+    if (!passwordValidation.valid) {
+      return res.status(400).json({
+        message: 'Password does not meet security requirements',
+        errors: passwordValidation.errors
+      })
     }
 
     // Require ToS acceptance
@@ -86,14 +127,9 @@ authRouter.post('/register', async (req, res) => {
       },
     })
 
-    // Record ToS acceptance using raw SQL (to avoid Prisma client regeneration issues)
+    // Record ToS acceptance using parameterized query
     const tosAcceptedAt = new Date().toISOString()
-    await prisma.$executeRawUnsafe(
-      `UPDATE users SET tos_accepted_at = ?, tos_version = ? WHERE id = ?`,
-      tosAcceptedAt,
-      CURRENT_TOS_VERSION,
-      user.id
-    )
+    await prisma.$executeRaw`UPDATE users SET tos_accepted_at = ${tosAcceptedAt}, tos_version = ${CURRENT_TOS_VERSION} WHERE id = ${user.id}`
 
     // Generate email verification token
     const crypto = await import('crypto')
@@ -439,11 +475,7 @@ authRouter.post('/logout-all-devices', async (req, res) => {
 
     // Update the token_invalidated_at timestamp to invalidate all existing tokens
     const now = new Date().toISOString()
-    await prisma.$executeRawUnsafe(
-      `UPDATE users SET token_invalidated_at = ? WHERE id = ?`,
-      now,
-      user.userId
-    )
+    await prisma.$executeRaw`UPDATE users SET token_invalidated_at = ${now} WHERE id = ${user.userId}`
 
     console.log(`User ${user.email} logged out from all devices at ${now}`)
 
@@ -1362,7 +1394,7 @@ authRouter.delete('/delete-account', async (req, res) => {
     await prisma.auditLog.create({
       data: {
         entityType: 'user',
-        entityId: userId,
+        entityId: user.id,
         action: 'account_deletion_requested',
         changes: JSON.stringify({
           email: user.email,

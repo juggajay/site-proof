@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useAuth, getAuthToken } from '../../lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check, Printer, Download } from 'lucide-react'
+import { Link2, Check, Printer } from 'lucide-react'
 import { generateNCRDetailPDF, NCRDetailData } from '../../lib/pdfGenerator'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
@@ -39,8 +39,7 @@ interface UserRole {
 
 export function NCRPage() {
   const { projectId } = useParams()
-  const navigate = useNavigate()
-  const { user } = useAuth()
+  useAuth() // Auth context needed but user variable not directly used
   const token = getAuthToken()
   const [ncrs, setNcrs] = useState<NCR[]>([])
   const [loading, setLoading] = useState(true)
@@ -649,7 +648,7 @@ export function NCRPage() {
         throw new Error(data.message || 'Failed to notify client')
       }
 
-      const data = await response.json()
+      await response.json() // Consume response body
       toast({
         title: 'Client Notified',
         description: `Client notification sent for ${notifyingNcr.ncrNumber}`,
@@ -730,12 +729,6 @@ export function NCRPage() {
       default:
         return 'bg-gray-100 text-gray-800'
     }
-  }
-
-  const getSeverityBadgeColor = (severity: string) => {
-    return severity === 'major'
-      ? 'bg-red-500 text-white font-bold'
-      : 'bg-yellow-100 text-yellow-800'
   }
 
   // Export NCRs to CSV
@@ -1077,7 +1070,7 @@ export function NCRPage() {
                             toast({
                               title: 'Error',
                               description: 'Failed to generate NCR PDF',
-                              variant: 'destructive',
+                              variant: 'error',
                             })
                           }
                         }}

@@ -39,7 +39,8 @@ interface FilterState {
 
 export function AuditLogPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { formatDate } = useDateFormat()
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { formatDate: _formatDate } = useDateFormat()
 
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(true)

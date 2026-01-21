@@ -1,8 +1,22 @@
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
+import bcrypt from 'bcryptjs'
 import { prisma } from './prisma.js'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production'
+// JWT_SECRET is required - no fallback for security
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  // Allow dev-secret only in development mode
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn('[AUTH] WARNING: JWT_SECRET not set, using development fallback. DO NOT use in production!')
+  } else {
+    throw new Error('FATAL: JWT_SECRET environment variable is required in production')
+  }
+}
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-secret-change-in-production'
+
+// Bcrypt configuration
+const BCRYPT_ROUNDS = 12
 
 interface TokenPayload {
   userId: string
@@ -25,14 +39,10 @@ export interface AuthUser {
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
-  console.log('[AUTH DEBUG] verifyToken called')
   try {
-    console.log('[AUTH DEBUG] Verifying JWT...')
-    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload
-    console.log('[AUTH DEBUG] JWT verified, userId:', payload.userId)
+    const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET) as TokenPayload
 
-    // Get user from database
-    console.log('[AUTH DEBUG] Querying user from database...')
+    // Get user from database, including token_invalidated_at for session invalidation check
     const userResult = await prisma.$queryRaw<Array<{
       id: string
       email: string
@@ -42,7 +52,8 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       company_id: string | null
       created_at: Date
       avatar_url: string | null
-    }>>`SELECT id, email, full_name, phone, role_in_company, company_id, created_at, avatar_url FROM users WHERE id = ${payload.userId}`
+      token_invalidated_at: Date | null
+    }>>`SELECT id, email, full_name, phone, role_in_company, company_id, created_at, avatar_url, token_invalidated_at FROM users WHERE id = ${payload.userId}`
 
     const user = userResult[0]
 
@@ -50,7 +61,15 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       return null
     }
 
-    console.log('[AUTH DEBUG] User found, returning auth user')
+    // Check if token was issued before user invalidated all tokens (logout-all-devices)
+    if (user.token_invalidated_at && payload.iat) {
+      const tokenIssuedAt = payload.iat * 1000 // JWT iat is in seconds, convert to ms
+      if (tokenIssuedAt < user.token_invalidated_at.getTime()) {
+        // Token was issued before invalidation - reject it
+        return null
+      }
+    }
+
     return {
       id: user.id,
       userId: user.id,
@@ -63,31 +82,60 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       createdAt: user.created_at,
       avatarUrl: user.avatar_url,
     }
-  } catch (error) {
-    console.log('[AUTH DEBUG] Error in verifyToken:', error)
+  } catch {
     return null
   }
 }
 
 export function generateToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' })
+  return jwt.sign(payload, EFFECTIVE_JWT_SECRET, { expiresIn: '24h' })
 }
 
 // For testing: generate an already-expired token
 export function generateExpiredToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '-1h' }) // Already expired
+  return jwt.sign(payload, EFFECTIVE_JWT_SECRET, { expiresIn: '-1h' }) // Already expired
 }
 
 export function generateRefreshToken(userId: string): string {
-  return jwt.sign({ userId, type: 'refresh' }, JWT_SECRET, { expiresIn: '7d' })
+  return jwt.sign({ userId, type: 'refresh' }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' })
 }
 
-// Simple password hashing for development (use bcrypt in production)
+/**
+ * Hash a password using bcrypt
+ * Uses 12 rounds of salting for security
+ */
 export function hashPassword(password: string): string {
-  // In production, use bcrypt. This is a simple hash for dev.
-  return crypto.createHash('sha256').update(password + JWT_SECRET).digest('hex')
+  return bcrypt.hashSync(password, BCRYPT_ROUNDS)
 }
 
+/**
+ * Verify a password against a hash
+ * Supports both bcrypt hashes (new) and legacy SHA256 hashes (migration period)
+ */
 export function verifyPassword(password: string, hash: string): boolean {
-  return hashPassword(password) === hash
+  // Check if hash is bcrypt format (starts with $2a$, $2b$, or $2y$)
+  if (hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')) {
+    return bcrypt.compareSync(password, hash)
+  }
+
+  // Legacy SHA256 hash support (for migration period)
+  // SHA256 hashes are 64 character hex strings
+  if (hash.length === 64 && /^[a-f0-9]+$/i.test(hash)) {
+    const sha256Hash = crypto.createHash('sha256').update(password + EFFECTIVE_JWT_SECRET).digest('hex')
+    if (sha256Hash === hash) {
+      // Log that this user needs password rehash (for monitoring migration progress)
+      console.log('[AUTH] Legacy SHA256 hash verified - user should be prompted to update password')
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Check if a password hash needs to be upgraded to bcrypt
+ */
+export function needsPasswordRehash(hash: string): boolean {
+  // SHA256 hashes need upgrading
+  return hash.length === 64 && /^[a-f0-9]+$/i.test(hash)
 }

@@ -2,8 +2,8 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import type { ReactNode } from 'react'
 
-// Role hierarchy - higher roles include lower role permissions
-const ROLE_HIERARCHY: Record<string, number> = {
+// Role hierarchy - higher roles include lower role permissions (reserved for future use)
+export const ROLE_HIERARCHY: Record<string, number> = {
   owner: 100,
   admin: 90,
   project_manager: 80,
@@ -23,7 +23,7 @@ interface RoleProtectedRouteProps {
 export function RoleProtectedRoute({
   children,
   allowedRoles,
-  redirectTo = '/dashboard'
+  redirectTo: _redirectTo = '/dashboard'
 }: RoleProtectedRouteProps) {
   const { user, loading } = useAuth()
   const location = useLocation()

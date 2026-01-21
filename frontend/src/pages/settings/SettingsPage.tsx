@@ -17,7 +17,7 @@ export function SettingsPage() {
   const { user, signOut } = useAuth()
   const { theme, setTheme, resolvedTheme } = useTheme()
   const { dateFormat, setDateFormat, formatDate } = useDateFormat()
-  const { timezone, setTimezone, formatTime, formatDateTime } = useTimezone()
+  const { timezone, setTimezone, formatTime } = useTimezone()
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [exportSuccess, setExportSuccess] = useState(false)
@@ -90,9 +90,6 @@ export function SettingsPage() {
     { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY', example: '12/31/2024' },
     { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD', example: '2024-12-31' },
   ]
-
-  // Get current timezone label
-  const currentTimezoneInfo = TIMEZONES.find(tz => tz.value === timezone)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
 

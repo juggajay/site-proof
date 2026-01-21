@@ -97,15 +97,101 @@ function setRateLimitHeaders(res: Response, remaining: number, resetSeconds: num
 
 /**
  * Stricter rate limiter for auth endpoints
- * Prevents brute force attacks
+ * Prevents brute force attacks with exponential backoff
  */
 const authRateLimitStore = new Map<string, RateLimitEntry>()
 const AUTH_WINDOW_MS = 60 * 1000 // 1 minute
-const AUTH_MAX_REQUESTS = 100 // Max login attempts per minute (increased for dev/testing)
+// Production-safe rate limit: 10 auth attempts per minute
+const AUTH_MAX_REQUESTS = process.env.NODE_ENV === 'production' ? 10 : 50
+
+// Account lockout tracking
+interface LockoutEntry {
+  failedAttempts: number
+  lockedUntil: number | null
+  lastAttemptTime: number
+}
+const lockoutStore = new Map<string, LockoutEntry>()
+const LOCKOUT_THRESHOLD = 5 // Lock after 5 failed attempts
+const LOCKOUT_DURATION = 15 * 60 * 1000 // 15 minute lockout
+
+// Cleanup lockout entries every 30 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of lockoutStore.entries()) {
+    // Remove entries that haven't been accessed in 1 hour
+    if (now - entry.lastAttemptTime > 60 * 60 * 1000) {
+      lockoutStore.delete(key)
+    }
+  }
+}, 30 * 60 * 1000)
+
+/**
+ * Check if an IP is currently locked out
+ */
+export function isLockedOut(ip: string): { locked: boolean; remainingSeconds: number } {
+  const entry = lockoutStore.get(ip)
+  if (!entry || !entry.lockedUntil) {
+    return { locked: false, remainingSeconds: 0 }
+  }
+
+  const now = Date.now()
+  if (now < entry.lockedUntil) {
+    return {
+      locked: true,
+      remainingSeconds: Math.ceil((entry.lockedUntil - now) / 1000)
+    }
+  }
+
+  // Lockout expired, reset
+  entry.lockedUntil = null
+  entry.failedAttempts = 0
+  return { locked: false, remainingSeconds: 0 }
+}
+
+/**
+ * Record a failed auth attempt (call this from auth routes on failed login)
+ */
+export function recordFailedAuthAttempt(ip: string): void {
+  const now = Date.now()
+  let entry = lockoutStore.get(ip)
+
+  if (!entry) {
+    entry = { failedAttempts: 1, lockedUntil: null, lastAttemptTime: now }
+    lockoutStore.set(ip, entry)
+    return
+  }
+
+  entry.failedAttempts++
+  entry.lastAttemptTime = now
+
+  // Apply lockout if threshold exceeded
+  if (entry.failedAttempts >= LOCKOUT_THRESHOLD) {
+    entry.lockedUntil = now + LOCKOUT_DURATION
+    console.log(`[SECURITY] IP ${ip} locked out for ${LOCKOUT_DURATION / 60000} minutes after ${entry.failedAttempts} failed attempts`)
+  }
+}
+
+/**
+ * Clear failed attempts on successful login
+ */
+export function clearFailedAuthAttempts(ip: string): void {
+  lockoutStore.delete(ip)
+}
 
 export function authRateLimiter(req: Request, res: Response, next: NextFunction) {
   const clientIp = getClientIp(req)
   const now = Date.now()
+
+  // Check for account lockout first
+  const lockout = isLockedOut(clientIp)
+  if (lockout.locked) {
+    return res.status(429).json({
+      error: 'Account Temporarily Locked',
+      message: `Too many failed attempts. Please try again in ${Math.ceil(lockout.remainingSeconds / 60)} minutes.`,
+      retryAfter: lockout.remainingSeconds,
+      locked: true
+    })
+  }
 
   let entry = authRateLimitStore.get(clientIp)
 

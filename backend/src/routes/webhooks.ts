@@ -1,10 +1,8 @@
 // Feature #746: Webhook external integration
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import crypto from 'crypto'
 
-const prisma = new PrismaClient()
 const router = Router()
 
 // In-memory store for webhook configurations and delivery logs (for testing/dev)
@@ -113,7 +111,7 @@ router.get('/test-receiver/logs', (req: Request, res: Response) => {
 })
 
 // Clear test logs
-router.delete('/test-receiver/logs', (req: Request, res: Response) => {
+router.delete('/test-receiver/logs', (_req: Request, res: Response) => {
   testWebhookReceived.length = 0
   res.json({ message: 'Test webhook logs cleared' })
 })

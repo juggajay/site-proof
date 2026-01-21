@@ -1,15 +1,12 @@
 // Feature #248: Documents API routes
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
-import { z } from 'zod'
+import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import exifr from 'exifr'
 import crypto from 'crypto'
-
-const prisma = new PrismaClient()
 
 // Feature #741: Signed URL system for secure file downloads
 // Store signed URL tokens with expiration times
@@ -243,10 +240,10 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     cb(null, uploadDir)
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
     cb(null, uniqueSuffix + '-' + file.originalname)
   }
@@ -255,7 +252,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     // Accept common document and image types
     const allowedTypes = [
       'application/pdf',
@@ -296,16 +293,6 @@ async function checkProjectAccess(userId: string, projectId: string): Promise<bo
   })
   return !!projectUser
 }
-
-// Schemas
-const createDocumentSchema = z.object({
-  projectId: z.string(),
-  lotId: z.string().optional(),
-  documentType: z.string().min(1),
-  category: z.string().optional(),
-  caption: z.string().optional(),
-  tags: z.string().optional(),
-})
 
 // GET /api/documents/:projectId - List documents for a project
 router.get('/:projectId', async (req: Request, res: Response) => {
@@ -475,7 +462,7 @@ router.post('/:documentId/version', upload.single('file'), async (req: Request, 
 
     // Find the root document (first version)
     let rootDocumentId = originalDocument.id
-    let currentVersion = originalDocument.version
+    // Note: currentVersion is tracked via allVersions query below
     if (originalDocument.parentDocumentId) {
       // This is already a version, find the root
       const rootDocument = await prisma.document.findUnique({
@@ -917,13 +904,6 @@ Respond with ONLY the category lines, nothing else.`
     res.status(500).json({ error: 'Failed to classify photo' })
   }
 })
-
-// Helper function to simulate AI classification based on filename/caption keywords
-// Feature #729: Returns multiple classifications for multi-label support
-function simulateClassification(filename: string, caption: string | null): string {
-  const results = simulateMultiLabelClassification(filename, caption)
-  return results.length > 0 ? results[0].label : 'General Progress'
-}
 
 // Feature #729: Multi-label classification based on keywords
 function simulateMultiLabelClassification(

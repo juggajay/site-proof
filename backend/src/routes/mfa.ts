@@ -3,28 +3,12 @@
 
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
-import { verifyToken, verifyPassword } from '../lib/auth.js'
+import { verifyPassword } from '../lib/auth.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
 import { generateSecret, verify as verifyOtp, generateURI } from 'otplib'
 import QRCode from 'qrcode'
 
 export const mfaRouter = Router()
-
-// Middleware to verify auth token
-const requireAuth = async (req: any, res: any, next: any) => {
-  const authHeader = req.headers.authorization
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Authentication required' })
-  }
-
-  const token = authHeader.slice(7)
-  const user = await verifyToken(token)
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid or expired token' })
-  }
-
-  req.user = user
-  next()
-}
 
 // GET /api/mfa/status - Get current MFA status for user
 mfaRouter.get('/status', requireAuth, async (req: any, res) => {
@@ -190,10 +174,11 @@ mfaRouter.post('/disable', requireAuth, async (req: any, res) => {
     }
 
     if (!verified && code && user.two_factor_secret) {
-      verified = await verifyOtp({
+      const verifyResult = await verifyOtp({
         token: code,
         secret: user.two_factor_secret,
       })
+      verified = typeof verifyResult === 'boolean' ? verifyResult : verifyResult.valid
     }
 
     if (!verified) {

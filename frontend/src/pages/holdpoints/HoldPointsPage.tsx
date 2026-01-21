@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check, FileText, Download, Eye, X, RefreshCw, ClipboardCheck, AlertTriangle } from 'lucide-react'
+import { Link2, Check, Download, Eye, X, RefreshCw, ClipboardCheck, AlertTriangle } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { SignaturePad } from '@/components/ui/SignaturePad'
 
 interface HoldPoint {
@@ -65,8 +65,8 @@ export function HoldPointsPage() {
       requiresOverride?: boolean;
     };
   } | null>(null)
-  const [noticePeriodOverride, setNoticePeriodOverride] = useState(false)
-  const [noticePeriodOverrideReason, setNoticePeriodOverrideReason] = useState('')
+  const [_noticePeriodOverride, setNoticePeriodOverride] = useState(false)
+  const [_noticePeriodOverrideReason, setNoticePeriodOverrideReason] = useState('')
   const [copiedHpId, setCopiedHpId] = useState<string | null>(null)
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null)
   const [chasingHpId, setChasingHpId] = useState<string | null>(null)
@@ -104,7 +104,7 @@ export function HoldPointsPage() {
         toast({
           title: 'Error',
           description: 'Failed to generate evidence package PDF',
-          variant: 'destructive',
+          variant: 'error',
         })
       } finally {
         setGeneratingPdf(null)
@@ -113,7 +113,7 @@ export function HoldPointsPage() {
   }
 
   // Copy HP link handler
-  const handleCopyHpLink = async (hpId: string, lotNumber: string, description: string) => {
+  const handleCopyHpLink = async (hpId: string, lotNumber: string, _description: string) => {
     const url = `${window.location.origin}/projects/${projectId}/holdpoints?hp=${hpId}`
     try {
       await navigator.clipboard.writeText(url)
@@ -149,8 +149,8 @@ export function HoldPointsPage() {
   const handleSubmitRecordRelease = async (
     releasedByName: string,
     releasedByOrg: string,
-    releaseDate: string,
-    releaseTime: string,
+    _releaseDate: string,
+    _releaseTime: string,
     releaseNotes: string,
     releaseMethod: string = 'digital',
     signatureDataUrl: string | null = null
@@ -201,7 +201,7 @@ export function HoldPointsPage() {
       toast({
         title: 'Error',
         description: 'Failed to record hold point release',
-        variant: 'destructive',
+        variant: 'error',
       })
     } finally {
       setRecordingRelease(false)
@@ -246,7 +246,7 @@ export function HoldPointsPage() {
       toast({
         title: 'Error',
         description: 'Failed to send chase notification',
-        variant: 'destructive',
+        variant: 'error',
       })
     } finally {
       setChasingHpId(null)
@@ -868,7 +868,7 @@ function RequestReleaseModal({
       toast({
         title: 'Override reason required',
         description: 'Please provide a reason for overriding the notice period',
-        variant: 'destructive',
+        variant: 'error',
       })
       return
     }
@@ -902,7 +902,7 @@ function RequestReleaseModal({
       toast({
         title: 'Error',
         description: 'Failed to load evidence package preview',
-        variant: 'destructive',
+        variant: 'error',
       })
     } finally {
       setLoadingPreview(false)
@@ -1392,7 +1392,7 @@ function RecordReleaseModal({
       toast({
         title: 'Name required',
         description: 'Please enter the name of the person releasing the hold point',
-        variant: 'destructive',
+        variant: 'error',
       })
       return
     }
@@ -1401,7 +1401,7 @@ function RecordReleaseModal({
       toast({
         title: 'Signature required',
         description: 'Please provide your signature to release the hold point',
-        variant: 'destructive',
+        variant: 'error',
       })
       return
     }

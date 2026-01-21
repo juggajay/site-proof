@@ -118,7 +118,7 @@ auditLogRouter.get('/', async (req, res) => {
 })
 
 // GET /api/audit-logs/actions - Get list of distinct actions for filtering
-auditLogRouter.get('/actions', async (req, res) => {
+auditLogRouter.get('/actions', async (_req, res) => {
   try {
     const actions = await prisma.auditLog.findMany({
       select: { action: true },
@@ -136,7 +136,7 @@ auditLogRouter.get('/actions', async (req, res) => {
 })
 
 // GET /api/audit-logs/entity-types - Get list of distinct entity types for filtering
-auditLogRouter.get('/entity-types', async (req, res) => {
+auditLogRouter.get('/entity-types', async (_req, res) => {
   try {
     const entityTypes = await prisma.auditLog.findMany({
       select: { entityType: true },
@@ -154,7 +154,7 @@ auditLogRouter.get('/entity-types', async (req, res) => {
 })
 
 // GET /api/audit-logs/users - Get list of users who have audit log entries
-auditLogRouter.get('/users', async (req, res) => {
+auditLogRouter.get('/users', async (_req, res) => {
   try {
     const usersWithLogs = await prisma.auditLog.findMany({
       select: {

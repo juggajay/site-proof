@@ -175,16 +175,14 @@ docketsRouter.post('/', async (req, res) => {
 docketsRouter.get('/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const user = req.user!
+    // Note: user is available from requireAuth middleware but not used in this endpoint
+    // const user = req.user!
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
       include: {
         subcontractorCompany: {
           select: { id: true, companyName: true }
-        },
-        project: {
-          select: { id: true, name: true }
         },
         labourEntries: {
           include: {
@@ -200,9 +198,7 @@ docketsRouter.get('/:id', async (req, res) => {
             plant: { select: { id: true, type: true, description: true, idRego: true, dryRate: true, wetRate: true } }
           },
           orderBy: { hoursOperated: 'desc' }
-        },
-        submittedBy: { select: { id: true, fullName: true, email: true } },
-        approvedBy: { select: { id: true, fullName: true, email: true } }
+        }
       }
     })
 
@@ -219,45 +215,53 @@ docketsRouter.get('/:id', async (req, res) => {
         projectId: docket.projectId,
         date: docket.date
       },
-      select: {
-        id: true,
-        date: true,
-        status: true,
-        sitePersonnel: true,
-        equipmentOnSite: true,
-        weatherConditions: true,
-        weatherHoursLost: true,
-        workPerformed: true
+      include: {
+        personnel: {
+          select: { id: true, name: true, company: true, role: true }
+        },
+        plant: {
+          select: { id: true, description: true, idRego: true }
+        },
+        activities: {
+          select: { id: true, description: true, lotId: true }
+        },
+        delays: {
+          select: { id: true, delayType: true, durationHours: true, description: true }
+        }
       }
     })
 
     if (diary) {
+      // Calculate weather hours lost from delays
+      const weatherDelays = diary.delays.filter((d) => d.delayType === 'weather')
+      const weatherHoursLost = weatherDelays.reduce((sum, d) => sum + (Number(d.durationHours) || 0), 0)
+
       foremanDiary = {
         id: diary.id,
         date: diary.date.toISOString().split('T')[0],
         status: diary.status,
-        sitePersonnel: diary.sitePersonnel,
-        equipmentOnSite: diary.equipmentOnSite,
+        personnelCount: diary.personnel.length,
+        plantCount: diary.plant.length,
         weatherConditions: diary.weatherConditions,
-        weatherHoursLost: Number(diary.weatherHoursLost) || 0,
-        workPerformed: diary.workPerformed
+        weatherHoursLost,
+        activitiesCount: diary.activities.length
       }
 
       // Feature #265 Step 4 - Highlight discrepancies
       const docketPersonnelCount = docket.labourEntries.length
-      const diaryPersonnel = diary.sitePersonnel || ''
-      if (docketPersonnelCount > 0 && !diaryPersonnel.includes(String(docketPersonnelCount))) {
-        discrepancies.push(`Personnel count may differ: docket has ${docketPersonnelCount} entries`)
+      const diaryPersonnelCount = diary.personnel.length
+      if (docketPersonnelCount > 0 && diaryPersonnelCount !== docketPersonnelCount) {
+        discrepancies.push(`Personnel count may differ: docket has ${docketPersonnelCount} entries, diary has ${diaryPersonnelCount}`)
       }
 
       const docketPlantCount = docket.plantEntries.length
-      const diaryEquipment = diary.equipmentOnSite || ''
-      if (docketPlantCount > 0 && !diaryEquipment.includes(String(docketPlantCount))) {
-        discrepancies.push(`Plant/equipment count may differ: docket has ${docketPlantCount} entries`)
+      const diaryPlantCount = diary.plant.length
+      if (docketPlantCount > 0 && diaryPlantCount !== docketPlantCount) {
+        discrepancies.push(`Plant/equipment count may differ: docket has ${docketPlantCount} entries, diary has ${diaryPlantCount}`)
       }
 
-      if (diary.weatherHoursLost && Number(diary.weatherHoursLost) > 0) {
-        discrepancies.push(`Weather hours lost noted in diary: ${diary.weatherHoursLost} hours`)
+      if (weatherHoursLost > 0) {
+        discrepancies.push(`Weather hours lost noted in diary: ${weatherHoursLost} hours`)
       }
     }
 
@@ -302,21 +306,45 @@ docketsRouter.get('/:id', async (req, res) => {
       approvedCost: Number(entry.approvedCost) || 0
     }))
 
+    // Fetch project info separately since it's not a relation on DailyDocket
+    const project = await prisma.project.findUnique({
+      where: { id: docket.projectId },
+      select: { id: true, name: true }
+    })
+
+    // Fetch submittedBy and approvedBy user info separately
+    const submittedBy = docket.submittedById
+      ? await prisma.user.findUnique({
+          where: { id: docket.submittedById },
+          select: { id: true, fullName: true, email: true }
+        })
+      : null
+
+    const approvedBy = docket.approvedById
+      ? await prisma.user.findUnique({
+          where: { id: docket.approvedById },
+          select: { id: true, fullName: true, email: true }
+        })
+      : null
+
     res.json({
       docket: {
         id: docket.id,
         docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
         date: docket.date.toISOString().split('T')[0],
         status: docket.status,
-        project: docket.project,
+        projectId: docket.projectId,
+        project,
         subcontractor: docket.subcontractorCompany,
         notes: docket.notes,
         foremanNotes: docket.foremanNotes,
-        rejectionReason: docket.rejectionReason,
+        adjustmentReason: docket.adjustmentReason,
         submittedAt: docket.submittedAt,
-        submittedBy: docket.submittedBy,
+        submittedById: docket.submittedById,
+        submittedBy,
         approvedAt: docket.approvedAt,
-        approvedBy: docket.approvedBy,
+        approvedById: docket.approvedById,
+        approvedBy,
         totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
         totalLabourApproved: Number(docket.totalLabourApproved) || 0,
         totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
@@ -897,7 +925,6 @@ docketsRouter.post('/:id/respond', async (req, res) => {
 
     // Update status back to pending_approval and append response to notes
     const existingNotes = docket.notes || ''
-    const existingForemanNotes = docket.foremanNotes || ''
     const newNotes = existingNotes
       ? `${existingNotes}\n\n--- Response to Query ---\n${response}`
       : `--- Response to Query ---\n${response}`

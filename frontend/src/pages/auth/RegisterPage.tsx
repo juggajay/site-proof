@@ -1,6 +1,6 @@
 // Feature #443: React Hook Form with Zod validation
 import { useState, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -38,14 +38,13 @@ export function RegisterPage() {
   const [registrationSuccess, setRegistrationSuccess] = useState(false)
   const [registeredEmail, setRegisteredEmail] = useState('')
   const { signUp } = useAuth()
-  const navigate = useNavigate()
 
   // React Hook Form with Zod resolver
   const {
     register,
     handleSubmit,
     watch,
-    formState: { errors, touchedFields }
+    formState: { errors }
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     mode: 'onBlur', // Validate on blur
@@ -69,11 +68,6 @@ export function RegisterPage() {
     hasLowercase: /[a-z]/.test(password),
     hasNumber: /[0-9]/.test(password),
   }), [password])
-
-  const isPasswordValid = passwordValidation.minLength &&
-    passwordValidation.hasUppercase &&
-    passwordValidation.hasLowercase &&
-    passwordValidation.hasNumber
 
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true)

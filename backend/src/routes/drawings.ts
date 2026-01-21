@@ -1,13 +1,11 @@
 // Feature #250: Drawing Register API routes
 import { Router, Request, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
-import { z } from 'zod'
+import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 
-const prisma = new PrismaClient()
 const router = Router()
 
 // Apply auth middleware
@@ -20,10 +18,10 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     cb(null, uploadDir)
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
     cb(null, uniqueSuffix + '-' + file.originalname)
   }
@@ -32,7 +30,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit for drawings
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     // Accept common drawing types
     const allowedTypes = [
       'application/pdf',

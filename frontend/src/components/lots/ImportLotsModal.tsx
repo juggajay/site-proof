@@ -36,7 +36,7 @@ interface ValidationResult {
 export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsModalProps) {
   const [step, setStep] = useState<'upload' | 'validation' | 'importing'>('upload')
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
-  const [importing, setImporting] = useState(false)
+  const [, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState(0)
   const [strictMode, setStrictMode] = useState(true) // Default to strict mode for atomicity
   const fileInputRef = useRef<HTMLInputElement>(null)

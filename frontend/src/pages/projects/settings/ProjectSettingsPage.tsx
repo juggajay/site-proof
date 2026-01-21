@@ -54,7 +54,7 @@ export function ProjectSettingsPage() {
 
   // Check if user can view contract value (admins, owners, project managers)
   // Note: user.role is the company role stored in auth context
-  const canViewContractValue = user && ['admin', 'owner', 'project_manager'].includes(user.role || user.roleInCompany || '')
+  const canViewContractValue = user && ['admin', 'owner', 'project_manager'].includes(user.role || (user as any)?.roleInCompany || '')
 
   // Get active tab from URL or default to 'general'
   const activeTab = (searchParams.get('tab') as SettingsTab) || 'general'

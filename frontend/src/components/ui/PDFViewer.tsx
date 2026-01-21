@@ -15,7 +15,7 @@ interface PDFViewerProps {
   className?: string
 }
 
-export function PDFViewer({ url, filename, onClose, className = '' }: PDFViewerProps) {
+export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number | null>(null)
   const [pageNumber, setPageNumber] = useState(1)
   const [scale, setScale] = useState(1.0)

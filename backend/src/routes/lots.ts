@@ -359,7 +359,7 @@ lotsRouter.post('/', async (req, res) => {
     // If an ITP template is specified, create an ITP instance for the lot
     if (itpTemplateId) {
       try {
-        await prisma.itpInstance.create({
+        await prisma.iTPInstance.create({
           data: {
             lotId: lot.id,
             templateId: itpTemplateId,
@@ -488,8 +488,8 @@ lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), async (req, res) => {
       // Suggest next section starting from where the original ended
       suggestedChainageStart = sourceLot.chainageEnd
       if (sourceLot.chainageStart !== null) {
-        const sectionLength = sourceLot.chainageEnd - sourceLot.chainageStart
-        suggestedChainageEnd = suggestedChainageStart + sectionLength
+        const sectionLength = Number(sourceLot.chainageEnd) - Number(sourceLot.chainageStart)
+        suggestedChainageEnd = Number(suggestedChainageStart) + sectionLength
       }
     }
 

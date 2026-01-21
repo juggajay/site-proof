@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import {
-  FolderKanban,
   AlertTriangle,
   ClipboardCheck,
   DollarSign,
@@ -11,11 +10,8 @@ import {
   RefreshCw,
   ChevronRight,
   AlertCircle,
-  Clock,
-  CheckCircle2,
   FileText,
   BarChart3,
-  Users,
   Layers
 } from 'lucide-react'
 
@@ -107,7 +103,7 @@ interface PMDashboardData {
 }
 
 export function ProjectManagerDashboard() {
-  const { user } = useAuth()
+  useAuth() // Auth check
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)

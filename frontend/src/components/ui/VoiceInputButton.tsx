@@ -1,7 +1,7 @@
 // Feature #288: Voice input button component
 import { useState, useCallback } from 'react'
 import { useSpeechToText } from '../../lib/useSpeechToText'
-import { Mic, MicOff, Square, AlertCircle } from 'lucide-react'
+import { Mic, Square, AlertCircle } from 'lucide-react'
 
 interface VoiceInputButtonProps {
   onTranscript: (text: string) => void
@@ -16,15 +16,17 @@ export function VoiceInputButton({
   disabled = false,
   className = '',
   buttonClassName = '',
-  appendMode = true
+  appendMode: _appendMode = true
 }: VoiceInputButtonProps) {
+  // appendMode reserved for future use (append vs replace text behavior)
+  void _appendMode
   const [pendingText, setPendingText] = useState('')
   const [showPreview, setShowPreview] = useState(false)
 
   const {
     isListening,
     isSupported,
-    transcript,
+    transcript: _transcript,
     interimTranscript,
     error,
     startListening,
@@ -40,6 +42,8 @@ export function VoiceInputButton({
       }
     }
   })
+  // transcript available via clearTranscript, not used directly
+  void _transcript
 
   const handleToggle = useCallback(() => {
     if (isListening) {

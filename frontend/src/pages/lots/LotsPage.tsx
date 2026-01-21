@@ -68,7 +68,7 @@ interface Lot {
   lotNumber: string
   description: string | null
   status: string
-  activityType: string | null
+  activityType?: string | null
   chainageStart: number | null
   chainageEnd: number | null
   offset: string | null
@@ -77,6 +77,15 @@ interface Lot {
   budgetAmount?: number | null
   assignedSubcontractorId?: string | null
   assignedSubcontractor?: { companyName: string } | null
+  // Additional properties for expanded view
+  createdAt?: string | null
+  updatedAt?: string | null
+  itpCount?: number
+  testCount?: number
+  documentCount?: number
+  ncrCount?: number
+  holdPointCount?: number
+  notes?: string | null
 }
 
 // Feature #438: Okabe-Ito color-blind safe palette
@@ -451,7 +460,7 @@ export function LotsPage() {
   }, [columnOrder, visibleColumns])
 
   // Get filter, sort, and pagination from URL
-  const currentPage = parseInt(searchParams.get('page') || '1', 10)
+  // Note: currentPage is available via searchParams.get('page') if needed later
   const statusFilterParam = searchParams.get('status') || ''
   // Support comma-separated status filter for multi-select
   const statusFilters = statusFilterParam ? statusFilterParam.split(',').filter(Boolean) : []
@@ -682,9 +691,8 @@ export function LotsPage() {
     updateFilters({ search: query })
   }
 
-  const handlePageChange = (page: number) => {
-    updateFilters({ page: page.toString() })
-  }
+  // Note: handlePageChange removed - using infinite scroll instead
+  // Can be restored with: const handlePageChange = (page: number) => updateFilters({ page: page.toString() })
 
   const handleSort = (field: string) => {
     // If clicking the same field, toggle direction; otherwise sort ascending
@@ -1341,61 +1349,7 @@ export function LotsPage() {
     }
   }
 
-  // Export lots to CSV
-  const handleExportCSV = () => {
-    // Define CSV headers
-    const headers = ['Lot Number', 'Description', 'Chainage Start', 'Chainage End', 'Activity Type', 'Status']
-    if (canViewBudgets) {
-      headers.push('Budget')
-    }
-    if (!isSubcontractor) {
-      headers.push('Subcontractor')
-    }
-
-    // Convert lots to CSV rows
-    const rows = filteredLots.map((lot) => {
-      const row = [
-        lot.lotNumber,
-        lot.description || '',
-        lot.chainageStart?.toString() || '',
-        lot.chainageEnd?.toString() || '',
-        lot.activityType || '',
-        lot.status,
-      ]
-      if (canViewBudgets) {
-        row.push(lot.budgetAmount?.toString() || '')
-      }
-      if (!isSubcontractor) {
-        row.push(lot.assignedSubcontractor?.companyName || '')
-      }
-      return row
-    })
-
-    // Escape CSV values (handle commas, quotes, newlines)
-    const escapeCSV = (value: string) => {
-      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-        return `"${value.replace(/"/g, '""')}"`
-      }
-      return value
-    }
-
-    // Build CSV content
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row) => row.map(escapeCSV).join(','))
-    ].join('\n')
-
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `lot-register-${projectId}-${new Date().toISOString().split('T')[0]}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-  }
+  // Note: CSV export functionality moved to ExportLotsModal component
 
   // Handle bulk wizard success
   const handleBulkCreateSuccess = () => {

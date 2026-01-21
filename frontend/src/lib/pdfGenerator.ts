@@ -694,7 +694,7 @@ interface HPEvidencePackageData {
  * @param data - The HP evidence package data
  * @param options - Customization options (Feature #466)
  */
-export function generateHPEvidencePackagePDF(data: HPEvidencePackageData, options: HPPackageOptions = defaultHPPackageOptions): void {
+export function generateHPEvidencePackagePDF(data: HPEvidencePackageData, _options: HPPackageOptions = defaultHPPackageOptions): void {
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -1609,12 +1609,6 @@ export function generateNCRDetailPDF(data: NCRDetailData): void {
     }
   }
 
-  const drawLine = (): void => {
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 3
-  }
-
   const drawSectionHeader = (title: string): void => {
     checkPageBreak(15)
     doc.setFillColor(240, 240, 240)
@@ -2208,12 +2202,6 @@ export function generateDailyDiaryPDF(data: DailyDiaryPDFData): void {
       doc.addPage()
       yPos = margin
     }
-  }
-
-  const drawLine = (): void => {
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 3
   }
 
   const drawSectionHeader = (title: string): void => {
@@ -2924,4 +2912,4 @@ export function generateDocketDetailPDF(data: DocketDetailPDFData): void {
   console.log(`Docket detail PDF generated in ${Date.now() - startTime}ms`)
 }
 
-export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData, NCRDetailData, TestCertificateData, DailyDiaryPDFData, DocketDetailPDFData, HPPackageOptions }
+export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData }

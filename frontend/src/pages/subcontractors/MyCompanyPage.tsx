@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth, getAuthToken } from '@/lib/auth'
-import { Plus, Users, Truck, CheckCircle, Clock, X, DollarSign, Edit, Trash2 } from 'lucide-react'
+import { Plus, Users, Truck, CheckCircle, Clock, X, Trash2 } from 'lucide-react'
 
 interface Employee {
   id: string

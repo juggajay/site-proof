@@ -49,6 +49,11 @@ tmp/
 temp/
 *.tmp
 
+# Backup files
+*.bak
+*.backup
+*.original
+
 # PWA
 sw.js
 workbox-*.js

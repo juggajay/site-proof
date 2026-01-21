@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
-import { Lock, Sparkles, Calendar, Mail } from 'lucide-react'
+import { Lock, Sparkles, Mail } from 'lucide-react'
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
@@ -242,7 +242,7 @@ export function ReportsPage() {
   const [testStartDate, setTestStartDate] = useState<string>('')
   const [testEndDate, setTestEndDate] = useState<string>('')
   const [selectedTestTypes, setSelectedTestTypes] = useState<string[]>([])
-  const [availableTestTypes, setAvailableTestTypes] = useState<string[]>([])
+  const [_availableTestTypes, _setAvailableTestTypes] = useState<string[]>([])
 
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false)

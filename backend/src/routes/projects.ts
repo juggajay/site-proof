@@ -708,11 +708,13 @@ projectsRouter.post('/:id/users', async (req, res) => {
       // Send email notification
       await sendNotificationIfEnabled(
         invitedUser.id,
-        projectId,
         'mentions', // Using mentions type for team invitations
-        'Team Invitation',
-        `You've been invited to join ${projectDetails?.name || 'a project'} as ${role.replace('_', ' ')}. Project: ${projectDetails?.projectNumber || 'N/A'}`,
-        invitedUser.email
+        {
+          title: 'Team Invitation',
+          message: `You've been invited to join ${projectDetails?.name || 'a project'} as ${role.replace('_', ' ')}. Project: ${projectDetails?.projectNumber || 'N/A'}`,
+          linkUrl: `/projects/${projectId}`,
+          projectName: projectDetails?.name || undefined
+        }
       )
 
       console.log(`[Team Invitation] Notification sent to ${invitedUser.email} for project ${projectDetails?.name}`)

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, AuthRequest } from '../middleware/authMiddleware.js'
-import { sendNotificationEmail, sendDailyDigestEmail, getQueuedEmails, clearEmailQueue, NotificationTypes, DigestItem, isResendConfigured } from '../lib/email.js'
+import { sendNotificationEmail, sendDailyDigestEmail, getQueuedEmails, clearEmailQueue, DigestItem, isResendConfigured } from '../lib/email.js'
 
 export const notificationsRouter = Router()
 
@@ -920,28 +920,27 @@ notificationsRouter.post('/alerts/check-escalations', async (req: AuthRequest, r
       }
 
       if (shouldEscalate) {
-        // Find users to escalate to based on roles
-        const escalationUsers = await prisma.user.findMany({
-          where: {
-            role: {
-              in: config.escalationRoles,
-            },
-            // If there's a project, find users in that project
-            ...(alert.projectId ? {
-              projectUsers: {
-                some: {
-                  projectId: alert.projectId,
+        // Find users to escalate to based on roles in project
+        const escalationUsers = alert.projectId
+          ? await prisma.user.findMany({
+              where: {
+                projectUsers: {
+                  some: {
+                    projectId: alert.projectId,
+                    role: {
+                      in: config.escalationRoles,
+                    },
+                  },
                 },
               },
-            } : {}),
-          },
-          select: {
-            id: true,
-            email: true,
-            fullName: true,
-            role: true,
-          },
-        })
+              select: {
+                id: true,
+                email: true,
+                fullName: true,
+                roleInCompany: true,
+              },
+            })
+          : []
 
         const escalatedToIds = escalationUsers.map(u => u.id)
 
@@ -1042,27 +1041,27 @@ notificationsRouter.post('/alerts/:id/test-escalate', async (req: AuthRequest, r
       return res.status(400).json({ error: 'Alert is already at maximum escalation level' })
     }
 
-    // Find users to escalate to based on roles
-    const escalationUsers = await prisma.user.findMany({
-      where: {
-        role: {
-          in: config.escalationRoles,
-        },
-        ...(alert.projectId ? {
-          projectUsers: {
-            some: {
-              projectId: alert.projectId,
+    // Find users to escalate to based on roles in project
+    const escalationUsers = alert.projectId
+      ? await prisma.user.findMany({
+          where: {
+            projectUsers: {
+              some: {
+                projectId: alert.projectId,
+                role: {
+                  in: config.escalationRoles,
+                },
+              },
             },
           },
-        } : {}),
-      },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        role: true,
-      },
-    })
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            roleInCompany: true,
+          },
+        })
+      : []
 
     const escalatedToIds = escalationUsers.map(u => u.id)
 
@@ -1093,7 +1092,7 @@ notificationsRouter.post('/alerts/:id/test-escalate', async (req: AuthRequest, r
     res.json({
       success: true,
       alert,
-      escalatedTo: escalationUsers.map(u => ({ id: u.id, email: u.email, role: u.role })),
+      escalatedTo: escalationUsers.map(u => ({ id: u.id, email: u.email, roleInCompany: u.roleInCompany })),
       message: `Alert escalated to level ${newLevel}. Notified ${escalationUsers.length} users.`,
     })
   } catch (error) {
@@ -1192,11 +1191,13 @@ notificationsRouter.post('/diary-reminder/check', async (req: AuthRequest, res) 
           // Send email notification
           await sendNotificationIfEnabled(
             user.id,
-            project.id,
-            'diary_reminder',
-            'Daily Diary Reminder',
-            `No daily diary entry found for ${project.name} on ${dateString}. Please complete your site diary.`,
-            user.email
+            'mentions', // Using mentions as closest notification type
+            {
+              title: 'Daily Diary Reminder',
+              message: `No daily diary entry found for ${project.name} on ${dateString}. Please complete your site diary.`,
+              projectName: project.name,
+              linkUrl: `/projects/${project.id}/diary`,
+            }
           )
         }
 
@@ -1289,11 +1290,13 @@ notificationsRouter.post('/diary-reminder/send', async (req: AuthRequest, res) =
       for (const user of users) {
         await sendNotificationIfEnabled(
           user.id,
-          project.id,
-          'diary_reminder',
-          'Daily Diary Reminder',
-          `Reminder: Please complete the daily diary for ${project.name} on ${dateString}.`,
-          user.email
+          'mentions', // Using mentions as closest notification type
+          {
+            title: 'Daily Diary Reminder',
+            message: `Reminder: Please complete the daily diary for ${project.name} on ${dateString}.`,
+            projectName: project.name,
+            linkUrl: `/projects/${project.id}/diary`,
+          }
         )
       }
     }
@@ -1413,11 +1416,13 @@ notificationsRouter.post('/diary-reminder/check-alerts', async (req: AuthRequest
           // Send email notification for alerts (always immediate for escalations)
           await sendNotificationIfEnabled(
             user.id,
-            project.id,
-            'diary_reminder',
-            'Missing Diary Alert',
-            `ALERT: No daily diary entry was completed for ${project.name} on ${yesterdayString}. This is more than 24 hours overdue.`,
-            user.email
+            'ncrAssigned', // Using ncrAssigned for urgent alerts
+            {
+              title: 'Missing Diary Alert',
+              message: `ALERT: No daily diary entry was completed for ${project.name} on ${yesterdayString}. This is more than 24 hours overdue.`,
+              projectName: project.name,
+              linkUrl: `/projects/${project.id}/diary`,
+            }
           )
         }
 
@@ -1480,14 +1485,6 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
 
     const overdueDockers = await prisma.dailyDocket.findMany({
       where: whereClause,
-      include: {
-        project: {
-          select: { id: true, name: true }
-        },
-        submittedBy: {
-          select: { id: true, email: true, fullName: true }
-        }
-      }
     })
 
     console.log(`   Found ${overdueDockers.length} docket(s) pending >48 hours`)
@@ -1504,7 +1501,13 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
     }
 
     for (const [projectId, dockets] of docketsByProject.entries()) {
-      const project = dockets[0].project
+      // Get project info
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, name: true }
+      })
+
+      if (!project) continue
 
       // Check if we already sent an alert for these specific dockets today
       const today = new Date()
@@ -1566,11 +1569,13 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
           // Send email notification
           await sendNotificationIfEnabled(
             user.id,
-            projectId,
             'holdPointReminder', // Using existing type for backlog alerts
-            'Docket Backlog Alert',
-            `${docketCount} docket(s) have been pending approval for more than 48 hours on ${project.name}. Please review.`,
-            user.email
+            {
+              title: 'Docket Backlog Alert',
+              message: `${docketCount} docket(s) have been pending approval for more than 48 hours on ${project.name}. Please review.`,
+              projectName: project.name,
+              linkUrl: `/projects/${projectId}/dockets`,
+            }
           )
         }
 
@@ -1718,7 +1723,7 @@ notificationsRouter.post('/system-alerts/check', async (req: AuthRequest, res) =
         },
         include: {
           lot: { select: { id: true, lotNumber: true } },
-          itpItem: { select: { id: true, description: true } }
+          itpChecklistItem: { select: { id: true, description: true } }
         }
       })
 
@@ -1739,7 +1744,7 @@ notificationsRouter.post('/system-alerts/check', async (req: AuthRequest, res) =
             type: 'stale_hold_point',
             severity,
             title: `Hold Point stale: Lot ${hp.lot.lotNumber}`,
-            message: `Hold Point for Lot ${hp.lot.lotNumber} has been ${hp.status} for ${hoursStale} hours. ${hp.itpItem?.description?.substring(0, 80) || ''}`,
+            message: `Hold Point for Lot ${hp.lot.lotNumber} has been ${hp.status} for ${hoursStale} hours. ${hp.itpChecklistItem?.description?.substring(0, 80) || ''}`,
             entityId: hp.id,
             entityType: 'holdpoint',
             projectId: project.id,

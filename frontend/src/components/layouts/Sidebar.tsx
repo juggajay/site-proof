@@ -30,11 +30,11 @@ import { useUIStore } from '@/stores/uiStore'  // Feature #442: Zustand client s
 const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
 const ADMIN_ROLES = ['owner', 'admin']
 const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
-const FIELD_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'site_engineer', 'foreman']
+export const FIELD_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'site_engineer', 'foreman']
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
 
 // Roles that can only view (read-only access)
-const VIEW_ONLY_ROLES = ['viewer']
+export const VIEW_ONLY_ROLES = ['viewer']
 
 // Foreman simplified menu - only sees essential field items
 const FOREMAN_MENU_ITEMS = ['Lots', 'ITPs', 'Hold Points', 'Test Results', 'NCRs', 'Daily Diary', 'Docket Approvals']
@@ -168,7 +168,6 @@ export function Sidebar() {
   const hasAdminAccess = ADMIN_ROLES.includes(userRole)
   const hasManagementAccess = MANAGEMENT_ROLES.includes(userRole)
   const isForeman = userRole === 'foreman'
-  const isViewer = VIEW_ONLY_ROLES.includes(userRole)
   const isSubcontractor = SUBCONTRACTOR_ROLES.includes(userRole)
 
   // Helper function to check if a menu item should be visible

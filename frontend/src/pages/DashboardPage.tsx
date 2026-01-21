@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard'
@@ -15,7 +15,6 @@ import {
   Check,
   Activity,
   ListChecks,
-  DollarSign,
   Users,
   Download,
   AlertCircle,
@@ -30,13 +29,6 @@ import {
 
 // Date range presets
 type DateRangePreset = 'today' | 'yesterday' | 'last7days' | 'last30days' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'custom'
-
-interface DateRange {
-  preset: DateRangePreset
-  startDate: string
-  endDate: string
-  label: string
-}
 
 const DATE_RANGE_PRESETS: { value: DateRangePreset; label: string; getRange: () => { start: Date; end: Date } }[] = [
   {
@@ -188,7 +180,7 @@ interface DashboardStats {
 export function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [projects, setProjects] = useState<Project[]>([])
+  const [_projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
 
   // Feature #292, #293, #294: Check user role for role-specific dashboards
@@ -440,7 +432,7 @@ export function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back{user?.firstName ? `, ${user.firstName}` : ''}! Here's an overview of your projects.
+            Welcome back{user?.name ? `, ${user.name}` : user?.fullName ? `, ${user.fullName}` : ''}! Here's an overview of your projects.
           </p>
         </div>
 

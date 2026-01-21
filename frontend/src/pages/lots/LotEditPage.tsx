@@ -5,7 +5,7 @@ import { getAuthToken, getCurrentUser } from '@/lib/auth'
 import { TagInput } from '@/components/ui/TagInput'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
 import { useOfflineStatus } from '@/lib/useOfflineStatus'
-import { cacheLotForOfflineEdit, saveLotEditOffline, getOfflineLot, type OfflineLotEdit } from '@/lib/offlineDb'
+import { cacheLotForOfflineEdit, saveLotEditOffline, getOfflineLot } from '@/lib/offlineDb'
 import { SyncStatusBadge } from '@/components/OfflineIndicator'
 import { toast } from '@/components/ui/toaster'
 
@@ -150,14 +150,16 @@ export function LotEditPage() {
         setOfflineSyncStatus(offlineLot.syncStatus)
 
         // Populate form with offline data
+        // Note: OfflineLotEdit stores offset as number but we display as string option
+        const offlineOffsetStr = offlineLot.offset !== undefined ? String(offlineLot.offset) : ''
         const initialData = {
           lotNumber: offlineLot.lotNumber || '',
           description: offlineLot.description || '',
           activityType: offlineLot.activityType || '',
           chainageStart: offlineLot.chainageStart?.toString() || '',
           chainageEnd: offlineLot.chainageEnd?.toString() || '',
-          offset: offlineLot.offset || '',
-          offsetCustom: offlineLot.offsetCustom || '',
+          offset: offlineOffsetStr,
+          offsetCustom: '', // OfflineLotEdit uses offsetLeft/offsetRight instead
           layer: offlineLot.layer || '',
           areaZone: offlineLot.areaZone || '',
           status: offlineLot.status || '',
@@ -172,10 +174,10 @@ export function LotEditPage() {
           description: offlineLot.description || null,
           status: offlineLot.status || 'not_started',
           activityType: offlineLot.activityType || null,
-          chainageStart: offlineLot.chainageStart ? parseFloat(offlineLot.chainageStart) : null,
-          chainageEnd: offlineLot.chainageEnd ? parseFloat(offlineLot.chainageEnd) : null,
-          offset: offlineLot.offset || null,
-          offsetCustom: offlineLot.offsetCustom || null,
+          chainageStart: offlineLot.chainageStart ?? null,
+          chainageEnd: offlineLot.chainageEnd ?? null,
+          offset: offlineOffsetStr || null,
+          offsetCustom: null, // OfflineLotEdit uses offsetLeft/offsetRight instead
           layer: offlineLot.layer || null,
           areaZone: offlineLot.areaZone || null,
           budgetAmount: offlineLot.budget,
@@ -356,10 +358,10 @@ export function LotEditPage() {
           projectId,
           lotNumber: formData.lotNumber,
           description: formData.description || undefined,
-          chainage: formData.chainageStart || undefined,
-          chainageStart: formData.chainageStart || undefined,
-          chainageEnd: formData.chainageEnd || undefined,
-          offset: formData.offset || undefined,
+          chainage: formData.chainageStart ? parseFloat(formData.chainageStart) : undefined,
+          chainageStart: formData.chainageStart ? parseFloat(formData.chainageStart) : undefined,
+          chainageEnd: formData.chainageEnd ? parseFloat(formData.chainageEnd) : undefined,
+          offset: formData.offset ? parseFloat(formData.offset) || undefined : undefined,
           layer: formData.layer || undefined,
           areaZone: formData.areaZone || undefined,
           activityType: formData.activityType || undefined,
@@ -432,10 +434,10 @@ export function LotEditPage() {
             projectId,
             lotNumber: formData.lotNumber,
             description: formData.description || undefined,
-            chainage: formData.chainageStart || undefined,
-            chainageStart: formData.chainageStart || undefined,
-            chainageEnd: formData.chainageEnd || undefined,
-            offset: formData.offset || undefined,
+            chainage: formData.chainageStart ? parseFloat(formData.chainageStart) : undefined,
+            chainageStart: formData.chainageStart ? parseFloat(formData.chainageStart) : undefined,
+            chainageEnd: formData.chainageEnd ? parseFloat(formData.chainageEnd) : undefined,
+            offset: formData.offset ? parseFloat(formData.offset) || undefined : undefined,
             layer: formData.layer || undefined,
             areaZone: formData.areaZone || undefined,
             activityType: formData.activityType || undefined,

@@ -26,7 +26,7 @@ const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
 const ADMIN_ROLES = ['owner', 'admin']
 const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
 const FOREMAN_MENU_ITEMS = ['Lots', 'ITPs', 'Hold Points', 'Test Results', 'NCRs', 'Daily Diary', 'Docket Approvals']
-const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
+export const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
 
 interface NavigationItem {
   name: string

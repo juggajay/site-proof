@@ -15,10 +15,10 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     cb(null, uploadsDir)
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
     cb(null, `cert-${uniqueSuffix}${path.extname(file.originalname)}`)
   }
@@ -27,7 +27,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     // Accept only PDFs and images
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
     if (allowedTypes.includes(file.mimetype)) {
@@ -163,7 +163,7 @@ const TEST_CREATORS = ['owner', 'admin', 'project_manager', 'site_engineer', 'qu
 const TEST_VERIFIERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 
 // GET /api/test-results/specifications - Get all test type specifications
-testResultsRouter.get('/specifications', async (req, res) => {
+testResultsRouter.get('/specifications', async (_req, res) => {
   try {
     res.json({
       specifications: Object.entries(testTypeSpecifications).map(([key, spec]) => ({
@@ -1641,11 +1641,13 @@ testResultsRouter.post('/:id/status', async (req, res) => {
         for (const eng of engineerUsers) {
           await sendNotificationIfEnabled(
             eng.id,
-            testResult.projectId,
-            'test_result_received',
-            'Test Result Received',
-            `Test result for ${testResult.testType} (${requestNum}) from ${labName} is pending verification.`,
-            eng.email
+            'enabled',
+            {
+              title: 'Test Result Received',
+              message: `Test result for ${testResult.testType} (${requestNum}) from ${labName} is pending verification.`,
+              linkUrl: `/projects/${testResult.projectId}/test-results`,
+              projectName: project?.name
+            }
           )
         }
 
@@ -1791,7 +1793,7 @@ testResultsRouter.get('/:id/workflow', async (req, res) => {
 
 // Simulated AI extraction - extracts field values from PDF content
 // In production, this would call an actual AI/ML service
-const simulateAIExtraction = (filename: string) => {
+const simulateAIExtraction = (_filename: string) => {
   // Simulate extracted data based on common test certificate patterns
   // Generate realistic looking data with varying confidence levels
   const testTypes = ['Compaction Test', 'CBR Test', 'Grading Analysis', 'Moisture Content', 'Plasticity Index']
@@ -2184,7 +2186,7 @@ testResultsRouter.patch('/:id/confirm-extraction', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { confirmedFields, corrections } = req.body
+    const { corrections } = req.body
 
     const testResult = await prisma.testResult.findUnique({
       where: { id },
