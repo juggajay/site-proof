@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { generateToken, generateExpiredToken, hashPassword, verifyPassword, verifyToken } from '../lib/auth.js'
-import { sendMagicLinkEmail } from '../lib/email.js'
+import { sendMagicLinkEmail, sendVerificationEmail, sendPasswordResetEmail } from '../lib/email.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -146,18 +146,17 @@ authRouter.post('/register', async (req, res) => {
       },
     })
 
-    // In development, log the verification link to console
-    const verifyUrl = `http://localhost:5173/verify-email?token=${verificationToken}`
-    console.log('')
-    console.log('========================================')
-    console.log('📧 EMAIL VERIFICATION LINK (Development Mode)')
-    console.log('========================================')
-    console.log(`Email: ${email}`)
-    console.log(`Token: ${verificationToken}`)
-    console.log(`Verify URL: ${verifyUrl}`)
-    console.log(`Expires: ${expiresAt.toISOString()}`)
-    console.log('========================================')
-    console.log('')
+    // Build verification URL using FRONTEND_URL
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+    const verifyUrl = `${baseUrl}/verify-email?token=${verificationToken}`
+
+    // Send verification email
+    await sendVerificationEmail({
+      to: email,
+      userName: name || undefined,
+      verificationUrl: verifyUrl,
+      expiresInHours: 24,
+    })
 
     // Generate auth token
     const token = generateToken({
@@ -534,18 +533,16 @@ authRouter.post('/forgot-password', async (req, res) => {
         },
       })
 
-      // In development, log the reset link to console
-      const resetUrl = `http://localhost:5173/reset-password?token=${token}`
-      console.log('')
-      console.log('========================================')
-      console.log('🔑 PASSWORD RESET LINK (Development Mode)')
-      console.log('========================================')
-      console.log(`Email: ${email}`)
-      console.log(`Token: ${token}`)
-      console.log(`Reset URL: ${resetUrl}`)
-      console.log(`Expires: ${expiresAt.toISOString()}`)
-      console.log('========================================')
-      console.log('')
+      // Build reset URL using FRONTEND_URL
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+      const resetUrl = `${baseUrl}/reset-password?token=${token}`
+
+      // Send password reset email
+      await sendPasswordResetEmail({
+        to: user.email,
+        resetUrl,
+        expiresInMinutes: 60,
+      })
     }
 
     // Always return success (security: don't reveal if email exists)
@@ -1011,7 +1008,7 @@ authRouter.post('/resend-verification', async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, email: true, emailVerified: true },
+      select: { id: true, email: true, emailVerified: true, fullName: true },
     })
 
     // Always return success (don't reveal if email exists)
@@ -1053,18 +1050,17 @@ authRouter.post('/resend-verification', async (req, res) => {
       },
     })
 
-    // In development, log the verification link to console
-    const verifyUrl = `http://localhost:5173/verify-email?token=${verificationToken}`
-    console.log('')
-    console.log('========================================')
-    console.log('📧 EMAIL VERIFICATION LINK (Resent - Development Mode)')
-    console.log('========================================')
-    console.log(`Email: ${email}`)
-    console.log(`Token: ${verificationToken}`)
-    console.log(`Verify URL: ${verifyUrl}`)
-    console.log(`Expires: ${expiresAt.toISOString()}`)
-    console.log('========================================')
-    console.log('')
+    // Build verification URL using FRONTEND_URL
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
+    const verifyUrl = `${baseUrl}/verify-email?token=${verificationToken}`
+
+    // Send verification email
+    await sendVerificationEmail({
+      to: user.email,
+      userName: user.fullName || undefined,
+      verificationUrl: verifyUrl,
+      expiresInHours: 24,
+    })
 
     res.json({
       message: 'If an account exists with this email, a new verification link has been sent.'

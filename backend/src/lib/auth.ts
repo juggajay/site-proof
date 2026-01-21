@@ -64,7 +64,11 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
     // Check if token was issued before user invalidated all tokens (logout-all-devices)
     if (user.token_invalidated_at && payload.iat) {
       const tokenIssuedAt = payload.iat * 1000 // JWT iat is in seconds, convert to ms
-      if (tokenIssuedAt < user.token_invalidated_at.getTime()) {
+      // Handle both Date objects and ISO strings from raw SQL
+      const invalidatedAt = user.token_invalidated_at instanceof Date
+        ? user.token_invalidated_at.getTime()
+        : new Date(user.token_invalidated_at).getTime()
+      if (tokenIssuedAt < invalidatedAt) {
         // Token was issued before invalidation - reject it
         return null
       }

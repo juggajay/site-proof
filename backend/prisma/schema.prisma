@@ -49,6 +49,8 @@ model User {
   // OAuth fields (Feature #414, #1004)
   oauthProvider    String? @map("oauth_provider")
   oauthProviderId  String? @map("oauth_provider_id")
+  // Token invalidation for logout-all-devices feature
+  tokenInvalidatedAt DateTime? @map("token_invalidated_at")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
