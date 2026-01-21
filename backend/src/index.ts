@@ -77,6 +77,10 @@ if (process.env.NODE_ENV === 'production') {
 app.use(cors({
   origin: function(origin, callback) {
     const allowedOrigins = [
+      // Production URLs
+      'https://site-proof.vercel.app',
+      'https://site-proof-production.up.railway.app',
+      // Development URLs
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:5175',
