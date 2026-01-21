@@ -51,7 +51,7 @@ async function createOAuthState(redirectUri?: string): Promise<string> {
 
   await prisma.$executeRaw`
     INSERT INTO oauth_states (id, state, redirect_uri, expires_at)
-    VALUES (${id}, ${state}, ${redirectUri || null}, ${expiresAt.toISOString()})
+    VALUES (${id}, ${state}, ${redirectUri || null}, ${expiresAt})
   `
 
   return state
@@ -99,7 +99,7 @@ async function verifyOAuthState(state: string): Promise<{ valid: boolean; redire
  * Clean up expired OAuth states from the database
  */
 async function cleanupExpiredStates(): Promise<void> {
-  const now = new Date().toISOString()
+  const now = new Date()
   await prisma.$executeRaw`DELETE FROM oauth_states WHERE expires_at < ${now}`
 }
 
