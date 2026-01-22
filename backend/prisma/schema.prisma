@@ -24,8 +24,9 @@ model Company {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  users    User[]
-  projects Project[]
+  users                User[]
+  projects             Project[]
+  globalSubcontractors GlobalSubcontractor[]
 
   @@map("companies")
 }
@@ -693,28 +694,50 @@ model DiaryAddendum {
 // Subcontractor Management
 // ============================================================================
 
-model SubcontractorCompany {
+// Global subcontractor directory - stores company info at organization level
+// Subcontractors can be quickly invited to multiple projects without re-entering details
+model GlobalSubcontractor {
   id                  String    @id @default(uuid())
-  projectId           String    @map("project_id")
+  organizationId      String    @map("organization_id")
   companyName         String    @map("company_name")
   abn                 String?
   primaryContactName  String?   @map("primary_contact_name")
   primaryContactEmail String?   @map("primary_contact_email")
   primaryContactPhone String?   @map("primary_contact_phone")
-  status              String    @default("pending_approval")
-  approvedById        String?   @map("approved_by")
-  approvedAt          DateTime? @map("approved_at")
-  portalAccess        Json?     @map("portal_access")
+  status              String    @default("active")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  users           SubcontractorUser[]
-  employeeRoster  EmployeeRoster[]
-  plantRegister   PlantRegister[]
-  dailyDockets    DailyDocket[]
-  assignedLots    Lot[]
-  responsibleNCRs NCR[]
+  organization          Company                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectSubcontractors SubcontractorCompany[]
+
+  @@map("global_subcontractors")
+}
+
+model SubcontractorCompany {
+  id                    String    @id @default(uuid())
+  projectId             String    @map("project_id")
+  globalSubcontractorId String?   @map("global_subcontractor_id")
+  companyName           String    @map("company_name")
+  abn                   String?
+  primaryContactName    String?   @map("primary_contact_name")
+  primaryContactEmail   String?   @map("primary_contact_email")
+  primaryContactPhone   String?   @map("primary_contact_phone")
+  status                String    @default("pending_approval")
+  approvedById          String?   @map("approved_by")
+  approvedAt            DateTime? @map("approved_at")
+  portalAccess          Json?     @map("portal_access")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  globalSubcontractor  GlobalSubcontractor? @relation(fields: [globalSubcontractorId], references: [id])
+  users                SubcontractorUser[]
+  employeeRoster       EmployeeRoster[]
+  plantRegister        PlantRegister[]
+  dailyDockets         DailyDocket[]
+  assignedLots         Lot[]
+  responsibleNCRs      NCR[]
 
   @@map("subcontractor_companies")
 }

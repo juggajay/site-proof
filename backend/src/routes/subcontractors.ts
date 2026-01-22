@@ -95,11 +95,59 @@ subcontractorsRouter.get('/invitation/:id', async (req, res) => {
 // Apply authentication middleware to all subsequent routes
 subcontractorsRouter.use(requireAuth)
 
+// GET /api/subcontractors/directory - Get global subcontractors for the user's organization
+// This allows selecting existing subcontractors when inviting to a new project
+subcontractorsRouter.get('/directory', async (req, res) => {
+  try {
+    const user = req.user!
+
+    // User must belong to a company
+    if (!user.companyId) {
+      return res.status(400).json({
+        error: 'No organization',
+        message: 'User must belong to an organization to access the subcontractor directory'
+      })
+    }
+
+    // Get all global subcontractors for this organization
+    const globalSubcontractors = await prisma.globalSubcontractor.findMany({
+      where: {
+        organizationId: user.companyId,
+        status: 'active'
+      },
+      orderBy: { companyName: 'asc' }
+    })
+
+    res.json({
+      subcontractors: globalSubcontractors.map(gs => ({
+        id: gs.id,
+        companyName: gs.companyName,
+        abn: gs.abn || '',
+        primaryContactName: gs.primaryContactName || '',
+        primaryContactEmail: gs.primaryContactEmail || '',
+        primaryContactPhone: gs.primaryContactPhone || ''
+      }))
+    })
+  } catch (error) {
+    console.error('Get directory error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // POST /api/subcontractors/invite - Invite/create a new subcontractor company for a project
+// Now supports selecting from global directory via globalSubcontractorId
 subcontractorsRouter.post('/invite', async (req, res) => {
   try {
     const user = req.user!
-    const { projectId, companyName, abn, primaryContactName, primaryContactEmail, primaryContactPhone } = req.body
+    const {
+      projectId,
+      globalSubcontractorId, // Optional: select from existing directory
+      companyName,
+      abn,
+      primaryContactName,
+      primaryContactEmail,
+      primaryContactPhone
+    } = req.body
 
     // Only allow head contractor roles to invite subcontractors
     const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
@@ -111,23 +159,19 @@ subcontractorsRouter.post('/invite', async (req, res) => {
     }
 
     // Validate required fields
-    if (!projectId || !companyName || !primaryContactName || !primaryContactEmail) {
+    if (!projectId) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'projectId, companyName, primaryContactName, and primaryContactEmail are required'
+        message: 'projectId is required'
       })
     }
 
-    // Feature #483: Validate ABN if provided
-    if (abn) {
-      const abnValidation = validateABN(abn)
-      if (!abnValidation.valid) {
-        return res.status(400).json({
-          error: 'Invalid ABN',
-          message: abnValidation.error,
-          code: 'INVALID_ABN'
-        })
-      }
+    // If not selecting from directory, require all fields
+    if (!globalSubcontractorId && (!companyName || !primaryContactName || !primaryContactEmail)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'companyName, primaryContactName, and primaryContactEmail are required when not selecting from directory'
+      })
     }
 
     // Verify project exists and user has access
@@ -139,51 +183,133 @@ subcontractorsRouter.post('/invite', async (req, res) => {
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    // Check if a subcontractor with same name already exists for this project
-    const existingSubcontractor = await prisma.subcontractorCompany.findFirst({
-      where: {
-        projectId,
-        companyName: companyName
-      }
-    })
+    // Determine the company details to use
+    let finalCompanyName: string
+    let finalAbn: string | null
+    let finalContactName: string
+    let finalContactEmail: string
+    let finalContactPhone: string | null
+    let globalId: string | null = null
 
-    if (existingSubcontractor) {
-      return res.status(409).json({
-        error: 'Conflict',
-        message: 'A subcontractor with this company name already exists for this project'
+    if (globalSubcontractorId) {
+      // Selecting from directory - fetch the global subcontractor
+      const globalSub = await prisma.globalSubcontractor.findUnique({
+        where: { id: globalSubcontractorId }
       })
+
+      if (!globalSub) {
+        return res.status(404).json({ error: 'Global subcontractor not found' })
+      }
+
+      // Verify it belongs to the same organization
+      if (globalSub.organizationId !== user.companyId) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'This subcontractor does not belong to your organization'
+        })
+      }
+
+      // Check if this global subcontractor is already invited to this project
+      const existingLink = await prisma.subcontractorCompany.findFirst({
+        where: {
+          projectId,
+          globalSubcontractorId
+        }
+      })
+
+      if (existingLink) {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: 'This subcontractor has already been invited to this project'
+        })
+      }
+
+      finalCompanyName = globalSub.companyName
+      finalAbn = globalSub.abn
+      finalContactName = globalSub.primaryContactName || ''
+      finalContactEmail = globalSub.primaryContactEmail || ''
+      finalContactPhone = globalSub.primaryContactPhone
+      globalId = globalSub.id
+    } else {
+      // Creating new - validate ABN if provided
+      if (abn) {
+        const abnValidation = validateABN(abn)
+        if (!abnValidation.valid) {
+          return res.status(400).json({
+            error: 'Invalid ABN',
+            message: abnValidation.error,
+            code: 'INVALID_ABN'
+          })
+        }
+      }
+
+      // Check if a subcontractor with same name already exists for this project
+      const existingSubcontractor = await prisma.subcontractorCompany.findFirst({
+        where: {
+          projectId,
+          companyName: companyName
+        }
+      })
+
+      if (existingSubcontractor) {
+        return res.status(409).json({
+          error: 'Conflict',
+          message: 'A subcontractor with this company name already exists for this project'
+        })
+      }
+
+      // Create a new GlobalSubcontractor record
+      const newGlobalSub = await prisma.globalSubcontractor.create({
+        data: {
+          organizationId: user.companyId!,
+          companyName,
+          abn: abn || null,
+          primaryContactName,
+          primaryContactEmail,
+          primaryContactPhone: primaryContactPhone || null,
+          status: 'active'
+        }
+      })
+
+      finalCompanyName = companyName
+      finalAbn = abn || null
+      finalContactName = primaryContactName
+      finalContactEmail = primaryContactEmail
+      finalContactPhone = primaryContactPhone || null
+      globalId = newGlobalSub.id
     }
 
-    // Create the subcontractor company
+    // Create the project-specific SubcontractorCompany linked to the global record
     const subcontractor = await prisma.subcontractorCompany.create({
       data: {
         projectId,
-        companyName,
-        abn: abn || null,
-        primaryContactName,
-        primaryContactEmail,
-        primaryContactPhone: primaryContactPhone || null,
+        globalSubcontractorId: globalId,
+        companyName: finalCompanyName,
+        abn: finalAbn,
+        primaryContactName: finalContactName,
+        primaryContactEmail: finalContactEmail,
+        primaryContactPhone: finalContactPhone,
         status: 'pending_approval'
       }
     })
 
-    console.log(`Subcontractor ${companyName} invited to project ${project.name} by ${user.email}`)
+    console.log(`Subcontractor ${finalCompanyName} invited to project ${project.name} by ${user.email}${globalSubcontractorId ? ' (from directory)' : ' (new)'}`)
 
     // Feature #942 - Send subcontractor invitation email with setup link
     const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/subcontractor-portal/accept-invite?id=${subcontractor.id}`
 
     try {
       const emailResult = await sendSubcontractorInvitationEmail({
-        to: primaryContactEmail,
-        contactName: primaryContactName,
-        companyName,
+        to: finalContactEmail,
+        contactName: finalContactName,
+        companyName: finalCompanyName,
         projectName: project.name,
         inviterEmail: user.email,
         inviteUrl
       })
 
       if (emailResult.success) {
-        console.log(`[Subcontractor Invite] Email sent successfully to ${primaryContactEmail}`)
+        console.log(`[Subcontractor Invite] Email sent successfully to ${finalContactEmail}`)
       } else {
         console.log(`[Subcontractor Invite] Email failed: ${emailResult.error}`)
       }
@@ -258,15 +384,19 @@ subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
       return res.status(404).json({ error: 'Invitation not found or expired' })
     }
 
-    // Check if user is already linked to a subcontractor company
+    // Check if user is already linked to THIS specific subcontractor company
+    // (Allow users to be linked to multiple subcontractor companies across different projects)
     const existingLink = await prisma.subcontractorUser.findFirst({
-      where: { userId: user.id }
+      where: {
+        userId: user.id,
+        subcontractorCompanyId: id
+      }
     })
 
     if (existingLink) {
       return res.status(400).json({
         error: 'Already linked',
-        message: 'Your account is already linked to a subcontractor company'
+        message: 'Your account is already linked to this subcontractor company'
       })
     }
 
