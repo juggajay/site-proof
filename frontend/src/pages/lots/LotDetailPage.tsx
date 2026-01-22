@@ -3526,7 +3526,10 @@ export function LotDetailPage() {
               {conforming ? 'Conforming...' : 'Conform Lot'}
             </button>
             {canVerifyTestResults && (
-              <button className="rounded-lg border border-green-700 px-4 py-2 text-sm text-green-700 hover:bg-green-100">
+              <button
+                onClick={() => handleTabChange('tests')}
+                className="rounded-lg border border-green-700 px-4 py-2 text-sm text-green-700 hover:bg-green-100"
+              >
                 Verify Test Results
               </button>
             )}

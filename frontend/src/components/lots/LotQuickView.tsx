@@ -115,12 +115,16 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
     })
   }
 
-  const formatChainage = (start: number | null, end: number | null) => {
+  const formatChainage = (start: number | string | null, end: number | string | null) => {
     if (start === null && end === null) return '—'
-    if (start !== null && end !== null) {
-      return `${start.toFixed(3)} - ${end.toFixed(3)}`
+    const startNum = start !== null ? Number(start) : null
+    const endNum = end !== null ? Number(end) : null
+    if (startNum !== null && !isNaN(startNum) && endNum !== null && !isNaN(endNum)) {
+      return `${startNum.toFixed(3)} - ${endNum.toFixed(3)}`
     }
-    return start !== null ? start.toFixed(3) : end?.toFixed(3) || '—'
+    if (startNum !== null && !isNaN(startNum)) return startNum.toFixed(3)
+    if (endNum !== null && !isNaN(endNum)) return endNum.toFixed(3)
+    return '—'
   }
 
   return (

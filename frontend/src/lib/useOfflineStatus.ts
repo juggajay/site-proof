@@ -51,11 +51,19 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
     const token = getAuthToken();
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4006';
     let syncedCount = 0;
+    const MAX_ATTEMPTS = 5;
 
     try {
       const items = await getPendingSyncItems();
 
       for (const item of items) {
+        // Skip and remove items that have failed too many times
+        if (item.attempts >= MAX_ATTEMPTS && item.id) {
+          console.warn('[Sync] Removing item after max attempts:', item.type, item.id);
+          await removeSyncQueueItem(item.id);
+          continue;
+        }
+
         if (item.type === 'itp_completion' && item.id) {
           try {
             const completion = item.data;
@@ -391,6 +399,14 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
         if (item.type === 'lot_conflict' && item.id) {
           // Conflict notification item - just remove it, conflict is tracked in lot record
           await removeSyncQueueItem(item.id);
+          continue;
+        }
+
+        // Remove unrecognized item types to prevent queue buildup
+        const knownTypes = ['itp_completion', 'photo_upload', 'diary_save', 'diary_submit', 'docket_create', 'docket_submit', 'lot_edit', 'lot_conflict'];
+        if (!knownTypes.includes(item.type) && item.id) {
+          console.warn('[Sync] Removing unknown item type:', item.type);
+          await removeSyncQueueItem(item.id);
         }
       }
 
@@ -409,12 +425,16 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
     }
   }, [isOnline, isSyncing, callbacks]);
 
-  // Auto-sync when coming back online
+  // Auto-sync when coming back online (with debounce to prevent rapid re-triggering)
   useEffect(() => {
-    if (isOnline && pendingSyncCount > 0) {
-      syncPendingChanges();
+    if (isOnline && pendingSyncCount > 0 && !isSyncing) {
+      const timeout = setTimeout(() => {
+        syncPendingChanges();
+      }, 1000); // Wait 1 second before auto-syncing
+      return () => clearTimeout(timeout);
     }
-  }, [isOnline, pendingSyncCount, syncPendingChanges]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline, pendingSyncCount, isSyncing]); // Don't include syncPendingChanges to prevent loops
 
   return {
     isOnline,
