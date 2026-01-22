@@ -21,6 +21,7 @@ import {
   ClipboardList,
   ChevronLeft,
   ChevronRight,
+  Briefcase,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth, getAuthToken } from '@/lib/auth'
@@ -52,9 +53,9 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false, excludeRoles: SUBCONTRACTOR_ROLES },
   { name: 'Portfolio', href: '/portfolio', icon: PieChart, requiresProject: false, requiresAdmin: true },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false },
+  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false, excludeRoles: SUBCONTRACTOR_ROLES },
 ]
 
 const projectNavigation: NavigationItem[] = [
@@ -75,7 +76,7 @@ const projectNavigation: NavigationItem[] = [
 
 // Settings navigation items
 const settingsNavigation: NavigationItem[] = [
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: SUBCONTRACTOR_ROLES },
   { name: 'Help & Support', href: '/support', icon: HelpCircle },
   { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
   { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAdmin: true },
@@ -83,6 +84,7 @@ const settingsNavigation: NavigationItem[] = [
 
 // Subcontractor-specific navigation
 const subcontractorNavigation: NavigationItem[] = [
+  { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase, allowedRoles: SUBCONTRACTOR_ROLES },
   { name: 'My Company', href: '/my-company', icon: Building2, allowedRoles: SUBCONTRACTOR_ROLES },
 ]
 
@@ -306,7 +308,8 @@ export function Sidebar() {
           </>
         )}
 
-        {projectId && (
+        {/* Hide project navigation for subcontractors */}
+        {projectId && !isSubcontractor && (
           <>
             <div className="my-4 border-t pt-4">
               {!isCollapsed && (

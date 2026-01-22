@@ -704,6 +704,7 @@ model SubcontractorCompany {
   status              String    @default("pending_approval")
   approvedById        String?   @map("approved_by")
   approvedAt          DateTime? @map("approved_at")
+  portalAccess        Json?     @map("portal_access")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 

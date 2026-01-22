@@ -44,7 +44,55 @@ function validateABN(abn: string): { valid: boolean; error?: string } {
 
 export const subcontractorsRouter = Router()
 
-// Apply authentication middleware to all routes
+// ================================================================================
+// PUBLIC ENDPOINTS (no auth required) - Must be defined BEFORE requireAuth
+// ================================================================================
+
+// Feature #484: GET /api/subcontractors/invitation/:id - Get invitation details (no auth required)
+// This allows the frontend to display invitation info before user creates account
+subcontractorsRouter.get('/invitation/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      include: {
+        project: { select: { id: true, name: true, companyId: true } }
+      }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Invitation not found or expired' })
+    }
+
+    // Get the head contractor company name
+    const headContractor = await prisma.company.findUnique({
+      where: { id: subcontractor.project.companyId },
+      select: { name: true }
+    })
+
+    res.json({
+      invitation: {
+        id: subcontractor.id,
+        companyName: subcontractor.companyName,
+        projectName: subcontractor.project.name,
+        headContractorName: headContractor?.name || 'Unknown',
+        primaryContactEmail: subcontractor.primaryContactEmail,
+        primaryContactName: subcontractor.primaryContactName,
+        status: subcontractor.status
+      }
+    })
+  } catch (error) {
+    console.error('Get invitation error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ================================================================================
+// PROTECTED ENDPOINTS (auth required)
+// ================================================================================
+
+// Apply authentication middleware to all subsequent routes
 subcontractorsRouter.use(requireAuth)
 
 // POST /api/subcontractors/invite - Invite/create a new subcontractor company for a project
@@ -192,45 +240,6 @@ subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
   }
 })
 
-// Feature #484: GET /api/subcontractors/invitation/:id - Get invitation details (no auth required)
-// This allows the frontend to display invitation info before user creates account
-subcontractorsRouter.get('/invitation/:id', async (req, res) => {
-  try {
-    const { id } = req.params
-
-    const subcontractor = await prisma.subcontractorCompany.findUnique({
-      where: { id },
-      include: {
-        project: { select: { id: true, name: true, companyId: true } }
-      }
-    })
-
-    if (!subcontractor) {
-      return res.status(404).json({ error: 'Invitation not found or expired' })
-    }
-
-    // Get the head contractor company name
-    const headContractor = await prisma.company.findUnique({
-      where: { id: subcontractor.project.companyId },
-      select: { name: true }
-    })
-
-    res.json({
-      invitation: {
-        id: subcontractor.id,
-        companyName: subcontractor.companyName,
-        projectName: subcontractor.project.name,
-        headContractorName: headContractor?.name || 'Unknown',
-        primaryContactEmail: subcontractor.primaryContactEmail,
-        status: subcontractor.status
-      }
-    })
-  } catch (error) {
-    console.error('Get invitation error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
 // Feature #484: POST /api/subcontractors/invitation/:id/accept - Accept invitation and link user
 subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
   try {
@@ -319,6 +328,12 @@ subcontractorsRouter.get('/my-company', async (req, res) => {
           include: {
             employeeRoster: true,
             plantRegister: true,
+            project: {
+              select: {
+                id: true,
+                name: true,
+              }
+            }
           }
         }
       }
@@ -335,6 +350,8 @@ subcontractorsRouter.get('/my-company', async (req, res) => {
         id: company.id,
         companyName: company.companyName,
         abn: company.abn || '',
+        projectId: company.projectId,
+        projectName: company.project?.name || '',
         primaryContactName: company.primaryContactName || user.fullName || '',
         primaryContactEmail: company.primaryContactEmail || user.email,
         primaryContactPhone: company.primaryContactPhone || '',
@@ -643,6 +660,143 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
   }
 })
 
+// Default portal access settings
+const DEFAULT_PORTAL_ACCESS = {
+  lots: true,
+  itps: false,
+  holdPoints: false,
+  testResults: false,
+  ncrs: false,
+  documents: false,
+}
+
+// PATCH /api/subcontractors/:id/portal-access - Update portal access settings
+subcontractorsRouter.patch('/:id/portal-access', async (req, res) => {
+  try {
+    const user = req.user!
+    const { id } = req.params
+    const { portalAccess } = req.body
+
+    // Only allow head contractor roles to change portal access
+    const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
+    if (!allowedRoles.includes(user.roleInCompany || '')) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Only project managers or higher can update portal access settings'
+      })
+    }
+
+    // Validate portal access object
+    if (!portalAccess || typeof portalAccess !== 'object') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'portalAccess object is required'
+      })
+    }
+
+    // Validate the structure - ensure all keys are valid booleans
+    const validKeys = ['lots', 'itps', 'holdPoints', 'testResults', 'ncrs', 'documents']
+    for (const key of validKeys) {
+      if (portalAccess[key] !== undefined && typeof portalAccess[key] !== 'boolean') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: `Invalid value for ${key} - must be a boolean`
+        })
+      }
+    }
+
+    // Find the subcontractor company
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      include: { project: true }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Subcontractor company not found' })
+    }
+
+    // Verify user has access to this project
+    const projectUser = await prisma.projectUser.findUnique({
+      where: {
+        projectId_userId: {
+          projectId: subcontractor.projectId,
+          userId: user.id
+        }
+      }
+    })
+
+    const isCompanyAdmin = ['owner', 'admin'].includes(user.roleInCompany || '')
+    const project = await prisma.project.findUnique({
+      where: { id: subcontractor.projectId }
+    })
+    const isCompanyProject = project?.companyId === user.companyId
+
+    if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this project'
+      })
+    }
+
+    // Merge with defaults to ensure all keys exist
+    const mergedAccess = {
+      ...DEFAULT_PORTAL_ACCESS,
+      ...portalAccess
+    }
+
+    // Update the portal access
+    const updatedSubcontractor = await prisma.subcontractorCompany.update({
+      where: { id },
+      data: {
+        portalAccess: mergedAccess
+      },
+      select: {
+        id: true,
+        companyName: true,
+        portalAccess: true,
+      }
+    })
+
+    console.log(`Portal access updated for ${updatedSubcontractor.companyName} by ${user.email}:`, mergedAccess)
+
+    res.json({
+      message: 'Portal access updated successfully',
+      portalAccess: updatedSubcontractor.portalAccess
+    })
+  } catch (error) {
+    console.error('Update portal access error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/subcontractors/:id/portal-access - Get portal access settings
+subcontractorsRouter.get('/:id/portal-access', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        companyName: true,
+        portalAccess: true,
+      }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Subcontractor company not found' })
+    }
+
+    // Return stored access or defaults
+    const portalAccess = subcontractor.portalAccess || DEFAULT_PORTAL_ACCESS
+
+    res.json({ portalAccess })
+  } catch (error) {
+    console.error('Get portal access error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // GET /api/subcontractors/project/:projectId - Get all subcontractors for a project (head contractor view)
 subcontractorsRouter.get('/project/:projectId', async (req, res) => {
   try {
@@ -692,6 +846,7 @@ subcontractorsRouter.get('/project/:projectId', async (req, res) => {
         email: sub.primaryContactEmail || '',
         phone: sub.primaryContactPhone || '',
         status: sub.status,
+        portalAccess: sub.portalAccess || DEFAULT_PORTAL_ACCESS,
         employees: sub.employeeRoster.map(e => ({
           id: e.id,
           name: e.name,

@@ -17,6 +17,8 @@ import {
   FileCheck,
   Menu,
   X,
+  Briefcase,
+  Building2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
@@ -27,6 +29,12 @@ const ADMIN_ROLES = ['owner', 'admin']
 const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
 const FOREMAN_MENU_ITEMS = ['Lots', 'ITPs', 'Hold Points', 'Test Results', 'NCRs', 'Daily Diary', 'Docket Approvals']
 export const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
+
+// Subcontractor-specific navigation
+const subcontractorNavigation = [
+  { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase },
+  { name: 'My Company', href: '/my-company', icon: Building2 },
+]
 
 interface NavigationItem {
   name: string
@@ -41,8 +49,8 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false, excludeRoles: SUBCONTRACTOR_ROLES },
 ]
 
 const projectNavigation: NavigationItem[] = [
@@ -62,11 +70,17 @@ const projectNavigation: NavigationItem[] = [
 ]
 
 // Bottom nav - most important items for quick access
-const bottomNavItems = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Projects', href: '/projects', icon: FolderKanban },
-  { name: 'Lots', href: 'lots', icon: MapPin, requiresProject: true },
-  { name: 'Settings', href: '/settings', icon: Settings },
+const bottomNavItems: NavigationItem[] = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Projects', href: '/projects', icon: FolderKanban, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Lots', href: 'lots', icon: MapPin, requiresProject: true, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: SUBCONTRACTOR_ROLES },
+]
+
+// Subcontractor bottom nav items
+const subcontractorBottomNavItems: NavigationItem[] = [
+  { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase },
+  { name: 'My Company', href: '/my-company', icon: Building2 },
 ]
 
 export function MobileNav() {
@@ -79,6 +93,7 @@ export function MobileNav() {
   const hasAdminAccess = ADMIN_ROLES.includes(userRole)
   const hasManagementAccess = MANAGEMENT_ROLES.includes(userRole)
   const isForeman = userRole === 'foreman'
+  const isSubcontractor = SUBCONTRACTOR_ROLES.includes(userRole)
 
   const shouldShowItem = (item: NavigationItem): boolean => {
     if (item.requiresCommercialAccess && !hasCommercialAccess) return false
@@ -128,7 +143,7 @@ export function MobileNav() {
               </button>
             </div>
             <nav className="flex-1 space-y-1 p-4 overflow-auto">
-              {navigation.map((item) => (
+              {navigation.filter(shouldShowItem).map((item) => (
                 <NavLink
                   key={item.name}
                   to={item.href}
@@ -147,7 +162,37 @@ export function MobileNav() {
                 </NavLink>
               ))}
 
-              {projectId && (
+              {/* Subcontractor Navigation */}
+              {isSubcontractor && (
+                <>
+                  <div className="my-4 border-t pt-4">
+                    <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
+                      Subcontractor
+                    </p>
+                  </div>
+                  {subcontractorNavigation.map((item) => (
+                    <NavLink
+                      key={item.name}
+                      to={item.href}
+                      onClick={() => setIsOpen(false)}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                          isActive
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )
+                      }
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {item.name}
+                    </NavLink>
+                  ))}
+                </>
+              )}
+
+              {/* Hide project navigation for subcontractors */}
+              {projectId && !isSubcontractor && (
                 <>
                   <div className="my-4 border-t pt-4">
                     <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
@@ -175,23 +220,26 @@ export function MobileNav() {
                 </>
               )}
             </nav>
-            <div className="border-t p-4">
-              <NavLink
-                to="/settings"
-                onClick={() => setIsOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )
-                }
-              >
-                <Settings className="h-5 w-5" />
-                Settings
-              </NavLink>
-            </div>
+            {/* Hide settings for subcontractors */}
+            {!isSubcontractor && (
+              <div className="border-t p-4">
+                <NavLink
+                  to="/settings"
+                  onClick={() => setIsOpen(false)}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )
+                  }
+                >
+                  <Settings className="h-5 w-5" />
+                  Settings
+                </NavLink>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -199,7 +247,10 @@ export function MobileNav() {
       {/* Bottom Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom">
         <div className="flex justify-around items-center h-16">
-          {bottomNavItems.map((item) => {
+          {/* Use subcontractor nav items if subcontractor */}
+          {(isSubcontractor ? subcontractorBottomNavItems : bottomNavItems).map((item) => {
+            // Skip items excluded by role
+            if (!shouldShowItem(item)) return null
             // Skip project-specific items if no project selected
             if (item.requiresProject && !projectId) return null
 

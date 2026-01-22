@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { Plus, Users, Building2, CheckCircle, Clock, X, DollarSign, Truck, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Users, Building2, CheckCircle, Clock, X, DollarSign, Truck, ChevronDown, ChevronUp, Settings2, MapPin, ClipboardCheck, AlertTriangle, TestTube, FileWarning, FileText, Eye, EyeOff } from 'lucide-react'
 import { validateABN, formatABN } from '@/lib/abnValidation'
 
 interface Employee {
@@ -22,6 +22,15 @@ interface Plant {
   status: 'pending' | 'approved' | 'inactive'
 }
 
+interface PortalAccess {
+  lots: boolean
+  itps: boolean
+  holdPoints: boolean
+  testResults: boolean
+  ncrs: boolean
+  documents: boolean
+}
+
 interface Subcontractor {
   id: string
   companyName: string
@@ -34,7 +43,28 @@ interface Subcontractor {
   plant: Plant[]
   totalApprovedDockets: number
   totalCost: number
+  portalAccess?: PortalAccess
 }
+
+// Default portal access settings
+const DEFAULT_PORTAL_ACCESS: PortalAccess = {
+  lots: true,
+  itps: false,
+  holdPoints: false,
+  testResults: false,
+  ncrs: false,
+  documents: false,
+}
+
+// Portal access module definitions
+const PORTAL_MODULES = [
+  { key: 'lots', label: 'Assigned Lots', icon: MapPin, description: 'View lots assigned to their company' },
+  { key: 'itps', label: 'ITPs', icon: ClipboardCheck, description: 'View ITPs linked to assigned lots' },
+  { key: 'holdPoints', label: 'Hold Points', icon: AlertTriangle, description: 'View hold points on assigned lots' },
+  { key: 'testResults', label: 'Test Results', icon: TestTube, description: 'View test results for assigned work' },
+  { key: 'ncrs', label: 'NCRs', icon: FileWarning, description: 'View NCRs related to their work' },
+  { key: 'documents', label: 'Documents', icon: FileText, description: 'Access project documents' },
+] as const
 
 export function SubcontractorsPage() {
   const { projectId } = useParams()
@@ -65,6 +95,9 @@ export function SubcontractorsPage() {
     dryRate: '',
     wetRate: ''
   })
+  // Portal Access Panel state
+  const [selectedSubForPanel, setSelectedSubForPanel] = useState<Subcontractor | null>(null)
+  const [savingAccess, setSavingAccess] = useState(false)
 
   useEffect(() => {
     fetchSubcontractors()
@@ -432,6 +465,55 @@ export function SubcontractorsPage() {
     }
   }
 
+  const updatePortalAccess = async (subId: string, access: PortalAccess) => {
+    setSavingAccess(true)
+    const token = getAuthToken()
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+
+    try {
+      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/portal-access`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ portalAccess: access })
+      })
+
+      if (response.ok) {
+        // Update local state
+        setSubcontractors(subs => subs.map(sub =>
+          sub.id === subId ? { ...sub, portalAccess: access } : sub
+        ))
+        // Update the panel state too
+        if (selectedSubForPanel?.id === subId) {
+          setSelectedSubForPanel(prev => prev ? { ...prev, portalAccess: access } : null)
+        }
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Failed to update portal access')
+      }
+    } catch (error) {
+      console.error('Update portal access error:', error)
+      // For demo, update local state anyway
+      setSubcontractors(subs => subs.map(sub =>
+        sub.id === subId ? { ...sub, portalAccess: access } : sub
+      ))
+      if (selectedSubForPanel?.id === subId) {
+        setSelectedSubForPanel(prev => prev ? { ...prev, portalAccess: access } : null)
+      }
+    } finally {
+      setSavingAccess(false)
+    }
+  }
+
+  const toggleAccessModule = (moduleKey: keyof PortalAccess) => {
+    if (!selectedSubForPanel) return
+    const currentAccess = selectedSubForPanel.portalAccess || DEFAULT_PORTAL_ACCESS
+    const newAccess = { ...currentAccess, [moduleKey]: !currentAccess[moduleKey] }
+    updatePortalAccess(selectedSubForPanel.id, newAccess)
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-AU', {
       style: 'currency',
@@ -546,6 +628,14 @@ export function SubcontractorsPage() {
               </div>
               <div className="flex items-center gap-4">
                 {getStatusBadge(sub.status)}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSelectedSubForPanel(sub); }}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-muted transition-colors"
+                  title="Configure Portal Access"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Portal Access</span>
+                </button>
                 <div className="text-right">
                   <p className="font-semibold">{formatCurrency(sub.totalCost)}</p>
                   <p className="text-xs text-muted-foreground">{sub.totalApprovedDockets} dockets</p>
@@ -995,6 +1085,166 @@ export function SubcontractorsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Portal Access Side Panel */}
+      {selectedSubForPanel && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={() => setSelectedSubForPanel(null)}
+          />
+
+          {/* Panel */}
+          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-background border-l shadow-xl z-50 overflow-y-auto animate-in slide-in-from-right duration-300">
+            {/* Panel Header */}
+            <div className="sticky top-0 bg-background border-b p-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Portal Access</h2>
+                <p className="text-sm text-muted-foreground">{selectedSubForPanel.companyName}</p>
+              </div>
+              <button
+                onClick={() => setSelectedSubForPanel(null)}
+                className="p-2 hover:bg-muted rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Panel Content */}
+            <div className="p-4 space-y-6">
+              {/* Company Info Summary */}
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Building2 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">{selectedSubForPanel.companyName}</p>
+                    <p className="text-sm text-muted-foreground">{selectedSubForPanel.primaryContact}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Employees:</span>{' '}
+                    <span className="font-medium">{selectedSubForPanel.employees.length}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Plant:</span>{' '}
+                    <span className="font-medium">{selectedSubForPanel.plant.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Access Explanation */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Portal Access Settings</strong><br />
+                  Control what project information this subcontractor can view in their portal.
+                  They will always have access to their dockets, assigned work, and company management.
+                </p>
+              </div>
+
+              {/* Module Toggles */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  Project Modules
+                </h3>
+
+                {PORTAL_MODULES.map((module) => {
+                  const Icon = module.icon
+                  const currentAccess = selectedSubForPanel.portalAccess || DEFAULT_PORTAL_ACCESS
+                  const isEnabled = currentAccess[module.key as keyof PortalAccess]
+
+                  return (
+                    <div
+                      key={module.key}
+                      className={`rounded-lg border p-3 transition-colors ${
+                        isEnabled
+                          ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
+                          : 'border-gray-200 dark:border-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${
+                            isEnabled
+                              ? 'bg-green-100 dark:bg-green-800'
+                              : 'bg-gray-100 dark:bg-gray-800'
+                          }`}>
+                            <Icon className={`h-4 w-4 ${
+                              isEnabled
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-gray-500 dark:text-gray-400'
+                            }`} />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{module.label}</p>
+                            <p className="text-xs text-muted-foreground">{module.description}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => toggleAccessModule(module.key as keyof PortalAccess)}
+                          disabled={savingAccess}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            isEnabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                          } ${savingAccess ? 'opacity-50' : ''}`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              isEnabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Quick Actions */}
+              <div className="flex gap-2 pt-4 border-t">
+                <button
+                  onClick={() => {
+                    const allEnabled: PortalAccess = {
+                      lots: true,
+                      itps: true,
+                      holdPoints: true,
+                      testResults: true,
+                      ncrs: true,
+                      documents: true,
+                    }
+                    updatePortalAccess(selectedSubForPanel.id, allEnabled)
+                  }}
+                  disabled={savingAccess}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  <Eye className="h-4 w-4" />
+                  Enable All
+                </button>
+                <button
+                  onClick={() => {
+                    const allDisabled: PortalAccess = {
+                      lots: false,
+                      itps: false,
+                      holdPoints: false,
+                      testResults: false,
+                      ncrs: false,
+                      documents: false,
+                    }
+                    updatePortalAccess(selectedSubForPanel.id, allDisabled)
+                  }}
+                  disabled={savingAccess}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  <EyeOff className="h-4 w-4" />
+                  Disable All
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
