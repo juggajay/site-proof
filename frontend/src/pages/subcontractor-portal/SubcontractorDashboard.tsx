@@ -14,7 +14,6 @@ import {
   Building2,
   Calendar,
   ClipboardList,
-  FileText,
   FlaskConical,
   FolderOpen,
   Hand,
