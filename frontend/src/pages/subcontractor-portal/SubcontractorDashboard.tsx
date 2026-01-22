@@ -13,12 +13,26 @@ import {
   RefreshCw,
   Building2,
   Calendar,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  FolderOpen,
+  Hand,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useAuth, getAuthToken } from '@/lib/auth'
 import { cn } from '@/lib/utils'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+
+interface PortalAccess {
+  lots: boolean
+  itps: boolean
+  holdPoints: boolean
+  testResults: boolean
+  ncrs: boolean
+  documents: boolean
+}
 
 interface Company {
   id: string
@@ -35,6 +49,7 @@ interface Company {
     type: string
     status: string
   }>
+  portalAccess?: PortalAccess
 }
 
 interface Docket {
@@ -384,51 +399,53 @@ export function SubcontractorDashboard() {
         </div>
       )}
 
-      {/* Assigned Lots */}
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
-        <div className="p-4 pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-gray-400" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Assigned Lots</h2>
+      {/* Assigned Lots - Only show if portal access allows */}
+      {company?.portalAccess?.lots !== false && (
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+          <div className="p-4 pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-gray-400" />
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Assigned Lots</h2>
+              </div>
+              <span className="px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
+                {assignedLots.length}
+              </span>
             </div>
-            <span className="px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
-              {assignedLots.length}
-            </span>
+          </div>
+          <div className="p-4 pt-2">
+            {assignedLots.length > 0 ? (
+              <div className="space-y-2">
+                {assignedLots.map((lot) => (
+                  <div
+                    key={lot.id}
+                    className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-gray-400" />
+                      <span className="font-medium text-gray-900 dark:text-white">{lot.lotNumber}</span>
+                      {lot.activity && (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">- {lot.activity}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <Link
+                  to="/subcontractor-portal/work"
+                  className="flex items-center justify-center gap-2 w-full py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mt-2"
+                >
+                  View All Work
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                No lots assigned yet. Contact your project manager.
+              </p>
+            )}
           </div>
         </div>
-        <div className="p-4 pt-2">
-          {assignedLots.length > 0 ? (
-            <div className="space-y-2">
-              {assignedLots.map((lot) => (
-                <div
-                  key={lot.id}
-                  className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50"
-                >
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium text-gray-900 dark:text-white">{lot.lotNumber}</span>
-                    {lot.activity && (
-                      <span className="text-sm text-gray-500 dark:text-gray-400">- {lot.activity}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              <Link
-                to="/subcontractor-portal/work"
-                className="flex items-center justify-center gap-2 w-full py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mt-2"
-              >
-                View All Work
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-          ) : (
-            <p className="text-center text-gray-500 dark:text-gray-400 py-4">
-              No lots assigned yet. Contact your project manager.
-            </p>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Recent Dockets */}
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
@@ -500,6 +517,81 @@ export function SubcontractorDashboard() {
             </div>
           </div>
         </Link>
+        {/* Portal Access - ITPs */}
+        {company?.portalAccess?.itps && (
+          <Link
+            to={`/projects/${company.projectId}/itp`}
+            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+          >
+            <div className="p-4 flex items-center gap-3">
+              <ClipboardList className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">ITPs</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Inspection & Test Plans</p>
+              </div>
+            </div>
+          </Link>
+        )}
+        {/* Portal Access - Hold Points */}
+        {company?.portalAccess?.holdPoints && (
+          <Link
+            to={`/projects/${company.projectId}/holdpoints`}
+            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+          >
+            <div className="p-4 flex items-center gap-3">
+              <Hand className="h-5 w-5 text-amber-500" />
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">Hold Points</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">View hold points</p>
+              </div>
+            </div>
+          </Link>
+        )}
+        {/* Portal Access - Test Results */}
+        {company?.portalAccess?.testResults && (
+          <Link
+            to={`/projects/${company.projectId}/tests`}
+            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+          >
+            <div className="p-4 flex items-center gap-3">
+              <FlaskConical className="h-5 w-5 text-blue-500" />
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">Test Results</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">View test results</p>
+              </div>
+            </div>
+          </Link>
+        )}
+        {/* Portal Access - NCRs */}
+        {company?.portalAccess?.ncrs && (
+          <Link
+            to={`/projects/${company.projectId}/ncr`}
+            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+          >
+            <div className="p-4 flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">NCRs</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Non-conformance reports</p>
+              </div>
+            </div>
+          </Link>
+        )}
+        {/* Portal Access - Documents */}
+        {company?.portalAccess?.documents && (
+          <Link
+            to={`/projects/${company.projectId}/documents`}
+            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+          >
+            <div className="p-4 flex items-center gap-3">
+              <FolderOpen className="h-5 w-5 text-purple-500" />
+              <div>
+                <p className="font-medium text-gray-900 dark:text-white">Documents</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Project documents</p>
+              </div>
+            </div>
+          </Link>
+        )}
       </div>
     </div>
   )

@@ -372,7 +372,15 @@ subcontractorsRouter.get('/my-company', async (req, res) => {
           dryRate: p.dryRate?.toNumber() || 0,
           wetRate: p.wetRate?.toNumber() || 0,
           status: p.status === 'approved' ? 'approved' : 'pending'
-        }))
+        })),
+        portalAccess: (company as any).portalAccess || {
+          lots: true,
+          itps: false,
+          holdPoints: false,
+          testResults: false,
+          ncrs: false,
+          documents: false,
+        }
       }
     })
   } catch (error) {
