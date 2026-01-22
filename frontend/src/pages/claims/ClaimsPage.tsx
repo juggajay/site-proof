@@ -88,7 +88,7 @@ export function ClaimsPage() {
 
     try {
       const token = getAuthToken()
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
       const response = await fetch(`${API_URL}/api/projects/${projectId}/claims/${claimId}/completeness-check`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
@@ -190,7 +190,7 @@ export function ClaimsPage() {
 
     try {
       const token = getAuthToken()
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
       const response = await fetch(`${API_URL}/api/projects/${projectId}/claims/${claimId}/evidence-package`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })

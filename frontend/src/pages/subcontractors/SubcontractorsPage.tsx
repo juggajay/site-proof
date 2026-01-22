@@ -109,7 +109,7 @@ export function SubcontractorsPage() {
     const token = getAuthToken()
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
       const response = await fetch(`${API_URL}/api/subcontractors/project/${projectId}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
@@ -187,7 +187,7 @@ export function SubcontractorsPage() {
 
   const updateEmployeeStatus = async (subId: string, empId: string, status: 'pending' | 'approved' | 'inactive') => {
     const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
       const response = await fetch(`${API_URL}/api/subcontractors/${subId}/employees/${empId}/status`, {
@@ -239,7 +239,7 @@ export function SubcontractorsPage() {
     }
 
     const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
       const response = await fetch(`${API_URL}/api/subcontractors/${subId}/employees`, {
@@ -280,7 +280,7 @@ export function SubcontractorsPage() {
 
   const updatePlantStatus = async (subId: string, plantId: string, status: 'pending' | 'approved' | 'inactive') => {
     const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
       const response = await fetch(`${API_URL}/api/subcontractors/${subId}/plant/${plantId}/status`, {
@@ -332,7 +332,7 @@ export function SubcontractorsPage() {
     }
 
     const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
       const response = await fetch(`${API_URL}/api/subcontractors/${subId}/plant`, {
@@ -397,7 +397,7 @@ export function SubcontractorsPage() {
 
   const updateSubcontractorStatus = async (subId: string, status: string) => {
     const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
       const response = await fetch(`${API_URL}/api/subcontractors/${subId}/status`, {
@@ -427,7 +427,7 @@ export function SubcontractorsPage() {
   const inviteSubcontractor = async () => {
     setInviting(true)
     const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
       const response = await fetch(`${API_URL}/api/subcontractors/invite`, {
@@ -468,7 +468,7 @@ export function SubcontractorsPage() {
   const updatePortalAccess = async (subId: string, access: PortalAccess) => {
     setSavingAccess(true)
     const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4001'
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
       const response = await fetch(`${API_URL}/api/subcontractors/${subId}/portal-access`, {
