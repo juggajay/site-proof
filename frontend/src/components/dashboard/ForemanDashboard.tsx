@@ -133,6 +133,45 @@ export function ForemanDashboard() {
     )
   }
 
+  const projectId = data.project?.id
+
+  // Helper to build project-scoped paths
+  const getProjectPath = (path: string) => {
+    return projectId ? `/projects/${projectId}/${path}` : '/projects'
+  }
+
+  // If no project is assigned, show a message
+  if (!projectId) {
+    return (
+      <div className="space-y-6 p-6">
+        <div>
+          <h1 className="text-2xl font-bold">Good {getTimeOfDay()}, {user?.fullName?.split(' ')[0] || user?.name?.split(' ')[0] || 'Foreman'}!</h1>
+          <p className="text-muted-foreground flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            {today}
+          </p>
+        </div>
+
+        <div className="bg-card rounded-lg border p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+            <ClipboardCheck className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h2 className="text-lg font-semibold mb-2">No Project Assigned</h2>
+          <p className="text-muted-foreground mb-4">
+            You need to be assigned to a project before you can access the foreman dashboard features.
+          </p>
+          <Link
+            to="/projects"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
+          >
+            View Projects
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -213,7 +252,7 @@ export function ForemanDashboard() {
                     : 'Diary started but not yet submitted'}
                 </p>
                 <Link
-                  to={`/diary?date=${formatDateForUrl(new Date())}`}
+                  to={getProjectPath(`diary?date=${formatDateForUrl(new Date())}`)}
                   className="inline-flex items-center gap-2 text-primary hover:underline"
                 >
                   View/Edit Diary <ChevronRight className="h-4 w-4" />
@@ -225,7 +264,7 @@ export function ForemanDashboard() {
                   No diary entry started for today
                 </p>
                 <Link
-                  to={`/diary?date=${formatDateForUrl(new Date())}`}
+                  to={getProjectPath(`diary?date=${formatDateForUrl(new Date())}`)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
                 >
                   <Plus className="h-4 w-4" />
@@ -263,7 +302,7 @@ export function ForemanDashboard() {
                   </div>
                 </div>
                 <Link
-                  to="/dockets?status=pending_approval"
+                  to={getProjectPath('dockets?status=pending_approval')}
                   className="inline-flex items-center gap-2 text-primary hover:underline"
                 >
                   Review Dockets <ChevronRight className="h-4 w-4" />
@@ -332,28 +371,28 @@ export function ForemanDashboard() {
         </div>
         <div className="p-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <Link
-            to={`/diary?date=${formatDateForUrl(new Date())}`}
+            to={getProjectPath(`diary?date=${formatDateForUrl(new Date())}`)}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <FileText className="h-5 w-5 text-blue-600" />
             <span className="font-medium">Daily Diary</span>
           </Link>
           <Link
-            to="/dockets"
+            to={getProjectPath('dockets')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <ClipboardCheck className="h-5 w-5 text-amber-600" />
             <span className="font-medium">Docket Approvals</span>
           </Link>
           <Link
-            to="/lots"
+            to={getProjectPath('lots')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <Users className="h-5 w-5 text-green-600" />
             <span className="font-medium">View Lots</span>
           </Link>
           <Link
-            to="/itp"
+            to={getProjectPath('itp')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <AlertTriangle className="h-5 w-5 text-red-600" />
