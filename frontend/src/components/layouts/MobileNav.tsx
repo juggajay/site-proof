@@ -89,7 +89,8 @@ export function MobileNav() {
   const { projectId } = useParams()
   const { user } = useAuth()
 
-  const userRole = user?.role || ''
+  // Use roleInCompany first (from backend), fallback to role
+  const userRole = (user as any)?.roleInCompany || user?.role || ''
   const hasCommercialAccess = COMMERCIAL_ROLES.includes(userRole)
   const hasAdminAccess = ADMIN_ROLES.includes(userRole)
   const hasManagementAccess = MANAGEMENT_ROLES.includes(userRole)
