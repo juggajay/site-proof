@@ -44,6 +44,8 @@ export async function createTestProject(companyId: string, overrides = {}) {
       projectNumber: `TP-${Date.now()}`,
       companyId,
       status: 'active',
+      state: 'NSW',
+      specificationSet: 'TfNSW',
       ...overrides,
     },
   })
@@ -54,6 +56,7 @@ export async function createTestLot(projectId: string, overrides = {}) {
     data: {
       projectId,
       lotNumber: `LOT-${Date.now()}`,
+      lotType: 'roadworks',
       description: 'Test Lot',
       status: 'not_started',
       activityType: 'Earthworks',

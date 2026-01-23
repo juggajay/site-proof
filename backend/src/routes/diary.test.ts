@@ -5,8 +5,7 @@ import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
 
 // Import diary router
-import diaryRouterModule from './diary.js'
-const diaryRouter = diaryRouterModule.default || diaryRouterModule
+import diaryRouter from './diary.js'
 
 const app = express()
 app.use(express.json())

@@ -204,7 +204,6 @@ describe('ITP Instances', () => {
   let projectId: string
   let templateId: string
   let lotId: string
-  let instanceId: string
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -300,7 +299,7 @@ describe('ITP Instances', () => {
 
     expect(res.status).toBe(201)
     expect(res.body.instance).toBeDefined()
-    instanceId = res.body.instance.id
+    // instanceId stored in res.body.instance.id if needed
   })
 
   it('should get ITP instance for lot', async () => {

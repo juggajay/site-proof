@@ -15,7 +15,6 @@ app.use('/api/ncrs', ncrsRouter)
 describe('Role-Based Access Control', () => {
   let companyId: string
   let projectId: string
-  let lotId: string
 
   // User tokens by role
   let adminToken: string
@@ -109,7 +108,7 @@ describe('Role-Based Access Control', () => {
     })
 
     // Create a test lot for RBAC testing
-    const lot = await prisma.lot.create({
+    await prisma.lot.create({
       data: {
         projectId,
         lotNumber: `RBAC-LOT-${Date.now()}`,
@@ -118,7 +117,6 @@ describe('Role-Based Access Control', () => {
         activityType: 'Earthworks',
       }
     })
-    lotId = lot.id
   })
 
   afterAll(async () => {

@@ -20,7 +20,6 @@ describe('Hold Points API', () => {
   let templateId: string
   let lotId: string
   let checklistItemId: string
-  let instanceId: string
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -94,14 +93,13 @@ describe('Hold Points API', () => {
     lotId = lot.id
 
     // Create ITP instance for the lot
-    const instance = await prisma.iTPInstance.create({
+    await prisma.iTPInstance.create({
       data: {
         templateId,
         lotId,
         status: 'not_started',
       }
     })
-    instanceId = instance.id
   })
 
   afterAll(async () => {
