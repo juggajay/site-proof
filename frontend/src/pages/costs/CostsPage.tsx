@@ -1,7 +1,9 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { DollarSign, TrendingUp, Users, Truck, Download, Filter } from 'lucide-react'
+import { DollarSign, TrendingUp, Users, Truck, Download, Filter, FolderOpen } from 'lucide-react'
+import { useIsMobile } from '@/hooks/useMediaQuery'
+import { MobileDataCard } from '@/components/ui/MobileDataCard'
 
 interface CostSummary {
   totalLabourCost: number
@@ -33,6 +35,7 @@ interface LotCost {
 
 export function CostsPage() {
   const { projectId } = useParams()
+  const isMobile = useIsMobile()
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<CostSummary | null>(null)
   const [subcontractorCosts, setSubcontractorCosts] = useState<SubcontractorCost[]>([])
@@ -60,40 +63,33 @@ export function CostsPage() {
         setSubcontractorCosts(data.subcontractorCosts || [])
         setLotCosts(data.lotCosts || [])
       } else {
-        // Use default data for display
+        // Show empty state on error
         setSummary({
-          totalLabourCost: 125680,
-          totalPlantCost: 89450,
-          totalCost: 215130,
-          budgetTotal: 250000,
-          budgetVariance: 34870,
-          approvedDockets: 47,
-          pendingDockets: 3
+          totalLabourCost: 0,
+          totalPlantCost: 0,
+          totalCost: 0,
+          budgetTotal: 0,
+          budgetVariance: 0,
+          approvedDockets: 0,
+          pendingDockets: 0
         })
-        setSubcontractorCosts([
-          { id: '1', companyName: 'ABC Earthworks Pty Ltd', labourCost: 45200, plantCost: 32100, totalCost: 77300, approvedDockets: 18 },
-          { id: '2', companyName: 'XYZ Drainage Services', labourCost: 38450, plantCost: 28500, totalCost: 66950, approvedDockets: 15 },
-          { id: '3', companyName: 'Premier Paving Co', labourCost: 42030, plantCost: 28850, totalCost: 70880, approvedDockets: 14 }
-        ])
-        setLotCosts([
-          { id: '1', lotNumber: 'LOT-001', activity: 'Earthworks', budgetAmount: 45000, actualCost: 38500, variance: 6500 },
-          { id: '2', lotNumber: 'LOT-002', activity: 'Drainage', budgetAmount: 32000, actualCost: 35200, variance: -3200 },
-          { id: '3', lotNumber: 'LOT-003', activity: 'Pavement', budgetAmount: 78000, actualCost: 71430, variance: 6570 },
-          { id: '4', lotNumber: 'LOT-004', activity: 'Concrete', budgetAmount: 95000, actualCost: 70000, variance: 25000 }
-        ])
+        setSubcontractorCosts([])
+        setLotCosts([])
       }
     } catch (error) {
       console.error('Error fetching cost data:', error)
-      // Use demo data on error
+      // Show empty state on error
       setSummary({
-        totalLabourCost: 125680,
-        totalPlantCost: 89450,
-        totalCost: 215130,
-        budgetTotal: 250000,
-        budgetVariance: 34870,
-        approvedDockets: 47,
-        pendingDockets: 3
+        totalLabourCost: 0,
+        totalPlantCost: 0,
+        totalCost: 0,
+        budgetTotal: 0,
+        budgetVariance: 0,
+        approvedDockets: 0,
+        pendingDockets: 0
       })
+      setSubcontractorCosts([])
+      setLotCosts([])
     } finally {
       setLoading(false)
     }
@@ -208,58 +204,103 @@ export function CostsPage() {
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - Consolidated on mobile */}
       {summary && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border bg-card p-6">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <DollarSign className="h-4 w-4" />
-              <span className="text-sm font-medium">Total Cost</span>
+        <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'md:grid-cols-2 lg:grid-cols-4'}`}>
+          {/* Total Cost - On mobile, includes Labour/Plant breakdown inline */}
+          <div className={`rounded-xl border bg-card p-5 ${isMobile ? '' : ''}`}>
+            <div className="flex items-center gap-2 text-muted-foreground mb-2">
+              <DollarSign className="h-5 w-5" />
+              <span className="font-medium">Total Cost</span>
             </div>
-            <div className="mt-2 text-2xl font-bold">{formatCurrency(summary.totalCost)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Labour: {formatCurrency(summary.totalLabourCost)} | Plant: {formatCurrency(summary.totalPlantCost)}
-            </p>
+            <div className="text-3xl font-bold">{formatCurrency(summary.totalCost)}</div>
+            {isMobile ? (
+              <div className="mt-3 grid grid-cols-2 gap-4 pt-3 border-t">
+                <div>
+                  <div className="flex items-center gap-1 text-muted-foreground mb-1">
+                    <Users className="h-3.5 w-3.5" />
+                    <span className="text-xs">Labour</span>
+                  </div>
+                  <p className="font-semibold">{formatCurrency(summary.totalLabourCost)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {summary.totalCost > 0 ? Math.round((summary.totalLabourCost / summary.totalCost) * 100) : 0}% of total
+                  </p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1 text-muted-foreground mb-1">
+                    <Truck className="h-3.5 w-3.5" />
+                    <span className="text-xs">Plant</span>
+                  </div>
+                  <p className="font-semibold">{formatCurrency(summary.totalPlantCost)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {summary.totalCost > 0 ? Math.round((summary.totalPlantCost / summary.totalCost) * 100) : 0}% of total
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">
+                Labour: {formatCurrency(summary.totalLabourCost)} | Plant: {formatCurrency(summary.totalPlantCost)}
+              </p>
+            )}
           </div>
 
-          <div className="rounded-lg border bg-card p-6">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <TrendingUp className="h-4 w-4" />
-              <span className="text-sm font-medium">Budget Status</span>
+          {/* Budget Status */}
+          <div className="rounded-xl border bg-card p-5">
+            <div className="flex items-center gap-2 text-muted-foreground mb-2">
+              <TrendingUp className="h-5 w-5" />
+              <span className="font-medium">Budget Status</span>
             </div>
-            <div className="mt-2 text-2xl font-bold">{formatCurrency(summary.budgetTotal)}</div>
-            <p className={`text-xs mt-1 ${summary.budgetVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className="text-3xl font-bold">{formatCurrency(summary.budgetTotal)}</div>
+            <p className={`text-sm mt-1 font-medium ${summary.budgetVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {summary.budgetVariance >= 0 ? 'Under budget by ' : 'Over budget by '}
               {formatCurrency(Math.abs(summary.budgetVariance))}
             </p>
+            {isMobile && (
+              <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-2xl font-bold text-green-600">{summary.approvedDockets}</span>
+                  <p className="text-xs text-muted-foreground">Approved</p>
+                </div>
+                <div>
+                  <span className="text-2xl font-bold text-amber-600">{summary.pendingDockets}</span>
+                  <p className="text-xs text-muted-foreground">Pending</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="rounded-lg border bg-card p-6">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Users className="h-4 w-4" />
-              <span className="text-sm font-medium">Labour Cost</span>
+          {/* Labour Cost - Desktop only */}
+          {!isMobile && (
+            <div className="rounded-xl border bg-card p-5">
+              <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                <Users className="h-5 w-5" />
+                <span className="font-medium">Labour Cost</span>
+              </div>
+              <div className="text-3xl font-bold">{formatCurrency(summary.totalLabourCost)}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {summary.totalCost > 0 ? Math.round((summary.totalLabourCost / summary.totalCost) * 100) : 0}% of total
+              </p>
             </div>
-            <div className="mt-2 text-2xl font-bold">{formatCurrency(summary.totalLabourCost)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {Math.round((summary.totalLabourCost / summary.totalCost) * 100)}% of total
-            </p>
-          </div>
+          )}
 
-          <div className="rounded-lg border bg-card p-6">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Truck className="h-4 w-4" />
-              <span className="text-sm font-medium">Plant Cost</span>
+          {/* Plant Cost - Desktop only */}
+          {!isMobile && (
+            <div className="rounded-xl border bg-card p-5">
+              <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                <Truck className="h-5 w-5" />
+                <span className="font-medium">Plant Cost</span>
+              </div>
+              <div className="text-3xl font-bold">{formatCurrency(summary.totalPlantCost)}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {summary.totalCost > 0 ? Math.round((summary.totalPlantCost / summary.totalCost) * 100) : 0}% of total
+              </p>
             </div>
-            <div className="mt-2 text-2xl font-bold">{formatCurrency(summary.totalPlantCost)}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {Math.round((summary.totalPlantCost / summary.totalCost) * 100)}% of total
-            </p>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Docket Status */}
-      {summary && (
+      {/* Docket Status - Hidden on mobile (integrated into Budget Status card) */}
+      {summary && !isMobile && (
         <div className="rounded-lg border bg-card p-6">
           <h3 className="font-semibold mb-4">Docket Status</h3>
           <div className="flex gap-8">
@@ -307,67 +348,125 @@ export function CostsPage() {
 
       {/* Content */}
       {activeTab === 'subcontractors' && (
-        <div className="rounded-lg border">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left p-4 font-medium">Subcontractor</th>
-                <th className="text-right p-4 font-medium">Labour Cost</th>
-                <th className="text-right p-4 font-medium">Plant Cost</th>
-                <th className="text-right p-4 font-medium">Total Cost</th>
-                <th className="text-right p-4 font-medium">Dockets</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className={isMobile ? 'space-y-3' : 'rounded-lg border'}>
+          {subcontractorCosts.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground rounded-lg border">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="font-medium">No subcontractor costs yet</p>
+              <p className="text-sm mt-1">Costs will appear here once dockets are approved.</p>
+            </div>
+          ) : isMobile ? (
+            /* Mobile Card View for Subcontractors */
+            <>
               {subcontractorCosts.map((sub) => (
-                <tr key={sub.id} className="border-t hover:bg-muted/30">
-                  <td className="p-4 font-medium">{sub.companyName}</td>
-                  <td className="p-4 text-right">{formatCurrency(sub.labourCost)}</td>
-                  <td className="p-4 text-right">{formatCurrency(sub.plantCost)}</td>
-                  <td className="p-4 text-right font-semibold">{formatCurrency(sub.totalCost)}</td>
-                  <td className="p-4 text-right">{sub.approvedDockets}</td>
-                </tr>
+                <MobileDataCard
+                  key={sub.id}
+                  title={sub.companyName}
+                  subtitle={`${sub.approvedDockets} approved dockets`}
+                  fields={[
+                    { label: 'Total', value: formatCurrency(sub.totalCost), priority: 'primary' },
+                    { label: 'Labour', value: formatCurrency(sub.labourCost), priority: 'primary' },
+                    { label: 'Plant', value: formatCurrency(sub.plantCost), priority: 'secondary' },
+                  ]}
+                />
               ))}
-            </tbody>
-            <tfoot className="bg-muted/30 font-semibold">
-              <tr className="border-t">
-                <td className="p-4">Total</td>
-                <td className="p-4 text-right">{formatCurrency(summary?.totalLabourCost || 0)}</td>
-                <td className="p-4 text-right">{formatCurrency(summary?.totalPlantCost || 0)}</td>
-                <td className="p-4 text-right">{formatCurrency(summary?.totalCost || 0)}</td>
-                <td className="p-4 text-right">{summary?.approvedDockets || 0}</td>
-              </tr>
-            </tfoot>
-          </table>
+              {/* Totals Card */}
+              <div className="rounded-xl border bg-muted/50 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Total</span>
+                  <span className="font-bold text-lg">{formatCurrency(summary?.totalCost || 0)}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Desktop Table View */
+            <table className="w-full">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-4 font-medium">Subcontractor</th>
+                  <th className="text-right p-4 font-medium">Labour Cost</th>
+                  <th className="text-right p-4 font-medium">Plant Cost</th>
+                  <th className="text-right p-4 font-medium">Total Cost</th>
+                  <th className="text-right p-4 font-medium">Dockets</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subcontractorCosts.map((sub) => (
+                  <tr key={sub.id} className="border-t hover:bg-muted/30">
+                    <td className="p-4 font-medium">{sub.companyName}</td>
+                    <td className="p-4 text-right">{formatCurrency(sub.labourCost)}</td>
+                    <td className="p-4 text-right">{formatCurrency(sub.plantCost)}</td>
+                    <td className="p-4 text-right font-semibold">{formatCurrency(sub.totalCost)}</td>
+                    <td className="p-4 text-right">{sub.approvedDockets}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-muted/30 font-semibold">
+                <tr className="border-t">
+                  <td className="p-4">Total</td>
+                  <td className="p-4 text-right">{formatCurrency(summary?.totalLabourCost || 0)}</td>
+                  <td className="p-4 text-right">{formatCurrency(summary?.totalPlantCost || 0)}</td>
+                  <td className="p-4 text-right">{formatCurrency(summary?.totalCost || 0)}</td>
+                  <td className="p-4 text-right">{summary?.approvedDockets || 0}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
         </div>
       )}
 
       {activeTab === 'lots' && (
-        <div className="rounded-lg border">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left p-4 font-medium">Lot</th>
-                <th className="text-left p-4 font-medium">Activity</th>
-                <th className="text-right p-4 font-medium">Budget</th>
-                <th className="text-right p-4 font-medium">Actual Cost</th>
-                <th className="text-right p-4 font-medium">Variance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lotCosts.map((lot) => (
-                <tr key={lot.id} className="border-t hover:bg-muted/30">
-                  <td className="p-4 font-medium">{lot.lotNumber}</td>
-                  <td className="p-4">{lot.activity}</td>
-                  <td className="p-4 text-right">{formatCurrency(lot.budgetAmount)}</td>
-                  <td className="p-4 text-right">{formatCurrency(lot.actualCost)}</td>
-                  <td className={`p-4 text-right font-semibold ${lot.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {lot.variance >= 0 ? '+' : ''}{formatCurrency(lot.variance)}
-                  </td>
+        <div className={isMobile ? 'space-y-3' : 'rounded-lg border'}>
+          {lotCosts.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground rounded-lg border">
+              <FolderOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="font-medium">No lot cost data yet</p>
+              <p className="text-sm mt-1">Create lots and assign budgets to track costs by lot.</p>
+            </div>
+          ) : isMobile ? (
+            /* Mobile Card View for Lots */
+            lotCosts.map((lot) => (
+              <MobileDataCard
+                key={lot.id}
+                title={lot.lotNumber}
+                subtitle={lot.activity}
+                status={{
+                  label: lot.variance >= 0 ? `+${formatCurrency(lot.variance)}` : formatCurrency(lot.variance),
+                  variant: lot.variance >= 0 ? 'success' : 'error'
+                }}
+                fields={[
+                  { label: 'Budget', value: formatCurrency(lot.budgetAmount), priority: 'primary' },
+                  { label: 'Actual', value: formatCurrency(lot.actualCost), priority: 'primary' },
+                ]}
+              />
+            ))
+          ) : (
+            /* Desktop Table View */
+            <table className="w-full">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-4 font-medium">Lot</th>
+                  <th className="text-left p-4 font-medium">Activity</th>
+                  <th className="text-right p-4 font-medium">Budget</th>
+                  <th className="text-right p-4 font-medium">Actual Cost</th>
+                  <th className="text-right p-4 font-medium">Variance</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lotCosts.map((lot) => (
+                  <tr key={lot.id} className="border-t hover:bg-muted/30">
+                    <td className="p-4 font-medium">{lot.lotNumber}</td>
+                    <td className="p-4">{lot.activity}</td>
+                    <td className="p-4 text-right">{formatCurrency(lot.budgetAmount)}</td>
+                    <td className="p-4 text-right">{formatCurrency(lot.actualCost)}</td>
+                    <td className={`p-4 text-right font-semibold ${lot.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {lot.variance >= 0 ? '+' : ''}{formatCurrency(lot.variance)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 

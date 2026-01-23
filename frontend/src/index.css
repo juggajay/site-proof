@@ -70,8 +70,16 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-background text-foreground;
+    /* Prevent pull-to-refresh interference */
+    overscroll-behavior-y: contain;
   }
 
   /* Prevent horizontal scroll on mobile */
@@ -89,6 +97,11 @@
   /* Bottom navigation safe area */
   .safe-area-inset-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Focus visible states for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
   }
 }
 
@@ -131,6 +144,44 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* Micro-interaction utilities */
+@layer utilities {
+  /* Card press feedback */
+  .card-press {
+    @apply transition-transform duration-100 active:scale-[0.98];
+  }
+
+  /* Smooth fade in for loaded content */
+  .fade-in-up {
+    animation: fadeInUp 0.2s ease-out;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Staggered list animation */
+  .stagger-item {
+    animation: slideUp 0.3s ease-out backwards;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Touch manipulation for better mobile touch response */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px] touch-manipulation;
+  }
+
+  /* Skeleton pulse animation */
+  .skeleton-pulse {
+    @apply animate-pulse bg-muted rounded;
   }
 }
 

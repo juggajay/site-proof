@@ -1,9 +1,10 @@
 import { useAuth, getAuthToken } from '@/lib/auth'
-import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, Settings, UserCircle, Search } from 'lucide-react'
+import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, Settings, UserCircle, Search, Sun, Moon } from 'lucide-react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Breadcrumbs } from './Breadcrumbs'
 import { GlobalSearch } from '@/components/GlobalSearch'
+import { useTheme } from '@/lib/theme'
 
 interface Project {
   id: string
@@ -31,6 +32,7 @@ export function Header() {
   const navigate = useNavigate()
   const location = useLocation()
   const { projectId } = useParams()
+  const { setTheme, resolvedTheme } = useTheme()
   const [projects, setProjects] = useState<Project[]>([])
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false)
   const [projectSearchTerm, setProjectSearchTerm] = useState('')
@@ -300,6 +302,19 @@ export function Header() {
         <Breadcrumbs />
       </div>
       <div className="flex items-center gap-4">
+        {/* Theme Toggle Button */}
+        <button
+          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+          className="p-2 rounded-lg hover:bg-muted touch-manipulation"
+          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {resolvedTheme === 'dark' ? (
+            <Sun className="h-5 w-5" />
+          ) : (
+            <Moon className="h-5 w-5" />
+          )}
+        </button>
+
         {/* Quick Search Button */}
         <button
           onClick={() => setIsSearchOpen(true)}

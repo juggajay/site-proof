@@ -12,6 +12,7 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton'
 import { getAuthToken } from '@/lib/auth'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
@@ -83,6 +84,7 @@ function getDocketStatusBadge(status: string) {
 }
 
 export function DocketsListPage() {
+  const isMobile = useIsMobile()
   const [dockets, setDockets] = useState<Docket[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -183,12 +185,15 @@ export function DocketsListPage() {
         </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-x-auto">
+      {/* Filter tabs - wraps on mobile */}
+      <div className={cn(
+        "p-1 bg-gray-100 dark:bg-gray-800 rounded-lg",
+        isMobile ? "grid grid-cols-2 gap-1" : "flex gap-1 overflow-x-auto"
+      )}>
         <button
           onClick={() => setStatusFilter('all')}
           className={cn(
-            'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap',
+            'flex items-center justify-center gap-1 px-3 py-2.5 text-sm font-medium rounded-md transition-colors touch-manipulation',
             statusFilter === 'all'
               ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -200,7 +205,7 @@ export function DocketsListPage() {
         <button
           onClick={() => setStatusFilter('pending_approval')}
           className={cn(
-            'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap',
+            'flex items-center justify-center gap-1 px-3 py-2.5 text-sm font-medium rounded-md transition-colors touch-manipulation',
             statusFilter === 'pending_approval'
               ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -212,7 +217,7 @@ export function DocketsListPage() {
         <button
           onClick={() => setStatusFilter('approved')}
           className={cn(
-            'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap',
+            'flex items-center justify-center gap-1 px-3 py-2.5 text-sm font-medium rounded-md transition-colors touch-manipulation',
             statusFilter === 'approved'
               ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -224,7 +229,7 @@ export function DocketsListPage() {
         <button
           onClick={() => setStatusFilter('queried')}
           className={cn(
-            'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap',
+            'flex items-center justify-center gap-1 px-3 py-2.5 text-sm font-medium rounded-md transition-colors touch-manipulation',
             statusFilter === 'queried'
               ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'

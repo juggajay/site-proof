@@ -3,6 +3,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
@@ -137,6 +138,7 @@ export function LotsPage() {
   const { canViewBudgets } = useCommercialAccess()
   const { isSubcontractor } = useSubcontractorAccess()
   const { canCreate } = useViewerAccess()
+  const isMobile = useIsMobile()
   const [lots, setLots] = useState<Lot[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -2181,13 +2183,13 @@ export function LotsPage() {
         </div>
       )}
 
-      {/* Lot Table / Card View */}
-      {!loading && !error && viewMode === 'list' && (
+      {/* Lot Table / Card View - Table hidden on mobile, use card view instead */}
+      {!loading && !error && viewMode === 'list' && !isMobile && (
         <div
           className={`rounded-lg border overflow-auto max-h-[calc(100vh-280px)] ${resizingColumn ? 'cursor-col-resize select-none' : ''}`}
           data-testid="scrollable-table-container"
         >
-          <table className="w-full min-w-[900px]" style={{ tableLayout: 'fixed' }} data-testid="lots-table">
+          <table className="w-full" style={{ tableLayout: 'fixed' }} data-testid="lots-table">
             <thead className="border-b sticky top-0 z-10 bg-muted" data-testid="sticky-table-header">
               <tr>
                 {canDelete && (
@@ -2474,8 +2476,8 @@ export function LotsPage() {
         </div>
       )}
 
-      {/* Card View */}
-      {!loading && !error && viewMode === 'card' && (
+      {/* Card View - Also shows on mobile when list view is selected */}
+      {!loading && !error && (viewMode === 'card' || (viewMode === 'list' && isMobile)) && (
         <div className="overflow-auto max-h-[calc(100vh-280px)]" data-testid="card-view-container">
           {displayedLots.length === 0 ? (
             <div className="rounded-lg border p-12 text-center">

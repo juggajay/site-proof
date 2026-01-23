@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
+import { useIsMobile } from '@/hooks/useMediaQuery'
+import { MobileDataCard } from '@/components/ui/MobileDataCard'
 
 interface Delay {
   id: string
@@ -37,6 +39,7 @@ const DELAY_TYPES = [
 
 export function DelayRegisterPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const isMobile = useIsMobile()
   const [delays, setDelays] = useState<Delay[]>([])
   const [summary, setSummary] = useState<DelaySummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -221,15 +224,37 @@ export function DelayRegisterPage() {
       )}
 
       {/* Delays Table */}
-      <div className="rounded-lg border bg-card">
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="p-8 text-center text-muted-foreground">Loading delays...</div>
-          ) : delays.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              No delays found {filterType || startDate || endDate ? 'matching your filters' : 'in any diary entries'}
-            </div>
-          ) : (
+      <div className={isMobile ? '' : 'rounded-lg border bg-card'}>
+        {loading ? (
+          <div className="p-8 text-center text-muted-foreground rounded-lg border bg-card">Loading delays...</div>
+        ) : delays.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground rounded-lg border bg-card">
+            No delays found {filterType || startDate || endDate ? 'matching your filters' : 'in any diary entries'}
+          </div>
+        ) : isMobile ? (
+          /* Mobile Card View */
+          <div className="space-y-3">
+            {delays.map((delay) => (
+              <MobileDataCard
+                key={delay.id}
+                title={formatDate(delay.diaryDate)}
+                subtitle={delay.description}
+                status={{
+                  label: getDelayTypeLabel(delay.delayType),
+                  variant: 'error'
+                }}
+                fields={[
+                  { label: 'Duration', value: delay.durationHours ? `${delay.durationHours.toFixed(1)}h` : '-', priority: 'primary' },
+                  { label: 'Time', value: delay.startTime && delay.endTime ? `${delay.startTime} - ${delay.endTime}` : '-', priority: 'primary' },
+                  { label: 'Impact', value: delay.impact || '-', priority: 'secondary' },
+                ]}
+                onClick={() => window.location.href = `/projects/${projectId}/diary?date=${delay.diaryDate.split('T')[0]}`}
+              />
+            ))}
+          </div>
+        ) : (
+          /* Desktop Table View */
+          <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr>
@@ -279,8 +304,8 @@ export function DelayRegisterPage() {
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )

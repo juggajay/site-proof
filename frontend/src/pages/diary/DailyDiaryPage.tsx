@@ -5,6 +5,7 @@ import { RichTextEditor } from '../../components/ui/RichTextEditor'
 import { VoiceInputButton } from '../../components/ui/VoiceInputButton'
 import { generateDailyDiaryPDF, DailyDiaryPDFData } from '../../lib/pdfGenerator'
 import { toast } from '../../components/ui/toaster'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 
 interface Personnel {
   id: string
@@ -86,6 +87,7 @@ const DELAY_TYPES = ['Weather', 'Client Instruction', 'Design Change', 'Material
 
 export function DailyDiaryPage() {
   const { projectId } = useParams()
+  const isMobile = useIsMobile()
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [diary, setDiary] = useState<DailyDiary | null>(null)
   const [diaries, setDiaries] = useState<DailyDiary[]>([])
@@ -1409,44 +1411,77 @@ export function DailyDiaryPage() {
 
               {/* Personnel List */}
               {diary.personnel.length > 0 && (
-                <div className="mb-6 overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b text-left text-sm text-muted-foreground">
-                        <th className="pb-2">Name</th>
-                        <th className="pb-2">Company</th>
-                        <th className="pb-2">Role</th>
-                        <th className="pb-2">Start</th>
-                        <th className="pb-2">Finish</th>
-                        <th className="pb-2">Hours</th>
-                        {diary.status !== 'submitted' && <th className="pb-2"></th>}
-                      </tr>
-                    </thead>
-                    <tbody>
+                <div className="mb-6">
+                  {isMobile ? (
+                    /* Mobile Card View */
+                    <div className="space-y-3">
                       {diary.personnel.map((p) => (
-                        <tr key={p.id} className="border-b">
-                          <td className="py-2 font-medium">{p.name}</td>
-                          <td className="py-2">{p.company || '-'}</td>
-                          <td className="py-2">{p.role || '-'}</td>
-                          <td className="py-2">{p.startTime || '-'}</td>
-                          <td className="py-2">{p.finishTime || '-'}</td>
-                          <td className="py-2">{p.hours || '-'}</td>
-                          {diary.status !== 'submitted' && (
-                            <td className="py-2">
+                        <div key={p.id} className="rounded-xl border bg-card p-4">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="font-semibold">{p.name}</p>
+                              <p className="text-sm text-muted-foreground">{p.company || 'No company'} • {p.role || 'No role'}</p>
+                            </div>
+                            {diary.status !== 'submitted' && (
                               <button
                                 onClick={() => removePersonnel(p.id)}
-                                className="text-red-600 hover:text-red-700"
+                                className="p-2 text-red-600 hover:text-red-700 touch-manipulation"
                               >
                                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                               </button>
-                            </td>
-                          )}
-                        </tr>
+                            )}
+                          </div>
+                          <div className="mt-2 flex gap-4 text-sm">
+                            <span>{p.startTime || '-'} - {p.finishTime || '-'}</span>
+                            <span className="font-medium">{p.hours || 0} hrs</span>
+                          </div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+                  ) : (
+                    /* Desktop Table View */
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b text-left text-sm text-muted-foreground">
+                            <th className="pb-2">Name</th>
+                            <th className="pb-2">Company</th>
+                            <th className="pb-2">Role</th>
+                            <th className="pb-2">Start</th>
+                            <th className="pb-2">Finish</th>
+                            <th className="pb-2">Hours</th>
+                            {diary.status !== 'submitted' && <th className="pb-2"></th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {diary.personnel.map((p) => (
+                            <tr key={p.id} className="border-b">
+                              <td className="py-2 font-medium">{p.name}</td>
+                              <td className="py-2">{p.company || '-'}</td>
+                              <td className="py-2">{p.role || '-'}</td>
+                              <td className="py-2">{p.startTime || '-'}</td>
+                              <td className="py-2">{p.finishTime || '-'}</td>
+                              <td className="py-2">{p.hours || '-'}</td>
+                              {diary.status !== 'submitted' && (
+                                <td className="py-2">
+                                  <button
+                                    onClick={() => removePersonnel(p.id)}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 

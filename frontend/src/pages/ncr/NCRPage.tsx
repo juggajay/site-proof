@@ -5,6 +5,8 @@ import { useAuth, getAuthToken } from '../../lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { Link2, Check, Printer } from 'lucide-react'
 import { generateNCRDetailPDF, NCRDetailData } from '../../lib/pdfGenerator'
+import { useIsMobile } from '@/hooks/useMediaQuery'
+import { MobileDataCard } from '@/components/ui/MobileDataCard'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
@@ -41,6 +43,7 @@ export function NCRPage() {
   const { projectId } = useParams()
   useAuth() // Auth context needed but user variable not directly used
   const token = getAuthToken()
+  const isMobile = useIsMobile()
   const [ncrs, setNcrs] = useState<NCR[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -950,9 +953,42 @@ export function NCRPage() {
             {ncrs.length === 0 ? 'Great! No non-conformances have been raised.' : 'Try adjusting your filter criteria.'}
           </p>
         </div>
+      ) : isMobile ? (
+        /* Mobile Card View */
+        <div className="space-y-3">
+          {filteredNcrs.map((ncr) => {
+            const ageInDays = Math.floor((Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+            const isOverdue = ncr.dueDate && new Date(ncr.dueDate) < new Date() && ncr.status !== 'closed' && ncr.status !== 'closed_concession'
+            const statusVariant = ncr.status === 'closed' || ncr.status === 'closed_concession' ? 'success'
+              : ncr.status === 'open' ? 'error'
+              : ncr.status === 'verification' ? 'info'
+              : 'warning'
+
+            return (
+              <MobileDataCard
+                key={ncr.id}
+                title={ncr.ncrNumber}
+                subtitle={ncr.description}
+                status={{
+                  label: ncr.status.replace('_', ' '),
+                  variant: statusVariant
+                }}
+                fields={[
+                  { label: 'Category', value: ncr.category.replace(/_/g, ' '), priority: 'primary' },
+                  { label: 'Responsible', value: ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned', priority: 'primary' },
+                  { label: 'Due', value: ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString() : '-', priority: 'secondary' },
+                  { label: 'Age', value: `${ageInDays}d`, priority: 'secondary' },
+                ]}
+                onClick={() => setSelectedNcr(ncr)}
+                className={isOverdue ? 'border-red-300' : undefined}
+              />
+            )
+          })}
+        </div>
       ) : (
+        /* Desktop Table View */
         <div className="bg-card rounded-lg border overflow-x-auto">
-          <table className="w-full min-w-[800px]">
+          <table className="w-full">
             <thead className="bg-muted/50">
               <tr>
                 <th className="px-4 py-3 text-left text-sm font-medium">NCR #</th>
