@@ -112,17 +112,13 @@ export function MobileNav() {
     )
   }
 
+  // Foreman uses ForemanBottomNav exclusively, no hamburger menu needed
+  if (isForeman) {
+    return <ForemanBottomNav />
+  }
+
   return (
     <>
-      {/* Hamburger Menu Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="md:hidden p-2.5 min-h-[44px] min-w-[44px] rounded-lg hover:bg-muted touch-manipulation flex items-center justify-center"
-        aria-label="Toggle menu"
-      >
-        {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-      </button>
-
       {/* Mobile Slide-out Menu */}
       {isOpen && (
         <>
@@ -245,11 +241,8 @@ export function MobileNav() {
         </>
       )}
 
-      {/* Bottom Navigation Bar - Use ForemanBottomNav for foreman role */}
-      {isForeman ? (
-        <ForemanBottomNav />
-      ) : (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom">
+      {/* Bottom Navigation Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom">
           <div className="flex justify-around items-center h-16">
             {/* Use subcontractor nav items if subcontractor */}
             {(isSubcontractor ? subcontractorBottomNavItems : bottomNavItems).map((item) => {
@@ -282,7 +275,6 @@ export function MobileNav() {
             })}
           </div>
         </nav>
-      )}
     </>
   )
 }
