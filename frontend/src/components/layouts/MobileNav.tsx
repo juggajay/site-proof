@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
+import { ForemanBottomNav } from '@/components/foreman'
 
 // Role-based access definitions
 const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
@@ -244,40 +245,44 @@ export function MobileNav() {
         </>
       )}
 
-      {/* Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom">
-        <div className="flex justify-around items-center h-16">
-          {/* Use subcontractor nav items if subcontractor */}
-          {(isSubcontractor ? subcontractorBottomNavItems : bottomNavItems).map((item) => {
-            // Skip items excluded by role
-            if (!shouldShowItem(item)) return null
-            // Skip project-specific items if no project selected
-            if (item.requiresProject && !projectId) return null
+      {/* Bottom Navigation Bar - Use ForemanBottomNav for foreman role */}
+      {isForeman ? (
+        <ForemanBottomNav />
+      ) : (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom">
+          <div className="flex justify-around items-center h-16">
+            {/* Use subcontractor nav items if subcontractor */}
+            {(isSubcontractor ? subcontractorBottomNavItems : bottomNavItems).map((item) => {
+              // Skip items excluded by role
+              if (!shouldShowItem(item)) return null
+              // Skip project-specific items if no project selected
+              if (item.requiresProject && !projectId) return null
 
-            const href = item.requiresProject && projectId
-              ? `/projects/${projectId}/${item.href}`
-              : item.href
+              const href = item.requiresProject && projectId
+                ? `/projects/${projectId}/${item.href}`
+                : item.href
 
-            return (
-              <NavLink
-                key={item.name}
-                to={href}
-                className={({ isActive }) =>
-                  cn(
-                    'flex flex-col items-center justify-center w-full h-full gap-1 text-xs transition-colors',
-                    isActive
-                      ? 'text-primary'
-                      : 'text-muted-foreground'
-                  )
-                }
-              >
-                <item.icon className="h-5 w-5" />
-                <span>{item.name}</span>
-              </NavLink>
-            )
-          })}
-        </div>
-      </nav>
+              return (
+                <NavLink
+                  key={item.name}
+                  to={href}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex flex-col items-center justify-center w-full h-full gap-1 text-xs transition-colors',
+                      isActive
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    )
+                  }
+                >
+                  <item.icon className="h-5 w-5" />
+                  <span>{item.name}</span>
+                </NavLink>
+              )
+            })}
+          </div>
+        </nav>
+      )}
     </>
   )
 }
