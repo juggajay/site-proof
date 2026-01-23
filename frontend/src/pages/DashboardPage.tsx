@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard'
+import { ForemanMobileDashboard } from '@/components/foreman'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard'
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard'
 import {
@@ -183,15 +185,18 @@ export function DashboardPage() {
   const [_projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Call useIsMobile before any early returns (React hook rules)
+  const isMobile = useIsMobile()
+
   // Feature #292, #293, #294: Check user role for role-specific dashboards
   const userRole = (user as any)?.roleInCompany || (user as any)?.role
   const isForeman = userRole === 'foreman'
   const isQualityManager = userRole === 'quality_manager'
   const isProjectManager = userRole === 'project_manager'
 
-  // Render simplified foreman dashboard for foreman role
+  // Render mobile or desktop foreman dashboard based on screen size
   if (isForeman) {
-    return <ForemanDashboard />
+    return isMobile ? <ForemanMobileDashboard /> : <ForemanDashboard />
   }
 
   // Feature #293: Render quality manager dashboard for QM role

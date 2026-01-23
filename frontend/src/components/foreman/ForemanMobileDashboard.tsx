@@ -17,7 +17,6 @@ import {
 import { cn } from '@/lib/utils'
 import { DashboardCard, DashboardStat } from './DashboardCard'
 import { WeatherWidget } from './WeatherWidget'
-import { ForemanBottomNav } from './ForemanBottomNav'
 import { QuickCaptureButton } from './QuickCaptureButton'
 import { PhotoCaptureModal } from './PhotoCaptureModal'
 import { useForemanMobileStore } from '@/stores/foremanMobileStore'
@@ -314,8 +313,7 @@ export function ForemanMobileDashboard() {
         />
       )}
 
-      {/* Bottom Navigation */}
-      <ForemanBottomNav />
+      {/* Bottom Navigation is rendered by MobileNav in MainLayout for foreman users */}
     </div>
   )
 }
