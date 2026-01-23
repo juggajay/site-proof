@@ -125,12 +125,16 @@ export function ForemanMobileDashboard() {
     month: 'short',
   })
 
-  // Quick action handlers
+  // Quick action handlers - use effectiveProjectId (from URL or API) for navigation
+  const getProjectPath = (path: string) => {
+    const pid = projectId || data.project?.id
+    return pid ? `/projects/${pid}/${path}` : '/projects'
+  }
   const handleCapturePhoto = () => setIsCameraOpen(true)
-  const handleAddDelay = () => navigate(projectId ? `/projects/${projectId}/diary?tab=delays` : '/diary')
-  const handleRaiseNCR = () => navigate(projectId ? `/projects/${projectId}/ncr/new` : '/ncr/new')
-  const handleAddNote = () => navigate(projectId ? `/projects/${projectId}/diary` : '/diary')
-  const handleRequestHoldPoint = () => navigate(projectId ? `/projects/${projectId}/hold-points` : '/hold-points')
+  const handleAddDelay = () => navigate(getProjectPath('diary?tab=delays'))
+  const handleRaiseNCR = () => navigate(getProjectPath('ncr/new'))
+  const handleAddNote = () => navigate(getProjectPath('diary'))
+  const handleRequestHoldPoint = () => navigate(getProjectPath('hold-points'))
 
   if (loading) {
     return (
@@ -141,6 +145,48 @@ export function ForemanMobileDashboard() {
   }
 
   const effectiveProjectId = projectId || data.project?.id
+
+  // If no project is available, show a message to select/join a project
+  if (!effectiveProjectId) {
+    return (
+      <div className="pb-28 md:pb-6 overflow-x-hidden">
+        <div className="sticky top-0 z-10 bg-background border-b px-4 py-3 md:px-6 md:py-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold">
+              Good {getTimeOfDay()}, {user?.fullName?.split(' ')[0] || 'Foreman'}!
+            </h1>
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {today}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-4 md:p-6 md:space-y-6">
+          <div className="bg-card rounded-lg border p-6 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+              <ClipboardCheck className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h2 className="text-lg font-semibold mb-2">No Project Assigned</h2>
+            <p className="text-muted-foreground mb-4">
+              You need to be assigned to a project before you can access the foreman dashboard features.
+            </p>
+            <button
+              onClick={() => navigate('/projects')}
+              className={cn(
+                'inline-flex items-center justify-center gap-2 px-4 py-2',
+                'bg-primary text-primary-foreground rounded-lg',
+                'font-medium touch-manipulation min-h-[44px]'
+              )}
+            >
+              View Projects
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="pb-28 md:pb-6 overflow-x-hidden">
