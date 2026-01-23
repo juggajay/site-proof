@@ -10,6 +10,7 @@ import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { OfflineIndicator } from '@/components/OfflineIndicator'
 import { CookieConsentBanner } from '@/components/CookieConsentBanner'
+import { RoleSwitcher } from '@/components/dev/RoleSwitcher'
 
 // Layouts
 import { MainLayout } from '@/components/layouts/MainLayout'
@@ -65,6 +66,13 @@ import { SupportPage } from '@/pages/support/SupportPage'
 // Admin Pages
 import { AuditLogPage } from '@/pages/admin/AuditLogPage'
 
+// Subcontractor Portal Pages
+import { AcceptInvitePage } from '@/pages/subcontractor-portal/AcceptInvitePage'
+import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard'
+import { DocketEditPage } from '@/pages/subcontractor-portal/DocketEditPage'
+import { DocketsListPage } from '@/pages/subcontractor-portal/DocketsListPage'
+import { AssignedWorkPage } from '@/pages/subcontractor-portal/AssignedWorkPage'
+
 // Admin-only roles
 const ADMIN_ROLES = ['owner', 'admin', 'project_manager']
 
@@ -111,6 +119,9 @@ function App() {
         {/* Legal Pages (public, no layout) */}
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+
+        {/* Subcontractor Portal - Accept Invite (public/hybrid auth) */}
+        <Route path="/subcontractor-portal/accept-invite" element={<AcceptInvitePage />} />
 
         {/* Protected Routes */}
         <Route
@@ -264,6 +275,48 @@ function App() {
               </RoleProtectedRoute>
             }
           />
+
+          {/* Subcontractor Portal - Protected routes */}
+          <Route
+            path="/subcontractor-portal"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <SubcontractorDashboard />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/docket/new"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <DocketEditPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/docket/:docketId"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <DocketEditPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/dockets"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <DocketsListPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/work"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <AssignedWorkPage />
+              </RoleProtectedRoute>
+            }
+          />
         </Route>
 
         {/* 404 */}
@@ -272,6 +325,7 @@ function App() {
       <Toaster />
       <OfflineIndicator />
       <CookieConsentBanner />
+      <RoleSwitcher />
       </KeyboardShortcutsProvider>
     </AuthProvider>
     </ErrorBoundary>

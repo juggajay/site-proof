@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react'
 
 // Simple user type for local development
 interface User {
@@ -14,6 +14,15 @@ interface User {
   avatarUrl?: string | null
 }
 
+// Role override key for dev testing
+const ROLE_OVERRIDE_KEY = 'siteproof_role_override'
+
+// Helper to get role override (used by RoleSwitcher)
+export function getRoleOverride(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(ROLE_OVERRIDE_KEY)
+}
+
 // MFA Challenge error class (Feature #22, #421)
 export class MfaRequiredError extends Error {
   userId: string
@@ -26,6 +35,7 @@ export class MfaRequiredError extends Error {
 
 interface AuthContextType {
   user: User | null
+  actualRole: string | null  // The user's actual role (without override)
   loading: boolean
   sessionExpired: boolean
   signIn: (email: string, password: string, rememberMe?: boolean, mfaCode?: string) => Promise<void>
@@ -57,9 +67,21 @@ function clearAuthFromAllStorages() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [actualUser, setActualUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [sessionExpired, setSessionExpired] = useState(false)
+
+  // Apply role override for dev testing (only for admin/owner users)
+  const user = useMemo(() => {
+    if (!actualUser) return null
+
+    const roleOverride = getRoleOverride()
+    // Only allow override if actual user is admin/owner
+    if (roleOverride && ['admin', 'owner'].includes(actualUser.role || '')) {
+      return { ...actualUser, role: roleOverride }
+    }
+    return actualUser
+  }, [actualUser])
 
   useEffect(() => {
     // Check for stored auth on mount and verify token is valid
@@ -93,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Update storage with fresh user data
             const updatedAuth = { ...parsed, user: freshUser }
             storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedAuth))
-            setUser(freshUser)
+            setActualUser(freshUser)
           } else {
             // Token is invalid or expired
             clearAuthFromAllStorages()
@@ -148,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token: data.token,
       }))
 
-      setUser(data.user)
+      setActualUser(data.user)
       setSessionExpired(false)
     } catch (error) {
       throw error
@@ -180,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token: data.token,
       }))
 
-      setUser(data.user)
+      setActualUser(data.user)
       setSessionExpired(false)
     } catch (error) {
       throw error
@@ -189,12 +211,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     clearAuthFromAllStorages()
-    setUser(null)
+    setActualUser(null)
   }
 
   const handleSessionExpired = () => {
     clearAuthFromAllStorages()
-    setUser(null)
+    setActualUser(null)
     setSessionExpired(true)
   }
 
@@ -229,7 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user: data.user,
         }
         storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedAuth))
-        setUser(data.user)
+        setActualUser(data.user)
       }
     } catch (e) {
       console.error('Failed to refresh user:', e)
@@ -261,7 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           token: token,
         }))
 
-        setUser(data.user)
+        setActualUser(data.user)
         setSessionExpired(false)
       } else {
         throw new Error('Invalid token')
@@ -273,7 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, sessionExpired, signIn, signUp, signOut, handleSessionExpired, refreshUser, setToken }}>
+    <AuthContext.Provider value={{ user, actualRole: actualUser?.role || null, loading, sessionExpired, signIn, signUp, signOut, handleSessionExpired, refreshUser, setToken }}>
       {children}
     </AuthContext.Provider>
   )
