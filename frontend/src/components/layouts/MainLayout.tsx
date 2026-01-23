@@ -21,7 +21,7 @@ export function MainLayout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
         <main
-          className={`flex-1 overflow-auto p-6 pb-20 md:pb-6 transition-opacity duration-150 ${
+          className={`flex-1 overflow-auto overflow-x-hidden p-4 pb-24 md:p-6 md:pb-6 transition-opacity duration-150 ${
             isTransitioning ? 'opacity-0' : 'opacity-100'
           }`}
         >

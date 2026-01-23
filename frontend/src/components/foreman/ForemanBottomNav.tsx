@@ -53,7 +53,7 @@ export function ForemanBottomNav() {
   }
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 pb-safe">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 pb-safe max-w-full overflow-hidden">
       {/* Offline indicator */}
       {(!isOnline || pendingSyncCount > 0) && (
         <div

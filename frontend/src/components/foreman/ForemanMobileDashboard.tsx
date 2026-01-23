@@ -144,7 +144,7 @@ export function ForemanMobileDashboard() {
   const effectiveProjectId = projectId || data.project?.id
 
   return (
-    <div className="pb-24 md:pb-6">
+    <div className="pb-28 md:pb-6 overflow-x-hidden">
       {/* Header - optimized for mobile */}
       <div className="sticky top-0 z-10 bg-background border-b px-4 py-3 md:px-6 md:py-4">
         <div className="flex items-center justify-between">
