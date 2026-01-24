@@ -1,10 +1,9 @@
-import { useParams } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { ForemanMobileDashboard } from '@/components/foreman'
+import { ProjectDashboard } from '@/components/dashboard/ProjectDashboard'
 
 export function ProjectDetailPage() {
-  const { projectId } = useParams()
   const { user } = useAuth()
   const isMobile = useIsMobile()
 
@@ -16,11 +15,6 @@ export function ProjectDetailPage() {
     return <ForemanMobileDashboard />
   }
 
-  return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Project Overview</h1>
-      <p className="text-muted-foreground">Project ID: {projectId}</p>
-      {/* Project details and overview will be implemented here */}
-    </div>
-  )
+  // For all other users (including desktop foreman), render the project dashboard
+  return <ProjectDashboard />
 }

@@ -185,6 +185,402 @@ projectsRouter.get('/:id', async (req, res) => {
   }
 })
 
+// GET /api/projects/:id/dashboard - Get project dashboard data with stats
+projectsRouter.get('/:id/dashboard', async (req, res) => {
+  try {
+    const { id: projectId } = req.params
+    const user = req.user!
+
+    // Check access
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: user.id }
+    })
+
+    const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        name: true,
+        projectNumber: true,
+        clientName: true,
+        status: true,
+        state: true,
+        companyId: true,
+      }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    const isCompanyProject = project.companyId === user.companyId
+
+    if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
+      return res.status(403).json({ error: 'Access denied to this project' })
+    }
+
+    // Get today's date range for diary status
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    // Gather all stats in parallel
+    const [
+      lotsStats,
+      ncrStats,
+      holdPointStats,
+      itpStats,
+      docketStats,
+      testCount,
+      documentCount,
+      todayDiary,
+      recentActivity
+    ] = await Promise.all([
+      // Lots stats
+      prisma.lot.groupBy({
+        by: ['status'],
+        where: { projectId },
+        _count: true
+      }),
+      // NCR stats
+      Promise.all([
+        prisma.nCR.count({ where: { projectId, status: { notIn: ['closed', 'closed_concession'] } } }),
+        prisma.nCR.count({ where: { projectId } })
+      ]),
+      // Hold point stats
+      Promise.all([
+        prisma.holdPoint.count({ where: { lot: { projectId }, status: { in: ['pending', 'scheduled', 'requested'] } } }),
+        prisma.holdPoint.count({ where: { lot: { projectId }, status: 'released' } })
+      ]),
+      // ITP stats
+      Promise.all([
+        prisma.iTPInstance.count({ where: { lot: { projectId }, status: { in: ['not_started', 'in_progress'] } } }),
+        prisma.iTPInstance.count({ where: { lot: { projectId }, status: 'completed' } })
+      ]),
+      // Docket stats
+      prisma.dailyDocket.count({ where: { projectId, status: 'pending_approval' } }),
+      // Test results count
+      prisma.testResult.count({ where: { lot: { projectId } } }),
+      // Documents count
+      prisma.document.count({ where: { projectId } }),
+      // Today's diary
+      prisma.dailyDiary.findFirst({
+        where: { projectId, date: { gte: today, lt: tomorrow } },
+        select: { status: true }
+      }),
+      // Recent activity (NCRs, lots, hold points)
+      Promise.all([
+        prisma.nCR.findMany({
+          where: { projectId },
+          orderBy: { updatedAt: 'desc' },
+          take: 3,
+          select: { id: true, ncrNumber: true, status: true, updatedAt: true }
+        }),
+        prisma.lot.findMany({
+          where: { projectId },
+          orderBy: { updatedAt: 'desc' },
+          take: 3,
+          select: { id: true, lotNumber: true, status: true, updatedAt: true }
+        }),
+        prisma.holdPoint.findMany({
+          where: { lot: { projectId } },
+          orderBy: { updatedAt: 'desc' },
+          take: 2,
+          select: { id: true, status: true, updatedAt: true, lot: { select: { lotNumber: true, id: true } } }
+        })
+      ])
+    ])
+
+    // Process lots stats
+    let lotsTotal = 0
+    let lotsCompleted = 0
+    let lotsInProgress = 0
+    lotsStats.forEach(stat => {
+      lotsTotal += stat._count
+      if (stat.status === 'completed' || stat.status === 'conformed') {
+        lotsCompleted += stat._count
+      } else if (stat.status === 'in_progress') {
+        lotsInProgress += stat._count
+      }
+    })
+
+    // Format recent activity
+    const [recentNCRs, recentLots, recentHPs] = recentActivity
+    const formattedActivity = [
+      ...recentNCRs.map(ncr => ({
+        id: `ncr-${ncr.id}`,
+        type: 'ncr' as const,
+        description: `NCR ${ncr.ncrNumber} status: ${ncr.status}`,
+        timestamp: ncr.updatedAt.toISOString(),
+        link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`
+      })),
+      ...recentLots.map(lot => ({
+        id: `lot-${lot.id}`,
+        type: 'lot' as const,
+        description: `Lot ${lot.lotNumber} status: ${lot.status}`,
+        timestamp: lot.updatedAt.toISOString(),
+        link: `/projects/${projectId}/lots/${lot.id}`
+      })),
+      ...recentHPs.map(hp => ({
+        id: `hp-${hp.id}`,
+        type: 'holdpoint' as const,
+        description: `Hold point ${hp.status} for Lot ${hp.lot?.lotNumber || 'Unknown'}`,
+        timestamp: hp.updatedAt.toISOString(),
+        link: hp.lot ? `/projects/${projectId}/lots/${hp.lot.id}` : undefined
+      }))
+    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
+    res.json({
+      project: {
+        id: project.id,
+        name: project.name,
+        projectNumber: project.projectNumber,
+        status: project.status,
+        client: project.clientName,
+        state: project.state
+      },
+      stats: {
+        lots: {
+          total: lotsTotal,
+          completed: lotsCompleted,
+          inProgress: lotsInProgress
+        },
+        ncrs: {
+          open: ncrStats[0],
+          total: ncrStats[1]
+        },
+        holdPoints: {
+          pending: holdPointStats[0],
+          released: holdPointStats[1]
+        },
+        itps: {
+          pending: itpStats[0],
+          completed: itpStats[1]
+        },
+        dockets: {
+          pendingApproval: docketStats
+        },
+        tests: {
+          total: testCount
+        },
+        documents: {
+          total: documentCount
+        },
+        diary: {
+          todayStatus: todayDiary?.status || null
+        }
+      },
+      recentActivity: formattedActivity.slice(0, 8)
+    })
+  } catch (error) {
+    console.error('Get project dashboard error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/projects/:id/costs - Get project cost breakdown
+// Returns summary, by-subcontractor, and by-lot cost data
+projectsRouter.get('/:id/costs', async (req, res) => {
+  try {
+    const { id: projectId } = req.params
+    const user = req.user!
+
+    // Check access - via ProjectUser or company admin
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId, userId: user.id }
+    })
+
+    const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner'
+
+    // Get the project to check ownership and get budget
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, companyId: true, contractValue: true }
+    })
+
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
+
+    const isCompanyProject = project.companyId === user.companyId
+
+    // Check subcontractor access - they should not see cost details
+    const isSubcontractor = user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin'
+    if (isSubcontractor) {
+      return res.status(403).json({ error: 'Access denied. Subcontractors cannot view project costs.' })
+    }
+
+    if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
+      return res.status(403).json({ error: 'Access denied to this project' })
+    }
+
+    // Get all approved dockets with their subcontractor info
+    const dockets = await prisma.dailyDocket.findMany({
+      where: {
+        projectId,
+        status: 'approved'
+      },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        }
+      }
+    })
+
+    // Get pending docket count
+    const pendingDocketCount = await prisma.dailyDocket.count({
+      where: {
+        projectId,
+        status: 'pending_approval'
+      }
+    })
+
+    // Calculate totals
+    let totalLabourCost = 0
+    let totalPlantCost = 0
+
+    // Track by subcontractor
+    const subcontractorMap = new Map<string, {
+      id: string
+      companyName: string
+      labourCost: number
+      plantCost: number
+      totalCost: number
+      approvedDockets: number
+    }>()
+
+    for (const docket of dockets) {
+      const labour = Number(docket.totalLabourSubmitted || 0)
+      const plant = Number(docket.totalPlantSubmitted || 0)
+
+      totalLabourCost += labour
+      totalPlantCost += plant
+
+      // Aggregate by subcontractor
+      const subId = docket.subcontractorCompanyId
+      const existing = subcontractorMap.get(subId) || {
+        id: subId,
+        companyName: docket.subcontractorCompany?.companyName || 'Unknown',
+        labourCost: 0,
+        plantCost: 0,
+        totalCost: 0,
+        approvedDockets: 0
+      }
+      existing.labourCost += labour
+      existing.plantCost += plant
+      existing.totalCost += labour + plant
+      existing.approvedDockets += 1
+      subcontractorMap.set(subId, existing)
+    }
+
+    const totalCost = totalLabourCost + totalPlantCost
+    const budgetTotal = Number(project.contractValue || 0)
+    const budgetVariance = budgetTotal - totalCost // Positive = under budget
+
+    // Get lots with their budget amounts
+    const lots = await prisma.lot.findMany({
+      where: { projectId },
+      select: {
+        id: true,
+        lotNumber: true,
+        activityType: true,
+        budgetAmount: true
+      },
+      orderBy: { lotNumber: 'asc' }
+    })
+
+    // Get cost allocations per lot from docket entries
+    // Labour allocations
+    const labourLotAllocations = await prisma.docketLabourLot.findMany({
+      where: {
+        docketLabour: {
+          docket: {
+            projectId,
+            status: 'approved'
+          }
+        }
+      },
+      include: {
+        docketLabour: {
+          select: { submittedCost: true }
+        }
+      }
+    })
+
+    // Plant allocations
+    const plantLotAllocations = await prisma.docketPlantLot.findMany({
+      where: {
+        docketPlant: {
+          docket: {
+            projectId,
+            status: 'approved'
+          }
+        }
+      },
+      include: {
+        docketPlant: {
+          select: { submittedCost: true }
+        }
+      }
+    })
+
+    // Calculate cost per lot
+    const lotCostMap = new Map<string, number>()
+
+    // Add labour costs
+    for (const alloc of labourLotAllocations) {
+      const cost = Number(alloc.docketLabour?.submittedCost || 0)
+      const existing = lotCostMap.get(alloc.lotId) || 0
+      lotCostMap.set(alloc.lotId, existing + cost)
+    }
+
+    // Add plant costs
+    for (const alloc of plantLotAllocations) {
+      const cost = Number(alloc.docketPlant?.submittedCost || 0)
+      const existing = lotCostMap.get(alloc.lotId) || 0
+      lotCostMap.set(alloc.lotId, existing + cost)
+    }
+
+    // Build lot costs array
+    const lotCosts = lots.map(lot => {
+      const budgetAmount = Number(lot.budgetAmount || 0)
+      const actualCost = lotCostMap.get(lot.id) || 0
+      return {
+        id: lot.id,
+        lotNumber: lot.lotNumber,
+        activity: lot.activityType,
+        budgetAmount,
+        actualCost,
+        variance: budgetAmount - actualCost // Positive = under budget
+      }
+    })
+
+    // Build subcontractor costs array
+    const subcontractorCosts = Array.from(subcontractorMap.values())
+      .sort((a, b) => b.totalCost - a.totalCost) // Sort by total cost descending
+
+    res.json({
+      summary: {
+        totalLabourCost,
+        totalPlantCost,
+        totalCost,
+        budgetTotal,
+        budgetVariance,
+        approvedDockets: dockets.length,
+        pendingDockets: pendingDocketCount
+      },
+      subcontractorCosts,
+      lotCosts
+    })
+  } catch (error) {
+    console.error('Get project costs error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // Subscription tier project limits
 const TIER_PROJECT_LIMITS: Record<string, number> = {
   basic: 3,

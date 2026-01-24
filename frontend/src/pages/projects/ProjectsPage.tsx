@@ -423,7 +423,7 @@ export function ProjectsPage() {
           {projects.map((project) => (
             <Link
               key={project.id}
-              to={`/projects/${project.id}/ncr`}
+              to={`/projects/${project.id}`}
               className="block p-6 bg-card rounded-lg border hover:border-primary hover:shadow-md transition-all"
             >
               <h3 className="text-lg font-semibold">{project.name}</h3>
@@ -452,7 +452,7 @@ export function ProjectsPage() {
                   )
                 })()}
                 <span className="text-xs text-muted-foreground">
-                  Click to view NCRs
+                  View project →
                 </span>
               </div>
             </Link>
