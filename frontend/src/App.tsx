@@ -30,6 +30,9 @@ import { OAuthMockPage } from '@/pages/auth/OAuthMockPage'  // Feature #414 (dev
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ProjectsPage } from '@/pages/projects/ProjectsPage'
 import { ProjectDetailPage } from '@/pages/projects/ProjectDetailPage'
+
+// Foreman Mobile Components
+import { ForemanMobileShell, TodayWorklist } from '@/components/foreman'
 import { ProjectSettingsPage } from '@/pages/projects/settings/ProjectSettingsPage'
 import { ProjectUsersPage } from '@/pages/projects/settings/ProjectUsersPage'
 import { ProjectAreasPage } from '@/pages/projects/settings/ProjectAreasPage'
@@ -147,6 +150,12 @@ function App() {
           {/* Projects */}
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+
+          {/* Foreman Mobile Views - nested under ForemanMobileShell for 5-tab nav */}
+          <Route path="/projects/:projectId/foreman" element={<ForemanMobileShell />}>
+            <Route index element={<Navigate to="today" replace />} />
+            <Route path="today" element={<TodayWorklist />} />
+          </Route>
 
           {/* Project Settings - Admin Only */}
           <Route

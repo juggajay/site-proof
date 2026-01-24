@@ -1448,3 +1448,235 @@ dashboardRouter.get('/project-manager', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' })
   }
 })
+
+// GET /api/projects/:projectId/foreman/today - Unified "Today" worklist for foreman
+// Shows everything requiring attention: hold points, ITP items, inspections
+// Categorized by urgency: blocking (past due), due_today, upcoming (next 48h)
+dashboardRouter.get('/projects/:projectId/foreman/today', async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id
+    const { projectId } = req.params
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not found'
+      })
+    }
+
+    // Verify user has access to this project
+    const projectAccess = await prisma.projectUser.findFirst({
+      where: { userId, projectId }
+    })
+
+    if (!projectAccess) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this project'
+      })
+    }
+
+    // Calculate date boundaries
+    const now = new Date()
+    const today = new Date(now)
+    today.setHours(0, 0, 0, 0)
+
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    const dayAfterTomorrow = new Date(today)
+    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2)
+
+    // Arrays to hold categorized items
+    const blocking: any[] = []
+    const dueToday: any[] = []
+    const upcoming: any[] = []
+
+    // 1. Get Hold Points
+    // Blocking: scheduled date is in the past and still pending
+    // Due Today: scheduled for today
+    // Upcoming: scheduled for tomorrow or day after
+    const holdPoints = await prisma.holdPoint.findMany({
+      where: {
+        lot: { projectId },
+        status: { in: ['pending', 'scheduled', 'requested'] }
+      },
+      include: {
+        lot: {
+          select: {
+            id: true,
+            lotNumber: true,
+            projectId: true
+          }
+        },
+        itpChecklistItem: {
+          select: {
+            description: true
+          }
+        }
+      },
+      orderBy: { scheduledDate: 'asc' }
+    })
+
+    for (const hp of holdPoints) {
+      const item = {
+        id: hp.id,
+        type: 'hold_point' as const,
+        title: hp.description || hp.itpChecklistItem?.description || 'Hold Point',
+        subtitle: `Status: ${hp.status.replace('_', ' ')}`,
+        link: `/projects/${projectId}/lots/${hp.lot.id}?tab=holdpoints&hp=${hp.id}`,
+        metadata: {
+          lotNumber: hp.lot.lotNumber,
+          lotId: hp.lot.id,
+          status: hp.status
+        }
+      }
+
+      const scheduledDate = hp.scheduledDate ? new Date(hp.scheduledDate) : null
+
+      if (!scheduledDate) {
+        // No scheduled date - treat as due today (needs attention)
+        dueToday.push({ ...item, urgency: 'due_today' })
+      } else if (scheduledDate < today) {
+        // Past due - blocking
+        blocking.push({ ...item, urgency: 'blocking' })
+      } else if (scheduledDate >= today && scheduledDate < tomorrow) {
+        // Due today
+        dueToday.push({ ...item, urgency: 'due_today' })
+      } else if (scheduledDate >= tomorrow && scheduledDate < dayAfterTomorrow) {
+        // Upcoming (tomorrow)
+        upcoming.push({ ...item, urgency: 'upcoming' })
+      }
+      // Items further out are not shown
+    }
+
+    // 2. Get ITP Checklist Items that need completion
+    // These are items where the ITP is assigned to a lot but the item hasn't been completed
+    const itpCompletions = await prisma.iTPCompletion.findMany({
+      where: {
+        itpInstance: {
+          lot: { projectId }
+        },
+        status: { in: ['pending', 'in_progress'] }
+      },
+      include: {
+        checklistItem: {
+          select: {
+            id: true,
+            description: true,
+            pointType: true,
+            sequenceNumber: true
+          }
+        },
+        itpInstance: {
+          include: {
+            lot: {
+              select: {
+                id: true,
+                lotNumber: true
+              }
+            },
+            template: {
+              select: {
+                name: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        checklistItem: { sequenceNumber: 'asc' }
+      },
+      take: 50 // Limit to prevent overload
+    })
+
+    for (const completion of itpCompletions) {
+      // Skip hold points - they're handled above
+      if (completion.checklistItem.pointType === 'hold_point') continue
+
+      const item = {
+        id: completion.id,
+        type: 'itp_item' as const,
+        title: completion.checklistItem.description,
+        subtitle: completion.itpInstance.template?.name || 'ITP Item',
+        link: `/projects/${projectId}/lots/${completion.itpInstance.lot?.id}?tab=itp`,
+        metadata: {
+          lotNumber: completion.itpInstance.lot?.lotNumber,
+          lotId: completion.itpInstance.lot?.id,
+          itpName: completion.itpInstance.template?.name,
+          status: completion.status
+        }
+      }
+
+      // ITP items without specific due dates go to "due today" as they need ongoing attention
+      // Witness points are less urgent than hold points
+      if (completion.checklistItem.pointType === 'witness_point') {
+        dueToday.push({ ...item, urgency: 'due_today' })
+      } else {
+        // Regular checklist items - upcoming
+        upcoming.push({ ...item, urgency: 'upcoming' })
+      }
+    }
+
+    // 3. Get pending verifications (ITP items completed by subbie, awaiting HC verification)
+    const pendingVerifications = await prisma.iTPCompletion.findMany({
+      where: {
+        itpInstance: {
+          lot: { projectId }
+        },
+        status: 'completed',
+        verificationStatus: 'pending_verification'
+      },
+      include: {
+        checklistItem: {
+          select: {
+            description: true
+          }
+        },
+        itpInstance: {
+          include: {
+            lot: {
+              select: {
+                id: true,
+                lotNumber: true
+              }
+            }
+          }
+        }
+      },
+      take: 20
+    })
+
+    for (const verification of pendingVerifications) {
+      dueToday.push({
+        id: `verify-${verification.id}`,
+        type: 'inspection' as const,
+        title: `Verify: ${verification.checklistItem.description}`,
+        subtitle: 'Awaiting your verification',
+        urgency: 'due_today',
+        link: `/projects/${projectId}/lots/${verification.itpInstance.lot?.id}?tab=itp`,
+        metadata: {
+          lotNumber: verification.itpInstance.lot?.lotNumber,
+          lotId: verification.itpInstance.lot?.id
+        }
+      })
+    }
+
+    // Calculate summary
+    const summary = {
+      totalBlocking: blocking.length,
+      totalDueToday: dueToday.length,
+      totalUpcoming: upcoming.length
+    }
+
+    res.json({
+      blocking,
+      dueToday,
+      upcoming,
+      summary
+    })
+  } catch (error) {
+    console.error('Foreman today worklist error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
