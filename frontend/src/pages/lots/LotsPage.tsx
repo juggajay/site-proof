@@ -12,7 +12,11 @@ import { ExportLotsModal } from '@/components/lots/ExportLotsModal'
 import { LotQuickView } from '@/components/lots/LotQuickView'
 import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal'
 import { LinearMapView } from '@/components/lots/LinearMapView'  // Feature #151
-import { Settings2, Check, ChevronUp, ChevronDown, ChevronRight, Save, Bookmark, Trash2, Printer, Calendar, FileText, AlertTriangle, TestTube, LayoutGrid, LayoutList, MapPin } from 'lucide-react'
+import { Settings2, Check, ChevronUp, ChevronDown, ChevronRight, Save, Bookmark, Trash2, Printer, Calendar, FileText, AlertTriangle, TestTube, LayoutGrid, LayoutList, MapPin, Plus, Eye } from 'lucide-react'
+import { FilterBottomSheet, FilterTriggerButton, type FilterConfig, type FilterValues } from '@/components/mobile/FilterBottomSheet'
+import { ContextFAB } from '@/components/mobile/ContextFAB'
+import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
+import { SwipeableCard } from '@/components/foreman/SwipeableCard'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
 // Roles that can delete lots
@@ -360,6 +364,21 @@ export function LotsPage() {
   const [newFilterName, setNewFilterName] = useState('')
   const [savedFiltersDropdownOpen, setSavedFiltersDropdownOpen] = useState(false)
 
+  // Mobile filter bottom sheet state
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+
+  // Status border colors for mobile cards
+  const statusBorderColors: Record<string, string> = {
+    not_started: 'border-l-gray-400',
+    in_progress: 'border-l-sky-500',
+    awaiting_test: 'border-l-purple-500',
+    hold_point: 'border-l-red-500',
+    ncr_raised: 'border-l-red-600',
+    completed: 'border-l-emerald-500',
+    conformed: 'border-l-green-600',
+    claimed: 'border-l-teal-500',
+  }
+
   // Save filter to localStorage
   const saveCurrentFilter = () => {
     if (!newFilterName.trim()) return
@@ -480,6 +499,14 @@ export function LotsPage() {
 
   // Area/Zone filter
   const areaZoneFilter = searchParams.get('areaZone') || ''
+
+  // Mobile filter values - synced with URL params
+  const [mobileFilterValues, setMobileFilterValues] = useState<FilterValues>({
+    status: statusFilters,
+    activity: activityFilter || null,
+    subcontractor: subcontractorFilter || null,
+    areaZone: areaZoneFilter || null,
+  })
 
   // Status filter dropdown state
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
@@ -769,6 +796,19 @@ export function LotsPage() {
   useEffect(() => {
     fetchLots()
   }, [projectId, navigate])
+
+  // Pull-to-refresh for mobile card view
+  const {
+    containerRef: pullToRefreshRef,
+    pullDistance,
+    isRefreshing,
+    progress: pullProgress,
+  } = usePullToRefresh({
+    onRefresh: async () => {
+      await fetchLots()
+    },
+    enabled: isMobile,
+  })
 
   // Feature #732: Real-time lot update polling
   // Poll for updates every 30 seconds when the tab is visible
@@ -1608,19 +1648,24 @@ export function LotsPage() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setExportModalOpen(true)}
-            className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
-          >
-            Export CSV
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="rounded-lg border border-gray-500 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 print:hidden"
-          >
-            <Printer className="h-4 w-4" />
-            Print Register
-          </button>
+          {/* Hide admin actions on mobile */}
+          {!isMobile && (
+            <>
+              <button
+                onClick={() => setExportModalOpen(true)}
+                className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+              >
+                Export CSV
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="rounded-lg border border-gray-500 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 print:hidden"
+              >
+                <Printer className="h-4 w-4" />
+                Print Register
+              </button>
+            </>
+          )}
           {canCreate && selectedLots.size > 0 && (
             <>
               <button
@@ -1657,18 +1702,24 @@ export function LotsPage() {
           )}
           {!isSubcontractor && canCreate && (
             <>
-              <button
-                onClick={() => setImportModalOpen(true)}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
-              >
-                Import CSV
-              </button>
-              <button
-                onClick={() => setBulkWizardOpen(true)}
-                className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
-              >
-                Bulk Create Lots
-              </button>
+              {/* Hide bulk admin actions on mobile */}
+              {!isMobile && (
+                <>
+                  <button
+                    onClick={() => setImportModalOpen(true)}
+                    className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+                  >
+                    Import CSV
+                  </button>
+                  <button
+                    onClick={() => setBulkWizardOpen(true)}
+                    className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+                  >
+                    Bulk Create Lots
+                  </button>
+                </>
+              )}
+              {/* Create Lot stays visible on all devices */}
               <button
                 onClick={handleOpenCreateModal}
                 className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
@@ -1685,49 +1736,69 @@ export function LotsPage() {
           : `Manage lots for project ${projectId}. The lot is the atomic unit of the system.`}
       </p>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4">
-        {/* Filter label with badge count */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-medium text-muted-foreground">Filters:</span>
-          {activeFilterCount > 0 && (
-            <span
-              className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground"
-              data-testid="filter-badge"
-              title={`${activeFilterCount} active filter${activeFilterCount > 1 ? 's' : ''}`}
-            >
-              {activeFilterCount}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="search-input" className="text-sm font-medium">
-            Search:
-          </label>
-          <div className="flex items-center">
+      {/* Filters - Mobile vs Desktop */}
+      {isMobile ? (
+        /* Mobile: Search + Filter button */
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
             <input
-              id="search-input"
+              id="search-input-mobile"
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Lot # or description..."
-              className="rounded-lg border bg-background px-3 py-1.5 text-sm w-48"
+              placeholder="Search lots..."
+              className="w-full rounded-lg border bg-background px-4 py-3 text-base"
             />
-            {searchQuery && (
-              <button
-                onClick={() => handleSearch('')}
-                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
-                title="Clear search"
-                aria-label="Clear search"
+          </div>
+          <FilterTriggerButton
+            onClick={() => setFilterSheetOpen(true)}
+            activeCount={activeFilterCount}
+          />
+        </div>
+      ) : (
+        /* Desktop: Full filter layout */
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Filter label with badge count */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-muted-foreground">Filters:</span>
+            {activeFilterCount > 0 && (
+              <span
+                className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-semibold rounded-full bg-primary text-primary-foreground"
+                data-testid="filter-badge"
+                title={`${activeFilterCount} active filter${activeFilterCount > 1 ? 's' : ''}`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
+                {activeFilterCount}
+              </span>
             )}
           </div>
-        </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="search-input" className="text-sm font-medium">
+              Search:
+            </label>
+            <div className="flex items-center">
+              <input
+                id="search-input"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Lot # or description..."
+                className="rounded-lg border bg-background px-3 py-1.5 text-sm w-48"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => handleSearch('')}
+                  className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium">
             Status:
@@ -2142,7 +2213,71 @@ export function LotsPage() {
             </>
           )}
         </div>
-      </div>
+        </div>
+      )}
+
+      {/* Mobile Filter Bottom Sheet */}
+      <FilterBottomSheet
+        isOpen={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        title="Filter Lots"
+        filters={[
+          {
+            type: 'multiselect',
+            id: 'status',
+            label: 'Status',
+            options: STATUS_OPTIONS,
+            value: statusFilters,
+          },
+          {
+            type: 'select',
+            id: 'activity',
+            label: 'Activity Type',
+            options: activityTypes.filter((t): t is string => t !== null && t !== undefined).map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) })),
+            value: activityFilter || null,
+          },
+          ...(!isSubcontractor && subcontractors.length > 0 ? [{
+            type: 'select' as const,
+            id: 'subcontractor',
+            label: 'Subcontractor',
+            options: [
+              { value: 'unassigned', label: 'Unassigned' },
+              ...subcontractors.map(s => ({ value: s.id, label: s.companyName })),
+            ],
+            value: subcontractorFilter || null,
+          }] : []),
+          ...(areaZones.length > 0 ? [{
+            type: 'select' as const,
+            id: 'areaZone',
+            label: 'Area/Zone',
+            options: [
+              { value: 'unassigned', label: 'Unassigned' },
+              ...areaZones.map(z => ({ value: z, label: z })),
+            ],
+            value: areaZoneFilter || null,
+          }] : []),
+        ] as FilterConfig[]}
+        values={mobileFilterValues}
+        onChange={(values) => setMobileFilterValues(values)}
+        onApply={(values) => {
+          updateFilters({
+            status: (values.status as string[] || []).join(','),
+            activity: values.activity as string || '',
+            subcontractor: values.subcontractor as string || '',
+            areaZone: values.areaZone as string || '',
+          })
+          setFilterSheetOpen(false)
+        }}
+        onClear={() => {
+          setMobileFilterValues({
+            status: [],
+            activity: null,
+            subcontractor: null,
+            areaZone: null,
+          })
+          updateFilters({ status: '', activity: '', subcontractor: '', areaZone: '' })
+        }}
+      />
 
       {/* Loading State - Skeleton */}
       {loading && (
@@ -2478,7 +2613,19 @@ export function LotsPage() {
 
       {/* Card View - Also shows on mobile when list view is selected */}
       {!loading && !error && (viewMode === 'card' || (viewMode === 'list' && isMobile)) && (
-        <div className="overflow-auto max-h-[calc(100vh-280px)]" data-testid="card-view-container">
+        <div
+          ref={isMobile ? pullToRefreshRef : undefined}
+          className="overflow-auto max-h-[calc(100vh-280px)] relative"
+          data-testid="card-view-container"
+        >
+          {/* Pull-to-refresh indicator for mobile */}
+          {isMobile && (
+            <PullToRefreshIndicator
+              pullDistance={pullDistance}
+              isRefreshing={isRefreshing}
+              progress={pullProgress}
+            />
+          )}
           {displayedLots.length === 0 ? (
             <div className="rounded-lg border p-12 text-center">
               {lots.length === 0 ? (
@@ -2501,56 +2648,79 @@ export function LotsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="card-grid">
-              {displayedLots.map((lot) => (
-                <div
-                  key={lot.id}
-                  className="rounded-lg border bg-card p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
-                  onContextMenu={(e) => handleContextMenu(e, lot)}
-                  data-testid={`lot-card-${lot.id}`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-semibold text-lg">{lot.lotNumber}</h3>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
-                      {lot.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                    {lot.description || 'No description'}
-                  </p>
-                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    {lot.activityType && (
-                      <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded">
-                        {lot.activityType}
+              {displayedLots.map((lot) => {
+                const cardContent = (
+                  <div
+                    className={`rounded-lg border bg-card p-4 hover:shadow-md transition-shadow cursor-pointer ${
+                      isMobile ? `border-l-4 ${statusBorderColors[lot.status] || 'border-l-gray-400'}` : ''
+                    }`}
+                    onClick={() => !isMobile && navigate(`/projects/${projectId}/lots/${lot.id}`)}
+                    onContextMenu={(e) => handleContextMenu(e, lot)}
+                    data-testid={`lot-card-${lot.id}`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-lg">{lot.lotNumber}</h3>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
+                        {lot.status.replace('_', ' ')}
                       </span>
-                    )}
-                    {(lot.chainageStart != null || lot.chainageEnd != null) && (
-                      <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded">
-                        <MapPin className="h-3 w-3" />
-                        {formatChainage(lot)}
-                      </span>
-                    )}
-                    {lot.areaZone && (
-                      <span className="bg-muted px-2 py-0.5 rounded">
-                        {lot.areaZone}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t text-xs text-muted-foreground">
-                    <div className="flex gap-3">
-                      <span>{lot.itpCount ?? 0} ITPs</span>
-                      <span>{lot.testCount ?? 0} Tests</span>
-                      {(lot.ncrCount ?? 0) > 0 && (
-                        <span className="text-amber-600 flex items-center gap-0.5">
-                          <AlertTriangle className="h-3 w-3" />
-                          {lot.ncrCount} NCRs
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                      {lot.description || 'No description'}
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      {lot.activityType && (
+                        <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded">
+                          {lot.activityType}
+                        </span>
+                      )}
+                      {(lot.chainageStart != null || lot.chainageEnd != null) && (
+                        <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded">
+                          <MapPin className="h-3 w-3" />
+                          {formatChainage(lot)}
+                        </span>
+                      )}
+                      {lot.areaZone && (
+                        <span className="bg-muted px-2 py-0.5 rounded">
+                          {lot.areaZone}
                         </span>
                       )}
                     </div>
-                    <span>{lot.createdAt ? new Date(lot.createdAt).toLocaleDateString() : ''}</span>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t text-xs text-muted-foreground">
+                      <div className="flex gap-3">
+                        <span>{lot.itpCount ?? 0} ITPs</span>
+                        <span>{lot.testCount ?? 0} Tests</span>
+                        {(lot.ncrCount ?? 0) > 0 && (
+                          <span className="text-amber-600 flex items-center gap-0.5">
+                            <AlertTriangle className="h-3 w-3" />
+                            {lot.ncrCount} NCRs
+                          </span>
+                        )}
+                      </div>
+                      <span>{lot.createdAt ? new Date(lot.createdAt).toLocaleDateString() : ''}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+
+                // On mobile, wrap in SwipeableCard for swipe gestures
+                if (isMobile) {
+                  return (
+                    <SwipeableCard
+                      key={lot.id}
+                      onSwipeRight={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
+                      rightAction={{
+                        label: 'View',
+                        color: 'bg-blue-500',
+                        icon: <Eye className="h-6 w-6" />,
+                      }}
+                    >
+                      {cardContent}
+                    </SwipeableCard>
+                  )
+                }
+
+                // On desktop, just render the card directly
+                return <div key={lot.id}>{cardContent}</div>
+              })}
             </div>
           )}
           {/* Infinite Scroll for Card View */}
@@ -3171,6 +3341,21 @@ export function LotsPage() {
           lots={lots.filter(lot => selectedLots.has(lot.id))}
           projectId={projectId}
           onClose={() => setPrintLabelsModalOpen(false)}
+        />
+      )}
+
+      {/* Mobile Floating Action Button */}
+      {!isSubcontractor && canCreate && (
+        <ContextFAB
+          actions={[
+            {
+              id: 'add-lot',
+              label: 'Add Lot',
+              icon: <Plus className="w-5 h-5" />,
+              color: 'bg-primary',
+              onClick: handleOpenCreateModal,
+            },
+          ]}
         />
       )}
     </div>

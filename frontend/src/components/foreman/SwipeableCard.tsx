@@ -2,6 +2,7 @@
 import { useState, useRef, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Check, X } from 'lucide-react'
+import { useHaptics } from '@/hooks/useHaptics'
 
 interface SwipeableCardProps {
   children: ReactNode
@@ -36,11 +37,14 @@ export function SwipeableCard({
   const [isDragging, setIsDragging] = useState(false)
   const startXRef = useRef(0)
   const currentXRef = useRef(0)
+  const thresholdCrossedRef = useRef<'left' | 'right' | null>(null)
+  const { trigger } = useHaptics()
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (disabled) return
     startXRef.current = e.touches[0].clientX
     currentXRef.current = e.touches[0].clientX
+    thresholdCrossedRef.current = null
     setIsDragging(true)
   }
 
@@ -59,6 +63,18 @@ export function SwipeableCard({
       newOffset = maxOffset * (diff > 0 ? 1 : -1) + (diff - maxOffset * (diff > 0 ? 1 : -1)) * resistance
     }
 
+    // Trigger haptic feedback when crossing threshold (once per direction)
+    if (newOffset > threshold && thresholdCrossedRef.current !== 'right') {
+      trigger('light')
+      thresholdCrossedRef.current = 'right'
+    } else if (newOffset < -threshold && thresholdCrossedRef.current !== 'left') {
+      trigger('light')
+      thresholdCrossedRef.current = 'left'
+    } else if (Math.abs(newOffset) < threshold && thresholdCrossedRef.current !== null) {
+      // Reset when coming back below threshold
+      thresholdCrossedRef.current = null
+    }
+
     setOffset(newOffset)
   }
 
@@ -67,8 +83,10 @@ export function SwipeableCard({
     setIsDragging(false)
 
     if (offset > threshold && onSwipeRight) {
+      trigger('light')
       onSwipeRight()
     } else if (offset < -threshold && onSwipeLeft) {
+      trigger('light')
       onSwipeLeft()
     }
 

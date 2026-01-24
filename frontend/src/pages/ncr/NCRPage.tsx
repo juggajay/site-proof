@@ -3,10 +3,14 @@ import { createPortal } from 'react-dom'
 import { useParams } from 'react-router-dom'
 import { useAuth, getAuthToken } from '../../lib/auth'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check, Printer } from 'lucide-react'
+import { Link2, Check, Printer, AlertTriangle, ChevronRight, Search } from 'lucide-react'
 import { generateNCRDetailPDF, NCRDetailData } from '../../lib/pdfGenerator'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { MobileDataCard } from '@/components/ui/MobileDataCard'
+import { FilterBottomSheet, FilterTriggerButton, type FilterConfig, type FilterValues } from '@/components/mobile/FilterBottomSheet'
+import { ContextFAB } from '@/components/mobile/ContextFAB'
+import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
+import { SwipeableCard } from '@/components/foreman/SwipeableCard'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
@@ -120,6 +124,10 @@ export function NCRPage() {
   const [dateFromFilter, setDateFromFilter] = useState<string>('')
   const [dateToFilter, setDateToFilter] = useState<string>('')
 
+  // Mobile filter bottom sheet state
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const [mobileSearchQuery, setMobileSearchQuery] = useState('')
+
   // Get unique values for filter dropdowns
   const uniqueStatuses = [...new Set(ncrs.map(ncr => ncr.status))]
   const uniqueCategories = [...new Set(ncrs.map(ncr => ncr.category))]
@@ -129,6 +137,18 @@ export function NCRPage() {
 
   // Apply filters to NCRs
   const filteredNcrs = ncrs.filter(ncr => {
+    // Mobile search query filter (search across NCR number, description, category)
+    if (mobileSearchQuery) {
+      const query = mobileSearchQuery.toLowerCase()
+      const matchesSearch =
+        ncr.ncrNumber.toLowerCase().includes(query) ||
+        ncr.description.toLowerCase().includes(query) ||
+        ncr.category.toLowerCase().includes(query) ||
+        (ncr.responsibleUser?.fullName?.toLowerCase().includes(query)) ||
+        (ncr.responsibleUser?.email?.toLowerCase().includes(query))
+      if (!matchesSearch) return false
+    }
+
     // Status filter
     if (statusFilter && ncr.status !== statusFilter) return false
 
@@ -275,6 +295,89 @@ export function NCRPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [token, projectId])
+
+  // Pull-to-refresh for mobile
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({
+    onRefresh: async () => {
+      await fetchNcrs()
+    },
+    enabled: isMobile,
+  })
+
+  // Mobile filter configuration
+  const mobileFilters: FilterConfig[] = [
+    {
+      type: 'select',
+      id: 'status',
+      label: 'Status',
+      options: uniqueStatuses.map(status => ({
+        value: status,
+        label: status.replace(/_/g, ' '),
+      })),
+      value: statusFilter || null,
+    },
+    {
+      type: 'select',
+      id: 'category',
+      label: 'Category',
+      options: uniqueCategories.map(category => ({
+        value: category,
+        label: category.replace(/_/g, ' '),
+      })),
+      value: categoryFilter || null,
+    },
+    {
+      type: 'select',
+      id: 'responsible',
+      label: 'Responsible',
+      options: uniqueResponsible.map(responsible => ({
+        value: responsible,
+        label: responsible,
+      })),
+      value: responsibleFilter || null,
+    },
+    {
+      type: 'date',
+      id: 'dateRange',
+      label: 'Date Range',
+      value: { start: dateFromFilter || null, end: dateToFilter || null },
+    },
+  ]
+
+  // Mobile filter values for bottom sheet
+  const mobileFilterValues: FilterValues = {
+    status: statusFilter || null,
+    category: categoryFilter || null,
+    responsible: responsibleFilter || null,
+    dateRange: { start: dateFromFilter || null, end: dateToFilter || null },
+  }
+
+  // Count active mobile filters
+  const activeMobileFilterCount =
+    (statusFilter ? 1 : 0) +
+    (categoryFilter ? 1 : 0) +
+    (responsibleFilter ? 1 : 0) +
+    (dateFromFilter || dateToFilter ? 1 : 0)
+
+  // Handle mobile filter apply
+  const handleMobileFilterApply = (values: FilterValues) => {
+    setStatusFilter((values.status as string) || '')
+    setCategoryFilter((values.category as string) || '')
+    setResponsibleFilter((values.responsible as string) || '')
+    const dateRange = values.dateRange as { start: string | null; end: string | null }
+    setDateFromFilter(dateRange?.start || '')
+    setDateToFilter(dateRange?.end || '')
+    setFilterSheetOpen(false)
+  }
+
+  // Handle mobile filter clear
+  const handleMobileFilterClear = () => {
+    setStatusFilter('')
+    setCategoryFilter('')
+    setResponsibleFilter('')
+    setDateFromFilter('')
+    setDateToFilter('')
+  }
 
   // Create NCR
   const handleCreateNcr = async (formData: {
@@ -778,7 +881,8 @@ export function NCRPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {filteredNcrs.length > 0 && (
+          {/* Hide Export CSV on mobile */}
+          {!isMobile && filteredNcrs.length > 0 && (
             <button
               onClick={() => handleExportCSV()}
               className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center gap-2"
@@ -786,7 +890,8 @@ export function NCRPage() {
               Export CSV
             </button>
           )}
-          {projectId && (
+          {/* Raise NCR stays visible - will be replaced by FAB on mobile later */}
+          {projectId && !isMobile && (
             <button
               onClick={() => setShowCreateModal(true)}
               className="rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700 flex items-center gap-2"
@@ -824,121 +929,172 @@ export function NCRPage() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="bg-card rounded-lg border p-4">
-        <div className="flex flex-wrap gap-4 items-end">
-          {/* Status Filter */}
-          <div className="flex flex-col min-w-[150px]">
-            <label htmlFor="status-filter" className="text-sm font-medium text-muted-foreground mb-1">
-              Status
-            </label>
-            <select
-              id="status-filter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border rounded-lg bg-background text-sm"
-            >
-              <option value="">All Statuses</option>
-              {uniqueStatuses.map(status => (
-                <option key={status} value={status}>
-                  {status.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Category Filter */}
-          <div className="flex flex-col min-w-[150px]">
-            <label htmlFor="category-filter" className="text-sm font-medium text-muted-foreground mb-1">
-              Category
-            </label>
-            <select
-              id="category-filter"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 border rounded-lg bg-background text-sm"
-            >
-              <option value="">All Categories</option>
-              {uniqueCategories.map(category => (
-                <option key={category} value={category}>
-                  {category.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Responsible Filter */}
-          <div className="flex flex-col min-w-[150px]">
-            <label htmlFor="responsible-filter" className="text-sm font-medium text-muted-foreground mb-1">
-              Responsible
-            </label>
-            <select
-              id="responsible-filter"
-              value={responsibleFilter}
-              onChange={(e) => setResponsibleFilter(e.target.value)}
-              className="px-3 py-2 border rounded-lg bg-background text-sm"
-            >
-              <option value="">All Responsible</option>
-              {uniqueResponsible.map(responsible => (
-                <option key={responsible} value={responsible}>
-                  {responsible}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date From Filter */}
-          <div className="flex flex-col min-w-[150px]">
-            <label htmlFor="date-from-filter" className="text-sm font-medium text-muted-foreground mb-1">
-              Date From
-            </label>
-            <input
-              id="date-from-filter"
-              type="date"
-              value={dateFromFilter}
-              onChange={(e) => setDateFromFilter(e.target.value)}
-              className="px-3 py-2 border rounded-lg bg-background text-sm"
+      {/* Filters - Mobile vs Desktop */}
+      {isMobile ? (
+        /* Mobile Filter Bar */
+        <div className="bg-card rounded-lg border p-3">
+          <div className="flex gap-3 items-center">
+            {/* Mobile Search Input */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search NCRs..."
+                value={mobileSearchQuery}
+                onChange={(e) => setMobileSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-background text-base focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+              />
+            </div>
+            {/* Filter Trigger Button */}
+            <FilterTriggerButton
+              onClick={() => setFilterSheetOpen(true)}
+              activeCount={activeMobileFilterCount}
             />
           </div>
-
-          {/* Date To Filter */}
-          <div className="flex flex-col min-w-[150px]">
-            <label htmlFor="date-to-filter" className="text-sm font-medium text-muted-foreground mb-1">
-              Date To
-            </label>
-            <input
-              id="date-to-filter"
-              type="date"
-              value={dateToFilter}
-              onChange={(e) => setDateToFilter(e.target.value)}
-              className="px-3 py-2 border rounded-lg bg-background text-sm"
-            />
-          </div>
-
-          {/* Clear Filters Button */}
-          {(statusFilter || categoryFilter || responsibleFilter || dateFromFilter || dateToFilter) && (
-            <button
-              onClick={() => {
-                setStatusFilter('')
-                setCategoryFilter('')
-                setResponsibleFilter('')
-                setDateFromFilter('')
-                setDateToFilter('')
-              }}
-              className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground border rounded-lg hover:bg-muted/50"
-            >
-              Clear Filters
-            </button>
+          {/* Filter Results Summary for Mobile */}
+          {(statusFilter || categoryFilter || responsibleFilter || dateFromFilter || dateToFilter || mobileSearchQuery) && (
+            <div className="mt-2 text-sm text-muted-foreground">
+              Showing {filteredNcrs.length} of {ncrs.length} NCRs
+            </div>
           )}
         </div>
+      ) : (
+        /* Desktop Filters */
+        <div className="bg-card rounded-lg border p-4">
+          <div className="flex flex-wrap gap-4 items-end">
+            {/* Status Filter */}
+            <div className="flex flex-col min-w-[150px]">
+              <label htmlFor="status-filter" className="text-sm font-medium text-muted-foreground mb-1">
+                Status
+              </label>
+              <select
+                id="status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-background text-sm"
+              >
+                <option value="">All Statuses</option>
+                {uniqueStatuses.map(status => (
+                  <option key={status} value={status}>
+                    {status.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        {/* Filter Results Summary */}
-        {(statusFilter || categoryFilter || responsibleFilter || dateFromFilter || dateToFilter) && (
-          <div className="mt-3 text-sm text-muted-foreground">
-            Showing {filteredNcrs.length} of {ncrs.length} NCRs
+            {/* Category Filter */}
+            <div className="flex flex-col min-w-[150px]">
+              <label htmlFor="category-filter" className="text-sm font-medium text-muted-foreground mb-1">
+                Category
+              </label>
+              <select
+                id="category-filter"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-background text-sm"
+              >
+                <option value="">All Categories</option>
+                {uniqueCategories.map(category => (
+                  <option key={category} value={category}>
+                    {category.replace(/_/g, ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Responsible Filter */}
+            <div className="flex flex-col min-w-[150px]">
+              <label htmlFor="responsible-filter" className="text-sm font-medium text-muted-foreground mb-1">
+                Responsible
+              </label>
+              <select
+                id="responsible-filter"
+                value={responsibleFilter}
+                onChange={(e) => setResponsibleFilter(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-background text-sm"
+              >
+                <option value="">All Responsible</option>
+                {uniqueResponsible.map(responsible => (
+                  <option key={responsible} value={responsible}>
+                    {responsible}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Date From Filter */}
+            <div className="flex flex-col min-w-[150px]">
+              <label htmlFor="date-from-filter" className="text-sm font-medium text-muted-foreground mb-1">
+                Date From
+              </label>
+              <input
+                id="date-from-filter"
+                type="date"
+                value={dateFromFilter}
+                onChange={(e) => setDateFromFilter(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-background text-sm"
+              />
+            </div>
+
+            {/* Date To Filter */}
+            <div className="flex flex-col min-w-[150px]">
+              <label htmlFor="date-to-filter" className="text-sm font-medium text-muted-foreground mb-1">
+                Date To
+              </label>
+              <input
+                id="date-to-filter"
+                type="date"
+                value={dateToFilter}
+                onChange={(e) => setDateToFilter(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-background text-sm"
+              />
+            </div>
+
+            {/* Clear Filters Button */}
+            {(statusFilter || categoryFilter || responsibleFilter || dateFromFilter || dateToFilter) && (
+              <button
+                onClick={() => {
+                  setStatusFilter('')
+                  setCategoryFilter('')
+                  setResponsibleFilter('')
+                  setDateFromFilter('')
+                  setDateToFilter('')
+                }}
+                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground border rounded-lg hover:bg-muted/50"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Filter Results Summary */}
+          {(statusFilter || categoryFilter || responsibleFilter || dateFromFilter || dateToFilter) && (
+            <div className="mt-3 text-sm text-muted-foreground">
+              Showing {filteredNcrs.length} of {ncrs.length} NCRs
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mobile Filter Bottom Sheet */}
+      <FilterBottomSheet
+        isOpen={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        title="Filter NCRs"
+        filters={mobileFilters}
+        values={mobileFilterValues}
+        onChange={(values) => {
+          // Update local state as user interacts
+          setStatusFilter((values.status as string) || '')
+          setCategoryFilter((values.category as string) || '')
+          setResponsibleFilter((values.responsible as string) || '')
+          const dateRange = values.dateRange as { start: string | null; end: string | null }
+          setDateFromFilter(dateRange?.start || '')
+          setDateToFilter(dateRange?.end || '')
+        }}
+        onApply={handleMobileFilterApply}
+        onClear={handleMobileFilterClear}
+      />
 
       {/* NCR List */}
       {filteredNcrs.length === 0 ? (
@@ -954,36 +1110,64 @@ export function NCRPage() {
           </p>
         </div>
       ) : isMobile ? (
-        /* Mobile Card View */
-        <div className="space-y-3">
-          {filteredNcrs.map((ncr) => {
-            const ageInDays = Math.floor((Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24))
-            const isOverdue = ncr.dueDate && new Date(ncr.dueDate) < new Date() && ncr.status !== 'closed' && ncr.status !== 'closed_concession'
-            const statusVariant = ncr.status === 'closed' || ncr.status === 'closed_concession' ? 'success'
-              : ncr.status === 'open' ? 'error'
-              : ncr.status === 'verification' ? 'info'
-              : 'warning'
+        /* Mobile Card View with Pull-to-Refresh */
+        <div
+          ref={containerRef as React.RefObject<HTMLDivElement>}
+          className="relative overflow-auto"
+          style={{ maxHeight: 'calc(100vh - 300px)' }}
+        >
+          {/* Pull-to-Refresh Indicator */}
+          <PullToRefreshIndicator
+            pullDistance={pullDistance}
+            isRefreshing={isRefreshing}
+            progress={progress}
+          />
 
-            return (
-              <MobileDataCard
-                key={ncr.id}
-                title={ncr.ncrNumber}
-                subtitle={ncr.description}
-                status={{
-                  label: ncr.status.replace('_', ' '),
-                  variant: statusVariant
-                }}
-                fields={[
-                  { label: 'Category', value: ncr.category.replace(/_/g, ' '), priority: 'primary' },
-                  { label: 'Responsible', value: ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned', priority: 'primary' },
-                  { label: 'Due', value: ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString() : '-', priority: 'secondary' },
-                  { label: 'Age', value: `${ageInDays}d`, priority: 'secondary' },
-                ]}
-                onClick={() => setSelectedNcr(ncr)}
-                className={isOverdue ? 'border-red-300' : undefined}
-              />
-            )
-          })}
+          <div className="space-y-3">
+            {filteredNcrs.map((ncr) => {
+              const ageInDays = Math.floor((Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+              const isOverdue = ncr.dueDate && new Date(ncr.dueDate) < new Date() && ncr.status !== 'closed' && ncr.status !== 'closed_concession'
+              const statusVariant = ncr.status === 'closed' || ncr.status === 'closed_concession' ? 'success'
+                : ncr.status === 'open' ? 'error'
+                : ncr.status === 'verification' ? 'info'
+                : 'warning'
+
+              return (
+                <SwipeableCard
+                  key={ncr.id}
+                  onSwipeRight={() => setSelectedNcr(ncr)}
+                  rightAction={{
+                    label: 'View',
+                    color: 'bg-blue-500',
+                    icon: <ChevronRight className="h-6 w-6" />,
+                  }}
+                  leftAction={{
+                    label: 'Copy Link',
+                    color: 'bg-slate-500',
+                    icon: <Link2 className="h-6 w-6" />,
+                  }}
+                  onSwipeLeft={() => handleCopyNcrLink(ncr.id, ncr.ncrNumber)}
+                >
+                  <MobileDataCard
+                    title={ncr.ncrNumber}
+                    subtitle={ncr.description}
+                    status={{
+                      label: ncr.status.replace('_', ' '),
+                      variant: statusVariant
+                    }}
+                    fields={[
+                      { label: 'Category', value: ncr.category.replace(/_/g, ' '), priority: 'primary' },
+                      { label: 'Responsible', value: ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned', priority: 'primary' },
+                      { label: 'Due', value: ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString() : '-', priority: 'secondary' },
+                      { label: 'Age', value: `${ageInDays}d`, priority: 'secondary' },
+                    ]}
+                    onClick={() => setSelectedNcr(ncr)}
+                    className={isOverdue ? 'border-red-300' : undefined}
+                  />
+                </SwipeableCard>
+              )
+            })}
+          </div>
         </div>
       ) : (
         /* Desktop Table View */
@@ -1671,6 +1855,22 @@ export function NCRPage() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Mobile Context FAB for Raising NCR */}
+      {projectId && (
+        <ContextFAB
+          actions={[
+            {
+              id: 'raise-ncr',
+              label: 'Raise NCR',
+              icon: <AlertTriangle className="w-5 h-5" />,
+              color: 'bg-red-500',
+              onClick: () => setShowCreateModal(true),
+            },
+          ]}
+          mainColor="bg-red-500"
+        />
       )}
     </div>
   )
