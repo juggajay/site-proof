@@ -22,7 +22,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
-import { ForemanBottomNav } from '@/components/foreman'
+import { ForemanBottomNavV2 } from '@/components/foreman'
+import { useForemanMobileStore } from '@/stores/foremanMobileStore'
 
 // Role-based access definitions
 const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
@@ -96,6 +97,7 @@ export function MobileNav() {
   const hasManagementAccess = MANAGEMENT_ROLES.includes(userRole)
   const isForeman = userRole === 'foreman'
   const isSubcontractor = SUBCONTRACTOR_ROLES.includes(userRole)
+  const { setIsCameraOpen } = useForemanMobileStore()
 
   const shouldShowItem = (item: NavigationItem): boolean => {
     if (item.requiresCommercialAccess && !hasCommercialAccess) return false
@@ -113,9 +115,9 @@ export function MobileNav() {
     )
   }
 
-  // Foreman uses ForemanBottomNav exclusively, no hamburger menu needed
+  // Foreman uses research-backed 5-tab nav: Capture, Today, Approve, Diary, Lots
   if (isForeman) {
-    return <ForemanBottomNav />
+    return <ForemanBottomNavV2 onCapturePress={() => setIsCameraOpen(true)} />
   }
 
   return (

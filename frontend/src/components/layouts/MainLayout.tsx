@@ -1,12 +1,21 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { MobileNav } from './MobileNav'
+import { useAuth } from '@/lib/auth'
+import { useForemanMobileStore } from '@/stores/foremanMobileStore'
+import { CaptureModal } from '@/components/foreman'
 
 export function MainLayout() {
   const location = useLocation()
+  const { projectId } = useParams()
+  const { user } = useAuth()
   const [isTransitioning, setIsTransitioning] = useState(false)
+
+  const userRole = (user as any)?.roleInCompany || (user as any)?.role || ''
+  const isForeman = userRole === 'foreman'
+  const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore()
 
   // Add subtle fade transition when navigating between pages
   useEffect(() => {
@@ -29,6 +38,15 @@ export function MainLayout() {
         </main>
       </div>
       <MobileNav />
+
+      {/* Foreman capture modal - triggered by bottom nav Capture button via store */}
+      {isForeman && projectId && (
+        <CaptureModal
+          projectId={projectId}
+          isOpen={isCameraOpen}
+          onClose={() => setIsCameraOpen(false)}
+        />
+      )}
     </div>
   )
 }

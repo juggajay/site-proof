@@ -1,10 +1,14 @@
 // ForemanBottomNavV2 - Research-backed mobile navigation for foreman role
 // 5 primary actions: Capture, Today, Approve, Diary, Lots
 // Reference: docs/Foreman persona document (AU civil).md
+import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Camera, ListChecks, CheckSquare, BookOpen, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { getAuthToken } from '@/lib/auth'
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 type NavTab = 'capture' | 'today' | 'approve' | 'diary' | 'lots'
 
@@ -52,14 +56,45 @@ const navItems: NavItem[] = [
 
 interface ForemanBottomNavV2Props {
   onCapturePress: () => void
-  todayBadgeCount?: number // Number of blocking/due items
+  todayBadgeCount?: number // If provided, skips internal fetch
 }
 
-export function ForemanBottomNavV2({ onCapturePress, todayBadgeCount }: ForemanBottomNavV2Props) {
+export function ForemanBottomNavV2({ onCapturePress, todayBadgeCount: externalBadgeCount }: ForemanBottomNavV2Props) {
   const { projectId } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
   const { isOnline, pendingSyncCount } = useOnlineStatus()
+  const [internalBadgeCount, setInternalBadgeCount] = useState(0)
+
+  // Self-manage badge count when no external count provided
+  const fetchBadgeCount = useCallback(async () => {
+    if (externalBadgeCount !== undefined || !projectId) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/dashboard/projects/${projectId}/foreman/today`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (response.ok) {
+        const data = await response.json()
+        const count = (data.blocking?.length || 0) + (data.dueToday?.length || 0)
+        setInternalBadgeCount(count)
+      }
+    } catch {
+      // Silently fail - badge is non-critical
+    }
+  }, [projectId, externalBadgeCount])
+
+  useEffect(() => {
+    fetchBadgeCount()
+    const interval = setInterval(fetchBadgeCount, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [fetchBadgeCount])
+
+  const todayBadgeCount = externalBadgeCount ?? internalBadgeCount
 
   // Determine active tab from current path
   const getActiveTab = (): NavTab | null => {
