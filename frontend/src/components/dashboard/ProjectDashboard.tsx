@@ -1,4 +1,5 @@
 // ProjectDashboard - Landing page when entering a project
+// Shows project health at a glance: attention items, progress, stats ribbon, activity
 import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
@@ -12,13 +13,27 @@ import {
   FlaskConical,
   FileText,
   Settings,
-  ChevronRight,
   RefreshCw,
   Activity,
+  ArrowRight,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
+
+interface AttentionItem {
+  id: string
+  type: 'ncr' | 'holdpoint'
+  title: string
+  description: string
+  urgency: 'critical' | 'warning'
+  daysOverdue: number
+  link: string
+}
 
 interface ProjectDashboardData {
   project: {
@@ -30,8 +45,22 @@ interface ProjectDashboardData {
     state?: string
   }
   stats: {
-    lots: { total: number; completed: number; inProgress: number }
-    ncrs: { open: number; total: number }
+    lots: {
+      total: number
+      completed: number
+      inProgress: number
+      notStarted: number
+      onHold: number
+      progressPct: number
+    }
+    ncrs: {
+      open: number
+      total: number
+      overdue: number
+      major: number
+      minor: number
+      observation: number
+    }
     holdPoints: { pending: number; released: number }
     itps: { pending: number; completed: number }
     dockets: { pendingApproval: number }
@@ -39,6 +68,7 @@ interface ProjectDashboardData {
     documents: { total: number }
     diary: { todayStatus: 'not_started' | 'draft' | 'submitted' | null }
   }
+  attentionItems: AttentionItem[]
   recentActivity: Array<{
     id: string
     type: 'lot' | 'ncr' | 'holdpoint' | 'diary' | 'docket'
@@ -46,41 +76,6 @@ interface ProjectDashboardData {
     timestamp: string
     link?: string
   }>
-}
-
-interface StatCardProps {
-  title: string
-  value: string | number
-  subtitle?: string
-  icon: React.ReactNode
-  href: string
-  color: string
-}
-
-function StatCard({ title, value, subtitle, icon, href, color }: StatCardProps) {
-  return (
-    <Link
-      to={href}
-      className={cn(
-        'bg-card rounded-lg border p-4 hover:border-primary hover:shadow-md transition-all',
-        'flex flex-col gap-2'
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div className={cn('p-2 rounded-lg', color)}>
-          {icon}
-        </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div>
-        <p className="text-2xl font-bold">{value}</p>
-        <p className="text-sm font-medium">{title}</p>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
-        )}
-      </div>
-    </Link>
-  )
 }
 
 export function ProjectDashboard() {
@@ -140,16 +135,15 @@ export function ProjectDashboard() {
   if (error || !data) {
     return (
       <div className="p-6">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
           {error || 'Failed to load project dashboard'}
         </div>
       </div>
     )
   }
 
-  const { project, stats, recentActivity } = data
+  const { project, stats, attentionItems, recentActivity } = data
 
-  // Status badge colors
   const statusColors: Record<string, string> = {
     active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     completed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
@@ -158,16 +152,27 @@ export function ProjectDashboard() {
     draft: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
   }
 
-  const getDiarySubtitle = () => {
+  const getDiaryLabel = () => {
     switch (stats.diary.todayStatus) {
-      case 'submitted': return 'Submitted today'
-      case 'draft': return 'Draft in progress'
-      default: return 'Not started today'
+      case 'submitted': return 'Submitted'
+      case 'draft': return 'Draft'
+      default: return 'Not started'
     }
   }
 
+  const getDiaryColor = () => {
+    switch (stats.diary.todayStatus) {
+      case 'submitted': return 'text-green-600 dark:text-green-400'
+      case 'draft': return 'text-amber-600 dark:text-amber-400'
+      default: return 'text-muted-foreground'
+    }
+  }
+
+  const hasAttentionItems = attentionItems.length > 0
+  const criticalCount = attentionItems.filter(i => i.urgency === 'critical').length
+
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-5 p-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -182,8 +187,8 @@ export function ProjectDashboard() {
           </div>
           <p className="text-muted-foreground mt-1">
             {project.projectNumber}
-            {project.client && ` • ${project.client}`}
-            {project.state && ` • ${project.state}`}
+            {project.client && ` \u2022 ${project.client}`}
+            {project.state && ` \u2022 ${project.state}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -205,113 +210,410 @@ export function ProjectDashboard() {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <StatCard
-          title="Lots"
+      {/* Attention Banner */}
+      {hasAttentionItems && (
+        <div className={cn(
+          'rounded-lg border p-4',
+          criticalCount > 0
+            ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900'
+            : 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900'
+        )}>
+          <div className="flex items-center gap-2 mb-3">
+            <AlertCircle className={cn(
+              'h-5 w-5',
+              criticalCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+            )} />
+            <h2 className={cn(
+              'text-sm font-semibold',
+              criticalCount > 0 ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'
+            )}>
+              {attentionItems.length} item{attentionItems.length !== 1 ? 's' : ''} need{attentionItems.length === 1 ? 's' : ''} attention
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {attentionItems.slice(0, 4).map((item) => (
+              <Link
+                key={item.id}
+                to={item.link}
+                className={cn(
+                  'flex items-center justify-between p-2.5 rounded-md transition-colors text-sm',
+                  item.urgency === 'critical'
+                    ? 'bg-red-100/60 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40'
+                    : 'bg-amber-100/60 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40'
+                )}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {item.urgency === 'critical' ? (
+                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  )}
+                  <span className={cn(
+                    'font-medium truncate',
+                    item.urgency === 'critical' ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'
+                  )}>
+                    {item.title}
+                  </span>
+                </div>
+                <span className={cn(
+                  'text-xs flex-shrink-0 ml-3',
+                  item.urgency === 'critical' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+                )}>
+                  {item.daysOverdue}d overdue
+                </span>
+              </Link>
+            ))}
+            {attentionItems.length > 4 && (
+              <p className={cn(
+                'text-xs pl-2',
+                criticalCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+              )}>
+                + {attentionItems.length - 4} more
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Compact Stat Ribbon */}
+      <div className="grid grid-cols-4 md:grid-cols-8 gap-px bg-border rounded-lg overflow-hidden border">
+        <StatPill
+          label="Lots"
           value={stats.lots.total}
-          subtitle={`${stats.lots.completed} completed, ${stats.lots.inProgress} in progress`}
-          icon={<MapPin className="h-5 w-5 text-blue-600" />}
-          href={`/projects/${projectId}/lots`}
-          color="bg-blue-100 dark:bg-blue-900/30"
+          sub={`${stats.lots.progressPct}%`}
+          icon={<MapPin className="h-3.5 w-3.5" />}
+          color="text-blue-600 dark:text-blue-400"
         />
-        <StatCard
-          title="Daily Diary"
-          value={stats.diary.todayStatus === 'submitted' ? '✓' : stats.diary.todayStatus === 'draft' ? '◐' : '○'}
-          subtitle={getDiarySubtitle()}
-          icon={<Calendar className="h-5 w-5 text-purple-600" />}
-          href={`/projects/${projectId}/diary`}
-          color="bg-purple-100 dark:bg-purple-900/30"
-        />
-        <StatCard
-          title="Open NCRs"
+        <StatPill
+          label="NCRs"
           value={stats.ncrs.open}
-          subtitle={`${stats.ncrs.total} total`}
-          icon={<AlertTriangle className="h-5 w-5 text-red-600" />}
-          href={`/projects/${projectId}/ncr`}
-          color="bg-red-100 dark:bg-red-900/30"
+          sub={stats.ncrs.overdue > 0 ? `${stats.ncrs.overdue} late` : 'open'}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          color="text-red-600 dark:text-red-400"
+          alert={stats.ncrs.overdue > 0}
         />
-        <StatCard
-          title="ITPs"
-          value={stats.itps.pending}
-          subtitle={`${stats.itps.completed} completed`}
-          icon={<ClipboardCheck className="h-5 w-5 text-green-600" />}
-          href={`/projects/${projectId}/itp`}
-          color="bg-green-100 dark:bg-green-900/30"
-        />
-        <StatCard
-          title="Dockets"
-          value={stats.dockets.pendingApproval}
-          subtitle="Pending approval"
-          icon={<FileCheck className="h-5 w-5 text-amber-600" />}
-          href={`/projects/${projectId}/dockets`}
-          color="bg-amber-100 dark:bg-amber-900/30"
-        />
-        <StatCard
-          title="Hold Points"
+        <StatPill
+          label="Hold Pts"
           value={stats.holdPoints.pending}
-          subtitle={`${stats.holdPoints.released} released`}
-          icon={<Clock className="h-5 w-5 text-orange-600" />}
-          href={`/projects/${projectId}/hold-points`}
-          color="bg-orange-100 dark:bg-orange-900/30"
+          sub="pending"
+          icon={<Clock className="h-3.5 w-3.5" />}
+          color="text-orange-600 dark:text-orange-400"
         />
-        <StatCard
-          title="Test Results"
+        <StatPill
+          label="ITPs"
+          value={stats.itps.pending}
+          sub={`${stats.itps.completed} done`}
+          icon={<ClipboardCheck className="h-3.5 w-3.5" />}
+          color="text-green-600 dark:text-green-400"
+        />
+        <StatPill
+          label="Dockets"
+          value={stats.dockets.pendingApproval}
+          sub="pending"
+          icon={<FileCheck className="h-3.5 w-3.5" />}
+          color="text-amber-600 dark:text-amber-400"
+        />
+        <StatPill
+          label="Tests"
           value={stats.tests.total}
-          subtitle="Total results"
-          icon={<FlaskConical className="h-5 w-5 text-teal-600" />}
-          href={`/projects/${projectId}/tests`}
-          color="bg-teal-100 dark:bg-teal-900/30"
+          sub="results"
+          icon={<FlaskConical className="h-3.5 w-3.5" />}
+          color="text-teal-600 dark:text-teal-400"
         />
-        <StatCard
-          title="Documents"
+        <StatPill
+          label="Docs"
           value={stats.documents.total}
-          subtitle="Files uploaded"
-          icon={<FileText className="h-5 w-5 text-gray-600" />}
-          href={`/projects/${projectId}/documents`}
-          color="bg-gray-100 dark:bg-gray-700"
+          sub="files"
+          icon={<FileText className="h-3.5 w-3.5" />}
+          color="text-gray-600 dark:text-gray-400"
+        />
+        <StatPill
+          label="Diary"
+          value={getDiaryLabel()}
+          sub="today"
+          icon={<Calendar className="h-3.5 w-3.5" />}
+          color={getDiaryColor()}
         />
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-card rounded-lg border">
-        <div className="p-4 border-b flex items-center gap-2">
-          <Activity className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Recent Activity</h2>
-        </div>
-        <div className="divide-y">
-          {recentActivity.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground">
-              No recent activity
+      {/* Main Content Grid */}
+      <div className="grid gap-5 md:grid-cols-2">
+        {/* Left Column - Project Progress */}
+        <div className="space-y-5">
+          {/* Lot Progress */}
+          <div className="bg-card rounded-lg border p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                Lot Progress
+              </h2>
+              <Link
+                to={`/projects/${projectId}/lots`}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                View all <ArrowRight className="h-3 w-3" />
+              </Link>
             </div>
-          ) : (
-            recentActivity.slice(0, 8).map((activity) => (
-              <div key={activity.id} className="p-4 hover:bg-muted/50 transition-colors">
-                {activity.link ? (
-                  <Link to={activity.link} className="block">
-                    <p className="text-sm">{activity.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatRelativeTime(activity.timestamp)}
-                    </p>
-                  </Link>
-                ) : (
-                  <>
-                    <p className="text-sm">{activity.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatRelativeTime(activity.timestamp)}
-                    </p>
-                  </>
+
+            {stats.lots.total === 0 ? (
+              <div className="text-center py-6 text-muted-foreground text-sm">
+                No lots created yet.{' '}
+                <Link to={`/projects/${projectId}/lots`} className="text-primary hover:underline">
+                  Create your first lot
+                </Link>
+              </div>
+            ) : (
+              <>
+                {/* Progress bar */}
+                <div className="mb-4">
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <span className="text-2xl font-bold">{stats.lots.progressPct}%</span>
+                    <span className="text-xs text-muted-foreground">
+                      {stats.lots.completed} of {stats.lots.total} lots completed
+                    </span>
+                  </div>
+                  <div className="h-2.5 bg-muted rounded-full overflow-hidden flex">
+                    {stats.lots.completed > 0 && (
+                      <div
+                        className="bg-green-500 dark:bg-green-400 transition-all"
+                        style={{ width: `${(stats.lots.completed / stats.lots.total) * 100}%` }}
+                      />
+                    )}
+                    {stats.lots.inProgress > 0 && (
+                      <div
+                        className="bg-blue-500 dark:bg-blue-400 transition-all"
+                        style={{ width: `${(stats.lots.inProgress / stats.lots.total) * 100}%` }}
+                      />
+                    )}
+                    {stats.lots.onHold > 0 && (
+                      <div
+                        className="bg-amber-500 dark:bg-amber-400 transition-all"
+                        style={{ width: `${(stats.lots.onHold / stats.lots.total) * 100}%` }}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Status breakdown */}
+                <div className="grid grid-cols-4 gap-3 text-center">
+                  <StatusCount label="Not Started" count={stats.lots.notStarted} color="bg-gray-400" />
+                  <StatusCount label="In Progress" count={stats.lots.inProgress} color="bg-blue-500" />
+                  <StatusCount label="On Hold" count={stats.lots.onHold} color="bg-amber-500" />
+                  <StatusCount label="Complete" count={stats.lots.completed} color="bg-green-500" />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Quality Overview */}
+          <div className="bg-card rounded-lg border p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                Quality Overview
+              </h2>
+              <Link
+                to={`/projects/${projectId}/ncr`}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                View NCRs <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+
+            {stats.ncrs.total === 0 ? (
+              <div className="text-center py-6 text-muted-foreground text-sm">
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                No non-conformances recorded
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Open NCR summary */}
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl font-bold">{stats.ncrs.open}</span>
+                  <span className="text-xs text-muted-foreground">
+                    open of {stats.ncrs.total} total
+                  </span>
+                </div>
+
+                {/* Category breakdown */}
+                {stats.ncrs.open > 0 && (
+                  <div className="space-y-2">
+                    {stats.ncrs.major > 0 && (
+                      <NCRCategoryBar
+                        label="Major"
+                        count={stats.ncrs.major}
+                        total={stats.ncrs.open}
+                        color="bg-red-500"
+                      />
+                    )}
+                    {stats.ncrs.minor > 0 && (
+                      <NCRCategoryBar
+                        label="Minor"
+                        count={stats.ncrs.minor}
+                        total={stats.ncrs.open}
+                        color="bg-amber-500"
+                      />
+                    )}
+                    {stats.ncrs.observation > 0 && (
+                      <NCRCategoryBar
+                        label="Observation"
+                        count={stats.ncrs.observation}
+                        total={stats.ncrs.open}
+                        color="bg-blue-400"
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Overdue warning */}
+                {stats.ncrs.overdue > 0 && (
+                  <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400 pt-1">
+                    <XCircle className="h-3.5 w-3.5" />
+                    {stats.ncrs.overdue} overdue NCR{stats.ncrs.overdue !== 1 ? 's' : ''}
+                  </div>
                 )}
               </div>
-            ))
-          )}
+            )}
+          </div>
+        </div>
+
+        {/* Right Column - Activity */}
+        <div className="bg-card rounded-lg border">
+          <div className="p-4 border-b flex items-center justify-between">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              Recent Activity
+            </h2>
+          </div>
+          <div className="divide-y">
+            {recentActivity.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                No recent activity
+              </div>
+            ) : (
+              recentActivity.slice(0, 10).map((activity) => (
+                <div key={activity.id} className="hover:bg-muted/50 transition-colors">
+                  {activity.link ? (
+                    <Link to={activity.link} className="flex items-start gap-3 p-3">
+                      <ActivityIcon type={activity.type} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm truncate">{activity.description}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {formatRelativeTime(activity.timestamp)}
+                        </p>
+                      </div>
+                    </Link>
+                  ) : (
+                    <div className="flex items-start gap-3 p-3">
+                      <ActivityIcon type={activity.type} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm truncate">{activity.description}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {formatRelativeTime(activity.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-// Helper to format relative time
+// --- Sub-components ---
+
+function StatPill({
+  label,
+  value,
+  sub,
+  icon,
+  color,
+  alert,
+}: {
+  label: string
+  value: string | number
+  sub: string
+  icon: React.ReactNode
+  color: string
+  alert?: boolean
+}) {
+  return (
+    <div className={cn(
+      'bg-card px-3 py-2.5 text-center',
+      alert && 'ring-1 ring-inset ring-red-200 dark:ring-red-800'
+    )}>
+      <div className={cn('flex items-center justify-center mb-1', color)}>
+        {icon}
+      </div>
+      <p className={cn(
+        'text-lg font-bold leading-tight',
+        alert && 'text-red-600 dark:text-red-400'
+      )}>
+        {value}
+      </p>
+      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{sub}</p>
+      <p className="text-[10px] text-muted-foreground font-medium leading-tight">{label}</p>
+    </div>
+  )
+}
+
+function StatusCount({ label, count, color }: { label: string; count: number; color: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-center gap-1.5 mb-0.5">
+        <div className={cn('w-2 h-2 rounded-full', color)} />
+        <span className="text-lg font-semibold">{count}</span>
+      </div>
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+    </div>
+  )
+}
+
+function NCRCategoryBar({
+  label,
+  count,
+  total,
+  color,
+}: {
+  label: string
+  count: number
+  total: number
+  color: string
+}) {
+  const pct = total > 0 ? (count / total) * 100 : 0
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs w-20 text-muted-foreground">{label}</span>
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className={cn('h-full rounded-full', color)} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs font-medium w-6 text-right">{count}</span>
+    </div>
+  )
+}
+
+function ActivityIcon({ type }: { type: string }) {
+  const base = 'h-4 w-4 mt-0.5 flex-shrink-0'
+  switch (type) {
+    case 'ncr':
+      return <AlertTriangle className={cn(base, 'text-red-500')} />
+    case 'lot':
+      return <MapPin className={cn(base, 'text-blue-500')} />
+    case 'holdpoint':
+      return <Clock className={cn(base, 'text-orange-500')} />
+    case 'docket':
+      return <FileCheck className={cn(base, 'text-amber-500')} />
+    case 'diary':
+      return <Calendar className={cn(base, 'text-purple-500')} />
+    default:
+      return <Activity className={cn(base, 'text-muted-foreground')} />
+  }
+}
+
 function formatRelativeTime(timestamp: string): string {
   const now = new Date()
   const date = new Date(timestamp)
@@ -321,8 +623,8 @@ function formatRelativeTime(timestamp: string): string {
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
   if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`
-  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`
-  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
   return date.toLocaleDateString()
 }
