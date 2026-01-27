@@ -177,7 +177,14 @@ router.get('/:projectId', async (req: Request, res: Response) => {
 })
 
 // GET /api/diary/:projectId/:date - Get diary for specific date
-router.get('/:projectId/:date', async (req: Request, res: Response) => {
+// IMPORTANT: This catch-all two-segment route must skip literal sub-routes
+// defined later (validate, addendums, timeline) to avoid shadowing them.
+router.get('/:projectId/:date', async (req: Request, res: Response, next) => {
+  const literalSubRoutes = ['validate', 'addendums', 'timeline']
+  if (literalSubRoutes.includes(req.params.date)) {
+    return next()
+  }
+
   try {
     const { projectId, date } = req.params
     const userId = (req as any).user?.id
