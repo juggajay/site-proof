@@ -2,6 +2,7 @@ import { DiaryLotSelector } from './DiaryLotSelector'
 import { DiaryWeatherBar } from './DiaryWeatherBar'
 import { DiaryQuickAddBar, QuickAddType } from './DiaryQuickAddBar'
 import { DiaryTimelineEntry } from './DiaryTimelineEntry'
+import { DiaryDocketSummary } from './DiaryDocketSummary'
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
 
 interface DiaryMobileViewProps {
@@ -21,6 +22,9 @@ interface DiaryMobileViewProps {
   // Docket summary
   docketSummary: any | null
   docketSummaryLoading: boolean
+  manualEntries?: { personnel: Array<{ id: string; name: string; hours?: number }>; plant: Array<{ id: string; description: string; hoursOperated?: number }> }
+  onTapPending?: (docketId: string) => void
+  onAddManual?: () => void
   // Timeline
   timeline: any[]
   // Actions
@@ -35,7 +39,8 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
     selectedDate, lots, activeLotId, onLotChange,
     weather, weatherSource, fetchingWeather, onEditWeather,
     diary, loading,
-    docketSummary: _docketSummary, docketSummaryLoading: _docketSummaryLoading,
+    docketSummary, docketSummaryLoading,
+    manualEntries, onTapPending, onAddManual,
     timeline,
     onQuickAdd, onRefresh, onEditEntry, onDeleteEntry,
   } = props
@@ -83,8 +88,14 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
             onTapEdit={onEditWeather}
           />
 
-          {/* Docket summary card - Task 6 will implement this */}
-          {/* <DiaryDocketSummary ... /> */}
+          {/* Docket summary card */}
+          <DiaryDocketSummary
+            summary={docketSummary}
+            manualEntries={manualEntries || { personnel: [], plant: [] }}
+            loading={docketSummaryLoading}
+            onTapPending={onTapPending || (() => {})}
+            onAddManual={onAddManual || (() => {})}
+          />
 
           {/* Timeline entries - Task 5 will wire these */}
           {timeline.length === 0 && !loading && (

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 import { RichTextEditor } from '../../components/ui/RichTextEditor'
 import { VoiceInputButton } from '../../components/ui/VoiceInputButton'
@@ -123,6 +123,7 @@ const DELAY_TYPES = ['Weather', 'Client Instruction', 'Design Change', 'Material
 
 export function DailyDiaryPage() {
   const { projectId } = useParams()
+  const navigate = useNavigate()
   const isMobile = useIsMobile()
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [diary, setDiary] = useState<DailyDiary | null>(null)
@@ -1199,6 +1200,16 @@ export function DailyDiaryPage() {
     })
   }
 
+  // Mobile: derive manual entries from timeline for docket summary display
+  const manualEntries = {
+    personnel: timeline
+      .filter((e: any) => e.type === 'personnel')
+      .map((e: any) => ({ id: e.id, name: e.description, hours: e.data?.hours })),
+    plant: timeline
+      .filter((e: any) => e.type === 'plant')
+      .map((e: any) => ({ id: e.id, description: e.description, hoursOperated: e.data?.hoursOperated })),
+  }
+
   // Mobile layout shell
   if (isMobile) {
     return (
@@ -1226,6 +1237,12 @@ export function DailyDiaryPage() {
           loading={loading}
           docketSummary={docketSummary}
           docketSummaryLoading={docketSummaryLoading}
+          manualEntries={manualEntries}
+          onTapPending={(_docketId: string) => {
+            // Navigate to the approve tab in the foreman shell
+            navigate(`/projects/${projectId}/foreman?tab=approve`)
+          }}
+          onAddManual={() => setActiveSheet('manual' as any)}
           timeline={timeline}
           onQuickAdd={(type) => setActiveSheet(type)}
           onRefresh={handleRefresh}
