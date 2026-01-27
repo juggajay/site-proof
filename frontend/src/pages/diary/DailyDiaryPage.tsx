@@ -6,6 +6,8 @@ import { VoiceInputButton } from '../../components/ui/VoiceInputButton'
 import { generateDailyDiaryPDF, DailyDiaryPDFData } from '../../lib/pdfGenerator'
 import { toast } from '../../components/ui/toaster'
 import { useIsMobile } from '@/hooks/useMediaQuery'
+import { DiaryMobileView } from '@/components/foreman/DiaryMobileView'
+import type { QuickAddType } from '@/components/foreman/DiaryQuickAddBar'
 
 interface Personnel {
   id: string
@@ -146,6 +148,13 @@ export function DailyDiaryPage() {
   const [addendums, setAddendums] = useState<Addendum[]>([])
   const [addendumContent, setAddendumContent] = useState('')
   const [addingAddendum, setAddingAddendum] = useState(false)
+
+  // Mobile diary view state
+  const [activeLotId, setActiveLotId] = useState<string | null>(null)
+  const [timeline, setTimeline] = useState<any[]>([])
+  const [docketSummary, setDocketSummary] = useState<any>(null)
+  const [docketSummaryLoading, setDocketSummaryLoading] = useState(false)
+  const [_activeSheet, setActiveSheet] = useState<QuickAddType | null>(null)
 
   // Form states
   const [weatherForm, setWeatherForm] = useState({
@@ -365,6 +374,20 @@ export function DailyDiaryPage() {
     }
   }, [diary?.id, diary?.status])
 
+  // Mobile: fetch timeline when diary changes
+  useEffect(() => {
+    if (diary && isMobile) {
+      fetchTimeline()
+    }
+  }, [diary?.id, isMobile])
+
+  // Mobile: fetch docket summary
+  useEffect(() => {
+    if (isMobile && projectId && selectedDate) {
+      fetchDocketSummary()
+    }
+  }, [isMobile, projectId, selectedDate])
+
   // Feature #234: Auto-save functionality
   const performAutoSave = useCallback(async () => {
     if (!diary || diary.status === 'submitted' || saving || autoSaving) return
@@ -498,6 +521,51 @@ export function DailyDiaryPage() {
     } catch (err) {
       console.error('Error fetching lots:', err)
     }
+  }
+
+  // Mobile: fetch timeline entries
+  const fetchTimeline = async () => {
+    if (!diary) return
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary/${diary.id}/timeline`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setTimeline(data.timeline)
+      }
+    } catch (err) {
+      console.error('Error fetching timeline:', err)
+    }
+  }
+
+  // Mobile: fetch docket summary
+  const fetchDocketSummary = async () => {
+    if (!projectId || !selectedDate) return
+    setDocketSummaryLoading(true)
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/diary/project/${projectId}/docket-summary/${selectedDate}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setDocketSummary(data)
+      }
+    } catch (err) {
+      console.error('Error fetching docket summary:', err)
+    } finally {
+      setDocketSummaryLoading(false)
+    }
+  }
+
+  // Mobile: pull-to-refresh handler
+  const handleRefresh = async () => {
+    await Promise.all([
+      fetchDiaryForDate(selectedDate),
+      fetchDocketSummary(),
+    ])
   }
 
   // Feature #240: Search diaries by content
@@ -1051,6 +1119,43 @@ export function DailyDiaryPage() {
       month: 'short',
       year: 'numeric',
     })
+  }
+
+  // Mobile layout shell
+  if (isMobile) {
+    return (
+      <>
+        <DiaryMobileView
+          selectedDate={selectedDate}
+          lots={lots}
+          activeLotId={activeLotId}
+          onLotChange={setActiveLotId}
+          weather={diary ? {
+            conditions: diary.weatherConditions || '',
+            temperatureMin: diary.temperatureMin?.toString() || '',
+            temperatureMax: diary.temperatureMax?.toString() || '',
+            rainfallMm: diary.rainfallMm?.toString() || '',
+          } : weatherForm.weatherConditions ? {
+            conditions: weatherForm.weatherConditions,
+            temperatureMin: weatherForm.temperatureMin,
+            temperatureMax: weatherForm.temperatureMax,
+            rainfallMm: weatherForm.rainfallMm,
+          } : null}
+          weatherSource={weatherSource}
+          fetchingWeather={fetchingWeather}
+          onEditWeather={() => setActiveSheet('weather' as any)}
+          diary={diary}
+          loading={loading}
+          docketSummary={docketSummary}
+          docketSummaryLoading={docketSummaryLoading}
+          timeline={timeline}
+          onQuickAdd={(type) => setActiveSheet(type)}
+          onRefresh={handleRefresh}
+          onEditEntry={() => {}}
+          onDeleteEntry={() => {}}
+        />
+      </>
+    )
   }
 
   return (
