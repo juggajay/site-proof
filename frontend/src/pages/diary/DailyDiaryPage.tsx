@@ -15,6 +15,7 @@ interface Personnel {
   startTime?: string
   finishTime?: string
   hours?: number
+  createdAt: string
 }
 
 interface Plant {
@@ -24,6 +25,7 @@ interface Plant {
   company?: string
   hoursOperated?: number
   notes?: string
+  createdAt: string
 }
 
 interface Activity {
@@ -34,6 +36,7 @@ interface Activity {
   quantity?: number
   unit?: string
   notes?: string
+  createdAt: string
 }
 
 interface Delay {
@@ -44,6 +47,30 @@ interface Delay {
   durationHours?: number
   description: string
   impact?: string
+  createdAt: string
+}
+
+interface Delivery {
+  id: string
+  description: string
+  supplier?: string
+  docketNumber?: string
+  quantity?: number
+  unit?: string
+  lotId?: string
+  lot?: { id: string; lotNumber: string }
+  notes?: string
+  createdAt: string
+}
+
+interface DiaryEvent {
+  id: string
+  eventType: string
+  description: string
+  notes?: string
+  lotId?: string
+  lot?: { id: string; lotNumber: string }
+  createdAt: string
 }
 
 interface Addendum {
@@ -68,6 +95,8 @@ interface DailyDiary {
   plant: Plant[]
   activities: Activity[]
   delays: Delay[]
+  deliveries: Delivery[]
+  events: DiaryEvent[]
   submittedBy?: { id: string; fullName: string; email: string }
   submittedAt?: string
   isLate?: boolean

@@ -27,6 +27,7 @@ const addPersonnelSchema = z.object({
   startTime: z.string().optional(),
   finishTime: z.string().optional(),
   hours: z.number().optional(),
+  lotId: z.string().optional(),
 })
 
 const addPlantSchema = z.object({
@@ -35,6 +36,7 @@ const addPlantSchema = z.object({
   company: z.string().optional(),
   hoursOperated: z.number().optional(),
   notes: z.string().optional(),
+  lotId: z.string().optional(),
 })
 
 const addActivitySchema = z.object({
@@ -52,6 +54,7 @@ const addDelaySchema = z.object({
   durationHours: z.number().optional(),
   description: z.string().min(1),
   impact: z.string().optional(),
+  lotId: z.string().optional(),
 })
 
 // Feature #477: Visitor recording schema
@@ -60,6 +63,23 @@ const addVisitorSchema = z.object({
   company: z.string().optional(),
   purpose: z.string().optional(),
   timeInOut: z.string().optional(),
+})
+
+const addDeliverySchema = z.object({
+  description: z.string().min(1),
+  supplier: z.string().optional(),
+  docketNumber: z.string().optional(),
+  quantity: z.number().optional(),
+  unit: z.string().optional(),
+  lotId: z.string().optional(),
+  notes: z.string().optional(),
+})
+
+const addEventSchema = z.object({
+  eventType: z.enum(['visitor', 'safety', 'instruction', 'variation', 'other']),
+  description: z.string().min(1),
+  notes: z.string().optional(),
+  lotId: z.string().optional(),
 })
 
 // Helper to check project access
@@ -101,10 +121,12 @@ router.get('/:projectId', async (req: Request, res: Response) => {
       where: { projectId },
       include: {
         submittedBy: { select: { id: true, fullName: true, email: true } },
-        personnel: true,
-        plant: true,
+        personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
         activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        delays: true,
+        delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        events: { include: { lot: { select: { id: true, lotNumber: true } } } },
       },
       orderBy: { date: 'desc' }
     })
@@ -186,11 +208,13 @@ router.get('/:projectId/:date', async (req: Request, res: Response) => {
       },
       include: {
         submittedBy: { select: { id: true, fullName: true, email: true } },
-        personnel: true,
-        plant: true,
+        personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
         activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
         visitors: true,
-        delays: true,
+        delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        events: { include: { lot: { select: { id: true, lotNumber: true } } } },
       }
     })
 
@@ -246,11 +270,13 @@ router.post('/', async (req: Request, res: Response) => {
           generalNotes: data.generalNotes,
         },
         include: {
-          personnel: true,
-          plant: true,
+          personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
           activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
           visitors: true,
-          delays: true,
+          delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          events: { include: { lot: { select: { id: true, lotNumber: true } } } },
         }
       })
     } else {
@@ -268,11 +294,13 @@ router.post('/', async (req: Request, res: Response) => {
           generalNotes: data.generalNotes,
         },
         include: {
-          personnel: true,
-          plant: true,
+          personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
           activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
           visitors: true,
-          delays: true,
+          delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          events: { include: { lot: { select: { id: true, lotNumber: true } } } },
         }
       })
     }
@@ -901,6 +929,8 @@ router.get('/:diaryId/validate', async (req: Request, res: Response) => {
         activities: true,
         delays: true,
         visitors: true,
+        deliveries: true,
+        events: true,
       }
     })
 
@@ -1016,6 +1046,8 @@ router.post('/:diaryId/submit', async (req: Request, res: Response) => {
         plant: true,
         activities: true,
         delays: true,
+        deliveries: true,
+        events: true,
       }
     })
     if (!diary) {
@@ -1067,11 +1099,13 @@ router.post('/:diaryId/submit', async (req: Request, res: Response) => {
       },
       include: {
         submittedBy: { select: { id: true, fullName: true, email: true } },
-        personnel: true,
-        plant: true,
+        personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
         activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
         visitors: true,
-        delays: true,
+        delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        events: { include: { lot: { select: { id: true, lotNumber: true } } } },
       }
     })
 
@@ -1178,11 +1212,13 @@ router.get('/entry/:diaryId', async (req: Request, res: Response) => {
       where: { id: diaryId },
       include: {
         submittedBy: { select: { id: true, fullName: true, email: true } },
-        personnel: true,
-        plant: true,
+        personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
         activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
         visitors: true,
-        delays: true,
+        delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        events: { include: { lot: { select: { id: true, lotNumber: true } } } },
       }
     })
 
@@ -1585,6 +1621,257 @@ router.get('/project/:projectId/delays/export', async (req: Request, res: Respon
   } catch (error) {
     console.error('Error exporting delays:', error)
     res.status(500).json({ error: 'Failed to export delays' })
+  }
+})
+
+// GET /api/diary/project/:projectId/docket-summary/:date - Get docket summary for a date
+router.get('/project/:projectId/docket-summary/:date', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const { projectId, date } = req.params
+
+    const hasAccess = await checkProjectAccess(userId, projectId)
+    if (!hasAccess) return res.status(403).json({ error: 'Access denied' })
+
+    const targetDate = new Date(date)
+    const nextDate = new Date(date)
+    nextDate.setDate(nextDate.getDate() + 1)
+
+    const dockets = await prisma.dailyDocket.findMany({
+      where: {
+        projectId,
+        date: { gte: targetDate, lt: nextDate },
+      },
+      include: {
+        subcontractorCompany: { select: { id: true, companyName: true } },
+        labourEntries: {
+          include: {
+            employee: { select: { id: true, name: true, role: true } },
+          },
+        },
+        plantEntries: {
+          include: {
+            plant: { select: { id: true, type: true, description: true, idRego: true } },
+          },
+        },
+      },
+    })
+
+    const approved = dockets.filter(d => d.status === 'approved')
+    const pending = dockets.filter(d => d.status === 'pending_approval')
+
+    const summary = {
+      approvedDockets: approved.map(d => ({
+        id: d.id,
+        subcontractor: d.subcontractorCompany.companyName,
+        subcontractorId: d.subcontractorCompany.id,
+        workerCount: d.labourEntries.length,
+        totalLabourHours: d.labourEntries.reduce((sum, e) => sum + (Number(e.approvedHours || e.submittedHours) || 0), 0),
+        machineCount: d.plantEntries.length,
+        totalPlantHours: d.plantEntries.reduce((sum, e) => sum + (Number(e.hoursOperated) || 0), 0),
+        workers: d.labourEntries.map(e => ({
+          name: e.employee.name,
+          role: e.employee.role,
+          hours: Number(e.approvedHours || e.submittedHours) || 0,
+        })),
+        machines: d.plantEntries.map(e => ({
+          type: e.plant.type,
+          description: e.plant.description,
+          idRego: e.plant.idRego,
+          hours: Number(e.hoursOperated) || 0,
+        })),
+      })),
+      pendingCount: pending.length,
+      pendingDockets: pending.map(d => ({
+        id: d.id,
+        subcontractor: d.subcontractorCompany.companyName,
+      })),
+      totals: {
+        workers: approved.reduce((sum, d) => sum + d.labourEntries.length, 0),
+        labourHours: approved.reduce((sum, d) => sum + d.labourEntries.reduce((s, e) => s + (Number(e.approvedHours || e.submittedHours) || 0), 0), 0),
+        machines: approved.reduce((sum, d) => sum + d.plantEntries.length, 0),
+        plantHours: approved.reduce((sum, d) => sum + d.plantEntries.reduce((s, e) => s + (Number(e.hoursOperated) || 0), 0), 0),
+      },
+    }
+
+    res.json(summary)
+  } catch (error) {
+    console.error('Get docket summary error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/diary/:diaryId/deliveries - Add delivery to diary
+router.post('/:diaryId/deliveries', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const { diaryId } = req.params
+    const data = addDeliverySchema.parse(req.body)
+
+    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } })
+    if (!diary) return res.status(404).json({ error: 'Diary not found' })
+    if (diary.status === 'submitted') return res.status(400).json({ error: 'Cannot modify submitted diary' })
+
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) return res.status(403).json({ error: 'Access denied' })
+
+    const delivery = await prisma.diaryDelivery.create({
+      data: {
+        diaryId,
+        description: data.description,
+        supplier: data.supplier,
+        docketNumber: data.docketNumber,
+        quantity: data.quantity,
+        unit: data.unit,
+        lotId: data.lotId,
+        notes: data.notes,
+      },
+      include: { lot: { select: { id: true, lotNumber: true } } },
+    })
+
+    res.status(201).json(delivery)
+  } catch (error: any) {
+    if (error.name === 'ZodError') return res.status(400).json({ error: 'Validation error', details: error.errors })
+    console.error('Add delivery error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/diary/:diaryId/deliveries/:deliveryId - Remove delivery
+router.delete('/:diaryId/deliveries/:deliveryId', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const { diaryId, deliveryId } = req.params
+
+    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } })
+    if (!diary) return res.status(404).json({ error: 'Diary not found' })
+    if (diary.status === 'submitted') return res.status(400).json({ error: 'Cannot modify submitted diary' })
+
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) return res.status(403).json({ error: 'Access denied' })
+
+    await prisma.diaryDelivery.delete({ where: { id: deliveryId } })
+    res.json({ message: 'Delivery removed' })
+  } catch (error) {
+    console.error('Remove delivery error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/diary/:diaryId/events - Add event to diary
+router.post('/:diaryId/events', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const { diaryId } = req.params
+    const data = addEventSchema.parse(req.body)
+
+    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } })
+    if (!diary) return res.status(404).json({ error: 'Diary not found' })
+    if (diary.status === 'submitted') return res.status(400).json({ error: 'Cannot modify submitted diary' })
+
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) return res.status(403).json({ error: 'Access denied' })
+
+    const event = await prisma.diaryEvent.create({
+      data: {
+        diaryId,
+        eventType: data.eventType,
+        description: data.description,
+        notes: data.notes,
+        lotId: data.lotId,
+      },
+      include: { lot: { select: { id: true, lotNumber: true } } },
+    })
+
+    res.status(201).json(event)
+  } catch (error: any) {
+    if (error.name === 'ZodError') return res.status(400).json({ error: 'Validation error', details: error.errors })
+    console.error('Add event error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/diary/:diaryId/events/:eventId - Remove event
+router.delete('/:diaryId/events/:eventId', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const { diaryId, eventId } = req.params
+
+    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } })
+    if (!diary) return res.status(404).json({ error: 'Diary not found' })
+    if (diary.status === 'submitted') return res.status(400).json({ error: 'Cannot modify submitted diary' })
+
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) return res.status(403).json({ error: 'Access denied' })
+
+    await prisma.diaryEvent.delete({ where: { id: eventId } })
+    res.json({ message: 'Event removed' })
+  } catch (error) {
+    console.error('Remove event error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// GET /api/diary/:diaryId/timeline - Get merged chronological timeline
+router.get('/:diaryId/timeline', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
+    const { diaryId } = req.params
+
+    const diary = await prisma.dailyDiary.findUnique({
+      where: { id: diaryId },
+      include: {
+        personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        events: { include: { lot: { select: { id: true, lotNumber: true } } } },
+      },
+    })
+
+    if (!diary) return res.status(404).json({ error: 'Diary not found' })
+
+    const hasAccess = await checkProjectAccess(userId, diary.projectId)
+    if (!hasAccess) return res.status(403).json({ error: 'Access denied' })
+
+    const timeline = [
+      ...diary.activities.map(a => ({
+        id: a.id, type: 'activity' as const, createdAt: a.createdAt,
+        description: a.description, lot: a.lot, data: a,
+      })),
+      ...diary.delays.map(d => ({
+        id: d.id, type: 'delay' as const, createdAt: d.createdAt,
+        description: d.description, lot: d.lot, data: d,
+      })),
+      ...diary.deliveries.map(d => ({
+        id: d.id, type: 'delivery' as const, createdAt: d.createdAt,
+        description: d.description, lot: d.lot, data: d,
+      })),
+      ...diary.events.map(e => ({
+        id: e.id, type: 'event' as const, createdAt: e.createdAt,
+        description: e.description, lot: e.lot, data: e,
+      })),
+      ...diary.personnel.filter(p => (p as any).source === 'manual').map(p => ({
+        id: p.id, type: 'personnel' as const, createdAt: (p as any).createdAt || diary.createdAt,
+        description: `${p.name} — ${p.role || 'Worker'}`, lot: (p as any).lot, data: p,
+      })),
+      ...diary.plant.filter(p => (p as any).source === 'manual').map(p => ({
+        id: p.id, type: 'plant' as const, createdAt: (p as any).createdAt || diary.createdAt,
+        description: p.description, lot: (p as any).lot, data: p,
+      })),
+    ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+    res.json({ timeline })
+  } catch (error) {
+    console.error('Get timeline error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
 })
 
