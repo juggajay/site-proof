@@ -8,6 +8,11 @@ import { toast } from '../../components/ui/toaster'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { DiaryMobileView } from '@/components/foreman/DiaryMobileView'
 import type { QuickAddType } from '@/components/foreman/DiaryQuickAddBar'
+import { AddActivitySheet } from '@/components/foreman/sheets/AddActivitySheet'
+import { AddDelaySheet } from '@/components/foreman/sheets/AddDelaySheet'
+import { AddDeliverySheet } from '@/components/foreman/sheets/AddDeliverySheet'
+import { AddEventSheet } from '@/components/foreman/sheets/AddEventSheet'
+import { AddManualLabourPlantSheet } from '@/components/foreman/sheets/AddManualLabourPlantSheet'
 
 interface Personnel {
   id: string
@@ -154,7 +159,7 @@ export function DailyDiaryPage() {
   const [timeline, setTimeline] = useState<any[]>([])
   const [docketSummary, setDocketSummary] = useState<any>(null)
   const [docketSummaryLoading, setDocketSummaryLoading] = useState(false)
-  const [_activeSheet, setActiveSheet] = useState<QuickAddType | null>(null)
+  const [activeSheet, setActiveSheet] = useState<QuickAddType | null>(null)
 
   // Form states
   const [weatherForm, setWeatherForm] = useState({
@@ -566,6 +571,79 @@ export function DailyDiaryPage() {
       fetchDiaryForDate(selectedDate),
       fetchDocketSummary(),
     ])
+  }
+
+  // Mobile: ensure diary exists before adding entries
+  const ensureDiaryExists = async (): Promise<DailyDiary | null> => {
+    if (diary) return diary
+    const token = getAuthToken()
+    const res = await fetch(`${API_URL}/api/diary`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ projectId, date: selectedDate }),
+    })
+    if (res.ok) {
+      const newDiary = await res.json()
+      setDiary(newDiary)
+      return newDiary
+    }
+    return null
+  }
+
+  // Mobile: add activity from sheet
+  const addActivityFromSheet = async (data: { description: string; lotId?: string; quantity?: number; unit?: string; notes?: string }) => {
+    let currentDiary = diary
+    if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
+    const token = getAuthToken()
+    const res = await fetch(`${API_URL}/api/diary/${currentDiary.id}/activities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    if (res.ok) { await fetchTimeline(); await fetchDiaryForDate(selectedDate) }
+    else throw new Error('Failed to add activity')
+  }
+
+  // Mobile: add delay from sheet
+  const addDelayFromSheet = async (data: { delayType: string; description: string; durationHours?: number; impact?: string; lotId?: string }) => {
+    let currentDiary = diary
+    if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
+    const token = getAuthToken()
+    const res = await fetch(`${API_URL}/api/diary/${currentDiary.id}/delays`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    if (res.ok) { await fetchTimeline(); await fetchDiaryForDate(selectedDate) }
+    else throw new Error('Failed to add delay')
+  }
+
+  // Mobile: add delivery from sheet
+  const addDeliveryFromSheet = async (data: { description: string; supplier?: string; docketNumber?: string; quantity?: number; unit?: string; lotId?: string; notes?: string }) => {
+    let currentDiary = diary
+    if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
+    const token = getAuthToken()
+    const res = await fetch(`${API_URL}/api/diary/${currentDiary.id}/deliveries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    if (res.ok) { await fetchTimeline(); await fetchDiaryForDate(selectedDate) }
+    else throw new Error('Failed to add delivery')
+  }
+
+  // Mobile: add event from sheet
+  const addEventFromSheet = async (data: { eventType: string; description: string; notes?: string; lotId?: string }) => {
+    let currentDiary = diary
+    if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
+    const token = getAuthToken()
+    const res = await fetch(`${API_URL}/api/diary/${currentDiary.id}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    if (res.ok) { await fetchTimeline(); await fetchDiaryForDate(selectedDate) }
+    else throw new Error('Failed to add event')
   }
 
   // Feature #240: Search diaries by content
@@ -1154,6 +1232,82 @@ export function DailyDiaryPage() {
           onEditEntry={() => {}}
           onDeleteEntry={() => {}}
         />
+        {activeSheet === 'activity' && (
+          <AddActivitySheet
+            isOpen
+            onClose={() => setActiveSheet(null)}
+            onSave={async (data) => {
+              await addActivityFromSheet({ ...data, lotId: data.lotId || activeLotId || undefined })
+            }}
+            defaultLotId={activeLotId}
+            lots={lots}
+          />
+        )}
+        {activeSheet === 'delay' && (
+          <AddDelaySheet
+            isOpen
+            onClose={() => setActiveSheet(null)}
+            onSave={async (data) => {
+              await addDelayFromSheet({ ...data, lotId: data.lotId || activeLotId || undefined })
+            }}
+            defaultLotId={activeLotId}
+            lots={lots}
+          />
+        )}
+        {activeSheet === 'delivery' && (
+          <AddDeliverySheet
+            isOpen
+            onClose={() => setActiveSheet(null)}
+            onSave={async (data) => {
+              await addDeliveryFromSheet({ ...data, lotId: data.lotId || activeLotId || undefined })
+            }}
+            defaultLotId={activeLotId}
+            lots={lots}
+          />
+        )}
+        {activeSheet === 'event' && (
+          <AddEventSheet
+            isOpen
+            onClose={() => setActiveSheet(null)}
+            onSave={async (data) => {
+              await addEventFromSheet({ ...data, lotId: data.lotId || activeLotId || undefined })
+            }}
+            defaultLotId={activeLotId}
+            lots={lots}
+          />
+        )}
+        {activeSheet === 'manual' && (
+          <AddManualLabourPlantSheet
+            isOpen
+            onClose={() => setActiveSheet(null)}
+            onSavePersonnel={async (data) => {
+              let currentDiary = diary
+              if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
+              const token = getAuthToken()
+              await fetch(`${API_URL}/api/diary/${currentDiary.id}/personnel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ ...data, source: 'manual', lotId: data.lotId || activeLotId || undefined }),
+              })
+              await fetchTimeline()
+              await fetchDiaryForDate(selectedDate)
+            }}
+            onSavePlant={async (data) => {
+              let currentDiary = diary
+              if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
+              const token = getAuthToken()
+              await fetch(`${API_URL}/api/diary/${currentDiary.id}/plant`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ ...data, source: 'manual', lotId: data.lotId || activeLotId || undefined }),
+              })
+              await fetchTimeline()
+              await fetchDiaryForDate(selectedDate)
+            }}
+            defaultLotId={activeLotId}
+            lots={lots}
+          />
+        )}
       </>
     )
   }

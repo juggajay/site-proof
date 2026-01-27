@@ -1,6 +1,7 @@
 import { DiaryLotSelector } from './DiaryLotSelector'
 import { DiaryWeatherBar } from './DiaryWeatherBar'
 import { DiaryQuickAddBar, QuickAddType } from './DiaryQuickAddBar'
+import { DiaryTimelineEntry } from './DiaryTimelineEntry'
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
 
 interface DiaryMobileViewProps {
@@ -36,7 +37,7 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
     diary, loading,
     docketSummary: _docketSummary, docketSummaryLoading: _docketSummaryLoading,
     timeline,
-    onQuickAdd, onRefresh, onEditEntry: _onEditEntry, onDeleteEntry: _onDeleteEntry,
+    onQuickAdd, onRefresh, onEditEntry, onDeleteEntry,
   } = props
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({
@@ -93,7 +94,15 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
             </div>
           )}
 
-          {/* Timeline entries will render here */}
+          {timeline.map(entry => (
+            <DiaryTimelineEntry
+              key={`${entry.type}-${entry.id}`}
+              entry={entry}
+              onEdit={onEditEntry}
+              onDelete={onDeleteEntry}
+              isSubmitted={isSubmitted}
+            />
+          ))}
         </div>
       </div>
 
