@@ -246,6 +246,11 @@ model Lot {
   ncrLots          NCRLot[]
   documents        Document[]
   diaryActivities  DiaryActivity[]
+  diaryDeliveries  DiaryDelivery[]
+  diaryEvents      DiaryEvent[]
+  diaryDelays      DiaryDelay[]
+  diaryPlant       DiaryPlant[]
+  diaryPersonnel   DiaryPersonnel[]
   docketLabourLots DocketLabourLot[]
   docketPlantLots  DocketPlantLot[]
   claimedLots      ClaimedLot[]
@@ -599,6 +604,8 @@ model DailyDiary {
   activities DiaryActivity[]
   visitors   DiaryVisitor[]
   delays     DiaryDelay[]
+  deliveries DiaryDelivery[]
+  events     DiaryEvent[]
   addendums  DiaryAddendum[]
 
   @@unique([projectId, date])
@@ -614,8 +621,14 @@ model DiaryPersonnel {
   startTime  String?  @map("start_time")
   finishTime String?  @map("finish_time")
   hours      Decimal?
+  lotId      String?  @map("lot_id")
+  source     String   @default("manual")
+  docketId   String?  @map("docket_id")
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
+  diary  DailyDiary   @relation(fields: [diaryId], references: [id], onDelete: Cascade)
+  lot    Lot?         @relation(fields: [lotId], references: [id])
+  docket DailyDocket? @relation(fields: [docketId], references: [id])
 
   @@map("diary_personnel")
 }
@@ -628,8 +641,14 @@ model DiaryPlant {
   company       String?
   hoursOperated Decimal? @map("hours_operated")
   notes         String?
+  lotId         String?  @map("lot_id")
+  source        String   @default("manual")
+  docketId      String?  @map("docket_id")
+  createdAt     DateTime @default(now()) @map("created_at")
 
-  diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
+  diary  DailyDiary   @relation(fields: [diaryId], references: [id], onDelete: Cascade)
+  lot    Lot?         @relation(fields: [lotId], references: [id])
+  docket DailyDocket? @relation(fields: [docketId], references: [id])
 
   @@map("diary_plant")
 }
@@ -642,6 +661,7 @@ model DiaryActivity {
   quantity    Decimal?
   unit        String?
   notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
 
   diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
   lot   Lot?       @relation(fields: [lotId], references: [id])
@@ -671,10 +691,48 @@ model DiaryDelay {
   durationHours Decimal? @map("duration_hours")
   description   String
   impact        String?
+  lotId         String?  @map("lot_id")
+  createdAt     DateTime @default(now()) @map("created_at")
 
   diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
+  lot   Lot?       @relation(fields: [lotId], references: [id])
 
   @@map("diary_delays")
+}
+
+model DiaryDelivery {
+  id           String   @id @default(uuid())
+  diaryId      String   @map("diary_id")
+  description  String
+  supplier     String?
+  docketNumber String?  @map("docket_number")
+  quantity     Decimal?
+  unit         String?
+  lotId        String?  @map("lot_id")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
+  lot   Lot?       @relation(fields: [lotId], references: [id])
+
+  @@map("diary_deliveries")
+}
+
+model DiaryEvent {
+  id          String   @id @default(uuid())
+  diaryId     String   @map("diary_id")
+  eventType   String   @map("event_type")
+  description String
+  notes       String?
+  lotId       String?  @map("lot_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
+  lot   Lot?       @relation(fields: [lotId], references: [id])
+
+  @@map("diary_events")
 }
 
 model DiaryAddendum {
@@ -814,8 +872,10 @@ model DailyDocket {
   subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
   project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  labourEntries DocketLabour[]
-  plantEntries  DocketPlant[]
+  labourEntries  DocketLabour[]
+  plantEntries   DocketPlant[]
+  diaryPersonnel DiaryPersonnel[]
+  diaryPlant     DiaryPlant[]
 
   @@map("daily_dockets")
 }
