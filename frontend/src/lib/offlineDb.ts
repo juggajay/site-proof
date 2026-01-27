@@ -36,7 +36,7 @@ export interface OfflineChecklistItem {
 
 export interface SyncQueueItem {
   id?: number;
-  type: 'itp_completion' | 'photo_upload' | 'diary_save' | 'diary_submit' | 'docket_create' | 'docket_submit' | 'lot_edit' | 'lot_conflict';
+  type: 'itp_completion' | 'photo_upload' | 'diary_save' | 'diary_submit' | 'docket_create' | 'docket_submit' | 'lot_edit' | 'lot_conflict' | 'delivery_save' | 'event_save';
   action: 'create' | 'update';
   data: any;
   createdAt: string;
@@ -117,6 +117,31 @@ export interface OfflineDailyDiary {
   localUpdatedAt: string;
 }
 
+export interface OfflineDiaryDelivery {
+  id: string;
+  diaryId: string;
+  description: string;
+  supplier?: string;
+  docketNumber?: string;
+  quantity?: number;
+  unit?: string;
+  lotId?: string;
+  notes?: string;
+  syncStatus: 'synced' | 'pending' | 'error';
+  localUpdatedAt: string;
+}
+
+export interface OfflineDiaryEvent {
+  id: string;
+  diaryId: string;
+  eventType: string;
+  description: string;
+  notes?: string;
+  lotId?: string;
+  syncStatus: 'synced' | 'pending' | 'error';
+  localUpdatedAt: string;
+}
+
 // Feature #311: Offline Photo Capture
 // Feature #317: Photo Compression
 export interface OfflinePhoto {
@@ -182,6 +207,8 @@ class OfflineDatabase extends Dexie {
   diaries!: Table<OfflineDailyDiary>;
   dockets!: Table<OfflineDocket>;
   lots!: Table<OfflineLotEditTable>;
+  diaryDeliveries!: Table<OfflineDiaryDelivery>;
+  diaryEvents!: Table<OfflineDiaryEvent>;
 
   constructor() {
     super('SiteProofOfflineDB');
@@ -228,6 +255,19 @@ class OfflineDatabase extends Dexie {
       diaries: 'id, projectId, date, status, syncStatus, localUpdatedAt',
       dockets: 'id, projectId, subcontractorCompanyId, date, status, syncStatus, localUpdatedAt',
       lots: 'id, projectId, lotNumber, syncStatus, localUpdatedAt'
+    });
+
+    // Version 6: Add delivery and event tables for mobile diary timeline
+    this.version(6).stores({
+      itpChecklists: 'id, lotId, templateId, cachedAt',
+      itpCompletions: 'id, lotId, checklistItemId, syncStatus, localUpdatedAt',
+      syncQueue: '++id, type, action, createdAt',
+      photos: 'id, projectId, lotId, entityType, entityId, syncStatus, capturedAt',
+      diaries: 'id, projectId, date, status, syncStatus, localUpdatedAt',
+      dockets: 'id, projectId, subcontractorCompanyId, date, status, syncStatus, localUpdatedAt',
+      lots: 'id, projectId, lotNumber, syncStatus, localUpdatedAt',
+      diaryDeliveries: 'id, diaryId, syncStatus, localUpdatedAt',
+      diaryEvents: 'id, diaryId, syncStatus, localUpdatedAt',
     });
   }
 }
@@ -345,6 +385,9 @@ export async function clearAllOfflineData(): Promise<void> {
   await offlineDb.photos.clear();
   await offlineDb.diaries.clear();
   await offlineDb.dockets.clear();
+  await offlineDb.lots.clear();
+  await offlineDb.diaryDeliveries.clear();
+  await offlineDb.diaryEvents.clear();
 }
 
 // ============================================================================

@@ -4,6 +4,7 @@ import { DiaryQuickAddBar, QuickAddType } from './DiaryQuickAddBar'
 import { DiaryTimelineEntry } from './DiaryTimelineEntry'
 import { DiaryDocketSummary } from './DiaryDocketSummary'
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
+import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard'
 
 interface DiaryMobileViewProps {
   // Date & lot
@@ -97,11 +98,35 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
             onAddManual={onAddManual || (() => {})}
           />
 
-          {/* Timeline entries - Task 5 will wire these */}
-          {timeline.length === 0 && !loading && (
+          {/* Timeline entries */}
+          {loading && (
+            <>
+              <MobileDataCardSkeleton />
+              <MobileDataCardSkeleton />
+              <MobileDataCardSkeleton />
+            </>
+          )}
+
+          {!loading && timeline.length === 0 && (
             <div className="text-center py-12">
-              <p className="text-muted-foreground text-sm">No entries yet</p>
-              <p className="text-muted-foreground text-xs mt-1">Tap a chip below to add your first entry</p>
+              {!diary && isToday && (
+                <>
+                  <p className="text-muted-foreground text-sm font-medium">Start your day</p>
+                  <p className="text-muted-foreground text-xs mt-1">Tap a chip below to add your first entry</p>
+                </>
+              )}
+              {!diary && !isToday && (
+                <>
+                  <p className="text-muted-foreground text-sm font-medium">No diary for this date</p>
+                  <p className="text-muted-foreground text-xs mt-1">Switch to today to start recording</p>
+                </>
+              )}
+              {diary && (
+                <>
+                  <p className="text-muted-foreground text-sm font-medium">No entries yet</p>
+                  <p className="text-muted-foreground text-xs mt-1">Tap a chip below to add your first entry</p>
+                </>
+              )}
             </div>
           )}
 
