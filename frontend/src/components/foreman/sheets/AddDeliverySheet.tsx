@@ -18,17 +18,18 @@ interface AddDeliverySheetProps {
   }) => Promise<void>
   defaultLotId: string | null
   lots: Array<{ id: string; lotNumber: string }>
+  initialData?: { description?: string; supplier?: string; docketNumber?: string; quantity?: number; unit?: string; lotId?: string; notes?: string }
 }
 
-export function AddDeliverySheet({ isOpen, onClose, onSave, defaultLotId, lots }: AddDeliverySheetProps) {
-  const [description, setDescription] = useState('')
-  const [supplier, setSupplier] = useState('')
-  const [docketNumber, setDocketNumber] = useState('')
-  const [quantity, setQuantity] = useState('')
-  const [unit, setUnit] = useState('')
-  const [lotId, setLotId] = useState(defaultLotId || '')
-  const [notes, setNotes] = useState('')
-  const [showMore, setShowMore] = useState(false)
+export function AddDeliverySheet({ isOpen, onClose, onSave, defaultLotId, lots, initialData }: AddDeliverySheetProps) {
+  const [description, setDescription] = useState(initialData?.description || '')
+  const [supplier, setSupplier] = useState(initialData?.supplier || '')
+  const [docketNumber, setDocketNumber] = useState(initialData?.docketNumber || '')
+  const [quantity, setQuantity] = useState(initialData?.quantity?.toString() || '')
+  const [unit, setUnit] = useState(initialData?.unit || '')
+  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '')
+  const [notes, setNotes] = useState(initialData?.notes || '')
+  const [showMore, setShowMore] = useState(!!initialData)
   const [saving, setSaving] = useState(false)
   const { trigger } = useHaptics()
 

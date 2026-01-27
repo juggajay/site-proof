@@ -17,17 +17,18 @@ interface AddActivitySheetProps {
   defaultLotId: string | null
   lots: Array<{ id: string; lotNumber: string }>
   suggestions?: string[]
+  initialData?: { description?: string; lotId?: string; quantity?: number; unit?: string; notes?: string }
 }
 
 export function AddActivitySheet({
-  isOpen, onClose, onSave, defaultLotId, lots, suggestions = []
+  isOpen, onClose, onSave, defaultLotId, lots, suggestions = [], initialData
 }: AddActivitySheetProps) {
-  const [description, setDescription] = useState('')
-  const [lotId, setLotId] = useState(defaultLotId || '')
-  const [quantity, setQuantity] = useState('')
-  const [unit, setUnit] = useState('')
-  const [notes, setNotes] = useState('')
-  const [showMore, setShowMore] = useState(false)
+  const [description, setDescription] = useState(initialData?.description || '')
+  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '')
+  const [quantity, setQuantity] = useState(initialData?.quantity?.toString() || '')
+  const [unit, setUnit] = useState(initialData?.unit || '')
+  const [notes, setNotes] = useState(initialData?.notes || '')
+  const [showMore, setShowMore] = useState(!!initialData)
   const [saving, setSaving] = useState(false)
   const { trigger } = useHaptics()
 

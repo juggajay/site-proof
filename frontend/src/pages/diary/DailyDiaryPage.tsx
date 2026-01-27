@@ -13,6 +13,7 @@ import { AddDelaySheet } from '@/components/foreman/sheets/AddDelaySheet'
 import { AddDeliverySheet } from '@/components/foreman/sheets/AddDeliverySheet'
 import { AddEventSheet } from '@/components/foreman/sheets/AddEventSheet'
 import { AddManualLabourPlantSheet } from '@/components/foreman/sheets/AddManualLabourPlantSheet'
+import { AddWeatherSheet } from '@/components/foreman/sheets/AddWeatherSheet'
 
 interface Personnel {
   id: string
@@ -160,7 +161,8 @@ export function DailyDiaryPage() {
   const [timeline, setTimeline] = useState<any[]>([])
   const [docketSummary, setDocketSummary] = useState<any>(null)
   const [docketSummaryLoading, setDocketSummaryLoading] = useState(false)
-  const [activeSheet, setActiveSheet] = useState<QuickAddType | null>(null)
+  const [activeSheet, setActiveSheet] = useState<QuickAddType | 'weather' | null>(null)
+  const [editingEntry, setEditingEntry] = useState<any>(null)
 
   // Form states
   const [weatherForm, setWeatherForm] = useState({
@@ -633,6 +635,36 @@ export function DailyDiaryPage() {
     })
     if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
     else throw new Error('Failed to add delivery')
+  }
+
+  // Mobile: delete entry from timeline
+  const handleDeleteEntry = async (entry: { id: string; type: string }) => {
+    if (!diary) return
+    const typeToEndpoint: Record<string, string> = {
+      activity: 'activities',
+      delay: 'delays',
+      delivery: 'deliveries',
+      event: 'events',
+      personnel: 'personnel',
+      plant: 'plant',
+    }
+    const endpoint = typeToEndpoint[entry.type]
+    if (!endpoint) return
+    const token = getAuthToken()
+    const res = await fetch(`${API_URL}/api/diary/${diary.id}/${endpoint}/${entry.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) {
+      await fetchTimeline(diary.id)
+      await fetchDiaryForDate(selectedDate)
+    }
+  }
+
+  // Mobile: edit entry — open appropriate sheet pre-filled
+  const handleEditEntry = (entry: any) => {
+    setEditingEntry(entry)
+    setActiveSheet(entry.type === 'personnel' || entry.type === 'plant' ? 'manual' : entry.type)
   }
 
   // Mobile: add event from sheet
@@ -1234,7 +1266,7 @@ export function DailyDiaryPage() {
           } : null}
           weatherSource={weatherSource}
           fetchingWeather={fetchingWeather}
-          onEditWeather={() => setActiveSheet('weather' as any)}
+          onEditWeather={() => setActiveSheet('weather')}
           diary={diary}
           loading={loading}
           docketSummary={docketSummary}
@@ -1244,62 +1276,96 @@ export function DailyDiaryPage() {
             // Navigate to the approve tab in the foreman shell
             navigate(`/projects/${projectId}/foreman?tab=approve`)
           }}
-          onAddManual={() => setActiveSheet('manual' as any)}
+          onAddManual={() => setActiveSheet('manual')}
           timeline={timeline}
-          onQuickAdd={(type) => setActiveSheet(type)}
+          onQuickAdd={(type) => setActiveSheet(type === 'plant' ? 'manual' : type)}
           onRefresh={handleRefresh}
-          onEditEntry={() => {}}
-          onDeleteEntry={() => {}}
+          onEditEntry={handleEditEntry}
+          onDeleteEntry={handleDeleteEntry}
         />
         {activeSheet === 'activity' && (
           <AddActivitySheet
             isOpen
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); setEditingEntry(null) }}
             onSave={async (data) => {
+              if (editingEntry) { await handleDeleteEntry(editingEntry); setEditingEntry(null) }
               await addActivityFromSheet({ ...data, lotId: data.lotId || activeLotId || undefined })
             }}
             defaultLotId={activeLotId}
             lots={lots}
+            initialData={editingEntry?.type === 'activity' ? {
+              description: editingEntry.description,
+              quantity: editingEntry.data?.quantity,
+              unit: editingEntry.data?.unit,
+              notes: editingEntry.data?.notes,
+              lotId: editingEntry.data?.lotId,
+            } : undefined}
           />
         )}
         {activeSheet === 'delay' && (
           <AddDelaySheet
             isOpen
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); setEditingEntry(null) }}
             onSave={async (data) => {
+              if (editingEntry) { await handleDeleteEntry(editingEntry); setEditingEntry(null) }
               await addDelayFromSheet({ ...data, lotId: data.lotId || activeLotId || undefined })
             }}
             defaultLotId={activeLotId}
             lots={lots}
+            initialData={editingEntry?.type === 'delay' ? {
+              delayType: editingEntry.data?.delayType,
+              description: editingEntry.description,
+              durationHours: editingEntry.data?.durationHours,
+              impact: editingEntry.data?.impact,
+              lotId: editingEntry.data?.lotId,
+            } : undefined}
           />
         )}
         {activeSheet === 'delivery' && (
           <AddDeliverySheet
             isOpen
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); setEditingEntry(null) }}
             onSave={async (data) => {
+              if (editingEntry) { await handleDeleteEntry(editingEntry); setEditingEntry(null) }
               await addDeliveryFromSheet({ ...data, lotId: data.lotId || activeLotId || undefined })
             }}
             defaultLotId={activeLotId}
             lots={lots}
+            initialData={editingEntry?.type === 'delivery' ? {
+              description: editingEntry.description,
+              supplier: editingEntry.data?.supplier,
+              docketNumber: editingEntry.data?.docketNumber,
+              quantity: editingEntry.data?.quantity,
+              unit: editingEntry.data?.unit,
+              lotId: editingEntry.data?.lotId,
+              notes: editingEntry.data?.notes,
+            } : undefined}
           />
         )}
         {activeSheet === 'event' && (
           <AddEventSheet
             isOpen
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); setEditingEntry(null) }}
             onSave={async (data) => {
+              if (editingEntry) { await handleDeleteEntry(editingEntry); setEditingEntry(null) }
               await addEventFromSheet({ ...data, lotId: data.lotId || activeLotId || undefined })
             }}
             defaultLotId={activeLotId}
             lots={lots}
+            initialData={editingEntry?.type === 'event' ? {
+              eventType: editingEntry.data?.eventType,
+              description: editingEntry.description,
+              notes: editingEntry.data?.notes,
+              lotId: editingEntry.data?.lotId,
+            } : undefined}
           />
         )}
         {activeSheet === 'manual' && (
           <AddManualLabourPlantSheet
             isOpen
-            onClose={() => setActiveSheet(null)}
+            onClose={() => { setActiveSheet(null); setEditingEntry(null) }}
             onSavePersonnel={async (data) => {
+              if (editingEntry?.type === 'personnel') { await handleDeleteEntry(editingEntry); setEditingEntry(null) }
               let currentDiary = diary
               if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
               const token = getAuthToken()
@@ -1312,6 +1378,7 @@ export function DailyDiaryPage() {
               await fetchDiaryForDate(selectedDate)
             }}
             onSavePlant={async (data) => {
+              if (editingEntry?.type === 'plant') { await handleDeleteEntry(editingEntry); setEditingEntry(null) }
               let currentDiary = diary
               if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
               const token = getAuthToken()
@@ -1325,6 +1392,52 @@ export function DailyDiaryPage() {
             }}
             defaultLotId={activeLotId}
             lots={lots}
+          />
+        )}
+        {activeSheet === 'weather' && (
+          <AddWeatherSheet
+            isOpen
+            onClose={() => { setActiveSheet(null); setEditingEntry(null) }}
+            onSave={async (data) => {
+              const currentDiary = await ensureDiaryExists()
+              if (!currentDiary) return
+              const token = getAuthToken()
+              const res = await fetch(`${API_URL}/api/diary`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                  projectId,
+                  date: selectedDate,
+                  weatherConditions: data.conditions || undefined,
+                  temperatureMin: data.temperatureMin ? parseFloat(data.temperatureMin) : undefined,
+                  temperatureMax: data.temperatureMax ? parseFloat(data.temperatureMax) : undefined,
+                  rainfallMm: data.rainfallMm ? parseFloat(data.rainfallMm) : undefined,
+                }),
+              })
+              if (res.ok) {
+                const updated = await res.json()
+                setDiary(updated)
+                setWeatherForm({
+                  weatherConditions: updated.weatherConditions || '',
+                  temperatureMin: updated.temperatureMin?.toString() || '',
+                  temperatureMax: updated.temperatureMax?.toString() || '',
+                  rainfallMm: updated.rainfallMm?.toString() || '',
+                  weatherNotes: updated.weatherNotes || '',
+                  generalNotes: updated.generalNotes || '',
+                })
+              }
+            }}
+            initialData={diary ? {
+              conditions: diary.weatherConditions || '',
+              temperatureMin: diary.temperatureMin?.toString() || '',
+              temperatureMax: diary.temperatureMax?.toString() || '',
+              rainfallMm: diary.rainfallMm?.toString() || '',
+            } : weatherForm.weatherConditions ? {
+              conditions: weatherForm.weatherConditions,
+              temperatureMin: weatherForm.temperatureMin,
+              temperatureMax: weatherForm.temperatureMax,
+              rainfallMm: weatherForm.rainfallMm,
+            } : null}
           />
         )}
       </>

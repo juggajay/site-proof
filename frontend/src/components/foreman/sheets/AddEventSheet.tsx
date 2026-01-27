@@ -17,13 +17,14 @@ interface AddEventSheetProps {
   }) => Promise<void>
   defaultLotId: string | null
   lots: Array<{ id: string; lotNumber: string }>
+  initialData?: { eventType?: string; description?: string; notes?: string; lotId?: string }
 }
 
-export function AddEventSheet({ isOpen, onClose, onSave, defaultLotId, lots }: AddEventSheetProps) {
-  const [eventType, setEventType] = useState('')
-  const [description, setDescription] = useState('')
-  const [notes, setNotes] = useState('')
-  const [lotId, setLotId] = useState(defaultLotId || '')
+export function AddEventSheet({ isOpen, onClose, onSave, defaultLotId, lots, initialData }: AddEventSheetProps) {
+  const [eventType, setEventType] = useState(initialData?.eventType || '')
+  const [description, setDescription] = useState(initialData?.description || '')
+  const [notes, setNotes] = useState(initialData?.notes || '')
+  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '')
   const [saving, setSaving] = useState(false)
   const { trigger } = useHaptics()
 
@@ -32,7 +33,7 @@ export function AddEventSheet({ isOpen, onClose, onSave, defaultLotId, lots }: A
     setSaving(true)
     try {
       await onSave({
-        eventType,
+        eventType: eventType.toLowerCase(),
         description: description.trim(),
         notes: notes || undefined,
         lotId: lotId || undefined,

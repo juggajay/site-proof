@@ -18,15 +18,16 @@ interface AddDelaySheetProps {
   }) => Promise<void>
   defaultLotId: string | null
   lots: Array<{ id: string; lotNumber: string }>
+  initialData?: { delayType?: string; description?: string; durationHours?: number; impact?: string; lotId?: string }
 }
 
-export function AddDelaySheet({ isOpen, onClose, onSave, defaultLotId, lots }: AddDelaySheetProps) {
-  const [delayType, setDelayType] = useState('')
-  const [description, setDescription] = useState('')
-  const [durationHours, setDurationHours] = useState('')
-  const [impact, setImpact] = useState('')
-  const [lotId, setLotId] = useState(defaultLotId || '')
-  const [showMore, setShowMore] = useState(false)
+export function AddDelaySheet({ isOpen, onClose, onSave, defaultLotId, lots, initialData }: AddDelaySheetProps) {
+  const [delayType, setDelayType] = useState(initialData?.delayType || '')
+  const [description, setDescription] = useState(initialData?.description || '')
+  const [durationHours, setDurationHours] = useState(initialData?.durationHours?.toString() || '')
+  const [impact, setImpact] = useState(initialData?.impact || '')
+  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '')
+  const [showMore, setShowMore] = useState(!!initialData)
   const [saving, setSaving] = useState(false)
   const { trigger } = useHaptics()
 
