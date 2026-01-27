@@ -530,11 +530,13 @@ export function DailyDiaryPage() {
   }
 
   // Mobile: fetch timeline entries
-  const fetchTimeline = async () => {
-    if (!diary) return
+  // Accept optional diaryId to avoid stale closure when diary was just created
+  const fetchTimeline = async (diaryId?: string) => {
+    const id = diaryId || diary?.id
+    if (!id) return
     try {
       const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/timeline`, {
+      const res = await fetch(`${API_URL}/api/diary/${id}/timeline`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.ok) {
@@ -601,7 +603,7 @@ export function DailyDiaryPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     })
-    if (res.ok) { await fetchTimeline(); await fetchDiaryForDate(selectedDate) }
+    if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
     else throw new Error('Failed to add activity')
   }
 
@@ -615,7 +617,7 @@ export function DailyDiaryPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     })
-    if (res.ok) { await fetchTimeline(); await fetchDiaryForDate(selectedDate) }
+    if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
     else throw new Error('Failed to add delay')
   }
 
@@ -629,7 +631,7 @@ export function DailyDiaryPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     })
-    if (res.ok) { await fetchTimeline(); await fetchDiaryForDate(selectedDate) }
+    if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
     else throw new Error('Failed to add delivery')
   }
 
@@ -643,7 +645,7 @@ export function DailyDiaryPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     })
-    if (res.ok) { await fetchTimeline(); await fetchDiaryForDate(selectedDate) }
+    if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
     else throw new Error('Failed to add event')
   }
 
@@ -1306,7 +1308,7 @@ export function DailyDiaryPage() {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ ...data, source: 'manual', lotId: data.lotId || activeLotId || undefined }),
               })
-              await fetchTimeline()
+              await fetchTimeline(currentDiary.id)
               await fetchDiaryForDate(selectedDate)
             }}
             onSavePlant={async (data) => {
@@ -1318,7 +1320,7 @@ export function DailyDiaryPage() {
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ ...data, source: 'manual', lotId: data.lotId || activeLotId || undefined }),
               })
-              await fetchTimeline()
+              await fetchTimeline(currentDiary.id)
               await fetchDiaryForDate(selectedDate)
             }}
             defaultLotId={activeLotId}
