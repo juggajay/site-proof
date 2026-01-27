@@ -571,6 +571,95 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
       }
     })
 
+    // === DIARY AUTO-POPULATION ===
+    // When a docket is approved, write its labour and plant data into the daily diary
+    try {
+      const docketDate = docket.date.toISOString().split('T')[0]
+
+      // Find or create diary for this date
+      let diary = await prisma.dailyDiary.findUnique({
+        where: { projectId_date: { projectId: docket.projectId, date: docket.date } },
+      })
+
+      if (!diary) {
+        diary = await prisma.dailyDiary.create({
+          data: {
+            projectId: docket.projectId,
+            date: docket.date,
+            status: 'draft',
+          },
+        })
+        console.log(`[Docket→Diary] Auto-created diary for ${docketDate}`)
+      }
+
+      // Don't modify submitted diaries
+      if (diary.status !== 'submitted') {
+        // Fetch full docket with labour and plant entries
+        const fullDocket = await prisma.dailyDocket.findUnique({
+          where: { id: docket.id },
+          include: {
+            labourEntries: {
+              include: {
+                employee: { select: { name: true, role: true } },
+                lotAllocations: true,
+              },
+            },
+            plantEntries: {
+              include: {
+                plant: { select: { type: true, description: true, idRego: true } },
+                lotAllocations: true,
+              },
+            },
+            subcontractorCompany: { select: { companyName: true } },
+          },
+        })
+
+        if (fullDocket) {
+          // Write personnel records from labour entries
+          for (const entry of fullDocket.labourEntries) {
+            await prisma.diaryPersonnel.create({
+              data: {
+                diaryId: diary.id,
+                name: entry.employee.name,
+                role: entry.employee.role || undefined,
+                company: fullDocket.subcontractorCompany.companyName,
+                hours: entry.approvedHours || entry.submittedHours || undefined,
+                startTime: entry.startTime || undefined,
+                finishTime: entry.finishTime || undefined,
+                source: 'docket',
+                docketId: docket.id,
+                lotId: entry.lotAllocations[0]?.lotId || undefined,
+              },
+            })
+          }
+
+          // Write plant records from plant entries
+          for (const entry of fullDocket.plantEntries) {
+            await prisma.diaryPlant.create({
+              data: {
+                diaryId: diary.id,
+                description: entry.plant.description || entry.plant.type,
+                idRego: entry.plant.idRego || undefined,
+                company: fullDocket.subcontractorCompany.companyName,
+                hoursOperated: entry.hoursOperated || undefined,
+                source: 'docket',
+                docketId: docket.id,
+                lotId: entry.lotAllocations[0]?.lotId || undefined,
+              },
+            })
+          }
+
+          console.log(`[Docket→Diary] Populated diary with ${fullDocket.labourEntries.length} personnel + ${fullDocket.plantEntries.length} plant from docket ${docket.id}`)
+        }
+      } else {
+        console.log(`[Docket→Diary] Diary for ${docketDate} is already submitted, skipping auto-population`)
+      }
+    } catch (diaryError) {
+      // Don't fail the approval if diary population fails
+      console.error('[Docket→Diary] Auto-population failed (docket still approved):', diaryError)
+    }
+    // === END DIARY AUTO-POPULATION ===
+
     // Feature #927 - Notify subcontractor users about docket approval
     const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`
     const docketDate = docket.date.toISOString().split('T')[0]
