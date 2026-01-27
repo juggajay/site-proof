@@ -1464,12 +1464,19 @@ dashboardRouter.get('/projects/:projectId/foreman/today', async (req, res) => {
       })
     }
 
-    // Verify user has access to this project
+    // Verify user has access to this project (project membership or company-level)
     const projectAccess = await prisma.projectUser.findFirst({
       where: { userId, projectId }
     })
 
-    if (!projectAccess) {
+    const companyAccess = !projectAccess ? await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        companyId: req.user?.companyId || undefined,
+      },
+    }) : null
+
+    if (!projectAccess && !companyAccess) {
       return res.status(403).json({
         error: 'Forbidden',
         message: 'You do not have access to this project'
