@@ -171,9 +171,9 @@ export function ForemanBottomNavV2({ onCapturePress, todayBadgeCount: externalBa
               aria-label={item.label}
             >
               {isCapture ? (
-                // Capture button - elevated with emphasis
+                // Capture button - centered circle
                 <div className={cn(
-                  'flex items-center justify-center w-12 h-12 -mt-6 rounded-full',
+                  'flex items-center justify-center w-12 h-12 rounded-full',
                   'bg-primary text-primary-foreground shadow-lg',
                   'active:scale-95 transition-transform'
                 )}>
@@ -181,12 +181,12 @@ export function ForemanBottomNavV2({ onCapturePress, todayBadgeCount: externalBa
                 </div>
               ) : (
                 <>
-                  <div className="relative">
-                    <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
-                    {/* Badge for Today count */}
+                  <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
+                  <div className="flex items-center gap-1">
+                    <span className={cn('text-xs', isActive && 'font-medium')}>{item.label}</span>
                     {showBadge && (
                       <span className={cn(
-                        'absolute -top-1 -right-1 flex items-center justify-center',
+                        'flex items-center justify-center',
                         'min-w-[16px] h-4 px-1 text-[10px] font-bold rounded-full',
                         'bg-red-500 text-white'
                       )}>
@@ -194,7 +194,6 @@ export function ForemanBottomNavV2({ onCapturePress, todayBadgeCount: externalBa
                       </span>
                     )}
                   </div>
-                  <span className={cn('text-xs', isActive && 'font-medium')}>{item.label}</span>
                 </>
               )}
             </button>
