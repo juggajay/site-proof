@@ -233,7 +233,7 @@ export function Breadcrumbs() {
   }
 
   return (
-    <nav className="flex items-center gap-1 text-sm" aria-label="Breadcrumb">
+    <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Breadcrumb">
       <Link
         to="/dashboard"
         className="text-muted-foreground hover:text-foreground transition-colors"

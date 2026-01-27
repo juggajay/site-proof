@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useAuth, getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { X, Printer } from 'lucide-react'
 import { generateDocketDetailPDF, DocketDetailPDFData } from '@/lib/pdfGenerator'
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton'
+import { useIsMobile } from '@/hooks/useMediaQuery'
+import { DocketApprovalsMobileView } from '@/components/foreman/DocketApprovalsMobileView'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
@@ -44,11 +46,14 @@ const statusLabels: Record<string, string> = {
 export function DocketApprovalsPage() {
   const { projectId } = useParams()
   const { user } = useAuth()
+  const isMobile = useIsMobile()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  // State for dockets and filtering
+  // State for dockets and filtering — initialise from URL
   const [dockets, setDockets] = useState<Docket[]>([])
   const [loading, setLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const initialStatus = searchParams.get('status') || 'all'
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus)
 
   // State for create docket modal
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -93,6 +98,23 @@ export function DocketApprovalsPage() {
   const adjustedLabourValidation = validateHours(adjustedLabourHours)
   const adjustedPlantValidation = validateHours(adjustedPlantHours)
   const canApprove = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'].includes(userRole || '')
+
+  // Sync filter changes to URL query params
+  const handleFilterChange = (newFilter: string) => {
+    setStatusFilter(newFilter)
+    if (newFilter === 'all') {
+      setSearchParams({})
+    } else {
+      setSearchParams({ status: newFilter })
+    }
+  }
+
+  // Mobile: tap a docket card
+  const handleTapDocket = (docket: Docket) => {
+    if (docket.status === 'pending_approval' && canApprove) {
+      openActionModal(docket, 'approve')
+    }
+  }
 
   // Computed values
   const filteredDockets = useMemo(() => {
@@ -376,206 +398,226 @@ export function DocketApprovalsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Docket Approvals</h1>
-          <p className="text-sm text-muted-foreground">
-            Review and approve subcontractor dockets for project {projectId}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {dockets.length > 0 && (
+    <>
+      {isMobile ? (
+        <DocketApprovalsMobileView
+          dockets={dockets}
+          filteredDockets={filteredDockets}
+          loading={loading}
+          statusFilter={statusFilter}
+          setStatusFilter={handleFilterChange}
+          pendingCount={pendingCount}
+          totalLabourHours={totalLabourHours}
+          totalPlantHours={totalPlantHours}
+          canApprove={canApprove}
+          onApprove={(d) => openActionModal(d, 'approve')}
+          onReject={(d) => openActionModal(d, 'reject')}
+          onTapDocket={handleTapDocket}
+          onRefresh={fetchDockets}
+        />
+      ) : (
+      <div className="space-y-6 p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Docket Approvals</h1>
+            <p className="text-sm text-muted-foreground">
+              Review and approve subcontractor dockets for project {projectId}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {dockets.length > 0 && (
+              <button
+                onClick={handleExportCSV}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Export CSV
+              </button>
+            )}
+            {isSubcontractor && (
+              <button
+                onClick={() => setCreateModalOpen(true)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                Create Docket
+              </button>
+            )}
             <button
-              onClick={handleExportCSV}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              onClick={() => handleFilterChange('all')}
+              className={`rounded-lg border px-4 py-2 text-sm ${statusFilter === 'all' ? 'bg-muted' : 'hover:bg-muted'}`}
             >
-              Export CSV
+              All Dockets
             </button>
-          )}
-          {isSubcontractor && (
             <button
-              onClick={() => setCreateModalOpen(true)}
-              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              onClick={() => handleFilterChange('pending_approval')}
+              className={`rounded-lg px-4 py-2 text-sm ${
+                statusFilter === 'pending_approval'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border hover:bg-muted'
+              }`}
             >
-              Create Docket
+              Pending ({pendingCount})
             </button>
-          )}
-          <button
-            onClick={() => setStatusFilter('all')}
-            className={`rounded-lg border px-4 py-2 text-sm ${statusFilter === 'all' ? 'bg-muted' : 'hover:bg-muted'}`}
-          >
-            All Dockets
-          </button>
-          <button
-            onClick={() => setStatusFilter('pending_approval')}
-            className={`rounded-lg px-4 py-2 text-sm ${
-              statusFilter === 'pending_approval'
-                ? 'bg-primary text-primary-foreground'
-                : 'border hover:bg-muted'
-            }`}
-          >
-            Pending ({pendingCount})
-          </button>
+          </div>
         </div>
-      </div>
 
-      {/* Dockets Table */}
-      <div className="rounded-lg border">
-        <table className="w-full">
-          <thead className="border-b bg-muted/50">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium">Docket #</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Subcontractor</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Date</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Notes</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Labour Hrs</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Plant Hrs</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {loading ? (
+        {/* Dockets Table */}
+        <div className="rounded-lg border">
+          <table className="w-full">
+            <thead className="border-b bg-muted/50">
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                    <span className="ml-2">Loading dockets...</span>
-                  </div>
-                </td>
+                <th className="px-4 py-3 text-left text-sm font-medium">Docket #</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Subcontractor</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Date</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Notes</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Labour Hrs</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Plant Hrs</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+                <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
               </tr>
-            ) : filteredDockets.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
-                  No dockets found
-                </td>
-              </tr>
-            ) : (
-              filteredDockets.map((docket) => (
-                <tr key={docket.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3 text-sm font-medium">{docket.docketNumber}</td>
-                  <td className="px-4 py-3 text-sm">{docket.subcontractor}</td>
-                  <td className="px-4 py-3 text-sm">{docket.date}</td>
-                  <td className="px-4 py-3 text-sm max-w-xs truncate" title={docket.notes || ''}>
-                    {docket.notes || '-'}
-                  </td>
-                  <td className="px-4 py-3 text-sm">{docket.labourHours}h</td>
-                  <td className="px-4 py-3 text-sm">{docket.plantHours}h</td>
-                  <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`rounded px-2 py-1 text-xs font-medium ${statusColors[docket.status] || 'bg-gray-100'}`}
-                    >
-                      {statusLabels[docket.status] || docket.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="flex gap-2">
-                      {/* Print button - always visible */}
-                      <button
-                        onClick={async () => {
-                          try {
-                            const token = getAuthToken()
-                            // Fetch project info
-                            const projectRes = await fetch(`${API_URL}/api/projects/${projectId}`, {
-                              headers: token ? { Authorization: `Bearer ${token}` } : {}
-                            })
-                            const project = projectRes.ok ? await projectRes.json() : { name: 'Unknown Project', projectNumber: null }
-
-                            const pdfData: DocketDetailPDFData = {
-                              docket: {
-                                id: docket.id,
-                                docketNumber: docket.docketNumber,
-                                date: docket.date,
-                                status: docket.status,
-                                notes: docket.notes,
-                                labourHours: docket.labourHours,
-                                plantHours: docket.plantHours,
-                                totalLabourSubmitted: docket.totalLabourSubmitted,
-                                totalLabourApproved: docket.totalLabourApproved,
-                                totalPlantSubmitted: docket.totalPlantSubmitted,
-                                totalPlantApproved: docket.totalPlantApproved,
-                                submittedAt: docket.submittedAt,
-                                approvedAt: docket.approvedAt,
-                                foremanNotes: docket.foremanNotes
-                              },
-                              subcontractor: {
-                                name: docket.subcontractor
-                              },
-                              project: {
-                                name: project.name || 'Unknown Project',
-                                projectNumber: project.projectNumber || null
-                              }
-                            }
-
-                            generateDocketDetailPDF(pdfData)
-                            toast({ title: 'Docket PDF downloaded', variant: 'success' })
-                          } catch (err) {
-                            console.error('Error generating docket PDF:', err)
-                            toast({ title: 'Failed to generate PDF', variant: 'error' })
-                          }
-                        }}
-                        className="rounded border p-1.5 hover:bg-muted"
-                        title="Print docket"
-                      >
-                        <Printer className="h-4 w-4" />
-                      </button>
-                      {/* Submit button for draft dockets (subcontractor only) */}
-                      {docket.status === 'draft' && isSubcontractor && (
-                        <button
-                          onClick={() => handleSubmitDocket(docket)}
-                          className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
-                        >
-                          Submit
-                        </button>
-                      )}
-                      {/* Approve/Reject buttons for pending dockets (approvers only) */}
-                      {docket.status === 'pending_approval' && canApprove && (
-                        <>
-                          <button
-                            onClick={() => openActionModal(docket, 'approve')}
-                            className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => openActionModal(docket, 'reject')}
-                            className="rounded border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
+            </thead>
+            <tbody className="divide-y">
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                      <span className="ml-2">Loading dockets...</span>
                     </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : filteredDockets.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                    No dockets found
+                  </td>
+                </tr>
+              ) : (
+                filteredDockets.map((docket) => (
+                  <tr key={docket.id} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 text-sm font-medium">{docket.docketNumber}</td>
+                    <td className="px-4 py-3 text-sm">{docket.subcontractor}</td>
+                    <td className="px-4 py-3 text-sm">{docket.date}</td>
+                    <td className="px-4 py-3 text-sm max-w-xs truncate" title={docket.notes || ''}>
+                      {docket.notes || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">{docket.labourHours}h</td>
+                    <td className="px-4 py-3 text-sm">{docket.plantHours}h</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`rounded px-2 py-1 text-xs font-medium ${statusColors[docket.status] || 'bg-gray-100'}`}
+                      >
+                        {statusLabels[docket.status] || docket.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex gap-2">
+                        {/* Print button - always visible */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              const token = getAuthToken()
+                              // Fetch project info
+                              const projectRes = await fetch(`${API_URL}/api/projects/${projectId}`, {
+                                headers: token ? { Authorization: `Bearer ${token}` } : {}
+                              })
+                              const project = projectRes.ok ? await projectRes.json() : { name: 'Unknown Project', projectNumber: null }
 
-      {/* Operational Summary */}
-      <div className="rounded-lg border p-4">
-        <h2 className="text-lg font-semibold mb-4">Operational Summary</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <span className="text-sm text-muted-foreground">Pending Approvals</span>
-            <p className="text-2xl font-bold">{pendingCount}</p>
-          </div>
-          <div>
-            <span className="text-sm text-muted-foreground">Total Labour Hours</span>
-            <p className="text-2xl font-bold">{totalLabourHours}h</p>
-          </div>
-          <div>
-            <span className="text-sm text-muted-foreground">Total Plant Hours</span>
-            <p className="text-2xl font-bold">{totalPlantHours}h</p>
+                              const pdfData: DocketDetailPDFData = {
+                                docket: {
+                                  id: docket.id,
+                                  docketNumber: docket.docketNumber,
+                                  date: docket.date,
+                                  status: docket.status,
+                                  notes: docket.notes,
+                                  labourHours: docket.labourHours,
+                                  plantHours: docket.plantHours,
+                                  totalLabourSubmitted: docket.totalLabourSubmitted,
+                                  totalLabourApproved: docket.totalLabourApproved,
+                                  totalPlantSubmitted: docket.totalPlantSubmitted,
+                                  totalPlantApproved: docket.totalPlantApproved,
+                                  submittedAt: docket.submittedAt,
+                                  approvedAt: docket.approvedAt,
+                                  foremanNotes: docket.foremanNotes
+                                },
+                                subcontractor: {
+                                  name: docket.subcontractor
+                                },
+                                project: {
+                                  name: project.name || 'Unknown Project',
+                                  projectNumber: project.projectNumber || null
+                                }
+                              }
+
+                              generateDocketDetailPDF(pdfData)
+                              toast({ title: 'Docket PDF downloaded', variant: 'success' })
+                            } catch (err) {
+                              console.error('Error generating docket PDF:', err)
+                              toast({ title: 'Failed to generate PDF', variant: 'error' })
+                            }
+                          }}
+                          className="rounded border p-1.5 hover:bg-muted"
+                          title="Print docket"
+                        >
+                          <Printer className="h-4 w-4" />
+                        </button>
+                        {/* Submit button for draft dockets (subcontractor only) */}
+                        {docket.status === 'draft' && isSubcontractor && (
+                          <button
+                            onClick={() => handleSubmitDocket(docket)}
+                            className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+                          >
+                            Submit
+                          </button>
+                        )}
+                        {/* Approve/Reject buttons for pending dockets (approvers only) */}
+                        {docket.status === 'pending_approval' && canApprove && (
+                          <>
+                            <button
+                              onClick={() => openActionModal(docket, 'approve')}
+                              className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => openActionModal(docket, 'reject')}
+                              className="rounded border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Operational Summary */}
+        <div className="rounded-lg border p-4">
+          <h2 className="text-lg font-semibold mb-4">Operational Summary</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <span className="text-sm text-muted-foreground">Pending Approvals</span>
+              <p className="text-2xl font-bold">{pendingCount}</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Total Labour Hours</span>
+              <p className="text-2xl font-bold">{totalLabourHours}h</p>
+            </div>
+            <div>
+              <span className="text-sm text-muted-foreground">Total Plant Hours</span>
+              <p className="text-2xl font-bold">{totalPlantHours}h</p>
+            </div>
           </div>
         </div>
       </div>
+      )}
 
-      {/* Create Docket Modal */}
+      {/* Create Docket Modal — renders for both mobile & desktop */}
       {createModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
@@ -841,6 +883,6 @@ export function DocketApprovalsPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

@@ -24,3 +24,4 @@ export { WeatherWidget } from './WeatherWidget'
 // Approval Components
 export { DocketComparisonCard } from './DocketComparisonCard'
 export { SwipeableCard } from './SwipeableCard'
+export { DocketApprovalsMobileView } from './DocketApprovalsMobileView'
