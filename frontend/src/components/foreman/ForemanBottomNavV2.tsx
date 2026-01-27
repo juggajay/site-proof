@@ -1,5 +1,6 @@
 // ForemanBottomNavV2 - Research-backed mobile navigation for foreman role
-// 5 primary actions: Capture, Today, Approve, Diary, Lots
+// 5 primary actions: Today, Approve, [Capture], Diary, Lots
+// Camera button centered between 4 nav tabs
 // Reference: docs/Foreman persona document (AU civil).md
 import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -22,13 +23,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    id: 'capture',
-    label: 'Capture',
-    icon: Camera,
-    getPath: () => '', // Special handling - opens modal
-    isAction: true
-  },
-  {
     id: 'today',
     label: 'Today',
     icon: ListChecks,
@@ -39,6 +33,13 @@ const navItems: NavItem[] = [
     label: 'Approve',
     icon: CheckSquare,
     getPath: (projectId) => `/projects/${projectId}/dockets?status=pending_approval`
+  },
+  {
+    id: 'capture',
+    label: 'Capture',
+    icon: Camera,
+    getPath: () => '', // Special handling - opens modal
+    isAction: true
   },
   {
     id: 'diary',
