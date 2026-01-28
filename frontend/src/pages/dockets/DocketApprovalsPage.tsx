@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { useAuth, getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { X, Printer } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { generateDocketDetailPDF, DocketDetailPDFData } from '@/lib/pdfGenerator'
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton'
 import { useIsMobile } from '@/hooks/useMediaQuery'
@@ -63,9 +64,9 @@ export function DocketApprovalsPage() {
   const [newDocketNotes, setNewDocketNotes] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // State for approve/reject modal
+  // State for approve/reject/view modal
   const [actionModalOpen, setActionModalOpen] = useState(false)
-  const [actionType, setActionType] = useState<'approve' | 'reject'>('approve')
+  const [actionType, setActionType] = useState<'approve' | 'reject' | 'view'>('approve')
   const [selectedDocket, setSelectedDocket] = useState<Docket | null>(null)
   const [actionNotes, setActionNotes] = useState('')
   const [actionInProgress, setActionInProgress] = useState(false)
@@ -109,22 +110,29 @@ export function DocketApprovalsPage() {
     }
   }
 
-  // Mobile: tap a docket card
+  // Mobile: tap a docket card — open detail view for any docket
   const handleTapDocket = (docket: Docket) => {
     if (docket.status === 'pending_approval' && canApprove) {
       openActionModal(docket, 'approve')
+    } else {
+      openActionModal(docket, 'view')
     }
   }
 
+  // Exclude drafts from the approvals view — only submitted dockets belong here
+  const submittedDockets = useMemo(() => {
+    return dockets.filter((d) => d.status !== 'draft')
+  }, [dockets])
+
   // Computed values
   const filteredDockets = useMemo(() => {
-    if (statusFilter === 'all') return dockets
-    return dockets.filter((d) => d.status === statusFilter)
-  }, [dockets, statusFilter])
+    if (statusFilter === 'all') return submittedDockets
+    return submittedDockets.filter((d) => d.status === statusFilter)
+  }, [submittedDockets, statusFilter])
 
   const pendingCount = useMemo(() => {
-    return dockets.filter((d) => d.status === 'pending_approval').length
-  }, [dockets])
+    return submittedDockets.filter((d) => d.status === 'pending_approval').length
+  }, [submittedDockets])
 
   const totalLabourHours = useMemo(() => {
     return filteredDockets.reduce((sum, d) => sum + (d.labourHours || 0), 0)
@@ -237,8 +245,8 @@ export function DocketApprovalsPage() {
     }
   }
 
-  // Open the approve/reject modal
-  const openActionModal = (docket: Docket, type: 'approve' | 'reject') => {
+  // Open the approve/reject/view modal
+  const openActionModal = (docket: Docket, type: 'approve' | 'reject' | 'view') => {
     setSelectedDocket(docket)
     setActionType(type)
     setActionNotes('')
@@ -723,13 +731,13 @@ export function DocketApprovalsPage() {
         </div>
       )}
 
-      {/* Approve/Reject Modal */}
+      {/* Approve/Reject/View Modal */}
       {actionModalOpen && selectedDocket && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-xl font-semibold">
-                {actionType === 'approve' ? 'Approve Docket' : 'Reject Docket'}
+                {actionType === 'approve' ? 'Approve Docket' : actionType === 'reject' ? 'Reject Docket' : 'Docket Details'}
               </h2>
               <button
                 onClick={() => setActionModalOpen(false)}
@@ -740,7 +748,7 @@ export function DocketApprovalsPage() {
             </div>
 
             <div className="p-6 space-y-4">
-              <div className="rounded-lg bg-muted/50 p-3">
+              <div className="rounded-lg bg-muted/50 p-3 space-y-1">
                 <p className="text-sm">
                   <strong>Docket:</strong> {selectedDocket.docketNumber}
                 </p>
@@ -751,12 +759,62 @@ export function DocketApprovalsPage() {
                   <strong>Date:</strong> {selectedDocket.date}
                 </p>
                 <p className="text-sm">
+                  <strong>Status:</strong>{' '}
+                  <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', statusColors[selectedDocket.status] || 'bg-gray-100 text-gray-800')}>
+                    {statusLabels[selectedDocket.status] || selectedDocket.status}
+                  </span>
+                </p>
+                <p className="text-sm">
                   <strong>Labour Hours:</strong> {selectedDocket.labourHours}h
+                  {selectedDocket.totalLabourApproved > 0 && selectedDocket.totalLabourApproved !== selectedDocket.labourHours && (
+                    <span className="text-muted-foreground"> (approved: {selectedDocket.totalLabourApproved}h)</span>
+                  )}
                 </p>
                 <p className="text-sm">
                   <strong>Plant Hours:</strong> {selectedDocket.plantHours}h
+                  {selectedDocket.totalPlantApproved > 0 && selectedDocket.totalPlantApproved !== selectedDocket.plantHours && (
+                    <span className="text-muted-foreground"> (approved: {selectedDocket.totalPlantApproved}h)</span>
+                  )}
                 </p>
+                {selectedDocket.notes && (
+                  <p className="text-sm">
+                    <strong>Notes:</strong> {selectedDocket.notes}
+                  </p>
+                )}
+                {selectedDocket.foremanNotes && (
+                  <p className="text-sm">
+                    <strong>Foreman Notes:</strong> {selectedDocket.foremanNotes}
+                  </p>
+                )}
+                {selectedDocket.submittedAt && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Submitted: {new Date(selectedDocket.submittedAt).toLocaleString('en-AU')}
+                  </p>
+                )}
+                {selectedDocket.approvedAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Approved: {new Date(selectedDocket.approvedAt).toLocaleString('en-AU')}
+                  </p>
+                )}
               </div>
+
+              {/* View mode: show approve/reject buttons if docket is pending */}
+              {actionType === 'view' && selectedDocket.status === 'pending_approval' && canApprove && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActionType('approve')}
+                    className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => setActionType('reject')}
+                    className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
 
               {actionType === 'approve' && (
                 <>
@@ -860,25 +918,27 @@ export function DocketApprovalsPage() {
                 onClick={() => setActionModalOpen(false)}
                 className="px-4 py-2 border rounded-lg hover:bg-muted"
               >
-                Cancel
+                {actionType === 'view' ? 'Close' : 'Cancel'}
               </button>
-              <button
-                onClick={handleAction}
-                disabled={actionInProgress || (actionType === 'reject' && !actionNotes.trim())}
-                className={`px-4 py-2 rounded-lg disabled:opacity-50 ${
-                  actionType === 'approve'
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-red-600 text-white hover:bg-red-700'
-                }`}
-              >
-                {actionInProgress
-                  ? actionType === 'approve'
-                    ? 'Approving...'
-                    : 'Rejecting...'
-                  : actionType === 'approve'
-                    ? 'Approve'
-                    : 'Reject'}
-              </button>
+              {actionType !== 'view' && (
+                <button
+                  onClick={handleAction}
+                  disabled={actionInProgress || (actionType === 'reject' && !actionNotes.trim())}
+                  className={`px-4 py-2 rounded-lg disabled:opacity-50 ${
+                    actionType === 'approve'
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
+                >
+                  {actionInProgress
+                    ? actionType === 'approve'
+                      ? 'Approving...'
+                      : 'Rejecting...'
+                    : actionType === 'approve'
+                      ? 'Approve'
+                      : 'Reject'}
+                </button>
+              )}
             </div>
           </div>
         </div>
