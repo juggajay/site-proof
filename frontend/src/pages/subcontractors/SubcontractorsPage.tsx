@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { getAuthToken } from '@/lib/auth'
-import { Plus, Users, Building2, CheckCircle, Clock, X, DollarSign, Truck, ChevronDown, ChevronUp, Settings2, MapPin, ClipboardCheck, AlertTriangle, TestTube, FileWarning, FileText, Eye, EyeOff, Search } from 'lucide-react'
+import { Plus, Users, Building2, CheckCircle, Clock, X, DollarSign, Truck, ChevronDown, ChevronUp, Settings2, MapPin, ClipboardCheck, AlertTriangle, TestTube, FileWarning, FileText, Eye, EyeOff, Search, Trash2 } from 'lucide-react'
 import { validateABN, formatABN } from '@/lib/abnValidation'
 
 // Global subcontractor from organization directory
@@ -48,7 +48,7 @@ interface Subcontractor {
   primaryContact: string
   email: string
   phone: string
-  status: 'pending_approval' | 'approved' | 'suspended'
+  status: 'pending_approval' | 'approved' | 'suspended' | 'removed'
   employees: Employee[]
   plant: Plant[]
   totalApprovedDockets: number
@@ -113,10 +113,13 @@ export function SubcontractorsPage() {
   const [selectedGlobalId, setSelectedGlobalId] = useState<string | null>(null)
   const [directorySearch, setDirectorySearch] = useState('')
   const [loadingDirectory, setLoadingDirectory] = useState(false)
+  // Show removed subcontractors toggle
+  const [showRemoved, setShowRemoved] = useState(false)
+  const [removedCount, setRemovedCount] = useState(0)
 
   useEffect(() => {
     fetchSubcontractors()
-  }, [projectId])
+  }, [projectId, showRemoved])
 
   const fetchSubcontractors = async () => {
     if (!projectId) return
@@ -125,13 +128,19 @@ export function SubcontractorsPage() {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-      const response = await fetch(`${API_URL}/api/subcontractors/project/${projectId}`, {
+      const queryParams = showRemoved ? '?includeRemoved=true' : ''
+      const response = await fetch(`${API_URL}/api/subcontractors/project/${projectId}${queryParams}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
 
       if (response.ok) {
         const data = await response.json()
-        setSubcontractors(data.subcontractors || [])
+        const allSubs = data.subcontractors || []
+        setSubcontractors(allSubs)
+        // Track removed count for the toggle label
+        if (showRemoved) {
+          setRemovedCount(allSubs.filter((s: Subcontractor) => s.status === 'removed').length)
+        }
       } else {
         // Demo data
         setSubcontractors([
@@ -481,10 +490,15 @@ export function SubcontractorsPage() {
       })
 
       if (response.ok) {
-        // Update local state
-        setSubcontractors(subs => subs.map(sub =>
-          sub.id === subId ? { ...sub, status: status as any } : sub
-        ))
+        // If removing and not showing removed, filter it out; otherwise update in place
+        if (status === 'removed' && !showRemoved) {
+          setSubcontractors(subs => subs.filter(sub => sub.id !== subId))
+          setExpandedId(null)
+        } else {
+          setSubcontractors(subs => subs.map(sub =>
+            sub.id === subId ? { ...sub, status: status as any } : sub
+          ))
+        }
       } else {
         const error = await response.json()
         alert(error.message || 'Failed to update subcontractor status')
@@ -492,6 +506,45 @@ export function SubcontractorsPage() {
     } catch (error) {
       console.error('Update subcontractor status error:', error)
       alert('Failed to update subcontractor status')
+    }
+  }
+
+  const deleteSubcontractor = async (sub: Subcontractor) => {
+    const docketCount = sub.totalApprovedDockets
+    const employeeCount = sub.employees.length
+    const plantCount = sub.plant.length
+
+    const confirmed = confirm(
+      `This will PERMANENTLY delete ${sub.companyName} and all associated records:\n\n` +
+      `- ${docketCount} approved docket(s)\n` +
+      `- ${employeeCount} employee(s)\n` +
+      `- ${plantCount} plant item(s)\n\n` +
+      `This cannot be undone. Continue?`
+    )
+
+    if (!confirmed) return
+
+    const token = getAuthToken()
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
+
+    try {
+      const response = await fetch(`${API_URL}/api/subcontractors/${sub.id}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      })
+
+      if (response.ok) {
+        setSubcontractors(subs => subs.filter(s => s.id !== sub.id))
+        setExpandedId(null)
+      } else {
+        const error = await response.json()
+        alert(error.message || 'Failed to delete subcontractor')
+      }
+    } catch (error) {
+      console.error('Delete subcontractor error:', error)
+      alert('Failed to delete subcontractor')
     }
   }
 
@@ -636,13 +689,32 @@ export function SubcontractorsPage() {
             Manage subcontractor companies, employees, and rates
           </p>
         </div>
-        <button
-          onClick={openInviteModal}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Invite Subcontractor
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer text-sm">
+            <button
+              onClick={() => setShowRemoved(!showRemoved)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                showRemoved ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                  showRemoved ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                }`}
+              />
+            </button>
+            <span className="text-muted-foreground">
+              Show removed{removedCount > 0 && showRemoved ? ` (${removedCount})` : ''}
+            </span>
+          </label>
+          <button
+            onClick={openInviteModal}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Invite Subcontractor
+          </button>
+        </div>
       </div>
 
       {/* Pending Approvals Alert */}
@@ -724,13 +796,22 @@ export function SubcontractorsPage() {
                 {/* Status Management Buttons */}
                 <div className="flex justify-end gap-2">
                   {sub.status === 'pending_approval' && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); approveSubcontractor(sub.id); }}
-                      className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      Approve Company
-                    </button>
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); approveSubcontractor(sub.id); }}
+                        className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Approve Company
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeSubcontractor(sub.id); }}
+                        className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                        Remove from Project
+                      </button>
+                    </>
                   )}
                   {sub.status === 'approved' && (
                     <>
@@ -751,13 +832,40 @@ export function SubcontractorsPage() {
                     </>
                   )}
                   {sub.status === 'suspended' && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); reinstateSubcontractor(sub.id); }}
-                      className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      Reinstate
-                    </button>
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); reinstateSubcontractor(sub.id); }}
+                        className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Reinstate
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeSubcontractor(sub.id); }}
+                        className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                        Remove from Project
+                      </button>
+                    </>
+                  )}
+                  {sub.status === 'removed' && (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); reinstateSubcontractor(sub.id); }}
+                        className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Reinstate
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteSubcontractor(sub); }}
+                        className="flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-white hover:bg-red-900"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete Permanently
+                      </button>
+                    </>
                   )}
                 </div>
 

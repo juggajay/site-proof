@@ -798,6 +798,94 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
   }
 })
 
+// DELETE /api/subcontractors/:id - Permanently delete a subcontractor and all associated records
+subcontractorsRouter.delete('/:id', async (req, res) => {
+  try {
+    const user = req.user!
+    const { id } = req.params
+
+    // Only allow head contractor roles to delete subcontractors
+    const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
+    if (!allowedRoles.includes(user.roleInCompany || '')) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Only project managers or higher can delete subcontractors'
+      })
+    }
+
+    // Find the subcontractor company with counts
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      include: {
+        project: true,
+        employeeRoster: { select: { id: true } },
+        plantRegister: { select: { id: true } },
+        dailyDockets: { select: { id: true } },
+        users: { select: { id: true } },
+      }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Subcontractor company not found' })
+    }
+
+    // Verify user has access to this project
+    const projectUser = await prisma.projectUser.findUnique({
+      where: {
+        projectId_userId: {
+          projectId: subcontractor.projectId,
+          userId: user.id
+        }
+      }
+    })
+
+    const isCompanyAdmin = ['owner', 'admin'].includes(user.roleInCompany || '')
+    const project = await prisma.project.findUnique({
+      where: { id: subcontractor.projectId }
+    })
+    const isCompanyProject = project?.companyId === user.companyId
+
+    if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this project'
+      })
+    }
+
+    // Nullify foreign keys in Lot and NCR before deleting
+    await prisma.lot.updateMany({
+      where: { assignedSubcontractorId: id },
+      data: { assignedSubcontractorId: null }
+    })
+
+    await prisma.nCR.updateMany({
+      where: { responsibleSubcontractorId: id },
+      data: { responsibleSubcontractorId: null }
+    })
+
+    const deletedCounts = {
+      dockets: subcontractor.dailyDockets.length,
+      employees: subcontractor.employeeRoster.length,
+      plant: subcontractor.plantRegister.length,
+    }
+
+    // Delete the subcontractor company (Prisma cascade handles SubcontractorUser, EmployeeRoster, PlantRegister, DailyDocket)
+    await prisma.subcontractorCompany.delete({
+      where: { id }
+    })
+
+    console.log(`Subcontractor ${subcontractor.companyName} permanently deleted by ${user.email} (${deletedCounts.dockets} dockets, ${deletedCounts.employees} employees, ${deletedCounts.plant} plant)`)
+
+    res.json({
+      message: `Subcontractor ${subcontractor.companyName} permanently deleted`,
+      deletedCounts
+    })
+  } catch (error) {
+    console.error('Delete subcontractor error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // Default portal access settings
 const DEFAULT_PORTAL_ACCESS = {
   lots: true,
