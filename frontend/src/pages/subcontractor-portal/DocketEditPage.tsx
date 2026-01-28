@@ -151,6 +151,10 @@ export function DocketEditPage() {
   const [notes, setNotes] = useState('')
   const [activeTab, setActiveTab] = useState('labour')
 
+  // Query response state
+  const [queryResponse, setQueryResponse] = useState('')
+  const [respondingToQuery, setRespondingToQuery] = useState(false)
+
   // Entry sheet state
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sheetType, setSheetType] = useState<'labour' | 'plant'>('labour')
@@ -520,6 +524,46 @@ export function DocketEditPage() {
     }
   }
 
+  // Respond to a query
+  const respondToQuery = async () => {
+    if (!docket || !queryResponse.trim()) return
+
+    setRespondingToQuery(true)
+    try {
+      const token = getAuthToken()
+      const response = await fetch(`${API_URL}/api/dockets/${docket.id}/respond`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ response: queryResponse.trim() }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.message || 'Failed to respond')
+      }
+
+      toast({
+        title: 'Response sent',
+        description: 'Your docket has been resubmitted for approval',
+        variant: 'success',
+      })
+
+      navigate('/subcontractor-portal')
+    } catch (err: any) {
+      console.error('Error responding to query:', err)
+      toast({
+        title: 'Failed to respond',
+        description: err.message || 'Please try again',
+        variant: 'error',
+      })
+    } finally {
+      setRespondingToQuery(false)
+    }
+  }
+
   const resetSheetState = () => {
     setSelectedEmployee(null)
     setSelectedPlant(null)
@@ -561,7 +605,7 @@ export function DocketEditPage() {
   const totalCost = (docket?.totalLabourSubmitted || 0) + (docket?.totalPlantSubmitted || 0)
 
   const canEdit = !docket || docket.status === 'draft' || docket.status === 'queried' || docket.status === 'rejected'
-  const canSubmit = docket && docket.status === 'draft' && (docket.labourEntries.length > 0 || docket.plantEntries.length > 0)
+  const canSubmit = docket && (docket.status === 'draft' || docket.status === 'rejected') && (docket.labourEntries.length > 0 || docket.plantEntries.length > 0)
 
   if (loading) {
     return (
@@ -627,21 +671,58 @@ export function DocketEditPage() {
         )}
       </div>
 
-      {/* Query/Rejection notice */}
-      {docket?.status === 'queried' && docket.foremanNotes && (
-        <div className="flex items-start gap-3 p-4 mb-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-          <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-amber-800 dark:text-amber-200">
-            <strong>Query from foreman:</strong> {docket.foremanNotes}
+      {/* Query notice with response input */}
+      {docket?.status === 'queried' && (
+        <div className="mb-4 border border-amber-200 dark:border-amber-800 rounded-lg bg-amber-50 dark:bg-amber-900/20 overflow-hidden">
+          <div className="flex items-start gap-3 p-4">
+            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-amber-800 dark:text-amber-200">
+              <strong>Query from foreman:</strong> {docket.foremanNotes || 'Please review this docket'}
+            </div>
+          </div>
+          <div className="px-4 pb-4 space-y-3">
+            <textarea
+              value={queryResponse}
+              onChange={(e) => setQueryResponse(e.target.value)}
+              placeholder="Type your response to the query..."
+              rows={3}
+              className="w-full px-3 py-2 border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
+            <button
+              onClick={respondToQuery}
+              disabled={!queryResponse.trim() || respondingToQuery}
+              className={cn(
+                'w-full flex items-center justify-center gap-2 py-2.5 px-4 font-medium rounded-lg transition-colors',
+                queryResponse.trim() && !respondingToQuery
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+              )}
+            >
+              {respondingToQuery ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Respond &amp; Resubmit
+                </>
+              )}
+            </button>
           </div>
         </div>
       )}
 
-      {docket?.status === 'rejected' && docket.foremanNotes && (
+      {/* Rejection notice with resubmit option */}
+      {docket?.status === 'rejected' && (
         <div className="flex items-start gap-3 p-4 mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
           <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
           <div className="text-red-800 dark:text-red-200">
-            <strong>Rejection reason:</strong> {docket.foremanNotes}
+            <strong>Rejection reason:</strong> {docket.foremanNotes || 'No reason provided'}
+            <p className="text-sm mt-2 text-red-700 dark:text-red-300">
+              You can edit the entries below and resubmit using the button at the bottom.
+            </p>
           </div>
         </div>
       )}
@@ -940,7 +1021,7 @@ export function DocketEditPage() {
               ) : (
                 <>
                   <Send className="h-4 w-4" />
-                  Submit for Approval
+                  {docket?.status === 'rejected' ? 'Resubmit for Approval' : 'Submit for Approval'}
                 </>
               )}
             </button>
