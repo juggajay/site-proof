@@ -74,6 +74,29 @@ export function DocketApprovalsPage() {
   const [adjustedPlantHours, setAdjustedPlantHours] = useState('')
   const [adjustmentReason, setAdjustmentReason] = useState('')
 
+  // State for docket detail entries (fetched on modal open)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [labourEntries, setLabourEntries] = useState<Array<{
+    id: string
+    employee: { name: string; role: string }
+    startTime: string | null
+    finishTime: string | null
+    submittedHours: number
+    approvedHours: number
+    hourlyRate: number
+    submittedCost: number
+    approvedCost: number
+  }>>([])
+  const [plantEntries, setPlantEntries] = useState<Array<{
+    id: string
+    plant: { type: string; description: string; idRego?: string }
+    hoursOperated: number
+    wetOrDry: string
+    hourlyRate: number
+    submittedCost: number
+    approvedCost: number
+  }>>([])
+
   // Role checks - use roleInCompany which is the field returned from the backend
   const userRole = (user as any)?.roleInCompany || user?.role
   const isSubcontractor = userRole === 'subcontractor' || userRole === 'subcontractor_admin'
@@ -245,8 +268,8 @@ export function DocketApprovalsPage() {
     }
   }
 
-  // Open the approve/reject/view modal
-  const openActionModal = (docket: Docket, type: 'approve' | 'reject' | 'view') => {
+  // Open the approve/reject/view modal and fetch detail entries
+  const openActionModal = async (docket: Docket, type: 'approve' | 'reject' | 'view') => {
     setSelectedDocket(docket)
     setActionType(type)
     setActionNotes('')
@@ -254,7 +277,27 @@ export function DocketApprovalsPage() {
     setAdjustedLabourHours(String(docket.labourHours || 0))
     setAdjustedPlantHours(String(docket.plantHours || 0))
     setAdjustmentReason('')
+    setLabourEntries([])
+    setPlantEntries([])
     setActionModalOpen(true)
+
+    // Fetch full docket detail for labour/plant entries
+    setDetailLoading(true)
+    try {
+      const token = getAuthToken()
+      const res = await fetch(`${API_URL}/api/dockets/${docket.id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setLabourEntries(data.docket?.labourEntries || [])
+        setPlantEntries(data.docket?.plantEntries || [])
+      }
+    } catch (err) {
+      console.error('Error fetching docket detail:', err)
+    } finally {
+      setDetailLoading(false)
+    }
   }
 
   // Handle approve or reject action
@@ -752,7 +795,7 @@ export function DocketApprovalsPage() {
       {/* Approve/Reject/View Modal */}
       {actionModalOpen && selectedDocket && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-xl font-semibold">
                 {actionType === 'approve' ? 'Approve Docket' : actionType === 'reject' ? 'Reject Docket' : 'Docket Details'}
@@ -815,6 +858,100 @@ export function DocketApprovalsPage() {
                   </p>
                 )}
               </div>
+
+              {/* Labour & Plant entry details */}
+              {detailLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-3">Loading entries...</p>
+              ) : (
+                <>
+                  {labourEntries.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">Labour Entries</h3>
+                      <div className="rounded-lg border overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-medium">Name</th>
+                              <th className="text-left px-3 py-2 font-medium">Role</th>
+                              <th className="text-right px-3 py-2 font-medium">Hours</th>
+                              <th className="text-right px-3 py-2 font-medium">Cost</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {labourEntries.map((entry) => (
+                              <tr key={entry.id}>
+                                <td className="px-3 py-2">{entry.employee.name}</td>
+                                <td className="px-3 py-2 text-muted-foreground">{entry.employee.role}</td>
+                                <td className="px-3 py-2 text-right">
+                                  {entry.approvedHours > 0 && entry.approvedHours !== entry.submittedHours ? (
+                                    <span>
+                                      <span className="font-medium">{entry.approvedHours}h</span>
+                                      <span className="text-muted-foreground line-through ml-1 text-xs">{entry.submittedHours}h</span>
+                                    </span>
+                                  ) : (
+                                    <>{entry.submittedHours}h</>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  {entry.approvedCost > 0 && entry.approvedCost !== entry.submittedCost ? (
+                                    <span>
+                                      <span className="font-medium">${entry.approvedCost.toFixed(2)}</span>
+                                      <span className="text-muted-foreground line-through ml-1 text-xs">${entry.submittedCost.toFixed(2)}</span>
+                                    </span>
+                                  ) : (
+                                    <>${entry.submittedCost.toFixed(2)}</>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {plantEntries.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">Plant Entries</h3>
+                      <div className="rounded-lg border overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-medium">Plant</th>
+                              <th className="text-left px-3 py-2 font-medium">Type</th>
+                              <th className="text-right px-3 py-2 font-medium">Hours</th>
+                              <th className="text-right px-3 py-2 font-medium">Cost</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {plantEntries.map((entry) => (
+                              <tr key={entry.id}>
+                                <td className="px-3 py-2">{entry.plant.description}{entry.plant.idRego ? ` (${entry.plant.idRego})` : ''}</td>
+                                <td className="px-3 py-2 text-muted-foreground capitalize">{entry.wetOrDry}</td>
+                                <td className="px-3 py-2 text-right">{entry.hoursOperated}h</td>
+                                <td className="px-3 py-2 text-right">
+                                  {entry.approvedCost > 0 && entry.approvedCost !== entry.submittedCost ? (
+                                    <span>
+                                      <span className="font-medium">${entry.approvedCost.toFixed(2)}</span>
+                                      <span className="text-muted-foreground line-through ml-1 text-xs">${entry.submittedCost.toFixed(2)}</span>
+                                    </span>
+                                  ) : (
+                                    <>${entry.submittedCost.toFixed(2)}</>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {labourEntries.length === 0 && plantEntries.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">No entries found</p>
+                  )}
+                </>
+              )}
 
               {/* View mode: show approve/reject buttons if docket is pending */}
               {actionType === 'view' && selectedDocket.status === 'pending_approval' && canApprove && (
