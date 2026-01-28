@@ -502,15 +502,33 @@ export function DocketApprovalsPage() {
                 </tr>
               ) : (
                 filteredDockets.map((docket) => (
-                  <tr key={docket.id} className="hover:bg-muted/30">
+                  <tr key={docket.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => handleTapDocket(docket)}>
                     <td className="px-4 py-3 text-sm font-medium">{docket.docketNumber}</td>
                     <td className="px-4 py-3 text-sm">{docket.subcontractor}</td>
                     <td className="px-4 py-3 text-sm">{docket.date}</td>
                     <td className="px-4 py-3 text-sm max-w-xs truncate" title={docket.notes || ''}>
                       {docket.notes || '-'}
                     </td>
-                    <td className="px-4 py-3 text-sm">{docket.labourHours}h</td>
-                    <td className="px-4 py-3 text-sm">{docket.plantHours}h</td>
+                    <td className="px-4 py-3 text-sm">
+                      {docket.status === 'approved' && docket.totalLabourApproved !== docket.totalLabourSubmitted ? (
+                        <span>
+                          <span className="font-medium">{docket.totalLabourApproved}h</span>
+                          <span className="text-muted-foreground line-through ml-1 text-xs">{docket.labourHours}h</span>
+                        </span>
+                      ) : (
+                        <>{docket.labourHours}h</>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {docket.status === 'approved' && docket.totalPlantApproved !== docket.totalPlantSubmitted ? (
+                        <span>
+                          <span className="font-medium">{docket.totalPlantApproved}h</span>
+                          <span className="text-muted-foreground line-through ml-1 text-xs">{docket.plantHours}h</span>
+                        </span>
+                      ) : (
+                        <>{docket.plantHours}h</>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm">
                       <span
                         className={`rounded px-2 py-1 text-xs font-medium ${statusColors[docket.status] || 'bg-gray-100'}`}
@@ -518,7 +536,7 @@ export function DocketApprovalsPage() {
                         {statusLabels[docket.status] || docket.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm">
+                    <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-2">
                         {/* Print button - always visible */}
                         <button
