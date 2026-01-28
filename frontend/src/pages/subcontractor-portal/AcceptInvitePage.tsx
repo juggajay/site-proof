@@ -36,12 +36,13 @@ export function AcceptInvitePage() {
   const [tosAccepted, setTosAccepted] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  // Password requirements
+  // Password requirements (must match backend: 12+ chars, uppercase, lowercase, number, special)
   const [passwordChecks, setPasswordChecks] = useState({
     minLength: false,
     hasUppercase: false,
     hasLowercase: false,
     hasNumber: false,
+    hasSpecial: false,
   })
 
   // Fetch invitation details
@@ -89,10 +90,11 @@ export function AcceptInvitePage() {
   // Update password checks
   useEffect(() => {
     setPasswordChecks({
-      minLength: password.length >= 8,
+      minLength: password.length >= 12,
       hasUppercase: /[A-Z]/.test(password),
       hasLowercase: /[a-z]/.test(password),
       hasNumber: /\d/.test(password),
+      hasSpecial: /[^A-Za-z0-9]/.test(password),
     })
   }, [password])
 
@@ -434,7 +436,7 @@ export function AcceptInvitePage() {
                   {password && (
                     <div className="text-xs space-y-1 mt-2">
                       <p className={passwordChecks.minLength ? 'text-green-600' : 'text-gray-500'}>
-                        {passwordChecks.minLength ? '✓' : '○'} At least 8 characters
+                        {passwordChecks.minLength ? '✓' : '○'} At least 12 characters
                       </p>
                       <p className={passwordChecks.hasUppercase ? 'text-green-600' : 'text-gray-500'}>
                         {passwordChecks.hasUppercase ? '✓' : '○'} One uppercase letter
@@ -444,6 +446,9 @@ export function AcceptInvitePage() {
                       </p>
                       <p className={passwordChecks.hasNumber ? 'text-green-600' : 'text-gray-500'}>
                         {passwordChecks.hasNumber ? '✓' : '○'} One number
+                      </p>
+                      <p className={passwordChecks.hasSpecial ? 'text-green-600' : 'text-gray-500'}>
+                        {passwordChecks.hasSpecial ? '✓' : '○'} One special character
                       </p>
                     </div>
                   )}

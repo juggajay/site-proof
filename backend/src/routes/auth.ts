@@ -1331,6 +1331,134 @@ authRouter.get('/export-data', async (req, res) => {
   }
 })
 
+// POST /api/auth/register-and-accept-invitation - Register new user and accept subcontractor invitation
+// This is a public endpoint (no auth required) for onboarding new subcontractor users
+authRouter.post('/register-and-accept-invitation', async (req, res) => {
+  try {
+    const { email, password, fullName, invitationId, tosAccepted } = req.body
+
+    if (!email || !password || !invitationId) {
+      return res.status(400).json({ message: 'Email, password, and invitationId are required' })
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password)
+    if (!passwordValidation.valid) {
+      return res.status(400).json({
+        message: 'Password does not meet security requirements',
+        errors: passwordValidation.errors
+      })
+    }
+
+    // Require ToS acceptance
+    if (!tosAccepted) {
+      return res.status(400).json({ message: 'You must accept the Terms of Service to create an account' })
+    }
+
+    // Find the subcontractor company invitation
+    const subcontractor = await prisma.subcontractorCompany.findUnique({
+      where: { id: invitationId },
+      include: {
+        project: { select: { id: true, name: true } }
+      }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ message: 'Invitation not found or expired' })
+    }
+
+    // Verify email matches the invitation (case-insensitive)
+    if (subcontractor.primaryContactEmail?.toLowerCase() !== email.toLowerCase()) {
+      return res.status(400).json({ message: 'Email does not match the invitation' })
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    })
+
+    if (existingUser) {
+      return res.status(400).json({ message: 'An account with this email already exists. Please log in and accept the invitation.' })
+    }
+
+    // Check if another user is already linked to this subcontractor company
+    const existingLink = await prisma.subcontractorUser.findFirst({
+      where: { subcontractorCompanyId: subcontractor.id }
+    })
+
+    if (existingLink) {
+      return res.status(400).json({ message: 'This invitation has already been accepted by another user' })
+    }
+
+    // Create the user account
+    const passwordHash = hashPassword(password)
+    const user = await prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        passwordHash,
+        fullName: fullName || subcontractor.primaryContactName || null,
+        emailVerified: true, // Auto-verify since they're accepting an invitation
+        roleInCompany: 'subcontractor_admin',
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        roleInCompany: true,
+      },
+    })
+
+    // Record ToS acceptance
+    await prisma.$executeRaw`UPDATE users SET tos_accepted_at = NOW(), tos_version = ${CURRENT_TOS_VERSION} WHERE id = ${user.id}`
+
+    // Link user to subcontractor company
+    await prisma.subcontractorUser.create({
+      data: {
+        userId: user.id,
+        subcontractorCompanyId: subcontractor.id,
+        role: 'admin' // First user is admin
+      }
+    })
+
+    // Update subcontractor status to approved if pending
+    if (subcontractor.status === 'pending_approval') {
+      await prisma.subcontractorCompany.update({
+        where: { id: subcontractor.id },
+        data: { status: 'approved' }
+      })
+    }
+
+    // Generate auth token
+    const token = generateToken({
+      userId: user.id,
+      email: user.email,
+      role: user.roleInCompany,
+    })
+
+    console.log(`[Register & Accept] User ${user.email} created and linked to ${subcontractor.companyName}`)
+
+    res.status(201).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.roleInCompany,
+      },
+      company: {
+        id: subcontractor.id,
+        companyName: subcontractor.companyName,
+        projectId: subcontractor.projectId,
+        projectName: subcontractor.project.name,
+      },
+      token,
+      message: 'Account created and invitation accepted successfully',
+    })
+  } catch (error) {
+    console.error('Register and accept invitation error:', error)
+    res.status(500).json({ message: 'Internal server error' })
+  }
+})
+
 // GDPR Data Deletion endpoint
 authRouter.delete('/delete-account', async (req, res) => {
   try {
