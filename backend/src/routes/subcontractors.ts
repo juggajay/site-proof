@@ -409,11 +409,15 @@ subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
       }
     })
 
-    // Update user's role to subcontractor_admin
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { roleInCompany: 'subcontractor_admin' }
-    })
+    // Only set role to subcontractor_admin if the user doesn't already have a role
+    // (don't downgrade owners, admins, project managers, etc.)
+    const currentUser = await prisma.user.findUnique({ where: { id: user.id }, select: { roleInCompany: true } })
+    if (!currentUser?.roleInCompany) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { roleInCompany: 'subcontractor_admin' }
+      })
+    }
 
     // Update subcontractor status to approved if pending
     if (subcontractor.status === 'pending_approval') {

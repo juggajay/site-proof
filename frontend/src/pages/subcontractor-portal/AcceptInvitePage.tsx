@@ -281,7 +281,7 @@ export function AcceptInvitePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-6">
         {/* Logo */}
         <div className="text-center">
@@ -289,46 +289,46 @@ export function AcceptInvitePage() {
         </div>
 
         {/* Invitation Card */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <div className="text-center mb-4">
-            <h2 className="text-xl font-semibold">You've been invited!</h2>
-            <p className="text-gray-600 text-sm">
+            <h2 className="text-xl font-semibold dark:text-white">You've been invited!</h2>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
               Join as a subcontractor on the following project
             </p>
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-3">
               <Building2 className="h-5 w-5 text-gray-400 shrink-0" />
               <div>
                 <p className="text-xs text-gray-500">Your Company</p>
-                <p className="font-medium">{invitation.companyName}</p>
+                <p className="font-medium dark:text-white">{invitation.companyName}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <ClipboardCheck className="h-5 w-5 text-gray-400 shrink-0" />
               <div>
                 <p className="text-xs text-gray-500">Project</p>
-                <p className="font-medium">{invitation.projectName}</p>
+                <p className="font-medium dark:text-white">{invitation.projectName}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <User className="h-5 w-5 text-gray-400 shrink-0" />
               <div>
                 <p className="text-xs text-gray-500">Invited by</p>
-                <p className="font-medium">{invitation.headContractorName}</p>
+                <p className="font-medium dark:text-white">{invitation.headContractorName}</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Action Card */}
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           {user ? (
             // Logged in - just accept
             <div>
-              <p className="text-center text-sm text-gray-600 mb-4">
-                Logged in as <strong>{user.email}</strong>
+              <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Logged in as <strong className="dark:text-white">{user.email}</strong>
               </p>
               {formError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
@@ -360,8 +360,8 @@ export function AcceptInvitePage() {
           ) : (
             // Not logged in - show registration form
             <form onSubmit={handleRegisterAndAccept}>
-              <h3 className="text-lg font-semibold mb-1">Create Account</h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <h3 className="text-lg font-semibold dark:text-white mb-1">Create Account</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Create your account to accept this invitation
               </p>
 
@@ -374,7 +374,7 @@ export function AcceptInvitePage() {
 
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Full Name
                   </label>
                   <input
@@ -384,12 +384,12 @@ export function AcceptInvitePage() {
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="John Smith"
                     autoComplete="name"
-                    className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Email
                   </label>
                   <input
@@ -400,7 +400,7 @@ export function AcceptInvitePage() {
                     placeholder="john@company.com"
                     autoComplete="email"
                     disabled={!!invitation.primaryContactEmail}
-                    className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-600"
                   />
                   {invitation.primaryContactEmail && (
                     <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
@@ -411,7 +411,7 @@ export function AcceptInvitePage() {
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Password
                   </label>
                   <div className="relative">
@@ -422,7 +422,7 @@ export function AcceptInvitePage() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Create a secure password"
                       autoComplete="new-password"
-                      className="w-full px-3 py-3 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-3 pr-10 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                       type="button"
@@ -455,7 +455,7 @@ export function AcceptInvitePage() {
                 </div>
 
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Confirm Password
                   </label>
                   <input
@@ -465,7 +465,7 @@ export function AcceptInvitePage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm your password"
                     autoComplete="new-password"
-                    className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   {confirmPassword && password !== confirmPassword && (
                     <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
@@ -480,7 +480,7 @@ export function AcceptInvitePage() {
                     onChange={(e) => setTosAccepted(e.target.checked)}
                     className="mt-1"
                   />
-                  <label htmlFor="tos" className="text-sm text-gray-600">
+                  <label htmlFor="tos" className="text-sm text-gray-600 dark:text-gray-400">
                     I agree to the{' '}
                     <Link to="/terms-of-service" target="_blank" className="text-blue-600 hover:underline">
                       Terms of Service
