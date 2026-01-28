@@ -995,8 +995,8 @@ export function DocketEditPage() {
         )}
       </div>
 
-      {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 md:relative md:border-0 md:bg-transparent md:p-0 md:mt-6">
+      {/* Bottom Action Bar - bottom-16 on mobile to sit above MobileNav (h-16, z-30) */}
+      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 md:relative md:border-0 md:bg-transparent md:p-0 md:mt-6 md:z-auto">
         <div className="container max-w-2xl mx-auto flex items-center justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
