@@ -10,6 +10,8 @@ import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, Zo
 import { generateConformanceReportPDF, ConformanceReportData, ConformanceFormat, ConformanceFormatOptions, defaultConformanceOptions } from '@/lib/pdfGenerator'
 import { useOfflineStatus } from '@/lib/useOfflineStatus'
 import { cacheITPChecklist, getCachedITPChecklist, updateChecklistItemOffline, getPendingSyncCount, OfflineChecklistItem } from '@/lib/offlineDb'
+import { useIsMobile } from '@/hooks/useMediaQuery'
+import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist'
 
 // Tab types for lot detail page
 type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'comments' | 'history'
@@ -241,6 +243,7 @@ export function LotDetailPage() {
   }
   const { canViewBudgets: _canViewBudgets } = useCommercialAccess()
   const { canCreate: canEdit } = useViewerAccess()
+  const isMobile = useIsMobile()
   const [lot, setLot] = useState<Lot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<{ type: 'not_found' | 'forbidden' | 'error'; message: string } | null>(null)
@@ -1267,6 +1270,233 @@ export function LotDetailPage() {
     }
   }
 
+  // Mobile-specific handlers for MobileITPChecklist
+  const handleMobileMarkNA = async (checklistItemId: string, reason: string) => {
+    if (!itpInstance) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      setUpdatingCompletion(checklistItemId)
+      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          status: 'not_applicable',
+          notes: reason.trim() || 'Marked as N/A',
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setItpInstance(prev => {
+          if (!prev) return prev
+          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+          const newCompletions = [...prev.completions]
+          if (existingIndex >= 0) {
+            newCompletions[existingIndex] = data.completion
+          } else {
+            newCompletions.push(data.completion)
+          }
+          return { ...prev, completions: newCompletions }
+        })
+        toast({
+          title: 'Item marked as N/A',
+          description: 'The checklist item has been marked as not applicable.',
+        })
+      }
+    } catch (err) {
+      console.error('Failed to mark as N/A:', err)
+      toast({
+        title: 'Failed to mark as N/A',
+        description: 'An error occurred. Please try again.',
+        variant: 'error'
+      })
+    } finally {
+      setUpdatingCompletion(null)
+    }
+  }
+
+  const handleMobileMarkFailed = async (checklistItemId: string, reason: string) => {
+    if (!itpInstance) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      setUpdatingCompletion(checklistItemId)
+      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          status: 'failed',
+          notes: `Failed: ${reason.trim() || 'Item failed inspection'}`,
+          ncrDescription: reason.trim() || 'Item failed ITP inspection',
+          ncrCategory: 'workmanship',
+          ncrSeverity: 'minor',
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setItpInstance(prev => {
+          if (!prev) return prev
+          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+          const newCompletions = [...prev.completions]
+          if (existingIndex >= 0) {
+            newCompletions[existingIndex] = data.completion
+          } else {
+            newCompletions.push(data.completion)
+          }
+          return { ...prev, completions: newCompletions }
+        })
+
+        // Refresh NCRs list
+        const ncrsResponse = await fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (ncrsResponse.ok) {
+          const ncrsData = await ncrsResponse.json()
+          setNcrs(ncrsData.ncrs || [])
+          setNcrsCount(ncrsData.ncrs?.length || 0)
+        }
+
+        toast({
+          title: 'Item marked as Failed',
+          description: data.ncr
+            ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
+            : 'The item has been marked as failed.',
+        })
+      }
+    } catch (err) {
+      console.error('Failed to mark as Failed:', err)
+      toast({
+        title: 'Failed to mark item',
+        description: 'An error occurred. Please try again.',
+        variant: 'error'
+      })
+    } finally {
+      setUpdatingCompletion(null)
+    }
+  }
+
+  const handleMobileAddPhoto = async (checklistItemId: string, file: File) => {
+    if (!itpInstance) return
+
+    const token = getAuthToken()
+    if (!token) return
+
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+    try {
+      setUpdatingCompletion(checklistItemId)
+
+      // First ensure there's a completion for this item
+      let completion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
+
+      if (!completion?.id) {
+        // Create completion first
+        const createResponse = await fetch(`${apiUrl}/api/itp/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            itpInstanceId: itpInstance.id,
+            checklistItemId,
+            status: 'pending',
+            notes: '',
+          }),
+        })
+        if (createResponse.ok) {
+          const data = await createResponse.json()
+          completion = data.completion
+          // Update local state
+          setItpInstance(prev => {
+            if (!prev) return prev
+            return { ...prev, completions: [...prev.completions, data.completion] }
+          })
+        }
+      }
+
+      if (!completion?.id) {
+        toast({
+          title: 'Cannot add photo',
+          description: 'Unable to create completion record.',
+          variant: 'error'
+        })
+        return
+      }
+
+      // Upload photo
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('projectId', projectId!)
+      formData.append('lotId', lotId!)
+
+      const uploadResponse = await fetch(`${apiUrl}/api/itp/completions/${completion.id}/attachments`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+
+      if (uploadResponse.ok) {
+        const data = await uploadResponse.json()
+        // Update local state with new attachment
+        setItpInstance(prev => {
+          if (!prev) return prev
+          const newCompletions = prev.completions.map(c => {
+            if (c.checklistItemId === checklistItemId) {
+              return {
+                ...c,
+                attachments: [...(c.attachments || []), data.attachment]
+              }
+            }
+            return c
+          })
+          return { ...prev, completions: newCompletions }
+        })
+        toast({
+          title: 'Photo uploaded',
+          description: 'Photo has been attached to the checklist item.',
+        })
+      } else {
+        toast({
+          title: 'Upload failed',
+          description: 'Failed to upload photo. Please try again.',
+          variant: 'error'
+        })
+      }
+    } catch (err) {
+      console.error('Failed to add photo:', err)
+      toast({
+        title: 'Upload failed',
+        description: 'An error occurred. Please try again.',
+        variant: 'error'
+      })
+    } finally {
+      setUpdatingCompletion(null)
+    }
+  }
+
   // Handle completing a witness point with witness details
   const handleCompleteWitnessPoint = async () => {
     if (!witnessModal || !itpInstance || witnessPresent === null) {
@@ -2026,7 +2256,24 @@ export function LotDetailPage() {
               <div className="flex justify-center p-8">
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
               </div>
+            ) : itpInstance && isMobile ? (
+              /* Mobile ITP Checklist */
+              <MobileITPChecklist
+                lotNumber={lot?.lotNumber || ''}
+                templateName={itpInstance.template.name}
+                checklistItems={itpInstance.template.checklistItems}
+                completions={itpInstance.completions}
+                onToggleCompletion={async (checklistItemId, isCompleted, notes) => {
+                  await handleToggleCompletion(checklistItemId, !isCompleted, notes)
+                }}
+                onMarkNotApplicable={handleMobileMarkNA}
+                onMarkFailed={handleMobileMarkFailed}
+                onUpdateNotes={handleUpdateNotes}
+                onAddPhoto={handleMobileAddPhoto}
+                updatingItem={updatingCompletion}
+              />
             ) : itpInstance ? (
+              /* Desktop ITP Checklist */
               <>
                 <div className="rounded-lg border p-4">
                   {/* Offline indicator */}
