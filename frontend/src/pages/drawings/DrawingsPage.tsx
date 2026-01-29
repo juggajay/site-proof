@@ -34,7 +34,8 @@ interface Stats {
 const API_URL = import.meta.env.VITE_API_URL || ''
 
 // Helper to construct document URLs - handles both relative paths and full Supabase URLs
-const getDocumentUrl = (fileUrl: string): string => {
+const getDocumentUrl = (fileUrl: string | null | undefined): string => {
+  if (!fileUrl) return ''
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
     return fileUrl
   }

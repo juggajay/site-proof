@@ -7,7 +7,8 @@ import { PDFViewer } from '../../components/ui/PDFViewer'  // Feature #446: Reac
 import { API_URL } from '../../lib/api'
 
 // Helper to construct document URLs - handles both relative paths and full Supabase URLs
-const getDocumentUrl = (fileUrl: string): string => {
+const getDocumentUrl = (fileUrl: string | null | undefined): string => {
+  if (!fileUrl) return ''
   // If it's already a full URL (Supabase storage), use it directly
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
     return fileUrl
@@ -321,14 +322,21 @@ export function DocumentsPage() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-AU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return 'Unknown date'
+    try {
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return 'Invalid date'
+      return date.toLocaleDateString('en-AU', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    } catch {
+      return 'Invalid date'
+    }
   }
 
   const getTypeLabel = (type: string) => {

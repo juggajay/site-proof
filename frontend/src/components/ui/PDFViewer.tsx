@@ -329,7 +329,12 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
                     : 'border-transparent hover:border-gray-500'
                 }`}
               >
-                <Document file={url} loading="">
+                <Document
+                  file={url}
+                  loading=""
+                  error=""
+                  onLoadError={() => {/* Silently ignore thumbnail errors */}}
+                >
                   <Page
                     pageNumber={page}
                     scale={0.1}
