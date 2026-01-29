@@ -5,8 +5,8 @@ import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Maximiz
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 
-// Set up the worker - use cdnjs which is more reliable than unpkg
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`
+// Set up the worker - use unpkg with legacy build for better compatibility
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.min.js`
 
 interface PDFViewerProps {
   url: string
