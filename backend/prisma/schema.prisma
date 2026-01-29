@@ -84,6 +84,7 @@ model User {
   comments             Comment[]
   apiKeys              ApiKey[]   // Feature #747: External API access
   consentRecords       ConsentRecord[]  // Feature #776: Privacy consent tracking
+  assignedLotSubcontractors LotSubcontractorAssignment[] @relation("AssignedByUser")
 
   @@map("users")
 }
@@ -152,21 +153,22 @@ model Project {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  company              Company               @relation(fields: [companyId], references: [id])
-  projectUsers         ProjectUser[]
-  projectAreas         ProjectArea[]
-  lots                 Lot[]
-  itpTemplates         ITPTemplate[]
-  ncrs                 NCR[]
-  dailyDiaries         DailyDiary[]
-  subcontractorCompanies SubcontractorCompany[]
-  dailyDockets         DailyDocket[]
-  progressClaims       ProgressClaim[]
-  documents            Document[]
-  drawings             Drawing[]
-  notifications        Notification[]
-  auditLogs            AuditLog[]
-  testResults          TestResult[]
+  company                    Company               @relation(fields: [companyId], references: [id])
+  projectUsers               ProjectUser[]
+  projectAreas               ProjectArea[]
+  lots                       Lot[]
+  itpTemplates               ITPTemplate[]
+  ncrs                       NCR[]
+  dailyDiaries               DailyDiary[]
+  subcontractorCompanies     SubcontractorCompany[]
+  dailyDockets               DailyDocket[]
+  progressClaims             ProgressClaim[]
+  documents                  Document[]
+  drawings                   Drawing[]
+  notifications              Notification[]
+  auditLogs                  AuditLog[]
+  testResults                TestResult[]
+  lotSubcontractorAssignments LotSubcontractorAssignment[]
 
   @@unique([companyId, projectNumber])
   @@map("projects")
@@ -240,20 +242,21 @@ model Lot {
   conformedBy           User?                 @relation("ConformedByUser", fields: [conformedById], references: [id])
   claimedIn             ProgressClaim?        @relation(fields: [claimedInId], references: [id])
 
-  itpInstance      ITPInstance?
-  holdPoints       HoldPoint[]
-  testResults      TestResult[]
-  ncrLots          NCRLot[]
-  documents        Document[]
-  diaryActivities  DiaryActivity[]
-  diaryDeliveries  DiaryDelivery[]
-  diaryEvents      DiaryEvent[]
-  diaryDelays      DiaryDelay[]
-  diaryPlant       DiaryPlant[]
-  diaryPersonnel   DiaryPersonnel[]
-  docketLabourLots DocketLabourLot[]
-  docketPlantLots  DocketPlantLot[]
-  claimedLots      ClaimedLot[]
+  itpInstance              ITPInstance?
+  holdPoints               HoldPoint[]
+  testResults              TestResult[]
+  ncrLots                  NCRLot[]
+  documents                Document[]
+  diaryActivities          DiaryActivity[]
+  diaryDeliveries          DiaryDelivery[]
+  diaryEvents              DiaryEvent[]
+  diaryDelays              DiaryDelay[]
+  diaryPlant               DiaryPlant[]
+  diaryPersonnel           DiaryPersonnel[]
+  docketLabourLots         DocketLabourLot[]
+  docketPlantLots          DocketPlantLot[]
+  claimedLots              ClaimedLot[]
+  subcontractorAssignments LotSubcontractorAssignment[]
 
   @@unique([projectId, lotNumber])
   @@map("lots")
@@ -796,6 +799,7 @@ model SubcontractorCompany {
   dailyDockets         DailyDocket[]
   assignedLots         Lot[]
   responsibleNCRs      NCR[]
+  lotAssignments       LotSubcontractorAssignment[]
 
   @@map("subcontractor_companies")
 }
@@ -810,6 +814,34 @@ model SubcontractorUser {
   subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
 
   @@map("subcontractor_users")
+}
+
+// Lot-level subcontractor assignment with ITP permissions
+model LotSubcontractorAssignment {
+  id                      String    @id @default(uuid())
+  lotId                   String    @map("lot_id")
+  subcontractorCompanyId  String    @map("subcontractor_company_id")
+  projectId               String    @map("project_id")
+
+  // ITP Permissions
+  canCompleteITP          Boolean   @default(false) @map("can_complete_itp")
+  itpRequiresVerification Boolean   @default(true) @map("itp_requires_verification")
+
+  // Metadata
+  status                  String    @default("active")
+  assignedAt              DateTime  @default(now()) @map("assigned_at")
+  assignedById            String?   @map("assigned_by_id")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  lot                     Lot       @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  subcontractorCompany    SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id])
+  project                 Project   @relation(fields: [projectId], references: [id])
+  assignedBy              User?     @relation("AssignedByUser", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([lotId, subcontractorCompanyId])
+  @@index([projectId])
+  @@index([subcontractorCompanyId])
+  @@map("lot_subcontractor_assignments")
 }
 
 model EmployeeRoster {
