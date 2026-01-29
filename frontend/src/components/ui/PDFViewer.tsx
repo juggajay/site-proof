@@ -5,8 +5,12 @@ import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Maximiz
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 
-// Set up the worker - use unpkg with legacy build for better compatibility
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.min.js`
+// Set up the worker - use Vite URL import to bundle the worker with the app
+// This avoids CDN issues and ensures the worker is always available
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString()
 
 interface PDFViewerProps {
   url: string

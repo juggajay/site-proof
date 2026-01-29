@@ -1,0 +1,3644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SiteProof — Civil Execution &amp; Conformance Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ========================================
+       CSS Custom Properties & Design System
+       ======================================== */
+    :root {
+      --navy: #0f172a;
+      --navy-light: #1e293b;
+      --navy-mid: #334155;
+      --orange: #f97316;
+      --orange-light: #fb923c;
+      --orange-dark: #ea580c;
+      --white: #ffffff;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-300: #cbd5e1;
+      --gray-400: #94a3b8;
+      --gray-500: #64748b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --max-width: 1200px;
+    }
+
+    /* ========================================
+       Reset
+       ======================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--navy);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    img, svg {
+      display: block;
+      max-width: 100%;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    ul, ol {
+      list-style: none;
+    }
+
+    button {
+      font-family: inherit;
+      border: none;
+      cursor: pointer;
+    }
+
+    /* ========================================
+       Layout
+       ======================================== */
+    .container {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    section {
+      padding: 100px 0;
+      min-height: auto;
+      position: relative;
+    }
+
+    .section-title {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .section-subtitle {
+      font-size: clamp(1rem, 2vw, 1.15rem);
+      color: var(--gray-300);
+      text-align: center;
+      max-width: 640px;
+      margin: 0 auto 48px;
+    }
+
+    /* ========================================
+       Fade-in Animation
+       ======================================== */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ========================================
+       Navigation
+       ======================================== */
+    .navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.9);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      height: 64px;
+    }
+
+    .nav-container {
+      max-width: var(--max-width);
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+    }
+
+    .nav-logo {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--orange);
+      letter-spacing: -0.5px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    .nav-links a {
+      color: var(--gray-400);
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.3s ease;
+    }
+
+    .nav-links a:hover,
+    .nav-links a.nav-active {
+      color: var(--orange);
+    }
+
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 5px;
+      width: 40px;
+      height: 40px;
+      background: transparent;
+      cursor: pointer;
+      position: relative;
+      z-index: 1001;
+    }
+
+    .hamburger span {
+      display: block;
+      width: 24px;
+      height: 2px;
+      background: var(--gray-300);
+      border-radius: 2px;
+      transition: all 0.3s ease;
+    }
+
+    .hamburger.active span:nth-child(1) {
+      transform: rotate(45deg) translate(5px, 5px);
+    }
+
+    .hamburger.active span:nth-child(2) {
+      opacity: 0;
+    }
+
+    .hamburger.active span:nth-child(3) {
+      transform: rotate(-45deg) translate(5px, -5px);
+    }
+
+    .mobile-nav-open .nav-links {
+      display: flex;
+    }
+
+    /* ========================================
+       Hero
+       ======================================== */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      padding-top: 64px;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      opacity: 0.07;
+      background:
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 50px,
+          rgba(249, 115, 22, 0.3) 50px,
+          rgba(249, 115, 22, 0.3) 51px
+        ),
+        repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent 50px,
+          rgba(249, 115, 22, 0.3) 50px,
+          rgba(249, 115, 22, 0.3) 51px
+        );
+      z-index: 0;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 800px;
+      padding: 0 24px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1.15;
+      margin-bottom: 24px;
+      letter-spacing: -1px;
+    }
+
+    .hero h1 .highlight {
+      color: var(--orange);
+    }
+
+    .hero .hero-subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      color: var(--gray-300);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    .hero-cta-group {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .scroll-indicator {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: bounce 2s ease infinite;
+      z-index: 1;
+      opacity: 0.6;
+    }
+
+    .scroll-indicator svg {
+      width: 32px;
+      height: 32px;
+      stroke: var(--gray-400);
+    }
+
+    /* ========================================
+       Pain Point Cards (Section 2)
+       ======================================== */
+    .pain-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .pain-card {
+      background: var(--navy-light);
+      border-radius: var(--radius);
+      padding: 32px;
+      border-left: 4px solid var(--orange);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .pain-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .pain-icon {
+      width: 48px;
+      height: 48px;
+      color: var(--orange);
+      margin-bottom: 16px;
+    }
+
+    .pain-card h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .pain-card p {
+      color: var(--gray-400);
+      font-size: 0.95rem;
+    }
+
+    /* ========================================
+       Flow Section (Section 3)
+       ======================================== */
+    .flow-grid {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 0;
+      align-items: stretch;
+      margin-top: 48px;
+    }
+
+    .flow-col {
+      background: var(--navy-light);
+      border-radius: var(--radius);
+      padding: 32px;
+      text-align: center;
+      position: relative;
+    }
+
+    .flow-col .flow-icon {
+      width: 56px;
+      height: 56px;
+      color: var(--orange);
+      margin: 0 auto 16px;
+    }
+
+    .flow-col h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .flow-col ul {
+      text-align: left;
+      padding-left: 0;
+    }
+
+    .flow-col ul li {
+      color: var(--gray-300);
+      font-size: 0.9rem;
+      padding: 6px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .flow-col ul li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--orange);
+    }
+
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8px;
+      position: relative;
+    }
+
+    .flow-arrow svg {
+      width: 40px;
+      height: 40px;
+      color: var(--orange);
+      animation: flowPulse 2s ease-in-out infinite;
+    }
+
+    .flow-tagline {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--gray-300);
+    }
+
+    /* ========================================
+       Subbie Portal Split (Section 4)
+       ======================================== */
+    .portal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      margin-top: 48px;
+    }
+
+    .subbie-side {
+      border-left: 4px solid var(--orange);
+      background: var(--navy-light);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+
+    .contractor-side {
+      border-left: 4px solid #22c55e;
+      background: var(--navy-light);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+
+    .portal-grid h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .mock-panel {
+      background: var(--navy-mid);
+      border-radius: var(--radius-sm);
+      padding: 20px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+    }
+
+    .mock-panel-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--gray-400);
+      margin-bottom: 12px;
+    }
+
+    .mock-panel-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .mock-form-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .mock-input {
+      flex: 1;
+      background: var(--navy);
+      border: 1px solid var(--navy-mid);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.85rem;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .mock-select {
+      background: var(--navy);
+      border: 1px solid var(--navy-mid);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.85rem;
+      min-width: 140px;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .mock-submit-btn {
+      background: var(--orange);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 24px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: default;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .mock-approve-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .mock-btn-approve {
+      flex: 1;
+      background: #22c55e;
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 0;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: default;
+    }
+
+    .mock-btn-query {
+      flex: 1;
+      background: var(--orange);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 0;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: default;
+    }
+
+    .mock-btn-reject {
+      flex: 1;
+      background: #ef4444;
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 0;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: default;
+    }
+
+    .mock-docket-card {
+      background: var(--navy);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--navy-mid);
+    }
+
+    .mock-docket-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .mock-docket-company {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .mock-docket-status {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+
+    .status-pending {
+      background: rgba(249, 115, 22, 0.15);
+      color: var(--orange);
+    }
+
+    .mock-docket-detail {
+      color: var(--gray-400);
+      font-size: 0.8rem;
+    }
+
+    .portal-bottom-msg {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--orange);
+    }
+
+    .mock-cost-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+      font-size: 0.9rem;
+    }
+
+    .mock-cost-row:last-child {
+      border-bottom: none;
+    }
+
+    .mock-cost-label {
+      color: var(--gray-400);
+    }
+
+    .mock-cost-value {
+      font-weight: 600;
+    }
+
+    /* ========================================
+       Lot Model Flow (Section 5)
+       ======================================== */
+    .lot-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-top: 48px;
+      flex-wrap: nowrap;
+    }
+
+    .lot-node {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 3px solid var(--orange);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: var(--navy-light);
+      flex-shrink: 0;
+    }
+
+    .lot-node svg {
+      width: 28px;
+      height: 28px;
+      color: var(--orange);
+      margin-bottom: 2px;
+    }
+
+    .lot-node-label {
+      font-size: 0.6rem;
+      font-weight: 600;
+      text-align: center;
+      color: var(--gray-300);
+      line-height: 1.2;
+      padding: 0 4px;
+    }
+
+    .lot-connector {
+      height: 3px;
+      flex-grow: 1;
+      min-width: 24px;
+      max-width: 80px;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--orange) 0,
+        var(--orange) 8px,
+        transparent 8px,
+        transparent 14px
+      );
+      animation: dash 1.5s linear infinite;
+      background-size: 14px 3px;
+    }
+
+    /* ========================================
+       Role Cards (Section 6)
+       ======================================== */
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .role-grid-bottom {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      margin-top: 24px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .role-card {
+      background: var(--navy-light);
+      border-radius: var(--radius);
+      padding: 28px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .role-card:hover {
+      border-color: var(--orange);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .role-card .role-icon {
+      width: 48px;
+      height: 48px;
+      color: var(--orange);
+      margin-bottom: 16px;
+    }
+
+    .role-card h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .role-card .role-tagline {
+      color: var(--gray-400);
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+    }
+
+    .role-card .role-tap-hint {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      font-style: italic;
+    }
+
+    .role-expanded {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, padding 0.4s ease;
+    }
+
+    .role-card.active .role-expanded {
+      max-height: 300px;
+      padding-top: 12px;
+    }
+
+    .role-expanded ul {
+      padding: 0;
+    }
+
+    .role-expanded ul li {
+      color: var(--gray-300);
+      font-size: 0.85rem;
+      padding: 6px 0 6px 20px;
+      position: relative;
+    }
+
+    .role-expanded ul li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--orange);
+    }
+
+    /* ========================================
+       Interactive Demo (Section 7)
+       ======================================== */
+    .demo-progress {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 40px;
+    }
+
+    .demo-progress-step {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--navy-light);
+      color: var(--gray-400);
+      border: 2px solid var(--navy-mid);
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .demo-progress-step.active {
+      background: var(--orange);
+      color: var(--white);
+      border-color: var(--orange);
+    }
+
+    .demo-progress-step.completed {
+      background: var(--orange-dark);
+      color: var(--white);
+      border-color: var(--orange-dark);
+    }
+
+    .demo-progress-line {
+      height: 2px;
+      width: 32px;
+      background: var(--navy-mid);
+      flex-shrink: 0;
+    }
+
+    .demo-progress-line.completed {
+      background: var(--orange);
+    }
+
+    .demo-step {
+      display: none;
+      padding: 40px;
+      background: var(--navy-light);
+      border-radius: var(--radius);
+      min-height: 300px;
+      position: relative;
+      animation: fadeInUp 0.5s ease;
+    }
+
+    .demo-step.active {
+      display: block;
+    }
+
+    .demo-step-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--orange);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .demo-step h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .demo-step .demo-desc {
+      color: var(--gray-400);
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+    }
+
+    .demo-mock {
+      background: var(--navy-mid);
+      border-radius: var(--radius-sm);
+      padding: 24px;
+      border: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .demo-mock-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .demo-mock-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .demo-mock-badge {
+      font-size: 0.7rem;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    .badge-live {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+    }
+
+    .badge-alert {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+    }
+
+    .badge-success {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+    }
+
+    .badge-pending {
+      background: rgba(249, 115, 22, 0.15);
+      color: var(--orange);
+    }
+
+    .demo-form-group {
+      margin-bottom: 14px;
+    }
+
+    .demo-form-label {
+      font-size: 0.75rem;
+      color: var(--gray-400);
+      margin-bottom: 6px;
+      display: block;
+      font-weight: 500;
+    }
+
+    .demo-form-input {
+      width: 100%;
+      background: var(--navy);
+      border: 1px solid var(--navy-mid);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.85rem;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .demo-form-select {
+      width: 100%;
+      background: var(--navy);
+      border: 1px solid var(--navy-mid);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.85rem;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .demo-form-submit {
+      width: 100%;
+      background: var(--orange);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-top: 8px;
+      cursor: default;
+    }
+
+    .demo-notif {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      padding: 20px;
+      background: var(--navy);
+      border-radius: var(--radius-sm);
+      border-left: 4px solid var(--orange);
+    }
+
+    .demo-notif-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(249, 115, 22, 0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .demo-notif-icon svg {
+      width: 20px;
+      height: 20px;
+      color: var(--orange);
+    }
+
+    .demo-notif-body h4 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .demo-notif-body p {
+      font-size: 0.8rem;
+      color: var(--gray-400);
+    }
+
+    .demo-notif-time {
+      font-size: 0.7rem;
+      color: var(--gray-500);
+      margin-top: 6px;
+    }
+
+    .demo-employee-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+      font-size: 0.85rem;
+    }
+
+    .demo-employee-row:last-child {
+      border-bottom: none;
+    }
+
+    .demo-employee-name {
+      font-weight: 500;
+    }
+
+    .demo-employee-hours {
+      color: var(--gray-400);
+    }
+
+    .demo-camera {
+      background: var(--navy);
+      border-radius: var(--radius-sm);
+      padding: 0;
+      position: relative;
+      overflow: hidden;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--navy-mid);
+    }
+
+    .demo-camera-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px;
+    }
+
+    .demo-camera-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .demo-camera-label {
+      background: rgba(249, 115, 22, 0.9);
+      color: var(--white);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .demo-camera-rec {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .demo-camera-rec-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: blink 1.5s ease infinite;
+    }
+
+    .demo-camera-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .demo-camera-gps {
+      font-size: 0.7rem;
+      color: var(--gray-300);
+      font-family: 'Courier New', monospace;
+    }
+
+    .demo-camera-crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60px;
+      height: 60px;
+    }
+
+    .demo-camera-crosshair::before,
+    .demo-camera-crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(249, 115, 22, 0.4);
+    }
+
+    .demo-camera-crosshair::before {
+      width: 1px;
+      height: 100%;
+      left: 50%;
+    }
+
+    .demo-camera-crosshair::after {
+      height: 1px;
+      width: 100%;
+      top: 50%;
+    }
+
+    .demo-checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    }
+
+    .demo-checklist-item:last-child {
+      border-bottom: none;
+    }
+
+    .demo-check {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .demo-check.checked {
+      background: #22c55e;
+    }
+
+    .demo-check.checking {
+      background: var(--orange);
+      animation: blink 1s ease infinite;
+    }
+
+    .demo-check.unchecked {
+      background: transparent;
+      border: 2px solid var(--gray-500);
+    }
+
+    .demo-check svg {
+      width: 14px;
+      height: 14px;
+      color: var(--white);
+    }
+
+    .demo-checklist-text {
+      font-size: 0.9rem;
+    }
+
+    .demo-checklist-text.done {
+      color: var(--gray-400);
+    }
+
+    .demo-alert-card {
+      background: var(--navy);
+      border-radius: var(--radius-sm);
+      border: 2px solid #ef4444;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .demo-alert-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 12px;
+      color: #ef4444;
+    }
+
+    .demo-alert-card h4 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #ef4444;
+      margin-bottom: 8px;
+    }
+
+    .demo-alert-card p {
+      font-size: 0.85rem;
+      color: var(--gray-300);
+      margin-bottom: 4px;
+    }
+
+    .demo-alert-card .demo-alert-action {
+      font-size: 0.8rem;
+      color: var(--gray-400);
+      margin-top: 12px;
+      font-style: italic;
+    }
+
+    .demo-lot-summary {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .demo-lot-item {
+      background: var(--navy);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .demo-lot-item-label {
+      font-size: 0.7rem;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .demo-lot-item-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .demo-lot-item-value.green {
+      color: #22c55e;
+    }
+
+    .demo-conformant-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+      padding: 12px 28px;
+      border-radius: 40px;
+      font-weight: 700;
+      font-size: 1rem;
+      margin-top: 8px;
+    }
+
+    .demo-claim-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+      font-size: 0.9rem;
+    }
+
+    .demo-claim-row:last-child {
+      border-bottom: none;
+    }
+
+    .demo-claim-label {
+      color: var(--gray-400);
+    }
+
+    .demo-claim-value {
+      font-weight: 600;
+    }
+
+    .demo-claim-total {
+      display: flex;
+      justify-content: space-between;
+      padding: 14px 0 0;
+      margin-top: 8px;
+      border-top: 2px solid var(--orange);
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .demo-claim-btn {
+      width: 100%;
+      background: var(--orange);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-top: 20px;
+      cursor: default;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .demo-claim-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .demo-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 24px;
+    }
+
+    .demo-btn {
+      background: var(--orange);
+      color: var(--white);
+      border-radius: var(--radius-sm);
+      padding: 12px 32px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background 0.3s ease;
+      border: none;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .demo-btn:hover {
+      background: var(--orange-dark);
+    }
+
+    .demo-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .demo-btn:disabled:hover {
+      background: var(--orange);
+    }
+
+    .demo-counter {
+      font-size: 0.85rem;
+      color: var(--gray-400);
+      font-weight: 500;
+    }
+
+    /* ========================================
+       Modules Grid (Section 8)
+       ======================================== */
+    .modules-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .module-card {
+      background: var(--navy-light);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      border: 1px solid transparent;
+    }
+
+    .module-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border-color: rgba(249, 115, 22, 0.2);
+    }
+
+    .module-icon {
+      width: 48px;
+      height: 48px;
+      color: var(--orange);
+      margin-bottom: 16px;
+    }
+
+    .module-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .module-card p {
+      font-size: 0.85rem;
+      color: var(--gray-400);
+      line-height: 1.5;
+    }
+
+    /* ========================================
+       Phone Mockup (Section 9)
+       ======================================== */
+    .mobile-section-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+      margin-top: 48px;
+    }
+
+    .phone-mockup {
+      width: 280px;
+      height: 560px;
+      border-radius: 36px;
+      border: 4px solid var(--gray-500);
+      background: var(--navy);
+      position: relative;
+      margin: 0 auto;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .phone-notch {
+      width: 120px;
+      height: 24px;
+      background: var(--gray-500);
+      border-radius: 0 0 16px 16px;
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+    }
+
+    .phone-screen {
+      position: absolute;
+      inset: 0;
+      padding: 36px 16px 70px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .phone-status-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: var(--gray-400);
+      padding: 0 4px 8px;
+    }
+
+    .phone-screen-header {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--orange);
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    .phone-screen-content {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .phone-card {
+      background: var(--navy-light);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      font-size: 0.7rem;
+    }
+
+    .phone-card-title {
+      font-weight: 600;
+      font-size: 0.75rem;
+      margin-bottom: 4px;
+    }
+
+    .phone-card-sub {
+      color: var(--gray-400);
+      font-size: 0.65rem;
+    }
+
+    .phone-tab-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: var(--navy-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      border-top: 1px solid var(--navy-mid);
+      padding: 0 8px;
+    }
+
+    .phone-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 0.55rem;
+      color: var(--gray-500);
+    }
+
+    .phone-tab.active {
+      color: var(--orange);
+    }
+
+    .phone-tab svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .mobile-features-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .mobile-feature-item {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .mobile-feature-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(249, 115, 22, 0.1);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .mobile-feature-icon svg {
+      width: 20px;
+      height: 20px;
+      color: var(--orange);
+    }
+
+    .mobile-feature-item h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .mobile-feature-item p {
+      font-size: 0.85rem;
+      color: var(--gray-400);
+    }
+
+    /* ========================================
+       Spec Badges (Section 10)
+       ======================================== */
+    .spec-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 32px;
+    }
+
+    .spec-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--navy-light);
+      border: 1px solid var(--gray-400);
+      border-radius: 40px;
+      padding: 8px 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--gray-300);
+      transition: border-color 0.3s ease;
+    }
+
+    .spec-badge:hover {
+      border-color: var(--orange);
+    }
+
+    .spec-badge svg {
+      width: 16px;
+      height: 16px;
+      color: var(--orange);
+    }
+
+    /* ========================================
+       Pipeline Flow (Section 11)
+       ======================================== */
+    .pipeline-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-top: 48px;
+      flex-wrap: nowrap;
+    }
+
+    .pipeline-node {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--orange);
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .pipeline-node-label {
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--gray-300);
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    .pipeline-line {
+      flex-grow: 1;
+      min-width: 32px;
+      max-width: 80px;
+      height: 0;
+      border-top: 3px dashed var(--orange);
+      animation: dash 2s linear infinite;
+    }
+
+    /* ========================================
+       Security Cards (Section 12)
+       ======================================== */
+    .security-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    .security-card {
+      background: var(--navy-light);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+    }
+
+    .security-card svg {
+      width: 40px;
+      height: 40px;
+      color: var(--orange);
+      margin: 0 auto 12px;
+    }
+
+    .security-card h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .security-card p {
+      font-size: 0.8rem;
+      color: var(--gray-400);
+    }
+
+    /* ========================================
+       Timeline Roadmap (Section 13)
+       ======================================== */
+    .timeline {
+      position: relative;
+      padding-left: 40px;
+      margin-top: 48px;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--orange);
+      border-radius: 3px;
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 40px;
+      padding-left: 32px;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -32px;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--orange);
+      border: 3px solid var(--navy);
+    }
+
+    .timeline-dot.future {
+      background: var(--navy-mid);
+      border-color: var(--gray-500);
+    }
+
+    .timeline-item h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .timeline-item .timeline-date {
+      font-size: 0.8rem;
+      color: var(--orange);
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .timeline-item p {
+      font-size: 0.85rem;
+      color: var(--gray-400);
+    }
+
+    /* ========================================
+       CTA Section (Section 14)
+       ======================================== */
+    .cta-section {
+      text-align: center;
+      background: linear-gradient(135deg, var(--navy-light) 0%, var(--navy) 50%, var(--navy-light) 100%);
+      border-top: 1px solid rgba(249, 115, 22, 0.2);
+      border-bottom: 1px solid rgba(249, 115, 22, 0.2);
+    }
+
+    .cta-section h2 {
+      font-size: clamp(1.75rem, 4vw, 2.5rem);
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .cta-section p {
+      font-size: 1.1rem;
+      color: var(--gray-300);
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--orange);
+      color: var(--white);
+      padding: 16px 36px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 1rem;
+      transition: transform 0.3s ease, background 0.3s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    .cta-btn:hover {
+      transform: scale(1.05);
+      background: var(--orange-dark);
+    }
+
+    .cta-btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      color: var(--white);
+      padding: 16px 36px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 1rem;
+      border: 2px solid var(--white);
+      transition: transform 0.3s ease, background 0.3s ease;
+      cursor: pointer;
+    }
+
+    .cta-btn-outline:hover {
+      transform: scale(1.05);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* ========================================
+       Footer
+       ======================================== */
+    .footer {
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+      padding: 40px 0;
+      text-align: center;
+      color: var(--gray-400);
+      font-size: 0.85rem;
+    }
+
+    .footer a {
+      color: var(--orange);
+      transition: opacity 0.3s ease;
+    }
+
+    .footer a:hover {
+      opacity: 0.8;
+    }
+
+    /* ========================================
+       Keyframe Animations
+       ======================================== */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {
+        transform: translateX(-50%) translateY(0);
+      }
+      40% {
+        transform: translateX(-50%) translateY(-12px);
+      }
+      60% {
+        transform: translateX(-50%) translateY(-6px);
+      }
+    }
+
+    @keyframes dash {
+      to {
+        background-position: 28px 0;
+      }
+    }
+
+    @keyframes slideLeft {
+      from {
+        opacity: 0;
+        transform: translateX(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes slideRight {
+      from {
+        opacity: 0;
+        transform: translateX(-30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes flowPulse {
+      0%, 100% {
+        opacity: 0.5;
+        transform: translateX(0);
+      }
+      50% {
+        opacity: 1;
+        transform: translateX(4px);
+      }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ========================================
+       Responsive: 768px
+       ======================================== */
+    @media (max-width: 768px) {
+      section {
+        padding: 64px 0;
+      }
+
+      .hamburger {
+        display: flex;
+      }
+
+      .nav-links {
+        display: none;
+        position: absolute;
+        top: 64px;
+        left: 0;
+        right: 0;
+        background: rgba(15, 23, 42, 0.98);
+        flex-direction: column;
+        padding: 16px 24px 24px;
+        gap: 16px;
+        border-bottom: 1px solid var(--navy-mid);
+        backdrop-filter: blur(12px);
+      }
+
+      .nav-links.open {
+        display: flex;
+      }
+
+      .pain-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .flow-arrow {
+        transform: rotate(90deg);
+        padding: 8px 0;
+      }
+
+      .portal-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .lot-flow {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .lot-connector {
+        min-width: 16px;
+        max-width: 40px;
+      }
+
+      .lot-node {
+        width: 80px;
+        height: 80px;
+      }
+
+      .lot-node svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      .lot-node-label {
+        font-size: 0.5rem;
+      }
+
+      .role-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .role-grid-bottom {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-step {
+        padding: 24px;
+        min-height: 250px;
+      }
+
+      .demo-lot-summary {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-progress-step {
+        width: 30px;
+        height: 30px;
+        font-size: 0.7rem;
+      }
+
+      .demo-progress-line {
+        width: 16px;
+      }
+
+      .modules-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .mobile-section-grid {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+
+      .pipeline-flow {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .pipeline-node {
+        width: 52px;
+        height: 52px;
+        font-size: 0.75rem;
+      }
+
+      .pipeline-line {
+        min-width: 20px;
+        max-width: 40px;
+      }
+
+      .pipeline-node-label {
+        font-size: 0.6rem;
+      }
+
+      .security-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .cta-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+
+    /* ========================================
+       Responsive: 480px
+       ======================================== */
+    @media (max-width: 480px) {
+      section {
+        padding: 48px 0;
+      }
+
+      .container {
+        padding: 0 16px;
+      }
+
+      .hero h1 {
+        font-size: 1.75rem;
+      }
+
+      .pain-card {
+        padding: 24px;
+      }
+
+      .flow-col {
+        padding: 24px;
+      }
+
+      .modules-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .security-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .lot-flow {
+        gap: 4px;
+      }
+
+      .lot-node {
+        width: 64px;
+        height: 64px;
+      }
+
+      .lot-node svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .lot-node-label {
+        font-size: 0.45rem;
+      }
+
+      .lot-connector {
+        min-width: 10px;
+        max-width: 24px;
+      }
+
+      .demo-btn {
+        padding: 10px 20px;
+        font-size: 0.8rem;
+      }
+
+      .phone-mockup {
+        width: 240px;
+        height: 480px;
+      }
+    }
+
+    /* ========================================
+       Print Styles
+       ======================================== */
+    @media print {
+      * {
+        color: #000 !important;
+        background: #fff !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+        border-color: #ccc !important;
+      }
+
+      body {
+        background: #fff !important;
+        color: #000 !important;
+      }
+
+      .navbar {
+        display: none !important;
+      }
+
+      .fade-in {
+        opacity: 1 !important;
+        transform: none !important;
+      }
+
+      .hero-bg {
+        display: none !important;
+      }
+
+      .scroll-indicator {
+        display: none !important;
+      }
+
+      section {
+        page-break-before: auto;
+        padding: 32px 0;
+      }
+
+      section + section {
+        page-break-before: always;
+      }
+
+      .hero {
+        min-height: auto;
+        padding: 40px 0;
+      }
+
+      .demo-nav {
+        display: none !important;
+      }
+
+      .demo-btn {
+        display: none !important;
+      }
+
+      .demo-step {
+        display: block !important;
+        page-break-inside: avoid;
+        margin-bottom: 16px;
+      }
+
+      .demo-progress {
+        display: none !important;
+      }
+
+      .cta-btn,
+      .cta-btn-outline {
+        display: none !important;
+      }
+
+      .hamburger {
+        display: none !important;
+      }
+
+      .pain-card,
+      .flow-col,
+      .role-card,
+      .module-card,
+      .security-card {
+        border: 1px solid #ccc !important;
+        page-break-inside: avoid;
+      }
+
+      .lot-connector,
+      .pipeline-line {
+        background: none !important;
+        border-top: 2px solid #ccc !important;
+        animation: none !important;
+      }
+
+      .lot-node,
+      .pipeline-node {
+        border-color: #333 !important;
+      }
+
+      .flow-arrow svg {
+        animation: none !important;
+      }
+
+      a[href]::after {
+        content: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ========================================
+     Navigation
+     ======================================== -->
+<nav class="navbar" id="navbar">
+  <div class="nav-container">
+    <a href="#hero" class="nav-logo">SiteProof</a>
+    <button class="hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="nav-links" id="navLinks">
+      <a href="#problem">Problem</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#subbie-portal">Subbie Portal</a>
+      <a href="#lot-model">Lot Model</a>
+      <a href="#roles">Roles</a>
+      <a href="#demo">Demo</a>
+      <a href="#modules">Modules</a>
+      <a href="#mobile">Mobile</a>
+      <a href="#contact">Contact</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ========================================
+     Section 1: Hero
+     ======================================== -->
+<section class="hero" id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <h1>Your subbies enter the data.<br><span class="highlight">You approve it. That's it.</span></h1>
+    <p class="hero-subtitle">Civil execution and conformance — from Lot to claim, in one platform.</p>
+    <div class="hero-cta-group">
+      <a href="#demo" class="cta-btn">See It In Action</a>
+      <a href="#contact" class="cta-btn-outline">Get Early Access</a>
+    </div>
+  </div>
+  <div class="scroll-indicator">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  </div>
+</section>
+
+<!-- ========================================
+     Section 2: The Problem
+     ======================================== -->
+<section id="problem">
+  <div class="container">
+    <h2 class="section-title fade-in">Sound familiar?</h2>
+    <div class="pain-grid">
+
+      <div class="pain-card fade-in">
+        <svg class="pain-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        <h3>Chasing subbies for timesheets</h3>
+        <p>You shouldn't have to ask for data you're owed.</p>
+      </div>
+
+      <div class="pain-card fade-in">
+        <svg class="pain-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+        <h3>47 photos emailed to the office</h3>
+        <p>Then someone spends 2 hours sorting them into lot folders.</p>
+      </div>
+
+      <div class="pain-card fade-in">
+        <svg class="pain-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <path d="M12 18v-6"></path>
+          <path d="M9 15h6"></path>
+        </svg>
+        <h3>Assembling conformance packs</h3>
+        <p>Pulling from 5 different spreadsheets to prove one lot.</p>
+      </div>
+
+      <div class="pain-card fade-in">
+        <svg class="pain-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+        </svg>
+        <h3>The Excel parallel universe</h3>
+        <p>Test results in one sheet, ITPs in another, photos in a cloud drive.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========================================
+     Section 3: The Flip — How It Works
+     ======================================== -->
+<section id="how-it-works">
+  <div class="container">
+    <h2 class="section-title fade-in">Data comes to you. Not the other way around.</h2>
+    <div class="flow-grid fade-in">
+
+      <div class="flow-col">
+        <svg class="flow-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z"></path>
+          <circle cx="16.5" cy="7.5" r=".5"></circle>
+          <path d="M12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5"></path>
+          <path d="M20 4 8.7 15.3"></path>
+          <path d="M2 12h6"></path>
+          <path d="M12 2v6"></path>
+          <circle cx="12" cy="12" r="10" stroke="none" fill="none"></circle>
+          <path d="M12 2a9.96 9.96 0 0 1 7.07 2.93"></path>
+          <!-- Hard hat icon -->
+        </svg>
+        <svg class="flow-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin: -48px auto 16px;">
+          <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-1H2z"></path>
+          <path d="M4 19V12a8 8 0 0 1 16 0v7"></path>
+          <path d="M12 4V2"></path>
+        </svg>
+        <h3>Subbies Enter</h3>
+        <ul>
+          <li>Dockets</li>
+          <li>Timesheets</li>
+          <li>ITP sign-offs</li>
+        </ul>
+      </div>
+
+      <div class="flow-arrow">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </div>
+
+      <div class="flow-col">
+        <svg class="flow-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <h3>Foreman Approves</h3>
+        <ul>
+          <li>One-tap approve</li>
+          <li>Adjust hours</li>
+          <li>Query back</li>
+        </ul>
+      </div>
+
+      <div class="flow-arrow">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </div>
+
+      <div class="flow-col">
+        <svg class="flow-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23"></line>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>
+        <h3>PM Claims</h3>
+        <ul>
+          <li>Evidence assembled</li>
+          <li>Claim generated</li>
+          <li>Payment tracked</li>
+        </ul>
+      </div>
+
+    </div>
+    <p class="flow-tagline fade-in">One platform. Every role. Every lot.</p>
+  </div>
+</section>
+
+<!-- ========================================
+     Section 4: Subbie Portal
+     ======================================== -->
+<section id="subbie-portal">
+  <div class="container">
+    <h2 class="section-title fade-in">Give them a login. They do the rest.</h2>
+    <div class="portal-grid fade-in">
+
+      <div class="subbie-side">
+        <h3>What your subbie sees</h3>
+
+        <div class="mock-panel">
+          <div class="mock-panel-title">Dashboard</div>
+          <div class="mock-panel-value">3 lots assigned</div>
+        </div>
+
+        <div class="mock-panel">
+          <div class="mock-panel-title">Roster</div>
+          <div class="mock-panel-value">12 employees</div>
+        </div>
+
+        <div class="mock-panel">
+          <div class="mock-panel-title">Today's Docket</div>
+          <div class="mock-form-row">
+            <div class="mock-input" style="pointer-events:none;">Dave Mitchell</div>
+            <div class="mock-input" style="pointer-events:none; max-width:80px;">8 hrs</div>
+          </div>
+          <div class="mock-form-row">
+            <div class="mock-select" style="pointer-events:none; flex:1;">Lot 14 — Subgrade</div>
+          </div>
+          <div class="mock-submit-btn">Submit Docket</div>
+        </div>
+      </div>
+
+      <div class="contractor-side">
+        <h3>What you see</h3>
+
+        <div class="mock-panel">
+          <div class="mock-panel-title">Approval Queue</div>
+          <div class="mock-docket-card">
+            <div class="mock-docket-header">
+              <span class="mock-docket-company">Murray's Earthworks</span>
+              <span class="mock-docket-status status-pending">Pending</span>
+            </div>
+            <div class="mock-docket-detail">3 employees &middot; 24 hrs total &middot; Lot 14</div>
+            <div class="mock-approve-row">
+              <div class="mock-btn-approve">Approve</div>
+              <div class="mock-btn-query">Query</div>
+              <div class="mock-btn-reject">Reject</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mock-panel">
+          <div class="mock-panel-title">Diary</div>
+          <div class="mock-panel-value" style="font-size:0.85rem; color:var(--gray-300);">Auto-populated from approved dockets</div>
+        </div>
+
+        <div class="mock-panel">
+          <div class="mock-panel-title">Cost Summary</div>
+          <div class="mock-cost-row">
+            <span class="mock-cost-label">Labour</span>
+            <span class="mock-cost-value">$12,450</span>
+          </div>
+          <div class="mock-cost-row">
+            <span class="mock-cost-label">Plant</span>
+            <span class="mock-cost-value">$8,200</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <p class="portal-bottom-msg fade-in">No more chasing. No more re-entry. No more spreadsheets.</p>
+  </div>
+</section>
+
+<!-- ========================================
+     Section 5: Lot Model
+     ======================================== -->
+<section id="lot-model">
+  <div class="container">
+    <h2 class="section-title fade-in">The Lot is the truth.</h2>
+    <p class="section-subtitle fade-in">Everything traces back to a spatial location.</p>
+    <div class="lot-flow fade-in">
+
+      <div class="lot-node">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+          <path d="M9 14l2 2 4-4"></path>
+        </svg>
+        <span class="lot-node-label">ITP Checklist</span>
+      </div>
+
+      <div class="lot-connector"></div>
+
+      <div class="lot-node">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"></path>
+          <path d="M8.5 2h7"></path>
+          <path d="M7 16h10"></path>
+        </svg>
+        <span class="lot-node-label">Test Results</span>
+      </div>
+
+      <div class="lot-connector"></div>
+
+      <div class="lot-node">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+        <span class="lot-node-label">Photos</span>
+      </div>
+
+      <div class="lot-connector"></div>
+
+      <div class="lot-node">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"></path>
+          <line x1="12" y1="2" x2="12" y2="12"></line>
+          <path d="M9 9l3 3 3-3"></path>
+          <circle cx="12" cy="12" r="1"></circle>
+        </svg>
+        <span class="lot-node-label">Hold Point</span>
+      </div>
+
+      <div class="lot-connector"></div>
+
+      <div class="lot-node" style="border-color: #22c55e;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+        <span class="lot-node-label">Conformance</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========================================
+     Section 6: Roles
+     ======================================== -->
+<section id="roles">
+  <div class="container">
+    <h2 class="section-title fade-in">Built for every role on site</h2>
+    <div class="role-grid fade-in">
+
+      <div class="role-card" onclick="this.classList.toggle('active')">
+        <svg class="role-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-1H2z"></path>
+          <path d="M4 19V12a8 8 0 0 1 16 0v7"></path>
+          <path d="M12 4V2"></path>
+        </svg>
+        <h3>Foreman</h3>
+        <p class="role-tagline">Approve dockets, capture evidence, fill diary — all from your phone.</p>
+        <p class="role-tap-hint">Tap to see details</p>
+        <div class="role-expanded">
+          <ul>
+            <li>Docket approvals</li>
+            <li>Photo capture with GPS</li>
+            <li>Daily diary auto-populated</li>
+            <li>Works on any phone browser</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="role-card" onclick="this.classList.toggle('active')">
+        <svg class="role-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+          <line x1="8" y1="10" x2="16" y2="10"></line>
+          <line x1="8" y1="14" x2="16" y2="14"></line>
+          <line x1="8" y1="18" x2="12" y2="18"></line>
+        </svg>
+        <h3>Site Engineer</h3>
+        <p class="role-tagline">ITP tracking, test results, hold points — no spreadsheet required.</p>
+        <p class="role-tap-hint">Tap to see details</p>
+        <div class="role-expanded">
+          <ul>
+            <li>ITP checklist management</li>
+            <li>Test result recording</li>
+            <li>Hold point notifications</li>
+            <li>Conformance tracking</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="role-card" onclick="this.classList.toggle('active')">
+        <svg class="role-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+        </svg>
+        <h3>Project Manager</h3>
+        <p class="role-tagline">Claims, costs, docket summaries — commercial visibility in real time.</p>
+        <p class="role-tap-hint">Tap to see details</p>
+        <div class="role-expanded">
+          <ul>
+            <li>Cost tracking by lot</li>
+            <li>Claim generation</li>
+            <li>Docket summaries</li>
+            <li>Budget vs actual</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="role-grid-bottom fade-in">
+
+      <div class="role-card" onclick="this.classList.toggle('active')">
+        <svg class="role-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          <polyline points="9 12 11 14 15 10"></polyline>
+        </svg>
+        <h3>Quality Manager</h3>
+        <p class="role-tagline">Conformance oversight, NCR tracking, audit-ready records.</p>
+        <p class="role-tap-hint">Tap to see details</p>
+        <div class="role-expanded">
+          <ul>
+            <li>Conformance reports</li>
+            <li>NCR workflows</li>
+            <li>Audit trail</li>
+            <li>Document control</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="role-card" onclick="this.classList.toggle('active')">
+        <svg class="role-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+        </svg>
+        <h3>Subcontractor</h3>
+        <p class="role-tagline">Enter your dockets, complete your ITPs, get paid faster.</p>
+        <p class="role-tap-hint">Tap to see details</p>
+        <div class="role-expanded">
+          <ul>
+            <li>Own portal &amp; dashboard</li>
+            <li>Docket entry</li>
+            <li>ITP sign-offs</li>
+            <li>Employee roster management</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ========================================
+     Section 7: Interactive Demo
+     ======================================== -->
+<section id="demo">
+  <div class="container">
+    <h2 class="section-title fade-in">See how it works</h2>
+
+    <div class="demo-progress fade-in" id="demoProgress">
+      <div class="demo-progress-step active" data-step="1" onclick="goToStep(1)">1</div>
+      <div class="demo-progress-line" data-line="1"></div>
+      <div class="demo-progress-step" data-step="2" onclick="goToStep(2)">2</div>
+      <div class="demo-progress-line" data-line="2"></div>
+      <div class="demo-progress-step" data-step="3" onclick="goToStep(3)">3</div>
+      <div class="demo-progress-line" data-line="3"></div>
+      <div class="demo-progress-step" data-step="4" onclick="goToStep(4)">4</div>
+      <div class="demo-progress-line" data-line="4"></div>
+      <div class="demo-progress-step" data-step="5" onclick="goToStep(5)">5</div>
+      <div class="demo-progress-line" data-line="5"></div>
+      <div class="demo-progress-step" data-step="6" onclick="goToStep(6)">6</div>
+      <div class="demo-progress-line" data-line="6"></div>
+      <div class="demo-progress-step" data-step="7" onclick="goToStep(7)">7</div>
+      <div class="demo-progress-line" data-line="7"></div>
+      <div class="demo-progress-step" data-step="8" onclick="goToStep(8)">8</div>
+    </div>
+
+    <!-- Step 1: Subbie submits docket -->
+    <div class="demo-step active" data-step="1">
+      <div class="demo-step-label">Step 1 of 8</div>
+      <h3>Subbie submits docket</h3>
+      <p class="demo-desc">The subcontractor logs in and enters their daily docket — employees, hours, lot, and plant used.</p>
+      <div class="demo-mock">
+        <div class="demo-mock-header">
+          <span class="demo-mock-title">New Docket Entry</span>
+          <span class="demo-mock-badge badge-live">Live</span>
+        </div>
+        <div class="demo-form-group">
+          <label class="demo-form-label">Employee</label>
+          <div class="demo-form-select" style="pointer-events:none;">Dave Mitchell — Excavator Operator</div>
+        </div>
+        <div class="demo-form-group">
+          <label class="demo-form-label">Hours</label>
+          <div class="demo-form-input" style="pointer-events:none;">8</div>
+        </div>
+        <div class="demo-form-group">
+          <label class="demo-form-label">Lot</label>
+          <div class="demo-form-select" style="pointer-events:none;">Lot 14 — Subgrade Preparation</div>
+        </div>
+        <div class="demo-form-group">
+          <label class="demo-form-label">Plant</label>
+          <div class="demo-form-select" style="pointer-events:none;">CAT 320 Excavator — 8 hrs</div>
+        </div>
+        <div class="demo-form-submit">Submit Docket</div>
+      </div>
+    </div>
+
+    <!-- Step 2: Foreman gets notification -->
+    <div class="demo-step" data-step="2">
+      <div class="demo-step-label">Step 2 of 8</div>
+      <h3>Foreman gets notification</h3>
+      <p class="demo-desc">The foreman receives an instant notification on their phone — a new docket is waiting for review.</p>
+      <div class="demo-mock">
+        <div class="demo-notif">
+          <div class="demo-notif-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </div>
+          <div class="demo-notif-body">
+            <h4>New docket from Murray's Earthworks</h4>
+            <p>3 employees, 24 hrs total — Lot 14 Subgrade</p>
+            <div class="demo-notif-time">Just now</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Foreman approves -->
+    <div class="demo-step" data-step="3">
+      <div class="demo-step-label">Step 3 of 8</div>
+      <h3>Foreman approves</h3>
+      <p class="demo-desc">Review employees and hours, then approve, query, or reject with one tap.</p>
+      <div class="demo-mock">
+        <div class="demo-mock-header">
+          <span class="demo-mock-title">Murray's Earthworks — Lot 14</span>
+          <span class="demo-mock-badge badge-pending">Pending Review</span>
+        </div>
+        <div class="demo-employee-row">
+          <span class="demo-employee-name">Dave Mitchell</span>
+          <span class="demo-employee-hours">8 hrs — Excavator Op</span>
+        </div>
+        <div class="demo-employee-row">
+          <span class="demo-employee-name">Craig Thompson</span>
+          <span class="demo-employee-hours">8 hrs — Labourer</span>
+        </div>
+        <div class="demo-employee-row">
+          <span class="demo-employee-name">Steve O'Brien</span>
+          <span class="demo-employee-hours">8 hrs — Spotter</span>
+        </div>
+        <div class="mock-approve-row" style="margin-top:16px;">
+          <div class="mock-btn-approve" style="padding:14px 0; font-size:0.9rem;">Approve</div>
+          <div class="mock-btn-query" style="padding:14px 0; font-size:0.9rem;">Query</div>
+          <div class="mock-btn-reject" style="padding:14px 0; font-size:0.9rem;">Reject</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4: Photo captured on site -->
+    <div class="demo-step" data-step="4">
+      <div class="demo-step-label">Step 4 of 8</div>
+      <h3>Photo captured on site</h3>
+      <p class="demo-desc">Every photo is geotagged and linked to the lot automatically. No sorting, no folders.</p>
+      <div class="demo-camera">
+        <div class="demo-camera-crosshair"></div>
+        <div class="demo-camera-overlay">
+          <div class="demo-camera-top">
+            <span class="demo-camera-label">Lot 14 — Subgrade</span>
+            <span class="demo-camera-rec"><span class="demo-camera-rec-dot"></span> REC</span>
+          </div>
+          <div class="demo-camera-bottom">
+            <span class="demo-camera-gps">-33.8688, 151.2093</span>
+            <span class="demo-camera-gps">28 Jan 2026 14:32</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: ITP item completed -->
+    <div class="demo-step" data-step="5">
+      <div class="demo-step-label">Step 5 of 8</div>
+      <h3>ITP item completed</h3>
+      <p class="demo-desc">Each inspection and test plan item is checked off as work is verified on site.</p>
+      <div class="demo-mock">
+        <div class="demo-mock-header">
+          <span class="demo-mock-title">ITP — Subgrade Preparation</span>
+          <span class="demo-mock-badge badge-pending">In Progress</span>
+        </div>
+        <div class="demo-checklist-item">
+          <div class="demo-check checked">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <span class="demo-checklist-text done">Survey set-out confirmed</span>
+        </div>
+        <div class="demo-checklist-item">
+          <div class="demo-check checked">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <span class="demo-checklist-text done">Proof roll completed — no soft spots</span>
+        </div>
+        <div class="demo-checklist-item">
+          <div class="demo-check checked">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <span class="demo-checklist-text done">Compaction test — 98% MDD</span>
+        </div>
+        <div class="demo-checklist-item">
+          <div class="demo-check checking">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <span class="demo-checklist-text">Level survey — design conformance</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 6: Hold point fires -->
+    <div class="demo-step" data-step="6">
+      <div class="demo-step-label">Step 6 of 8</div>
+      <h3>Hold point fires</h3>
+      <p class="demo-desc">When a hold point is reached, the superintendent is automatically notified. No work proceeds until released.</p>
+      <div class="demo-alert-card">
+        <svg class="demo-alert-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <h4>HOLD POINT</h4>
+        <p>Subgrade inspection required before placing select fill</p>
+        <p style="color: var(--gray-300); font-weight: 500; margin-top: 4px;">Lot 14 — Subgrade Preparation</p>
+        <p class="demo-alert-action">Superintendent notified via email — awaiting release</p>
+      </div>
+    </div>
+
+    <!-- Step 7: Lot reaches conformance -->
+    <div class="demo-step" data-step="7">
+      <div class="demo-step-label">Step 7 of 8</div>
+      <h3>Lot reaches conformance</h3>
+      <p class="demo-desc">All ITP items checked, tests passed, photos attached, hold points released. The lot is conformant.</p>
+      <div class="demo-mock">
+        <div class="demo-mock-header">
+          <span class="demo-mock-title">Lot 14 — Subgrade Preparation</span>
+        </div>
+        <div class="demo-lot-summary">
+          <div class="demo-lot-item">
+            <div class="demo-lot-item-label">ITP Progress</div>
+            <div class="demo-lot-item-value green">100%</div>
+          </div>
+          <div class="demo-lot-item">
+            <div class="demo-lot-item-label">Tests</div>
+            <div class="demo-lot-item-value green">All Passed</div>
+          </div>
+          <div class="demo-lot-item">
+            <div class="demo-lot-item-label">Photos</div>
+            <div class="demo-lot-item-value green">12 / 12</div>
+          </div>
+          <div class="demo-lot-item">
+            <div class="demo-lot-item-label">Hold Points</div>
+            <div class="demo-lot-item-value green">Released</div>
+          </div>
+        </div>
+        <div style="text-align:center;">
+          <span class="demo-conformant-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            CONFORMANT
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 8: PM generates claim -->
+    <div class="demo-step" data-step="8">
+      <div class="demo-step-label">Step 8 of 8</div>
+      <h3>PM generates claim</h3>
+      <p class="demo-desc">All evidence is assembled. The PM generates a claim PDF with full traceability back to the lot.</p>
+      <div class="demo-mock">
+        <div class="demo-mock-header">
+          <span class="demo-mock-title">Claim — Lot 14 Subgrade</span>
+          <span class="demo-mock-badge badge-success">Ready</span>
+        </div>
+        <div class="demo-claim-row">
+          <span class="demo-claim-label">Labour (3 employees, 24 hrs)</span>
+          <span class="demo-claim-value">$4,320</span>
+        </div>
+        <div class="demo-claim-row">
+          <span class="demo-claim-label">Plant (CAT 320, 8 hrs)</span>
+          <span class="demo-claim-value">$2,400</span>
+        </div>
+        <div class="demo-claim-row">
+          <span class="demo-claim-label">Materials (Select Fill, 120m3)</span>
+          <span class="demo-claim-value">$5,640</span>
+        </div>
+        <div class="demo-claim-total">
+          <span>Total Claim Value</span>
+          <span>$12,360</span>
+        </div>
+        <div style="font-size:0.8rem; color:var(--gray-400); margin-top:12px;">Evidence: 12 photos, 4 test results, 1 ITP complete, 2 hold points released</div>
+        <div class="demo-claim-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          Generate Claim PDF
+        </div>
+      </div>
+    </div>
+
+    <!-- Demo Navigation -->
+    <div class="demo-nav fade-in">
+      <button class="demo-btn" id="demoPrev" onclick="changeStep(-1)" disabled>&larr; Previous</button>
+      <span class="demo-counter" id="demoCounter">Step 1 of 8</span>
+      <button class="demo-btn" id="demoNext" onclick="changeStep(1)">Next &rarr;</button>
+    </div>
+
+  </div>
+</section>
+
+    <!-- ============================================ -->
+    <!-- SECTION 8: CORE MODULES GRID                 -->
+    <!-- ============================================ -->
+    <section id="modules" style="padding: 120px 0;">
+      <div class="container">
+        <h2 class="section-title fade-in">Everything you need. Nothing you don't.</h2>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 60px;" class="modules-grid">
+
+          <!-- Module 1: Lots -->
+          <div class="module-card fade-in">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="6" width="36" height="36" rx="4"/>
+                <path d="M24 14v8"/>
+                <path d="M20 22h8"/>
+                <circle cx="24" cy="30" r="4"/>
+                <path d="M24 34v6"/>
+              </svg>
+            </div>
+            <h3>Lots</h3>
+            <p>Track every lot from start to conformance</p>
+          </div>
+
+          <!-- Module 2: ITPs -->
+          <div class="module-card fade-in">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 6h14l10 10v26a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/>
+                <path d="M28 6v10h10"/>
+                <path d="M18 24h12"/>
+                <path d="M18 30h12"/>
+                <path d="M18 36h8"/>
+              </svg>
+            </div>
+            <h3>ITPs</h3>
+            <p>Inspection &amp; test plans with automated hold points</p>
+          </div>
+
+          <!-- Module 3: Hold Points -->
+          <div class="module-card fade-in">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 6v20.6a4 4 0 0 0 1.2 2.8L24 36l6.8-6.6a4 4 0 0 0 1.2-2.8V6"/>
+                <path d="M12 6h24"/>
+                <path d="M20 16h8"/>
+                <path d="M24 12v8"/>
+                <path d="M24 36v6"/>
+              </svg>
+            </div>
+            <h3>Hold Points</h3>
+            <p>Automated notifications, email release, full audit trail</p>
+          </div>
+
+          <!-- Module 4: Tests -->
+          <div class="module-card fade-in">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6v12l-8 16a4 4 0 0 0 3.6 5.8h20.8A4 4 0 0 0 38 34L30 18V6"/>
+                <path d="M14 6h20"/>
+                <path d="M16 30h16"/>
+                <circle cx="22" cy="34" r="2"/>
+                <circle cx="30" cy="26" r="1.5"/>
+              </svg>
+            </div>
+            <h3>Tests</h3>
+            <p>Test results linked to lots and ITPs automatically</p>
+          </div>
+
+          <!-- Module 5: NCRs -->
+          <div class="module-card fade-in">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M24 8L6 40h36L24 8z"/>
+                <path d="M24 20v8"/>
+                <circle cx="24" cy="33" r="1.5"/>
+              </svg>
+            </div>
+            <h3>NCRs</h3>
+            <p>Non-conformance tracking with corrective actions</p>
+          </div>
+
+          <!-- Module 6: Diary -->
+          <div class="module-card fade-in">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 42h28a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H14a4 4 0 0 0-4 4v28a4 4 0 0 0 4 4z"/>
+                <path d="M10 10a4 4 0 0 1 4-4"/>
+                <path d="M18 16h12"/>
+                <path d="M18 24h12"/>
+                <path d="M18 32h8"/>
+              </svg>
+            </div>
+            <h3>Diary</h3>
+            <p>Auto-populated from approved dockets</p>
+          </div>
+
+          <!-- Module 7: Dockets -->
+          <div class="module-card fade-in">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 6h24a2 2 0 0 1 2 2v32a2 2 0 0 1-2 2H12a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/>
+                <path d="M16 6v6h16V6"/>
+                <path d="M16 20h16"/>
+                <path d="M16 26h16"/>
+                <path d="M16 32h10"/>
+                <path d="M10 38h28" stroke-dasharray="4 2"/>
+              </svg>
+            </div>
+            <h3>Dockets</h3>
+            <p>Subbie-entered, foreman-approved, PM-visible</p>
+          </div>
+
+          <!-- Module 8: Claims -->
+          <div class="module-card fade-in">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="24" cy="24" r="18"/>
+                <path d="M24 14v20"/>
+                <path d="M18 20h12a4 4 0 0 1 0 8H16"/>
+                <path d="M18 28h12"/>
+              </svg>
+            </div>
+            <h3>Claims</h3>
+            <p>Generate claims from conformant lots in one click</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- SECTION 9: MOBILE-FIRST FOR THE FIELD        -->
+    <!-- ============================================ -->
+    <section id="mobile" style="padding: 120px 0; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);">
+      <div class="container">
+        <h2 class="section-title fade-in">One-handed. Gloved. In the rain.</h2>
+        <div style="display: flex; align-items: center; gap: 80px; margin-top: 60px; flex-wrap: wrap; justify-content: center;">
+
+          <!-- Phone Mockup (Pure CSS) -->
+          <div class="fade-in" style="flex-shrink: 0;">
+            <div style="width: 280px; height: 560px; border-radius: 36px; border: 4px solid #475569; background: #0f172a; position: relative; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
+              <!-- Notch -->
+              <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 28px; background: #475569; border-radius: 0 0 16px 16px;"></div>
+              <!-- Screen -->
+              <div style="margin: 40px 8px 8px; background: #1e293b; border-radius: 8px; overflow: hidden; height: calc(100% - 48px); display: flex; flex-direction: column;">
+                <!-- Header Bar -->
+                <div style="padding: 12px 16px; background: #0f172a; display: flex; align-items: center; gap: 8px; border-bottom: 2px solid #f97316;">
+                  <div style="width: 8px; height: 8px; background: #f97316; border-radius: 50%;"></div>
+                  <span style="color: #fff; font-size: 14px; font-weight: 700; letter-spacing: 0.5px;">SiteProof</span>
+                  <div style="margin-left: auto; width: 24px; height: 24px; border-radius: 50%; background: #334155;"></div>
+                </div>
+                <!-- Main Content -->
+                <div style="flex: 1; padding: 16px; overflow: hidden;">
+                  <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Today's Tasks</div>
+                  <!-- Task 1 -->
+                  <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #0f172a; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #f97316;">
+                    <div style="width: 18px; height: 18px; border: 2px solid #f97316; border-radius: 4px; flex-shrink: 0;"></div>
+                    <div>
+                      <div style="color: #fff; font-size: 12px; font-weight: 600;">HP Release — Lot 14</div>
+                      <div style="color: #64748b; font-size: 10px;">Subbase compaction</div>
+                    </div>
+                  </div>
+                  <!-- Task 2 -->
+                  <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #0f172a; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #22c55e;">
+                    <div style="width: 18px; height: 18px; border: 2px solid #22c55e; border-radius: 4px; flex-shrink: 0; position: relative;">
+                      <div style="position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: #22c55e; border-radius: 2px;"></div>
+                    </div>
+                    <div>
+                      <div style="color: #fff; font-size: 12px; font-weight: 600;">Approve Dockets (3)</div>
+                      <div style="color: #64748b; font-size: 10px;">Pending review</div>
+                    </div>
+                  </div>
+                  <!-- Task 3 -->
+                  <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #0f172a; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #3b82f6;">
+                    <div style="width: 18px; height: 18px; border: 2px solid #3b82f6; border-radius: 4px; flex-shrink: 0;"></div>
+                    <div>
+                      <div style="color: #fff; font-size: 12px; font-weight: 600;">NCR #7 — Response Due</div>
+                      <div style="color: #64748b; font-size: 10px;">Drainage realignment</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Bottom Nav Bar -->
+                <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px 0 12px; background: #0f172a; border-top: 1px solid #1e293b;">
+                  <div style="text-align: center;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg>
+                    <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Capture</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+                    <div style="color: #f97316; font-size: 9px; font-weight: 700; margin-top: 2px;">Today</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Approve</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z"/></svg>
+                    <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Diary</div>
+                  </div>
+                  <div style="text-align: center;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 3v18"/></svg>
+                    <div style="color: #64748b; font-size: 9px; margin-top: 2px;">Lots</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature List -->
+          <div class="fade-in" style="flex: 1; min-width: 300px;">
+            <div style="display: flex; flex-direction: column; gap: 28px;">
+              <!-- Offline -->
+              <div style="display: flex; align-items: flex-start; gap: 16px;">
+                <div style="color: #f97316; flex-shrink: 0; margin-top: 2px;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                    <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+                    <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+                    <path d="M10.71 5.05A16 16 0 0 1 22.56 9"/>
+                    <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                    <line x1="12" y1="20" x2="12.01" y2="20"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style="color: #fff; font-size: 18px; font-weight: 600; margin-bottom: 4px;">Works offline — no signal required</div>
+                  <div style="color: #94a3b8; font-size: 15px;">Capture data in dead zones. Syncs when you're back in range.</div>
+                </div>
+              </div>
+              <!-- GPS Photos -->
+              <div style="display: flex; align-items: flex-start; gap: 16px;">
+                <div style="color: #f97316; flex-shrink: 0; margin-top: 2px;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style="color: #fff; font-size: 18px; font-weight: 600; margin-bottom: 4px;">GPS-tagged photos with one tap</div>
+                  <div style="color: #94a3b8; font-size: 15px;">Every photo stamped with location, time, and user. No metadata gaps.</div>
+                </div>
+              </div>
+              <!-- One-tap approval -->
+              <div style="display: flex; align-items: flex-start; gap: 16px;">
+                <div style="color: #f97316; flex-shrink: 0; margin-top: 2px;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style="color: #fff; font-size: 18px; font-weight: 600; margin-bottom: 4px;">One-tap docket approval</div>
+                  <div style="color: #94a3b8; font-size: 15px;">Swipe to approve or reject. No forms, no friction.</div>
+                </div>
+              </div>
+              <!-- Voice notes -->
+              <div style="display: flex; align-items: flex-start; gap: 16px;">
+                <div style="color: #f97316; flex-shrink: 0; margin-top: 2px;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style="color: #fff; font-size: 18px; font-weight: 600; margin-bottom: 4px;">Voice notes for diary entries</div>
+                  <div style="color: #94a3b8; font-size: 15px;">Talk instead of type. Perfect for muddy hands and busy days.</div>
+                </div>
+              </div>
+              <!-- Any phone -->
+              <div style="display: flex; align-items: flex-start; gap: 16px;">
+                <div style="color: #f97316; flex-shrink: 0; margin-top: 2px;">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                    <line x1="12" y1="18" x2="12.01" y2="18"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style="color: #fff; font-size: 18px; font-weight: 600; margin-bottom: 4px;">Any phone, any browser — no app store needed</div>
+                  <div style="color: #94a3b8; font-size: 15px;">Progressive web app. Works on iPhone, Android, tablet. Zero install.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- SECTION 10: AUSTRALIAN CIVIL — BUILT IN      -->
+    <!-- ============================================ -->
+    <section id="australian" style="padding: 120px 0;">
+      <div class="container">
+        <h2 class="section-title fade-in">Not a generic construction app.</h2>
+        <p class="fade-in" style="text-align: center; color: #94a3b8; font-size: 20px; margin-top: -20px; margin-bottom: 48px;">Built for Australian civil.</p>
+
+        <!-- Spec Badges -->
+        <div class="fade-in" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-bottom: 60px;">
+          <span style="display: inline-flex; align-items: center; padding: 10px 24px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); border-radius: 999px; color: #f97316; font-weight: 600; font-size: 15px;">TMR (Queensland)</span>
+          <span style="display: inline-flex; align-items: center; padding: 10px 24px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); border-radius: 999px; color: #f97316; font-weight: 600; font-size: 15px;">TfNSW (New South Wales)</span>
+          <span style="display: inline-flex; align-items: center; padding: 10px 24px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); border-radius: 999px; color: #f97316; font-weight: 600; font-size: 15px;">VicRoads (Victoria)</span>
+          <span style="display: inline-flex; align-items: center; padding: 10px 24px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); border-radius: 999px; color: #f97316; font-weight: 600; font-size: 15px;">Main Roads WA</span>
+          <span style="display: inline-flex; align-items: center; padding: 10px 24px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); border-radius: 999px; color: #f97316; font-weight: 600; font-size: 15px;">Austroads</span>
+        </div>
+
+        <!-- Feature Bullets -->
+        <div class="fade-in" style="max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px;">
+          <div style="display: flex; align-items: flex-start; gap: 16px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><polyline points="20 6 9 17 4 12"/></svg>
+            <span style="color: #e2e8f0; font-size: 17px;">ITP templates pre-loaded for Australian state specifications</span>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 16px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><polyline points="20 6 9 17 4 12"/></svg>
+            <span style="color: #e2e8f0; font-size: 17px;">Test methods aligned to AS/NZS standards</span>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 16px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><polyline points="20 6 9 17 4 12"/></svg>
+            <span style="color: #e2e8f0; font-size: 17px;">Lot-based conformance matching Australian road &amp; bridge specs</span>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 16px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><polyline points="20 6 9 17 4 12"/></svg>
+            <span style="color: #e2e8f0; font-size: 17px;">Hold point workflows matching state authority requirements</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- SECTION 11: CONFORMANCE-TO-CLAIMS PIPELINE   -->
+    <!-- ============================================ -->
+    <section id="pipeline" style="padding: 120px 0; background: #1e293b;">
+      <div class="container">
+        <h2 class="section-title fade-in">Stop assembling conformance packs. Start generating them.</h2>
+
+        <style>
+          @keyframes dashMove {
+            to { stroke-dashoffset: -20; }
+          }
+          .pipeline-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0;
+            margin-top: 60px;
+          }
+          .pipeline-step {
+            display: flex;
+            align-items: center;
+          }
+          .pipeline-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+          }
+          .pipeline-node .node-circle {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #f97316;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 700;
+            font-size: 13px;
+            text-align: center;
+            line-height: 1.1;
+            box-shadow: 0 0 20px rgba(249,115,22,0.3);
+          }
+          .pipeline-node .node-label {
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .pipeline-line {
+            width: 48px;
+            height: 2px;
+            margin: 0 -2px;
+            margin-bottom: 28px;
+            position: relative;
+          }
+          .pipeline-line svg {
+            position: absolute;
+            top: -1px;
+            left: 0;
+            width: 100%;
+            height: 4px;
+          }
+          .pipeline-line svg line {
+            stroke: #f97316;
+            stroke-width: 2;
+            stroke-dasharray: 8 6;
+            animation: dashMove 1s linear infinite;
+          }
+          @media (max-width: 768px) {
+            .pipeline-wrapper {
+              gap: 8px;
+            }
+            .pipeline-line {
+              width: 24px;
+            }
+            .pipeline-node .node-circle {
+              width: 52px;
+              height: 52px;
+              font-size: 11px;
+            }
+          }
+        </style>
+
+        <div class="pipeline-wrapper fade-in">
+          <!-- Lot -->
+          <div class="pipeline-step">
+            <div class="pipeline-node">
+              <div class="node-circle">LOT</div>
+              <div class="node-label">Lot</div>
+            </div>
+          </div>
+          <div class="pipeline-line"><svg><line x1="0" y1="2" x2="100%" y2="2"/></svg></div>
+          <!-- ITP -->
+          <div class="pipeline-step">
+            <div class="pipeline-node">
+              <div class="node-circle">ITP</div>
+              <div class="node-label">ITP</div>
+            </div>
+          </div>
+          <div class="pipeline-line"><svg><line x1="0" y1="2" x2="100%" y2="2"/></svg></div>
+          <!-- Tests -->
+          <div class="pipeline-step">
+            <div class="pipeline-node">
+              <div class="node-circle">TEST</div>
+              <div class="node-label">Tests</div>
+            </div>
+          </div>
+          <div class="pipeline-line"><svg><line x1="0" y1="2" x2="100%" y2="2"/></svg></div>
+          <!-- HP Release -->
+          <div class="pipeline-step">
+            <div class="pipeline-node">
+              <div class="node-circle" style="font-size: 11px;">HP</div>
+              <div class="node-label">HP Release</div>
+            </div>
+          </div>
+          <div class="pipeline-line"><svg><line x1="0" y1="2" x2="100%" y2="2"/></svg></div>
+          <!-- Conform -->
+          <div class="pipeline-step">
+            <div class="pipeline-node">
+              <div class="node-circle" style="font-size: 10px;">CONF</div>
+              <div class="node-label">Conform</div>
+            </div>
+          </div>
+          <div class="pipeline-line"><svg><line x1="0" y1="2" x2="100%" y2="2"/></svg></div>
+          <!-- Claim -->
+          <div class="pipeline-step">
+            <div class="pipeline-node">
+              <div class="node-circle" style="background: #22c55e;">CLAIM</div>
+              <div class="node-label">Claim</div>
+            </div>
+          </div>
+          <div class="pipeline-line"><svg><line x1="0" y1="2" x2="100%" y2="2"/></svg></div>
+          <!-- Payment -->
+          <div class="pipeline-step">
+            <div class="pipeline-node">
+              <div class="node-circle" style="background: #22c55e;">$</div>
+              <div class="node-label">Payment</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- SECTION 12: SECURITY & COMPLIANCE            -->
+    <!-- ============================================ -->
+    <section id="security" style="padding: 120px 0;">
+      <div class="container">
+        <h2 class="section-title fade-in">Enterprise-grade. Site-proven.</h2>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-top: 60px; max-width: 900px; margin-left: auto; margin-right: auto;" class="security-grid">
+
+          <!-- Role-based access -->
+          <div class="fade-in" style="background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px;">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px;">Role-based access</h3>
+            <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">Commercial data stays with commercial roles. Engineers see what engineers need.</p>
+          </div>
+
+          <!-- Full audit trail -->
+          <div class="fade-in" style="background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px;">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+            </div>
+            <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px;">Full audit trail</h3>
+            <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">Every action timestamped and attributed. Always know who did what, and when.</p>
+          </div>
+
+          <!-- Offline resilience -->
+          <div class="fade-in" style="background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px;">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="1" y1="1" x2="23" y2="23"/>
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+                <path d="M10.71 5.05A16 16 0 0 1 22.56 9"/>
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                <line x1="12" y1="20" x2="12.01" y2="20"/>
+              </svg>
+            </div>
+            <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px;">Offline resilience</h3>
+            <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">Capture data without signal. Syncs automatically when connectivity returns.</p>
+          </div>
+
+          <!-- Australian hosted -->
+          <div class="fade-in" style="background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 32px;">
+            <div style="color: #f97316; margin-bottom: 16px;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <polyline points="9 12 11 14 15 10"/>
+              </svg>
+            </div>
+            <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px;">Australian hosted</h3>
+            <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">Data sovereignty maintained. Hosted on Australian infrastructure.</p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- SECTION 13: VISION / ROADMAP                 -->
+    <!-- ============================================ -->
+    <section id="roadmap" style="padding: 120px 0; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);">
+      <div class="container">
+        <h2 class="section-title fade-in">What's coming next</h2>
+
+        <div style="max-width: 680px; margin: 60px auto 0; position: relative; padding-left: 48px;">
+          <!-- Vertical line -->
+          <div style="position: absolute; left: 15px; top: 0; bottom: 0; width: 2px; background: linear-gradient(180deg, #f97316, #334155);"></div>
+
+          <!-- Item 1: AI Document Parsing -->
+          <div class="fade-in" style="position: relative; margin-bottom: 48px;">
+            <div style="position: absolute; left: -48px; top: 4px; width: 32px; height: 32px; background: #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 16px rgba(249,115,22,0.4);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/></svg>
+            </div>
+            <div style="color: #f97316; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">2026</div>
+            <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px;">AI Document Parsing</h3>
+            <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">Drop a PDF test certificate. AI extracts results and links them to the right lot and ITP.</p>
+          </div>
+
+          <!-- Item 2: BIM Integration -->
+          <div class="fade-in" style="position: relative; margin-bottom: 48px;">
+            <div style="position: absolute; left: -48px; top: 4px; width: 32px; height: 32px; background: #334155; border: 2px solid #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/></svg>
+            </div>
+            <div style="color: #64748b; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">2026</div>
+            <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px;">BIM Integration</h3>
+            <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">Connect your 3D model. Lots mapped to BIM elements for visual progress tracking.</p>
+          </div>
+
+          <!-- Item 3: Automated Weather from BOM -->
+          <div class="fade-in" style="position: relative; margin-bottom: 48px;">
+            <div style="position: absolute; left: -48px; top: 4px; width: 32px; height: 32px; background: #334155; border: 2px solid #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/></svg>
+            </div>
+            <div style="color: #64748b; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">2026</div>
+            <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px;">Automated Weather from BOM</h3>
+            <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">Daily weather auto-logged from Bureau of Meteorology. No more manual diary entries.</p>
+          </div>
+
+          <!-- Item 4: Advanced Analytics -->
+          <div class="fade-in" style="position: relative; margin-bottom: 0;">
+            <div style="position: absolute; left: -48px; top: 4px; width: 32px; height: 32px; background: #334155; border: 2px solid #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/></svg>
+            </div>
+            <div style="color: #64748b; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">2026</div>
+            <h3 style="color: #fff; font-size: 20px; font-weight: 700; margin-bottom: 8px;">Advanced Analytics</h3>
+            <p style="color: #94a3b8; font-size: 15px; line-height: 1.6;">Project dashboards, conformance velocity, cost forecasting — all in real time.</p>
+          </div>
+
+        </div>
+
+        <p class="fade-in" style="text-align: center; margin-top: 60px; color: #f97316; font-size: 18px; font-weight: 600;">Get in early. Shape the roadmap.</p>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- SECTION 14: CALL TO ACTION                   -->
+    <!-- ============================================ -->
+    <section id="contact" style="padding: 120px 0; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);">
+      <div class="container" style="text-align: center;">
+        <h2 class="section-title fade-in">Ready to see it live?</h2>
+        <p class="fade-in" style="color: #94a3b8; font-size: 20px; margin-top: -10px; margin-bottom: 48px; max-width: 560px; margin-left: auto; margin-right: auto;">Book a demo and see how SiteProof can transform your site operations.</p>
+
+        <div class="fade-in" style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px;">
+          <a href="mailto:hello@siteproof.com.au?subject=Demo%20Request" class="cta-btn" style="display: inline-flex; align-items: center; gap: 10px; padding: 18px 40px; background: #f97316; color: #fff; font-size: 18px; font-weight: 700; border-radius: 12px; text-decoration: none; border: 2px solid #f97316; transition: all 0.3s ease; cursor: pointer;">
+            Book a Demo
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+          <a href="mailto:hello@siteproof.com.au" class="cta-btn-outline" style="display: inline-flex; align-items: center; gap: 10px; padding: 18px 40px; background: transparent; color: #fff; font-size: 18px; font-weight: 700; border-radius: 12px; text-decoration: none; border: 2px solid #fff; transition: all 0.3s ease; cursor: pointer;">
+            Get in Touch
+          </a>
+        </div>
+
+        <p class="fade-in" style="color: #64748b; font-size: 15px;">
+          <a href="mailto:hello@siteproof.com.au" style="color: #94a3b8; text-decoration: none; border-bottom: 1px solid #475569; padding-bottom: 2px; transition: color 0.3s ease;">hello@siteproof.com.au</a>
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================ -->
+    <!-- FOOTER                                       -->
+    <!-- ============================================ -->
+    <footer style="border-top: 1px solid #1e293b; padding: 40px 0; text-align: center;">
+      <div class="container">
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 8px;">&copy; 2026 SiteProof. All rights reserved.</p>
+        <p style="color: #475569; font-size: 13px;">Civil execution &amp; conformance — from Lot to claim.</p>
+      </div>
+    </footer>
+
+    <!-- ============================================ -->
+    <!-- JAVASCRIPT                                   -->
+    <!-- ============================================ -->
+    <script>
+      // -----------------------------------------------
+      // 1. Intersection Observer for Scroll Animations
+      // -----------------------------------------------
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      }, { threshold: 0.1 });
+      document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+      // -----------------------------------------------
+      // 2. Interactive Demo Walkthrough
+      // -----------------------------------------------
+      var currentStep = 1;
+      var totalSteps = 8;
+
+      function updateDemo() {
+        document.querySelectorAll('.demo-step').forEach(function(el) {
+          var s = parseInt(el.getAttribute('data-step'));
+          if (s === currentStep) {
+            el.classList.add('active');
+          } else {
+            el.classList.remove('active');
+          }
+        });
+        document.querySelectorAll('.demo-progress-step').forEach(function(el) {
+          var s = parseInt(el.getAttribute('data-step'));
+          el.classList.remove('active', 'completed');
+          if (s === currentStep) {
+            el.classList.add('active');
+          } else if (s < currentStep) {
+            el.classList.add('completed');
+          }
+        });
+        document.querySelectorAll('.demo-progress-line').forEach(function(el) {
+          var l = parseInt(el.getAttribute('data-line'));
+          if (l < currentStep) {
+            el.classList.add('completed');
+          } else {
+            el.classList.remove('completed');
+          }
+        });
+        var prevEl = document.getElementById('demoPrev');
+        var nextEl = document.getElementById('demoNext');
+        var counterEl = document.getElementById('demoCounter');
+        if (prevEl) prevEl.disabled = (currentStep === 1);
+        if (nextEl) nextEl.disabled = (currentStep === totalSteps);
+        if (counterEl) counterEl.textContent = 'Step ' + currentStep + ' of ' + totalSteps;
+      }
+
+      // Global functions used by onclick attributes in HTML
+      window.goToStep = function(step) {
+        if (step < 1 || step > totalSteps) return;
+        currentStep = step;
+        updateDemo();
+      };
+      window.changeStep = function(delta) {
+        var next = currentStep + delta;
+        if (next < 1 || next > totalSteps) return;
+        currentStep = next;
+        updateDemo();
+      };
+      // Initialize demo
+      updateDemo();
+
+      // -----------------------------------------------
+      // 3. Nav Active Section Highlighting
+      // -----------------------------------------------
+      const sections = document.querySelectorAll('section[id]');
+      const navLinks = document.querySelectorAll('.nav-links a');
+
+      window.addEventListener('scroll', () => {
+        let current = '';
+        sections.forEach(section => {
+          const top = section.offsetTop - 100;
+          if (pageYOffset >= top) {
+            current = section.getAttribute('id');
+          }
+        });
+        navLinks.forEach(link => {
+          link.classList.remove('nav-active');
+          if (link.getAttribute('href') === '#' + current) {
+            link.classList.add('nav-active');
+          }
+        });
+        // Nav background on scroll
+        const nav = document.getElementById('navbar');
+        if (nav) {
+          nav.style.backgroundColor = window.scrollY > 50
+            ? 'rgba(15,23,42,0.95)'
+            : 'rgba(15,23,42,0.8)';
+        }
+      });
+
+      // -----------------------------------------------
+      // 4. Hamburger Mobile Menu Toggle
+      // -----------------------------------------------
+      const hamburger = document.getElementById('hamburger');
+      if (hamburger) {
+        hamburger.addEventListener('click', function() {
+          this.classList.toggle('active');
+          document.getElementById('navLinks').classList.toggle('open');
+        });
+        // Close menu on link click
+        document.querySelectorAll('.nav-links a').forEach(link => {
+          link.addEventListener('click', () => {
+            hamburger.classList.remove('active');
+            document.getElementById('navLinks').classList.remove('open');
+          });
+        });
+      }
+
+      // -----------------------------------------------
+      // 5. Role Card Expand/Collapse
+      // -----------------------------------------------
+      document.querySelectorAll('.role-card').forEach(card => {
+        card.addEventListener('click', function() {
+          this.classList.toggle('expanded');
+        });
+      });
+    </script>
+
+  </body>
+</html>
