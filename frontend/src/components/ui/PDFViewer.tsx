@@ -286,12 +286,21 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
 
         {!error && (
           <Document
-            file={url}
+            file={{
+              url,
+              // Enable cross-origin resource sharing for PDFs from different domains
+              withCredentials: false,
+            }}
             onLoadSuccess={onDocumentLoadSuccess}
             onLoadError={onDocumentLoadError}
             loading=""
             error=""
             className="flex justify-center"
+            options={{
+              // Use standard fetch with CORS mode
+              cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+              cMapPacked: true,
+            }}
           >
             <Page
               pageNumber={pageNumber}
