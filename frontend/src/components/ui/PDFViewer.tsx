@@ -1,12 +1,12 @@
 // Feature #446: React-PDF document viewer component
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Maximize2, Minimize2 } from 'lucide-react'
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 
-// Set up the worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+// Set up the worker - use cdnjs which is more reliable than unpkg
+pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`
 
 interface PDFViewerProps {
   url: string
@@ -22,6 +22,12 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
   const [rotation, setRotation] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isFitWidth, setIsFitWidth] = useState(true)
+
+  // Touch gesture state for mobile pinch-to-zoom
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [touchStartDistance, setTouchStartDistance] = useState<number | null>(null)
+  const [touchStartScale, setTouchStartScale] = useState(1.0)
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages)
@@ -32,7 +38,66 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
   const onDocumentLoadError = useCallback((error: Error) => {
     console.error('Error loading PDF:', error)
     setLoading(false)
-    setError('Failed to load PDF document')
+    setError('Unable to view PDF. The file may be loading - try again in a moment or download to view.')
+  }, [])
+
+  // Touch handlers for pinch-to-zoom on mobile
+  const getTouchDistance = (touches: React.TouchList) => {
+    if (touches.length < 2) return 0
+    const dx = touches[0].clientX - touches[1].clientX
+    const dy = touches[0].clientY - touches[1].clientY
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      setTouchStartDistance(getTouchDistance(e.touches))
+      setTouchStartScale(scale)
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && touchStartDistance) {
+      const currentDistance = getTouchDistance(e.touches)
+      const scaleChange = currentDistance / touchStartDistance
+      const newScale = Math.min(Math.max(touchStartScale * scaleChange, 0.5), 3.0)
+      setScale(newScale)
+      setIsFitWidth(false)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    setTouchStartDistance(null)
+  }
+
+  // Double-tap to reset zoom
+  const lastTap = useRef<number>(0)
+  const handleDoubleTap = () => {
+    const now = Date.now()
+    if (now - lastTap.current < 300) {
+      // Double tap - toggle between fit width and 100%
+      if (scale === 1.0) {
+        setIsFitWidth(true)
+        setScale(1.0)
+      } else {
+        setScale(1.0)
+        setIsFitWidth(false)
+      }
+    }
+    lastTap.current = now
+  }
+
+  // Track container width for fit-width mode
+  const [containerWidth, setContainerWidth] = useState(350)
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth - 32)
+      }
+    }
+    updateWidth()
+    window.addEventListener('resize', updateWidth)
+    return () => window.removeEventListener('resize', updateWidth)
   }, [])
 
   const goToPrevPage = () => {
@@ -45,14 +110,23 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
 
   const zoomIn = () => {
     setScale((prev) => Math.min(prev + 0.25, 3.0))
+    setIsFitWidth(false)
   }
 
   const zoomOut = () => {
     setScale((prev) => Math.max(prev - 0.25, 0.5))
+    setIsFitWidth(false)
   }
 
   const rotate = () => {
     setRotation((prev) => (prev + 90) % 360)
+  }
+
+  const toggleFitWidth = () => {
+    setIsFitWidth(!isFitWidth)
+    if (!isFitWidth) {
+      setScale(1.0)
+    }
   }
 
   const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,6 +202,16 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
             <ZoomIn className="h-5 w-5" />
           </button>
 
+          {/* Fit Width Toggle */}
+          <button
+            onClick={toggleFitWidth}
+            className={`rounded p-1.5 hover:bg-gray-700 ${isFitWidth ? 'bg-gray-600' : ''}`}
+            title={isFitWidth ? "Exit fit width" : "Fit to width"}
+            aria-label={isFitWidth ? "Exit fit width" : "Fit to width"}
+          >
+            {isFitWidth ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+          </button>
+
           {/* Rotate */}
           <button
             onClick={rotate}
@@ -158,46 +242,70 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
         )}
       </div>
 
-      {/* PDF Content */}
-      <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-gray-100 dark:bg-gray-800">
+      {/* PDF Content - with touch gesture support */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-auto flex items-start justify-center p-4 bg-gray-100 dark:bg-gray-800 touch-pan-x touch-pan-y"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={handleDoubleTap}
+      >
         {loading && (
-          <div className="flex flex-col items-center gap-2 text-gray-600 dark:text-gray-300">
+          <div className="flex flex-col items-center gap-2 text-gray-600 dark:text-gray-300 mt-20">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
             <span>Loading PDF...</span>
           </div>
         )}
 
         {error && (
-          <div className="flex flex-col items-center gap-2 text-red-600">
-            <span>{error}</span>
+          <div className="flex flex-col items-center gap-4 text-center p-6 mt-10">
+            <div className="rounded-full bg-red-100 p-4">
+              <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-red-600 font-medium">{error}</p>
+              <p className="text-gray-500 text-sm mt-1">Double-tap to retry or download the file</p>
+            </div>
             <a
               href={url}
-              download
-              className="rounded bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90"
+              download={filename || 'document.pdf'}
+              className="rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary/90 flex items-center gap-2"
             >
-              Download instead
+              <Download className="h-4 w-4" />
+              Download PDF
             </a>
           </div>
         )}
 
-        <Document
-          file={url}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          loading=""
-          error=""
-          className="flex justify-center"
-        >
-          <Page
-            pageNumber={pageNumber}
-            scale={scale}
-            rotate={rotation}
+        {!error && (
+          <Document
+            file={url}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onLoadError={onDocumentLoadError}
             loading=""
-            className="shadow-lg"
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-          />
-        </Document>
+            error=""
+            className="flex justify-center"
+          >
+            <Page
+              pageNumber={pageNumber}
+              scale={isFitWidth ? undefined : scale}
+              width={isFitWidth ? containerWidth : undefined}
+              rotate={rotation}
+              loading=""
+              className="shadow-lg"
+              renderTextLayer={true}
+              renderAnnotationLayer={true}
+            />
+          </Document>
+        )}
+      </div>
+
+      {/* Mobile hint - only shown on touch devices */}
+      <div className="md:hidden bg-gray-700 px-3 py-1.5 text-center text-xs text-gray-300">
+        Pinch to zoom • Double-tap to reset • Swipe to pan
       </div>
 
       {/* Page Thumbnails (optional - shown at bottom for multi-page PDFs) */}
