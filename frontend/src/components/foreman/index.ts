@@ -1,7 +1,6 @@
 // Foreman Mobile UI Components
 
 // Navigation (V2 is the research-backed 5-tab design)
-export { ForemanBottomNav } from './ForemanBottomNav'
 export { ForemanBottomNavV2 } from './ForemanBottomNavV2'
 
 // Shell & Dashboard
