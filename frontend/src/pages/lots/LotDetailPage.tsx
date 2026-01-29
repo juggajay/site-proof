@@ -33,11 +33,8 @@ import type {
 import {
   LOT_TABS as tabs,
   lotStatusColors as statusColors,
-  testPassFailColors,
-  testStatusColors,
-  ncrStatusColors,
-  severityColors,
 } from './constants'
+import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots'
 
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
@@ -2797,64 +2794,11 @@ export function LotDetailPage() {
                 View All Tests
               </button>
             </div>
-            {loadingTests ? (
-              <div className="flex justify-center p-8">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              </div>
-            ) : testResults.length === 0 ? (
-              <div className="rounded-lg border p-6 text-center">
-                <div className="text-4xl mb-2">🧪</div>
-                <h3 className="text-lg font-semibold mb-2">No Test Results</h3>
-                <p className="text-muted-foreground mb-4">
-                  No test results have been linked to this lot yet. Link test results to verify quality compliance.
-                </p>
-                <button
-                  onClick={() => navigate(`/projects/${projectId}/tests`)}
-                  className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
-                >
-                  Go to Test Results
-                </button>
-              </div>
-            ) : (
-              <div className="rounded-lg border overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Test Type</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Request #</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Laboratory</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Result</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Pass/Fail</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {testResults.map((test) => (
-                      <tr key={test.id} className="hover:bg-muted/30">
-                        <td className="px-4 py-3 text-sm font-medium">{test.testType}</td>
-                        <td className="px-4 py-3 text-sm">{test.testRequestNumber || '—'}</td>
-                        <td className="px-4 py-3 text-sm">{test.laboratoryName || '—'}</td>
-                        <td className="px-4 py-3 text-sm">
-                          {test.resultValue != null
-                            ? `${test.resultValue}${test.resultUnit ? ` ${test.resultUnit}` : ''}`
-                            : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${testPassFailColors[test.passFail] || 'bg-gray-100'}`}>
-                            {test.passFail}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-gray-100'}`}>
-                            {test.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <TestsTabContent
+              projectId={projectId!}
+              testResults={testResults}
+              loading={loadingTests}
+            />
           </div>
         )}
 
@@ -2870,60 +2814,11 @@ export function LotDetailPage() {
                 View All NCRs
               </button>
             </div>
-            {loadingNcrs ? (
-              <div className="flex justify-center p-8">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              </div>
-            ) : ncrs.length === 0 ? (
-              <div className="rounded-lg border p-6 text-center">
-                <div className="text-4xl mb-2">✅</div>
-                <h3 className="text-lg font-semibold mb-2">No NCRs</h3>
-                <p className="text-muted-foreground mb-4">
-                  No non-conformance reports have been raised for this lot.
-                </p>
-                <button
-                  onClick={() => navigate(`/projects/${projectId}/ncr`)}
-                  className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
-                >
-                  Go to NCR Register
-                </button>
-              </div>
-            ) : (
-              <div className="rounded-lg border overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium">NCR #</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Description</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Category</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Severity</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium">Raised By</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {ncrs.map((ncr) => (
-                      <tr key={ncr.id} className="hover:bg-muted/30">
-                        <td className="px-4 py-3 text-sm font-mono">{ncr.ncrNumber}</td>
-                        <td className="px-4 py-3 text-sm max-w-xs truncate">{ncr.description}</td>
-                        <td className="px-4 py-3 text-sm capitalize">{ncr.category}</td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${severityColors[ncr.severity] || 'bg-gray-100'}`}>
-                            {ncr.severity.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${ncrStatusColors[ncr.status] || 'bg-gray-100'}`}>
-                            {ncr.status.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm">{ncr.raisedBy?.fullName || ncr.raisedBy?.email || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <NCRsTabContent
+              projectId={projectId!}
+              ncrs={ncrs}
+              loading={loadingNcrs}
+            />
           </div>
         )}
 
@@ -3410,100 +3305,10 @@ export function LotDetailPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Activity History</h2>
             </div>
-            {loadingHistory ? (
-              <div className="flex justify-center p-8">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              </div>
-            ) : activityLogs.length === 0 ? (
-              <div className="rounded-lg border p-6 text-center">
-                <div className="text-4xl mb-2">📜</div>
-                <h3 className="text-lg font-semibold mb-2">No Activity History</h3>
-                <p className="text-muted-foreground">
-                  No activity has been recorded for this lot yet.
-                </p>
-              </div>
-            ) : (
-              <div className="relative">
-                {/* Timeline */}
-                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
-                <div className="space-y-4">
-                  {activityLogs.map((log, _index) => {
-                    const isCreate = log.action.includes('create') || log.action.includes('add')
-                    const isDelete = log.action.includes('delete') || log.action.includes('remove')
-                    const isUpdate = log.action.includes('update') || log.action.includes('edit')
-
-                    return (
-                      <div key={log.id} className="relative pl-10">
-                        {/* Timeline dot */}
-                        <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 bg-background ${
-                          isCreate ? 'border-green-500' :
-                          isDelete ? 'border-red-500' :
-                          isUpdate ? 'border-blue-500' :
-                          'border-gray-400'
-                        }`} />
-
-                        <div className="rounded-lg border bg-card p-4">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
-                                isCreate ? 'bg-green-100 text-green-700' :
-                                isDelete ? 'bg-red-100 text-red-700' :
-                                isUpdate ? 'bg-blue-100 text-blue-700' :
-                                'bg-gray-100 text-gray-700'
-                              }`}>
-                                {log.action}
-                              </span>
-                              <p className="mt-1 text-sm">
-                                {log.user ? (
-                                  <span className="font-medium">{log.user.fullName || log.user.email}</span>
-                                ) : (
-                                  <span className="text-muted-foreground">System</span>
-                                )}
-                                {' '}
-                                <span className="text-muted-foreground">
-                                  {log.action.replace(/_/g, ' ')} {log.entityType.toLowerCase()}
-                                </span>
-                              </p>
-                            </div>
-                            <time className="text-xs text-muted-foreground">
-                              {new Date(log.createdAt).toLocaleString('en-AU', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </time>
-                          </div>
-
-                          {/* Show changes if available */}
-                          {log.changes && Object.keys(log.changes).length > 0 && (
-                            <div className="mt-3 pt-3 border-t">
-                              <p className="text-xs font-medium text-muted-foreground mb-2">Changes:</p>
-                              <div className="space-y-1">
-                                {Object.entries(log.changes).map(([field, values]: [string, any]) => (
-                                  <div key={field} className="text-xs">
-                                    <span className="font-medium capitalize">{field.replace(/_/g, ' ')}:</span>
-                                    {' '}
-                                    {values.from !== undefined && (
-                                      <>
-                                        <span className="text-red-600 line-through">{String(values.from || '(empty)')}</span>
-                                        {' → '}
-                                      </>
-                                    )}
-                                    <span className="text-green-600">{String(values.to || values || '(empty)')}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+            <HistoryTabContent
+              activityLogs={activityLogs}
+              loading={loadingHistory}
+            />
           </div>
         )}
       </div>
