@@ -1,9 +1,9 @@
 // MobileITPChecklist - Mobile-optimized ITP completion interface for foremen/subcontractors
-// Features: Simple status buttons (Pass/N/A/Fail), notes, photos, no blocking
+// Features: Simple status buttons (Pass/N/A/Fail), notes, photos, hold point locking
 import { useState, useRef, useEffect } from 'react'
 import { BottomSheet } from './sheets/BottomSheet'
 import { useHaptics } from '@/hooks/useHaptics'
-import { Camera, MessageSquare, Image, ChevronRight } from 'lucide-react'
+import { Camera, MessageSquare, Image, ChevronRight, Lock } from 'lucide-react'
 
 interface ITPChecklistItem {
   id: string
@@ -35,6 +35,7 @@ interface ITPCompletion {
   isCompleted: boolean
   isNotApplicable?: boolean
   isFailed?: boolean
+  isVerified?: boolean
   notes: string | null
   completedAt: string | null
   completedBy: { id: string; fullName: string; email: string } | null
@@ -80,6 +81,21 @@ export function MobileITPChecklist({
     return 'pending'
   }
 
+  // Check if item is locked due to unreleased hold point (Feature #194)
+  // An item is locked if there's an unreleased hold point BEFORE it in the sequence
+  const isItemLockedByHoldPoint = (item: ITPChecklistItem): boolean => {
+    // Get all hold point items that come BEFORE this item (lower order number)
+    const precedingHoldPoints = checklistItems.filter(
+      (i) => i.pointType === 'hold_point' && i.order < item.order
+    )
+    // Check if any preceding hold point is NOT released (not completed or not verified)
+    return precedingHoldPoints.some((hp) => {
+      const hpCompletion = getCompletion(hp.id)
+      // A hold point is "released" if it's completed AND verified
+      return !hpCompletion?.isCompleted || !hpCompletion?.isVerified
+    })
+  }
+
   const completedCount = completions.filter(c => c.isCompleted || c.isNotApplicable).length
   const totalCount = checklistItems.length
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
@@ -114,6 +130,7 @@ export function MobileITPChecklist({
           const completion = getCompletion(item.id)
           const hasNotes = !!completion?.notes
           const hasPhotos = (completion?.attachments?.length || 0) > 0
+          const isLocked = isItemLockedByHoldPoint(item) && status === 'pending'
 
           return (
             <MobileITPItem
@@ -124,11 +141,16 @@ export function MobileITPChecklist({
               hasPhotos={hasPhotos}
               photoCount={completion?.attachments?.length || 0}
               isUpdating={updatingItem === item.id}
+              isLocked={isLocked}
               onTap={() => {
                 trigger('light')
                 setSelectedItem(item)
               }}
               onQuickComplete={() => {
+                if (isLocked) {
+                  trigger('error')
+                  return
+                }
                 trigger('medium')
                 onToggleCompletion(item.id, status !== 'completed', completion?.notes || null)
               }}
@@ -142,21 +164,34 @@ export function MobileITPChecklist({
         isOpen={!!selectedItem}
         item={selectedItem}
         completion={selectedItem ? getCompletion(selectedItem.id) : undefined}
+        isLocked={selectedItem ? isItemLockedByHoldPoint(selectedItem) && getItemStatus(selectedItem.id) === 'pending' : false}
         onClose={() => setSelectedItem(null)}
         onPass={(notes) => {
           if (!selectedItem) return
+          if (isItemLockedByHoldPoint(selectedItem) && getItemStatus(selectedItem.id) === 'pending') {
+            trigger('error')
+            return
+          }
           trigger('medium')
           onToggleCompletion(selectedItem.id, true, notes)
           setSelectedItem(null)
         }}
         onNA={(reason) => {
           if (!selectedItem) return
+          if (isItemLockedByHoldPoint(selectedItem) && getItemStatus(selectedItem.id) === 'pending') {
+            trigger('error')
+            return
+          }
           trigger('medium')
           onMarkNotApplicable(selectedItem.id, reason)
           setSelectedItem(null)
         }}
         onFail={(reason) => {
           if (!selectedItem) return
+          if (isItemLockedByHoldPoint(selectedItem) && getItemStatus(selectedItem.id) === 'pending') {
+            trigger('error')
+            return
+          }
           trigger('error')
           onMarkFailed(selectedItem.id, reason)
           setSelectedItem(null)
@@ -182,6 +217,7 @@ interface MobileITPItemProps {
   hasPhotos: boolean
   photoCount: number
   isUpdating: boolean
+  isLocked: boolean
   onTap: () => void
   onQuickComplete: () => void
 }
@@ -193,6 +229,7 @@ function MobileITPItem({
   hasPhotos,
   photoCount,
   isUpdating,
+  isLocked,
   onTap,
   onQuickComplete,
 }: MobileITPItemProps) {
@@ -201,6 +238,7 @@ function MobileITPItem({
     completed: 'bg-green-500 border-green-500 text-white',
     na: 'bg-gray-400 border-gray-400 text-white',
     failed: 'bg-red-500 border-red-500 text-white',
+    locked: 'bg-gray-300 border-gray-400 text-gray-500',
   }
 
   const statusIcons = {
@@ -222,23 +260,23 @@ function MobileITPItem({
     <div
       className={`flex items-center gap-3 p-4 border-b active:bg-muted/50 transition-colors touch-manipulation ${
         isUpdating ? 'opacity-50' : ''
-      }`}
+      } ${isLocked ? 'opacity-60 bg-gray-100/50 dark:bg-gray-800/30' : ''}`}
       onClick={onTap}
     >
       {/* Status indicator - quick tap to toggle complete */}
       <button
         onClick={(e) => {
           e.stopPropagation()
-          if (status === 'pending' || status === 'completed') {
+          if (!isLocked && (status === 'pending' || status === 'completed')) {
             onQuickComplete()
           }
         }}
-        disabled={isUpdating || status === 'na' || status === 'failed'}
+        disabled={isUpdating || status === 'na' || status === 'failed' || isLocked}
         className={`flex-shrink-0 w-12 h-12 rounded-full border-2 flex items-center justify-center text-xl font-bold transition-all touch-manipulation ${
-          statusColors[status]
-        } ${isUpdating ? 'animate-pulse' : ''}`}
+          isLocked ? statusColors.locked : statusColors[status]
+        } ${isUpdating ? 'animate-pulse' : ''} ${isLocked ? 'cursor-not-allowed' : ''}`}
       >
-        {statusIcons[status]}
+        {isLocked ? <Lock className="w-5 h-5" /> : statusIcons[status]}
       </button>
 
       {/* Item content */}
@@ -255,7 +293,13 @@ function MobileITPItem({
         </div>
         {/* Indicators */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground ml-7">
-          {item.evidenceRequired === 'photo' && !hasPhotos && (
+          {isLocked && (
+            <span className="flex items-center gap-1 text-gray-500">
+              <Lock className="w-3 h-3" />
+              <span>Locked</span>
+            </span>
+          )}
+          {item.evidenceRequired === 'photo' && !hasPhotos && !isLocked && (
             <span className="flex items-center gap-1 text-amber-600">
               <Camera className="w-3 h-3" />
               <span>Photo req</span>
@@ -288,6 +332,7 @@ interface MobileITPItemSheetProps {
   isOpen: boolean
   item: ITPChecklistItem | null
   completion?: ITPCompletion
+  isLocked: boolean
   onClose: () => void
   onPass: (notes: string | null) => void
   onNA: (reason: string) => void
@@ -300,6 +345,7 @@ function MobileITPItemSheet({
   isOpen,
   item,
   completion,
+  isLocked,
   onClose,
   onPass,
   onNA,
@@ -348,6 +394,17 @@ function MobileITPItemSheet({
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={`Item ${item.order}`}>
       <div className="space-y-4">
+        {/* Locked banner */}
+        {isLocked && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <Lock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Item Locked</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">Complete preceding hold point first</p>
+            </div>
+          </div>
+        )}
+
         {/* Item description */}
         <div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -373,9 +430,12 @@ function MobileITPItemSheet({
         {/* Status buttons - large touch targets */}
         <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={() => onPass(notes || null)}
+            onClick={() => !isLocked && onPass(notes || null)}
+            disabled={isLocked}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
-              isCompleted
+              isLocked
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : isCompleted
                 ? 'bg-green-500 text-white ring-2 ring-green-600 ring-offset-2'
                 : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-200'
             }`}
@@ -385,14 +445,17 @@ function MobileITPItemSheet({
           </button>
           <button
             onClick={() => {
-              if (isNA) return
+              if (isLocked || isNA) return
               if (!showNAInput) {
                 setShowNAInput(true)
                 setShowFailInput(false)
               }
             }}
+            disabled={isLocked}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
-              isNA
+              isLocked
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : isNA
                 ? 'bg-gray-500 text-white ring-2 ring-gray-600 ring-offset-2'
                 : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200'
             }`}
@@ -402,14 +465,17 @@ function MobileITPItemSheet({
           </button>
           <button
             onClick={() => {
-              if (isFailed) return
+              if (isLocked || isFailed) return
               if (!showFailInput) {
                 setShowFailInput(true)
                 setShowNAInput(false)
               }
             }}
+            disabled={isLocked}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
-              isFailed
+              isLocked
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : isFailed
                 ? 'bg-red-500 text-white ring-2 ring-red-600 ring-offset-2'
                 : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200'
             }`}
