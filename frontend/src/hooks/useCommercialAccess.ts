@@ -1,21 +1,17 @@
 import { useAuth } from '@/lib/auth'
+import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles'
 
-// Roles that can view commercial data (contract values, budgets, rates, claims)
-const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
-
-// Roles that can view subcontractor rates specifically
-// Foremen and site engineers cannot see hourly rates for subcontractors
-const RATE_VIEW_ROLES = ['owner', 'admin', 'project_manager']
-
-// Roles that can view docket amounts
-const DOCKET_AMOUNT_ROLES = ['owner', 'admin', 'project_manager']
-
+/**
+ * Hook to check if the current user has commercial access.
+ * Commercial access allows viewing contract values, budgets, rates, and claims.
+ */
 export function useCommercialAccess() {
   const { user } = useAuth()
+  const role = user?.role
 
-  const hasCommercialAccess = user?.role ? COMMERCIAL_ROLES.includes(user.role) : false
-  const canViewSubcontractorRates = user?.role ? RATE_VIEW_ROLES.includes(user.role) : false
-  const canViewDocketAmounts = user?.role ? DOCKET_AMOUNT_ROLES.includes(user.role) : false
+  const hasCommercialAccess = hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL)
+  const canViewSubcontractorRates = hasRoleInGroup(role, ROLE_GROUPS.RATE_VIEWERS)
+  const canViewDocketAmounts = hasRoleInGroup(role, ROLE_GROUPS.DOCKET_AMOUNT_VIEWERS)
 
   return {
     hasCommercialAccess,
@@ -23,7 +19,6 @@ export function useCommercialAccess() {
     canViewRates: hasCommercialAccess,
     canViewClaims: hasCommercialAccess,
     canViewContractValues: hasCommercialAccess,
-    // Subcontractor-specific rate visibility
     canViewSubcontractorRates,
     canViewDocketAmounts,
   }

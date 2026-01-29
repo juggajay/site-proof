@@ -1,4 +1,5 @@
 import { useAuth } from '@/lib/auth'
+import { isViewerRole } from '@/lib/roles'
 
 interface ViewerAccessState {
   isViewer: boolean
@@ -35,15 +36,13 @@ export function useViewerAccess(): ViewerAccessState {
     }
   }
 
-  // Check if user is a viewer role
-  const role = user.role?.toLowerCase() || ''
-  const isViewerRole = role === 'viewer'
+  const isViewer = isViewerRole(user.role)
 
   return {
-    isViewer: isViewerRole,
-    canCreate: !isViewerRole,
-    canEdit: !isViewerRole,
-    canDelete: !isViewerRole,
+    isViewer,
+    canCreate: !isViewer,
+    canEdit: !isViewer,
+    canDelete: !isViewer,
     loading: false,
   }
 }

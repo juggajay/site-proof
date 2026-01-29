@@ -103,3 +103,72 @@ export const ROLE_OPTIONS = [
   { value: ROLES.VIEWER, label: 'Viewer' },
   { value: ROLES.MEMBER, label: 'Member' },
 ] as const
+
+/**
+ * Role groups for permission checking.
+ * Use these to check if a user belongs to a category of roles.
+ */
+export const ROLE_GROUPS = {
+  // Can view commercial data (contract values, budgets, rates, claims)
+  COMMERCIAL: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
+
+  // Admin-level access
+  ADMIN: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
+
+  // Can manage site operations and subcontractors
+  MANAGEMENT: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER] as const,
+
+  // Can perform quality actions (conformance, ITP verification)
+  QUALITY: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.QUALITY_MANAGER] as const,
+
+  // Subcontractor roles
+  SUBCONTRACTOR: [ROLES.SUBCONTRACTOR, ROLES.SUBCONTRACTOR_ADMIN] as const,
+
+  // Can view subcontractor rates
+  RATE_VIEWERS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
+
+  // Can view docket amounts
+  DOCKET_AMOUNT_VIEWERS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
+
+  // Read-only access
+  VIEWER: [ROLES.VIEWER] as const,
+}
+
+/**
+ * Check if a role is in a specific role group
+ */
+export function hasRoleInGroup(
+  userRole: string | undefined | null,
+  group: readonly string[]
+): boolean {
+  if (!userRole) return false
+  return group.includes(userRole)
+}
+
+/**
+ * Check if user has commercial access
+ */
+export function hasCommercialAccess(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL)
+}
+
+/**
+ * Check if user is a subcontractor
+ */
+export function isSubcontractorRole(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.SUBCONTRACTOR)
+}
+
+/**
+ * Check if user is a viewer (read-only)
+ */
+export function isViewerRole(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.VIEWER)
+}
+
+/**
+ * Check if user has quality management access
+ */
+export function hasQualityAccess(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.QUALITY)
+}
