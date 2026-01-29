@@ -302,9 +302,14 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
               width={isFitWidth ? containerWidth : undefined}
               rotate={rotation}
               loading=""
+              error=""
               className="shadow-lg"
               renderTextLayer={true}
               renderAnnotationLayer={true}
+              onRenderError={(error) => {
+                console.error('Page render error:', error)
+                // Don't crash - just log the error
+              }}
             />
           </Document>
         )}
@@ -340,8 +345,10 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
                     scale={0.1}
                     width={60}
                     loading=""
+                    error=""
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
+                    onRenderError={() => {/* Silently ignore thumbnail render errors */}}
                   />
                 </Document>
               </button>
