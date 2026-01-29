@@ -78,6 +78,19 @@ lotsRouter.get('/', async (req, res) => {
             companyName: true,
           }
         },
+        // Include subcontractor assignments with ITP permissions
+        subcontractorAssignments: {
+          where: { status: 'active' },
+          select: {
+            id: true,
+            subcontractorCompanyId: true,
+            canCompleteITP: true,
+            itpRequiresVerification: true,
+            subcontractorCompany: {
+              select: { id: true, companyName: true }
+            }
+          }
+        },
         createdAt: true,
       },
       orderBy: { lotNumber: 'asc' },
