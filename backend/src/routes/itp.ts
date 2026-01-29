@@ -1230,10 +1230,40 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
     // Determine completedAt and completedById based on status
     const isFinished = newStatus === 'completed' || newStatus === 'not_applicable' || newStatus === 'failed'
 
-    // Feature #271: Subcontractor completions require head contractor verification
+    // Feature #271: Subcontractor completions - check lot assignment for ITP permissions
     let verificationStatus: string | undefined
     if (isSubcontractor && isFinished && newStatus === 'completed') {
-      verificationStatus = 'pending_verification'
+      // Get the ITP instance to find the lot
+      const itpInstanceForPermCheck = await prisma.iTPInstance.findUnique({
+        where: { id: itpInstanceId },
+        select: { lotId: true }
+      })
+
+      if (itpInstanceForPermCheck?.lotId && subcontractorUser) {
+        // Check if subcontractor has ITP completion permission for this lot
+        const assignment = await prisma.lotSubcontractorAssignment.findFirst({
+          where: {
+            lotId: itpInstanceForPermCheck.lotId,
+            subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+            status: 'active',
+            canCompleteITP: true
+          }
+        })
+
+        if (!assignment) {
+          return res.status(403).json({
+            error: 'Not authorized to complete ITP items on this lot'
+          })
+        }
+
+        // Set verification status based on assignment config
+        verificationStatus = assignment.itpRequiresVerification
+          ? 'pending_verification'
+          : 'verified'
+      } else {
+        // Fallback to requiring verification if no assignment found
+        verificationStatus = 'pending_verification'
+      }
     }
 
     // Build witness data object (only include if values provided)
@@ -1386,9 +1416,9 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       )
     }
 
-    // Feature #271: Notify head contractor when subcontractor completes an item
+    // Feature #271: Notify head contractor when subcontractor completes an item (only if verification required)
     let subbieCompletionNotification = null
-    if (isSubcontractor && isFinished && newStatus === 'completed') {
+    if (isSubcontractor && isFinished && newStatus === 'completed' && verificationStatus === 'pending_verification') {
       try {
         // Get the ITP instance with lot and project info
         const itpInstance = await prisma.iTPInstance.findUnique({
