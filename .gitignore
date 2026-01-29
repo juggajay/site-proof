@@ -67,3 +67,4 @@ workbox-*.js
 # Local development
 .turbo/
 .vercel/
+.worktrees/
