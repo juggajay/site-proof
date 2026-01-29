@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 import { AlertTriangle } from 'lucide-react'
 import { PDFViewer } from '../../components/ui/PDFViewer'  // Feature #446: React-PDF viewer
+import { API_URL } from '../../lib/api'
 
 interface Document {
   id: string
@@ -25,8 +26,6 @@ interface Lot {
   lotNumber: string
   description: string
 }
-
-const API_URL = import.meta.env.VITE_API_URL || ''
 
 const DOCUMENT_TYPES = [
   { id: 'specification', label: 'Specification' },
