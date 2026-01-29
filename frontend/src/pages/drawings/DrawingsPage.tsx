@@ -33,6 +33,14 @@ interface Stats {
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
+// Helper to construct document URLs - handles both relative paths and full Supabase URLs
+const getDocumentUrl = (fileUrl: string): string => {
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+    return fileUrl
+  }
+  return `${API_URL}${fileUrl}`
+}
+
 const DRAWING_STATUSES = [
   { id: 'preliminary', label: 'Preliminary', color: 'bg-yellow-100 text-yellow-800' },
   { id: 'for_construction', label: 'For Construction', color: 'bg-blue-100 text-blue-800' },
@@ -287,7 +295,7 @@ export function DrawingsPage() {
         // For now, we'll open each file in a new tab
         for (const drawing of data.drawings) {
           const link = document.createElement('a')
-          link.href = `${API_URL}${drawing.fileUrl}`
+          link.href = getDocumentUrl(drawing.fileUrl)
           link.download = `${drawing.drawingNumber}_Rev${drawing.revision || '0'}_${drawing.filename}`
           link.target = '_blank'
           document.body.appendChild(link)
@@ -493,7 +501,7 @@ export function DrawingsPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
                           <a
-                            href={`${API_URL}${drawing.document.fileUrl}`}
+                            href={getDocumentUrl(drawing.document.fileUrl)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="rounded-md p-2 hover:bg-muted"

@@ -6,6 +6,16 @@ import { AlertTriangle } from 'lucide-react'
 import { PDFViewer } from '../../components/ui/PDFViewer'  // Feature #446: React-PDF viewer
 import { API_URL } from '../../lib/api'
 
+// Helper to construct document URLs - handles both relative paths and full Supabase URLs
+const getDocumentUrl = (fileUrl: string): string => {
+  // If it's already a full URL (Supabase storage), use it directly
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+    return fileUrl
+  }
+  // Otherwise, prepend API_URL for local/relative paths
+  return `${API_URL}${fileUrl}`
+}
+
 interface Document {
   id: string
   documentType: string
@@ -624,7 +634,7 @@ export function DocumentsPage() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted overflow-hidden" data-testid={`file-icon-${doc.id}`}>
                   {isImage(doc.mimeType) ? (
                     <img
-                      src={`${API_URL}${doc.fileUrl}`}
+                      src={getDocumentUrl(doc.fileUrl)}
                       alt={doc.filename}
                       className="h-full w-full object-cover"
                       onError={(e) => {
@@ -709,7 +719,7 @@ export function DocumentsPage() {
                     </button>
                   )}
                   <a
-                    href={`${API_URL}${doc.fileUrl}`}
+                    href={getDocumentUrl(doc.fileUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="rounded-md p-2 hover:bg-muted"
@@ -982,7 +992,7 @@ export function DocumentsPage() {
               </button>
               {/* Download */}
               <a
-                href={`${API_URL}${viewerDoc.fileUrl}`}
+                href={getDocumentUrl(viewerDoc.fileUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-md p-2 hover:bg-white/20"
@@ -1010,7 +1020,7 @@ export function DocumentsPage() {
             {isPdf(viewerDoc.mimeType) ? (
               /* Feature #446: Use React-PDF viewer for better PDF rendering */
               <PDFViewer
-                url={`${API_URL}${viewerDoc.fileUrl}`}
+                url={getDocumentUrl(viewerDoc.fileUrl)}
                 filename={viewerDoc.filename}
                 className="w-full h-full max-w-5xl"
               />
@@ -1020,7 +1030,7 @@ export function DocumentsPage() {
                 style={{ cursor: 'grab' }}
               >
                 <img
-                  src={`${API_URL}${viewerDoc.fileUrl}`}
+                  src={getDocumentUrl(viewerDoc.fileUrl)}
                   alt={viewerDoc.filename}
                   className="rounded shadow-lg transition-transform"
                   style={{
@@ -1035,7 +1045,7 @@ export function DocumentsPage() {
               <div className="text-white text-center">
                 <p>Preview not available for this file type</p>
                 <a
-                  href={`${API_URL}${viewerDoc.fileUrl}`}
+                  href={getDocumentUrl(viewerDoc.fileUrl)}
                   className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm"
                   download
                 >

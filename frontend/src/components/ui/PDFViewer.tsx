@@ -286,11 +286,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
 
         {!error && (
           <Document
-            file={{
-              url,
-              // Enable cross-origin resource sharing for PDFs from different domains
-              withCredentials: false,
-            }}
+            file={url}
             onLoadSuccess={onDocumentLoadSuccess}
             onLoadError={onDocumentLoadError}
             loading=""
