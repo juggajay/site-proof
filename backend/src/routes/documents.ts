@@ -2,6 +2,7 @@
 import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { supabase, isSupabaseConfigured, getSupabasePublicUrl, DOCUMENTS_BUCKET } from '../lib/supabase.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -234,12 +235,13 @@ router.get('/signed-url/validate', async (req: Request, res: Response) => {
 router.use(requireAuth)
 
 // Configure multer for file uploads
+// Use memory storage when Supabase is configured, disk storage as fallback
 const uploadDir = path.join(process.cwd(), 'uploads', 'documents')
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true })
 }
 
-const storage = multer.diskStorage({
+const diskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadDir)
   },
@@ -249,22 +251,26 @@ const storage = multer.diskStorage({
   }
 })
 
+// Use memory storage for Supabase uploads
+const memoryStorage = multer.memoryStorage()
+
+const allowedTypes = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]
+
+// Use memory storage when Supabase is configured for cloud uploads
 const upload = multer({
-  storage,
+  storage: isSupabaseConfigured() ? memoryStorage : diskStorage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
   fileFilter: (_req, file, cb) => {
-    // Accept common document and image types
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-    ]
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true)
     } else {
@@ -272,6 +278,50 @@ const upload = multer({
     }
   }
 })
+
+// Helper to upload file to Supabase Storage
+async function uploadToSupabase(
+  file: Express.Multer.File,
+  projectId: string
+): Promise<{ url: string; storagePath: string }> {
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+  const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')
+  const storagePath = `${projectId}/${uniqueSuffix}-${sanitizedFilename}`
+
+  const { error } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .upload(storagePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false
+    })
+
+  if (error) {
+    console.error('Supabase upload error:', error)
+    throw new Error(`Failed to upload to Supabase: ${error.message}`)
+  }
+
+  const url = getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath)
+  return { url, storagePath }
+}
+
+// Helper to delete file from Supabase Storage
+async function deleteFromSupabase(fileUrl: string): Promise<void> {
+  // Extract storage path from URL
+  const urlParts = fileUrl.split(`/storage/v1/object/public/${DOCUMENTS_BUCKET}/`)
+  if (urlParts.length !== 2) {
+    console.warn('Could not extract storage path from URL:', fileUrl)
+    return
+  }
+
+  const storagePath = decodeURIComponent(urlParts[1])
+  const { error } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .remove([storagePath])
+
+  if (error) {
+    console.error('Supabase delete error:', error)
+  }
+}
 
 // Helper to check project access
 async function checkProjectAccess(userId: string, projectId: string): Promise<boolean> {
@@ -403,19 +453,44 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     const { projectId, lotId, documentType, category, caption, tags } = req.body
 
     if (!projectId || !documentType) {
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path)
+      // Clean up uploaded file if using disk storage
+      if (req.file.path) {
+        fs.unlinkSync(req.file.path)
+      }
       return res.status(400).json({ error: 'projectId and documentType are required' })
     }
 
     const hasAccess = await checkProjectAccess(userId, projectId)
     if (!hasAccess) {
-      fs.unlinkSync(req.file.path)
+      if (req.file.path) {
+        fs.unlinkSync(req.file.path)
+      }
       return res.status(403).json({ error: 'Access denied' })
     }
 
-    // Feature #479: Extract EXIF metadata for images
-    const photoMetadata = await extractPhotoMetadata(req.file.path, req.file.mimetype)
+    let fileUrl: string
+    let photoMetadata: Awaited<ReturnType<typeof extractPhotoMetadata>> = {}
+
+    // Upload to Supabase Storage if configured, otherwise use local filesystem
+    if (isSupabaseConfigured() && req.file.buffer) {
+      // For EXIF extraction from memory buffer, write to temp file
+      if (req.file.mimetype.startsWith('image/')) {
+        const tempPath = path.join(uploadDir, `temp-${Date.now()}-${req.file.originalname}`)
+        fs.writeFileSync(tempPath, req.file.buffer)
+        photoMetadata = await extractPhotoMetadata(tempPath, req.file.mimetype)
+        fs.unlinkSync(tempPath) // Clean up temp file
+      }
+
+      // Upload to Supabase
+      const { url } = await uploadToSupabase(req.file, projectId)
+      fileUrl = url
+      console.log(`[Upload] File uploaded to Supabase: ${fileUrl}`)
+    } else {
+      // Fallback to local filesystem
+      photoMetadata = await extractPhotoMetadata(req.file.path, req.file.mimetype)
+      fileUrl = `/uploads/documents/${req.file.filename}`
+      console.log(`[Upload] File saved locally: ${fileUrl}`)
+    }
 
     // Create document record
     const document = await prisma.document.create({
@@ -425,7 +500,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
         documentType,
         category: category || null,
         filename: req.file.originalname,
-        fileUrl: `/uploads/documents/${req.file.filename}`,
+        fileUrl,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
         uploadedById: userId,
@@ -470,13 +545,13 @@ router.post('/:documentId/version', upload.single('file'), async (req: Request, 
     })
 
     if (!originalDocument) {
-      fs.unlinkSync(req.file.path)
+      if (req.file.path) fs.unlinkSync(req.file.path)
       return res.status(404).json({ error: 'Original document not found' })
     }
 
     const hasAccess = await checkProjectAccess(userId, originalDocument.projectId)
     if (!hasAccess) {
-      fs.unlinkSync(req.file.path)
+      if (req.file.path) fs.unlinkSync(req.file.path)
       return res.status(403).json({ error: 'Access denied' })
     }
 
@@ -506,8 +581,25 @@ router.post('/:documentId/version', upload.single('file'), async (req: Request, 
     const highestVersion = Math.max(...allVersions.map(v => v.version))
     const newVersion = highestVersion + 1
 
-    // Extract EXIF metadata for images
-    const photoMetadata = await extractPhotoMetadata(req.file.path, req.file.mimetype)
+    let fileUrl: string
+    let photoMetadata: Awaited<ReturnType<typeof extractPhotoMetadata>> = {}
+
+    // Upload to Supabase Storage if configured, otherwise use local filesystem
+    if (isSupabaseConfigured() && req.file.buffer) {
+      // For EXIF extraction from memory buffer, write to temp file
+      if (req.file.mimetype.startsWith('image/')) {
+        const tempPath = path.join(uploadDir, `temp-${Date.now()}-${req.file.originalname}`)
+        fs.writeFileSync(tempPath, req.file.buffer)
+        photoMetadata = await extractPhotoMetadata(tempPath, req.file.mimetype)
+        fs.unlinkSync(tempPath)
+      }
+
+      const { url } = await uploadToSupabase(req.file, originalDocument.projectId)
+      fileUrl = url
+    } else {
+      photoMetadata = await extractPhotoMetadata(req.file.path, req.file.mimetype)
+      fileUrl = `/uploads/documents/${req.file.filename}`
+    }
 
     // Mark all previous versions as not latest
     await prisma.document.updateMany({
@@ -528,7 +620,7 @@ router.post('/:documentId/version', upload.single('file'), async (req: Request, 
         documentType: originalDocument.documentType,
         category: originalDocument.category,
         filename: req.file.originalname,
-        fileUrl: `/uploads/documents/${req.file.filename}`,
+        fileUrl,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
         uploadedById: userId,
@@ -716,10 +808,18 @@ router.delete('/:documentId', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Access denied' })
     }
 
-    // Delete file from disk
-    const filePath = path.join(process.cwd(), document.fileUrl)
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath)
+    // Delete file from storage
+    if (document.fileUrl.includes('supabase.co/storage')) {
+      // Delete from Supabase Storage
+      await deleteFromSupabase(document.fileUrl)
+      console.log(`[Delete] File deleted from Supabase: ${document.fileUrl}`)
+    } else {
+      // Delete from local disk
+      const filePath = path.join(process.cwd(), document.fileUrl)
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+        console.log(`[Delete] File deleted from disk: ${filePath}`)
+      }
     }
 
     // Delete database record
