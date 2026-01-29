@@ -60,7 +60,8 @@ export function DocumentsPage() {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploadedCount, setUploadedCount] = useState(0)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [uploadForm, setUploadForm] = useState({
     documentType: '',
     category: '',
@@ -150,94 +151,115 @@ export function DocumentsPage() {
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
+    const files = e.target.files
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files)
+      setSelectedFiles(fileArray)
       setImageDimensions(null)
       setDimensionWarning(null)
 
-      // Auto-detect type from file and check image dimensions
-      if (file.type.startsWith('image/')) {
+      // Auto-detect type from first file
+      const firstFile = fileArray[0]
+      if (firstFile.type.startsWith('image/')) {
         setUploadForm(prev => ({ ...prev, documentType: 'photo' }))
 
-        // Check image dimensions
-        const objectUrl = URL.createObjectURL(file)
-        const img = new window.Image()
-        img.onload = () => {
-          const width = img.naturalWidth
-          const height = img.naturalHeight
-          setImageDimensions({ width, height })
+        // Check image dimensions for single image
+        if (fileArray.length === 1) {
+          const objectUrl = URL.createObjectURL(firstFile)
+          const img = new window.Image()
+          img.onload = () => {
+            const width = img.naturalWidth
+            const height = img.naturalHeight
+            setImageDimensions({ width, height })
 
-          if (width < MIN_IMAGE_WIDTH || height < MIN_IMAGE_HEIGHT) {
-            setDimensionWarning(
-              `Warning: Image dimensions (${width}x${height}) are below recommended minimum (${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}). Photo may lack detail for documentation.`
-            )
+            if (width < MIN_IMAGE_WIDTH || height < MIN_IMAGE_HEIGHT) {
+              setDimensionWarning(
+                `Warning: Image dimensions (${width}x${height}) are below recommended minimum (${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}). Photo may lack detail for documentation.`
+              )
+            }
+            URL.revokeObjectURL(objectUrl)
           }
-          URL.revokeObjectURL(objectUrl)
+          img.onerror = () => {
+            URL.revokeObjectURL(objectUrl)
+          }
+          img.src = objectUrl
         }
-        img.onerror = () => {
-          URL.revokeObjectURL(objectUrl)
-        }
-        img.src = objectUrl
-      } else if (file.type === 'application/pdf') {
-        // Keep current or let user choose
+      } else if (firstFile.type === 'application/pdf') {
+        setUploadForm(prev => ({ ...prev, documentType: 'drawing' }))
       }
     }
   }
 
   const handleUpload = async () => {
-    if (!selectedFile || !uploadForm.documentType) {
-      alert('Please select a file and document type')
+    if (selectedFiles.length === 0 || !uploadForm.documentType) {
+      alert('Please select file(s) and document type')
       return
     }
 
     setUploading(true)
     setUploadProgress(0)
+    setUploadedCount(0)
 
-    try {
-      const token = getAuthToken()
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      formData.append('projectId', projectId || '')
-      formData.append('documentType', uploadForm.documentType)
-      if (uploadForm.category) formData.append('category', uploadForm.category)
-      if (uploadForm.caption) formData.append('caption', uploadForm.caption)
-      if (uploadForm.lotId) formData.append('lotId', uploadForm.lotId)
+    const token = getAuthToken()
+    const uploadedDocs: Document[] = []
+    const failedFiles: string[] = []
 
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 10, 90))
-      }, 200)
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i]
 
-      const res = await fetch(`${API_URL}/api/documents/upload`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      })
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('projectId', projectId || '')
+        formData.append('documentType', uploadForm.documentType)
+        if (uploadForm.category) formData.append('category', uploadForm.category)
+        if (uploadForm.caption && selectedFiles.length === 1) {
+          formData.append('caption', uploadForm.caption)
+        }
+        if (uploadForm.lotId) formData.append('lotId', uploadForm.lotId)
 
-      clearInterval(progressInterval)
-      setUploadProgress(100)
+        const res = await fetch(`${API_URL}/api/documents/upload`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        })
 
-      if (res.ok) {
-        const newDoc = await res.json()
-        setDocuments(prev => [newDoc, ...prev])
-        setShowUploadModal(false)
-        setSelectedFile(null)
-        setUploadForm({ documentType: '', category: '', caption: '', lotId: '' })
-        if (fileInputRef.current) fileInputRef.current.value = ''
-      } else {
-        const error = await res.json()
-        alert(error.error || 'Failed to upload document')
+        if (res.ok) {
+          const newDoc = await res.json()
+          uploadedDocs.push(newDoc)
+        } else {
+          failedFiles.push(file.name)
+        }
+      } catch (err) {
+        console.error(`Error uploading ${file.name}:`, err)
+        failedFiles.push(file.name)
       }
-    } catch (err) {
-      console.error('Error uploading document:', err)
-      alert('Failed to upload document')
-    } finally {
-      setUploading(false)
-      setUploadProgress(0)
+
+      // Update progress
+      setUploadedCount(i + 1)
+      setUploadProgress(Math.round(((i + 1) / selectedFiles.length) * 100))
     }
+
+    // Add all uploaded docs to the list
+    if (uploadedDocs.length > 0) {
+      setDocuments(prev => [...uploadedDocs, ...prev])
+    }
+
+    // Show results
+    if (failedFiles.length > 0) {
+      alert(`Uploaded ${uploadedDocs.length} of ${selectedFiles.length} files.\nFailed: ${failedFiles.join(', ')}`)
+    }
+
+    // Reset state
+    setShowUploadModal(false)
+    setSelectedFiles([])
+    setUploadForm({ documentType: '', category: '', caption: '', lotId: '' })
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    setUploading(false)
+    setUploadProgress(0)
+    setUploadedCount(0)
   }
 
   const handleDelete = async (documentId: string) => {
@@ -393,11 +415,14 @@ export function DocumentsPage() {
 
     const files = e.dataTransfer.files
     if (files && files.length > 0) {
-      const file = files[0]
-      setSelectedFile(file)
-      // Auto-detect type from file
-      if (file.type.startsWith('image/')) {
+      const fileArray = Array.from(files)
+      setSelectedFiles(fileArray)
+      // Auto-detect type from first file
+      const firstFile = fileArray[0]
+      if (firstFile.type.startsWith('image/')) {
         setUploadForm(prev => ({ ...prev, documentType: 'photo' }))
+      } else if (firstFile.type === 'application/pdf') {
+        setUploadForm(prev => ({ ...prev, documentType: 'drawing' }))
       }
       setShowUploadModal(true)
     }
@@ -719,10 +744,10 @@ export function DocumentsPage() {
             <div className="space-y-4">
               {/* File Input with Drag-Drop Zone */}
               <div>
-                <label className="block text-sm font-medium mb-2">Select File</label>
+                <label className="block text-sm font-medium mb-2">Select Files</label>
                 <div
                   className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                    selectedFile
+                    selectedFiles.length > 0
                       ? 'border-green-400 bg-green-50'
                       : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/50'
                   }`}
@@ -732,28 +757,15 @@ export function DocumentsPage() {
                     e.stopPropagation()
                     const files = e.dataTransfer.files
                     if (files && files.length > 0) {
-                      const file = files[0]
-                      setSelectedFile(file)
+                      const fileArray = Array.from(files)
+                      setSelectedFiles(fileArray)
                       setImageDimensions(null)
                       setDimensionWarning(null)
-                      if (file.type.startsWith('image/')) {
+                      const firstFile = fileArray[0]
+                      if (firstFile.type.startsWith('image/')) {
                         setUploadForm(prev => ({ ...prev, documentType: 'photo' }))
-                        // Check image dimensions
-                        const objectUrl = URL.createObjectURL(file)
-                        const img = new window.Image()
-                        img.onload = () => {
-                          const width = img.naturalWidth
-                          const height = img.naturalHeight
-                          setImageDimensions({ width, height })
-                          if (width < MIN_IMAGE_WIDTH || height < MIN_IMAGE_HEIGHT) {
-                            setDimensionWarning(
-                              `Warning: Image dimensions (${width}x${height}) are below recommended minimum (${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}). Photo may lack detail for documentation.`
-                            )
-                          }
-                          URL.revokeObjectURL(objectUrl)
-                        }
-                        img.onerror = () => URL.revokeObjectURL(objectUrl)
-                        img.src = objectUrl
+                      } else if (firstFile.type === 'application/pdf') {
+                        setUploadForm(prev => ({ ...prev, documentType: 'drawing' }))
                       }
                     }
                   }}
@@ -761,19 +773,32 @@ export function DocumentsPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     onChange={handleFileSelect}
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
-                  {selectedFile ? (
-                    <div className="flex items-center justify-center gap-3">
-                      <svg className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div className="text-left">
-                        <p className="font-medium text-green-700">{selectedFile.name}</p>
-                        <p className="text-sm text-green-600">{formatFileSize(selectedFile.size)}</p>
+                  {selectedFiles.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-center gap-2">
+                        <svg className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-medium text-green-700">
+                          {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                        </span>
                       </div>
+                      <div className="max-h-32 overflow-y-auto text-left">
+                        {selectedFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-sm py-1 px-2 hover:bg-green-100 rounded">
+                            <span className="truncate text-green-700">{file.name}</span>
+                            <span className="text-green-600 ml-2 flex-shrink-0">{formatFileSize(file.size)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-green-600">
+                        Total: {formatFileSize(selectedFiles.reduce((sum, f) => sum + f.size, 0))}
+                      </p>
                     </div>
                   ) : (
                     <>
@@ -784,14 +809,14 @@ export function DocumentsPage() {
                         <span className="font-medium text-blue-600">Click to browse</span> or drag and drop
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        PDF, DOC, XLS, JPG, PNG up to 50MB
+                        PDF, DOC, XLS, JPG, PNG up to 50MB (select multiple files)
                       </p>
                     </>
                   )}
                 </div>
 
-                {/* Image dimension info and warning */}
-                {imageDimensions && (
+                {/* Image dimension info and warning (for single image) */}
+                {imageDimensions && selectedFiles.length === 1 && (
                   <p className="mt-2 text-sm text-gray-500">
                     Image dimensions: {imageDimensions.width} x {imageDimensions.height} pixels
                   </p>
@@ -873,7 +898,7 @@ export function DocumentsPage() {
                     />
                   </div>
                   <p className="text-sm text-center text-muted-foreground">
-                    Uploading... {uploadProgress}%
+                    Uploading {uploadedCount} of {selectedFiles.length} files... {uploadProgress}%
                   </p>
                 </div>
               )}
@@ -884,7 +909,7 @@ export function DocumentsPage() {
               <button
                 onClick={() => {
                   setShowUploadModal(false)
-                  setSelectedFile(null)
+                  setSelectedFiles([])
                   setUploadForm({ documentType: '', category: '', caption: '', lotId: '' })
                 }}
                 disabled={uploading}
@@ -894,10 +919,10 @@ export function DocumentsPage() {
               </button>
               <button
                 onClick={handleUpload}
-                disabled={!selectedFile || !uploadForm.documentType || uploading}
+                disabled={selectedFiles.length === 0 || !uploadForm.documentType || uploading}
                 className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
-                {uploading ? 'Uploading...' : 'Upload'}
+                {uploading ? 'Uploading...' : selectedFiles.length > 1 ? `Upload ${selectedFiles.length} Files` : 'Upload'}
               </button>
             </div>
           </div>
