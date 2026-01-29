@@ -7,7 +7,8 @@ import 'react-pdf/dist/esm/Page/TextLayer.css'
 
 // Set up the worker using CDN - most reliable for production builds
 // pdfjs.version gives us the exact version bundled with react-pdf
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+// Note: File is .js not .mjs for pdfjs-dist 3.x
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`
 
 interface PDFViewerProps {
   url: string
