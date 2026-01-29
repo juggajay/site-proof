@@ -201,3 +201,18 @@ export interface ActivityLog {
     fullName: string | null
   } | null
 }
+
+export interface LotSubcontractorAssignment {
+  id: string
+  subcontractorCompanyId: string
+  canCompleteITP: boolean
+  itpRequiresVerification: boolean
+  subcontractorCompany: {
+    id: string
+    companyName: string
+  }
+  assignedBy?: {
+    id: string
+    fullName: string
+  }
+}

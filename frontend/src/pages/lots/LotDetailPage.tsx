@@ -1,11 +1,14 @@
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { LotQRCode } from '@/components/lots/LotQRCode'
+import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal'
 import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, CheckCircle, Plus, Printer, WifiOff, CloudOff } from 'lucide-react'
 import { generateConformanceReportPDF, ConformanceReportData, ConformanceFormat, ConformanceFormatOptions, defaultConformanceOptions } from '@/lib/pdfGenerator'
 import { useOfflineStatus } from '@/lib/useOfflineStatus'
@@ -29,6 +32,7 @@ import type {
   ConformStatus,
   ActivityLog,
   LocationState,
+  LotSubcontractorAssignment,
 } from './types'
 import {
   LOT_TABS as tabs,
@@ -108,6 +112,10 @@ export function LotDetailPage() {
   const [subcontractors, setSubcontractors] = useState<SubcontractorCompany[]>([])
   const [selectedSubcontractor, setSelectedSubcontractor] = useState<string>('')
   const [assigningSubcontractor, setAssigningSubcontractor] = useState(false)
+  // Subcontractor assignments (new permission system)
+  const [showAssignSubcontractorModal, setShowAssignSubcontractorModal] = useState(false)
+  const [editingAssignment, setEditingAssignment] = useState<LotSubcontractorAssignment | null>(null)
+  const queryClient = useQueryClient()
   const [evidenceWarning, setEvidenceWarning] = useState<{
     checklistItemId: string
     itemDescription: string
@@ -661,6 +669,33 @@ export function LotDetailPage() {
   // Extract quality access permissions
   const canConformLots = qualityAccess?.canConformLots || false
   const canVerifyTestResults = qualityAccess?.canVerifyTestResults || false
+
+  // Permission check for managing lot (assign subcontractors)
+  const canManageLot = ['owner', 'admin', 'project_manager', 'site_manager'].includes(qualityAccess?.role || '')
+
+  // Fetch subcontractor assignments for this lot
+  const { data: assignments = [] } = useQuery({
+    queryKey: ['lot-assignments', lotId],
+    queryFn: () => apiFetch<LotSubcontractorAssignment[]>(`/api/lots/${lotId}/subcontractors`),
+    enabled: !!lotId
+  })
+
+  // Remove assignment mutation
+  const removeAssignmentMutation = useMutation({
+    mutationFn: (assignmentId: string) =>
+      apiFetch(`/api/lots/${lotId}/subcontractors/${assignmentId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] })
+      toast({ title: 'Subcontractor removed from lot' })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to remove subcontractor',
+        variant: 'error'
+      })
+    }
+  })
 
   if (loading) {
     return (
@@ -2021,6 +2056,68 @@ export function LotDetailPage() {
             })}
           </time>
         </div>
+      </div>
+
+      {/* Subcontractor Assignments Section */}
+      <div className="rounded-lg border p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold">Assigned Subcontractors</h3>
+          {canManageLot && (
+            <button
+              onClick={() => setShowAssignSubcontractorModal(true)}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          )}
+        </div>
+
+        {assignments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No subcontractors assigned</p>
+        ) : (
+          <div className="space-y-2">
+            {assignments.map(assignment => (
+              <div key={assignment.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
+                <div>
+                  <div className="font-medium">{assignment.subcontractorCompany.companyName}</div>
+                  <div className="text-sm text-muted-foreground">
+                    ITP: {assignment.canCompleteITP ? (
+                      <>
+                        <span className="text-green-600">Can complete</span>
+                        {assignment.itpRequiresVerification && (
+                          <span className="text-amber-600 ml-2">Requires verification</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-gray-500">View only</span>
+                    )}
+                  </div>
+                </div>
+                {canManageLot && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingAssignment(assignment)
+                        setShowAssignSubcontractorModal(true)
+                      }}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border rounded-md transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => removeAssignmentMutation.mutate(assignment.id)}
+                      disabled={removeAssignmentMutation.isPending}
+                      className="px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-md transition-colors disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tab Navigation */}
@@ -3735,6 +3832,23 @@ export function LotDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Assign Subcontractor Modal (new permission system) */}
+      {showAssignSubcontractorModal && (
+        <AssignSubcontractorModal
+          lotId={lotId!}
+          lotNumber={lot?.lotNumber || ''}
+          projectId={projectId || ''}
+          existingAssignment={editingAssignment}
+          onClose={() => {
+            setShowAssignSubcontractorModal(false)
+            setEditingAssignment(null)
+          }}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] })
+          }}
+        />
       )}
 
       {/* Evidence Warning Modal */}
