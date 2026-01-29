@@ -13,214 +13,31 @@ import { cacheITPChecklist, getCachedITPChecklist, updateChecklistItemOffline, g
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist'
 
-// Tab types for lot detail page
-type LotTab = 'itp' | 'tests' | 'ncrs' | 'photos' | 'documents' | 'comments' | 'history'
-
-const tabs: { id: LotTab; label: string }[] = [
-  { id: 'itp', label: 'ITP Checklist' },
-  { id: 'tests', label: 'Test Results' },
-  { id: 'ncrs', label: 'NCRs' },
-  { id: 'photos', label: 'Photos' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'comments', label: 'Comments' },
-  { id: 'history', label: 'History' },
-]
-
-interface QualityAccess {
-  role: string
-  isQualityManager: boolean
-  canConformLots: boolean
-  canVerifyTestResults: boolean
-  canCloseNCRs: boolean
-  canManageITPTemplates: boolean
-}
-
-interface Lot {
-  id: string
-  lotNumber: string
-  description: string | null
-  status: string
-  activityType: string | null
-  chainageStart: number | null
-  chainageEnd: number | null
-  offset: string | null
-  layer: string | null
-  areaZone: string | null
-  createdAt: string
-  updatedAt: string
-  conformedAt: string | null
-  conformedBy: {
-    id: string
-    fullName: string | null
-    email: string
-  } | null
-  assignedSubcontractorId: string | null
-  assignedSubcontractor?: {
-    id: string
-    companyName: string
-  } | null
-}
-
-interface SubcontractorCompany {
-  id: string
-  companyName: string
-  status: string
-}
-
-interface TestResult {
-  id: string
-  testType: string
-  testRequestNumber: string | null
-  laboratoryName: string | null
-  resultValue: number | null
-  resultUnit: string | null
-  passFail: string
-  status: string
-  createdAt: string
-}
-
-interface NCR {
-  id: string
-  ncrNumber: string
-  description: string
-  category: string
-  severity: 'minor' | 'major'
-  status: string
-  raisedBy: { fullName: string; email: string }
-  createdAt: string
-}
-
-interface ITPChecklistItem {
-  id: string
-  description: string
-  category: string
-  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general'
-  isHoldPoint: boolean
-  pointType: 'standard' | 'witness' | 'hold_point'
-  evidenceRequired: 'none' | 'photo' | 'test' | 'document'
-  order: number
-  testType?: string | null
-  acceptanceCriteria?: string | null
-}
-
-interface ITPAttachmentDocument {
-  id: string
-  filename: string
-  fileUrl: string
-  caption: string | null
-  uploadedAt: string
-  uploadedBy: { id: string; fullName: string; email: string } | null
-  gpsLatitude: number | null
-  gpsLongitude: number | null
-}
-
-interface ITPAttachment {
-  id: string
-  documentId: string
-  document: ITPAttachmentDocument
-}
-
-interface ITPCompletion {
-  id: string
-  checklistItemId: string
-  isCompleted: boolean
-  isNotApplicable?: boolean
-  isFailed?: boolean
-  notes: string | null
-  completedAt: string | null
-  completedBy: { id: string; fullName: string; email: string } | null
-  isVerified: boolean
-  verifiedAt: string | null
-  verifiedBy: { id: string; fullName: string; email: string } | null
-  attachments: ITPAttachment[]
-  linkedNcr?: { id: string; ncrNumber: string } | null
-  // Witness point details
-  witnessPresent?: boolean | null
-  witnessName?: string | null
-  witnessCompany?: string | null
-}
-
-interface ITPInstance {
-  id: string
-  template: {
-    id: string
-    name: string
-    checklistItems: ITPChecklistItem[]
-  }
-  completions: ITPCompletion[]
-}
-
-interface ITPTemplate {
-  id: string
-  name: string
-  activityType: string
-  checklistItems: ITPChecklistItem[]
-}
-
-interface ConformStatus {
-  canConform: boolean
-  blockingReasons: string[]
-  prerequisites: {
-    itpAssigned: boolean
-    itpCompleted: boolean
-    itpCompletedCount: number
-    itpTotalCount: number
-    hasPassingTest: boolean
-    noOpenNcrs: boolean
-    openNcrs: { id: string; ncrNumber: string; status: string }[]
-  }
-}
-
-interface ActivityLog {
-  id: string
-  action: string
-  entityType: string
-  entityId: string
-  changes: any
-  createdAt: string
-  user: {
-    id: string
-    email: string
-    fullName: string | null
-  } | null
-}
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  on_hold: 'bg-red-100 text-red-800',
-}
-
-const testPassFailColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  pass: 'bg-green-100 text-green-800',
-  fail: 'bg-red-100 text-red-800',
-}
-
-const testStatusColors: Record<string, string> = {
-  requested: 'bg-gray-100 text-gray-800',
-  entered: 'bg-blue-100 text-blue-800',
-  verified: 'bg-green-100 text-green-800',
-}
-
-const ncrStatusColors: Record<string, string> = {
-  open: 'bg-red-100 text-red-800',
-  investigating: 'bg-yellow-100 text-yellow-800',
-  rectification: 'bg-orange-100 text-orange-800',
-  verification: 'bg-blue-100 text-blue-800',
-  closed: 'bg-green-100 text-green-800',
-  closed_concession: 'bg-green-100 text-green-700',
-}
-
-const severityColors: Record<string, string> = {
-  minor: 'bg-yellow-100 text-yellow-800',
-  major: 'bg-red-500 text-white',
-}
-
-interface LocationState {
-  returnFilters?: string
-}
+// Types and constants extracted to separate files
+import type {
+  LotTab,
+  QualityAccess,
+  Lot,
+  SubcontractorCompany,
+  TestResult,
+  NCR,
+  ITPChecklistItem,
+  ITPAttachment,
+  ITPCompletion,
+  ITPInstance,
+  ITPTemplate,
+  ConformStatus,
+  ActivityLog,
+  LocationState,
+} from './types'
+import {
+  LOT_TABS as tabs,
+  lotStatusColors as statusColors,
+  testPassFailColors,
+  testStatusColors,
+  ncrStatusColors,
+  severityColors,
+} from './constants'
 
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
