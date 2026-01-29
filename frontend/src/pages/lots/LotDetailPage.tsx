@@ -673,12 +673,25 @@ export function LotDetailPage() {
   // Permission check for managing lot (assign subcontractors)
   const canManageLot = ['owner', 'admin', 'project_manager', 'site_manager'].includes(qualityAccess?.role || '')
 
+  // Check if user is a subcontractor
+  const isSubcontractor = ['subcontractor', 'subcontractor_admin'].includes(qualityAccess?.role || '')
+
   // Fetch subcontractor assignments for this lot
   const { data: assignments = [] } = useQuery({
     queryKey: ['lot-assignments', lotId],
     queryFn: () => apiFetch<LotSubcontractorAssignment[]>(`/api/lots/${lotId}/subcontractors`),
     enabled: !!lotId
   })
+
+  // Fetch current user's assignment (for subcontractors)
+  const { data: myAssignment } = useQuery({
+    queryKey: ['my-lot-assignment', lotId],
+    queryFn: () => apiFetch<LotSubcontractorAssignment>(`/api/lots/${lotId}/subcontractors/mine`).catch(() => null),
+    enabled: !!lotId && isSubcontractor
+  })
+
+  // Subcontractors need canCompleteITP permission, others can complete by default
+  const canCompleteITPItems = isSubcontractor ? (myAssignment?.canCompleteITP ?? false) : true
 
   // Remove assignment mutation
   const removeAssignmentMutation = useMutation({
@@ -2182,6 +2195,7 @@ export function LotDetailPage() {
                 onUpdateNotes={handleUpdateNotes}
                 onAddPhoto={handleMobileAddPhoto}
                 updatingItem={updatingCompletion}
+                canCompleteItems={canCompleteITPItems}
               />
             ) : itpInstance ? (
               /* Desktop ITP Checklist */

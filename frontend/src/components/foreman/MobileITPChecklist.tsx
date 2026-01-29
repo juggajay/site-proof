@@ -53,6 +53,8 @@ interface MobileITPChecklistProps {
   onUpdateNotes: (checklistItemId: string, notes: string) => Promise<void>
   onAddPhoto: (checklistItemId: string, file: File) => Promise<void>
   updatingItem?: string | null
+  /** Whether the current user can complete ITP items (false for subcontractors without permission) */
+  canCompleteItems?: boolean
 }
 
 export function MobileITPChecklist({
@@ -66,6 +68,7 @@ export function MobileITPChecklist({
   onUpdateNotes,
   onAddPhoto,
   updatingItem,
+  canCompleteItems = true,
 }: MobileITPChecklistProps) {
   const [selectedItem, setSelectedItem] = useState<ITPChecklistItem | null>(null)
   const { trigger } = useHaptics()
@@ -123,6 +126,16 @@ export function MobileITPChecklist({
         </div>
       </div>
 
+      {/* Read-only notice for users without completion permission */}
+      {!canCompleteItems && (
+        <div className="mx-4 mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            You can view this ITP but do not have permission to complete items.
+            Contact the head contractor to request completion access.
+          </p>
+        </div>
+      )}
+
       {/* Checklist items */}
       <div className="flex-1 overflow-y-auto">
         {checklistItems.map((item) => {
@@ -142,12 +155,13 @@ export function MobileITPChecklist({
               photoCount={completion?.attachments?.length || 0}
               isUpdating={updatingItem === item.id}
               isLocked={isLocked}
+              canComplete={canCompleteItems}
               onTap={() => {
                 trigger('light')
                 setSelectedItem(item)
               }}
               onQuickComplete={() => {
-                if (isLocked) {
+                if (isLocked || !canCompleteItems) {
                   trigger('error')
                   return
                 }
@@ -165,9 +179,14 @@ export function MobileITPChecklist({
         item={selectedItem}
         completion={selectedItem ? getCompletion(selectedItem.id) : undefined}
         isLocked={selectedItem ? isItemLockedByHoldPoint(selectedItem) && getItemStatus(selectedItem.id) === 'pending' : false}
+        canComplete={canCompleteItems}
         onClose={() => setSelectedItem(null)}
         onPass={(notes) => {
           if (!selectedItem) return
+          if (!canCompleteItems) {
+            trigger('error')
+            return
+          }
           if (isItemLockedByHoldPoint(selectedItem) && getItemStatus(selectedItem.id) === 'pending') {
             trigger('error')
             return
@@ -178,6 +197,10 @@ export function MobileITPChecklist({
         }}
         onNA={(reason) => {
           if (!selectedItem) return
+          if (!canCompleteItems) {
+            trigger('error')
+            return
+          }
           if (isItemLockedByHoldPoint(selectedItem) && getItemStatus(selectedItem.id) === 'pending') {
             trigger('error')
             return
@@ -188,6 +211,10 @@ export function MobileITPChecklist({
         }}
         onFail={(reason) => {
           if (!selectedItem) return
+          if (!canCompleteItems) {
+            trigger('error')
+            return
+          }
           if (isItemLockedByHoldPoint(selectedItem) && getItemStatus(selectedItem.id) === 'pending') {
             trigger('error')
             return
@@ -218,6 +245,7 @@ interface MobileITPItemProps {
   photoCount: number
   isUpdating: boolean
   isLocked: boolean
+  canComplete: boolean
   onTap: () => void
   onQuickComplete: () => void
 }
@@ -230,6 +258,7 @@ function MobileITPItem({
   photoCount,
   isUpdating,
   isLocked,
+  canComplete,
   onTap,
   onQuickComplete,
 }: MobileITPItemProps) {
@@ -267,14 +296,14 @@ function MobileITPItem({
       <button
         onClick={(e) => {
           e.stopPropagation()
-          if (!isLocked && (status === 'pending' || status === 'completed')) {
+          if (!isLocked && canComplete && (status === 'pending' || status === 'completed')) {
             onQuickComplete()
           }
         }}
-        disabled={isUpdating || status === 'na' || status === 'failed' || isLocked}
+        disabled={isUpdating || status === 'na' || status === 'failed' || isLocked || !canComplete}
         className={`flex-shrink-0 w-12 h-12 rounded-full border-2 flex items-center justify-center text-xl font-bold transition-all touch-manipulation ${
-          isLocked ? statusColors.locked : statusColors[status]
-        } ${isUpdating ? 'animate-pulse' : ''} ${isLocked ? 'cursor-not-allowed' : ''}`}
+          isLocked || !canComplete ? statusColors.locked : statusColors[status]
+        } ${isUpdating ? 'animate-pulse' : ''} ${isLocked || !canComplete ? 'cursor-not-allowed' : ''}`}
       >
         {isLocked ? <Lock className="w-5 h-5" /> : statusIcons[status]}
       </button>
@@ -333,6 +362,7 @@ interface MobileITPItemSheetProps {
   item: ITPChecklistItem | null
   completion?: ITPCompletion
   isLocked: boolean
+  canComplete: boolean
   onClose: () => void
   onPass: (notes: string | null) => void
   onNA: (reason: string) => void
@@ -346,6 +376,7 @@ function MobileITPItemSheet({
   item,
   completion,
   isLocked,
+  canComplete,
   onClose,
   onPass,
   onNA,
@@ -405,6 +436,17 @@ function MobileITPItemSheet({
           </div>
         )}
 
+        {/* No permission banner */}
+        {!canComplete && !isLocked && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <Lock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">View Only</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">Contact head contractor for completion access</p>
+            </div>
+          </div>
+        )}
+
         {/* Item description */}
         <div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -430,10 +472,10 @@ function MobileITPItemSheet({
         {/* Status buttons - large touch targets */}
         <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={() => !isLocked && onPass(notes || null)}
-            disabled={isLocked}
+            onClick={() => !isLocked && canComplete && onPass(notes || null)}
+            disabled={isLocked || !canComplete}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
-              isLocked
+              isLocked || !canComplete
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 : isCompleted
                 ? 'bg-green-500 text-white ring-2 ring-green-600 ring-offset-2'
@@ -445,15 +487,15 @@ function MobileITPItemSheet({
           </button>
           <button
             onClick={() => {
-              if (isLocked || isNA) return
+              if (isLocked || !canComplete || isNA) return
               if (!showNAInput) {
                 setShowNAInput(true)
                 setShowFailInput(false)
               }
             }}
-            disabled={isLocked}
+            disabled={isLocked || !canComplete}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
-              isLocked
+              isLocked || !canComplete
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 : isNA
                 ? 'bg-gray-500 text-white ring-2 ring-gray-600 ring-offset-2'
@@ -465,15 +507,15 @@ function MobileITPItemSheet({
           </button>
           <button
             onClick={() => {
-              if (isLocked || isFailed) return
+              if (isLocked || !canComplete || isFailed) return
               if (!showFailInput) {
                 setShowFailInput(true)
                 setShowNAInput(false)
               }
             }}
-            disabled={isLocked}
+            disabled={isLocked || !canComplete}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
-              isLocked
+              isLocked || !canComplete
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 : isFailed
                 ? 'bg-red-500 text-white ring-2 ring-red-600 ring-offset-2'
