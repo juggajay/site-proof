@@ -2336,33 +2336,15 @@ export function LotDetailPage() {
                       const isFailed = completion?.isFailed || false
                       const notes = completion?.notes || ''
 
-                      // Check if item is locked due to unreleased hold point (Feature #194)
-                      // An item is locked if there's an unreleased hold point BEFORE it in the sequence
-                      const isLockedByHoldPoint = (() => {
-                        // Get all hold point items that come BEFORE this item (lower order number)
-                        const precedingHoldPoints = itpInstance.template.checklistItems.filter(
-                          (i: any) => i.pointType === 'hold_point' && i.order < item.order
-                        )
-                        // Check if any preceding hold point is NOT released (not completed or not verified)
-                        return precedingHoldPoints.some((hp: any) => {
-                          const hpCompletion = itpInstance.completions.find((c: any) => c.checklistItemId === hp.id)
-                          // A hold point is "released" if it's completed AND verified
-                          return !hpCompletion?.isCompleted || !hpCompletion?.isVerified
-                        })
-                      })()
-
                       return (
-                        <div key={item.id} className={`p-4 ${isNotApplicable ? 'bg-gray-50 dark:bg-gray-900/30' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''} ${isLockedByHoldPoint && !isCompleted ? 'opacity-60 bg-gray-100/50 dark:bg-gray-800/30' : ''}`}>
+                        <div key={item.id} className={`p-4 ${isNotApplicable ? 'bg-gray-50 dark:bg-gray-900/30' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''}`}>
                           <div className="flex items-start gap-3">
                             <button
-                              onClick={() => !isNotApplicable && !isFailed && !isLockedByHoldPoint && handleToggleCompletion(item.id, isCompleted, notes)}
-                              disabled={updatingCompletion === item.id || isNotApplicable || isFailed || (isLockedByHoldPoint && !isCompleted)}
-                              aria-label={isLockedByHoldPoint && !isCompleted ? 'Locked - complete preceding hold point first' : isFailed ? 'Failed' : isNotApplicable ? 'Not Applicable' : isCompleted ? `Mark "${item.description}" as incomplete` : `Mark "${item.description}" as complete`}
-                              title={isLockedByHoldPoint && !isCompleted ? 'Complete preceding hold point first' : undefined}
+                              onClick={() => !isNotApplicable && !isFailed && handleToggleCompletion(item.id, isCompleted, notes)}
+                              disabled={updatingCompletion === item.id || isNotApplicable || isFailed}
+                              aria-label={isFailed ? 'Failed' : isNotApplicable ? 'Not Applicable' : isCompleted ? `Mark "${item.description}" as incomplete` : `Mark "${item.description}" as complete`}
                               className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                isLockedByHoldPoint && !isCompleted
-                                  ? 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed'
-                                  : isFailed
+                                isFailed
                                   ? 'bg-red-500 border-red-500 text-white cursor-not-allowed'
                                   : isNotApplicable
                                   ? 'bg-gray-400 border-gray-400 text-white cursor-not-allowed'
@@ -2371,7 +2353,7 @@ export function LotDetailPage() {
                                   : 'border-gray-300 hover:border-primary'
                               } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
                             >
-                              {isLockedByHoldPoint && !isCompleted ? <span className="text-[10px]" aria-hidden="true">🔒</span> : isFailed ? <span className="text-[10px] font-bold" aria-hidden="true">✗</span> : isNotApplicable ? <span className="text-[10px] font-bold" aria-hidden="true">—</span> : isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
+                              {isFailed ? <span className="text-[10px] font-bold" aria-hidden="true">✗</span> : isNotApplicable ? <span className="text-[10px] font-bold" aria-hidden="true">—</span> : isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
                             </button>
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -2391,12 +2373,6 @@ export function LotDetailPage() {
                                 {/* N/A Badge */}
                                 {isNotApplicable && (
                                   <span className="text-xs bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded font-medium">N/A</span>
-                                )}
-                                {/* Locked by HP Badge (Feature #194) */}
-                                {isLockedByHoldPoint && !isCompleted && (
-                                  <span className="text-xs bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded font-medium" title="Complete preceding hold point to unlock">
-                                    🔒 Locked
-                                  </span>
                                 )}
                                 {item.isHoldPoint && (
                                   <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Hold Point</span>

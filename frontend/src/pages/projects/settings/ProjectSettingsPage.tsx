@@ -112,6 +112,9 @@ export function ProjectSettingsPage() {
   // HP Approval Requirement state (Feature #698)
   const [hpApprovalRequirement, setHpApprovalRequirement] = useState<'any' | 'superintendent'>('any')
 
+  // ITP Verification state - when false, subcontractor completions are auto-verified
+  const [requireSubcontractorVerification, setRequireSubcontractorVerification] = useState(false)
+
   // ITP Templates state
   const [itpTemplates, setItpTemplates] = useState<Array<{
     id: string
@@ -185,6 +188,9 @@ export function ProjectSettingsPage() {
               }
               if (settings.enabledModules) {
                 setEnabledModules(prev => ({ ...prev, ...settings.enabledModules }))
+              }
+              if (typeof settings.requireSubcontractorVerification === 'boolean') {
+                setRequireSubcontractorVerification(settings.requireSubcontractorVerification)
               }
             } catch (e) {
               // Invalid JSON, use defaults
@@ -1259,6 +1265,52 @@ export function ProjectSettingsPage() {
               >
                 + Add Recipient
               </button>
+            </div>
+            <div className="rounded-lg border p-4">
+              <h2 className="text-lg font-semibold mb-2">Subcontractor ITP Verification</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure whether subcontractor ITP completions require verification by a supervisor.
+              </p>
+              <div className="space-y-4">
+                <div
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50"
+                  onClick={async () => {
+                    const newValue = !requireSubcontractorVerification
+                    setRequireSubcontractorVerification(newValue)
+                    // Save to project settings
+                    const token = getAuthToken()
+                    if (!token || !projectId) return
+                    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                    try {
+                      await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                        method: 'PATCH',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ settings: { requireSubcontractorVerification: newValue } }),
+                      })
+                    } catch (e) {
+                      console.error('Failed to save verification setting:', e)
+                    }
+                  }}
+                >
+                  <div>
+                    <p className="font-medium">Require Verification</p>
+                    <p className="text-sm text-muted-foreground">
+                      {requireSubcontractorVerification
+                        ? 'Subcontractor completions need supervisor verification'
+                        : 'Subcontractor completions are automatically verified'}
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={requireSubcontractorVerification}
+                    onChange={() => {}} // Handled by parent onClick
+                    className="h-5 w-5 cursor-pointer"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -1233,10 +1233,19 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
     // Feature #271: Subcontractor completions - check lot assignment for ITP permissions
     let verificationStatus: string | undefined
     if (isSubcontractor && isFinished && newStatus === 'completed') {
-      // Get the ITP instance to find the lot
+      // Get the ITP instance to find the lot and project
       const itpInstanceForPermCheck = await prisma.iTPInstance.findUnique({
         where: { id: itpInstanceId },
-        select: { lotId: true }
+        select: {
+          lotId: true,
+          lot: {
+            select: {
+              project: {
+                select: { id: true, settings: true }
+              }
+            }
+          }
+        }
       })
 
       if (itpInstanceForPermCheck?.lotId && subcontractorUser) {
@@ -1256,13 +1265,33 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           })
         }
 
-        // Set verification status based on assignment config
-        verificationStatus = assignment.itpRequiresVerification
-          ? 'pending_verification'
-          : 'verified'
+        // Check project-level setting for subcontractor verification
+        let projectRequiresVerification = false // Default: no verification needed
+        const projectSettings = itpInstanceForPermCheck.lot?.project?.settings
+        if (projectSettings) {
+          try {
+            const settings = typeof projectSettings === 'string'
+              ? JSON.parse(projectSettings)
+              : projectSettings
+            projectRequiresVerification = settings.requireSubcontractorVerification === true
+          } catch (e) {
+            // Invalid JSON, use default (no verification)
+          }
+        }
+
+        // Set verification status: project setting controls default, lot assignment can override
+        // If project doesn't require verification, auto-verify
+        // If project requires verification, use lot assignment setting
+        if (!projectRequiresVerification) {
+          verificationStatus = 'verified'
+        } else {
+          verificationStatus = assignment.itpRequiresVerification
+            ? 'pending_verification'
+            : 'verified'
+        }
       } else {
-        // Fallback to requiring verification if no assignment found
-        verificationStatus = 'pending_verification'
+        // Fallback to auto-verify if no assignment found (project default is no verification)
+        verificationStatus = 'verified'
       }
     }
 
