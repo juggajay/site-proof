@@ -115,7 +115,7 @@ lotsRouter.get('/', async (req, res) => {
       selectClause.itpInstance = {
         select: {
           id: true,
-          itpTemplateId: true,
+          templateId: true,
           status: true,
           template: {
             select: {
