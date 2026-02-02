@@ -1,4 +1,4 @@
-# SiteProof v2 - Developer Guide
+# SiteProof v3 - Developer Guide
 
 Construction quality management platform for civil contractors. Manages lots, ITPs, hold points, NCRs, daily diaries, dockets, progress claims, and documents.
 
@@ -106,6 +106,44 @@ router.get('/', authenticateToken, async (req, res) => {
 export { router as exampleRouter }
 ```
 
+## Error Handling
+
+### Backend
+```typescript
+// Errors bubble to global errorHandler middleware
+// Throw with statusCode and code for proper handling
+const error = new Error('Resource not found') as any
+error.statusCode = 404
+error.code = 'NOT_FOUND'
+throw error
+
+// Response format: { error: { message, code, stack? } }
+```
+
+- Global `errorHandler` in `backend/src/middleware/errorHandler.ts`
+- Logs to `backend/logs/errors.log` with structured JSON
+- 500+ errors logged as `error`, 4xx as `warn`
+- Stack traces only in development
+
+### Frontend
+```typescript
+import { apiFetch, ApiError } from '@/lib/api'
+
+try {
+  const data = await apiFetch<Lot>('/api/lots/123')
+} catch (err) {
+  if (err instanceof ApiError) {
+    // err.status: HTTP status code
+    // err.body: Response body text
+    console.error(`API Error ${err.status}:`, err.body)
+  }
+}
+```
+
+- `ApiError` class wraps non-OK responses
+- TanStack Query handles retries and error states automatically
+- Use `error` property from `useQuery`/`useMutation` for UI feedback
+
 ## Database Schema
 
 Core models (see `backend/prisma/schema.prisma`):
@@ -185,6 +223,30 @@ VITE_SUPABASE_ANON_KEY=...
 - Error boundaries at page level
 - Consistent API error handling
 
+## Security Checklist
+
+### Backend
+- [ ] Always use `authenticateToken` middleware on protected routes
+- [ ] Check user permissions in route handler (don't trust client-side checks)
+- [ ] Validate all input with Zod schemas before processing
+- [ ] Use Prisma parameterized queries (never raw SQL with user input)
+- [ ] Verify user belongs to company/project before returning data
+- [ ] Never log sensitive data (tokens, passwords, API keys)
+- [ ] Sanitize file names before storage upload
+
+### Frontend
+- [ ] Never store sensitive data in localStorage (except auth token)
+- [ ] Use `RoleProtectedRoute` for page-level access control
+- [ ] Validate forms with Zod before submission
+- [ ] Don't expose internal IDs or error details to users
+- [ ] Sanitize user-generated content before rendering
+
+### Environment
+- [ ] Keep `.env` files out of git (check `.gitignore`)
+- [ ] Use different JWT_SECRET per environment
+- [ ] Rotate Supabase service keys periodically
+- [ ] Review Supabase RLS policies when adding tables
+
 ## File Size Guidelines
 
 Keep files under 500 lines. Large files should be split:
@@ -199,3 +261,52 @@ These files need component extraction:
 - `LotsPage.tsx` (3,363 lines)
 - `pdfGenerator.ts` (2,915 lines)
 - `DailyDiaryPage.tsx` (2,669 lines)
+
+---
+
+## Workflow Orchestration
+
+### 1. Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately – don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes – don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests – then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+## Task Management
+
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` with patterns learned
