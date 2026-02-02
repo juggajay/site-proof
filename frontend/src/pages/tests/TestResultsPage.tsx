@@ -168,28 +168,53 @@ export function TestResultsPage() {
   })
   const [creatingNcr, setCreatingNcr] = useState(false)
 
-  // Feature #198: Test type specifications for auto-populate
-  const testTypeSpecs: Record<string, { min: string; max: string; unit: string }> = {
-    'compaction': { min: '95', max: '100', unit: '% MDD' },
-    'cbr': { min: '15', max: '', unit: '%' },
-    'moisture_content': { min: '', max: '', unit: '%' },
-    'plasticity_index': { min: '', max: '25', unit: '%' },
-    'liquid_limit': { min: '', max: '45', unit: '%' },
-    'grading': { min: '', max: '', unit: 'envelope' },
-    'sand_equivalent': { min: '30', max: '', unit: '%' },
-    'concrete_slump': { min: '50', max: '120', unit: 'mm' },
-    'concrete_strength': { min: '32', max: '', unit: 'MPa' },
-    'asphalt_density': { min: '93', max: '100', unit: '%' },
-    'dcp': { min: '', max: '10', unit: 'mm/blow' },
+  // Feature #198: Test type specifications for auto-populate (Australian civil standards)
+  const testTypeSpecs: Record<string, { min: string; max: string; unit: string; method?: string }> = {
+    // Compaction/Density Tests
+    'density_ratio': { min: '95', max: '100', unit: '% DDR', method: 'AS 1289.5.4.1' },
+    'dry_density_ratio': { min: '95', max: '100', unit: '% DDR', method: 'AS 1289.5.4.1' },
+    'field_density_nuclear': { min: '95', max: '100', unit: '% DDR', method: 'AS 1289.5.8.1' },
+    'field_density_sand': { min: '95', max: '100', unit: '% DDR', method: 'AS 1289.5.3.1' },
+    'mdd_standard': { min: '', max: '', unit: 't/m³', method: 'AS 1289.5.1.1' },
+    'mdd_modified': { min: '', max: '', unit: 't/m³', method: 'AS 1289.5.2.1' },
+    'hilf_rapid': { min: '95', max: '100', unit: '% MCWD', method: 'AS 1289.5.7.1' },
+    // Strength Tests
+    'cbr_laboratory': { min: '15', max: '', unit: '%', method: 'AS 1289.6.1.1' },
+    'cbr_4day_soaked': { min: '10', max: '', unit: '%', method: 'AS 1289.6.1.1' },
+    'cbr_field_dcp': { min: '', max: '10', unit: 'mm/blow', method: 'AS 1289.6.7.1' },
+    'ucs': { min: '', max: '', unit: 'MPa', method: 'AS 5101.4' },
+    // Classification Tests
+    'particle_size_distribution': { min: '', max: '', unit: 'envelope', method: 'AS 1289.3.6.1' },
+    'liquid_limit': { min: '', max: '45', unit: '%', method: 'AS 1289.3.1.1' },
+    'plastic_limit': { min: '', max: '', unit: '%', method: 'AS 1289.3.2.1' },
+    'plasticity_index': { min: '', max: '25', unit: '%', method: 'AS 1289.3.3.1' },
+    'linear_shrinkage': { min: '', max: '10', unit: '%', method: 'AS 1289.3.4.1' },
+    'moisture_content': { min: '', max: '', unit: '%', method: 'AS 1289.2.1.1' },
+    // Aggregate Tests
+    'flakiness_index': { min: '', max: '35', unit: '%', method: 'AS 1141.15' },
+    'los_angeles_abrasion': { min: '', max: '35', unit: '%', method: 'AS 1141.23' },
+    'aggregate_crushing_value': { min: '', max: '30', unit: '%', method: 'AS 1141.21' },
+    'wet_dry_strength': { min: '', max: '35', unit: '%', method: 'AS 1141.22' },
+    // Concrete Tests
+    'concrete_slump': { min: '50', max: '120', unit: 'mm', method: 'AS 1012.3.1' },
+    'concrete_strength': { min: '32', max: '', unit: 'MPa', method: 'AS 1012.9' },
+    // Asphalt Tests
+    'asphalt_density': { min: '93', max: '100', unit: '%', method: 'AS 2891.9.2' },
   }
 
   // Form state for creating test results
   const [formData, setFormData] = useState({
     testType: '',
+    testMethod: '',
     testRequestNumber: '',
     laboratoryName: '',
     laboratoryReportNumber: '',
+    nataSiteNumber: '',
     sampleLocation: '',
+    sampleDepth: '',
+    materialType: '',
+    layerLift: '',
+    sampledBy: '',
     sampleDate: '',
     testDate: '',
     resultDate: '',
@@ -198,6 +223,7 @@ export function TestResultsPage() {
     resultUnit: '',
     specificationMin: '',
     specificationMax: '',
+    specificationRef: '',
     passFail: 'pending',
   })
 
@@ -210,6 +236,7 @@ export function TestResultsPage() {
       setFormData(prev => ({
         ...prev,
         testType,
+        testMethod: specs.method || '',
         specificationMin: specs.min,
         specificationMax: specs.max,
         resultUnit: specs.unit,
@@ -538,10 +565,16 @@ export function TestResultsPage() {
 
         setFormData({
           testType: '',
+          testMethod: '',
           testRequestNumber: '',
           laboratoryName: '',
           laboratoryReportNumber: '',
+          nataSiteNumber: '',
           sampleLocation: '',
+          sampleDepth: '',
+          materialType: '',
+          layerLift: '',
+          sampledBy: '',
           sampleDate: '',
           testDate: '',
           resultDate: '',
@@ -550,6 +583,7 @@ export function TestResultsPage() {
           resultUnit: '',
           specificationMin: '',
           specificationMax: '',
+          specificationRef: '',
           passFail: 'pending',
         })
       } else {
@@ -1267,19 +1301,92 @@ export function TestResultsPage() {
                     list="test-types"
                   />
                   <datalist id="test-types">
-                    <option value="Compaction" />
-                    <option value="CBR" />
-                    <option value="Moisture Content" />
-                    <option value="Plasticity Index" />
-                    <option value="Liquid Limit" />
-                    <option value="Grading" />
-                    <option value="Sand Equivalent" />
-                    <option value="Concrete Slump" />
-                    <option value="Concrete Strength" />
-                    <option value="Asphalt Density" />
-                    <option value="DCP" />
+                    <optgroup label="Compaction/Density">
+                      <option value="Density Ratio" />
+                      <option value="Dry Density Ratio" />
+                      <option value="Field Density Nuclear" />
+                      <option value="Field Density Sand" />
+                      <option value="MDD Standard" />
+                      <option value="MDD Modified" />
+                      <option value="Hilf Rapid" />
+                    </optgroup>
+                    <optgroup label="Strength">
+                      <option value="CBR Laboratory" />
+                      <option value="CBR 4Day Soaked" />
+                      <option value="CBR Field DCP" />
+                      <option value="UCS" />
+                    </optgroup>
+                    <optgroup label="Classification">
+                      <option value="Particle Size Distribution" />
+                      <option value="Liquid Limit" />
+                      <option value="Plastic Limit" />
+                      <option value="Plasticity Index" />
+                      <option value="Linear Shrinkage" />
+                      <option value="Moisture Content" />
+                    </optgroup>
+                    <optgroup label="Aggregate">
+                      <option value="Flakiness Index" />
+                      <option value="Los Angeles Abrasion" />
+                      <option value="Aggregate Crushing Value" />
+                      <option value="Wet Dry Strength" />
+                    </optgroup>
+                    <optgroup label="Concrete">
+                      <option value="Concrete Slump" />
+                      <option value="Concrete Strength" />
+                    </optgroup>
+                    <optgroup label="Asphalt">
+                      <option value="Asphalt Density" />
+                    </optgroup>
                   </datalist>
-                  <p className="text-xs text-muted-foreground mt-1">Select a standard type to auto-populate specs</p>
+                  <p className="text-xs text-muted-foreground mt-1">Select a test type to auto-populate method & specs</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Test Method/Standard</label>
+                  <input
+                    type="text"
+                    value={formData.testMethod}
+                    onChange={(e) => setFormData({ ...formData, testMethod: e.target.value })}
+                    placeholder="e.g., AS 1289.5.4.1, TfNSW T111, TMR Q114A"
+                    className="w-full rounded-lg border px-3 py-2"
+                    list="test-methods"
+                  />
+                  <datalist id="test-methods">
+                    <optgroup label="Australian Standards">
+                      <option value="AS 1289.2.1.1" />
+                      <option value="AS 1289.3.1.1" />
+                      <option value="AS 1289.3.2.1" />
+                      <option value="AS 1289.3.3.1" />
+                      <option value="AS 1289.3.4.1" />
+                      <option value="AS 1289.5.1.1" />
+                      <option value="AS 1289.5.2.1" />
+                      <option value="AS 1289.5.3.1" />
+                      <option value="AS 1289.5.4.1" />
+                      <option value="AS 1289.5.7.1" />
+                      <option value="AS 1289.5.8.1" />
+                      <option value="AS 1289.6.1.1" />
+                      <option value="AS 1289.6.7.1" />
+                      <option value="AS 1141.11" />
+                      <option value="AS 1141.15" />
+                      <option value="AS 1141.23" />
+                    </optgroup>
+                    <optgroup label="NSW (TfNSW)">
+                      <option value="TfNSW T111" />
+                      <option value="TfNSW T112" />
+                      <option value="TfNSW T117" />
+                      <option value="TfNSW T162" />
+                      <option value="TfNSW T166" />
+                      <option value="TfNSW T173" />
+                    </optgroup>
+                    <optgroup label="QLD (TMR)">
+                      <option value="TMR Q102A" />
+                      <option value="TMR Q103A" />
+                      <option value="TMR Q113A" />
+                      <option value="TMR Q113B" />
+                      <option value="TMR Q114A" />
+                      <option value="TMR Q114B" />
+                      <option value="TMR Q117" />
+                    </optgroup>
+                  </datalist>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -1318,25 +1425,123 @@ export function TestResultsPage() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Laboratory Name</label>
-                  <input
-                    type="text"
-                    value={formData.laboratoryName}
-                    onChange={(e) => setFormData({ ...formData, laboratoryName: e.target.value })}
-                    placeholder="e.g., ABC Testing Labs"
-                    className="w-full rounded-lg border px-3 py-2"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Laboratory Name</label>
+                    <input
+                      type="text"
+                      value={formData.laboratoryName}
+                      onChange={(e) => setFormData({ ...formData, laboratoryName: e.target.value })}
+                      placeholder="e.g., ABC Testing Labs"
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">NATA Site Number</label>
+                    <input
+                      type="text"
+                      value={formData.nataSiteNumber}
+                      onChange={(e) => setFormData({ ...formData, nataSiteNumber: e.target.value })}
+                      placeholder="e.g., 12345"
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Sample Location</label>
-                  <input
-                    type="text"
-                    value={formData.sampleLocation}
-                    onChange={(e) => setFormData({ ...formData, sampleLocation: e.target.value })}
-                    placeholder="e.g., CH 1000+50, 2m LHS"
+                  <label className="block text-sm font-medium mb-1">Material Type</label>
+                  <select
+                    value={formData.materialType}
+                    onChange={(e) => setFormData({ ...formData, materialType: e.target.value })}
                     className="w-full rounded-lg border px-3 py-2"
-                  />
+                  >
+                    <option value="">Select material type</option>
+                    <optgroup label="Fill Materials">
+                      <option value="general_fill">General Fill</option>
+                      <option value="select_fill">Select Fill</option>
+                      <option value="structural_fill">Structural Fill</option>
+                      <option value="rock_fill">Rock Fill</option>
+                    </optgroup>
+                    <optgroup label="Pavement Materials">
+                      <option value="subgrade">Subgrade</option>
+                      <option value="subbase">Subbase</option>
+                      <option value="base">Base Course</option>
+                      <option value="dgb20">DGB20</option>
+                      <option value="dgs20">DGS20</option>
+                      <option value="fcr">FCR (Fine Crushed Rock)</option>
+                    </optgroup>
+                    <optgroup label="Drainage">
+                      <option value="drainage_10mm">Drainage Aggregate 10mm</option>
+                      <option value="drainage_14mm">Drainage Aggregate 14mm</option>
+                      <option value="drainage_20mm">Drainage Aggregate 20mm</option>
+                      <option value="filter_sand">Filter Sand</option>
+                    </optgroup>
+                    <optgroup label="Stabilised">
+                      <option value="lime_treated">Lime Treated</option>
+                      <option value="cement_treated">Cement Treated</option>
+                    </optgroup>
+                    <optgroup label="Concrete">
+                      <option value="concrete">Concrete</option>
+                      <option value="lean_mix">Lean Mix Concrete</option>
+                    </optgroup>
+                    <optgroup label="Asphalt">
+                      <option value="asphalt">Asphalt</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Sample Location</label>
+                    <input
+                      type="text"
+                      value={formData.sampleLocation}
+                      onChange={(e) => setFormData({ ...formData, sampleLocation: e.target.value })}
+                      placeholder="e.g., CH 1000+50, 2m LHS"
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Sample Depth</label>
+                    <select
+                      value={formData.sampleDepth}
+                      onChange={(e) => setFormData({ ...formData, sampleDepth: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2"
+                    >
+                      <option value="">Select depth</option>
+                      <option value="surface">Surface</option>
+                      <option value="0-150">0-150mm</option>
+                      <option value="150-300">150-300mm</option>
+                      <option value="300-450">300-450mm</option>
+                      <option value="450-600">450-600mm</option>
+                      <option value="other">Other (specify in notes)</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Layer/Lift</label>
+                    <select
+                      value={formData.layerLift}
+                      onChange={(e) => setFormData({ ...formData, layerLift: e.target.value })}
+                      className="w-full rounded-lg border px-3 py-2"
+                    >
+                      <option value="">N/A</option>
+                      <option value="1">Layer 1</option>
+                      <option value="2">Layer 2</option>
+                      <option value="3">Layer 3</option>
+                      <option value="4">Layer 4</option>
+                      <option value="5">Layer 5</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Sampled By</label>
+                    <input
+                      type="text"
+                      value={formData.sampledBy}
+                      onChange={(e) => setFormData({ ...formData, sampledBy: e.target.value })}
+                      placeholder="Technician name"
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
                 </div>
                 {/* Dates Section */}
                 <div className="grid grid-cols-3 gap-4">
@@ -1424,6 +1629,37 @@ export function TestResultsPage() {
                       className="w-full rounded-lg border px-3 py-2"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Specification Reference</label>
+                  <input
+                    type="text"
+                    value={formData.specificationRef}
+                    onChange={(e) => setFormData({ ...formData, specificationRef: e.target.value })}
+                    placeholder="e.g., TfNSW R44 Table 10, MRTS04 Cl.5.3, AS 3798"
+                    className="w-full rounded-lg border px-3 py-2"
+                    list="spec-refs"
+                  />
+                  <datalist id="spec-refs">
+                    <optgroup label="NSW">
+                      <option value="TfNSW R44" />
+                      <option value="TfNSW R117" />
+                      <option value="TfNSW 3051" />
+                    </optgroup>
+                    <optgroup label="QLD">
+                      <option value="MRTS04" />
+                      <option value="MRTS05" />
+                      <option value="MRTS07A" />
+                    </optgroup>
+                    <optgroup label="VIC">
+                      <option value="VicRoads Sec 204" />
+                      <option value="VicRoads Sec 801" />
+                    </optgroup>
+                    <optgroup label="National">
+                      <option value="AS 3798" />
+                      <option value="Austroads" />
+                    </optgroup>
+                  </datalist>
                 </div>
                 {/* Pass/Fail with auto-calculated indicator */}
                 <div>
