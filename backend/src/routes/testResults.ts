@@ -309,6 +309,50 @@ testResultsRouter.get('/', async (req, res) => {
       whereClause.lotId = lotId as string
     }
 
+    // Subcontractors can only see test results on their assigned lots
+    if (user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin') {
+      const subcontractorUser = await prisma.subcontractorUser.findFirst({
+        where: { userId: user.id },
+        include: { subcontractorCompany: true }
+      })
+
+      if (subcontractorUser) {
+        const subCompanyId = subcontractorUser.subcontractorCompanyId
+
+        // Get lots assigned via LotSubcontractorAssignment
+        const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
+          where: {
+            subcontractorCompanyId: subCompanyId,
+            status: 'active',
+            projectId: projectId as string,
+          },
+          select: { lotId: true }
+        })
+        const assignedLotIds = lotAssignments.map(a => a.lotId)
+
+        // Get lots assigned via legacy field
+        const legacyLots = await prisma.lot.findMany({
+          where: {
+            projectId: projectId as string,
+            assignedSubcontractorId: subCompanyId,
+          },
+          select: { id: true }
+        })
+        const legacyLotIds = legacyLots.map(l => l.id)
+
+        // Combine both sets of lot IDs
+        const allAssignedLotIds = [...new Set([...assignedLotIds, ...legacyLotIds])]
+
+        if (allAssignedLotIds.length === 0) {
+          return res.json({ testResults: [] })
+        }
+
+        whereClause.lotId = { in: allAssignedLotIds }
+      } else {
+        return res.json({ testResults: [] })
+      }
+    }
+
     const testResults = await prisma.testResult.findMany({
       where: whereClause,
       select: {

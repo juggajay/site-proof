@@ -60,29 +60,43 @@ ncrsRouter.get('/', requireAuth, async (req: any, res) => {
       })
 
       if (subcontractorUser) {
-        // Get lots assigned to this subcontractor company
-        const assignedLots = await prisma.lot.findMany({
-          where: { assignedSubcontractorId: subcontractorUser.subcontractorCompanyId },
+        const subCompanyId = subcontractorUser.subcontractorCompanyId
+
+        // Get lots assigned via LotSubcontractorAssignment (new model)
+        const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
+          where: {
+            subcontractorCompanyId: subCompanyId,
+            status: 'active',
+          },
+          select: { lotId: true }
+        })
+        const assignmentLotIds = lotAssignments.map(a => a.lotId)
+
+        // Get lots assigned via legacy field
+        const legacyLots = await prisma.lot.findMany({
+          where: { assignedSubcontractorId: subCompanyId },
           select: { id: true },
         })
+        const legacyLotIds = legacyLots.map(l => l.id)
 
-        const assignedLotIds = assignedLots.map(l => l.id)
+        // Combine both sets of lot IDs
+        const allAssignedLotIds = [...new Set([...assignmentLotIds, ...legacyLotIds])]
 
         // Feature #212: Allow subcontractors to see NCRs where they are the responsible party
         // OR NCRs linked to their assigned lots
         where.OR = [
           { responsibleUserId: user.userId }, // NCRs assigned to this user
-          ...(assignedLotIds.length > 0 ? [{
+          ...(allAssignedLotIds.length > 0 ? [{
             ncrLots: {
               some: {
-                lotId: { in: assignedLotIds },
+                lotId: { in: allAssignedLotIds },
               },
             },
           }] : []),
         ]
 
-        // If no assigned lots and no responsible NCRs possible, the OR handles it
-        if (assignedLotIds.length === 0) {
+        // If no assigned lots, only show NCRs where they're responsible
+        if (allAssignedLotIds.length === 0) {
           where.OR = [{ responsibleUserId: user.userId }]
         }
       } else {

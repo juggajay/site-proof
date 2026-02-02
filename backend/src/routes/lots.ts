@@ -50,7 +50,24 @@ lotsRouter.get('/', async (req, res) => {
       })
 
       if (subcontractorUser) {
-        whereClause.assignedSubcontractorId = subcontractorUser.subcontractorCompanyId
+        const subCompanyId = subcontractorUser.subcontractorCompanyId
+
+        // Get lots assigned via LotSubcontractorAssignment (new model)
+        const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
+          where: {
+            subcontractorCompanyId: subCompanyId,
+            status: 'active',
+            projectId: projectId as string,
+          },
+          select: { lotId: true }
+        })
+        const assignedLotIds = lotAssignments.map(a => a.lotId)
+
+        // Include lots from both legacy field AND new assignment model
+        whereClause.OR = [
+          { assignedSubcontractorId: subCompanyId },
+          ...(assignedLotIds.length > 0 ? [{ id: { in: assignedLotIds } }] : [])
+        ]
       } else {
         // No subcontractor company found - return empty result
         return res.json({ lots: [] })

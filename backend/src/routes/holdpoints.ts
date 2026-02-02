@@ -77,10 +77,46 @@ function calculateNotificationTime(
 holdpointsRouter.get('/project/:projectId', requireAuth, async (req: any, res) => {
   try {
     const { projectId } = req.params
+    const user = req.user
+
+    // Build where clause for lots
+    const lotsWhere: any = { projectId }
+
+    // Subcontractors can only see hold points on their assigned lots
+    if (user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin') {
+      const subcontractorUser = await prisma.subcontractorUser.findFirst({
+        where: { userId: user.id },
+        include: { subcontractorCompany: true }
+      })
+
+      if (subcontractorUser) {
+        const subCompanyId = subcontractorUser.subcontractorCompanyId
+
+        // Get lots assigned via LotSubcontractorAssignment
+        const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
+          where: {
+            subcontractorCompanyId: subCompanyId,
+            status: 'active',
+            projectId,
+          },
+          select: { lotId: true }
+        })
+        const assignedLotIds = lotAssignments.map(a => a.lotId)
+
+        // Include lots from both legacy field AND new assignment model
+        lotsWhere.OR = [
+          { assignedSubcontractorId: subCompanyId },
+          ...(assignedLotIds.length > 0 ? [{ id: { in: assignedLotIds } }] : [])
+        ]
+      } else {
+        // No subcontractor company - return empty
+        return res.json({ holdPoints: [] })
+      }
+    }
 
     // Get all lots for the project that have ITP instances with hold points
     const lots = await prisma.lot.findMany({
-      where: { projectId },
+      where: lotsWhere,
       include: {
         itpInstance: {
           include: {
