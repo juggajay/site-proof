@@ -1,9 +1,9 @@
 // MobileITPChecklist - Mobile-optimized ITP completion interface for foremen/subcontractors
 // Features: Simple status buttons (Pass/N/A/Fail), notes, photos
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { BottomSheet } from './sheets/BottomSheet'
 import { useHaptics } from '@/hooks/useHaptics'
-import { Camera, MessageSquare, Image, ChevronRight } from 'lucide-react'
+import { Camera, MessageSquare, Image, ChevronRight, ChevronDown } from 'lucide-react'
 
 interface ITPChecklistItem {
   id: string
@@ -71,6 +71,7 @@ export function MobileITPChecklist({
   canCompleteItems = true,
 }: MobileITPChecklistProps) {
   const [selectedItem, setSelectedItem] = useState<ITPChecklistItem | null>(null)
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const { trigger } = useHaptics()
 
   const getCompletion = (itemId: string) => completions.find(c => c.checklistItemId === itemId)
@@ -82,6 +83,42 @@ export function MobileITPChecklist({
     if (completion.isNotApplicable) return 'na'
     if (completion.isCompleted) return 'completed'
     return 'pending'
+  }
+
+  // Group items by category
+  const categorizedItems = useMemo(() => {
+    const groups: Record<string, ITPChecklistItem[]> = {}
+    checklistItems.forEach(item => {
+      const category = item.category || 'General'
+      if (!groups[category]) groups[category] = []
+      groups[category].push(item)
+    })
+    return groups
+  }, [checklistItems])
+
+  const categories = Object.keys(categorizedItems)
+
+  // Get category completion stats
+  const getCategoryStats = (category: string) => {
+    const items = categorizedItems[category] || []
+    const completed = items.filter(item => {
+      const completion = getCompletion(item.id)
+      return completion?.isCompleted || completion?.isNotApplicable
+    }).length
+    return { completed, total: items.length }
+  }
+
+  const toggleCategory = (category: string) => {
+    trigger('light')
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(category)) {
+        next.delete(category)
+      } else {
+        next.add(category)
+      }
+      return next
+    })
   }
 
   const completedCount = completions.filter(c => c.isCompleted || c.isNotApplicable).length
@@ -121,37 +158,73 @@ export function MobileITPChecklist({
         </div>
       )}
 
-      {/* Checklist items */}
+      {/* Checklist items grouped by category */}
       <div className="flex-1 overflow-y-auto">
-        {checklistItems.map((item) => {
-          const status = getItemStatus(item.id)
-          const completion = getCompletion(item.id)
-          const hasNotes = !!completion?.notes
-          const hasPhotos = (completion?.attachments?.length || 0) > 0
+        {categories.map(category => {
+          const isExpanded = expandedCategories.has(category)
+          const stats = getCategoryStats(category)
+          const items = categorizedItems[category]
+          const isComplete = stats.completed === stats.total
 
           return (
-            <MobileITPItem
-              key={item.id}
-              item={item}
-              status={status}
-              hasNotes={hasNotes}
-              hasPhotos={hasPhotos}
-              photoCount={completion?.attachments?.length || 0}
-              isUpdating={updatingItem === item.id}
-              canComplete={canCompleteItems}
-              onTap={() => {
-                trigger('light')
-                setSelectedItem(item)
-              }}
-              onQuickComplete={() => {
-                if (!canCompleteItems) {
-                  trigger('error')
-                  return
-                }
-                trigger('medium')
-                onToggleCompletion(item.id, status !== 'completed', completion?.notes || null)
-              }}
-            />
+            <div key={category} className="border-b">
+              {/* Category header - collapsible */}
+              <button
+                onClick={() => toggleCategory(category)}
+                className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 active:bg-muted transition-colors touch-manipulation"
+              >
+                <div className="flex items-center gap-3">
+                  {isExpanded ? (
+                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  )}
+                  <span className="font-semibold text-sm">{category}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    isComplete
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {stats.completed}/{stats.total}
+                  </span>
+                </div>
+              </button>
+
+              {/* Category items - expandable */}
+              {isExpanded && items.map((item) => {
+                const status = getItemStatus(item.id)
+                const completion = getCompletion(item.id)
+                const hasNotes = !!completion?.notes
+                const hasPhotos = (completion?.attachments?.length || 0) > 0
+
+                return (
+                  <MobileITPItem
+                    key={item.id}
+                    item={item}
+                    status={status}
+                    hasNotes={hasNotes}
+                    hasPhotos={hasPhotos}
+                    photoCount={completion?.attachments?.length || 0}
+                    isUpdating={updatingItem === item.id}
+                    canComplete={canCompleteItems}
+                    onTap={() => {
+                      trigger('light')
+                      setSelectedItem(item)
+                    }}
+                    onQuickComplete={() => {
+                      if (!canCompleteItems) {
+                        trigger('error')
+                        return
+                      }
+                      trigger('medium')
+                      onToggleCompletion(item.id, status !== 'completed', completion?.notes || null)
+                    }}
+                  />
+                )
+              })}
+            </div>
           )
         })}
       </div>

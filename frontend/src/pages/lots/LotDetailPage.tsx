@@ -124,6 +124,7 @@ export function LotDetailPage() {
   } | null>(null)
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
   const [itpStatusFilter, setItpStatusFilter] = useState<'all' | 'pending' | 'completed' | 'na' | 'failed'>('all')
+  const [expandedItpCategories, setExpandedItpCategories] = useState<Set<string>>(new Set())
   const [naModal, setNaModal] = useState<{
     checklistItemId: string
     itemDescription: string
@@ -2310,26 +2311,89 @@ export function LotDetailPage() {
                 </div>
                 <div className="rounded-lg border">
                   <div className="divide-y">
-                    {itpInstance.template.checklistItems
-                      .filter((item) => {
-                        const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
-                        const isCompleted = completion?.isCompleted || false
-                        const isNotApplicable = completion?.isNotApplicable || false
-                        const isFailed = completion?.isFailed || false
-                        const isPending = !isCompleted && !isNotApplicable && !isFailed
-
-                        // Apply status filter
-                        if (itpStatusFilter === 'pending' && !isPending) return false
-                        if (itpStatusFilter === 'completed' && !isCompleted) return false
-                        if (itpStatusFilter === 'na' && !isNotApplicable) return false
-                        if (itpStatusFilter === 'failed' && !isFailed) return false
-
-                        // Apply "show incomplete only" filter (legacy compatibility)
-                        if (showIncompleteOnly && !isPending) return false
-
-                        return true
+                    {(() => {
+                      // Group items by category
+                      const categorizedItems: Record<string, typeof itpInstance.template.checklistItems> = {}
+                      itpInstance.template.checklistItems.forEach(item => {
+                        const category = item.category || 'General'
+                        if (!categorizedItems[category]) categorizedItems[category] = []
+                        categorizedItems[category].push(item)
                       })
-                      .map((item) => {
+                      const categories = Object.keys(categorizedItems)
+
+                      return categories.map(category => {
+                        const categoryItems = categorizedItems[category]
+                        const isExpanded = expandedItpCategories.has(category)
+
+                        // Filter items for display
+                        const filteredItems = categoryItems.filter((item) => {
+                          const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
+                          const isCompleted = completion?.isCompleted || false
+                          const isNotApplicable = completion?.isNotApplicable || false
+                          const isFailed = completion?.isFailed || false
+                          const isPending = !isCompleted && !isNotApplicable && !isFailed
+
+                          if (itpStatusFilter === 'pending' && !isPending) return false
+                          if (itpStatusFilter === 'completed' && !isCompleted) return false
+                          if (itpStatusFilter === 'na' && !isNotApplicable) return false
+                          if (itpStatusFilter === 'failed' && !isFailed) return false
+                          if (showIncompleteOnly && !isPending) return false
+
+                          return true
+                        })
+
+                        // Category stats
+                        const completedInCategory = categoryItems.filter(item => {
+                          const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
+                          return completion?.isCompleted || completion?.isNotApplicable
+                        }).length
+                        const totalInCategory = categoryItems.length
+                        const isCategoryComplete = completedInCategory === totalInCategory
+
+                        // Skip category if no items match filter
+                        if (filteredItems.length === 0 && (itpStatusFilter !== 'all' || showIncompleteOnly)) {
+                          return null
+                        }
+
+                        return (
+                          <div key={category}>
+                            {/* Category header - collapsible */}
+                            <button
+                              onClick={() => {
+                                setExpandedItpCategories(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(category)) {
+                                    next.delete(category)
+                                  } else {
+                                    next.add(category)
+                                  }
+                                  return next
+                                })
+                              }}
+                              className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+                            >
+                              <div className="flex items-center gap-2">
+                                <svg
+                                  className={`w-4 h-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                                <span className="font-semibold">{category}</span>
+                              </div>
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                isCategoryComplete
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}>
+                                {completedInCategory}/{totalInCategory}
+                              </span>
+                            </button>
+
+                            {/* Category items - expandable */}
+                            {isExpanded && filteredItems.map((item) => {
                       const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
                       const isCompleted = completion?.isCompleted || false
                       const isNotApplicable = completion?.isNotApplicable || false
@@ -2583,6 +2647,10 @@ export function LotDetailPage() {
                         </div>
                       )
                     })}
+                          </div>
+                        )
+                      })
+                    })()}
                   </div>
                 </div>
               </>
