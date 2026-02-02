@@ -131,7 +131,7 @@ export function SubcontractorLotITPPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          instanceId: itpInstance.id,
+          itpInstanceId: itpInstance.id,
           checklistItemId,
           isCompleted,
           notes,
@@ -165,7 +165,7 @@ export function SubcontractorLotITPPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          instanceId: itpInstance.id,
+          itpInstanceId: itpInstance.id,
           checklistItemId,
           isNotApplicable: true,
           notes: reason,
@@ -199,7 +199,7 @@ export function SubcontractorLotITPPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          instanceId: itpInstance.id,
+          itpInstanceId: itpInstance.id,
           checklistItemId,
           isFailed: true,
           notes: reason,
