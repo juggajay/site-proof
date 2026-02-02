@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import DOMPurify from 'dompurify'
 import { X, Printer, QrCode, Download } from 'lucide-react'
 
 interface Lot {
@@ -274,7 +275,7 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
                   <div
                     className="label-qr"
                     style={{ width: '80px', height: '80px', marginBottom: '8px' }}
-                    dangerouslySetInnerHTML={{ __html: qrSvg }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(qrSvg) }}
                   />
                   <div
                     className="label-lot-number"

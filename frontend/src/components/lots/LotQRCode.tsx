@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import DOMPurify from 'dompurify'
 import { QrCode, X, Download, Printer } from 'lucide-react'
 
 interface LotQRCodeProps {
@@ -157,7 +158,7 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
         title="View QR Code"
       >
         <div
-          dangerouslySetInnerHTML={{ __html: generateQRSVG(qrUrl, pixelSize) }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(generateQRSVG(qrUrl, pixelSize)) }}
           style={{ width: pixelSize, height: pixelSize }}
         />
       </button>
@@ -185,7 +186,7 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
             <div className="flex flex-col items-center">
               <div
                 className="p-4 border rounded-lg bg-white"
-                dangerouslySetInnerHTML={{ __html: generateQRSVG(qrUrl, 200) }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(generateQRSVG(qrUrl, 200)) }}
               />
               <p className="mt-3 font-bold text-xl">{lotNumber}</p>
               <p className="mt-1 text-xs text-muted-foreground text-center break-all px-4">
