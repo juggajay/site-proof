@@ -3,6 +3,9 @@
  * Use this module instead of hardcoding API URLs throughout the app
  */
 
+// Import the correct getAuthToken from auth module
+import { getAuthToken as getAuthTokenFromAuth } from './auth'
+
 // API base URL - centralized configuration
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
@@ -32,24 +35,11 @@ export class ApiError extends Error {
 }
 
 /**
- * Get the auth token from localStorage
+ * Get the auth token from storage
+ * Delegates to auth module which handles the siteproof_auth JSON structure
  */
 export function getAuthToken(): string | null {
-  return localStorage.getItem('token')
-}
-
-/**
- * Set the auth token in localStorage
- */
-export function setAuthToken(token: string): void {
-  localStorage.setItem('token', token)
-}
-
-/**
- * Clear the auth token from localStorage
- */
-export function clearAuthToken(): void {
-  localStorage.removeItem('token')
+  return getAuthTokenFromAuth()
 }
 
 /**
