@@ -66,35 +66,51 @@ export function AssignSubcontractorModal({
   }, [existingAssignment])
 
   // Fetch subcontractors for this project (exclude only rejected/removed)
-  const { data: subcontractors = [], isLoading: loadingSubcontractors } = useQuery({
+  const { data: subcontractors = [], isLoading: loadingSubcontractors, error: subError } = useQuery({
     queryKey: ['subcontractors', projectId],
     queryFn: async () => {
       console.log('[AssignSubModal] Fetching subcontractors for projectId:', projectId)
-      const response = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(
-        `/api/subcontractors/for-project/${projectId}`
-      )
-      console.log('[AssignSubModal] API returned subcontractors:', response.subcontractors)
-      // Include approved, pending_approval, active - exclude rejected/removed
-      const filtered = response.subcontractors.filter(s =>
-        s.status !== 'rejected' && s.status !== 'removed'
-      )
-      console.log('[AssignSubModal] After status filter:', filtered)
-      return filtered
+      try {
+        const response = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(
+          `/api/subcontractors/for-project/${projectId}`
+        )
+        console.log('[AssignSubModal] API returned subcontractors:', response.subcontractors)
+        // Include approved, pending_approval, active - exclude rejected/removed
+        const filtered = response.subcontractors.filter(s =>
+          s.status !== 'rejected' && s.status !== 'removed'
+        )
+        console.log('[AssignSubModal] After status filter:', filtered)
+        return filtered
+      } catch (err) {
+        console.error('[AssignSubModal] Error fetching subcontractors:', err)
+        throw err
+      }
     },
-    enabled: !isEditing && !!projectId
+    enabled: !isEditing && !!projectId,
+    retry: false
   })
 
   // Fetch existing assignments to filter out already assigned subcontractors
-  const { data: existingAssignments = [], isLoading: loadingAssignments } = useQuery({
+  const { data: existingAssignments = [], isLoading: loadingAssignments, error: assignError } = useQuery({
     queryKey: ['lot-assignments', lotId],
     queryFn: async () => {
       console.log('[AssignSubModal] Fetching existing assignments for lotId:', lotId)
-      const result = await apiFetch<LotSubcontractorAssignment[]>(`/api/lots/${lotId}/subcontractors`)
-      console.log('[AssignSubModal] Existing assignments:', result)
-      return result
+      try {
+        const result = await apiFetch<LotSubcontractorAssignment[]>(`/api/lots/${lotId}/subcontractors`)
+        console.log('[AssignSubModal] Existing assignments:', result)
+        return result
+      } catch (err) {
+        console.error('[AssignSubModal] Error fetching assignments:', err)
+        throw err
+      }
     },
-    enabled: !isEditing
+    enabled: !isEditing,
+    retry: false
   })
+
+  // Log any errors
+  if (subError) console.error('[AssignSubModal] Subcontractors query error:', subError)
+  if (assignError) console.error('[AssignSubModal] Assignments query error:', assignError)
 
   const availableSubcontractors = subcontractors.filter(
     s => !existingAssignments.some(a => a.subcontractorCompanyId === s.id)
@@ -173,6 +189,10 @@ export function AssignSubcontractorModal({
               {!projectId ? (
                 <p className="text-sm text-red-500">
                   Error: Project ID is missing. Please reload the page.
+                </p>
+              ) : subError || assignError ? (
+                <p className="text-sm text-red-500">
+                  Error loading data: {(subError as Error)?.message || (assignError as Error)?.message || 'Authentication failed. Please refresh the page.'}
                 </p>
               ) : isLoading ? (
                 <div className="flex items-center gap-2 text-gray-500">
