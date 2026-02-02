@@ -156,6 +156,9 @@ export function TestResultsPage() {
   // Feature #206: Test register search
   const [searchQuery, setSearchQuery] = useState('')
 
+  // State-based filtering for test methods and specs
+  const [projectState, setProjectState] = useState<string>('NSW')
+
   // Feature #210: NCR raise from failed test
   const [showNcrPromptModal, setShowNcrPromptModal] = useState(false)
   const [failedTestForNcr, setFailedTestForNcr] = useState<{ testId: string; testType: string; resultValue: string; lotId: string | null } | null>(null)
@@ -200,6 +203,37 @@ export function TestResultsPage() {
     'concrete_strength': { min: '32', max: '', unit: 'MPa', method: 'AS 1012.9' },
     // Asphalt Tests
     'asphalt_density': { min: '93', max: '100', unit: '%', method: 'AS 2891.9.2' },
+  }
+
+  // State-based configuration for test methods and specifications
+  const stateTestMethods: Record<string, { label: string; methods: string[] }> = {
+    NSW: {
+      label: 'NSW (TfNSW)',
+      methods: ['TfNSW T111', 'TfNSW T112', 'TfNSW T117', 'TfNSW T162', 'TfNSW T166', 'TfNSW T173'],
+    },
+    QLD: {
+      label: 'QLD (TMR)',
+      methods: ['TMR Q102A', 'TMR Q103A', 'TMR Q113A', 'TMR Q113B', 'TMR Q114A', 'TMR Q114B', 'TMR Q117'],
+    },
+    VIC: {
+      label: 'VIC (VicRoads)',
+      methods: ['RC 500.01', 'RC 500.02', 'RC 500.03', 'RC 500.04', 'RC 500.05'],
+    },
+  }
+
+  const stateSpecRefs: Record<string, { label: string; specs: string[] }> = {
+    NSW: {
+      label: 'NSW (TfNSW)',
+      specs: ['TfNSW R44', 'TfNSW R117', 'TfNSW 3051'],
+    },
+    QLD: {
+      label: 'QLD (TMR)',
+      specs: ['MRTS04', 'MRTS05', 'MRTS06', 'MRTS21', 'MRTS35'],
+    },
+    VIC: {
+      label: 'VIC (VicRoads)',
+      specs: ['Section 204', 'Section 812', 'Section 173'],
+    },
   }
 
   // Form state for creating test results
@@ -342,12 +376,15 @@ export function TestResultsPage() {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
       try {
-        // Fetch test results and lots in parallel
-        const [testsResponse, lotsResponse] = await Promise.all([
+        // Fetch test results, lots, and project in parallel
+        const [testsResponse, lotsResponse, projectResponse] = await Promise.all([
           fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${apiUrl}/api/lots?projectId=${projectId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${apiUrl}/api/projects/${projectId}`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ])
@@ -360,6 +397,11 @@ export function TestResultsPage() {
         if (lotsResponse.ok) {
           const lotsData = await lotsResponse.json()
           setLots(lotsData.lots || [])
+        }
+
+        if (projectResponse.ok) {
+          const projectData = await projectResponse.json()
+          setProjectState(projectData.state || 'NSW')
         }
       } catch (err) {
         setError('Failed to load test results')
@@ -1369,23 +1411,13 @@ export function TestResultsPage() {
                       <option value="AS 1141.15" />
                       <option value="AS 1141.23" />
                     </optgroup>
-                    <optgroup label="NSW (TfNSW)">
-                      <option value="TfNSW T111" />
-                      <option value="TfNSW T112" />
-                      <option value="TfNSW T117" />
-                      <option value="TfNSW T162" />
-                      <option value="TfNSW T166" />
-                      <option value="TfNSW T173" />
-                    </optgroup>
-                    <optgroup label="QLD (TMR)">
-                      <option value="TMR Q102A" />
-                      <option value="TMR Q103A" />
-                      <option value="TMR Q113A" />
-                      <option value="TMR Q113B" />
-                      <option value="TMR Q114A" />
-                      <option value="TMR Q114B" />
-                      <option value="TMR Q117" />
-                    </optgroup>
+                    {stateTestMethods[projectState] && (
+                      <optgroup label={stateTestMethods[projectState].label}>
+                        {stateTestMethods[projectState].methods.map(method => (
+                          <option key={method} value={method} />
+                        ))}
+                      </optgroup>
+                    )}
                   </datalist>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1641,24 +1673,17 @@ export function TestResultsPage() {
                     list="spec-refs"
                   />
                   <datalist id="spec-refs">
-                    <optgroup label="NSW">
-                      <option value="TfNSW R44" />
-                      <option value="TfNSW R117" />
-                      <option value="TfNSW 3051" />
-                    </optgroup>
-                    <optgroup label="QLD">
-                      <option value="MRTS04" />
-                      <option value="MRTS05" />
-                      <option value="MRTS07A" />
-                    </optgroup>
-                    <optgroup label="VIC">
-                      <option value="VicRoads Sec 204" />
-                      <option value="VicRoads Sec 801" />
-                    </optgroup>
                     <optgroup label="National">
                       <option value="AS 3798" />
                       <option value="Austroads" />
                     </optgroup>
+                    {stateSpecRefs[projectState] && (
+                      <optgroup label={stateSpecRefs[projectState].label}>
+                        {stateSpecRefs[projectState].specs.map(spec => (
+                          <option key={spec} value={spec} />
+                        ))}
+                      </optgroup>
+                    )}
                   </datalist>
                 </div>
                 {/* Pass/Fail with auto-calculated indicator */}
