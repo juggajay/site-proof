@@ -126,6 +126,8 @@ projectsRouter.get('/:id', async (req, res) => {
         projectNumber: true,
         clientName: true,
         status: true,
+        state: true,
+        specificationSet: true,
         startDate: true,
         targetCompletion: true,
         contractValue: true,

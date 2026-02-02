@@ -401,7 +401,7 @@ export function TestResultsPage() {
 
         if (projectResponse.ok) {
           const projectData = await projectResponse.json()
-          setProjectState(projectData.state || 'NSW')
+          setProjectState(projectData.project?.state || 'NSW')
         }
       } catch (err) {
         setError('Failed to load test results')
