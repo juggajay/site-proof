@@ -65,14 +65,17 @@ export function AssignSubcontractorModal({
     }
   }, [existingAssignment])
 
-  // Fetch approved subcontractors for this project
+  // Fetch subcontractors for this project (exclude only rejected/removed)
   const { data: subcontractors = [], isLoading: loadingSubcontractors } = useQuery({
     queryKey: ['subcontractors', projectId],
     queryFn: async () => {
       const response = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(
         `/api/subcontractors/for-project/${projectId}`
       )
-      return response.subcontractors.filter(s => s.status === 'approved')
+      // Include approved, pending_approval, active - exclude rejected/removed
+      return response.subcontractors.filter(s =>
+        s.status !== 'rejected' && s.status !== 'removed'
+      )
     },
     enabled: !isEditing
   })

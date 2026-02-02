@@ -177,6 +177,8 @@ export function LotsPage() {
     chainageStart: '',
     chainageEnd: '',
     assignedSubcontractorId: '',
+    canCompleteITP: false,
+    itpRequiresVerification: true,
   })
   const [chainageError, setChainageError] = useState<string | null>(null)
   const [lotNumberTouched, setLotNumberTouched] = useState(false)
@@ -1054,6 +1056,8 @@ export function LotsPage() {
       chainageStart: '',
       chainageEnd: '',
       assignedSubcontractorId: '',
+      canCompleteITP: false,
+      itpRequiresVerification: true,
     })
     setChainageError(null)
     setSuggestedTemplate(null)
@@ -1137,6 +1141,8 @@ export function LotsPage() {
       chainageStart: '',
       chainageEnd: '',
       assignedSubcontractorId: '',
+      canCompleteITP: false,
+      itpRequiresVerification: true,
     })
   }
 
@@ -1212,6 +1218,8 @@ export function LotsPage() {
           chainageEnd: newLot.chainageEnd ? parseInt(newLot.chainageEnd) : null,
           itpTemplateId: selectedTemplateId || null,
           assignedSubcontractorId: newLot.assignedSubcontractorId || null,
+          canCompleteITP: newLot.assignedSubcontractorId ? newLot.canCompleteITP : undefined,
+          itpRequiresVerification: newLot.assignedSubcontractorId ? newLot.itpRequiresVerification : undefined,
         }),
       })
 
@@ -3279,6 +3287,38 @@ export function LotsPage() {
                       </option>
                     ))}
                   </select>
+
+                  {/* ITP permissions - only show when subcontractor is selected */}
+                  {newLot.assignedSubcontractorId && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-2">
+                      <p className="text-sm font-medium text-gray-700">ITP Permissions</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="can-complete-itp"
+                          checked={newLot.canCompleteITP}
+                          onChange={(e) => setNewLot((prev) => ({ ...prev, canCompleteITP: e.target.checked }))}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <label htmlFor="can-complete-itp" className="text-sm text-gray-700">
+                          Allow ITP completion
+                        </label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="itp-requires-verification"
+                          checked={newLot.itpRequiresVerification}
+                          onChange={(e) => setNewLot((prev) => ({ ...prev, itpRequiresVerification: e.target.checked }))}
+                          disabled={!newLot.canCompleteITP}
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50"
+                        />
+                        <label htmlFor="itp-requires-verification" className={`text-sm ${newLot.canCompleteITP ? 'text-gray-700' : 'text-gray-400'}`}>
+                          Require verification (recommended)
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -309,7 +309,7 @@ lotsRouter.get('/:id', async (req, res) => {
 lotsRouter.post('/', async (req, res) => {
   try {
     const user = req.user!
-    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType, itpTemplateId, assignedSubcontractorId, areaZone } = req.body
+    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType, itpTemplateId, assignedSubcontractorId, areaZone, canCompleteITP, itpRequiresVerification } = req.body
 
     if (!projectId || !lotNumber) {
       return res.status(400).json({
@@ -403,7 +403,7 @@ lotsRouter.post('/', async (req, res) => {
     }
 
     // If a subcontractor is assigned, also create a LotSubcontractorAssignment record
-    // This ensures the new assignment system recognizes legacy assignments
+    // This ensures the new assignment system recognizes the assignment with ITP permissions
     if (assignedSubcontractorId) {
       try {
         await prisma.lotSubcontractorAssignment.create({
@@ -411,8 +411,8 @@ lotsRouter.post('/', async (req, res) => {
             lotId: lot.id,
             subcontractorCompanyId: assignedSubcontractorId,
             projectId,
-            canCompleteITP: false,
-            itpRequiresVerification: true,
+            canCompleteITP: canCompleteITP ?? false,
+            itpRequiresVerification: itpRequiresVerification ?? true,
             assignedById: user.id,
           },
         })
