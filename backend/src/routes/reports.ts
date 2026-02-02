@@ -10,7 +10,7 @@ reportsRouter.use(requireAuth)
 // GET /api/reports/lot-status - Lot status report
 reportsRouter.get('/lot-status', async (req, res) => {
   try {
-    const { projectId } = req.query
+    const { projectId, page = '1', limit = '100' } = req.query
 
     if (!projectId) {
       return res.status(400).json({
@@ -19,7 +19,17 @@ reportsRouter.get('/lot-status', async (req, res) => {
       })
     }
 
-    // Get all lots for the project
+    // Pagination parameters
+    const pageNum = parseInt(page as string) || 1
+    const limitNum = Math.min(parseInt(limit as string) || 100, 500) // Max 500 per page
+    const skip = (pageNum - 1) * limitNum
+
+    // Get total count for pagination
+    const total = await prisma.lot.count({
+      where: { projectId: projectId as string }
+    })
+
+    // Get paginated lots for the project
     const lots = await prisma.lot.findMany({
       where: { projectId: projectId as string },
       select: {
@@ -37,6 +47,8 @@ reportsRouter.get('/lot-status', async (req, res) => {
         conformedAt: true,
       },
       orderBy: { lotNumber: 'asc' },
+      skip,
+      take: limitNum,
     })
 
     // Calculate status counts
@@ -81,7 +93,7 @@ reportsRouter.get('/lot-status', async (req, res) => {
     const report = {
       generatedAt: new Date().toISOString(),
       projectId,
-      totalLots: lots.length,
+      totalLots: total,
       statusCounts,
       activityCounts,
       lots: lots.map(lot => ({
@@ -104,6 +116,12 @@ reportsRouter.get('/lot-status', async (req, res) => {
         periodChangePercent,
         currentPeriodLabel: startOfThisMonth.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }),
         previousPeriodLabel: startOfLastMonth.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }),
+      },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
       }
     }
 
@@ -117,7 +135,7 @@ reportsRouter.get('/lot-status', async (req, res) => {
 // GET /api/reports/ncr - NCR report
 reportsRouter.get('/ncr', async (req, res) => {
   try {
-    const { projectId } = req.query
+    const { projectId, page = '1', limit = '100' } = req.query
 
     if (!projectId) {
       return res.status(400).json({
@@ -126,7 +144,17 @@ reportsRouter.get('/ncr', async (req, res) => {
       })
     }
 
-    // Get all NCRs for the project
+    // Pagination parameters
+    const pageNum = parseInt(page as string) || 1
+    const limitNum = Math.min(parseInt(limit as string) || 100, 500) // Max 500 per page
+    const skip = (pageNum - 1) * limitNum
+
+    // Get total count for pagination
+    const total = await prisma.nCR.count({
+      where: { projectId: projectId as string }
+    })
+
+    // Get paginated NCRs for the project
     const ncrs = await prisma.nCR.findMany({
       where: { projectId: projectId as string },
       select: {
@@ -141,6 +169,8 @@ reportsRouter.get('/ncr', async (req, res) => {
         rootCauseCategory: true,
       },
       orderBy: { ncrNumber: 'asc' },
+      skip,
+      take: limitNum,
     })
 
     // Calculate status counts
@@ -223,7 +253,7 @@ reportsRouter.get('/ncr', async (req, res) => {
     const report = {
       generatedAt: new Date().toISOString(),
       projectId,
-      totalNCRs: ncrs.length,
+      totalNCRs: total,
       statusCounts,
       categoryCounts,
       rootCauseCounts,
@@ -242,6 +272,12 @@ reportsRouter.get('/ncr', async (req, res) => {
         closedConcession: statusCounts['closed_concession'] || 0,
         minor: categoryCounts['minor'] || 0,
         major: categoryCounts['major'] || 0,
+      },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
       }
     }
 
@@ -255,7 +291,7 @@ reportsRouter.get('/ncr', async (req, res) => {
 // GET /api/reports/test - Test results report (Feature #208)
 reportsRouter.get('/test', async (req, res) => {
   try {
-    const { projectId, startDate, endDate, testTypes, lotIds } = req.query
+    const { projectId, startDate, endDate, testTypes, lotIds, page = '1', limit = '100' } = req.query
 
     if (!projectId) {
       return res.status(400).json({
@@ -263,6 +299,11 @@ reportsRouter.get('/test', async (req, res) => {
         message: 'projectId query parameter is required'
       })
     }
+
+    // Pagination parameters
+    const pageNum = parseInt(page as string) || 1
+    const limitNum = Math.min(parseInt(limit as string) || 100, 500) // Max 500 per page
+    const skip = (pageNum - 1) * limitNum
 
     // Build where clause with optional filters
     const whereClause: any = { projectId: projectId as string }
@@ -296,7 +337,12 @@ reportsRouter.get('/test', async (req, res) => {
       }
     }
 
-    // Get all test results for the project with filters
+    // Get total count for pagination
+    const total = await prisma.testResult.count({
+      where: whereClause
+    })
+
+    // Get paginated test results for the project with filters
     const tests = await prisma.testResult.findMany({
       where: whereClause,
       select: {
@@ -316,6 +362,8 @@ reportsRouter.get('/test', async (req, res) => {
         lotId: true,
       },
       orderBy: { sampleDate: 'desc' },
+      skip,
+      take: limitNum,
     })
 
     // Calculate pass/fail counts
@@ -342,7 +390,7 @@ reportsRouter.get('/test', async (req, res) => {
     const report = {
       generatedAt: new Date().toISOString(),
       projectId,
-      totalTests: tests.length,
+      totalTests: total,
       passFailCounts,
       testTypeCounts,
       statusCounts,
@@ -351,9 +399,15 @@ reportsRouter.get('/test', async (req, res) => {
         pass: passFailCounts['pass'] || 0,
         fail: passFailCounts['fail'] || 0,
         pending: passFailCounts['pending'] || 0,
-        passRate: tests.length > 0
-          ? ((passFailCounts['pass'] || 0) / tests.length * 100).toFixed(1)
+        passRate: total > 0
+          ? ((passFailCounts['pass'] || 0) / total * 100).toFixed(1)
           : '0.0',
+      },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
       }
     }
 
@@ -367,7 +421,7 @@ reportsRouter.get('/test', async (req, res) => {
 // GET /api/reports/diary - Diary report with section selection
 reportsRouter.get('/diary', async (req, res) => {
   try {
-    const { projectId, startDate, endDate, sections } = req.query
+    const { projectId, startDate, endDate, sections, page = '1', limit = '100' } = req.query
 
     if (!projectId) {
       return res.status(400).json({
@@ -375,6 +429,11 @@ reportsRouter.get('/diary', async (req, res) => {
         message: 'projectId query parameter is required'
       })
     }
+
+    // Pagination parameters
+    const pageNum = parseInt(page as string) || 1
+    const limitNum = Math.min(parseInt(limit as string) || 100, 500) // Max 500 per page
+    const skip = (pageNum - 1) * limitNum
 
     // Parse sections parameter (comma-separated) - default to all sections
     const selectedSections = sections
@@ -390,12 +449,18 @@ reportsRouter.get('/diary', async (req, res) => {
       dateFilter.lte = new Date(endDate as string)
     }
 
-    // Get diaries with selected sections
+    // Build where clause
+    const whereClause = {
+      projectId: projectId as string,
+      ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
+    }
+
+    // Get total count for pagination
+    const total = await prisma.dailyDiary.count({ where: whereClause })
+
+    // Get paginated diaries with selected sections
     const diaries = await prisma.dailyDiary.findMany({
-      where: {
-        projectId: projectId as string,
-        ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
-      },
+      where: whereClause,
       include: {
         personnel: selectedSections.includes('personnel'),
         plant: selectedSections.includes('plant'),
@@ -408,10 +473,11 @@ reportsRouter.get('/diary', async (req, res) => {
         },
       },
       orderBy: { date: 'desc' },
+      skip,
+      take: limitNum,
     }) as any[]
 
-    // Calculate summary statistics
-    const totalDiaries = diaries.length
+    // Calculate summary statistics (from paginated results)
     const submittedCount = diaries.filter(d => d.status === 'submitted').length
     const draftCount = diaries.filter(d => d.status === 'draft').length
 
@@ -510,7 +576,7 @@ reportsRouter.get('/diary', async (req, res) => {
         endDate: endDate || null,
       },
       selectedSections,
-      totalDiaries,
+      totalDiaries: total,
       submittedCount,
       draftCount,
       diaries: diaries.map(diary => ({
@@ -540,6 +606,12 @@ reportsRouter.get('/diary', async (req, res) => {
         ...(selectedSections.includes('activities') ? { activities: activitiesSummary } : {}),
         ...(selectedSections.includes('delays') ? { delays: delaysSummary } : {}),
       },
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
     }
 
     res.json(report)

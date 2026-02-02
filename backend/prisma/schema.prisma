@@ -259,6 +259,9 @@ model Lot {
   subcontractorAssignments LotSubcontractorAssignment[]
 
   @@unique([projectId, lotNumber])
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([projectId, conformedAt])
   @@map("lots")
 }
 
@@ -349,6 +352,8 @@ model ITPCompletion {
 
   attachments ITPCompletionAttachment[]
 
+  @@index([itpInstanceId])
+  @@index([verificationStatus])
   @@map("itp_completions")
 }
 
@@ -402,6 +407,9 @@ model HoldPoint {
   itpChecklistItem  ITPChecklistItem @relation(fields: [itpChecklistItemId], references: [id])
   releaseTokens     HoldPointReleaseToken[]
 
+  @@index([lotId])
+  @@index([status, createdAt])
+  @@index([status, scheduledDate])
   @@map("hold_points")
 }
 
@@ -469,6 +477,9 @@ model TestResult {
   verifiedBy       User?             @relation("VerifiedByTestUser", fields: [verifiedById], references: [id])
   rejectedBy       User?             @relation("RejectedByTestUser", fields: [rejectedById], references: [id])
 
+  @@index([projectId])
+  @@index([lotId])
+  @@index([projectId, passFail])
   @@map("test_results")
 }
 
@@ -548,6 +559,10 @@ model NCR {
   ncrEvidence NCREvidence[]
 
   @@unique([projectId, ncrNumber])
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([projectId, dueDate])
+  @@index([projectId, category, status])
   @@map("ncrs")
 }
 
@@ -612,6 +627,7 @@ model DailyDiary {
   addendums  DiaryAddendum[]
 
   @@unique([projectId, date])
+  @@index([projectId, date])
   @@map("daily_diaries")
 }
 

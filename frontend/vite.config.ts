@@ -67,5 +67,44 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-select',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-toast',
+            '@radix-ui/react-tooltip',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-accordion',
+            '@radix-ui/react-alert-dialog',
+            '@radix-ui/react-checkbox',
+            '@radix-ui/react-label',
+            '@radix-ui/react-progress',
+            '@radix-ui/react-radio-group',
+            '@radix-ui/react-separator',
+            '@radix-ui/react-slot',
+            '@radix-ui/react-switch',
+            'class-variance-authority',
+            'clsx',
+            'tailwind-merge',
+            'lucide-react',
+          ],
+          'vendor-data': ['@tanstack/react-query', 'zustand', 'zod', 'react-hook-form', '@hookform/resolvers'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-charts': ['recharts'],
+          'vendor-pdf': ['jspdf'],
+          'vendor-pdf-viewer': ['react-pdf', 'pdfjs-dist'],
+          'vendor-date': ['date-fns'],
+          'vendor-offline': ['dexie', 'dexie-react-hooks'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 500,
   }
 })

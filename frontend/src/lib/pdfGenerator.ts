@@ -1,4 +1,24 @@
-import { jsPDF } from 'jspdf'
+// Lazy load jsPDF for better bundle size
+let jsPDFModule: typeof import('jspdf') | null = null
+
+async function getJsPDF(): Promise<typeof import('jspdf').jsPDF> {
+  if (!jsPDFModule) {
+    jsPDFModule = await import('jspdf')
+  }
+  return jsPDFModule.jsPDF
+}
+
+// Synchronous helper for components that haven't migrated to async yet
+// This throws if jsPDF isn't loaded - use generateConformanceReportPDFAsync instead
+function getJsPDFSync(): typeof import('jspdf').jsPDF {
+  if (!jsPDFModule) {
+    throw new Error('jsPDF not loaded. Use async PDF generation functions.')
+  }
+  return jsPDFModule.jsPDF
+}
+
+// Pre-load jsPDF when the module is imported (non-blocking)
+getJsPDF().catch(() => {})
 
 // Conformance package format types for Australian road authorities
 export type ConformanceFormat = 'standard' | 'tmr' | 'tfnsw' | 'vicroads'
@@ -153,6 +173,7 @@ export function generateConformanceReportPDF(
   data: ConformanceReportData,
   options: ConformanceFormatOptions = defaultConformanceOptions
 ): void {
+  const jsPDF = getJsPDFSync()
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -695,6 +716,7 @@ interface HPEvidencePackageData {
  * @param options - Customization options (Feature #466)
  */
 export function generateHPEvidencePackagePDF(data: HPEvidencePackageData, _options: HPPackageOptions = defaultHPPackageOptions): void {
+  const jsPDF = getJsPDFSync()
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -1142,6 +1164,7 @@ const defaultPackageOptions: ClaimPackageOptions = {
  * Generate a PDF evidence package for a Progress Claim (SOPA compliant)
  */
 export function generateClaimEvidencePackagePDF(data: ClaimEvidencePackageData, options: ClaimPackageOptions = defaultPackageOptions): void {
+  const jsPDF = getJsPDFSync()
   const startTime = Date.now()
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -1573,6 +1596,7 @@ export interface NCRDetailData {
  * Generate a PDF detail report for a Non-Conformance Report (NCR)
  */
 export function generateNCRDetailPDF(data: NCRDetailData): void {
+  const jsPDF = getJsPDFSync()
   const startTime = Date.now()
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -1880,6 +1904,7 @@ export interface TestCertificateData {
  * Generate a PDF test certificate for a test result
  */
 export function generateTestCertificatePDF(data: TestCertificateData): void {
+  const jsPDF = getJsPDFSync()
   const startTime = Date.now()
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -2167,6 +2192,7 @@ export interface DailyDiaryPDFData {
  * Generate a PDF daily diary report
  */
 export function generateDailyDiaryPDF(data: DailyDiaryPDFData): void {
+  const jsPDF = getJsPDFSync()
   const startTime = Date.now()
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()
@@ -2643,6 +2669,7 @@ export interface DocketDetailPDFData {
  * Generate a PDF detail report for a Docket
  */
 export function generateDocketDetailPDF(data: DocketDetailPDFData): void {
+  const jsPDF = getJsPDFSync()
   const startTime = Date.now()
   const doc = new jsPDF()
   const pageWidth = doc.internal.pageSize.getWidth()

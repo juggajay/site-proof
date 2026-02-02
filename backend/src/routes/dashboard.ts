@@ -413,6 +413,8 @@ dashboardRouter.get('/portfolio-risks', async (req, res) => {
     const today = new Date()
     const thirtyDaysFromNow = new Date(today)
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+    const sevenDaysAgo = new Date(today)
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
     // Get all active projects with their risk indicators
     const projects = await prisma.project.findMany({
@@ -428,6 +430,47 @@ dashboardRouter.get('/portfolio-risks', async (req, res) => {
         status: true
       }
     })
+
+    const activeProjectIds = projects.map(p => p.id)
+
+    // Batch queries for all risk indicators - eliminates N+1 pattern
+    const [majorNCRsByProject, overdueNCRsByProject, staleHPsByProject] = await Promise.all([
+      // Major NCRs grouped by project
+      prisma.nCR.groupBy({
+        by: ['projectId'],
+        where: {
+          projectId: { in: activeProjectIds },
+          category: 'major',
+          status: { notIn: ['closed', 'closed_concession'] }
+        },
+        _count: true
+      }),
+      // Overdue NCRs grouped by project
+      prisma.nCR.groupBy({
+        by: ['projectId'],
+        where: {
+          projectId: { in: activeProjectIds },
+          status: { notIn: ['closed', 'closed_concession'] },
+          dueDate: { lt: today }
+        },
+        _count: true
+      }),
+      // Stale hold points - use raw query for efficient grouping via lot join
+      prisma.$queryRaw<Array<{ projectId: string; count: bigint }>>`
+        SELECT l."project_id" as "projectId", COUNT(hp.id) as count
+        FROM hold_points hp
+        JOIN lots l ON hp."lot_id" = l.id
+        WHERE l."project_id" = ANY(${activeProjectIds}::uuid[])
+          AND hp.status IN ('pending', 'scheduled', 'requested')
+          AND hp."created_at" < ${sevenDaysAgo}
+        GROUP BY l."project_id"
+      `
+    ])
+
+    // Convert to Maps for O(1) lookup
+    const majorNCRMap = new Map(majorNCRsByProject.map(r => [r.projectId, r._count]))
+    const overdueNCRMap = new Map(overdueNCRsByProject.map(r => [r.projectId, r._count]))
+    const staleHPMap = new Map(staleHPsByProject.map((r) => [r.projectId, Number(r.count)]))
 
     const projectsAtRisk = []
 
@@ -455,14 +498,8 @@ dashboardRouter.get('/portfolio-risks', async (req, res) => {
         }
       }
 
-      // Check for major open NCRs
-      const majorNCRCount = await prisma.nCR.count({
-        where: {
-          projectId: project.id,
-          category: 'major',
-          status: { notIn: ['closed', 'closed_concession'] }
-        }
-      })
+      // Check for major open NCRs (from pre-computed map)
+      const majorNCRCount = majorNCRMap.get(project.id) || 0
       if (majorNCRCount > 0) {
         riskIndicators.push({
           type: 'ncr',
@@ -472,14 +509,8 @@ dashboardRouter.get('/portfolio-risks', async (req, res) => {
         })
       }
 
-      // Check for overdue NCRs
-      const overdueNCRCount = await prisma.nCR.count({
-        where: {
-          projectId: project.id,
-          status: { notIn: ['closed', 'closed_concession'] },
-          dueDate: { lt: today }
-        }
-      })
+      // Check for overdue NCRs (from pre-computed map)
+      const overdueNCRCount = overdueNCRMap.get(project.id) || 0
       if (overdueNCRCount > 0) {
         riskIndicators.push({
           type: 'overdue_ncr',
@@ -489,16 +520,8 @@ dashboardRouter.get('/portfolio-risks', async (req, res) => {
         })
       }
 
-      // Check for stale hold points
-      const sevenDaysAgo = new Date(today)
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      const staleHPCount = await prisma.holdPoint.count({
-        where: {
-          lot: { projectId: project.id },
-          status: { in: ['pending', 'scheduled', 'requested'] },
-          createdAt: { lt: sevenDaysAgo }
-        }
-      })
+      // Check for stale hold points (from pre-computed map)
+      const staleHPCount = staleHPMap.get(project.id) || 0
       if (staleHPCount > 0) {
         riskIndicators.push({
           type: 'holdpoint',
