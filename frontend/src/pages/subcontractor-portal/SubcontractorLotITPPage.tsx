@@ -92,9 +92,11 @@ export function SubcontractorLotITPPage() {
       const lotData = await lotRes.json()
       setLot(lotData.lot)
 
-      // Check if subcontractor can complete items
-      const assignment = lotData.lot.subcontractorAssignments?.[0]
-      setCanCompleteItems(assignment?.canCompleteITP ?? false)
+      // Check if subcontractor can complete items (check all assignments)
+      const canComplete = lotData.lot.subcontractorAssignments?.some(
+        (a: { canCompleteITP: boolean }) => a.canCompleteITP
+      ) ?? false
+      setCanCompleteItems(canComplete)
 
       // Fetch ITP instance for this lot
       const itpRes = await fetch(`${API_URL}/api/itp/lots/${lotId}/instance`, { headers })

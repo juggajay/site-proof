@@ -100,12 +100,9 @@ export function SubcontractorITPsPage() {
         )
         if (lotsRes.ok) {
           const lotsData = await lotsRes.json()
-          // Filter to lots where subcontractor has canCompleteITP permission
+          // Show all assigned lots with ITPs (backend already filters to assigned lots)
           const assignedLots = (lotsData.lots || []).filter((lot: Lot) => {
-            const assignment = lot.subcontractorAssignments?.find(
-              a => a.canCompleteITP
-            )
-            return assignment && lot.itpInstances && lot.itpInstances.length > 0
+            return lot.itpInstances && lot.itpInstances.length > 0
           })
           setLots(assignedLots)
         }
@@ -256,6 +253,7 @@ export function SubcontractorITPsPage() {
 
 function ITPLotCard({ lot }: { lot: Lot }) {
   const itp = lot.itpInstances?.[0]
+  const canComplete = lot.subcontractorAssignments?.some(a => a.canCompleteITP) ?? false
 
   return (
     <Link
@@ -265,16 +263,16 @@ function ITPLotCard({ lot }: { lot: Lot }) {
       <div className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900">
-              <ClipboardList className="h-4 w-4 text-green-600 dark:text-green-300" />
+            <div className={`p-2 rounded-lg ${canComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-700'}`}>
+              <ClipboardList className={`h-4 w-4 ${canComplete ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`} />
             </div>
             <div>
               <p className="font-medium text-gray-900 dark:text-white">{lot.lotNumber}</p>
               {itp && (
                 <p className="text-sm text-gray-500 dark:text-gray-400">{itp.template.name}</p>
               )}
-              {lot.description && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{lot.description}</p>
+              {!canComplete && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">View only - contact PM for completion access</p>
               )}
             </div>
           </div>

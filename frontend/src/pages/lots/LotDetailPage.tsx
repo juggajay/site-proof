@@ -2086,9 +2086,23 @@ export function LotDetailPage() {
           )}
         </div>
 
-        {assignments.length === 0 ? (
+        {/* Show legacy assignment if exists but not in new assignments table */}
+        {lot.assignedSubcontractor && !assignments.some(a => a.subcontractorCompany.id === lot.assignedSubcontractorId) && (
+          <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-amber-800">{lot.assignedSubcontractor.companyName}</div>
+                <div className="text-sm text-amber-600">
+                  Legacy assignment - click Add to set ITP permissions
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {assignments.length === 0 && !lot.assignedSubcontractor ? (
           <p className="text-sm text-muted-foreground">No subcontractors assigned</p>
-        ) : (
+        ) : assignments.length > 0 ? (
           <div className="space-y-2">
             {assignments.map(assignment => (
               <div key={assignment.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
@@ -2130,7 +2144,7 @@ export function LotDetailPage() {
               </div>
             ))}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Tab Navigation */}
