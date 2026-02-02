@@ -99,7 +99,7 @@ export function SubcontractorLotITPPage() {
       setCanCompleteItems(canComplete)
 
       // Fetch ITP instance for this lot
-      const itpRes = await fetch(`${API_URL}/api/itp/lots/${lotId}/instance`, { headers })
+      const itpRes = await fetch(`${API_URL}/api/itp/instances/lot/${lotId}`, { headers })
       if (itpRes.ok) {
         const itpData = await itpRes.json()
         setItpInstance(itpData.instance)
