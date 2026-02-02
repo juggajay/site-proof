@@ -99,7 +99,7 @@ export default defineConfig({
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-charts': ['recharts'],
           'vendor-pdf': ['jspdf'],
-          'vendor-pdf-viewer': ['react-pdf', 'pdfjs-dist'],
+          'vendor-pdf-viewer': ['react-pdf'],
           'vendor-date': ['date-fns'],
           'vendor-offline': ['dexie', 'dexie-react-hooks'],
         },
