@@ -43,6 +43,9 @@ import { MarkAsNAModal } from './components/MarkAsNAModal'
 import { MarkAsFailedModal } from './components/MarkAsFailedModal'
 import { EvidenceWarningModal } from './components/EvidenceWarningModal'
 import { WitnessPointModal } from './components/WitnessPointModal'
+import { AIClassificationModal, ClassificationModalData } from './components/AIClassificationModal'
+import { StatusOverrideModal } from './components/StatusOverrideModal'
+import { ConformanceReportModal } from './components/ConformanceReportModal'
 
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
@@ -106,8 +109,6 @@ export function LotDetailPage() {
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [showOverrideModal, setShowOverrideModal] = useState(false)
-  const [overrideStatus, setOverrideStatus] = useState('')
-  const [overrideReason, setOverrideReason] = useState('')
   const [overriding, setOverriding] = useState(false)
   const [generatingReport, setGeneratingReport] = useState(false)
   const [showReportFormatDialog, setShowReportFormatDialog] = useState(false)
@@ -151,17 +152,7 @@ export function LotDetailPage() {
   const [submittingWitness, setSubmittingWitness] = useState(false)
 
   // AI Photo Classification modal state (Feature #247)
-  const [classificationModal, setClassificationModal] = useState<{
-    documentId: string
-    filename: string
-    suggestedClassification: string
-    confidence: number
-    categories: string[]
-    attachmentData: any
-    completionId: string
-    checklistItemId: string
-  } | null>(null)
-  const [selectedClassification, setSelectedClassification] = useState<string>('')
+  const [classificationModal, setClassificationModal] = useState<ClassificationModalData | null>(null)
   const [savingClassification, setSavingClassification] = useState(false)
   const [_classifying, setClassifying] = useState(false)
 
@@ -1511,11 +1502,7 @@ export function LotDetailPage() {
                 suggestedClassification: classificationData.suggestedClassification,
                 confidence: classificationData.confidence,
                 categories: classificationData.categories,
-                attachmentData: data.attachment,
-                completionId,
-                checklistItemId
               })
-              setSelectedClassification(classificationData.suggestedClassification)
             } else {
               console.warn('AI classification failed, photo uploaded without classification')
               toast({
@@ -1550,8 +1537,8 @@ export function LotDetailPage() {
   }
 
   // Feature #247: Handle saving the photo classification
-  const handleSaveClassification = async () => {
-    if (!classificationModal || !selectedClassification) return
+  const handleSaveClassification = async (classification: string) => {
+    if (!classificationModal) return
 
     setSavingClassification(true)
     const token = getAuthToken()
@@ -1565,17 +1552,16 @@ export function LotDetailPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          classification: selectedClassification
+          classification
         }),
       })
 
       if (response.ok) {
         toast({
           title: 'Classification saved',
-          description: `Photo classified as "${selectedClassification}"`,
+          description: `Photo classified as "${classification}"`,
         })
         setClassificationModal(null)
-        setSelectedClassification('')
       } else {
         toast({
           title: 'Failed to save',
@@ -1598,7 +1584,6 @@ export function LotDetailPage() {
   // Skip classification and just close the modal
   const handleSkipClassification = () => {
     setClassificationModal(null)
-    setSelectedClassification('')
     toast({
       title: 'Photo uploaded',
       description: 'Photo was uploaded without classification.',
@@ -1639,8 +1624,8 @@ export function LotDetailPage() {
   }
 
   // Handle status override
-  const handleOverrideStatus = async () => {
-    if (!overrideStatus || !overrideReason.trim()) {
+  const handleOverrideStatus = async (newStatus: string, reason: string) => {
+    if (!newStatus || !reason.trim()) {
       toast({
         title: 'Missing fields',
         description: 'Please select a status and provide a reason.',
@@ -1649,7 +1634,7 @@ export function LotDetailPage() {
       return
     }
 
-    if (overrideReason.trim().length < 5) {
+    if (reason.trim().length < 5) {
       toast({
         title: 'Reason too short',
         description: 'Please provide a more detailed reason (at least 5 characters).',
@@ -1670,8 +1655,8 @@ export function LotDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          status: overrideStatus,
-          reason: overrideReason.trim()
+          status: newStatus,
+          reason: reason.trim()
         }),
       })
 
@@ -1679,8 +1664,6 @@ export function LotDetailPage() {
         const data = await response.json()
         setLot((prev) => prev ? { ...prev, status: data.lot.status } : null)
         setShowOverrideModal(false)
-        setOverrideStatus('')
-        setOverrideReason('')
         toast({
           title: 'Status overridden',
           description: `Status changed from "${data.previousStatus.replace('_', ' ')}" to "${data.lot.status.replace('_', ' ')}".`,
@@ -1975,11 +1958,7 @@ export function LotDetailPage() {
           {/* Override Status Button - only for quality managers and above */}
           {canConformLots && lot.status !== 'claimed' && (
             <button
-              onClick={() => {
-                setOverrideStatus(lot.status !== 'conformed' ? '' : 'completed')
-                setOverrideReason('')
-                setShowOverrideModal(true)
-              }}
+              onClick={() => setShowOverrideModal(true)}
               className="flex items-center gap-1.5 rounded-lg border border-purple-500 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50"
               title="Manually override lot status"
             >
@@ -3597,197 +3576,23 @@ export function LotDetailPage() {
       )}
 
       {/* Conformance Report Format Selection Modal */}
-      {showReportFormatDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-lg shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-600">
-                <FileText className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold">Generate Conformance Package</h2>
-                <p className="text-sm text-muted-foreground">Select output format for the conformance report</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Report Format
-                </label>
-                <div className="space-y-2">
-                  {/* Standard format */}
-                  <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${selectedReportFormat === 'standard' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}`}>
-                    <input
-                      type="radio"
-                      name="reportFormat"
-                      value="standard"
-                      checked={selectedReportFormat === 'standard'}
-                      onChange={(e) => setSelectedReportFormat(e.target.value as ConformanceFormat)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <div className="font-medium">Standard</div>
-                      <p className="text-sm text-muted-foreground">Generic conformance report format suitable for most clients</p>
-                    </div>
-                  </label>
-
-                  {/* TMR format */}
-                  <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${selectedReportFormat === 'tmr' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}`}>
-                    <input
-                      type="radio"
-                      name="reportFormat"
-                      value="tmr"
-                      checked={selectedReportFormat === 'tmr'}
-                      onChange={(e) => setSelectedReportFormat(e.target.value as ConformanceFormat)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <div className="font-medium">TMR (Queensland)</div>
-                      <p className="text-sm text-muted-foreground">Transport and Main Roads format - MRTS compliant with contractor/superintendent signature blocks</p>
-                    </div>
-                  </label>
-
-                  {/* TfNSW format */}
-                  <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${selectedReportFormat === 'tfnsw' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}`}>
-                    <input
-                      type="radio"
-                      name="reportFormat"
-                      value="tfnsw"
-                      checked={selectedReportFormat === 'tfnsw'}
-                      onChange={(e) => setSelectedReportFormat(e.target.value as ConformanceFormat)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <div className="font-medium">TfNSW (New South Wales)</div>
-                      <p className="text-sm text-muted-foreground">Transport for NSW QA Specification compliant format with signature blocks</p>
-                    </div>
-                  </label>
-
-                  {/* VicRoads format */}
-                  <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${selectedReportFormat === 'vicroads' ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''}`}>
-                    <input
-                      type="radio"
-                      name="reportFormat"
-                      value="vicroads"
-                      checked={selectedReportFormat === 'vicroads'}
-                      onChange={(e) => setSelectedReportFormat(e.target.value as ConformanceFormat)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <div className="font-medium">VicRoads (Victoria)</div>
-                      <p className="text-sm text-muted-foreground">Department of Transport Victoria Section Specification format</p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowReportFormatDialog(false)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateReport}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                Generate PDF
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConformanceReportModal
+        isOpen={showReportFormatDialog}
+        selectedFormat={selectedReportFormat}
+        onFormatChange={setSelectedReportFormat}
+        onGenerate={handleGenerateReport}
+        onClose={() => setShowReportFormatDialog(false)}
+      />
 
       {/* Status Override Modal */}
-      {showOverrideModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-purple-100 text-purple-600">
-                <RefreshCw className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold">Override Status</h2>
-                <p className="text-sm text-muted-foreground">Manually change the lot status</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Current Status
-                </label>
-                <div className={`px-3 py-2 rounded border ${statusColors[lot.status] || 'bg-gray-100'}`}>
-                  {lot.status.replace('_', ' ')}
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="override-status" className="block text-sm font-medium mb-1">
-                  New Status <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="override-status"
-                  value={overrideStatus}
-                  onChange={(e) => setOverrideStatus(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg bg-background"
-                >
-                  <option value="">Select new status...</option>
-                  {validStatuses
-                    .filter(s => s.value !== lot.status) // Exclude current status
-                    .map(status => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))
-                  }
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="override-reason" className="block text-sm font-medium mb-1">
-                  Reason for Override <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  id="override-reason"
-                  value={overrideReason}
-                  onChange={(e) => setOverrideReason(e.target.value)}
-                  placeholder="Explain why you are overriding the status..."
-                  rows={3}
-                  className="w-full px-3 py-2 border rounded-lg bg-background resize-none"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  This reason will be recorded in the lot history for audit purposes.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowOverrideModal(false)
-                  setOverrideStatus('')
-                  setOverrideReason('')
-                }}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-                disabled={overriding}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleOverrideStatus}
-                disabled={overriding || !overrideStatus || !overrideReason.trim()}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {overriding ? 'Overriding...' : 'Override Status'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <StatusOverrideModal
+        isOpen={showOverrideModal}
+        currentStatus={lot.status}
+        validStatuses={validStatuses}
+        onClose={() => setShowOverrideModal(false)}
+        onSubmit={handleOverrideStatus}
+        isSubmitting={overriding}
+      />
 
       {/* Assign Subcontractor Modal */}
       {showSubcontractorModal && (
@@ -3936,86 +3741,13 @@ export function LotDetailPage() {
       />
 
       {/* Feature #247: AI Photo Classification Modal */}
-      {classificationModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" data-testid="ai-classification-modal">
-          <div className="bg-background rounded-lg p-6 w-full max-w-lg shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400">
-                <span className="text-xl">🤖</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">AI Photo Classification</h3>
-                <p className="text-sm text-muted-foreground">{classificationModal.filename}</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {/* AI Suggestion */}
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-blue-800 dark:text-blue-300">AI Suggested Classification</span>
-                  <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300">
-                    {classificationModal.confidence}% confidence
-                  </span>
-                </div>
-                <p className="text-lg font-semibold text-blue-900 dark:text-blue-100" data-testid="ai-suggested-classification">
-                  {classificationModal.suggestedClassification}
-                </p>
-              </div>
-
-              {/* Classification Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Select Classification <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto" data-testid="classification-options">
-                  {classificationModal.categories.map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => setSelectedClassification(category)}
-                      className={`px-3 py-2 text-sm rounded-lg border transition-colors text-left ${
-                        selectedClassification === category
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'border-border hover:bg-muted'
-                      }`}
-                      data-testid={`classification-option-${category.toLowerCase().replace(/[\/\s]+/g, '-')}`}
-                    >
-                      {category === classificationModal.suggestedClassification && (
-                        <span className="mr-1">✨</span>
-                      )}
-                      {category}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Info text */}
-              <p className="text-xs text-muted-foreground">
-                The AI analyzes photos to suggest a classification. You can accept the suggestion or choose a different category.
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={handleSkipClassification}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-                disabled={savingClassification}
-                data-testid="skip-classification-btn"
-              >
-                Skip
-              </button>
-              <button
-                onClick={handleSaveClassification}
-                disabled={savingClassification || !selectedClassification}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="save-classification-btn"
-              >
-                {savingClassification ? 'Saving...' : 'Save Classification'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AIClassificationModal
+        isOpen={!!classificationModal}
+        data={classificationModal}
+        onSave={handleSaveClassification}
+        onSkip={handleSkipClassification}
+        isSaving={savingClassification}
+      />
     </div>
   )
 }
