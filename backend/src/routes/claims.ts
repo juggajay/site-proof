@@ -1,7 +1,39 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { sendNotificationIfEnabled } from './notifications.js'
+
+// Validation schemas
+const createClaimSchema = z.object({
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  lotIds: z.array(z.string()).min(1, 'At least one lot is required')
+})
+
+const updateClaimSchema = z.object({
+  status: z.enum(['draft', 'submitted', 'certified', 'disputed', 'paid']).optional(),
+  certifiedAmount: z.number().optional(),
+  paidAmount: z.number().optional(),
+  paymentReference: z.string().optional(),
+  disputeNotes: z.string().optional()
+})
+
+const certifyClaimSchema = z.object({
+  certifiedAmount: z.number(),
+  certificationDate: z.string().optional(),
+  variationNotes: z.string().optional(),
+  certificationDocumentId: z.string().optional(),
+  certificationDocumentUrl: z.string().optional(),
+  certificationDocumentFilename: z.string().optional()
+})
+
+const recordPaymentSchema = z.object({
+  paidAmount: z.number().positive('Payment amount must be greater than zero'),
+  paymentDate: z.string().optional(),
+  paymentReference: z.string().optional(),
+  paymentNotes: z.string().optional()
+})
 
 const router = Router()
 
@@ -126,13 +158,17 @@ router.get('/:projectId/claims/:claimId', async (req, res) => {
 router.post('/:projectId/claims', async (req, res) => {
   try {
     const { projectId } = req.params
-    const { periodStart, periodEnd, lotIds } = req.body
     const userId = (req as any).userId
 
-    // Validate required fields
-    if (!periodStart || !periodEnd || !lotIds || !Array.isArray(lotIds) || lotIds.length === 0) {
-      return res.status(400).json({ error: 'Period start, period end, and at least one lot are required' })
+    // Validate request body
+    const validation = createClaimSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
     }
+    const { periodStart, periodEnd, lotIds } = validation.data
 
     // Get the next claim number for this project
     const lastClaim = await prisma.progressClaim.findFirst({
@@ -233,8 +269,17 @@ router.post('/:projectId/claims', async (req, res) => {
 router.put('/:projectId/claims/:claimId', async (req, res) => {
   try {
     const { projectId, claimId } = req.params
-    const { status, certifiedAmount, paidAmount, paymentReference, disputeNotes } = req.body
     const userId = (req as any).userId
+
+    // Validate request body
+    const validation = updateClaimSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+    const { status, certifiedAmount, paidAmount, paymentReference, disputeNotes } = validation.data
 
     const claim = await prisma.progressClaim.findFirst({
       where: { id: claimId, projectId },
@@ -1070,6 +1115,16 @@ router.get('/:projectId/claims/:claimId/completeness-check', async (req, res) =>
 router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
   try {
     const { projectId, claimId } = req.params
+    const userId = (req as any).userId
+
+    // Validate request body
+    const validation = certifyClaimSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
     const {
       certifiedAmount,
       certificationDate,
@@ -1077,13 +1132,7 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
       certificationDocumentId,
       certificationDocumentUrl,
       certificationDocumentFilename
-    } = req.body
-    const userId = (req as any).userId
-
-    // Validate required fields
-    if (certifiedAmount === undefined || certifiedAmount === null) {
-      return res.status(400).json({ error: 'Certified amount is required' })
-    }
+    } = validation.data
 
     // Get the claim
     const claim = await prisma.progressClaim.findFirst({
@@ -1241,22 +1290,22 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
 router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
   try {
     const { projectId, claimId } = req.params
+    const userId = (req as any).userId
+
+    // Validate request body
+    const validation = recordPaymentSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
     const {
       paidAmount,
       paymentDate,
       paymentReference,
       paymentNotes
-    } = req.body
-    const userId = (req as any).userId
-
-    // Validate required fields
-    if (paidAmount === undefined || paidAmount === null) {
-      return res.status(400).json({ error: 'Payment amount is required' })
-    }
-
-    if (paidAmount <= 0) {
-      return res.status(400).json({ error: 'Payment amount must be greater than zero' })
-    }
+    } = validation.data
 
     // Get the claim
     const claim = await prisma.progressClaim.findFirst({
