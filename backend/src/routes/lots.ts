@@ -162,7 +162,7 @@ lotsRouter.get('/suggest-number', async (req, res) => {
         lotNumber: { startsWith: prefix }
       },
       select: { lotNumber: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { lotNumber: 'desc' }
     })
 
     let nextNumber = startingNumber
@@ -1529,6 +1529,216 @@ lotsRouter.post('/:id/override-status', async (req, res) => {
     })
   } catch (error) {
     console.error('Override status error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ============================================================================
+// Lot Subcontractor Assignment Management (new permission system)
+// ============================================================================
+
+// GET /api/lots/:id/subcontractors - List all subcontractor assignments for a lot
+lotsRouter.get('/:id/subcontractors', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const assignments = await prisma.lotSubcontractorAssignment.findMany({
+      where: { lotId: id, status: 'active' },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        }
+      },
+      orderBy: { assignedAt: 'desc' }
+    })
+
+    res.json(assignments)
+  } catch (error) {
+    console.error('Get lot subcontractors error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// POST /api/lots/:id/subcontractors - Assign a subcontractor to a lot
+lotsRouter.post('/:id/subcontractors', async (req, res) => {
+  try {
+    const { id } = req.params
+    const user = req.user!
+    const { subcontractorCompanyId, canCompleteITP, itpRequiresVerification } = req.body
+
+    if (!subcontractorCompanyId) {
+      return res.status(400).json({ error: 'subcontractorCompanyId is required' })
+    }
+
+    // Get the lot to verify access and get projectId
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: { id: true, projectId: true, lotNumber: true }
+    })
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Check user permission (PM and above)
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId: lot.projectId, userId: user.id, status: 'active' }
+    })
+    const userRole = projectUser?.role || user.roleInCompany
+    const canAssign = ['owner', 'admin', 'project_manager', 'site_manager'].includes(userRole)
+
+    if (!canAssign) {
+      return res.status(403).json({ error: 'You do not have permission to assign subcontractors' })
+    }
+
+    // Verify subcontractor exists and belongs to this project
+    const subcontractor = await prisma.subcontractorCompany.findFirst({
+      where: { id: subcontractorCompanyId, projectId: lot.projectId }
+    })
+
+    if (!subcontractor) {
+      return res.status(404).json({ error: 'Subcontractor not found for this project' })
+    }
+
+    // Check for existing active assignment
+    const existingAssignment = await prisma.lotSubcontractorAssignment.findFirst({
+      where: { lotId: id, subcontractorCompanyId, status: 'active' }
+    })
+
+    if (existingAssignment) {
+      return res.status(409).json({ error: 'This subcontractor is already assigned to this lot' })
+    }
+
+    // Create the assignment
+    const assignment = await prisma.lotSubcontractorAssignment.create({
+      data: {
+        lotId: id,
+        projectId: lot.projectId,
+        subcontractorCompanyId,
+        canCompleteITP: canCompleteITP ?? false,
+        itpRequiresVerification: itpRequiresVerification ?? true,
+        assignedById: user.id,
+        status: 'active'
+      },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        }
+      }
+    })
+
+    console.log(`[Lot Assignment] ${subcontractor.companyName} assigned to ${lot.lotNumber} by ${user.email}`)
+
+    res.status(201).json(assignment)
+  } catch (error) {
+    console.error('Assign subcontractor to lot error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// PATCH /api/lots/:id/subcontractors/:assignmentId - Update assignment permissions
+lotsRouter.patch('/:id/subcontractors/:assignmentId', async (req, res) => {
+  try {
+    const { id, assignmentId } = req.params
+    const user = req.user!
+    const { canCompleteITP, itpRequiresVerification } = req.body
+
+    // Get the lot to verify access
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: { id: true, projectId: true }
+    })
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Check user permission
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId: lot.projectId, userId: user.id, status: 'active' }
+    })
+    const userRole = projectUser?.role || user.roleInCompany
+    const canManage = ['owner', 'admin', 'project_manager', 'site_manager'].includes(userRole)
+
+    if (!canManage) {
+      return res.status(403).json({ error: 'You do not have permission to manage subcontractor assignments' })
+    }
+
+    // Verify assignment exists and belongs to this lot
+    const assignment = await prisma.lotSubcontractorAssignment.findFirst({
+      where: { id: assignmentId, lotId: id }
+    })
+
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found' })
+    }
+
+    // Update the assignment
+    const updated = await prisma.lotSubcontractorAssignment.update({
+      where: { id: assignmentId },
+      data: {
+        ...(canCompleteITP !== undefined && { canCompleteITP }),
+        ...(itpRequiresVerification !== undefined && { itpRequiresVerification })
+      },
+      include: {
+        subcontractorCompany: {
+          select: { id: true, companyName: true }
+        }
+      }
+    })
+
+    res.json(updated)
+  } catch (error) {
+    console.error('Update lot assignment error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/lots/:id/subcontractors/:assignmentId - Remove assignment
+lotsRouter.delete('/:id/subcontractors/:assignmentId', async (req, res) => {
+  try {
+    const { id, assignmentId } = req.params
+    const user = req.user!
+
+    // Get the lot to verify access
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: { id: true, projectId: true }
+    })
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot not found' })
+    }
+
+    // Check user permission
+    const projectUser = await prisma.projectUser.findFirst({
+      where: { projectId: lot.projectId, userId: user.id, status: 'active' }
+    })
+    const userRole = projectUser?.role || user.roleInCompany
+    const canManage = ['owner', 'admin', 'project_manager', 'site_manager'].includes(userRole)
+
+    if (!canManage) {
+      return res.status(403).json({ error: 'You do not have permission to manage subcontractor assignments' })
+    }
+
+    // Verify assignment exists and belongs to this lot
+    const assignment = await prisma.lotSubcontractorAssignment.findFirst({
+      where: { id: assignmentId, lotId: id }
+    })
+
+    if (!assignment) {
+      return res.status(404).json({ error: 'Assignment not found' })
+    }
+
+    // Soft delete by setting status to 'removed'
+    await prisma.lotSubcontractorAssignment.update({
+      where: { id: assignmentId },
+      data: { status: 'removed' }
+    })
+
+    res.json({ message: 'Assignment removed successfully' })
+  } catch (error) {
+    console.error('Remove lot assignment error:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

@@ -69,27 +69,39 @@ export function AssignSubcontractorModal({
   const { data: subcontractors = [], isLoading: loadingSubcontractors } = useQuery({
     queryKey: ['subcontractors', projectId],
     queryFn: async () => {
+      console.log('[AssignSubModal] Fetching subcontractors for projectId:', projectId)
       const response = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(
         `/api/subcontractors/for-project/${projectId}`
       )
+      console.log('[AssignSubModal] API returned subcontractors:', response.subcontractors)
       // Include approved, pending_approval, active - exclude rejected/removed
-      return response.subcontractors.filter(s =>
+      const filtered = response.subcontractors.filter(s =>
         s.status !== 'rejected' && s.status !== 'removed'
       )
+      console.log('[AssignSubModal] After status filter:', filtered)
+      return filtered
     },
-    enabled: !isEditing
+    enabled: !isEditing && !!projectId
   })
 
   // Fetch existing assignments to filter out already assigned subcontractors
   const { data: existingAssignments = [], isLoading: loadingAssignments } = useQuery({
     queryKey: ['lot-assignments', lotId],
-    queryFn: () => apiFetch<LotSubcontractorAssignment[]>(`/api/lots/${lotId}/subcontractors`),
+    queryFn: async () => {
+      console.log('[AssignSubModal] Fetching existing assignments for lotId:', lotId)
+      const result = await apiFetch<LotSubcontractorAssignment[]>(`/api/lots/${lotId}/subcontractors`)
+      console.log('[AssignSubModal] Existing assignments:', result)
+      return result
+    },
     enabled: !isEditing
   })
 
   const availableSubcontractors = subcontractors.filter(
     s => !existingAssignments.some(a => a.subcontractorCompanyId === s.id)
   )
+
+  // Debug logging
+  console.log('[AssignSubModal] Final available subcontractors:', availableSubcontractors)
 
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -158,7 +170,11 @@ export function AssignSubcontractorModal({
               <label className="block text-sm font-medium text-gray-700">
                 Subcontractor Company
               </label>
-              {isLoading ? (
+              {!projectId ? (
+                <p className="text-sm text-red-500">
+                  Error: Project ID is missing. Please reload the page.
+                </p>
+              ) : isLoading ? (
                 <div className="flex items-center gap-2 text-gray-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Loading subcontractors...</span>
@@ -179,7 +195,9 @@ export function AssignSubcontractorModal({
                   </select>
                   {availableSubcontractors.length === 0 && (
                     <p className="text-sm text-gray-500">
-                      No available subcontractors. All approved subcontractors are already assigned.
+                      {subcontractors.length === 0
+                        ? 'No subcontractors found for this project. Invite subcontractors from the Subcontractors page first.'
+                        : 'All subcontractors are already assigned to this lot.'}
                     </p>
                   )}
                 </>
