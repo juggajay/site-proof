@@ -39,6 +39,10 @@ import {
   lotStatusColors as statusColors,
 } from './constants'
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots'
+import { MarkAsNAModal } from './components/MarkAsNAModal'
+import { MarkAsFailedModal } from './components/MarkAsFailedModal'
+import { EvidenceWarningModal } from './components/EvidenceWarningModal'
+import { WitnessPointModal } from './components/WitnessPointModal'
 
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
@@ -129,7 +133,6 @@ export function LotDetailPage() {
     checklistItemId: string
     itemDescription: string
   } | null>(null)
-  const [naReason, setNaReason] = useState('')
   const [submittingNa, setSubmittingNa] = useState(false)
 
   // Failed modal state for NCR creation
@@ -137,9 +140,6 @@ export function LotDetailPage() {
     checklistItemId: string
     itemDescription: string
   } | null>(null)
-  const [failedNcrDescription, setFailedNcrDescription] = useState('')
-  const [failedNcrCategory, setFailedNcrCategory] = useState('workmanship')
-  const [failedNcrSeverity, setFailedNcrSeverity] = useState('minor')
   const [submittingFailed, setSubmittingFailed] = useState(false)
 
   // Witness point modal state
@@ -148,9 +148,6 @@ export function LotDetailPage() {
     itemDescription: string
     existingNotes: string | null
   } | null>(null)
-  const [witnessPresent, setWitnessPresent] = useState<boolean | null>(null)
-  const [witnessName, setWitnessName] = useState('')
-  const [witnessCompany, setWitnessCompany] = useState('')
   const [submittingWitness, setSubmittingWitness] = useState(false)
 
   // AI Photo Classification modal state (Feature #247)
@@ -784,9 +781,6 @@ export function LotDetailPage() {
     // Check if this is a witness point and we're completing (not uncompleting)
     if (!currentlyCompleted && !forceComplete && item?.pointType === 'witness' && !witnessData) {
       // Show witness modal to collect witness details
-      setWitnessPresent(null)
-      setWitnessName('')
-      setWitnessCompany('')
       setWitnessModal({
         checklistItemId,
         itemDescription: item.description,
@@ -963,8 +957,8 @@ export function LotDetailPage() {
   }
 
   // Handle marking an ITP item as Not Applicable
-  const handleMarkAsNA = async () => {
-    if (!naModal || !itpInstance || !naReason.trim()) {
+  const handleMarkAsNA = async (reason: string) => {
+    if (!naModal || !itpInstance || !reason.trim()) {
       toast({
         title: 'Reason required',
         description: 'Please provide a reason for marking this item as N/A.',
@@ -990,7 +984,7 @@ export function LotDetailPage() {
           itpInstanceId: itpInstance.id,
           checklistItemId: naModal.checklistItemId,
           status: 'not_applicable',
-          notes: naReason.trim(),
+          notes: reason.trim(),
         }),
       })
 
@@ -1013,7 +1007,6 @@ export function LotDetailPage() {
           description: 'The checklist item has been marked as not applicable.',
         })
         setNaModal(null)
-        setNaReason('')
       } else {
         const errData = await response.json()
         toast({
@@ -1035,13 +1028,8 @@ export function LotDetailPage() {
   }
 
   // Handle marking an ITP item as Failed (triggers NCR creation)
-  const handleMarkAsFailed = async () => {
-    if (!failedModal || !itpInstance || !failedNcrDescription.trim()) {
-      toast({
-        title: 'Description required',
-        description: 'Please provide a description for the NCR.',
-        variant: 'error'
-      })
+  const handleMarkAsFailed = async (description: string, category: string, severity: string) => {
+    if (!failedModal || !itpInstance) {
       return
     }
 
@@ -1062,10 +1050,10 @@ export function LotDetailPage() {
           itpInstanceId: itpInstance.id,
           checklistItemId: failedModal.checklistItemId,
           status: 'failed',
-          notes: `Failed: ${failedNcrDescription.trim()}`,
-          ncrDescription: failedNcrDescription.trim(),
-          ncrCategory: failedNcrCategory,
-          ncrSeverity: failedNcrSeverity,
+          notes: `Failed: ${description}`,
+          ncrDescription: description,
+          ncrCategory: category,
+          ncrSeverity: severity,
         }),
       })
 
@@ -1110,9 +1098,6 @@ export function LotDetailPage() {
             : 'The item has been marked as failed.',
         })
         setFailedModal(null)
-        setFailedNcrDescription('')
-        setFailedNcrCategory('workmanship')
-        setFailedNcrSeverity('minor')
       } else {
         const errData = await response.json()
         toast({
@@ -1361,23 +1346,8 @@ export function LotDetailPage() {
   }
 
   // Handle completing a witness point with witness details
-  const handleCompleteWitnessPoint = async () => {
-    if (!witnessModal || !itpInstance || witnessPresent === null) {
-      toast({
-        title: 'Selection required',
-        description: 'Please indicate whether the client witness was present.',
-        variant: 'error'
-      })
-      return
-    }
-
-    // If witness was present, require name
-    if (witnessPresent && !witnessName.trim()) {
-      toast({
-        title: 'Witness name required',
-        description: 'Please enter the name of the witness who was present.',
-        variant: 'error'
-      })
+  const handleCompleteWitnessPoint = async (witnessPresent: boolean, witnessName?: string, witnessCompany?: string) => {
+    if (!witnessModal || !itpInstance) {
       return
     }
 
@@ -1392,8 +1362,8 @@ export function LotDetailPage() {
         true, // forceComplete to skip the modal check
         {
           witnessPresent,
-          witnessName: witnessPresent ? witnessName.trim() : undefined,
-          witnessCompany: witnessPresent ? witnessCompany.trim() : undefined
+          witnessName,
+          witnessCompany
         }
       )
 
@@ -1405,9 +1375,6 @@ export function LotDetailPage() {
       })
 
       setWitnessModal(null)
-      setWitnessPresent(null)
-      setWitnessName('')
-      setWitnessCompany('')
     } catch (err) {
       console.error('Failed to complete witness point:', err)
       toast({
@@ -3924,319 +3891,49 @@ export function LotDetailPage() {
       )}
 
       {/* Evidence Warning Modal */}
-      {evidenceWarning && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 text-amber-600">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Evidence Required</h2>
-                <p className="text-sm text-muted-foreground">This item requires {evidenceWarning.evidenceType.toLowerCase()} evidence</p>
-              </div>
-            </div>
-
-            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm font-medium">{evidenceWarning.itemDescription}</p>
-              <p className="text-xs text-amber-600 mt-1">
-                ⚠️ No {evidenceWarning.evidenceType.toLowerCase()} has been attached to this item yet.
-              </p>
-            </div>
-
-            <p className="text-sm text-muted-foreground mb-4">
-              You can still complete this item without evidence, but it is recommended to attach the required {evidenceWarning.evidenceType.toLowerCase()} for quality assurance purposes.
-            </p>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setEvidenceWarning(null)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  handleToggleCompletion(
-                    evidenceWarning.checklistItemId,
-                    false, // Currently not completed
-                    evidenceWarning.currentNotes,
-                    true  // Force complete without evidence
-                  )
-                }}
-                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-              >
-                Complete Anyway
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EvidenceWarningModal
+        isOpen={!!evidenceWarning}
+        warning={evidenceWarning}
+        onClose={() => setEvidenceWarning(null)}
+        onConfirm={() => {
+          if (evidenceWarning) {
+            handleToggleCompletion(
+              evidenceWarning.checklistItemId,
+              false, // Currently not completed
+              evidenceWarning.currentNotes,
+              true  // Force complete without evidence
+            )
+          }
+        }}
+        isLoading={updatingCompletion === evidenceWarning?.checklistItemId}
+      />
 
       {/* Mark as N/A Modal */}
-      {naModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                <span className="text-xl font-bold">—</span>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Mark as Not Applicable</h2>
-                <p className="text-sm text-muted-foreground">This item will be skipped</p>
-              </div>
-            </div>
-
-            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm font-medium">{naModal.itemDescription}</p>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2">
-                Reason for N/A <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={naReason}
-                onChange={(e) => setNaReason(e.target.value)}
-                placeholder="Enter reason why this item is not applicable..."
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent resize-none"
-                rows={3}
-                autoFocus
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                A reason is required to mark an item as N/A
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setNaModal(null)
-                  setNaReason('')
-                }}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-                disabled={submittingNa}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleMarkAsNA}
-                disabled={submittingNa || !naReason.trim()}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submittingNa ? 'Saving...' : 'Mark as N/A'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MarkAsNAModal
+        isOpen={!!naModal}
+        itemDescription={naModal?.itemDescription || ''}
+        onClose={() => setNaModal(null)}
+        onSubmit={handleMarkAsNA}
+        isSubmitting={submittingNa}
+      />
 
       {/* Mark as Failed Modal - Creates NCR */}
-      {failedModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400">
-                <span className="text-xl font-bold">✗</span>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Mark as Failed</h2>
-                <p className="text-sm text-muted-foreground">This will raise an NCR</p>
-              </div>
-            </div>
-
-            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-              <p className="text-sm font-medium">{failedModal.itemDescription}</p>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  NCR Description <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={failedNcrDescription}
-                  onChange={(e) => setFailedNcrDescription(e.target.value)}
-                  placeholder="Describe the non-conformance..."
-                  className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent resize-none"
-                  rows={3}
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Category
-                </label>
-                <select
-                  value={failedNcrCategory}
-                  onChange={(e) => setFailedNcrCategory(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
-                >
-                  <option value="workmanship">Workmanship</option>
-                  <option value="material">Material</option>
-                  <option value="design">Design</option>
-                  <option value="documentation">Documentation</option>
-                  <option value="process">Process</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Severity
-                </label>
-                <select
-                  value={failedNcrSeverity}
-                  onChange={(e) => setFailedNcrSeverity(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
-                >
-                  <option value="minor">Minor</option>
-                  <option value="major">Major (requires QM approval to close)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setFailedModal(null)
-                  setFailedNcrDescription('')
-                  setFailedNcrCategory('workmanship')
-                  setFailedNcrSeverity('minor')
-                }}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-                disabled={submittingFailed}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleMarkAsFailed}
-                disabled={submittingFailed || !failedNcrDescription.trim()}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submittingFailed ? 'Creating NCR...' : 'Mark as Failed & Raise NCR'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MarkAsFailedModal
+        isOpen={!!failedModal}
+        itemDescription={failedModal?.itemDescription || ''}
+        onClose={() => setFailedModal(null)}
+        onSubmit={handleMarkAsFailed}
+        isSubmitting={submittingFailed}
+      />
 
       {/* Witness Point Completion Modal */}
-      {witnessModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400">
-                <span className="text-xl font-bold">W</span>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold">Complete Witness Point</h2>
-                <p className="text-sm text-muted-foreground">Record witness attendance</p>
-              </div>
-            </div>
-
-            <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-              <p className="text-sm font-medium">{witnessModal.itemDescription}</p>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Was the client witness present? <span className="text-red-500">*</span>
-                </label>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setWitnessPresent(true)}
-                    className={`flex-1 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
-                      witnessPresent === true
-                        ? 'bg-green-100 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-400'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    ✓ Yes, witness was present
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWitnessPresent(false)}
-                    className={`flex-1 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
-                      witnessPresent === false
-                        ? 'bg-orange-100 border-orange-500 text-orange-700 dark:bg-orange-900/30 dark:border-orange-600 dark:text-orange-400'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    ✗ No, notification given
-                  </button>
-                </div>
-              </div>
-
-              {witnessPresent === true && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Witness Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={witnessName}
-                      onChange={(e) => setWitnessName(e.target.value)}
-                      placeholder="Enter witness name..."
-                      className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
-                      autoFocus
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Witness Company/Organisation
-                    </label>
-                    <input
-                      type="text"
-                      value={witnessCompany}
-                      onChange={(e) => setWitnessCompany(e.target.value)}
-                      placeholder="e.g., Client Name, Superintendent Firm..."
-                      className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
-                    />
-                  </div>
-                </>
-              )}
-
-              {witnessPresent === false && (
-                <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                  <p className="text-sm text-orange-700 dark:text-orange-400">
-                    <strong>Note:</strong> The item will be marked as complete with a record that notification was given but the witness was not present.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setWitnessModal(null)
-                  setWitnessPresent(null)
-                  setWitnessName('')
-                  setWitnessCompany('')
-                }}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-                disabled={submittingWitness}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCompleteWitnessPoint}
-                disabled={submittingWitness || witnessPresent === null || (witnessPresent && !witnessName.trim())}
-                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submittingWitness ? 'Saving...' : 'Complete Witness Point'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <WitnessPointModal
+        isOpen={!!witnessModal}
+        itemDescription={witnessModal?.itemDescription || ''}
+        onClose={() => setWitnessModal(null)}
+        onSubmit={handleCompleteWitnessPoint}
+        isSubmitting={submittingWitness}
+      />
 
       {/* Feature #247: AI Photo Classification Modal */}
       {classificationModal && (
