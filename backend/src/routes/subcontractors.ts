@@ -346,6 +346,20 @@ subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
   try {
     const { projectId } = req.params
 
+    console.log(`[Subcontractors] Fetching for projectId: ${projectId}`)
+
+    // Verify the project exists
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, name: true }
+    })
+
+    if (!project) {
+      console.log(`[Subcontractors] Project not found: ${projectId}`)
+    } else {
+      console.log(`[Subcontractors] Project found: ${project.name}`)
+    }
+
     // Get all subcontractor companies associated with this project
     const subcontractors = await prisma.subcontractorCompany.findMany({
       where: {
@@ -358,6 +372,11 @@ subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
       },
       orderBy: { companyName: 'asc' }
     })
+
+    console.log(`[Subcontractors] Found ${subcontractors.length} subcontractors for project ${projectId}`)
+    if (subcontractors.length > 0) {
+      console.log(`[Subcontractors] Subcontractors:`, subcontractors.map(s => `${s.companyName} (${s.status})`).join(', '))
+    }
 
     res.json({ subcontractors })
   } catch (error) {
