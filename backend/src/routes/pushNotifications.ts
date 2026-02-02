@@ -33,13 +33,6 @@ function getVapidKeys() {
   // Generate keys for development if not set
   if (!generatedVapidKeys) {
     generatedVapidKeys = webpush.generateVAPIDKeys()
-    console.log('='.repeat(60))
-    console.log('VAPID KEYS GENERATED (Development Mode)')
-    console.log('='.repeat(60))
-    console.log('Add these to your .env file for persistence:')
-    console.log(`VAPID_PUBLIC_KEY="${generatedVapidKeys.publicKey}"`)
-    console.log(`VAPID_PRIVATE_KEY="${generatedVapidKeys.privateKey}"`)
-    console.log('='.repeat(60))
   }
 
   return generatedVapidKeys
@@ -115,8 +108,6 @@ pushNotificationsRouter.post('/subscribe', async (req: AuthRequest, res) => {
       createdAt: new Date()
     })
 
-    console.log(`[Push] User ${userId} subscribed to push notifications (subscription: ${subscriptionId})`)
-
     res.json({
       success: true,
       message: 'Push notification subscription registered',
@@ -154,8 +145,6 @@ pushNotificationsRouter.delete('/unsubscribe', async (req: AuthRequest, res) => 
     }
 
     pushSubscriptions.delete(subscriptionId)
-
-    console.log(`[Push] User ${userId} unsubscribed from push notifications`)
 
     res.json({ success: true, message: 'Unsubscribed from push notifications' })
   } catch (error) {
@@ -242,7 +231,6 @@ pushNotificationsRouter.post('/test', async (req: AuthRequest, res) => {
           payload
         )
         results.push({ subscriptionId, success: true })
-        console.log(`[Push] Test notification sent to subscription ${subscriptionId}`)
       } catch (error: any) {
         // Handle expired subscriptions
         if (error.statusCode === 410 || error.statusCode === 404) {

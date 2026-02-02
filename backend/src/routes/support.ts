@@ -14,7 +14,7 @@ interface SupportRequest {
 // POST /api/support/request - Submit a support request
 supportRouter.post('/request', async (req: Request, res: Response) => {
   try {
-    const { subject, message, category, userEmail, userName }: SupportRequest = req.body
+    const { subject, message, category, userEmail }: SupportRequest = req.body
 
     if (!subject || !message) {
       return res.status(400).json({ message: 'Subject and message are required' })
@@ -25,16 +25,6 @@ supportRouter.post('/request', async (req: Request, res: Response) => {
     // 2. Send an email notification to the support team
     // 3. Create a ticket in the support system
     // 4. Send a confirmation email to the user
-
-    // For now, we'll log it and return success
-    console.log('Support request received:', {
-      subject,
-      message,
-      category,
-      userEmail,
-      userName,
-      timestamp: new Date().toISOString(),
-    })
 
     // Optional: Store in database if we have a SupportRequest model
     // For now, we'll create an activity log entry if user is authenticated

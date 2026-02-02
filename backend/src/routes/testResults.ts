@@ -1695,10 +1695,6 @@ testResultsRouter.post('/:id/status', async (req, res) => {
           )
         }
 
-        console.log(`[Test Result Received] Notification sent for test ${id}`)
-        console.log(`  Test Type: ${testResult.testType}`)
-        console.log(`  Project: ${project?.name || testResult.projectId}`)
-        console.log(`  Notified Engineers: ${engineerUsers.map(e => e.email).join(', ') || 'None'}`)
       } catch (notifError) {
         console.error('[Test Result Received] Failed to send notifications:', notifError)
         // Don't fail the main request if notifications fail

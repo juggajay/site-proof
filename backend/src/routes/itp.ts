@@ -239,21 +239,6 @@ async function checkAndNotifyWitnessPoint(
       notificationsCreated.push(notification)
     }
 
-    // Log the notification for console/email integration
-    console.log(`\n========================================`)
-    console.log(`WITNESS POINT NOTIFICATION`)
-    console.log(`========================================`)
-    console.log(`Project: ${project.name}`)
-    console.log(`Lot: ${instance.lot.lotNumber}`)
-    console.log(`Approaching Witness Point: ${nextItem.description}`)
-    console.log(`Triggered by: ${userName} completing "${completedItem.description}"`)
-    if (clientEmail) {
-      console.log(`Client to notify: ${clientName} <${clientEmail}>`)
-    }
-    console.log(`----------------------------------------`)
-    console.log(`Notifications sent to ${notificationsCreated.length} project team members`)
-    console.log(`========================================\n`)
-
     return {
       witnessPoint: nextItem,
       notificationsSent: notificationsCreated.length,
@@ -366,7 +351,6 @@ async function updateLotStatusFromITP(itpInstanceId: string) {
         where: { id: lot.id },
         data: { status: newStatus }
       })
-      console.log(`Auto-progressed lot ${lot.lotNumber} from ${lot.status} to ${newStatus}`)
     }
   } catch (error) {
     // Log but don't throw - status update is not critical
@@ -857,11 +841,7 @@ itpRouter.delete('/templates/:id', requireAuth, async (req: any, res) => {
     }
 
     // If force delete, first unlink all instances (they keep their snapshots)
-    if (instanceCount > 0 && force === 'true') {
-      // We don't delete the instances - they keep working with their snapshots
-      // Just remove the template reference
-      console.log(`Force deleting template ${template.name} - ${instanceCount} instances will retain their snapshots`)
-    }
+    // We don't delete the instances - they keep working with their snapshots
 
     // Delete checklist items first
     await prisma.iTPChecklistItem.deleteMany({
@@ -1518,7 +1498,6 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
           data: { status: 'ncr_raised' }
         })
 
-        console.log(`Created NCR ${ncrNumber} for failed ITP item: ${checklistItemDescription}`)
       }
     }
 
@@ -1588,7 +1567,6 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
               itemDescription
             }
 
-            console.log(`Feature #271: Notified ${projectManagers.length} head contractor users about subcontractor ITP completion`)
           }
         }
       } catch (notifError) {

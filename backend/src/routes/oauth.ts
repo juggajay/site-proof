@@ -116,8 +116,6 @@ oauthRouter.get('/google', async (_req, res) => {
   try {
     if (!clientId || clientId === 'mock-google-client-id.apps.googleusercontent.com') {
       // Development mode: Redirect to a mock OAuth flow
-      console.log('[OAuth] Google OAuth not configured, using development mock flow')
-
       // Generate a state token for security (using database storage)
       const state = await createOAuthState()
 
@@ -220,7 +218,7 @@ oauthRouter.get('/google/callback', async (req, res) => {
     }
 
     // Find or create user
-    const { user, token } = await findOrCreateOAuthUser({
+    const { token } = await findOrCreateOAuthUser({
       provider: 'google',
       providerId: googleUser.id,
       email: googleUser.email,
@@ -228,8 +226,6 @@ oauthRouter.get('/google/callback', async (req, res) => {
       avatarUrl: googleUser.picture,
       emailVerified: googleUser.verified_email ?? true
     })
-
-    console.log(`[OAuth] User logged in via Google: ${user.email}`)
 
     // Redirect to frontend with token
     res.redirect(`${frontendUrl}/auth/oauth-callback?token=${token}&provider=google`)
@@ -286,8 +282,6 @@ oauthRouter.post('/google/token', async (req, res) => {
       emailVerified: googleUser.verified_email ?? true
     })
 
-    console.log(`[OAuth] User logged in via Google token: ${user.email}`)
-
     res.json({
       user: {
         id: user.id,
@@ -331,8 +325,6 @@ oauthRouter.post('/oauth/mock', async (req, res) => {
       emailVerified: true
     })
 
-    console.log(`[OAuth Mock] User logged in: ${user.email}`)
-
     res.json({
       user: {
         id: user.id,
@@ -346,7 +338,7 @@ oauthRouter.post('/oauth/mock', async (req, res) => {
     })
 
   } catch (error) {
-    console.error('[OAuth Mock] Error:', error)
+    console.error('[OAuth] Mock flow error:', error)
     res.status(500).json({ message: 'Mock OAuth failed' })
   }
 })
@@ -402,7 +394,6 @@ async function findOrCreateOAuthUser(params: {
     // Update OAuth fields using parameterized query (to handle fields not in Prisma schema)
     await prisma.$executeRaw`UPDATE users SET oauth_provider = ${provider}, oauth_provider_id = ${providerId} WHERE id = ${user.id}`
 
-    console.log(`[OAuth] Created new user: ${email}`)
   }
 
   // Generate JWT token

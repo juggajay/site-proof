@@ -7,9 +7,8 @@ import { getAuthToken } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
-import { LotQRCode } from '@/components/lots/LotQRCode'
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal'
-import { Link2, Check, RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, CheckCircle, Plus, Printer, WifiOff, CloudOff } from 'lucide-react'
+import { RefreshCw, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, CheckCircle, Plus, Printer, WifiOff, CloudOff } from 'lucide-react'
 import { generateConformanceReportPDF, ConformanceReportData, ConformanceFormat, ConformanceFormatOptions, defaultConformanceOptions } from '@/lib/pdfGenerator'
 import { useOfflineStatus } from '@/lib/useOfflineStatus'
 import { cacheITPChecklist, getCachedITPChecklist, updateChecklistItemOffline, getPendingSyncCount, OfflineChecklistItem } from '@/lib/offlineDb'
@@ -36,7 +35,6 @@ import type {
 } from './types'
 import {
   LOT_TABS as tabs,
-  lotStatusColors as statusColors,
 } from './constants'
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots'
 import { MarkAsNAModal } from './components/MarkAsNAModal'
@@ -45,7 +43,8 @@ import { EvidenceWarningModal } from './components/EvidenceWarningModal'
 import { WitnessPointModal } from './components/WitnessPointModal'
 import { AIClassificationModal, ClassificationModalData } from './components/AIClassificationModal'
 import { StatusOverrideModal } from './components/StatusOverrideModal'
-import { ConformanceReportModal } from './components/ConformanceReportModal'
+import { QualityManagementSection } from './components/QualityManagementSection'
+import { LotHeader } from './components/LotHeader'
 
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
@@ -1892,207 +1891,32 @@ export function LotDetailPage() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-start gap-4">
-          {/* QR Code */}
-          <LotQRCode
-            lotId={lotId!}
-            lotNumber={lot.lotNumber}
-            projectId={projectId!}
-            size="medium"
-          />
-          <div>
-            <h1 className="text-2xl font-bold">{lot.lotNumber}</h1>
-            <p className="text-sm text-muted-foreground">{lot.description || 'No description'}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleCopyLink}
-            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-            title="Copy link to this lot"
-          >
-            {linkCopied ? (
-              <>
-                <Check className="h-4 w-4 text-green-600" />
-                <span className="text-green-600">Copied!</span>
-              </>
-            ) : (
-              <>
-                <Link2 className="h-4 w-4" />
-                <span>Copy Link</span>
-              </>
-            )}
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50 transition-colors print:hidden"
-            title="Print lot details"
-          >
-            <Printer className="h-4 w-4" />
-            <span>Print</span>
-          </button>
-          {canEdit && isEditable && (
-            <button
-              onClick={() => navigate(`/projects/${projectId}/lots/${lotId}/edit`)}
-              className="rounded-lg border border-amber-500 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50"
-            >
-              Edit Lot
-            </button>
-          )}
-          {/* Assign Subcontractor Button - only for PMs and above, not claimed lots */}
-          {canEdit && lot.status !== 'claimed' && (
-            <button
-              onClick={() => {
-                setSelectedSubcontractor(lot.assignedSubcontractorId || '')
-                setShowSubcontractorModal(true)
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-blue-500 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
-              title={lot.assignedSubcontractor ? `Assigned to ${lot.assignedSubcontractor.companyName}` : 'Assign to subcontractor'}
-            >
-              <Users className="h-4 w-4" />
-              <span>{lot.assignedSubcontractor ? lot.assignedSubcontractor.companyName : 'Assign Subcontractor'}</span>
-            </button>
-          )}
-          {/* Override Status Button - only for quality managers and above */}
-          {canConformLots && lot.status !== 'claimed' && (
-            <button
-              onClick={() => setShowOverrideModal(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-purple-500 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50"
-              title="Manually override lot status"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span>Override Status</span>
-            </button>
-          )}
-          <span className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
-            {lot.status.replace('_', ' ')}
-          </span>
-        </div>
-      </div>
-
-      {/* Lot Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-lg border p-4">
-          <span className="text-sm text-muted-foreground">Chainage</span>
-          <p className="font-medium text-lg">
-            {lot.chainageStart != null && lot.chainageEnd != null
-              ? `${lot.chainageStart} - ${lot.chainageEnd}`
-              : lot.chainageStart ?? lot.chainageEnd ?? '—'}
-          </p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <span className="text-sm text-muted-foreground">Activity Type</span>
-          <p className="font-medium text-lg capitalize">{lot.activityType || '—'}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <span className="text-sm text-muted-foreground">Layer</span>
-          <p className="font-medium text-lg">{lot.layer || '—'}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <span className="text-sm text-muted-foreground">Area/Zone</span>
-          <p className="font-medium text-lg">{lot.areaZone || '—'}</p>
-        </div>
-      </div>
-
-      {/* Timestamps */}
-      <div className="flex flex-wrap gap-6 text-sm text-muted-foreground border-t pt-4">
-        <div className="flex items-center gap-2">
-          <span className="font-medium">Created:</span>
-          <time dateTime={lot.createdAt} title={new Date(lot.createdAt).toISOString()}>
-            {new Date(lot.createdAt).toLocaleString('en-AU', {
-              dateStyle: 'medium',
-              timeStyle: 'medium',
-            })}
-          </time>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-medium">Last Updated:</span>
-          <time dateTime={lot.updatedAt} title={new Date(lot.updatedAt).toISOString()}>
-            {new Date(lot.updatedAt).toLocaleString('en-AU', {
-              dateStyle: 'medium',
-              timeStyle: 'medium',
-            })}
-          </time>
-        </div>
-      </div>
-
-      {/* Subcontractor Assignments Section */}
-      <div className="rounded-lg border p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold">Assigned Subcontractors</h3>
-          {canManageLot && (
-            <button
-              onClick={() => setShowAssignSubcontractorModal(true)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Add
-            </button>
-          )}
-        </div>
-
-        {/* Show legacy assignment if exists but not in new assignments table */}
-        {lot.assignedSubcontractor && !assignments.some(a => a.subcontractorCompany.id === lot.assignedSubcontractorId) && (
-          <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-amber-800">{lot.assignedSubcontractor.companyName}</div>
-                <div className="text-sm text-amber-600">
-                  Legacy assignment - click Add to set ITP permissions
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {assignments.length === 0 && !lot.assignedSubcontractor ? (
-          <p className="text-sm text-muted-foreground">No subcontractors assigned</p>
-        ) : assignments.length > 0 ? (
-          <div className="space-y-2">
-            {assignments.map(assignment => (
-              <div key={assignment.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
-                <div>
-                  <div className="font-medium">{assignment.subcontractorCompany.companyName}</div>
-                  <div className="text-sm text-muted-foreground">
-                    ITP: {assignment.canCompleteITP ? (
-                      <>
-                        <span className="text-green-600">Can complete</span>
-                        {assignment.itpRequiresVerification && (
-                          <span className="text-amber-600 ml-2">Requires verification</span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-gray-500">View only</span>
-                    )}
-                  </div>
-                </div>
-                {canManageLot && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingAssignment(assignment)
-                        setShowAssignSubcontractorModal(true)
-                      }}
-                      className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border rounded-md transition-colors"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => removeAssignmentMutation.mutate(assignment.id)}
-                      disabled={removeAssignmentMutation.isPending}
-                      className="px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-md transition-colors disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <LotHeader
+        lot={lot}
+        projectId={projectId!}
+        lotId={lotId!}
+        canEdit={canEdit}
+        canConformLots={canConformLots}
+        canManageLot={canManageLot}
+        isEditable={isEditable}
+        linkCopied={linkCopied}
+        assignments={assignments}
+        removeAssignmentPending={removeAssignmentMutation.isPending}
+        onCopyLink={handleCopyLink}
+        onPrint={() => window.print()}
+        onEdit={() => navigate(`/projects/${projectId}/lots/${lotId}/edit`)}
+        onAssignSubcontractorLegacy={() => {
+          setSelectedSubcontractor(lot.assignedSubcontractorId || '')
+          setShowSubcontractorModal(true)
+        }}
+        onOverrideStatus={() => setShowOverrideModal(true)}
+        onAddSubcontractor={() => setShowAssignSubcontractorModal(true)}
+        onEditAssignment={(assignment: LotSubcontractorAssignment) => {
+          setEditingAssignment(assignment)
+          setShowAssignSubcontractorModal(true)
+        }}
+        onRemoveAssignment={(assignmentId: string) => removeAssignmentMutation.mutate(assignmentId)}
+      />
 
       {/* Tab Navigation */}
       <div className="border-b">
@@ -3428,160 +3252,23 @@ export function LotDetailPage() {
         )}
       </div>
 
-      {/* Quality Management Actions */}
-      {canConformLots && lot.status !== 'conformed' && lot.status !== 'claimed' && (
-        <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4">
-          <h2 className="text-lg font-semibold text-green-800 mb-2">Quality Management</h2>
-          <p className="text-sm text-green-700 mb-4">
-            As a quality manager, you can conform this lot once all requirements are met.
-          </p>
-
-          {/* Conformance Prerequisites Checklist */}
-          {loadingConformStatus ? (
-            <div className="flex items-center gap-2 mb-4">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
-              <span className="text-sm text-green-700">Loading prerequisites...</span>
-            </div>
-          ) : conformStatus ? (
-            <div className="mb-4 space-y-2">
-              <h3 className="text-sm font-medium text-green-800 mb-2">Prerequisites:</h3>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-600'}>
-                    {conformStatus.prerequisites.itpAssigned ? '✓' : '✗'}
-                  </span>
-                  <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-700'}>
-                    ITP Assigned
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-600'}>
-                    {conformStatus.prerequisites.itpCompleted ? '✓' : '✗'}
-                  </span>
-                  <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-700'}>
-                    ITP Completed ({conformStatus.prerequisites.itpCompletedCount}/{conformStatus.prerequisites.itpTotalCount} items)
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-600'}>
-                    {conformStatus.prerequisites.hasPassingTest ? '✓' : '✗'}
-                  </span>
-                  <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-700'}>
-                    Passing Verified Test Result
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-600'}>
-                    {conformStatus.prerequisites.noOpenNcrs ? '✓' : '✗'}
-                  </span>
-                  <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-700'}>
-                    No Open NCRs
-                    {!conformStatus.prerequisites.noOpenNcrs && conformStatus.prerequisites.openNcrs.length > 0 && (
-                      <span className="text-red-600 ml-1">
-                        ({conformStatus.prerequisites.openNcrs.map(n => n.ncrNumber).join(', ')})
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-              {!conformStatus.canConform && conformStatus.blockingReasons.length > 0 && (
-                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm font-medium text-red-800 mb-1">Cannot conform lot:</p>
-                  <ul className="list-disc list-inside text-sm text-red-700">
-                    {conformStatus.blockingReasons.map((reason, i) => (
-                      <li key={i}>{reason}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          <div className="flex gap-4">
-            <button
-              onClick={handleConformLot}
-              disabled={conforming || (conformStatus !== null && !conformStatus.canConform)}
-              className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${
-                conformStatus?.canConform
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {conforming ? 'Conforming...' : 'Conform Lot'}
-            </button>
-            {canVerifyTestResults && (
-              <button
-                onClick={() => handleTabChange('tests')}
-                className="rounded-lg border border-green-700 px-4 py-2 text-sm text-green-700 hover:bg-green-100"
-              >
-                Verify Test Results
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Conformed Status Display (also show for claimed lots as they were previously conformed) */}
-      {(lot.status === 'conformed' || lot.status === 'claimed') && (
-        <div className={`mt-6 rounded-lg border p-4 ${lot.status === 'claimed' ? 'border-blue-400 bg-blue-100' : 'border-green-400 bg-green-100'}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{lot.status === 'claimed' ? '💰' : '✅'}</span>
-              <div>
-                <h2 className={`text-lg font-semibold ${lot.status === 'claimed' ? 'text-blue-800' : 'text-green-800'}`}>
-                  {lot.status === 'claimed' ? 'Lot Claimed' : 'Lot Conformed'}
-                </h2>
-                <p className={`text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}>
-                  {lot.status === 'claimed'
-                    ? 'This lot has been included in a progress claim.'
-                    : 'This lot has been quality-approved and is ready for claiming.'}
-                </p>
-                {/* Conformance Details */}
-                {(lot.conformedAt || lot.conformedBy) && (
-                  <div className={`mt-2 pt-2 border-t ${lot.status === 'claimed' ? 'border-blue-300' : 'border-green-300'}`}>
-                    <div className={`flex flex-wrap gap-4 text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}>
-                      {lot.conformedBy && (
-                        <div className="flex items-center gap-1">
-                          <span className="font-medium">Conformed by:</span>
-                          <span>{lot.conformedBy.fullName || lot.conformedBy.email}</span>
-                        </div>
-                      )}
-                      {lot.conformedAt && (
-                        <div className="flex items-center gap-1">
-                          <span className="font-medium">Conformed on:</span>
-                          <time dateTime={lot.conformedAt} title={new Date(lot.conformedAt).toISOString()}>
-                            {new Date(lot.conformedAt).toLocaleString('en-AU', {
-                              dateStyle: 'medium',
-                              timeStyle: 'short',
-                            })}
-                          </time>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Generate Conformance Report Button */}
-            <button
-              onClick={handleShowReportDialog}
-              disabled={generatingReport}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <FileText className="h-4 w-4" />
-              {generatingReport ? 'Generating...' : 'Generate Conformance Report'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Conformance Report Format Selection Modal */}
-      <ConformanceReportModal
-        isOpen={showReportFormatDialog}
-        selectedFormat={selectedReportFormat}
-        onFormatChange={setSelectedReportFormat}
-        onGenerate={handleGenerateReport}
-        onClose={() => setShowReportFormatDialog(false)}
+      {/* Quality Management Section */}
+      <QualityManagementSection
+        lot={lot}
+        conformStatus={conformStatus}
+        loadingConformStatus={loadingConformStatus}
+        canConformLots={canConformLots}
+        canVerifyTestResults={canVerifyTestResults}
+        conforming={conforming}
+        generatingReport={generatingReport}
+        showReportFormatDialog={showReportFormatDialog}
+        selectedReportFormat={selectedReportFormat}
+        onConformLot={handleConformLot}
+        onTabChange={handleTabChange}
+        onShowReportDialog={handleShowReportDialog}
+        onGenerateReport={handleGenerateReport}
+        onCloseReportDialog={() => setShowReportFormatDialog(false)}
+        onReportFormatChange={setSelectedReportFormat}
       />
 
       {/* Status Override Modal */}

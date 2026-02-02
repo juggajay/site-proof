@@ -541,12 +541,10 @@ export async function sendNotificationIfEnabled(
     userDigest.push(digestItem)
     digestQueue.set(userId, userDigest)
 
-    console.log(`[Notifications] Queued ${notificationType} notification for user ${userId} (timing: digest)`)
     return { sent: false, queued: true }
   }
 
   // Send the email immediately
-  console.log(`[Notifications] Sending ${notificationType} notification to user ${userId} immediately (timing: immediate)`)
   const result = await sendNotificationEmail(user.email, notificationType, data)
   return { sent: result.success, queued: false }
 }
@@ -794,8 +792,6 @@ notificationsRouter.post('/alerts', async (req: AuthRequest, res) => {
       },
     })
 
-    console.log(`[Alerts] Created alert ${alert.id} of type ${type} assigned to ${assignedTo}`)
-
     res.json({
       success: true,
       alert,
@@ -872,8 +868,6 @@ notificationsRouter.put('/alerts/:id/resolve', async (req: AuthRequest, res) => 
 
     alert.resolvedAt = new Date()
     alertStore.set(id, alert)
-
-    console.log(`[Alerts] Alert ${id} resolved by user ${userId}`)
 
     res.json({
       success: true,
@@ -972,7 +966,6 @@ notificationsRouter.post('/alerts/check-escalations', async (req: AuthRequest, r
         }
 
         escalatedAlerts.push(alert)
-        console.log(`[Alerts] Alert ${id} escalated to level ${newLevel}, notified ${escalationUsers.length} users`)
       }
     }
 
@@ -1084,10 +1077,7 @@ notificationsRouter.post('/alerts/:id/test-escalate', async (req: AuthRequest, r
         },
       })
 
-      console.log(`[Alerts] Sent escalation notification to ${user.email}`)
     }
-
-    console.log(`[Alerts] TEST: Alert ${id} force-escalated to level ${newLevel}`)
 
     res.json({
       success: true,
@@ -1119,8 +1109,6 @@ notificationsRouter.post('/diary-reminder/check', async (req: AuthRequest, res) 
     const targetDate = dateOverride ? new Date(dateOverride) : new Date()
     targetDate.setHours(0, 0, 0, 0)
     const dateString = targetDate.toISOString().split('T')[0]
-
-    console.log(`[Diary Reminder] Checking for missing diaries on ${dateString}`)
 
     // Get all active projects
     const projectQuery: any = { status: 'active' }
@@ -1209,8 +1197,6 @@ notificationsRouter.post('/diary-reminder/check', async (req: AuthRequest, res) 
         })
       }
     }
-
-    console.log(`[Diary Reminder] Created ${remindersCreated.length} reminder(s) for ${usersNotified.size} user(s)`)
 
     res.json({
       success: true,
@@ -1331,8 +1317,6 @@ notificationsRouter.post('/diary-reminder/check-alerts', async (req: AuthRequest
     yesterday.setHours(0, 0, 0, 0)
     const yesterdayString = yesterday.toISOString().split('T')[0]
 
-    console.log(`[Missing Diary Alert] Checking for missing diaries before ${yesterdayString}`)
-
     // Get all active projects
     const projectQuery: any = { status: 'active' }
     if (specificProjectId) {
@@ -1435,8 +1419,6 @@ notificationsRouter.post('/diary-reminder/check-alerts', async (req: AuthRequest
       }
     }
 
-    console.log(`[Missing Diary Alert] Created ${alertsCreated.length} alert(s) for ${usersNotified.size} user(s)`)
-
     res.json({
       success: true,
       missingDate: yesterdayString,
@@ -1469,8 +1451,6 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
     const cutoffTime = new Date()
     cutoffTime.setHours(cutoffTime.getHours() - 48)
 
-    console.log(`[Docket Backlog Alert] Checking for dockets pending since before ${cutoffTime.toISOString()}`)
-
     // Get all dockets that have been pending_approval for more than 48 hours
     const whereClause: any = {
       status: 'pending_approval',
@@ -1486,8 +1466,6 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
     const overdueDockers = await prisma.dailyDocket.findMany({
       where: whereClause,
     })
-
-    console.log(`   Found ${overdueDockers.length} docket(s) pending >48 hours`)
 
     const alertsCreated: any[] = []
     const usersNotified = new Set<string>()
@@ -1589,8 +1567,6 @@ notificationsRouter.post('/docket-backlog/check', async (req: AuthRequest, res) 
       }
     }
 
-    console.log(`[Docket Backlog Alert] Created ${alertsCreated.length} alert(s) for ${usersNotified.size} user(s)`)
-
     res.json({
       success: true,
       cutoffTime: cutoffTime.toISOString(),
@@ -1624,8 +1600,6 @@ notificationsRouter.post('/system-alerts/check', async (req: AuthRequest, res) =
     const now = new Date()
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-
-    console.log(`[System Alerts] Running critical issues check at ${now.toISOString()}`)
 
     const alertsGenerated: any[] = []
 
@@ -1705,7 +1679,6 @@ notificationsRouter.post('/system-alerts/check', async (req: AuthRequest, res) =
             message: alert.title
           })
 
-          console.log(`[System Alerts] Created overdue NCR alert: ${ncr.ncrNumber} (${daysOverdue} days overdue)`)
         }
       }
 
@@ -1787,7 +1760,6 @@ notificationsRouter.post('/system-alerts/check', async (req: AuthRequest, res) =
             message: alert.title
           })
 
-          console.log(`[System Alerts] Created stale HP alert: Lot ${hp.lot.lotNumber} (${hoursStale} hours stale)`)
         }
       }
 
@@ -1866,7 +1838,6 @@ notificationsRouter.post('/system-alerts/check', async (req: AuthRequest, res) =
             message: alert.title
           })
 
-          console.log(`[System Alerts] Created missing diary alert for ${project.name} on ${dateString}`)
         }
       }
     }
@@ -1877,11 +1848,6 @@ notificationsRouter.post('/system-alerts/check', async (req: AuthRequest, res) =
       staleHoldPoints: alertsGenerated.filter(a => a.type === 'stale_hold_point').length,
       missingDiaries: alertsGenerated.filter(a => a.type === 'missing_diary').length,
     }
-
-    console.log(`[System Alerts] Check complete. Generated ${alertsGenerated.length} new alerts:`)
-    console.log(`   - Overdue NCRs: ${summary.overdueNCRs}`)
-    console.log(`   - Stale Hold Points: ${summary.staleHoldPoints}`)
-    console.log(`   - Missing Diaries: ${summary.missingDiaries}`)
 
     res.json({
       success: true,

@@ -1212,7 +1212,6 @@ projectsRouter.post('/:id/users', async (req, res) => {
         }
       )
 
-      console.log(`[Team Invitation] Notification sent to ${invitedUser.email} for project ${projectDetails?.name}`)
     } catch (notifError) {
       console.error('[Team Invitation] Failed to send notification:', notifError)
       // Don't fail the main request if notifications fail
@@ -1332,7 +1331,6 @@ projectsRouter.patch('/:id/users/:userId', async (req, res) => {
           }
         )
 
-        console.log(`[Role Change] Notification sent to ${targetProjectUser.user.email} for project ${projectDetails?.name}: ${formattedOldRole} -> ${formattedNewRole}`)
       } catch (notifError) {
         console.error('[Role Change] Failed to send notification:', notifError)
         // Don't fail the main request if notifications fail
@@ -1446,7 +1444,6 @@ projectsRouter.delete('/:id/users/:userId', async (req, res) => {
         }
       )
 
-      console.log(`[Project Removal] Notification sent to ${targetProjectUser.user.email} - removed from ${projectDetails?.name}`)
     } catch (notifError) {
       console.error('[Project Removal] Failed to send notification:', notifError)
       // Don't fail the main request if notifications fail

@@ -192,8 +192,6 @@ lotsRouter.get('/', async (req, res) => {
         include: { subcontractorCompany: true }
       })
 
-      console.log('[Lots API] Subcontractor user lookup:', subcontractorUser ? `Found: ${subcontractorUser.subcontractorCompany?.companyName}` : 'NOT FOUND')
-
       if (subcontractorUser) {
         const subCompanyId = subcontractorUser.subcontractorCompanyId
 
@@ -208,18 +206,13 @@ lotsRouter.get('/', async (req, res) => {
         })
         const assignedLotIds = lotAssignments.map(a => a.lotId)
 
-        console.log('[Lots API] SubCompanyId:', subCompanyId)
-        console.log('[Lots API] LotSubcontractorAssignment records:', lotAssignments.length, 'lot IDs:', assignedLotIds)
-
         // Include lots from both legacy field AND new assignment model
         whereClause.OR = [
           { assignedSubcontractorId: subCompanyId },
           ...(assignedLotIds.length > 0 ? [{ id: { in: assignedLotIds } }] : [])
         ]
-        console.log('[Lots API] Where clause OR:', JSON.stringify(whereClause.OR))
       } else {
         // No subcontractor company found - return empty result with pagination
-        console.log('[Lots API] No subcontractor user found, returning empty')
         return res.json({
           data: [],
           pagination: getPaginationMeta(0, page, limit),
@@ -308,17 +301,6 @@ lotsRouter.get('/', async (req, res) => {
           itpInstances: lot.itpInstance ? [lot.itpInstance] : []
         }))
       : lots
-
-    // Debug logging for subcontractor ITP issues
-    if (includeITP === 'true') {
-      console.log('[Lots API] includeITP=true, returning', lots.length, 'lots')
-      lots.forEach((lot: any) => {
-        console.log(`  - Lot ${lot.lotNumber}: itpInstance=${lot.itpInstance ? 'YES' : 'NO'}, assignments=${lot.subcontractorAssignments?.length || 0}`)
-        if (lot.itpInstance) {
-          console.log(`    ITP: id=${lot.itpInstance.id}, status=${lot.itpInstance.status}, template=${lot.itpInstance.template?.name}`)
-        }
-      })
-    }
 
     res.json({
       data: transformedLots,
@@ -1832,8 +1814,6 @@ lotsRouter.post('/:id/subcontractors', async (req, res) => {
         }
       }
     })
-
-    console.log(`[Lot Assignment] ${subcontractor.companyName} assigned to ${lot.lotNumber} by ${user.email}`)
 
     res.status(201).json(assignment)
   } catch (error) {

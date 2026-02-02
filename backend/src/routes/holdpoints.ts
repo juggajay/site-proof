@@ -593,7 +593,6 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
         })
       }
 
-      console.log(`[HP Release Request] Sent email with secure release links to ${recipientsToNotify.length} superintendent(s)/PM(s) for HP on lot ${lot.lotNumber}`)
     } catch (emailError) {
       console.error('[HP Release Request] Failed to send superintendent email:', emailError)
       // Don't fail the main request
@@ -738,7 +737,6 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
       await prisma.notification.createMany({
         data: notificationsToCreate
       })
-      console.log(`[HP Release] Created ${notificationsToCreate.length} in-app notifications for HP release`)
     }
 
     // Send email notifications to team members (if configured)
@@ -755,13 +753,6 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
         // Continue with other notifications even if one fails
       }
     }
-
-    // Log email notification details for development (emails are logged to console)
-    console.log(`[HP Release] Email notification details:`)
-    console.log(`  To: ${projectUsers.map(pu => pu.user.email).join(', ')}`)
-    console.log(`  Subject: Hold Point Released - ${holdPoint.lot.lotNumber}`)
-    console.log(`  Hold Point: ${holdPoint.description}`)
-    console.log(`  Released By: ${releasedByName || 'Unknown'}`)
 
     // Feature #948 - Send HP release confirmation emails to contractor and superintendent
     try {
@@ -818,7 +809,6 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
         })
       }
 
-      console.log(`[HP Release] Sent confirmation emails to ${contractors.length} contractors and ${superintendents.length} superintendents`)
     } catch (emailError) {
       console.error('[HP Release] Failed to send confirmation emails:', emailError)
       // Don't fail the main request
@@ -927,7 +917,6 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
         })
       }
 
-      console.log(`[HP Chase] Sent chase email #${holdPoint.chaseCount} to ${recipientsToNotify.length} superintendent(s)/PM(s) for HP on lot ${existingHP.lot.lotNumber}`)
     } catch (emailError) {
       console.error('[HP Chase] Failed to send chase email:', emailError)
       // Don't fail the main request
@@ -1930,13 +1919,10 @@ holdpointsRouter.post('/public/:token/release', async (req: any, res) => {
         })
       }
 
-      console.log(`[HP Secure Release] Sent confirmation emails to ${contractors.length} contractors and ${superintendents.length} superintendents`)
     } catch (emailError) {
       console.error('[HP Secure Release] Failed to send confirmation emails:', emailError)
       // Don't fail the main request
     }
-
-    console.log(`[HP Secure Release] Hold point ${holdPoint.id} released via secure link by ${releasedByName}`)
 
     res.json({
       success: true,

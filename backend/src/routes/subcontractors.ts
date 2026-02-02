@@ -293,13 +293,11 @@ subcontractorsRouter.post('/invite', async (req, res) => {
       }
     })
 
-    console.log(`Subcontractor ${finalCompanyName} invited to project ${project.name} by ${user.email}${globalSubcontractorId ? ' (from directory)' : ' (new)'}`)
-
     // Feature #942 - Send subcontractor invitation email with setup link
     const inviteUrl = `${process.env.FRONTEND_URL || 'http://localhost:5174'}/subcontractor-portal/accept-invite?id=${subcontractor.id}`
 
     try {
-      const emailResult = await sendSubcontractorInvitationEmail({
+      await sendSubcontractorInvitationEmail({
         to: finalContactEmail,
         contactName: finalContactName,
         companyName: finalCompanyName,
@@ -307,12 +305,6 @@ subcontractorsRouter.post('/invite', async (req, res) => {
         inviterEmail: user.email,
         inviteUrl
       })
-
-      if (emailResult.success) {
-        console.log(`[Subcontractor Invite] Email sent successfully to ${finalContactEmail}`)
-      } else {
-        console.log(`[Subcontractor Invite] Email failed: ${emailResult.error}`)
-      }
     } catch (emailError) {
       console.error('[Subcontractor Invite] Failed to send email:', emailError)
       // Don't fail the invite if email fails
@@ -346,36 +338,6 @@ subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
   try {
     const { projectId } = req.params
 
-    console.log(`[Subcontractors] Fetching for projectId: ${projectId}`)
-
-    // Verify the project exists
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, name: true }
-    })
-
-    if (!project) {
-      console.log(`[Subcontractors] Project not found: ${projectId}`)
-    } else {
-      console.log(`[Subcontractors] Project found: ${project.name}`)
-    }
-
-    // DEBUG: Show ALL subcontractor companies to see what projectIds they have
-    const allSubcontractors = await prisma.subcontractorCompany.findMany({
-      select: {
-        id: true,
-        companyName: true,
-        status: true,
-        projectId: true,
-        project: { select: { name: true } }
-      },
-      orderBy: { companyName: 'asc' }
-    })
-    console.log(`[Subcontractors] ALL subcontractors in database:`)
-    allSubcontractors.forEach(s => {
-      console.log(`  - ${s.companyName} (status: ${s.status}, projectId: ${s.projectId}, project: ${s.project?.name || 'unknown'})`)
-    })
-
     // Get all subcontractor companies associated with this project
     const subcontractors = await prisma.subcontractorCompany.findMany({
       where: {
@@ -388,11 +350,6 @@ subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
       },
       orderBy: { companyName: 'asc' }
     })
-
-    console.log(`[Subcontractors] Found ${subcontractors.length} subcontractors for project ${projectId}`)
-    if (subcontractors.length > 0) {
-      console.log(`[Subcontractors] Subcontractors:`, subcontractors.map(s => `${s.companyName} (${s.status})`).join(', '))
-    }
 
     res.json({ subcontractors })
   } catch (error) {
@@ -461,8 +418,6 @@ subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
         data: { status: 'approved' }
       })
     }
-
-    console.log(`[Invitation Accept] User ${user.email} accepted invitation for ${subcontractor.companyName}`)
 
     res.json({
       message: 'Invitation accepted successfully',
@@ -824,9 +779,6 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
       }
     })
 
-    // Log the action
-    console.log(`Subcontractor ${updatedSubcontractor.companyName} status changed to ${status} by ${user.email}`)
-
     res.json({
       message: `Subcontractor status updated to ${status}`,
       subcontractor: updatedSubcontractor
@@ -912,8 +864,6 @@ subcontractorsRouter.delete('/:id', async (req, res) => {
     await prisma.subcontractorCompany.delete({
       where: { id }
     })
-
-    console.log(`Subcontractor ${subcontractor.companyName} permanently deleted by ${user.email} (${deletedCounts.dockets} dockets, ${deletedCounts.employees} employees, ${deletedCounts.plant} plant)`)
 
     res.json({
       message: `Subcontractor ${subcontractor.companyName} permanently deleted`,
@@ -1021,8 +971,6 @@ subcontractorsRouter.patch('/:id/portal-access', async (req, res) => {
         portalAccess: true,
       }
     })
-
-    console.log(`Portal access updated for ${updatedSubcontractor.companyName} by ${user.email}:`, mergedAccess)
 
     res.json({
       message: 'Portal access updated successfully',
@@ -1263,7 +1211,6 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
           })
         }
 
-        console.log(`[Rate Approval] Employee ${updated.name} rate approved for ${subcontractor?.companyName}, notified ${users.length} users`)
       } catch (notifError) {
         console.error('[Rate Approval] Failed to send notification:', notifError)
         // Don't fail the main request
@@ -1310,7 +1257,6 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
           })
         }
 
-        console.log(`[Rate Counter] Employee ${updated.name} counter-proposed ($${originalRate} -> $${proposedRate}) for ${subcontractor?.companyName}, notified ${users2.length} users`)
       } catch (notifError) {
         console.error('[Rate Counter] Failed to send notification:', notifError)
         // Don't fail the main request
@@ -1463,7 +1409,6 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
           })
         }
 
-        console.log(`[Rate Approval] Plant ${updated.type} rate approved for ${subcontractor?.companyName}, notified ${users3.length} users`)
       } catch (notifError) {
         console.error('[Rate Approval] Failed to send notification:', notifError)
         // Don't fail the main request
@@ -1519,7 +1464,6 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
           })
         }
 
-        console.log(`[Rate Counter] Plant ${updated.type} counter-proposed (${originalRates} -> ${proposedRates}) for ${subcontractor?.companyName}, notified ${users4.length} users`)
       } catch (notifError) {
         console.error('[Rate Counter] Failed to send notification:', notifError)
         // Don't fail the main request

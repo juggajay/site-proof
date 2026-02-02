@@ -546,7 +546,6 @@ docketsRouter.post('/:id/submit', async (req, res) => {
       await prisma.notification.createMany({
         data: notificationsToCreate
       })
-      console.log(`[Docket Submit] Created ${notificationsToCreate.length} in-app notifications for pending docket`)
     }
 
     // Send email notifications to approvers (if configured)
@@ -562,13 +561,6 @@ docketsRouter.post('/:id/submit', async (req, res) => {
         console.error(`[Docket Submit] Failed to send email to user ${pu.userId}:`, emailError)
       }
     }
-
-    // Log for development
-    console.log(`[Docket Submit] Notification details:`)
-    console.log(`  Docket: ${docketNumber}`)
-    console.log(`  Subcontractor: ${subcontractorName}`)
-    console.log(`  Notified: ${projectUsers.map(pu => pu.user.email).join(', ')}`)
-    console.log(`  Pending Count: ${pendingCount}`)
 
     res.json({
       message: 'Docket submitted for approval',
@@ -659,8 +651,6 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
     // === DIARY AUTO-POPULATION ===
     // When a docket is approved, write its labour and plant data into the daily diary
     try {
-      const docketDate = docket.date.toISOString().split('T')[0]
-
       // Find or create diary for this date
       let diary = await prisma.dailyDiary.findUnique({
         where: { projectId_date: { projectId: docket.projectId, date: docket.date } },
@@ -674,7 +664,6 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
             status: 'draft',
           },
         })
-        console.log(`[Docket→Diary] Auto-created diary for ${docketDate}`)
       }
 
       // Don't modify submitted diaries
@@ -734,10 +723,7 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
             })
           }
 
-          console.log(`[Docket→Diary] Populated diary with ${fullDocket.labourEntries.length} personnel + ${fullDocket.plantEntries.length} plant from docket ${docket.id}`)
         }
-      } else {
-        console.log(`[Docket→Diary] Diary for ${docketDate} is already submitted, skipping auto-population`)
       }
     } catch (diaryError) {
       // Don't fail the approval if diary population fails
@@ -780,7 +766,6 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
       await prisma.notification.createMany({
         data: notificationsToCreate
       })
-      console.log(`[Docket Approval] Created ${notificationsToCreate.length} in-app notifications for subcontractor`)
     }
 
     // Send email notifications to subcontractor users
@@ -796,12 +781,6 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
         console.error(`[Docket Approval] Failed to send email to user ${su.id}:`, emailError)
       }
     }
-
-    // Log for development
-    console.log(`[Docket Approval] Notification details:`)
-    console.log(`  Docket: ${docketNumber}`)
-    console.log(`  Approved by: ${approverName}`)
-    console.log(`  Notified: ${subcontractorUsers.map(su => su.email).join(', ')}`)
 
     res.json({
       message: 'Docket approved successfully',
@@ -908,7 +887,6 @@ docketsRouter.post('/:id/reject', requireRole(DOCKET_APPROVERS), async (req, res
       await prisma.notification.createMany({
         data: notificationsToCreate
       })
-      console.log(`[Docket Rejection] Created ${notificationsToCreate.length} in-app notifications for subcontractor`)
     }
 
     // Send email notifications to subcontractor users
@@ -924,13 +902,6 @@ docketsRouter.post('/:id/reject', requireRole(DOCKET_APPROVERS), async (req, res
         console.error(`[Docket Rejection] Failed to send email to user ${su.id}:`, emailError)
       }
     }
-
-    // Log for development
-    console.log(`[Docket Rejection] Notification details:`)
-    console.log(`  Docket: ${docketNumber}`)
-    console.log(`  Rejected by: ${rejectorName}`)
-    console.log(`  Reason: ${reason || 'Not provided'}`)
-    console.log(`  Notified: ${subcontractorUsers.map(su => su.email).join(', ')}`)
 
     res.json({
       message: 'Docket rejected',
@@ -1039,7 +1010,6 @@ docketsRouter.post('/:id/query', requireRole(DOCKET_APPROVERS), async (req, res)
       await prisma.notification.createMany({
         data: notificationsToCreate
       })
-      console.log(`[Docket Query] Created ${notificationsToCreate.length} in-app notifications for subcontractor`)
     }
 
     // Send email notifications to subcontractor users
@@ -1055,13 +1025,6 @@ docketsRouter.post('/:id/query', requireRole(DOCKET_APPROVERS), async (req, res)
         console.error(`[Docket Query] Failed to send email to user ${su.id}:`, emailError)
       }
     }
-
-    // Log for development
-    console.log(`[Docket Query] Notification details:`)
-    console.log(`  Docket: ${docketNumber}`)
-    console.log(`  Queried by: ${querierName}`)
-    console.log(`  Questions: ${questions.substring(0, 100)}...`)
-    console.log(`  Notified: ${subcontractorUsers.map(su => su.email).join(', ')}`)
 
     res.json({
       message: 'Docket queried successfully',
@@ -1169,7 +1132,6 @@ docketsRouter.post('/:id/respond', async (req, res) => {
       await prisma.notification.createMany({
         data: notificationsToCreate
       })
-      console.log(`[Docket Query Response] Created ${notificationsToCreate.length} notifications for approvers`)
     }
 
     res.json({

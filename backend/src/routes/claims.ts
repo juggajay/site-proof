@@ -380,7 +380,6 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
           await prisma.notification.createMany({
             data: notificationsToCreate
           })
-          console.log(`[Claim Certification] Created ${notificationsToCreate.length} in-app notifications for project managers`)
         }
 
         // Send email notifications to project managers
@@ -397,12 +396,6 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
           }
         }
 
-        // Log for development
-        console.log(`[Claim Certification] Notification details:`)
-        console.log(`  Claim: #${claim.claimNumber}`)
-        console.log(`  Certified by: ${certifierName}`)
-        console.log(`  Certified amount: ${formattedAmount}`)
-        console.log(`  Notified PMs: ${pmUsers.map(pm => pm.email).join(', ') || 'None'}`)
       } catch (notifError) {
         console.error('[Claim Certification] Failed to send notifications:', notifError)
         // Don't fail the main request if notifications fail
@@ -412,13 +405,6 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
     // Feature #932 - Notify relevant users when a claim is paid
     if (status === 'paid' && previousStatus !== 'paid' && paidAmount !== undefined) {
       try {
-        // Get the user who recorded the payment
-        const payer = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { id: true, email: true, fullName: true }
-        })
-        const payerName = payer?.fullName || payer?.email || 'Unknown'
-
         // Get all project managers on this project
         const projectManagers = await prisma.projectUser.findMany({
           where: {
@@ -457,7 +443,6 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
           await prisma.notification.createMany({
             data: notificationsToCreate
           })
-          console.log(`[Claim Payment] Created ${notificationsToCreate.length} in-app notifications for project managers`)
         }
 
         // Send email notifications to project managers
@@ -474,13 +459,6 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
           }
         }
 
-        // Log for development
-        console.log(`[Claim Payment] Notification details:`)
-        console.log(`  Claim: #${claim.claimNumber}`)
-        console.log(`  Recorded by: ${payerName}`)
-        console.log(`  Paid amount: ${formattedAmount}`)
-        console.log(`  Payment ref: ${paymentReference || 'N/A'}`)
-        console.log(`  Notified PMs: ${pmUsers.map(pm => pm.email).join(', ') || 'None'}`)
       } catch (notifError) {
         console.error('[Claim Payment] Failed to send notifications:', notifError)
         // Don't fail the main request if notifications fail
@@ -780,8 +758,6 @@ router.get('/:projectId/claims/:claimId/evidence-package', async (req, res) => {
       generatedAt: new Date().toISOString(),
       generationTimeMs: Date.now() - startTime
     }
-
-    console.log(`Evidence package generated in ${evidencePackage.generationTimeMs}ms for claim ${claim.claimNumber} with ${claim.claimedLots.length} lots`)
 
     res.json(evidencePackage)
   } catch (error) {
@@ -1272,12 +1248,6 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
       message: 'Claim certified successfully'
     }
 
-    const formattedAmountLog = new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD'
-    }).format(certifiedAmount)
-    console.log(`[Claim Certification] Claim #${claim.claimNumber} certified for ${formattedAmountLog}`)
-
     res.json(response)
   } catch (error) {
     console.error('Error certifying claim:', error)
@@ -1478,12 +1448,6 @@ router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
       paymentHistory,
       message: outstanding <= 0 ? 'Claim fully paid' : `Partial payment recorded. Outstanding: $${outstanding.toFixed(2)}`
     }
-
-    const formattedLog = new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD'
-    }).format(paidAmount)
-    console.log(`[Claim Payment] Claim #${claim.claimNumber} payment recorded: ${formattedLog} (${newStatus})`)
 
     res.json(response)
   } catch (error) {

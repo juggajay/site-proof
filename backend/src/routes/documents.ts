@@ -173,16 +173,12 @@ router.get('/download/:documentId', async (req: Request, res: Response) => {
       // Set content disposition header for download
       res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`)
       res.setHeader('Content-Type', document.mimeType || 'application/octet-stream')
-      console.log(`[Signed URL Download] Document ${documentId} downloaded using signed URL by user ${validation.userId}`)
       return res.sendFile(altPath)
     }
 
     // Set content disposition header for download
     res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`)
     res.setHeader('Content-Type', document.mimeType || 'application/octet-stream')
-
-    // Log the download for audit purposes
-    console.log(`[Signed URL Download] Document ${documentId} downloaded using signed URL by user ${validation.userId}`)
 
     res.sendFile(filePath)
   } catch (error) {
@@ -484,12 +480,10 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       // Upload to Supabase
       const { url } = await uploadToSupabase(req.file, projectId)
       fileUrl = url
-      console.log(`[Upload] File uploaded to Supabase: ${fileUrl}`)
     } else {
       // Fallback to local filesystem
       photoMetadata = await extractPhotoMetadata(req.file.path, req.file.mimetype)
       fileUrl = `/uploads/documents/${req.file.filename}`
-      console.log(`[Upload] File saved locally: ${fileUrl}`)
     }
 
     // Create document record
@@ -812,13 +806,11 @@ router.delete('/:documentId', async (req: Request, res: Response) => {
     if (document.fileUrl.includes('supabase.co/storage')) {
       // Delete from Supabase Storage
       await deleteFromSupabase(document.fileUrl)
-      console.log(`[Delete] File deleted from Supabase: ${document.fileUrl}`)
     } else {
       // Delete from local disk
       const filePath = path.join(process.cwd(), document.fileUrl)
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath)
-        console.log(`[Delete] File deleted from disk: ${filePath}`)
       }
     }
 
@@ -839,8 +831,6 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
     const { documentId } = req.params
     const userId = (req as any).user?.id
 
-    console.log('[AI Classification] Starting classification:', { documentId, userId })
-
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
@@ -850,13 +840,10 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
     })
 
     if (!document) {
-      console.log('[AI Classification] Document not found:', documentId)
       return res.status(404).json({ error: 'Document not found' })
     }
 
-    console.log('[AI Classification] Document found:', { documentId, projectId: document.projectId })
     const hasAccess = await checkProjectAccess(userId, document.projectId)
-    console.log('[AI Classification] Access check result:', { hasAccess, userId, projectId: document.projectId })
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied', debug: { userId, projectId: document.projectId } })
     }

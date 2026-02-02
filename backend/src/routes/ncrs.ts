@@ -1071,15 +1071,6 @@ ncrsRouter.post('/:id/notify-client', requireAuth, async (req: any, res) => {
       additionalMessage: additionalMessage || null,
     }
 
-    // In development mode, log the notification package
-    console.log('\n========================================')
-    console.log('📧 CLIENT NOTIFICATION (Development Mode)')
-    console.log('========================================')
-    console.log('NCR:', ncr.ncrNumber)
-    console.log('Recipient:', recipientEmail || '[No email provided]')
-    console.log('Notification Package:', JSON.stringify(notificationPackage, null, 2))
-    console.log('========================================\n')
-
     // Update NCR with notification timestamp
     const updatedNcr = await prisma.nCR.update({
       where: { id },

@@ -125,8 +125,6 @@ companyRouter.post('/leave', async (req, res) => {
     // Set role_in_company to 'member' (default) since it's NOT NULL
     await prisma.$executeRaw`UPDATE users SET company_id = NULL, role_in_company = 'member' WHERE id = ${user.userId}`
 
-    console.log(`User ${user.email} left company ${user.companyId}`)
-
     res.json({
       message: 'Successfully left the company',
       leftAt: new Date().toISOString()
@@ -234,8 +232,6 @@ companyRouter.post('/transfer-ownership', async (req, res) => {
       prisma.$executeRaw`UPDATE users SET role_in_company = 'admin' WHERE id = ${user.userId}`,
     ])
 
-    console.log(`Ownership of company ${user.companyId} transferred from ${user.email} to ${newOwner.email}`)
-
     res.json({
       message: 'Ownership transferred successfully',
       newOwner: {
@@ -308,8 +304,6 @@ companyRouter.patch('/', async (req, res) => {
         updatedAt: true,
       },
     })
-
-    console.log(`Company ${updatedCompany.name} settings updated by ${user.email}`)
 
     res.json({
       message: 'Company settings updated successfully',

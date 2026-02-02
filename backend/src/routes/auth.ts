@@ -294,7 +294,6 @@ authRouter.post('/magic-link/request', async (req, res) => {
 
     // Always return success to prevent email enumeration
     if (!user) {
-      console.log(`[Magic Link] Request for non-existent email: ${email}`)
       return res.json({
         message: 'If an account exists with this email, a login link has been sent.',
       })
@@ -330,8 +329,6 @@ authRouter.post('/magic-link/request', async (req, res) => {
       magicLinkUrl,
       expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
     })
-
-    console.log(`[Magic Link] Sent login link to ${user.email}`)
 
     res.json({
       message: 'If an account exists with this email, a login link has been sent.',
@@ -406,8 +403,6 @@ authRouter.post('/magic-link/verify', async (req, res) => {
       role: tokenRecord.user.roleInCompany,
     })
 
-    console.log(`[Magic Link] User ${tokenRecord.user.email} logged in via magic link`)
-
     res.json({
       user: {
         id: tokenRecord.user.id,
@@ -477,7 +472,6 @@ authRouter.post('/logout-all-devices', async (req, res) => {
     await prisma.$executeRaw`UPDATE users SET token_invalidated_at = NOW() WHERE id = ${user.userId}`
 
     const now = new Date().toISOString()
-    console.log(`User ${user.email} logged out from all devices at ${now}`)
 
     res.json({
       message: 'Successfully logged out from all devices',
@@ -603,8 +597,6 @@ authRouter.post('/reset-password', async (req, res) => {
         data: { usedAt: new Date() },
       }),
     ])
-
-    console.log(`✅ Password reset successful for: ${resetToken.user.email}`)
 
     res.json({ message: 'Password has been reset successfully. You can now log in with your new password.' })
   } catch (error) {
@@ -890,8 +882,6 @@ authRouter.post('/change-password', async (req, res) => {
       data: { passwordHash: newPasswordHash },
     })
 
-    console.log(`✅ Password changed for user: ${userData.email}`)
-
     res.json({ message: 'Password changed successfully' })
   } catch (error) {
     console.error('Change password error:', error)
@@ -947,8 +937,6 @@ authRouter.post('/verify-email', async (req, res) => {
         data: { usedAt: new Date() },
       }),
     ])
-
-    console.log(`✅ Email verified for: ${verificationToken.user.email}`)
 
     res.json({
       message: 'Email verified successfully. You can now log in.',
@@ -1435,8 +1423,6 @@ authRouter.post('/register-and-accept-invitation', async (req, res) => {
       role: user.roleInCompany,
     })
 
-    console.log(`[Register & Accept] User ${user.email} created and linked to ${subcontractor.companyName}`)
-
     res.status(201).json({
       user: {
         id: user.id,
@@ -1566,8 +1552,6 @@ authRouter.delete('/delete-account', async (req, res) => {
     await prisma.user.delete({
       where: { id: userId },
     })
-
-    console.log(`Account deleted for user: ${user.email} (ID: ${userId})`)
 
     res.json({
       success: true,

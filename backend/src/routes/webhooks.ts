@@ -78,8 +78,6 @@ router.post('/test-receiver', (req: Request, res: Response) => {
       testWebhookReceived.shift()
     }
 
-    console.log(`[Webhook Test Receiver] Received webhook: ${received.id}`)
-
     res.status(200).json({
       received: true,
       id: received.id,
@@ -177,8 +175,6 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     webhookConfigs.set(config.id, config)
-
-    console.log(`[Webhook] Created webhook config: ${config.id} -> ${url}`)
 
     res.status(201).json({
       id: config.id,
@@ -430,8 +426,6 @@ export async function deliverWebhook(
     delivery.responseStatus = response.status
     delivery.responseBody = await response.text()
     delivery.success = response.status >= 200 && response.status < 300
-
-    console.log(`[Webhook Delivery] ${event} -> ${config.url}: ${delivery.success ? 'SUCCESS' : 'FAILED'} (${response.status})`)
   } catch (error: any) {
     delivery.error = error.message || 'Unknown error'
     delivery.success = false
