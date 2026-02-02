@@ -19,7 +19,7 @@ const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 lotsRouter.get('/', async (req, res) => {
   try {
     const user = req.user!
-    const { projectId, status, unclaimed } = req.query
+    const { projectId, status, unclaimed, includeITP } = req.query
 
     if (!projectId) {
       return res.status(400).json({
@@ -74,46 +74,76 @@ lotsRouter.get('/', async (req, res) => {
       }
     }
 
-    const lots = await prisma.lot.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        lotNumber: true,
-        description: true,
-        status: true,
-        activityType: true,
-        chainageStart: true,
-        chainageEnd: true,
-        offset: true,
-        offsetCustom: true,
-        layer: true,
-        areaZone: true,
-        budgetAmount: true,
-        assignedSubcontractorId: true,
-        assignedSubcontractor: {
-          select: {
-            companyName: true,
+    // Build select clause - conditionally include ITP data
+    const selectClause: any = {
+      id: true,
+      lotNumber: true,
+      description: true,
+      status: true,
+      activityType: true,
+      chainageStart: true,
+      chainageEnd: true,
+      offset: true,
+      offsetCustom: true,
+      layer: true,
+      areaZone: true,
+      budgetAmount: true,
+      assignedSubcontractorId: true,
+      assignedSubcontractor: {
+        select: {
+          companyName: true,
+        }
+      },
+      // Include subcontractor assignments with ITP permissions
+      subcontractorAssignments: {
+        where: { status: 'active' },
+        select: {
+          id: true,
+          subcontractorCompanyId: true,
+          canCompleteITP: true,
+          itpRequiresVerification: true,
+          subcontractorCompany: {
+            select: { id: true, companyName: true }
           }
-        },
-        // Include subcontractor assignments with ITP permissions
-        subcontractorAssignments: {
-          where: { status: 'active' },
-          select: {
-            id: true,
-            subcontractorCompanyId: true,
-            canCompleteITP: true,
-            itpRequiresVerification: true,
-            subcontractorCompany: {
-              select: { id: true, companyName: true }
+        }
+      },
+      createdAt: true,
+    }
+
+    // Include ITP instance data if requested
+    if (includeITP === 'true') {
+      selectClause.itpInstance = {
+        select: {
+          id: true,
+          itpTemplateId: true,
+          status: true,
+          template: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
             }
           }
-        },
-        createdAt: true,
-      },
+        }
+      }
+    }
+
+    const lots = await prisma.lot.findMany({
+      where: whereClause,
+      select: selectClause,
       orderBy: { lotNumber: 'asc' },
     })
 
-    res.json({ lots })
+    // Transform response to match frontend expectations
+    // Frontend expects itpInstances array, but we have singular itpInstance
+    const transformedLots = includeITP === 'true'
+      ? lots.map(lot => ({
+          ...lot,
+          itpInstances: lot.itpInstance ? [lot.itpInstance] : []
+        }))
+      : lots
+
+    res.json({ lots: transformedLots })
   } catch (error) {
     console.error('Get lots error:', error)
     res.status(500).json({ error: 'Internal server error' })
@@ -225,6 +255,19 @@ lotsRouter.get('/:id', async (req, res) => {
             companyName: true,
           },
         },
+        // Include subcontractor assignments with ITP permissions
+        subcontractorAssignments: {
+          where: { status: 'active' },
+          select: {
+            id: true,
+            subcontractorCompanyId: true,
+            canCompleteITP: true,
+            itpRequiresVerification: true,
+            subcontractorCompany: {
+              select: { id: true, companyName: true }
+            }
+          }
+        },
         createdAt: true,
         updatedAt: true,
         conformedAt: true,
@@ -287,7 +330,13 @@ lotsRouter.get('/:id', async (req, res) => {
 
       const userSubcontractorId = subcontractorUser?.subcontractorCompanyId
 
-      if (lot.assignedSubcontractorId !== userSubcontractorId) {
+      // Check both legacy field AND new LotSubcontractorAssignment model
+      const hasLegacyAssignment = lot.assignedSubcontractorId === userSubcontractorId
+      const hasNewAssignment = lot.subcontractorAssignments?.some(
+        a => a.subcontractorCompanyId === userSubcontractorId
+      )
+
+      if (!hasLegacyAssignment && !hasNewAssignment) {
         return res.status(403).json({
           error: 'Forbidden',
           message: 'You do not have access to this lot'
