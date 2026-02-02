@@ -75,6 +75,12 @@ import { SubcontractorDashboard } from '@/pages/subcontractor-portal/Subcontract
 import { DocketEditPage } from '@/pages/subcontractor-portal/DocketEditPage'
 import { DocketsListPage } from '@/pages/subcontractor-portal/DocketsListPage'
 import { AssignedWorkPage } from '@/pages/subcontractor-portal/AssignedWorkPage'
+import { SubcontractorITPsPage } from '@/pages/subcontractor-portal/SubcontractorITPsPage'
+import { SubcontractorLotITPPage } from '@/pages/subcontractor-portal/SubcontractorLotITPPage'
+import { SubcontractorHoldPointsPage } from '@/pages/subcontractor-portal/SubcontractorHoldPointsPage'
+import { SubcontractorTestResultsPage } from '@/pages/subcontractor-portal/SubcontractorTestResultsPage'
+import { SubcontractorNCRsPage } from '@/pages/subcontractor-portal/SubcontractorNCRsPage'
+import { SubcontractorDocumentsPage } from '@/pages/subcontractor-portal/SubcontractorDocumentsPage'
 
 // Admin-only roles
 const ADMIN_ROLES = ['owner', 'admin', 'project_manager']
@@ -323,6 +329,54 @@ function App() {
             element={
               <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
                 <AssignedWorkPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/itps"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <SubcontractorITPsPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/lots/:lotId/itp"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <SubcontractorLotITPPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/holdpoints"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <SubcontractorHoldPointsPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/tests"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <SubcontractorTestResultsPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/ncrs"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <SubcontractorNCRsPage />
+              </RoleProtectedRoute>
+            }
+          />
+          <Route
+            path="/subcontractor-portal/documents"
+            element={
+              <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                <SubcontractorDocumentsPage />
               </RoleProtectedRoute>
             }
           />

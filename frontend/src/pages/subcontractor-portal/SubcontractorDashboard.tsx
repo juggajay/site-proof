@@ -519,7 +519,7 @@ export function SubcontractorDashboard() {
         {/* Portal Access - ITPs */}
         {company?.portalAccess?.itps && (
           <Link
-            to={`/projects/${company.projectId}/itp`}
+            to="/subcontractor-portal/itps"
             className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
@@ -534,7 +534,7 @@ export function SubcontractorDashboard() {
         {/* Portal Access - Hold Points */}
         {company?.portalAccess?.holdPoints && (
           <Link
-            to={`/projects/${company.projectId}/holdpoints`}
+            to="/subcontractor-portal/holdpoints"
             className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
@@ -549,7 +549,7 @@ export function SubcontractorDashboard() {
         {/* Portal Access - Test Results */}
         {company?.portalAccess?.testResults && (
           <Link
-            to={`/projects/${company.projectId}/tests`}
+            to="/subcontractor-portal/tests"
             className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
@@ -564,7 +564,7 @@ export function SubcontractorDashboard() {
         {/* Portal Access - NCRs */}
         {company?.portalAccess?.ncrs && (
           <Link
-            to={`/projects/${company.projectId}/ncr`}
+            to="/subcontractor-portal/ncrs"
             className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
@@ -579,7 +579,7 @@ export function SubcontractorDashboard() {
         {/* Portal Access - Documents */}
         {company?.portalAccess?.documents && (
           <Link
-            to={`/projects/${company.projectId}/documents`}
+            to="/subcontractor-portal/documents"
             className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
