@@ -45,6 +45,7 @@ import { AIClassificationModal, ClassificationModalData } from './components/AIC
 import { StatusOverrideModal } from './components/StatusOverrideModal'
 import { QualityManagementSection } from './components/QualityManagementSection'
 import { LotHeader } from './components/LotHeader'
+import { LotTabNavigation } from './components/LotTabNavigation'
 
 export function LotDetailPage() {
   const { projectId, lotId } = useParams()
@@ -1919,42 +1920,12 @@ export function LotDetailPage() {
       />
 
       {/* Tab Navigation */}
-      <div className="border-b">
-        <nav className="flex gap-4" aria-label="Lot detail tabs">
-          {tabs.map((tab) => {
-            // Get count for tabs that have badges
-            const count = tab.id === 'tests' ? testsCount : tab.id === 'ncrs' ? ncrsCount : null
-
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
-                  currentTab === tab.id
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
-                }`}
-                aria-selected={currentTab === tab.id}
-                role="tab"
-              >
-                {tab.label}
-                {count !== null && count > 0 && (
-                  <span
-                    className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-xs font-semibold rounded-full ${
-                      currentTab === tab.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                    data-testid={`${tab.id}-count-badge`}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </nav>
-      </div>
+      <LotTabNavigation
+        tabs={tabs}
+        currentTab={currentTab}
+        onTabChange={handleTabChange}
+        counts={{ tests: testsCount, ncrs: ncrsCount }}
+      />
 
       {/* Tab Content */}
       <div className="min-h-[300px]" role="tabpanel">
