@@ -1,10 +1,14 @@
 // Feature #747: API Keys for external REST access
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
 import crypto from 'crypto'
 import { z } from 'zod'
 
 const router = Router()
+
+// Apply authentication to all routes in this router
+router.use(requireAuth)
 
 // Generate secure random API key
 function generateApiKey(): string {
@@ -26,10 +30,7 @@ const createApiKeySchema = z.object({
 // POST /api/api-keys - Create a new API key
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
+    const userId = req.user!.id
 
     const validation = createApiKeySchema.safeParse(req.body)
     if (!validation.success) {
@@ -87,10 +88,7 @@ router.post('/', async (req: Request, res: Response) => {
 // GET /api/api-keys - List user's API keys
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
+    const userId = req.user!.id
 
     const apiKeys = await prisma.apiKey.findMany({
       where: { userId },
@@ -117,10 +115,7 @@ router.get('/', async (req: Request, res: Response) => {
 // DELETE /api/api-keys/:keyId - Revoke an API key
 router.delete('/:keyId', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
+    const userId = req.user!.id
 
     const { keyId } = req.params
 
