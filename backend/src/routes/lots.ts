@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js'
+import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pagination.js'
 
 // ============================================================================
 // Zod Validation Schemas
@@ -153,7 +154,7 @@ const LOT_DELETERS = ['owner', 'admin', 'project_manager']
 // Roles that can conform lots (quality management)
 const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 
-// GET /api/lots - List all lots for a project
+// GET /api/lots - List all lots for a project (paginated)
 lotsRouter.get('/', async (req, res) => {
   try {
     const user = req.user!
@@ -165,6 +166,10 @@ lotsRouter.get('/', async (req, res) => {
         message: 'projectId query parameter is required'
       })
     }
+
+    // Parse pagination parameters
+    const { page, limit, sortBy, sortOrder } = parsePagination(req.query)
+    const { skip, take } = getPrismaSkipTake(page, limit)
 
     // Build where clause based on user role
     const whereClause: any = { projectId: projectId as string }
@@ -213,9 +218,14 @@ lotsRouter.get('/', async (req, res) => {
         ]
         console.log('[Lots API] Where clause OR:', JSON.stringify(whereClause.OR))
       } else {
-        // No subcontractor company found - return empty result
+        // No subcontractor company found - return empty result with pagination
         console.log('[Lots API] No subcontractor user found, returning empty')
-        return res.json({ lots: [] })
+        return res.json({
+          data: [],
+          pagination: getPaginationMeta(0, page, limit),
+          // Backward compatibility - keep 'lots' alias during transition
+          lots: []
+        })
       }
     }
 
@@ -273,11 +283,22 @@ lotsRouter.get('/', async (req, res) => {
       }
     }
 
-    const lots = await prisma.lot.findMany({
-      where: whereClause,
-      select: selectClause,
-      orderBy: { lotNumber: 'asc' },
-    })
+    // Determine sort field - default to lotNumber for lots
+    const orderBy = sortBy
+      ? { [sortBy]: sortOrder }
+      : { lotNumber: 'asc' as const }
+
+    // Execute count and findMany in parallel for efficiency
+    const [lots, total] = await Promise.all([
+      prisma.lot.findMany({
+        where: whereClause,
+        select: selectClause,
+        orderBy,
+        skip,
+        take,
+      }),
+      prisma.lot.count({ where: whereClause })
+    ])
 
     // Transform response to match frontend expectations
     // Frontend expects itpInstances array, but we have singular itpInstance
@@ -299,7 +320,12 @@ lotsRouter.get('/', async (req, res) => {
       })
     }
 
-    res.json({ lots: transformedLots })
+    res.json({
+      data: transformedLots,
+      pagination: getPaginationMeta(total, page, limit),
+      // Backward compatibility - keep 'lots' alias during transition
+      lots: transformedLots
+    })
   } catch (error) {
     console.error('Get lots error:', error)
     res.status(500).json({ error: 'Internal server error' })

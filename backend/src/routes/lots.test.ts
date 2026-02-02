@@ -179,15 +179,38 @@ describe('Lots API', () => {
   })
 
   describe('GET /api/lots', () => {
-    it('should list lots for a project', async () => {
+    it('should list lots for a project with pagination', async () => {
       const res = await request(app)
         .get(`/api/lots?projectId=${projectId}`)
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(200)
+      // New paginated format
+      expect(res.body.data).toBeDefined()
+      expect(Array.isArray(res.body.data)).toBe(true)
+      expect(res.body.data.length).toBeGreaterThan(0)
+      // Pagination metadata
+      expect(res.body.pagination).toBeDefined()
+      expect(res.body.pagination.total).toBeGreaterThan(0)
+      expect(res.body.pagination.page).toBe(1)
+      expect(res.body.pagination.limit).toBe(20) // default limit
+      expect(typeof res.body.pagination.totalPages).toBe('number')
+      expect(typeof res.body.pagination.hasNextPage).toBe('boolean')
+      expect(typeof res.body.pagination.hasPrevPage).toBe('boolean')
+      // Backward compatibility
       expect(res.body.lots).toBeDefined()
-      expect(Array.isArray(res.body.lots)).toBe(true)
-      expect(res.body.lots.length).toBeGreaterThan(0)
+      expect(res.body.lots).toEqual(res.body.data)
+    })
+
+    it('should respect pagination parameters', async () => {
+      const res = await request(app)
+        .get(`/api/lots?projectId=${projectId}&page=1&limit=5`)
+        .set('Authorization', `Bearer ${authToken}`)
+
+      expect(res.status).toBe(200)
+      expect(res.body.pagination.page).toBe(1)
+      expect(res.body.pagination.limit).toBe(5)
+      expect(res.body.data.length).toBeLessThanOrEqual(5)
     })
 
     it('should require projectId query param', async () => {
@@ -205,7 +228,7 @@ describe('Lots API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(200)
-      for (const lot of res.body.lots) {
+      for (const lot of res.body.data) {
         expect(lot.status).toBe('not_started')
       }
     })

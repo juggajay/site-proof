@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
 import { sendNotificationIfEnabled } from './notifications.js'
+import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pagination.js'
 
 // Zod schemas for request body validation
 const createDocketSchema = z.object({
@@ -82,6 +83,10 @@ docketsRouter.get('/', async (req, res) => {
       })
     }
 
+    // Parse pagination parameters
+    const { page, limit, sortBy, sortOrder } = parsePagination(req.query)
+    const { skip, take } = getPrismaSkipTake(page, limit)
+
     const whereClause: any = { projectId: projectId as string }
 
     // Filter by status if provided
@@ -98,43 +103,48 @@ docketsRouter.get('/', async (req, res) => {
       if (subcontractorUser) {
         whereClause.subcontractorCompanyId = subcontractorUser.subcontractorCompanyId
       } else {
-        return res.json({ dockets: [] })
+        return res.json({ data: [], dockets: [], pagination: getPaginationMeta(0, page, limit) })
       }
     }
 
-    const dockets = await prisma.dailyDocket.findMany({
-      where: whereClause,
-      include: {
-        subcontractorCompany: {
-          select: {
-            id: true,
-            companyName: true,
-          }
-        },
-        labourEntries: {
-          include: {
-            employee: {
-              select: {
-                id: true,
-                name: true,
+    const [dockets, total] = await Promise.all([
+      prisma.dailyDocket.findMany({
+        where: whereClause,
+        skip,
+        take,
+        include: {
+          subcontractorCompany: {
+            select: {
+              id: true,
+              companyName: true,
+            }
+          },
+          labourEntries: {
+            include: {
+              employee: {
+                select: {
+                  id: true,
+                  name: true,
+                }
               }
             }
-          }
-        },
-        plantEntries: {
-          include: {
-            plant: {
-              select: {
-                id: true,
-                type: true,
-                description: true,
+          },
+          plantEntries: {
+            include: {
+              plant: {
+                select: {
+                  id: true,
+                  type: true,
+                  description: true,
+                }
               }
             }
-          }
+          },
         },
-      },
-      orderBy: { date: 'desc' },
-    })
+        orderBy: sortBy ? { [sortBy]: sortOrder } : { date: 'desc' },
+      }),
+      prisma.dailyDocket.count({ where: whereClause })
+    ])
 
     // Format dockets for response
     const formattedDockets = dockets.map(docket => ({
@@ -160,7 +170,11 @@ docketsRouter.get('/', async (req, res) => {
       foremanNotes: docket.foremanNotes,
     }))
 
-    res.json({ dockets: formattedDockets })
+    res.json({
+      data: formattedDockets,
+      pagination: getPaginationMeta(total, page, limit),
+      dockets: formattedDockets  // Backward compatibility
+    })
   } catch (error) {
     console.error('Get dockets error:', error)
     res.status(500).json({ error: 'Internal server error' })

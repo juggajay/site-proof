@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { type AuthUser } from '../lib/auth.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pagination.js'
 
 // Zod schemas for request validation
 const createNcrSchema = z.object({
@@ -79,6 +80,8 @@ ncrsRouter.get('/', requireAuth, async (req: any, res) => {
   try {
     const user = req.user as AuthUser
     const { projectId, status, severity, lotId } = req.query
+    const { page, limit, sortBy, sortOrder } = parsePagination(req.query)
+    const { skip, take } = getPrismaSkipTake(page, limit)
 
     // Get user details to check role
     const userDetails = await prisma.user.findUnique({
@@ -174,23 +177,32 @@ ncrsRouter.get('/', requireAuth, async (req: any, res) => {
       }
     }
 
-    const ncrs = await prisma.nCR.findMany({
-      where,
-      include: {
-        project: { select: { name: true, projectNumber: true } },
-        raisedBy: { select: { fullName: true, email: true } },
-        responsibleUser: { select: { fullName: true, email: true } },
-        ncrLots: {
-          include: {
-            lot: { select: { lotNumber: true, description: true } },
+    const [ncrs, total] = await Promise.all([
+      prisma.nCR.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          project: { select: { name: true, projectNumber: true } },
+          raisedBy: { select: { fullName: true, email: true } },
+          responsibleUser: { select: { fullName: true, email: true } },
+          ncrLots: {
+            include: {
+              lot: { select: { lotNumber: true, description: true } },
+            },
           },
+          qmApprovedBy: { select: { fullName: true, email: true } },
         },
-        qmApprovedBy: { select: { fullName: true, email: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+        orderBy: sortBy ? { [sortBy]: sortOrder } : { createdAt: 'desc' },
+      }),
+      prisma.nCR.count({ where })
+    ])
 
-    res.json({ ncrs })
+    res.json({
+      data: ncrs,
+      pagination: getPaginationMeta(total, page, limit),
+      ncrs  // Backward compatibility
+    })
   } catch (error) {
     console.error('List NCRs error:', error)
     res.status(500).json({ message: 'Internal server error' })
