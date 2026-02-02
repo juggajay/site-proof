@@ -385,6 +385,26 @@ lotsRouter.post('/', async (req, res) => {
       }
     }
 
+    // If a subcontractor is assigned, also create a LotSubcontractorAssignment record
+    // This ensures the new assignment system recognizes legacy assignments
+    if (assignedSubcontractorId) {
+      try {
+        await prisma.lotSubcontractorAssignment.create({
+          data: {
+            lotId: lot.id,
+            subcontractorCompanyId: assignedSubcontractorId,
+            projectId,
+            canCompleteITP: false,
+            itpRequiresVerification: true,
+            assignedById: user.id,
+          },
+        })
+      } catch (assignmentError) {
+        console.error('Failed to create subcontractor assignment:', assignmentError)
+        // Don't fail the lot creation if assignment fails
+      }
+    }
+
     res.status(201).json({ lot })
   } catch (error: any) {
     console.error('Create lot error:', error)

@@ -70,7 +70,7 @@ export function AssignSubcontractorModal({
     queryKey: ['subcontractors', projectId],
     queryFn: async () => {
       const response = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(
-        `/api/subcontractors?projectId=${projectId}`
+        `/api/subcontractors/for-project/${projectId}`
       )
       return response.subcontractors.filter(s => s.status === 'approved')
     },
