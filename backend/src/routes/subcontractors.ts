@@ -360,6 +360,22 @@ subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
       console.log(`[Subcontractors] Project found: ${project.name}`)
     }
 
+    // DEBUG: Show ALL subcontractor companies to see what projectIds they have
+    const allSubcontractors = await prisma.subcontractorCompany.findMany({
+      select: {
+        id: true,
+        companyName: true,
+        status: true,
+        projectId: true,
+        project: { select: { name: true } }
+      },
+      orderBy: { companyName: 'asc' }
+    })
+    console.log(`[Subcontractors] ALL subcontractors in database:`)
+    allSubcontractors.forEach(s => {
+      console.log(`  - ${s.companyName} (status: ${s.status}, projectId: ${s.projectId}, project: ${s.project?.name || 'unknown'})`)
+    })
+
     // Get all subcontractor companies associated with this project
     const subcontractors = await prisma.subcontractorCompany.findMany({
       where: {
