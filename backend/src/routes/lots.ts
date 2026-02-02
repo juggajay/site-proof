@@ -1,7 +1,145 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js'
+
+// ============================================================================
+// Zod Validation Schemas
+// ============================================================================
+
+// Valid lot statuses
+const validStatuses = [
+  'not_started', 'in_progress', 'awaiting_test',
+  'hold_point', 'ncr_raised', 'completed'
+] as const
+
+// Valid lot types
+const validLotTypes = ['chainage', 'area', 'structure'] as const
+
+// Schema for creating a lot
+const createLotSchema = z.object({
+  projectId: z.string().min(1, 'projectId is required'),
+  lotNumber: z.string().min(1, 'lotNumber is required'),
+  description: z.string().optional().nullable(),
+  activityType: z.string().optional(),
+  chainageStart: z.number().optional().nullable(),
+  chainageEnd: z.number().optional().nullable(),
+  lotType: z.enum(validLotTypes).optional(),
+  itpTemplateId: z.string().optional().nullable(),
+  assignedSubcontractorId: z.string().optional().nullable(),
+  areaZone: z.string().optional().nullable(),
+  structureId: z.string().optional().nullable(),
+  structureElement: z.string().optional().nullable(),
+  canCompleteITP: z.boolean().optional(),
+  itpRequiresVerification: z.boolean().optional(),
+})
+
+// Schema for bulk creating lots
+const bulkCreateLotsSchema = z.object({
+  projectId: z.string().min(1, 'projectId is required'),
+  lots: z.array(z.object({
+    lotNumber: z.string().min(1, 'Each lot must have a lotNumber'),
+    description: z.string().optional().nullable(),
+    activityType: z.string().optional(),
+    lotType: z.enum(validLotTypes).optional(),
+    chainageStart: z.number().optional().nullable(),
+    chainageEnd: z.number().optional().nullable(),
+    layer: z.string().optional().nullable(),
+  })).min(1, 'lots array is required and must not be empty'),
+})
+
+// Schema for cloning a lot
+const cloneLotSchema = z.object({
+  lotNumber: z.string().optional(),
+  chainageStart: z.number().optional().nullable(),
+  chainageEnd: z.number().optional().nullable(),
+})
+
+// Schema for updating a lot
+const updateLotSchema = z.object({
+  lotNumber: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  activityType: z.string().optional(),
+  chainageStart: z.number().optional().nullable(),
+  chainageEnd: z.number().optional().nullable(),
+  offset: z.string().optional().nullable(),
+  offsetCustom: z.string().optional().nullable(),
+  layer: z.string().optional().nullable(),
+  areaZone: z.string().optional().nullable(),
+  lotType: z.enum(validLotTypes).optional(),
+  structureId: z.string().optional().nullable(),
+  structureElement: z.string().optional().nullable(),
+  status: z.string().optional(),
+  budgetAmount: z.number().optional().nullable(),
+  assignedSubcontractorId: z.string().optional().nullable(),
+  expectedUpdatedAt: z.string().optional(), // For optimistic locking
+})
+
+// Schema for bulk delete
+const bulkDeleteSchema = z.object({
+  lotIds: z.array(z.string()).min(1, 'lotIds array is required and must not be empty'),
+})
+
+// Schema for bulk update status
+const bulkUpdateStatusSchema = z.object({
+  lotIds: z.array(z.string()).min(1, 'lotIds array is required and must not be empty'),
+  status: z.enum(validStatuses, {
+    errorMap: () => ({ message: `status must be one of: ${validStatuses.join(', ')}` })
+  }),
+})
+
+// Schema for bulk assign subcontractor
+const bulkAssignSubcontractorSchema = z.object({
+  lotIds: z.array(z.string()).min(1, 'lotIds array is required and must not be empty'),
+  subcontractorId: z.string().nullable().optional(),
+})
+
+// Schema for assigning subcontractor to lot
+const assignSubcontractorSchema = z.object({
+  subcontractorId: z.string().nullable().optional(),
+})
+
+// Schema for conforming a lot
+const conformLotSchema = z.object({
+  force: z.boolean().optional(),
+})
+
+// Schema for overriding status
+const overrideStatusSchema = z.object({
+  status: z.enum(validStatuses, {
+    errorMap: () => ({ message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` })
+  }),
+  reason: z.string().min(5, 'Reason must be at least 5 characters'),
+})
+
+// Schema for creating subcontractor assignment
+const createSubcontractorAssignmentSchema = z.object({
+  subcontractorCompanyId: z.string().min(1, 'subcontractorCompanyId is required'),
+  canCompleteITP: z.boolean().optional(),
+  itpRequiresVerification: z.boolean().optional(),
+})
+
+// Schema for updating subcontractor assignment
+const updateSubcontractorAssignmentSchema = z.object({
+  canCompleteITP: z.boolean().optional(),
+  itpRequiresVerification: z.boolean().optional(),
+})
+
+// Helper function to format Zod validation errors for consistent API responses
+function formatValidationError(error: z.ZodError) {
+  const messages = error.issues.map(issue => {
+    const path = issue.path.join('.')
+    // Lowercase the message for backward compatibility with existing tests
+    const message = issue.message.toLowerCase()
+    return path ? `${path}: ${message}` : message
+  })
+  return {
+    error: 'Validation failed',
+    message: messages.join('; '),
+    details: error.issues
+  }
+}
 
 export const lotsRouter = Router()
 
@@ -376,14 +514,13 @@ lotsRouter.get('/:id', async (req, res) => {
 lotsRouter.post('/', async (req, res) => {
   try {
     const user = req.user!
-    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType, itpTemplateId, assignedSubcontractorId, areaZone, canCompleteITP, itpRequiresVerification } = req.body
 
-    if (!projectId || !lotNumber) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId and lotNumber are required'
-      })
+    // Validate request body
+    const validation = createLotSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
     }
+    const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType, itpTemplateId, assignedSubcontractorId, areaZone, canCompleteITP, itpRequiresVerification } = validation.data
 
     // Feature #853: Area zone required for area lot type
     if (lotType === 'area' && !areaZone) {
@@ -509,24 +646,12 @@ lotsRouter.post('/', async (req, res) => {
 // POST /api/lots/bulk - Bulk create lots (requires creator role)
 lotsRouter.post('/bulk', requireRole(LOT_CREATORS), async (req, res) => {
   try {
-    const { projectId, lots: lotsData } = req.body
-
-    if (!projectId || !lotsData || !Array.isArray(lotsData) || lotsData.length === 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId and lots array are required'
-      })
+    // Validate request body
+    const validation = bulkCreateLotsSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
     }
-
-    // Validate all lots have required fields
-    for (const lot of lotsData) {
-      if (!lot.lotNumber) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Each lot must have a lotNumber'
-        })
-      }
-    }
+    const { projectId, lots: lotsData } = validation.data
 
     // Create all lots in a transaction
     const createdLots = await prisma.$transaction(
@@ -571,7 +696,13 @@ lotsRouter.post('/bulk', requireRole(LOT_CREATORS), async (req, res) => {
 lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), async (req, res) => {
   try {
     const { id } = req.params
-    const { lotNumber, chainageStart, chainageEnd } = req.body
+
+    // Validate request body
+    const validation = cloneLotSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
+    }
+    const { lotNumber, chainageStart, chainageEnd } = validation.data
 
     // Get the original lot
     const sourceLot = await prisma.lot.findUnique({
@@ -603,7 +734,7 @@ lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), async (req, res) => {
 
     if (suggestedChainageStart === undefined && sourceLot.chainageEnd !== null) {
       // Suggest next section starting from where the original ended
-      suggestedChainageStart = sourceLot.chainageEnd
+      suggestedChainageStart = Number(sourceLot.chainageEnd)
       if (sourceLot.chainageStart !== null) {
         const sectionLength = Number(sourceLot.chainageEnd) - Number(sourceLot.chainageStart)
         suggestedChainageEnd = Number(suggestedChainageStart) + sectionLength
@@ -686,6 +817,12 @@ lotsRouter.patch('/:id', async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
+    // Validate request body
+    const validation = updateLotSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
+    }
+
     const lot = await prisma.lot.findUnique({
       where: { id },
       select: {
@@ -746,7 +883,7 @@ lotsRouter.patch('/:id', async (req, res) => {
       }
     }
 
-    // Extract allowed fields from request body
+    // Extract validated fields
     const {
       lotNumber,
       description,
@@ -760,13 +897,16 @@ lotsRouter.patch('/:id', async (req, res) => {
       status,
       budgetAmount,
       assignedSubcontractorId,
-    } = req.body
+      lotType: validatedLotType,
+      structureId: validatedStructureId,
+      structureElement: validatedStructureElement,
+    } = validation.data
 
     // Feature #853 & #854: Validate area zone and structure ID for respective lot types
     const existingLot = await prisma.lot.findUnique({ where: { id }, select: { lotType: true, areaZone: true, structureId: true } })
-    const newLotType = req.body.lotType ?? existingLot?.lotType
+    const newLotType = validatedLotType ?? existingLot?.lotType
     const newAreaZone = areaZone ?? existingLot?.areaZone
-    const newStructureId = req.body.structureId ?? existingLot?.structureId
+    const newStructureId = validatedStructureId ?? existingLot?.structureId
 
     if (newLotType === 'area' && !newAreaZone) {
       return res.status(400).json({
@@ -787,7 +927,7 @@ lotsRouter.patch('/:id', async (req, res) => {
 
     // Build update data - only include fields that were provided
     const updateData: any = {}
-    if (req.body.lotType !== undefined) updateData.lotType = req.body.lotType
+    if (validatedLotType !== undefined) updateData.lotType = validatedLotType
     if (lotNumber !== undefined) updateData.lotNumber = lotNumber
     if (description !== undefined) updateData.description = description
     if (activityType !== undefined) updateData.activityType = activityType
@@ -797,8 +937,8 @@ lotsRouter.patch('/:id', async (req, res) => {
     if (offsetCustom !== undefined) updateData.offsetCustom = offsetCustom
     if (layer !== undefined) updateData.layer = layer
     if (areaZone !== undefined) updateData.areaZone = areaZone
-    if (req.body.structureId !== undefined) updateData.structureId = req.body.structureId  // Feature #854
-    if (req.body.structureElement !== undefined) updateData.structureElement = req.body.structureElement  // Feature #854
+    if (validatedStructureId !== undefined) updateData.structureId = validatedStructureId  // Feature #854
+    if (validatedStructureElement !== undefined) updateData.structureElement = validatedStructureElement  // Feature #854
     if (status !== undefined) updateData.status = status
     // Only PMs and above can set budget
     if (budgetAmount !== undefined && ['owner', 'admin', 'project_manager'].includes(userProjectRole)) {
@@ -965,14 +1105,12 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
 // POST /api/lots/bulk-delete - Bulk delete lots (requires deleter role)
 lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
   try {
-    const { lotIds } = req.body
-
-    if (!lotIds || !Array.isArray(lotIds) || lotIds.length === 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'lotIds array is required and must not be empty'
-      })
+    // Validate request body
+    const validation = bulkDeleteSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
     }
+    const { lotIds } = validation.data
 
     // Check that lots exist and can be deleted (not conformed or claimed)
     const lotsToDelete = await prisma.lot.findMany({
@@ -1038,27 +1176,12 @@ lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
 // POST /api/lots/bulk-update-status - Bulk update lot status (requires creator role)
 lotsRouter.post('/bulk-update-status', requireRole(LOT_CREATORS), async (req, res) => {
   try {
-    const { lotIds, status } = req.body
-
-    if (!lotIds || !Array.isArray(lotIds) || lotIds.length === 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'lotIds array is required and must not be empty'
-      })
+    // Validate request body
+    const validation = bulkUpdateStatusSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
     }
-
-    // Valid statuses
-    const validStatuses = [
-      'not_started', 'in_progress', 'awaiting_test',
-      'hold_point', 'ncr_raised', 'completed'
-    ]
-
-    if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `status must be one of: ${validStatuses.join(', ')}`
-      })
-    }
+    const { lotIds, status } = validation.data
 
     // Check that lots exist and can be updated (not conformed or claimed)
     const lotsToUpdate = await prisma.lot.findMany({
@@ -1109,14 +1232,12 @@ lotsRouter.post('/bulk-update-status', requireRole(LOT_CREATORS), async (req, re
 // POST /api/lots/bulk-assign-subcontractor - Bulk assign lots to subcontractor (requires creator role)
 lotsRouter.post('/bulk-assign-subcontractor', requireRole(LOT_CREATORS), async (req, res) => {
   try {
-    const { lotIds, subcontractorId } = req.body
-
-    if (!lotIds || !Array.isArray(lotIds) || lotIds.length === 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'lotIds array is required and must not be empty'
-      })
+    // Validate request body
+    const validation = bulkAssignSubcontractorSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
     }
+    const { lotIds, subcontractorId } = validation.data
 
     // subcontractorId can be null (to unassign) or a valid ID
     if (subcontractorId !== null && subcontractorId !== undefined) {
@@ -1186,7 +1307,13 @@ lotsRouter.post('/:id/assign', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { subcontractorId } = req.body
+
+    // Validate request body
+    const validation = assignSubcontractorSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
+    }
+    const { subcontractorId } = validation.data
 
     // Get the lot with project info
     const lot = await prisma.lot.findUnique({
@@ -1400,7 +1527,13 @@ lotsRouter.post('/:id/conform', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { force } = req.body // Optional force parameter to skip prerequisite check
+
+    // Validate request body
+    const validation = conformLotSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
+    }
+    const { force } = validation.data // Optional force parameter to skip prerequisite check
 
     // Check conformance prerequisites first
     const conformStatus = await checkConformancePrerequisites(id)
@@ -1479,40 +1612,18 @@ lotsRouter.post('/:id/conform', async (req, res) => {
 // Roles that can override lot status
 const STATUS_OVERRIDERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 
-// Valid lot statuses for override
-const VALID_STATUSES = [
-  'not_started', 'in_progress', 'awaiting_test',
-  'hold_point', 'ncr_raised', 'completed'
-]
-
 // POST /api/lots/:id/override-status - Manual status override with reason (Feature #159)
 lotsRouter.post('/:id/override-status', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { status, reason } = req.body
 
-    // Validate inputs
-    if (!status || !reason) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Both status and reason are required'
-      })
+    // Validate request body
+    const validation = overrideStatusSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
     }
-
-    if (typeof reason !== 'string' || reason.trim().length < 5) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Reason must be at least 5 characters'
-      })
-    }
-
-    if (!VALID_STATUSES.includes(status)) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`
-      })
-    }
+    const { status, reason } = validation.data
 
     // Get the lot
     const lot = await prisma.lot.findUnique({
@@ -1631,11 +1742,13 @@ lotsRouter.post('/:id/subcontractors', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { subcontractorCompanyId, canCompleteITP, itpRequiresVerification } = req.body
 
-    if (!subcontractorCompanyId) {
-      return res.status(400).json({ error: 'subcontractorCompanyId is required' })
+    // Validate request body
+    const validation = createSubcontractorAssignmentSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
     }
+    const { subcontractorCompanyId, canCompleteITP, itpRequiresVerification } = validation.data
 
     // Get the lot to verify access and get projectId
     const lot = await prisma.lot.findUnique({
@@ -1708,7 +1821,13 @@ lotsRouter.patch('/:id/subcontractors/:assignmentId', async (req, res) => {
   try {
     const { id, assignmentId } = req.params
     const user = req.user!
-    const { canCompleteITP, itpRequiresVerification } = req.body
+
+    // Validate request body
+    const validation = updateSubcontractorAssignmentSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json(formatValidationError(validation.error))
+    }
+    const { canCompleteITP, itpRequiresVerification } = validation.data
 
     // Get the lot to verify access
     const lot = await prisma.lot.findUnique({

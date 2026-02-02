@@ -1,9 +1,93 @@
 // Feature #592 trigger - ITP instance snapshot from template
 // Feature #175 - Auto-notification before witness point
 import { Router } from 'express'
+import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { type AuthUser } from '../lib/auth.js'
+
+// ============== Zod Schemas ==============
+
+// Checklist item schema (used in template creation/update)
+const checklistItemSchema = z.object({
+  description: z.string().min(1),
+  pointType: z.string().optional(),
+  isHoldPoint: z.boolean().optional(),
+  category: z.string().optional(),
+  responsibleParty: z.string().optional(),
+  evidenceRequired: z.string().optional(),
+  acceptanceCriteria: z.string().optional().nullable(),
+  testType: z.string().optional().nullable()
+})
+
+// POST /templates - Create ITP template
+const createTemplateSchema = z.object({
+  projectId: z.string().uuid(),
+  name: z.string().min(1),
+  description: z.string().optional().nullable(),
+  activityType: z.string().min(1),
+  checklistItems: z.array(checklistItemSchema).optional()
+})
+
+// POST /templates/:id/clone - Clone template
+const cloneTemplateSchema = z.object({
+  projectId: z.string().uuid().optional(),
+  name: z.string().optional()
+})
+
+// PATCH /templates/:id - Update template
+const updateTemplateSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  activityType: z.string().optional(),
+  checklistItems: z.array(checklistItemSchema).optional(),
+  isActive: z.boolean().optional()
+})
+
+// POST /templates/:id/propagate - Propagate template changes
+const propagateTemplateSchema = z.object({
+  instanceIds: z.array(z.string().uuid()).min(1, 'instanceIds array is required')
+})
+
+// POST /instances - Create ITP instance (assign to lot)
+const createInstanceSchema = z.object({
+  lotId: z.string().uuid(),
+  templateId: z.string().uuid()
+})
+
+// POST /completions - Complete/update checklist item
+const createCompletionSchema = z.object({
+  itpInstanceId: z.string().uuid(),
+  checklistItemId: z.string().uuid(),
+  isCompleted: z.boolean().optional(),
+  notes: z.string().optional().nullable(),
+  status: z.enum(['pending', 'completed', 'not_applicable', 'failed']).optional(),
+  // NCR details for failed status
+  ncrDescription: z.string().optional(),
+  ncrCategory: z.string().optional(),
+  ncrSeverity: z.enum(['minor', 'major', 'critical']).optional(),
+  // Witness point details
+  witnessPresent: z.boolean().optional(),
+  witnessName: z.string().optional().nullable(),
+  witnessCompany: z.string().optional().nullable(),
+  // Feature #463: Signature capture
+  signatureDataUrl: z.string().optional().nullable()
+})
+
+// POST /completions/:id/reject - Reject completion
+const rejectCompletionSchema = z.object({
+  reason: z.string().min(1, 'Rejection reason is required')
+})
+
+// POST /completions/:completionId/attachments - Add attachment
+const addAttachmentSchema = z.object({
+  filename: z.string().min(1),
+  fileUrl: z.string().min(1),
+  caption: z.string().optional(),
+  gpsLatitude: z.union([z.string(), z.number()]).optional(),
+  gpsLongitude: z.union([z.string(), z.number()]).optional(),
+  mimeType: z.string().optional()
+})
 
 const itpRouter = Router()
 
@@ -477,11 +561,11 @@ itpRouter.get('/templates/:id', requireAuth, async (req: any, res) => {
 // Create ITP template
 itpRouter.post('/templates', requireAuth, async (req: any, res) => {
   try {
-    const { projectId, name, description, activityType, checklistItems } = req.body
-
-    if (!projectId || !name || !activityType) {
-      return res.status(400).json({ error: 'projectId, name, and activityType are required' })
+    const parseResult = createTemplateSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Invalid request body' })
     }
+    const { projectId, name, description, activityType, checklistItems } = parseResult.data
 
     const template = await prisma.iTPTemplate.create({
       data: {
@@ -535,7 +619,11 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
 itpRouter.post('/templates/:id/clone', requireAuth, async (req: any, res) => {
   try {
     const { id } = req.params
-    const { projectId, name } = req.body
+    const parseResult = cloneTemplateSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Invalid request body' })
+    }
+    const { projectId, name } = parseResult.data
 
     // Get the source template with all checklist items
     const sourceTemplate = await prisma.iTPTemplate.findUnique({
@@ -608,7 +696,11 @@ itpRouter.post('/templates/:id/clone', requireAuth, async (req: any, res) => {
 itpRouter.patch('/templates/:id', requireAuth, async (req: any, res) => {
   try {
     const { id } = req.params
-    const { name, description, activityType, checklistItems, isActive } = req.body
+    const parseResult = updateTemplateSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Invalid request body' })
+    }
+    const { name, description, activityType, checklistItems, isActive } = parseResult.data
 
     // First, delete existing checklist items and recreate (simplest approach)
     if (checklistItems) {
@@ -883,11 +975,11 @@ itpRouter.post('/templates/:id/restore', requireAuth, async (req: any, res) => {
 itpRouter.post('/templates/:id/propagate', requireAuth, async (req: any, res) => {
   try {
     const { id } = req.params
-    const { instanceIds } = req.body
-
-    if (!instanceIds || !Array.isArray(instanceIds) || instanceIds.length === 0) {
-      return res.status(400).json({ error: 'instanceIds array is required' })
+    const parseResult = propagateTemplateSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'instanceIds array is required' })
     }
+    const { instanceIds } = parseResult.data
 
     // Get the current template state
     const template = await prisma.iTPTemplate.findUnique({
@@ -946,11 +1038,11 @@ itpRouter.post('/templates/:id/propagate', requireAuth, async (req: any, res) =>
 // Assign ITP template to lot (create ITP instance)
 itpRouter.post('/instances', requireAuth, async (req: any, res) => {
   try {
-    const { lotId, templateId } = req.body
-
-    if (!lotId || !templateId) {
-      return res.status(400).json({ error: 'lotId and templateId are required' })
+    const parseResult = createInstanceSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'lotId and templateId are required' })
     }
+    const { lotId, templateId } = parseResult.data
 
     // Check if lot already has an ITP instance
     const existingInstance = await prisma.iTPInstance.findUnique({
@@ -1172,6 +1264,10 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
 itpRouter.post('/completions', requireAuth, async (req: any, res) => {
   try {
     const user = req.user as AuthUser
+    const parseResult = createCompletionSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'itpInstanceId and checklistItemId are required' })
+    }
     const {
       itpInstanceId,
       checklistItemId,
@@ -1188,11 +1284,7 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
       witnessCompany,
       // Feature #463: Signature capture
       signatureDataUrl
-    } = req.body
-
-    if (!itpInstanceId || !checklistItemId) {
-      return res.status(400).json({ error: 'itpInstanceId and checklistItemId are required' })
-    }
+    } = parseResult.data
 
     // Validate N/A status requires a reason
     if (directStatus === 'not_applicable' && !notes?.trim()) {
@@ -1598,11 +1690,11 @@ itpRouter.post('/completions/:id/reject', requireAuth, async (req: any, res) => 
   try {
     const user = req.user as AuthUser
     const { id } = req.params
-    const { reason } = req.body
-
-    if (!reason || !reason.trim()) {
-      return res.status(400).json({ error: 'Rejection reason is required' })
+    const parseResult = rejectCompletionSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Rejection reason is required' })
     }
+    const { reason } = parseResult.data
 
     const completion = await prisma.iTPCompletion.update({
       where: { id },
@@ -1752,14 +1844,14 @@ itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req
   try {
     const user = req.user as AuthUser
     const { completionId } = req.params
-    const { filename, fileUrl, caption, gpsLatitude, gpsLongitude, mimeType } = req.body
-
-    if (!filename || !fileUrl) {
-      return res.status(400).json({ error: 'filename and fileUrl are required' })
+    const parseResult = addAttachmentSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'filename and fileUrl are required' })
     }
+    const { filename, fileUrl, caption, gpsLatitude, gpsLongitude, mimeType } = parseResult.data
 
     // Determine mimeType from various sources
-    let determinedMimeType = mimeType
+    let determinedMimeType: string | null = mimeType || null
     if (!determinedMimeType) {
       // Try to extract from base64 data URL
       const dataUrlMatch = fileUrl.match(/^data:([^;]+);base64,/)
@@ -1826,8 +1918,8 @@ itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req
         mimeType: determinedMimeType,
         uploadedById: user.userId,
         caption: caption || `ITP Evidence: ${completion.checklistItem.description}`,
-        gpsLatitude: gpsLatitude ? parseFloat(gpsLatitude) : null,
-        gpsLongitude: gpsLongitude ? parseFloat(gpsLongitude) : null
+        gpsLatitude: gpsLatitude ? parseFloat(String(gpsLatitude)) : null,
+        gpsLongitude: gpsLongitude ? parseFloat(String(gpsLongitude)) : null
       }
     })
 

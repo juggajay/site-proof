@@ -1,7 +1,76 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { type AuthUser } from '../lib/auth.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+
+// Zod schemas for request validation
+const createNcrSchema = z.object({
+  projectId: z.string().min(1, 'Project ID is required'),
+  description: z.string().min(1, 'Description is required'),
+  specificationReference: z.string().optional(),
+  category: z.string().min(1, 'Category is required'),
+  severity: z.enum(['minor', 'major']).optional(),
+  responsibleUserId: z.string().optional(),
+  dueDate: z.string().optional(),
+  lotIds: z.array(z.string()).optional(),
+})
+
+const updateNcrSchema = z.object({
+  responsibleUserId: z.string().nullable().optional(),
+  comments: z.string().optional(),
+})
+
+const respondNcrSchema = z.object({
+  rootCauseCategory: z.string().optional(),
+  rootCauseDescription: z.string().optional(),
+  proposedCorrectiveAction: z.string().optional(),
+})
+
+const qmReviewSchema = z.object({
+  action: z.enum(['accept', 'request_revision']),
+  comments: z.string().optional(),
+})
+
+const rectifyNcrSchema = z.object({
+  rectificationNotes: z.string().optional(),
+})
+
+const rejectRectificationSchema = z.object({
+  feedback: z.string().min(1, 'Feedback is required when rejecting rectification'),
+})
+
+const closeNcrSchema = z.object({
+  verificationNotes: z.string().optional(),
+  lessonsLearned: z.string().optional(),
+  withConcession: z.boolean().optional(),
+  concessionJustification: z.string().optional(),
+  concessionRiskAssessment: z.string().optional(),
+})
+
+const notifyClientSchema = z.object({
+  recipientEmail: z.string().email().optional(),
+  additionalMessage: z.string().optional(),
+})
+
+const reopenNcrSchema = z.object({
+  reason: z.string().optional(),
+})
+
+const addEvidenceSchema = z.object({
+  documentId: z.string().optional(),
+  evidenceType: z.string().optional(),
+  filename: z.string().optional(),
+  fileUrl: z.string().optional(),
+  fileSize: z.number().optional(),
+  mimeType: z.string().optional(),
+  caption: z.string().optional(),
+  projectId: z.string().optional(),
+})
+
+const submitForVerificationSchema = z.object({
+  rectificationNotes: z.string().optional(),
+})
 
 export const ncrsRouter = Router()
 
@@ -182,6 +251,14 @@ ncrsRouter.get('/:id', requireAuth, async (req: any, res) => {
 // POST /api/ncrs - Create new NCR
 ncrsRouter.post('/', requireAuth, async (req: any, res) => {
   try {
+    const validation = createNcrSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const user = req.user as AuthUser
     const {
       projectId,
@@ -192,11 +269,7 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
       responsibleUserId,
       dueDate,
       lotIds,
-    } = req.body
-
-    if (!projectId || !description || !category) {
-      return res.status(400).json({ message: 'Project ID, description, and category are required' })
-    }
+    } = validation.data
 
     // Check project access
     const hasAccess = await prisma.projectUser.findFirst({
@@ -325,9 +398,17 @@ ncrsRouter.post('/', requireAuth, async (req: any, res) => {
 // Feature #636: PATCH /api/ncrs/:id - Update NCR (including redirect to different responsible party)
 ncrsRouter.patch('/:id', requireAuth, async (req: any, res) => {
   try {
+    const validation = updateNcrSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     // Note: user authenticated via requireAuth middleware
     const { id } = req.params
-    const { responsibleUserId, comments } = req.body
+    const { responsibleUserId, comments } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -400,9 +481,17 @@ ncrsRouter.patch('/:id', requireAuth, async (req: any, res) => {
 // POST /api/ncrs/:id/respond - Submit response to NCR
 ncrsRouter.post('/:id/respond', requireAuth, async (req: any, res) => {
   try {
+    const validation = respondNcrSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     // Note: user authenticated via requireAuth middleware
     const { id } = req.params
-    const { rootCauseCategory, rootCauseDescription, proposedCorrectiveAction } = req.body
+    const { rootCauseCategory, rootCauseDescription, proposedCorrectiveAction } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -437,13 +526,17 @@ ncrsRouter.post('/:id/respond', requireAuth, async (req: any, res) => {
 // Feature #215: POST /api/ncrs/:id/qm-review - QM reviews the NCR response
 ncrsRouter.post('/:id/qm-review', requireAuth, async (req: any, res) => {
   try {
+    const validation = qmReviewSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const user = req.user as AuthUser
     const { id } = req.params
-    const { action, comments } = req.body // action: 'accept' or 'request_revision'
-
-    if (!action || !['accept', 'request_revision'].includes(action)) {
-      return res.status(400).json({ message: 'Action must be "accept" or "request_revision"' })
-    }
+    const { action, comments } = validation.data // action: 'accept' or 'request_revision'
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -567,8 +660,16 @@ ncrsRouter.post('/:id/qm-review', requireAuth, async (req: any, res) => {
 // POST /api/ncrs/:id/rectify - Submit rectification evidence
 ncrsRouter.post('/:id/rectify', requireAuth, async (req: any, res) => {
   try {
+    const validation = rectifyNcrSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const { id } = req.params
-    const { rectificationNotes } = req.body
+    const { rectificationNotes } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -601,13 +702,17 @@ ncrsRouter.post('/:id/rectify', requireAuth, async (req: any, res) => {
 // Feature #218: POST /api/ncrs/:id/reject-rectification - Reject rectification and return to RECTIFICATION status
 ncrsRouter.post('/:id/reject-rectification', requireAuth, async (req: any, res) => {
   try {
+    const validation = rejectRectificationSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const user = req.user as AuthUser
     const { id } = req.params
-    const { feedback } = req.body
-
-    if (!feedback || feedback.trim().length === 0) {
-      return res.status(400).json({ message: 'Feedback is required when rejecting rectification' })
-    }
+    const { feedback } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -761,9 +866,17 @@ ncrsRouter.post('/:id/qm-approve', requireAuth, async (req: any, res) => {
 // POST /api/ncrs/:id/close - Close NCR (requires QM approval for major NCRs)
 ncrsRouter.post('/:id/close', requireAuth, async (req: any, res) => {
   try {
+    const validation = closeNcrSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const user = req.user as AuthUser
     const { id } = req.params
-    const { verificationNotes, lessonsLearned, withConcession, concessionJustification, concessionRiskAssessment } = req.body
+    const { verificationNotes, lessonsLearned, withConcession, concessionJustification, concessionRiskAssessment } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -867,9 +980,17 @@ ncrsRouter.post('/:id/close', requireAuth, async (req: any, res) => {
 // Feature #213: POST /api/ncrs/:id/notify-client - Notify client about major NCR
 ncrsRouter.post('/:id/notify-client', requireAuth, async (req: any, res) => {
   try {
+    const validation = notifyClientSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const user = req.user as AuthUser
     const { id } = req.params
-    const { recipientEmail, additionalMessage } = req.body
+    const { recipientEmail, additionalMessage } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -993,9 +1114,17 @@ ncrsRouter.post('/:id/notify-client', requireAuth, async (req: any, res) => {
 // POST /api/ncrs/:id/reopen - Reopen a closed NCR
 ncrsRouter.post('/:id/reopen', requireAuth, async (req: any, res) => {
   try {
+    const validation = reopenNcrSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const user = req.user as AuthUser
     const { id } = req.params
-    const { reason } = req.body
+    const { reason } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -1047,9 +1176,17 @@ ncrsRouter.post('/:id/reopen', requireAuth, async (req: any, res) => {
 // POST /api/ncrs/:id/evidence - Add evidence to NCR
 ncrsRouter.post('/:id/evidence', requireAuth, async (req: any, res) => {
   try {
+    const validation = addEvidenceSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const user = req.user as AuthUser
     const { id } = req.params
-    const { documentId, evidenceType, filename, fileUrl, fileSize, mimeType, caption, projectId: _providedProjectId } = req.body
+    const { documentId, evidenceType, filename, fileUrl, fileSize, mimeType, caption, projectId: _providedProjectId } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -1101,7 +1238,7 @@ ncrsRouter.post('/:id/evidence', requireAuth, async (req: any, res) => {
     const evidence = await prisma.nCREvidence.create({
       data: {
         ncrId: id,
-        documentId: finalDocumentId,
+        documentId: finalDocumentId!,
         evidenceType: evidenceType || 'photo',
       },
       include: {
@@ -1236,9 +1373,17 @@ ncrsRouter.delete('/:id/evidence/:evidenceId', requireAuth, async (req: any, res
 // POST /api/ncrs/:id/submit-for-verification - Submit rectification for verification
 ncrsRouter.post('/:id/submit-for-verification', requireAuth, async (req: any, res) => {
   try {
+    const validation = submitForVerificationSchema.safeParse(req.body)
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues
+      })
+    }
+
     const user = req.user as AuthUser
     const { id } = req.params
-    const { rectificationNotes } = req.body
+    const { rectificationNotes } = validation.data
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },

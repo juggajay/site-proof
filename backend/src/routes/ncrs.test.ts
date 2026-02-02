@@ -145,7 +145,8 @@ describe('NCR API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error).toBe('Validation failed')
+      expect(res.body.details).toBeDefined()
     })
 
     it('should reject NCR without projectId', async () => {
@@ -500,7 +501,8 @@ describe('NCR QM Review - Request Revision', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('accept')
+    expect(res.body.error).toBe('Validation failed')
+    expect(res.body.details).toBeDefined()
   })
 })
 

@@ -1,7 +1,65 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
 import { sendNotificationIfEnabled } from './notifications.js'
+
+// Zod schemas for request body validation
+const createDocketSchema = z.object({
+  projectId: z.string().min(1, 'projectId is required'),
+  date: z.string().optional(),
+  labourHours: z.number().optional(),
+  plantHours: z.number().optional(),
+  notes: z.string().optional(),
+})
+
+const approveDocketSchema = z.object({
+  foremanNotes: z.string().optional(),
+  adjustmentReason: z.string().optional(),
+  adjustedLabourHours: z.number().optional(),
+  adjustedPlantHours: z.number().optional(),
+})
+
+const rejectDocketSchema = z.object({
+  reason: z.string().optional(),
+})
+
+const queryDocketSchema = z.object({
+  questions: z.string().min(1, 'Questions/issues are required'),
+})
+
+const respondDocketSchema = z.object({
+  response: z.string().min(1, 'Response is required'),
+})
+
+const lotAllocationSchema = z.object({
+  lotId: z.string().min(1),
+  hours: z.number(),
+})
+
+const addLabourEntrySchema = z.object({
+  employeeId: z.string().min(1, 'employeeId is required'),
+  startTime: z.string().optional(),
+  finishTime: z.string().optional(),
+  lotAllocations: z.array(lotAllocationSchema).optional(),
+})
+
+const updateLabourEntrySchema = z.object({
+  startTime: z.string().optional(),
+  finishTime: z.string().optional(),
+  lotAllocations: z.array(lotAllocationSchema).optional(),
+})
+
+const addPlantEntrySchema = z.object({
+  plantId: z.string().min(1, 'plantId is required'),
+  hoursOperated: z.number({ required_error: 'hoursOperated is required' }),
+  wetOrDry: z.enum(['wet', 'dry']).optional(),
+})
+
+const updatePlantEntrySchema = z.object({
+  hoursOperated: z.number().optional(),
+  wetOrDry: z.enum(['wet', 'dry']).optional(),
+})
 
 export const docketsRouter = Router()
 
@@ -113,14 +171,17 @@ docketsRouter.get('/', async (req, res) => {
 docketsRouter.post('/', async (req, res) => {
   try {
     const user = req.user!
-    const { projectId, date, labourHours, plantHours, notes } = req.body
 
-    if (!projectId) {
+    // Validate request body
+    const parseResult = createDocketSchema.safeParse(req.body)
+    if (!parseResult.success) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'projectId is required'
+        message: parseResult.error.errors[0]?.message || 'Invalid request body'
       })
     }
+
+    const { projectId, date, labourHours, plantHours, notes } = parseResult.data
 
     // Find user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
@@ -518,7 +579,17 @@ docketsRouter.post('/:id/approve', requireRole(DOCKET_APPROVERS), async (req, re
   try {
     const { id } = req.params
     const user = req.user!
-    const { foremanNotes, adjustmentReason, adjustedLabourHours, adjustedPlantHours } = req.body
+
+    // Validate request body
+    const parseResult = approveDocketSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: parseResult.error.errors[0]?.message || 'Invalid request body'
+      })
+    }
+
+    const { foremanNotes, adjustmentReason, adjustedLabourHours, adjustedPlantHours } = parseResult.data
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
@@ -743,7 +814,17 @@ docketsRouter.post('/:id/reject', requireRole(DOCKET_APPROVERS), async (req, res
   try {
     const { id } = req.params
     const user = req.user!
-    const { reason } = req.body
+
+    // Validate request body
+    const parseResult = rejectDocketSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: parseResult.error.errors[0]?.message || 'Invalid request body'
+      })
+    }
+
+    const { reason } = parseResult.data
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
@@ -859,9 +940,19 @@ docketsRouter.post('/:id/query', requireRole(DOCKET_APPROVERS), async (req, res)
   try {
     const { id } = req.params
     const user = req.user!
-    const { questions } = req.body
 
-    if (!questions || questions.trim() === '') {
+    // Validate request body
+    const parseResult = queryDocketSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: parseResult.error.errors[0]?.message || 'Questions/issues are required'
+      })
+    }
+
+    const { questions } = parseResult.data
+
+    if (questions.trim() === '') {
       return res.status(400).json({
         error: 'Bad Request',
         message: 'Questions/issues are required'
@@ -980,9 +1071,19 @@ docketsRouter.post('/:id/respond', async (req, res) => {
   try {
     const { id } = req.params
     const user = req.user!
-    const { response } = req.body
 
-    if (!response || response.trim() === '') {
+    // Validate request body
+    const parseResult = respondDocketSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: parseResult.error.errors[0]?.message || 'Response is required'
+      })
+    }
+
+    const { response } = parseResult.data
+
+    if (response.trim() === '') {
       return res.status(400).json({
         error: 'Bad Request',
         message: 'Response is required'
@@ -1151,11 +1252,14 @@ docketsRouter.get('/:id/labour', async (req, res) => {
 docketsRouter.post('/:id/labour', async (req, res) => {
   try {
     const { id } = req.params
-    const { employeeId, startTime, finishTime, lotAllocations } = req.body
 
-    if (!employeeId) {
-      return res.status(400).json({ error: 'employeeId is required' })
+    // Validate request body
+    const parseResult = addLabourEntrySchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Invalid request body' })
     }
+
+    const { employeeId, startTime, finishTime, lotAllocations } = parseResult.data
 
     // Get docket
     const docket = await prisma.dailyDocket.findUnique({
@@ -1276,7 +1380,14 @@ docketsRouter.post('/:id/labour', async (req, res) => {
 docketsRouter.put('/:id/labour/:entryId', async (req, res) => {
   try {
     const { id, entryId } = req.params
-    const { startTime, finishTime, lotAllocations } = req.body
+
+    // Validate request body
+    const parseResult = updateLabourEntrySchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Invalid request body' })
+    }
+
+    const { startTime, finishTime, lotAllocations } = parseResult.data
 
     const entry = await prisma.docketLabour.findFirst({
       where: { id: entryId, docketId: id },
@@ -1482,15 +1593,14 @@ docketsRouter.get('/:id/plant', async (req, res) => {
 docketsRouter.post('/:id/plant', async (req, res) => {
   try {
     const { id } = req.params
-    const { plantId, hoursOperated, wetOrDry } = req.body
 
-    if (!plantId) {
-      return res.status(400).json({ error: 'plantId is required' })
+    // Validate request body
+    const parseResult = addPlantEntrySchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Invalid request body' })
     }
 
-    if (hoursOperated === undefined || hoursOperated === null) {
-      return res.status(400).json({ error: 'hoursOperated is required' })
-    }
+    const { plantId, hoursOperated, wetOrDry } = parseResult.data
 
     // Get docket
     const docket = await prisma.dailyDocket.findUnique({
@@ -1587,7 +1697,14 @@ docketsRouter.post('/:id/plant', async (req, res) => {
 docketsRouter.put('/:id/plant/:entryId', async (req, res) => {
   try {
     const { id, entryId } = req.params
-    const { hoursOperated, wetOrDry } = req.body
+
+    // Validate request body
+    const parseResult = updatePlantEntrySchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({ error: parseResult.error.errors[0]?.message || 'Invalid request body' })
+    }
+
+    const { hoursOperated, wetOrDry } = parseResult.data
 
     const entry = await prisma.docketPlant.findFirst({
       where: { id: entryId, docketId: id },

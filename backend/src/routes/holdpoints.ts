@@ -1,9 +1,53 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import crypto from 'crypto'
+import { z } from 'zod'
 import { sendNotificationIfEnabled } from './notifications.js'
 import { sendHPReleaseRequestEmail, sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../lib/email.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+
+// =============================================================================
+// Zod Validation Schemas
+// =============================================================================
+
+const requestReleaseSchema = z.object({
+  lotId: z.string().min(1, 'lotId is required'),
+  itpChecklistItemId: z.string().min(1, 'itpChecklistItemId is required'),
+  scheduledDate: z.string().optional(),
+  scheduledTime: z.string().optional(),
+  notificationSentTo: z.string().optional(),
+  noticePeriodOverride: z.boolean().optional(),
+  noticePeriodOverrideReason: z.string().optional()
+})
+
+const releaseHoldPointSchema = z.object({
+  releasedByName: z.string().optional(),
+  releasedByOrg: z.string().optional(),
+  releaseMethod: z.string().optional(),
+  releaseNotes: z.string().optional()
+})
+
+const escalateSchema = z.object({
+  escalatedTo: z.string().optional(),
+  escalationReason: z.string().optional()
+})
+
+const calculateNotificationTimeSchema = z.object({
+  projectId: z.string().min(1, 'projectId is required'),
+  requestedDateTime: z.string().min(1, 'requestedDateTime is required')
+})
+
+const previewEvidencePackageSchema = z.object({
+  lotId: z.string().min(1, 'lotId is required'),
+  itpChecklistItemId: z.string().min(1, 'itpChecklistItemId is required')
+})
+
+const publicReleaseSchema = z.object({
+  releasedByName: z.string().min(1, 'Released by name is required'),
+  releasedByOrg: z.string().optional(),
+  releaseNotes: z.string().optional(),
+  signatureDataUrl: z.string().optional()
+})
 
 // Secure link expiry time (48 hours)
 const SECURE_LINK_EXPIRY_HOURS = 48
@@ -322,11 +366,15 @@ function calculateWorkingDays(
 // Request hold point release - checks prerequisites first
 holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => {
   try {
-    const { lotId, itpChecklistItemId, scheduledDate, scheduledTime, notificationSentTo, noticePeriodOverride, noticePeriodOverrideReason } = req.body
-
-    if (!lotId || !itpChecklistItemId) {
-      return res.status(400).json({ error: 'lotId and itpChecklistItemId are required' })
+    const parseResult = requestReleaseSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parseResult.error.flatten().fieldErrors
+      })
     }
+
+    const { lotId, itpChecklistItemId, scheduledDate, scheduledTime, notificationSentTo, noticePeriodOverride, noticePeriodOverrideReason } = parseResult.data
 
     // Get the lot with ITP instance and project
     const lot = await prisma.lot.findUnique({
@@ -566,7 +614,15 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
 holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
   try {
     const { id } = req.params
-    const { releasedByName, releasedByOrg, releaseMethod, releaseNotes } = req.body
+    const parseResult = releaseHoldPointSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parseResult.error.flatten().fieldErrors
+      })
+    }
+
+    const { releasedByName, releasedByOrg, releaseMethod, releaseNotes } = parseResult.data
 
     // Feature #698 - Check HP approval requirements from project settings
     const existingHP = await prisma.holdPoint.findUnique({
@@ -892,7 +948,15 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
 holdpointsRouter.post('/:id/escalate', requireAuth, async (req: any, res) => {
   try {
     const { id } = req.params
-    const { escalatedTo, escalationReason } = req.body
+    const parseResult = escalateSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parseResult.error.flatten().fieldErrors
+      })
+    }
+
+    const { escalatedTo, escalationReason } = parseResult.data
     const userId = req.user.userId
 
     // Get hold point with lot/project info
@@ -1175,11 +1239,15 @@ holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: any, res)
 // Get notification timing for a hold point request based on working hours
 holdpointsRouter.post('/calculate-notification-time', requireAuth, async (req: any, res) => {
   try {
-    const { projectId, requestedDateTime } = req.body
-
-    if (!projectId || !requestedDateTime) {
-      return res.status(400).json({ error: 'projectId and requestedDateTime are required' })
+    const parseResult = calculateNotificationTimeSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parseResult.error.flatten().fieldErrors
+      })
     }
+
+    const { projectId, requestedDateTime } = parseResult.data
 
     // Get project working hours configuration
     const project = await prisma.project.findUnique({
@@ -1264,11 +1332,15 @@ holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, async (re
 // Preview evidence package before submitting HP release request (Feature #179)
 holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: any, res) => {
   try {
-    const { lotId, itpChecklistItemId } = req.body
-
-    if (!lotId || !itpChecklistItemId) {
-      return res.status(400).json({ error: 'lotId and itpChecklistItemId are required' })
+    const parseResult = previewEvidencePackageSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parseResult.error.flatten().fieldErrors
+      })
     }
+
+    const { lotId, itpChecklistItemId } = parseResult.data
 
     // Get the lot with all related data
     const lot = await prisma.lot.findUnique({
@@ -1666,11 +1738,15 @@ holdpointsRouter.get('/public/:token', async (req: any, res) => {
 holdpointsRouter.post('/public/:token/release', async (req: any, res) => {
   try {
     const { token } = req.params
-    const { releasedByName, releasedByOrg, releaseNotes, signatureDataUrl } = req.body
-
-    if (!releasedByName) {
-      return res.status(400).json({ error: 'Released by name is required' })
+    const parseResult = publicReleaseSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: parseResult.error.flatten().fieldErrors
+      })
     }
+
+    const { releasedByName, releasedByOrg, releaseNotes, signatureDataUrl } = parseResult.data
 
     // Find the token and validate it
     const releaseToken = await prisma.holdPointReleaseToken.findUnique({
