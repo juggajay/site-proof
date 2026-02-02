@@ -68,19 +68,45 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
           try {
             const completion = item.data;
 
+            // First, get the ITP instance for this lot
+            const instanceResponse = await fetch(`${apiUrl}/api/itp/instances/lot/${completion.lotId}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+
+            if (!instanceResponse.ok) {
+              await markSyncItemError(item.id, 'Could not find ITP instance for lot');
+              continue;
+            }
+
+            const instanceData = await instanceResponse.json();
+            const itpInstanceId = instanceData.instance?.id;
+
+            if (!itpInstanceId) {
+              await markSyncItemError(item.id, 'No ITP instance found for lot');
+              continue;
+            }
+
+            // Convert status to backend expected format
+            const isCompleted = completion.status === 'completed';
+            const directStatus = completion.status === 'na' ? 'not_applicable'
+              : completion.status === 'failed' ? 'failed'
+              : undefined;
+
             // Sync to server
-            const response = await fetch(`${apiUrl}/api/itp-completions`, {
+            const response = await fetch(`${apiUrl}/api/itp/completions`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify({
-                lotId: completion.lotId,
+                itpInstanceId,
                 checklistItemId: completion.checklistItemId,
-                status: completion.status,
-                notes: completion.notes,
-                completedAt: completion.completedAt
+                isCompleted,
+                status: directStatus,
+                notes: completion.notes
               })
             });
 
