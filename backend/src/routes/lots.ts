@@ -128,7 +128,6 @@ lotsRouter.get('/', async (req, res) => {
             select: {
               id: true,
               name: true,
-              code: true,
               activityType: true,
             }
           }
