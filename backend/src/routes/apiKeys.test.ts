@@ -436,7 +436,7 @@ describe('API Keys Management', () => {
       testApp.use(express.json())
 
       const { authenticateApiKey } = await import('./apiKeys.js')
-      testApp.get('/test', authenticateApiKey, (req, res) => {
+      testApp.get('/test', authenticateApiKey, (_req, res) => {
         res.json({ success: true })
       })
 
@@ -493,7 +493,7 @@ describe('API Keys Management', () => {
       testApp.use(express.json())
 
       const { authenticateApiKey } = await import('./apiKeys.js')
-      testApp.get('/test', authenticateApiKey, (req, res) => {
+      testApp.get('/test', authenticateApiKey, (_req, res) => {
         res.json({ success: true })
       })
 
@@ -526,7 +526,7 @@ describe('API Keys Management', () => {
       testApp.use(express.json())
 
       const { authenticateApiKey } = await import('./apiKeys.js')
-      testApp.get('/test', authenticateApiKey, (req, res) => {
+      testApp.get('/test', authenticateApiKey, (_req, res) => {
         res.json({ success: true })
       })
 
@@ -560,7 +560,6 @@ describe('API Keys Management', () => {
 
   describe('Scope Authorization Middleware', () => {
     let readScopeKey: string
-    let writeScopeKey: string
     let adminScopeKey: string
 
     beforeAll(async () => {
@@ -571,11 +570,11 @@ describe('API Keys Management', () => {
         .send({ name: 'Read Scope Key', scopes: 'read' })
       readScopeKey = readRes.body.apiKey.key
 
-      const writeRes = await request(app)
+      // Create write key for setup (may be used in future tests)
+      await request(app)
         .post('/api/api-keys')
         .set('Authorization', `Bearer ${authToken}`)
         .send({ name: 'Write Scope Key', scopes: 'write' })
-      writeScopeKey = writeRes.body.apiKey.key
 
       const adminRes = await request(app)
         .post('/api/api-keys')
@@ -589,7 +588,7 @@ describe('API Keys Management', () => {
       testApp.use(express.json())
 
       const { authenticateApiKey, requireScope } = await import('./apiKeys.js')
-      testApp.get('/test', authenticateApiKey, requireScope('read'), (req, res) => {
+      testApp.get('/test', authenticateApiKey, requireScope('read'), (_req, res) => {
         res.json({ success: true })
       })
 
@@ -606,7 +605,7 @@ describe('API Keys Management', () => {
       testApp.use(express.json())
 
       const { authenticateApiKey, requireScope } = await import('./apiKeys.js')
-      testApp.get('/test', authenticateApiKey, requireScope('write'), (req, res) => {
+      testApp.get('/test', authenticateApiKey, requireScope('write'), (_req, res) => {
         res.json({ success: true })
       })
 
@@ -623,7 +622,7 @@ describe('API Keys Management', () => {
       testApp.use(express.json())
 
       const { authenticateApiKey, requireScope } = await import('./apiKeys.js')
-      testApp.get('/test', authenticateApiKey, requireScope('write'), (req, res) => {
+      testApp.get('/test', authenticateApiKey, requireScope('write'), (_req, res) => {
         res.json({ success: true })
       })
 
@@ -642,7 +641,7 @@ describe('API Keys Management', () => {
       const { authenticateApiKey, requireScope } = await import('./apiKeys.js')
       const { requireAuth } = await import('../middleware/authMiddleware.js')
 
-      testApp.get('/test', requireAuth, authenticateApiKey, requireScope('write'), (req, res) => {
+      testApp.get('/test', requireAuth, authenticateApiKey, requireScope('write'), (_req, res) => {
         res.json({ success: true })
       })
 

@@ -873,10 +873,8 @@ describe('Notifications API', () => {
     })
 
     describe('GET /api/notifications/alerts', () => {
-      let alertId: string
-
       beforeAll(async () => {
-        const res = await request(app)
+        await request(app)
           .post('/api/notifications/alerts')
           .set('Authorization', `Bearer ${authToken}`)
           .send({
@@ -889,7 +887,6 @@ describe('Notifications API', () => {
             projectId,
             assignedTo: userId,
           })
-        alertId = res.body.alert.id
       })
 
       it('should list all alerts', async () => {

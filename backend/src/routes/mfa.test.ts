@@ -4,7 +4,7 @@ import express from 'express'
 import { mfaRouter } from './mfa.js'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
-import * as otplib from 'otplib'
+import * as _otplib from 'otplib'
 import { encrypt, decrypt } from '../lib/encryption.js'
 
 // Mock otplib to control secret and verification
@@ -225,12 +225,12 @@ describe('MFA API', () => {
 
     it('should reject verification when MFA is already enabled', async () => {
       // Ensure MFA is enabled first
-      const secret = encrypt('TESTSECRET1234567890')
+      const encryptedSecret = encrypt('TESTSECRET1234567890')
       await prisma.user.update({
         where: { id: userId },
         data: {
           twoFactorEnabled: true,
-          twoFactorSecret: secret,
+          twoFactorSecret: encryptedSecret,
         },
       })
 
@@ -274,12 +274,12 @@ describe('MFA API', () => {
   describe('POST /api/mfa/disable', () => {
     beforeAll(async () => {
       // Ensure MFA is enabled
-      const secret = encrypt('TESTSECRET1234567890')
+      const encryptedSecret = encrypt('TESTSECRET1234567890')
       await prisma.user.update({
         where: { id: userId },
         data: {
           twoFactorEnabled: true,
-          twoFactorSecret: secret,
+          twoFactorSecret: encryptedSecret,
         },
       })
     })
@@ -307,12 +307,12 @@ describe('MFA API', () => {
 
     it('should disable MFA with valid MFA code', async () => {
       // Re-enable MFA
-      const secret = encrypt('TESTSECRET1234567890')
+      const encryptedSecret = encrypt('TESTSECRET1234567890')
       await prisma.user.update({
         where: { id: userId },
         data: {
           twoFactorEnabled: true,
-          twoFactorSecret: secret,
+          twoFactorSecret: encryptedSecret,
         },
       })
 
@@ -328,12 +328,12 @@ describe('MFA API', () => {
 
     it('should reject disable without password or code', async () => {
       // Re-enable MFA
-      const secret = encrypt('TESTSECRET1234567890')
+      const encryptedSecret = encrypt('TESTSECRET1234567890')
       await prisma.user.update({
         where: { id: userId },
         data: {
           twoFactorEnabled: true,
-          twoFactorSecret: secret,
+          twoFactorSecret: encryptedSecret,
         },
       })
 
@@ -397,12 +397,12 @@ describe('MFA API', () => {
   describe('POST /api/mfa/verify', () => {
     beforeAll(async () => {
       // Ensure MFA is enabled
-      const secret = encrypt('TESTSECRET1234567890')
+      const encryptedSecret = encrypt('TESTSECRET1234567890')
       await prisma.user.update({
         where: { id: userId },
         data: {
           twoFactorEnabled: true,
-          twoFactorSecret: secret,
+          twoFactorSecret: encryptedSecret,
         },
       })
     })
@@ -492,12 +492,12 @@ describe('MFA API', () => {
 
     it('should not require authentication (for login flow)', async () => {
       // Re-enable MFA
-      const secret = encrypt('TESTSECRET1234567890')
+      const encryptedSecret = encrypt('TESTSECRET1234567890')
       await prisma.user.update({
         where: { id: userId },
         data: {
           twoFactorEnabled: true,
-          twoFactorSecret: secret,
+          twoFactorSecret: encryptedSecret,
         },
       })
 
@@ -554,7 +554,6 @@ describe('MFA API', () => {
 
       expect(res.status).toBe(200)
       expect(res.body.secret).toBeDefined()
-      const secret = res.body.secret
 
       // Step 3: Verify setup with code
       res = await request(app)

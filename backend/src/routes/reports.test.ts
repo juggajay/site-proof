@@ -15,8 +15,6 @@ describe('Reports API - Lot Status Report', () => {
   let userId: string
   let companyId: string
   let projectId: string
-  let lotId1: string
-  let lotId2: string
 
   beforeAll(async () => {
     // Create test company
@@ -61,7 +59,7 @@ describe('Reports API - Lot Status Report', () => {
     })
 
     // Create test lots with various statuses
-    const lot1 = await prisma.lot.create({
+    await prisma.lot.create({
       data: {
         projectId,
         lotNumber: `RPT-LOT-1-${Date.now()}`,
@@ -73,9 +71,8 @@ describe('Reports API - Lot Status Report', () => {
         conformedById: userId,
       }
     })
-    lotId1 = lot1.id
 
-    const lot2 = await prisma.lot.create({
+    await prisma.lot.create({
       data: {
         projectId,
         lotNumber: `RPT-LOT-2-${Date.now()}`,
@@ -85,7 +82,6 @@ describe('Reports API - Lot Status Report', () => {
         description: 'Test pavement lot',
       }
     })
-    lotId2 = lot2.id
   })
 
   afterAll(async () => {
@@ -199,8 +195,6 @@ describe('Reports API - NCR Report', () => {
   let userId: string
   let companyId: string
   let projectId: string
-  let ncrId1: string
-  let ncrId2: string
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -242,7 +236,7 @@ describe('Reports API - NCR Report', () => {
     })
 
     // Create test NCRs
-    const ncr1 = await prisma.nCR.create({
+    await prisma.nCR.create({
       data: {
         projectId,
         ncrNumber: 'NCR-001',
@@ -254,12 +248,11 @@ describe('Reports API - NCR Report', () => {
         rootCauseCategory: 'workmanship',
       }
     })
-    ncrId1 = ncr1.id
 
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
 
-    const ncr2 = await prisma.nCR.create({
+    await prisma.nCR.create({
       data: {
         projectId,
         ncrNumber: 'NCR-002',
@@ -273,7 +266,6 @@ describe('Reports API - NCR Report', () => {
         responsibleUserId: userId,
       }
     })
-    ncrId2 = ncr2.id
   })
 
   afterAll(async () => {
@@ -390,8 +382,6 @@ describe('Reports API - Test Results Report', () => {
   let companyId: string
   let projectId: string
   let lotId: string
-  let testId1: string
-  let testId2: string
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -444,7 +434,7 @@ describe('Reports API - Test Results Report', () => {
     lotId = lot.id
 
     // Create test results
-    const test1 = await prisma.testResult.create({
+    await prisma.testResult.create({
       data: {
         projectId,
         lotId,
@@ -458,9 +448,8 @@ describe('Reports API - Test Results Report', () => {
         specificationMin: 95,
       }
     })
-    testId1 = test1.id
 
-    const test2 = await prisma.testResult.create({
+    await prisma.testResult.create({
       data: {
         projectId,
         lotId,
@@ -474,7 +463,6 @@ describe('Reports API - Test Results Report', () => {
         specificationMax: 10,
       }
     })
-    testId2 = test2.id
   })
 
   afterAll(async () => {
@@ -906,7 +894,6 @@ describe('Reports API - Claims Report', () => {
   let userId: string
   let companyId: string
   let projectId: string
-  let claimId: string
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -960,7 +947,7 @@ describe('Reports API - Claims Report', () => {
     })
 
     // Create a claim
-    const claim = await prisma.progressClaim.create({
+    await prisma.progressClaim.create({
       data: {
         projectId,
         claimNumber: 1,
@@ -982,7 +969,6 @@ describe('Reports API - Claims Report', () => {
         }
       }
     })
-    claimId = claim.id
   })
 
   afterAll(async () => {

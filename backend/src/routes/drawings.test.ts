@@ -434,7 +434,6 @@ describe('Drawings API', () => {
 
   describe('DELETE /api/drawings/:drawingId', () => {
     let deleteDrawingId: string
-    let deleteDocumentId: string
 
     beforeAll(async () => {
       // Create a drawing to delete
@@ -449,7 +448,6 @@ describe('Drawings API', () => {
           uploadedById: userId,
         }
       })
-      deleteDocumentId = doc.id
 
       const drawing = await prisma.drawing.create({
         data: {
@@ -628,7 +626,7 @@ describe('Drawings API', () => {
         }
       })
 
-      const drawing1 = await prisma.drawing.create({
+      await prisma.drawing.create({
         data: {
           projectId,
           documentId: doc1.id,

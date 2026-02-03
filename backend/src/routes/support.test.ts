@@ -168,7 +168,7 @@ describe('Support API', () => {
       expect(auditLog).toBeDefined()
       expect(auditLog?.entityId).toMatch(/^SP-/)
 
-      const changes = JSON.parse(auditLog!.changes)
+      const changes = JSON.parse(auditLog!.changes as string)
       expect(changes.subject).toBe('Test audit logging')
       expect(changes.category).toBe('technical')
       expect(changes.messagePreview).toBeDefined()
@@ -196,7 +196,7 @@ describe('Support API', () => {
         orderBy: { createdAt: 'desc' },
       })
 
-      const changes = JSON.parse(auditLog!.changes)
+      const changes = JSON.parse(auditLog!.changes as string)
       expect(changes.messagePreview.length).toBe(100)
     })
 
