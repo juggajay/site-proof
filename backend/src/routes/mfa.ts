@@ -18,7 +18,7 @@ mfaRouter.get('/status', requireAuth, async (req: any, res) => {
 
     // Use raw SQL to get MFA status
     const userResult = await prisma.$queryRaw<Array<{
-      two_factor_enabled: number
+      two_factor_enabled: boolean
     }>>`SELECT two_factor_enabled FROM users WHERE id = ${userId}`
 
     const user = userResult[0]
@@ -99,7 +99,7 @@ mfaRouter.post('/verify-setup', requireAuth, async (req: any, res) => {
     // Get the user's pending secret
     const userResult = await prisma.$queryRaw<Array<{
       two_factor_secret: string | null
-      two_factor_enabled: number
+      two_factor_enabled: boolean
     }>>`SELECT two_factor_secret, two_factor_enabled FROM users WHERE id = ${userId}`
 
     const user = userResult[0]
@@ -129,7 +129,7 @@ mfaRouter.post('/verify-setup', requireAuth, async (req: any, res) => {
     }
 
     // Enable MFA
-    await prisma.$executeRaw`UPDATE users SET two_factor_enabled = 1 WHERE id = ${userId}`
+    await prisma.$executeRaw`UPDATE users SET two_factor_enabled = TRUE WHERE id = ${userId}`
 
     // Generate backup codes (simple implementation - in production, use more secure method)
     const backupCodes = Array.from({ length: 8 }, () =>
@@ -161,7 +161,7 @@ mfaRouter.post('/disable', requireAuth, async (req: any, res) => {
     const userResult = await prisma.$queryRaw<Array<{
       password_hash: string | null
       two_factor_secret: string | null
-      two_factor_enabled: number
+      two_factor_enabled: boolean
     }>>`SELECT password_hash, two_factor_secret, two_factor_enabled FROM users WHERE id = ${userId}`
 
     const user = userResult[0]
@@ -195,7 +195,7 @@ mfaRouter.post('/disable', requireAuth, async (req: any, res) => {
     }
 
     // Disable MFA and clear secret
-    await prisma.$executeRaw`UPDATE users SET two_factor_enabled = 0, two_factor_secret = NULL WHERE id = ${userId}`
+    await prisma.$executeRaw`UPDATE users SET two_factor_enabled = FALSE, two_factor_secret = NULL WHERE id = ${userId}`
 
     res.json({
       success: true,
@@ -224,7 +224,7 @@ mfaRouter.post('/verify', async (req, res) => {
       role_in_company: string
       company_id: string | null
       two_factor_secret: string | null
-      two_factor_enabled: number
+      two_factor_enabled: boolean
     }>>`SELECT id, email, full_name, role_in_company, company_id, two_factor_secret, two_factor_enabled FROM users WHERE id = ${userId}`
 
     const user = userResult[0]

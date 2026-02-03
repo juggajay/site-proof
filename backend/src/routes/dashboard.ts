@@ -473,15 +473,15 @@ dashboardRouter.get('/portfolio-risks', async (req, res) => {
         _count: true
       }),
       // Stale hold points - use raw query for efficient grouping via lot join
-      prisma.$queryRaw<Array<{ projectId: string; count: bigint }>>`
+      activeProjectIds.length > 0 ? prisma.$queryRaw<Array<{ projectId: string; count: bigint }>>`
         SELECT l."project_id" as "projectId", COUNT(hp.id) as count
         FROM hold_points hp
         JOIN lots l ON hp."lot_id" = l.id
-        WHERE l."project_id" = ANY(${activeProjectIds}::uuid[])
+        WHERE l."project_id" IN (${Prisma.join(activeProjectIds)})
           AND hp.status IN ('pending', 'scheduled', 'requested')
           AND hp."created_at" < ${sevenDaysAgo}
         GROUP BY l."project_id"
-      `
+      ` : Promise.resolve([])
     ])
 
     // Convert to Maps for O(1) lookup
