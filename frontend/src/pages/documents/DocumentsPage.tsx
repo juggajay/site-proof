@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 import { AlertTriangle } from 'lucide-react'
-import { PDFViewer } from '../../components/ui/PDFViewer'  // Feature #446: React-PDF viewer
+import { LazyPDFViewer } from '../../components/ui/LazyPDFViewer'  // Feature #446: React-PDF viewer (lazy loaded)
 import { API_URL } from '../../lib/api'
 
 // Helper to construct document URLs - handles both relative paths and full Supabase URLs
@@ -1026,8 +1026,8 @@ export function DocumentsPage() {
           {/* Content Area */}
           <div className="flex-1 overflow-auto flex items-center justify-center p-4">
             {isPdf(viewerDoc.mimeType) ? (
-              /* Feature #446: Use React-PDF viewer for better PDF rendering */
-              <PDFViewer
+              /* Feature #446: Use React-PDF viewer for better PDF rendering (lazy loaded) */
+              <LazyPDFViewer
                 url={getDocumentUrl(viewerDoc.fileUrl)}
                 filename={viewerDoc.filename}
                 className="w-full h-full max-w-5xl"

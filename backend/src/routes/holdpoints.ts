@@ -1,10 +1,38 @@
-import { Router } from 'express'
+import { Router, Request, Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma.js'
 import crypto from 'crypto'
 import { z } from 'zod'
 import { sendNotificationIfEnabled } from './notifications.js'
 import { sendHPReleaseRequestEmail, sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../lib/email.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+
+// Type for hold point list item
+interface HoldPointListItem {
+  id: string
+  lotId: string
+  lotNumber: string
+  itpChecklistItemId: string
+  description: string
+  pointType: string | null
+  status: string
+  notificationSentAt: Date | null | undefined
+  scheduledDate: Date | null | undefined
+  releasedAt: Date | null | undefined
+  releasedByName: string | null | undefined
+  releaseNotes: string | null | undefined
+  sequenceNumber: number
+  isCompleted: boolean
+  isVerified: boolean
+  createdAt: Date
+}
+
+// Type for project settings related to hold points
+interface HPProjectSettings {
+  hpRecipients?: Array<{ email: string }>
+  hpApprovalRequirement?: string
+  holdPointMinimumNoticeDays?: number
+}
 
 // =============================================================================
 // Zod Validation Schemas
@@ -118,13 +146,13 @@ function calculateNotificationTime(
 }
 
 // Get all hold points for a project
-holdpointsRouter.get('/project/:projectId', requireAuth, async (req: any, res) => {
+holdpointsRouter.get('/project/:projectId', requireAuth, async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
-    const user = req.user
+    const user = req.user!
 
     // Build where clause for lots
-    const lotsWhere: any = { projectId }
+    const lotsWhere: Prisma.LotWhereInput = { projectId }
 
     // Subcontractors can only see hold points on their assigned lots
     if (user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin') {
@@ -184,7 +212,7 @@ holdpointsRouter.get('/project/:projectId', requireAuth, async (req: any, res) =
     })
 
     // Transform to hold point list
-    const holdPoints: any[] = []
+    const holdPoints: HoldPointListItem[] = []
 
     for (const lot of lots) {
       if (!lot.itpInstance?.template?.checklistItems) continue
@@ -231,7 +259,7 @@ holdpointsRouter.get('/project/:projectId', requireAuth, async (req: any, res) =
 })
 
 // Get hold point details with prerequisite status
-holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: any, res) => {
+holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: Request, res: Response) => {
   try {
     const { lotId, itemId } = req.params
 
@@ -303,7 +331,7 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: any, r
       try {
         const settings = JSON.parse(lot.project.settings)
         if (settings.hpRecipients && Array.isArray(settings.hpRecipients)) {
-          defaultRecipients = settings.hpRecipients.map((r: any) => r.email).filter(Boolean)
+          defaultRecipients = (settings as HPProjectSettings).hpRecipients?.map((r) => r.email).filter(Boolean) || []
         }
         if (settings.hpApprovalRequirement) {
           approvalRequirement = settings.hpApprovalRequirement
@@ -364,7 +392,7 @@ function calculateWorkingDays(
 }
 
 // Request hold point release - checks prerequisites first
-holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => {
+holdpointsRouter.post('/request-release', requireAuth, async (req: Request, res: Response) => {
   try {
     const parseResult = requestReleaseSchema.safeParse(req.body)
     if (!parseResult.success) {
@@ -435,10 +463,10 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
     }
 
     // Check minimum notice period (Feature #180)
-    let projectSettings: any = {}
+    let projectSettings: HPProjectSettings = {}
     if (lot.project.settings) {
       try {
-        projectSettings = JSON.parse(lot.project.settings)
+        projectSettings = JSON.parse(lot.project.settings) as HPProjectSettings
       } catch (e) {
         // Invalid JSON, use defaults
       }
@@ -515,7 +543,7 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
     try {
       // Get the requesting user's details
       const requestingUser = await prisma.user.findUnique({
-        where: { id: req.user.userId },
+        where: { id: req.user!.userId },
         select: { fullName: true, email: true }
       })
 
@@ -610,7 +638,7 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: any, res) => 
 })
 
 // Release a hold point
-holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
+holdpointsRouter.post('/:id/release', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
     const parseResult = releaseHoldPointSchema.safeParse(req.body)
@@ -830,7 +858,7 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: any, res) => {
 })
 
 // Chase a hold point (send reminder)
-holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
+holdpointsRouter.post('/:id/chase', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -934,7 +962,7 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: any, res) => {
 })
 
 // Escalate a hold point to QM/PM
-holdpointsRouter.post('/:id/escalate', requireAuth, async (req: any, res) => {
+holdpointsRouter.post('/:id/escalate', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
     const parseResult = escalateSchema.safeParse(req.body)
@@ -946,7 +974,7 @@ holdpointsRouter.post('/:id/escalate', requireAuth, async (req: any, res) => {
     }
 
     const { escalatedTo, escalationReason } = parseResult.data
-    const userId = req.user.userId
+    const userId = req.user!.userId
 
     // Get hold point with lot/project info
     const existingHP = await prisma.holdPoint.findUnique({
@@ -1026,7 +1054,7 @@ holdpointsRouter.post('/:id/escalate', requireAuth, async (req: any, res) => {
 })
 
 // Resolve an escalated hold point
-holdpointsRouter.post('/:id/resolve-escalation', requireAuth, async (req: any, res) => {
+holdpointsRouter.post('/:id/resolve-escalation', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -1050,7 +1078,7 @@ holdpointsRouter.post('/:id/resolve-escalation', requireAuth, async (req: any, r
 })
 
 // Generate evidence package for a hold point
-holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: any, res) => {
+holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -1226,7 +1254,7 @@ holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: any, res)
 })
 
 // Get notification timing for a hold point request based on working hours
-holdpointsRouter.post('/calculate-notification-time', requireAuth, async (req: any, res) => {
+holdpointsRouter.post('/calculate-notification-time', requireAuth, async (req: Request, res: Response) => {
   try {
     const parseResult = calculateNotificationTimeSchema.safeParse(req.body)
     if (!parseResult.success) {
@@ -1278,7 +1306,7 @@ holdpointsRouter.post('/calculate-notification-time', requireAuth, async (req: a
 })
 
 // Get project working hours configuration
-holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, async (req: any, res) => {
+holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
 
@@ -1319,7 +1347,7 @@ holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, async (re
 })
 
 // Preview evidence package before submitting HP release request (Feature #179)
-holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: any, res) => {
+holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: Request, res: Response) => {
   try {
     const parseResult = previewEvidencePackageSchema.safeParse(req.body)
     if (!parseResult.success) {
@@ -1510,7 +1538,7 @@ holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: any,
 // ============================================================================
 
 // Get hold point and evidence package via secure link (no auth required)
-holdpointsRouter.get('/public/:token', async (req: any, res) => {
+holdpointsRouter.get('/public/:token', async (req: Request, res: Response) => {
   try {
     const { token } = req.params
 
@@ -1724,7 +1752,7 @@ holdpointsRouter.get('/public/:token', async (req: any, res) => {
 })
 
 // Release hold point via secure link (no auth required)
-holdpointsRouter.post('/public/:token/release', async (req: any, res) => {
+holdpointsRouter.post('/public/:token/release', async (req: Request, res: Response) => {
   try {
     const { token } = req.params
     const parseResult = publicReleaseSchema.safeParse(req.body)

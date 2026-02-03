@@ -4,7 +4,7 @@ import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { Link2, Check, Download, Eye, X, RefreshCw, ClipboardCheck, AlertTriangle } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LazyHoldPointsChart } from '@/components/charts/LazyCharts'
 import { SignaturePad } from '@/components/ui/SignaturePad'
 
 interface HoldPoint {
@@ -557,52 +557,13 @@ export function HoldPointsPage() {
         </div>
       )}
 
-      {/* Charts Section (Feature #192) */}
+      {/* Charts Section (Feature #192) - Lazy Loaded */}
       {!loading && holdPoints.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* HP Releases Over Time Chart */}
-          <div className="rounded-lg border bg-card p-4">
-            <h3 className="text-sm font-medium mb-4">HP Releases - Last 7 Days</h3>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData.releasesOverTime}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                    labelStyle={{ color: 'hsl(var(--foreground))' }}
-                  />
-                  <Bar dataKey="releases" fill="#22c55e" radius={[4, 4, 0, 0]} name="Releases" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Average Time to Release */}
-          <div className="rounded-lg border bg-card p-4">
-            <h3 className="text-sm font-medium mb-4">Average Time: Notification to Release</h3>
-            <div className="h-48 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-5xl font-bold text-primary">
-                  {chartData.avgTimeToRelease > 24
-                    ? `${Math.round(chartData.avgTimeToRelease / 24)}d`
-                    : `${chartData.avgTimeToRelease}h`
-                  }
-                </div>
-                <div className="text-sm text-muted-foreground mt-2">
-                  {chartData.avgTimeToRelease > 24
-                    ? `${chartData.avgTimeToRelease} hours total`
-                    : 'hours on average'
-                  }
-                </div>
-                <div className="mt-4 text-xs text-muted-foreground">
-                  Based on {holdPoints.filter(hp => hp.status === 'released').length} released hold points
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <LazyHoldPointsChart
+          releasesOverTime={chartData.releasesOverTime}
+          avgTimeToRelease={chartData.avgTimeToRelease}
+          releasedCount={holdPoints.filter(hp => hp.status === 'released').length}
+        />
       )}
 
       {loading ? (

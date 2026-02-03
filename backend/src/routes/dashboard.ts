@@ -1,6 +1,23 @@
 import { Router } from 'express'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+
+// Type definitions for dashboard work items
+interface ForemanWorkItem {
+  id: string
+  type: 'hold_point' | 'itp_item' | 'inspection'
+  title: string
+  subtitle: string
+  urgency?: 'blocking' | 'due_today' | 'upcoming'
+  link: string
+  metadata: {
+    lotNumber: string
+    lotId: string
+    status?: string
+    itpName?: string
+  }
+}
 
 export const dashboardRouter = Router()
 
@@ -611,17 +628,14 @@ dashboardRouter.get('/cost-trend', async (req, res) => {
     const start = startDate ? new Date(startDate as string) : new Date(end.getTime() - daysToFetch * 24 * 60 * 60 * 1000)
 
     // Build docket filter
-    const docketWhere: any = {
+    const docketWhere: Prisma.DailyDocketWhereInput = {
       projectId: { in: targetProjectIds },
       date: {
         gte: start,
         lte: end
       },
-      status: { in: ['approved', 'pending_approval'] } // Only approved or pending dockets
-    }
-
-    if (subcontractorId) {
-      docketWhere.subcontractorCompanyId = subcontractorId as string
+      status: { in: ['approved', 'pending_approval'] }, // Only approved or pending dockets
+      ...(subcontractorId && { subcontractorCompanyId: subcontractorId as string })
     }
 
     // Get dockets grouped by date
@@ -1518,9 +1532,9 @@ dashboardRouter.get('/projects/:projectId/foreman/today', async (req, res) => {
     dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2)
 
     // Arrays to hold categorized items
-    const blocking: any[] = []
-    const dueToday: any[] = []
-    const upcoming: any[] = []
+    const blocking: ForemanWorkItem[] = []
+    const dueToday: ForemanWorkItem[] = []
+    const upcoming: ForemanWorkItem[] = []
 
     // 1. Get Hold Points
     // Blocking: scheduled date is in the past and still pending

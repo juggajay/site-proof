@@ -1,10 +1,72 @@
 // Feature #592 trigger - ITP instance snapshot from template
 // Feature #175 - Auto-notification before witness point
-import { Router } from 'express'
+import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { type AuthUser } from '../lib/auth.js'
+
+// Type for checklist items from snapshot or template
+interface ChecklistItem {
+  id: string
+  description: string
+  sequenceNumber: number
+  pointType?: string | null
+  responsibleParty?: string | null
+  evidenceRequired?: string | null
+  acceptanceCriteria?: string | null
+  testType?: string | null
+}
+
+// Type for ITP completion with attachments
+interface CompletionWithAttachments {
+  checklistItemId: string
+  status: string
+  verificationStatus?: string | null
+  attachments?: Array<{
+    id: string
+    documentId: string
+    document?: {
+      id: string
+      filename: string
+      fileUrl: string
+      caption?: string | null
+    }
+  }>
+}
+
+// Type for template snapshot
+interface TemplateSnapshot {
+  id: string
+  name: string
+  description?: string | null
+  activityType: string | null
+  checklistItems: ChecklistItem[]
+}
+
+// Extended checklist item with frontend-friendly properties
+interface TransformedChecklistItem extends Omit<ChecklistItem, 'sequenceNumber'> {
+  category: string
+  isHoldPoint: boolean
+  order: number
+  sequenceNumber?: number
+}
+
+// Type for transformed template data
+interface TransformedTemplateData extends Omit<TemplateSnapshot, 'checklistItems'> {
+  checklistItems: TransformedChecklistItem[]
+}
+
+// Type for project settings
+interface ProjectSettings {
+  witnessPointNotificationTrigger?: string
+  witnessPointNotificationEnabled?: boolean
+  witnessPointClientEmail?: string | null
+  witnessPointClientName?: string
+  requireSubcontractorVerification?: boolean
+  hpRecipients?: Array<{ email: string }>
+  hpApprovalRequirement?: string
+}
 
 // ============== Zod Schemas ==============
 
@@ -126,16 +188,16 @@ async function checkAndNotifyWitnessPoint(
     }
 
     // Get checklist items from snapshot or template
-    let checklistItems: any[]
+    let checklistItems: ChecklistItem[]
     if (instance.templateSnapshot) {
-      const snapshot = JSON.parse(instance.templateSnapshot)
+      const snapshot: TemplateSnapshot = JSON.parse(instance.templateSnapshot)
       checklistItems = snapshot.checklistItems || []
     } else {
       checklistItems = instance.template.checklistItems
     }
 
     // Find the completed item's sequence number
-    const completedItem = checklistItems.find((item: any) => item.id === completedItemId)
+    const completedItem = checklistItems.find((item) => item.id === completedItemId)
     if (!completedItem) {
       return null
     }
@@ -144,10 +206,10 @@ async function checkAndNotifyWitnessPoint(
 
     // Check project settings for witness point notification configuration
     const project = instance.lot.project
-    let settings: any = {}
+    let settings: ProjectSettings = {}
     if (project.settings) {
       try {
-        settings = JSON.parse(project.settings)
+        settings = JSON.parse(project.settings) as ProjectSettings
       } catch (e) {
         // Invalid JSON, use defaults
       }
@@ -173,7 +235,7 @@ async function checkAndNotifyWitnessPoint(
     }
 
     // Find the target item
-    const nextItem = checklistItems.find((item: any) => item.sequenceNumber === targetSequence)
+    const nextItem = checklistItems.find((item) => item.sequenceNumber === targetSequence)
     if (!nextItem) {
       return null
     }
@@ -185,7 +247,7 @@ async function checkAndNotifyWitnessPoint(
 
     // Check if the witness point is already completed (no need to notify)
     const witnessPointCompletion = instance.completions.find(
-      (c: any) => c.checklistItemId === nextItem.id && (c.status === 'completed' || c.status === 'not_applicable')
+      (c) => c.checklistItemId === nextItem.id && (c.status === 'completed' || c.status === 'not_applicable')
     )
     if (witnessPointCompletion) {
       return null // Witness point already passed
@@ -285,9 +347,9 @@ async function updateLotStatusFromITP(itpInstanceId: string) {
     }
 
     // Get checklist items from snapshot or template
-    let checklistItems: any[]
+    let checklistItems: ChecklistItem[]
     if (instance.templateSnapshot) {
-      const snapshot = JSON.parse(instance.templateSnapshot)
+      const snapshot: TemplateSnapshot = JSON.parse(instance.templateSnapshot)
       checklistItems = snapshot.checklistItems || []
     } else {
       checklistItems = instance.template.checklistItems
@@ -308,16 +370,16 @@ async function updateLotStatusFromITP(itpInstanceId: string) {
     const completedCount = completedItemIds.size
 
     // Identify test items (items with evidenceRequired === 'test' or testType set)
-    const testItems = checklistItems.filter((item: any) => item.evidenceRequired === 'test' || item.testType)
-    const nonTestItems = checklistItems.filter((item: any) => item.evidenceRequired !== 'test' && !item.testType)
+    const testItems = checklistItems.filter((item) => item.evidenceRequired === 'test' || item.testType)
+    const nonTestItems = checklistItems.filter((item) => item.evidenceRequired !== 'test' && !item.testType)
 
     // Count completed non-test items
-    const completedNonTestCount = nonTestItems.filter((item: any) =>
+    const completedNonTestCount = nonTestItems.filter((item) =>
       completedItemIds.has(item.id)
     ).length
 
     // Count completed test items
-    const completedTestCount = testItems.filter((item: any) =>
+    const completedTestCount = testItems.filter((item) =>
       completedItemIds.has(item.id)
     ).length
 
@@ -359,7 +421,7 @@ async function updateLotStatusFromITP(itpInstanceId: string) {
 }
 
 // Get ITP templates from other projects (for cross-project import - Feature #682)
-itpRouter.get('/templates/cross-project', requireAuth, async (req: any, res) => {
+itpRouter.get('/templates/cross-project', requireAuth, async (req: Request, res: Response) => {
   try {
     const user = req.user as AuthUser
     const { currentProjectId } = req.query
@@ -435,7 +497,7 @@ itpRouter.get('/templates/cross-project', requireAuth, async (req: any, res) => 
 })
 
 // Get ITP templates for a project
-itpRouter.get('/templates', requireAuth, async (req: any, res) => {
+itpRouter.get('/templates', requireAuth, async (req: Request, res: Response) => {
   try {
     const { projectId, includeGlobal } = req.query
 
@@ -502,7 +564,7 @@ itpRouter.get('/templates', requireAuth, async (req: any, res) => {
 })
 
 // Get single ITP template
-itpRouter.get('/templates/:id', requireAuth, async (req: any, res) => {
+itpRouter.get('/templates/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -543,7 +605,7 @@ itpRouter.get('/templates/:id', requireAuth, async (req: any, res) => {
 })
 
 // Create ITP template
-itpRouter.post('/templates', requireAuth, async (req: any, res) => {
+itpRouter.post('/templates', requireAuth, async (req: Request, res: Response) => {
   try {
     const parseResult = createTemplateSchema.safeParse(req.body)
     if (!parseResult.success) {
@@ -558,7 +620,7 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
         description: description || null,
         activityType,
         checklistItems: {
-          create: (checklistItems || []).map((item: any, index: number) => ({
+          create: (checklistItems || []).map((item, index: number) => ({
             description: item.description,
             sequenceNumber: index + 1,
             pointType: item.pointType || (item.isHoldPoint ? 'hold_point' : 'standard'),
@@ -600,7 +662,7 @@ itpRouter.post('/templates', requireAuth, async (req: any, res) => {
 })
 
 // Clone ITP template
-itpRouter.post('/templates/:id/clone', requireAuth, async (req: any, res) => {
+itpRouter.post('/templates/:id/clone', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
     const parseResult = cloneTemplateSchema.safeParse(req.body)
@@ -677,7 +739,7 @@ itpRouter.post('/templates/:id/clone', requireAuth, async (req: any, res) => {
 })
 
 // Update ITP template
-itpRouter.patch('/templates/:id', requireAuth, async (req: any, res) => {
+itpRouter.patch('/templates/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
     const parseResult = updateTemplateSchema.safeParse(req.body)
@@ -700,7 +762,7 @@ itpRouter.patch('/templates/:id', requireAuth, async (req: any, res) => {
     if (isActive !== undefined) updateData.isActive = isActive
     if (checklistItems) {
       updateData.checklistItems = {
-        create: checklistItems.map((item: any, index: number) => ({
+        create: checklistItems.map((item, index: number) => ({
           description: item.description,
           sequenceNumber: index + 1,
           pointType: item.pointType || 'standard',
@@ -746,7 +808,7 @@ itpRouter.patch('/templates/:id', requireAuth, async (req: any, res) => {
 })
 
 // Get lots using a template (for propagation feature)
-itpRouter.get('/templates/:id/lots', requireAuth, async (req: any, res) => {
+itpRouter.get('/templates/:id/lots', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -784,7 +846,7 @@ itpRouter.get('/templates/:id/lots', requireAuth, async (req: any, res) => {
 })
 
 // Delete ITP template with usage validation (Feature #575)
-itpRouter.delete('/templates/:id', requireAuth, async (req: any, res) => {
+itpRouter.delete('/templates/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
     const { force } = req.query // If force=true, delete even if in use
@@ -866,7 +928,7 @@ itpRouter.delete('/templates/:id', requireAuth, async (req: any, res) => {
 })
 
 // Archive ITP template (soft delete alternative) (Feature #575)
-itpRouter.post('/templates/:id/archive', requireAuth, async (req: any, res) => {
+itpRouter.post('/templates/:id/archive', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -909,7 +971,7 @@ itpRouter.post('/templates/:id/archive', requireAuth, async (req: any, res) => {
 })
 
 // Restore archived ITP template (Feature #575)
-itpRouter.post('/templates/:id/restore', requireAuth, async (req: any, res) => {
+itpRouter.post('/templates/:id/restore', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
 
@@ -952,7 +1014,7 @@ itpRouter.post('/templates/:id/restore', requireAuth, async (req: any, res) => {
 })
 
 // Propagate template changes to selected lots
-itpRouter.post('/templates/:id/propagate', requireAuth, async (req: any, res) => {
+itpRouter.post('/templates/:id/propagate', requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params
     const parseResult = propagateTemplateSchema.safeParse(req.body)
@@ -1016,7 +1078,7 @@ itpRouter.post('/templates/:id/propagate', requireAuth, async (req: any, res) =>
 })
 
 // Assign ITP template to lot (create ITP instance)
-itpRouter.post('/instances', requireAuth, async (req: any, res) => {
+itpRouter.post('/instances', requireAuth, async (req: Request, res: Response) => {
   try {
     const parseResult = createInstanceSchema.safeParse(req.body)
     if (!parseResult.success) {
@@ -1118,7 +1180,7 @@ itpRouter.post('/instances', requireAuth, async (req: any, res) => {
 
 // Feature #271: Get ITP instance for a lot with subcontractor filtering
 // Subcontractors only see items where responsibleParty = 'subcontractor'
-itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
+itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: Request, res: Response) => {
   // User available on req.user for future permission checks
   const { subcontractorView } = req.query // If true, filter to subcontractor items only
 
@@ -1164,13 +1226,13 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
     }
 
     // Use snapshot if available, otherwise fall back to live template
-    let templateData: any
+    let templateData: TransformedTemplateData
     if (instance.templateSnapshot) {
       // Parse the snapshot (template state at assignment time)
-      const snapshot = JSON.parse(instance.templateSnapshot)
+      const snapshot: TemplateSnapshot = JSON.parse(instance.templateSnapshot)
       templateData = {
         ...snapshot,
-        checklistItems: snapshot.checklistItems.map((item: any) => ({
+        checklistItems: snapshot.checklistItems.map((item) => ({
           id: item.id,
           description: item.description,
           category: item.responsibleParty || 'general',
@@ -1205,12 +1267,12 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
     // Feature #271: Filter to subcontractor-assigned items only if subcontractorView is true
     if (subcontractorView === 'true') {
       templateData.checklistItems = templateData.checklistItems.filter(
-        (item: any) => item.responsibleParty === 'subcontractor'
+        (item) => item.responsibleParty === 'subcontractor'
       )
     }
 
     // Get item IDs for filtered items (used to filter completions)
-    const filteredItemIds = new Set(templateData.checklistItems.map((item: any) => item.id))
+    const filteredItemIds = new Set(templateData.checklistItems.map((item) => item.id))
 
     // Transform to frontend-friendly format
     const transformedInstance = {
@@ -1225,7 +1287,7 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
           isFailed: c.status === 'failed',
           isVerified: c.verificationStatus === 'verified',
           isPendingVerification: c.verificationStatus === 'pending_verification',
-          attachments: (c as any).attachments?.map((a: any) => ({
+          attachments: (c as CompletionWithAttachments).attachments?.map((a) => ({
             id: a.id,
             documentId: a.documentId,
             document: a.document
@@ -1241,7 +1303,7 @@ itpRouter.get('/instances/lot/:lotId', requireAuth, async (req: any, res) => {
 })
 
 // Complete/update a checklist item (supports N/A and Failed status with reason)
-itpRouter.post('/completions', requireAuth, async (req: any, res) => {
+itpRouter.post('/completions', requireAuth, async (req: Request, res: Response) => {
   try {
     const user = req.user as AuthUser
     const parseResult = createCompletionSchema.safeParse(req.body)
@@ -1599,7 +1661,7 @@ itpRouter.post('/completions', requireAuth, async (req: any, res) => {
 })
 
 // Verify a completed checklist item (for hold points)
-itpRouter.post('/completions/:id/verify', requireAuth, async (req: any, res) => {
+itpRouter.post('/completions/:id/verify', requireAuth, async (req: Request, res: Response) => {
   try {
     const user = req.user as AuthUser
     const { id } = req.params
@@ -1664,7 +1726,7 @@ itpRouter.post('/completions/:id/verify', requireAuth, async (req: any, res) => 
 })
 
 // Reject a completed checklist item (Feature #634)
-itpRouter.post('/completions/:id/reject', requireAuth, async (req: any, res) => {
+itpRouter.post('/completions/:id/reject', requireAuth, async (req: Request, res: Response) => {
   try {
     const user = req.user as AuthUser
     const { id } = req.params
@@ -1738,7 +1800,7 @@ itpRouter.post('/completions/:id/reject', requireAuth, async (req: any, res) => 
 
 // Feature #272: Get pending verifications for a project
 // Head contractor can view all ITP items completed by subcontractors that need verification
-itpRouter.get('/pending-verifications', requireAuth, async (req: any, res) => {
+itpRouter.get('/pending-verifications', requireAuth, async (req: Request, res: Response) => {
   try {
     const { projectId } = req.query
 
@@ -1818,7 +1880,7 @@ itpRouter.get('/pending-verifications', requireAuth, async (req: any, res) => {
 })
 
 // Add photo attachment to ITP completion
-itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req: any, res) => {
+itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req: Request, res: Response) => {
   try {
     const user = req.user as AuthUser
     const { completionId } = req.params
@@ -1926,7 +1988,7 @@ itpRouter.post('/completions/:completionId/attachments', requireAuth, async (req
 })
 
 // Get attachments for an ITP completion
-itpRouter.get('/completions/:completionId/attachments', requireAuth, async (req: any, res) => {
+itpRouter.get('/completions/:completionId/attachments', requireAuth, async (req: Request, res: Response) => {
   try {
     const { completionId } = req.params
 
@@ -1957,7 +2019,7 @@ itpRouter.get('/completions/:completionId/attachments', requireAuth, async (req:
 })
 
 // Delete an attachment from ITP completion
-itpRouter.delete('/completions/:completionId/attachments/:attachmentId', requireAuth, async (req: any, res) => {
+itpRouter.delete('/completions/:completionId/attachments/:attachmentId', requireAuth, async (req: Request, res: Response) => {
   try {
     const { completionId, attachmentId } = req.params
 

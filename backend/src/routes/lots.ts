@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js'
@@ -172,7 +173,7 @@ lotsRouter.get('/', async (req, res) => {
     const { skip, take } = getPrismaSkipTake(page, limit)
 
     // Build where clause based on user role
-    const whereClause: any = { projectId: projectId as string }
+    const whereClause: Prisma.LotWhereInput = { projectId: projectId as string }
 
     // Filter by status if provided
     if (status) {
@@ -223,7 +224,7 @@ lotsRouter.get('/', async (req, res) => {
     }
 
     // Build select clause - conditionally include ITP data
-    const selectClause: any = {
+    const selectClause: Prisma.LotSelect = {
       id: true,
       lotNumber: true,
       description: true,
@@ -635,11 +636,11 @@ lotsRouter.post('/', async (req, res) => {
     }
 
     res.status(201).json({ lot })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Create lot error:', error)
 
     // Handle Prisma unique constraint violation
-    if (error?.code === 'P2002') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(409).json({
         error: 'Conflict',
         message: 'A lot with this number already exists in this project',
@@ -663,7 +664,7 @@ lotsRouter.post('/bulk', requireRole(LOT_CREATORS), async (req, res) => {
 
     // Create all lots in a transaction
     const createdLots = await prisma.$transaction(
-      lotsData.map((lot: any) =>
+      lotsData.map((lot) =>
         prisma.lot.create({
           data: {
             projectId,
@@ -801,10 +802,10 @@ lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), async (req, res) => {
       sourceLotId: sourceLot.id,
       message: `Lot cloned from ${sourceLot.lotNumber}`,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Clone lot error:', error)
 
-    if (error?.code === 'P2002') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(409).json({
         error: 'Conflict',
         message: 'A lot with this number already exists in this project',
@@ -934,7 +935,7 @@ lotsRouter.patch('/:id', async (req, res) => {
     }
 
     // Build update data - only include fields that were provided
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (validatedLotType !== undefined) updateData.lotType = validatedLotType
     if (lotNumber !== undefined) updateData.lotNumber = lotNumber
     if (description !== undefined) updateData.description = description
