@@ -115,8 +115,10 @@ describe('Daily Diary API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(200)
-      // API returns array directly
-      expect(Array.isArray(res.body)).toBe(true)
+      // API returns paginated response
+      expect(res.body).toHaveProperty('data')
+      expect(res.body).toHaveProperty('pagination')
+      expect(Array.isArray(res.body.data)).toBe(true)
     })
   })
 

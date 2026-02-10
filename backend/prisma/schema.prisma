@@ -1,4 +1,4 @@
-// SiteProof v2 - Prisma Schema
+// SiteProof v3 - Prisma Schema
 // Civil Execution and Conformance Platform
 
 generator client {
@@ -55,7 +55,7 @@ model User {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  company         Company?          @relation(fields: [companyId], references: [id])
+  company         Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
   projectUsers    ProjectUser[]
   createdLots     Lot[]             @relation("CreatedByUser")
   conformedLots   Lot[]             @relation("ConformedByUser")
@@ -85,6 +85,8 @@ model User {
   apiKeys              ApiKey[]   // Feature #747: External API access
   consentRecords       ConsentRecord[]  // Feature #776: Privacy consent tracking
   assignedLotSubcontractors LotSubcontractorAssignment[] @relation("AssignedByUser")
+  subcontractorUsers   SubcontractorUser[]
+  scheduledReports     ScheduledReport[]
 
   @@map("users")
 }
@@ -153,7 +155,7 @@ model Project {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  company                    Company               @relation(fields: [companyId], references: [id])
+  company                    Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
   projectUsers               ProjectUser[]
   projectAreas               ProjectArea[]
   lots                       Lot[]
@@ -169,6 +171,7 @@ model Project {
   auditLogs                  AuditLog[]
   testResults                TestResult[]
   lotSubcontractorAssignments LotSubcontractorAssignment[]
+  scheduledReports            ScheduledReport[]
 
   @@unique([companyId, projectNumber])
   @@map("projects")
@@ -187,6 +190,7 @@ model ProjectUser {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@index([userId])
   @@map("project_users")
 }
 
@@ -236,11 +240,11 @@ model Lot {
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
   project               Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  itpTemplate           ITPTemplate?          @relation(fields: [itpTemplateId], references: [id])
-  assignedSubcontractor SubcontractorCompany? @relation(fields: [assignedSubcontractorId], references: [id])
-  createdBy             User?                 @relation("CreatedByUser", fields: [createdById], references: [id])
-  conformedBy           User?                 @relation("ConformedByUser", fields: [conformedById], references: [id])
-  claimedIn             ProgressClaim?        @relation(fields: [claimedInId], references: [id])
+  itpTemplate           ITPTemplate?          @relation(fields: [itpTemplateId], references: [id], onDelete: SetNull)
+  assignedSubcontractor SubcontractorCompany? @relation(fields: [assignedSubcontractorId], references: [id], onDelete: SetNull)
+  createdBy             User?                 @relation("CreatedByUser", fields: [createdById], references: [id], onDelete: SetNull)
+  conformedBy           User?                 @relation("ConformedByUser", fields: [conformedById], references: [id], onDelete: SetNull)
+  claimedIn             ProgressClaim?        @relation(fields: [claimedInId], references: [id], onDelete: SetNull)
 
   itpInstance              ITPInstance?
   holdPoints               HoldPoint[]
@@ -307,6 +311,7 @@ model ITPChecklistItem {
   holdPoints     HoldPoint[]
   testResults    TestResult[]
 
+  @@index([templateId])
   @@map("itp_checklist_items")
 }
 
@@ -320,7 +325,7 @@ model ITPInstance {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   lot         Lot             @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  template    ITPTemplate     @relation(fields: [templateId], references: [id])
+  template    ITPTemplate     @relation(fields: [templateId], references: [id], onDelete: Restrict)
   completions ITPCompletion[]
 
   @@map("itp_instances")
@@ -346,13 +351,14 @@ model ITPCompletion {
   gpsLongitude       Decimal?  @map("gps_longitude")
 
   itpInstance   ITPInstance      @relation(fields: [itpInstanceId], references: [id], onDelete: Cascade)
-  checklistItem ITPChecklistItem @relation(fields: [checklistItemId], references: [id])
-  completedBy   User?            @relation("CompletedByUser", fields: [completedById], references: [id])
-  verifiedBy    User?            @relation("VerifiedByUser", fields: [verifiedById], references: [id])
+  checklistItem ITPChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Restrict)
+  completedBy   User?            @relation("CompletedByUser", fields: [completedById], references: [id], onDelete: SetNull)
+  verifiedBy    User?            @relation("VerifiedByUser", fields: [verifiedById], references: [id], onDelete: SetNull)
 
   attachments ITPCompletionAttachment[]
 
   @@index([itpInstanceId])
+  @@index([itpInstanceId, checklistItemId])
   @@index([verificationStatus])
   @@map("itp_completions")
 }
@@ -363,7 +369,7 @@ model ITPCompletionAttachment {
   documentId   String @map("document_id")
 
   completion ITPCompletion @relation(fields: [completionId], references: [id], onDelete: Cascade)
-  document   Document      @relation(fields: [documentId], references: [id])
+  document   Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@map("itp_completion_attachments")
 }
@@ -404,7 +410,7 @@ model HoldPoint {
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
   lot               Lot              @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  itpChecklistItem  ITPChecklistItem @relation(fields: [itpChecklistItemId], references: [id])
+  itpChecklistItem  ITPChecklistItem @relation(fields: [itpChecklistItemId], references: [id], onDelete: Restrict)
   releaseTokens     HoldPointReleaseToken[]
 
   @@index([lotId])
@@ -470,14 +476,15 @@ model TestResult {
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lot              Lot?              @relation(fields: [lotId], references: [id])
-  itpChecklistItem ITPChecklistItem? @relation(fields: [itpChecklistItemId], references: [id])
-  certificateDoc   Document?         @relation(fields: [certificateDocId], references: [id])
-  enteredBy        User?             @relation("EnteredByUser", fields: [enteredById], references: [id])
-  verifiedBy       User?             @relation("VerifiedByTestUser", fields: [verifiedById], references: [id])
-  rejectedBy       User?             @relation("RejectedByTestUser", fields: [rejectedById], references: [id])
+  lot              Lot?              @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  itpChecklistItem ITPChecklistItem? @relation(fields: [itpChecklistItemId], references: [id], onDelete: SetNull)
+  certificateDoc   Document?         @relation(fields: [certificateDocId], references: [id], onDelete: SetNull)
+  enteredBy        User?             @relation("EnteredByUser", fields: [enteredById], references: [id], onDelete: SetNull)
+  verifiedBy       User?             @relation("VerifiedByTestUser", fields: [verifiedById], references: [id], onDelete: SetNull)
+  rejectedBy       User?             @relation("RejectedByTestUser", fields: [rejectedById], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+  @@index([projectId, status])
   @@index([lotId])
   @@index([projectId, passFail])
   @@map("test_results")
@@ -499,7 +506,7 @@ model NCR {
   qmApprovalRequired        Boolean   @default(false) @map("qm_approval_required")
   qmApprovedById            String?   @map("qm_approved_by")
   qmApprovedAt              DateTime? @map("qm_approved_at")
-  raisedById                String    @map("raised_by")
+  raisedById                String?   @map("raised_by")
   raisedAt                  DateTime  @default(now()) @map("raised_at")
   responsibleUserId         String?   @map("responsible_user_id")
   responsibleSubcontractorId String?  @map("responsible_subcontractor_id")
@@ -545,15 +552,15 @@ model NCR {
   updatedAt                 DateTime  @updatedAt @map("updated_at")
 
   project                  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  respondedBy              User?                 @relation("RespondedByUser", fields: [respondedById], references: [id])
-  qmReviewedBy             User?                 @relation("QMReviewedByUser", fields: [qmReviewedById], references: [id])
-  escalatedBy              User?                 @relation("EscalatedByUser", fields: [escalatedById], references: [id])
-  raisedBy                 User                  @relation("RaisedByUser", fields: [raisedById], references: [id])
-  responsibleUser          User?                 @relation("ResponsibleUser", fields: [responsibleUserId], references: [id])
-  responsibleSubcontractor SubcontractorCompany? @relation(fields: [responsibleSubcontractorId], references: [id])
-  verifiedBy               User?                 @relation("VerifiedByUser", fields: [verifiedById], references: [id])
-  closedBy                 User?                 @relation("ClosedByUser", fields: [closedById], references: [id])
-  qmApprovedBy             User?                 @relation("QMApprovedByUser", fields: [qmApprovedById], references: [id])
+  respondedBy              User?                 @relation("RespondedByUser", fields: [respondedById], references: [id], onDelete: SetNull)
+  qmReviewedBy             User?                 @relation("QMReviewedByUser", fields: [qmReviewedById], references: [id], onDelete: SetNull)
+  escalatedBy              User?                 @relation("EscalatedByUser", fields: [escalatedById], references: [id], onDelete: SetNull)
+  raisedBy                 User?                 @relation("RaisedByUser", fields: [raisedById], references: [id], onDelete: SetNull)
+  responsibleUser          User?                 @relation("ResponsibleUser", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  responsibleSubcontractor SubcontractorCompany? @relation(fields: [responsibleSubcontractorId], references: [id], onDelete: SetNull)
+  verifiedBy               User?                 @relation("VerifiedByUser", fields: [verifiedById], references: [id], onDelete: SetNull)
+  closedBy                 User?                 @relation("ClosedByUser", fields: [closedById], references: [id], onDelete: SetNull)
+  qmApprovedBy             User?                 @relation("QMApprovedByUser", fields: [qmApprovedById], references: [id], onDelete: SetNull)
 
   ncrLots   NCRLot[]
   ncrEvidence NCREvidence[]
@@ -586,7 +593,7 @@ model NCREvidence {
   uploadedAt   DateTime @default(now()) @map("uploaded_at")
 
   ncr      NCR      @relation(fields: [ncrId], references: [id], onDelete: Cascade)
-  document Document @relation(fields: [documentId], references: [id])
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@map("ncr_evidence")
 }
@@ -615,7 +622,7 @@ model DailyDiary {
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  submittedBy User?           @relation(fields: [submittedById], references: [id])
+  submittedBy User?           @relation(fields: [submittedById], references: [id], onDelete: SetNull)
 
   personnel  DiaryPersonnel[]
   plant      DiaryPlant[]
@@ -646,8 +653,8 @@ model DiaryPersonnel {
   createdAt  DateTime @default(now()) @map("created_at")
 
   diary  DailyDiary   @relation(fields: [diaryId], references: [id], onDelete: Cascade)
-  lot    Lot?         @relation(fields: [lotId], references: [id])
-  docket DailyDocket? @relation(fields: [docketId], references: [id])
+  lot    Lot?         @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  docket DailyDocket? @relation(fields: [docketId], references: [id], onDelete: SetNull)
 
   @@map("diary_personnel")
 }
@@ -666,8 +673,8 @@ model DiaryPlant {
   createdAt     DateTime @default(now()) @map("created_at")
 
   diary  DailyDiary   @relation(fields: [diaryId], references: [id], onDelete: Cascade)
-  lot    Lot?         @relation(fields: [lotId], references: [id])
-  docket DailyDocket? @relation(fields: [docketId], references: [id])
+  lot    Lot?         @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  docket DailyDocket? @relation(fields: [docketId], references: [id], onDelete: SetNull)
 
   @@map("diary_plant")
 }
@@ -683,7 +690,7 @@ model DiaryActivity {
   createdAt   DateTime @default(now()) @map("created_at")
 
   diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
-  lot   Lot?       @relation(fields: [lotId], references: [id])
+  lot   Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
 
   @@map("diary_activities")
 }
@@ -714,7 +721,7 @@ model DiaryDelay {
   createdAt     DateTime @default(now()) @map("created_at")
 
   diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
-  lot   Lot?       @relation(fields: [lotId], references: [id])
+  lot   Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
 
   @@map("diary_delays")
 }
@@ -733,7 +740,7 @@ model DiaryDelivery {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
-  lot   Lot?       @relation(fields: [lotId], references: [id])
+  lot   Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
 
   @@map("diary_deliveries")
 }
@@ -749,7 +756,7 @@ model DiaryEvent {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   diary DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
-  lot   Lot?       @relation(fields: [lotId], references: [id])
+  lot   Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
 
   @@map("diary_events")
 }
@@ -758,11 +765,11 @@ model DiaryAddendum {
   id        String   @id @default(uuid())
   diaryId   String   @map("diary_id")
   content   String
-  addedById String   @map("added_by")
+  addedById String?  @map("added_by")
   addedAt   DateTime @default(now()) @map("added_at")
 
   diary   DailyDiary @relation(fields: [diaryId], references: [id], onDelete: Cascade)
-  addedBy User       @relation(fields: [addedById], references: [id])
+  addedBy User?      @relation(fields: [addedById], references: [id], onDelete: SetNull)
 
   @@map("diary_addendums")
 }
@@ -788,6 +795,7 @@ model GlobalSubcontractor {
   organization          Company                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projectSubcontractors SubcontractorCompany[]
 
+  @@unique([organizationId, companyName])
   @@map("global_subcontractors")
 }
 
@@ -808,7 +816,7 @@ model SubcontractorCompany {
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
   project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  globalSubcontractor  GlobalSubcontractor? @relation(fields: [globalSubcontractorId], references: [id])
+  globalSubcontractor  GlobalSubcontractor? @relation(fields: [globalSubcontractorId], references: [id], onDelete: SetNull)
   users                SubcontractorUser[]
   employeeRoster       EmployeeRoster[]
   plantRegister        PlantRegister[]
@@ -828,7 +836,10 @@ model SubcontractorUser {
   createdAt             DateTime @default(now()) @map("created_at")
 
   subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([subcontractorCompanyId, userId])
+  @@index([userId])
   @@map("subcontractor_users")
 }
 
@@ -850,13 +861,14 @@ model LotSubcontractorAssignment {
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
   lot                     Lot       @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  subcontractorCompany    SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id])
-  project                 Project   @relation(fields: [projectId], references: [id])
+  subcontractorCompany    SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
+  project                 Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignedBy              User?     @relation("AssignedByUser", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@unique([lotId, subcontractorCompanyId])
   @@index([projectId])
   @@index([subcontractorCompanyId])
+  @@index([lotId, status])
   @@map("lot_subcontractor_assignments")
 }
 
@@ -925,6 +937,8 @@ model DailyDocket {
   diaryPersonnel DiaryPersonnel[]
   diaryPlant     DiaryPlant[]
 
+  @@index([projectId, date])
+  @@index([projectId, status])
   @@map("daily_dockets")
 }
 
@@ -942,7 +956,7 @@ model DocketLabour {
   adjustmentReason String?  @map("adjustment_reason")
 
   docket   DailyDocket     @relation(fields: [docketId], references: [id], onDelete: Cascade)
-  employee EmployeeRoster  @relation(fields: [employeeId], references: [id])
+  employee EmployeeRoster  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
   lotAllocations DocketLabourLot[]
 
@@ -956,7 +970,7 @@ model DocketLabourLot {
   hours          Decimal?
 
   docketLabour DocketLabour @relation(fields: [docketLabourId], references: [id], onDelete: Cascade)
-  lot          Lot          @relation(fields: [lotId], references: [id])
+  lot          Lot          @relation(fields: [lotId], references: [id], onDelete: Cascade)
 
   @@map("docket_labour_lots")
 }
@@ -973,7 +987,7 @@ model DocketPlant {
   adjustmentReason String?  @map("adjustment_reason")
 
   docket DailyDocket   @relation(fields: [docketId], references: [id], onDelete: Cascade)
-  plant  PlantRegister @relation(fields: [plantId], references: [id])
+  plant  PlantRegister @relation(fields: [plantId], references: [id], onDelete: Restrict)
 
   lotAllocations DocketPlantLot[]
 
@@ -987,7 +1001,7 @@ model DocketPlantLot {
   hours         Decimal?
 
   docketPlant DocketPlant @relation(fields: [docketPlantId], references: [id], onDelete: Cascade)
-  lot         Lot         @relation(fields: [lotId], references: [id])
+  lot         Lot         @relation(fields: [lotId], references: [id], onDelete: Cascade)
 
   @@map("docket_plant_lots")
 }
@@ -1021,7 +1035,7 @@ model ProgressClaim {
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
   project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  preparedBy User?        @relation(fields: [preparedById], references: [id])
+  preparedBy User?        @relation(fields: [preparedById], references: [id], onDelete: SetNull)
 
   claimedLots ClaimedLot[]
   lots        Lot[]
@@ -1043,8 +1057,9 @@ model ClaimedLot {
   notes              String?
 
   claim ProgressClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
-  lot   Lot           @relation(fields: [lotId], references: [id])
+  lot   Lot           @relation(fields: [lotId], references: [id], onDelete: Cascade)
 
+  @@unique([claimId, lotId])
   @@map("claimed_lots")
 }
 
@@ -1078,9 +1093,9 @@ model Document {
   isLatestVersion  Boolean   @default(true) @map("is_latest_version")
 
   project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lot            Lot?      @relation(fields: [lotId], references: [id])
-  uploadedBy     User?     @relation(fields: [uploadedById], references: [id])
-  parentDocument Document? @relation("DocumentVersions", fields: [parentDocumentId], references: [id])
+  lot            Lot?      @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  uploadedBy     User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  parentDocument Document? @relation("DocumentVersions", fields: [parentDocumentId], references: [id], onDelete: SetNull)
   childVersions  Document[] @relation("DocumentVersions")
 
   itpCompletionAttachments ITPCompletionAttachment[]
@@ -1088,6 +1103,8 @@ model Document {
   testCertificates         TestResult[]
   drawings                 Drawing[]
 
+  @@index([projectId, documentType])
+  @@index([projectId, lotId])
   @@map("documents")
 }
 
@@ -1105,8 +1122,8 @@ model Drawing {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  document    Document  @relation(fields: [documentId], references: [id])
-  supersededBy Drawing?  @relation("DrawingSupersedes", fields: [supersededById], references: [id])
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  supersededBy Drawing?  @relation("DrawingSupersedes", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes   Drawing[] @relation("DrawingSupersedes")
 
   @@map("drawings")
@@ -1130,6 +1147,8 @@ model Notification {
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
   @@map("notifications")
 }
 
@@ -1146,8 +1165,10 @@ model AuditLog {
   createdAt  DateTime @default(now()) @map("created_at")
 
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User?    @relation(fields: [userId], references: [id])
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  @@index([projectId, createdAt])
+  @@index([entityType, entityId])
   @@map("audit_logs")
 }
 
@@ -1223,6 +1244,9 @@ model ScheduledReport {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
   @@map("scheduled_reports")
 }
 
@@ -1236,15 +1260,15 @@ model Comment {
   entityId     String    @map("entity_id")
   parentId     String?   @map("parent_id") // For reply threading
   content      String
-  authorId     String    @map("author_id")
+  authorId     String?   @map("author_id")
   isEdited     Boolean   @default(false) @map("is_edited")
   editedAt     DateTime? @map("edited_at")
   deletedAt    DateTime? @map("deleted_at") // Soft delete
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  author      User                @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parent      Comment?            @relation("CommentReplies", fields: [parentId], references: [id])
+  author      User?               @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  parent      Comment?            @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
   replies     Comment[]           @relation("CommentReplies")
   attachments CommentAttachment[]
 
