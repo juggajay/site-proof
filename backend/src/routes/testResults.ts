@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
 import { sendNotificationIfEnabled } from './notifications.js'
 
 export const testResultsRouter = Router()
@@ -353,39 +354,50 @@ testResultsRouter.get('/', async (req, res) => {
       }
     }
 
-    const testResults = await prisma.testResult.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        testType: true,
-        testRequestNumber: true,
-        laboratoryName: true,
-        laboratoryReportNumber: true,
-        sampleDate: true,
-        sampleLocation: true,
-        testDate: true,
-        resultDate: true,
-        resultValue: true,
-        resultUnit: true,
-        specificationMin: true,
-        specificationMax: true,
-        passFail: true,
-        status: true,
-        lotId: true,
-        lot: {
-          select: {
-            id: true,
-            lotNumber: true,
-          }
-        },
-        aiExtracted: true,  // Feature #200
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+    const pagination = parsePagination(req.query)
+    const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit)
 
-    res.json({ testResults })
+    const [testResults, total] = await Promise.all([
+      prisma.testResult.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          testType: true,
+          testRequestNumber: true,
+          laboratoryName: true,
+          laboratoryReportNumber: true,
+          sampleDate: true,
+          sampleLocation: true,
+          testDate: true,
+          resultDate: true,
+          resultValue: true,
+          resultUnit: true,
+          specificationMin: true,
+          specificationMax: true,
+          passFail: true,
+          status: true,
+          lotId: true,
+          lot: {
+            select: {
+              id: true,
+              lotNumber: true,
+            }
+          },
+          aiExtracted: true,  // Feature #200
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      prisma.testResult.count({ where: whereClause }),
+    ])
+
+    res.json({
+      testResults,
+      pagination: getPaginationMeta(total, pagination.page, pagination.limit),
+    })
   } catch (error) {
     console.error('Get test results error:', error)
     res.status(500).json({ error: 'Internal server error' })

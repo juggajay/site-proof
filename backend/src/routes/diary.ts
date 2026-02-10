@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { z } from 'zod'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
 
 const router = Router()
 
@@ -100,8 +101,8 @@ async function checkProjectAccess(userId: string, projectId: string): Promise<bo
   return !!projectUser
 }
 
-// GET /api/diary/:projectId - List all diaries for a project
-// Supports ?search=text to filter by content
+// GET /api/diary/:projectId - List diaries for a project with pagination
+// Supports ?search=text, ?page=1, ?limit=20
 router.get('/:projectId', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
@@ -117,59 +118,58 @@ router.get('/:projectId', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Access denied to this project' })
     }
 
-    const diaries = await prisma.dailyDiary.findMany({
-      where: { projectId },
-      include: {
-        submittedBy: { select: { id: true, fullName: true, email: true } },
-        personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        events: { include: { lot: { select: { id: true, lotNumber: true } } } },
-      },
-      orderBy: { date: 'desc' }
-    })
+    const pagination = parsePagination(req.query)
+    const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit)
 
-    // Feature #240: Filter by search term if provided
+    // Build where clause with search pushed to database level where possible
+    const where: any = { projectId }
+
     if (search && typeof search === 'string' && search.trim()) {
-      const searchLower = search.toLowerCase().trim()
-      const filteredDiaries = diaries.filter(diary => {
-        // Search in general notes
-        if (diary.generalNotes?.toLowerCase().includes(searchLower)) return true
-        // Search in weather notes
-        if (diary.weatherNotes?.toLowerCase().includes(searchLower)) return true
-        // Search in weather conditions
-        if (diary.weatherConditions?.toLowerCase().includes(searchLower)) return true
-        // Search in personnel names and companies
-        if (diary.personnel.some(p =>
-          p.name?.toLowerCase().includes(searchLower) ||
-          p.company?.toLowerCase().includes(searchLower) ||
-          p.role?.toLowerCase().includes(searchLower)
-        )) return true
-        // Search in plant descriptions
-        if (diary.plant.some(p =>
-          p.description?.toLowerCase().includes(searchLower) ||
-          p.company?.toLowerCase().includes(searchLower) ||
-          p.notes?.toLowerCase().includes(searchLower)
-        )) return true
-        // Search in activities
-        if (diary.activities.some(a =>
-          a.description?.toLowerCase().includes(searchLower) ||
-          a.notes?.toLowerCase().includes(searchLower)
-        )) return true
-        // Search in delays
-        if (diary.delays.some(d =>
-          d.description?.toLowerCase().includes(searchLower) ||
-          d.delayType?.toLowerCase().includes(searchLower) ||
-          d.impact?.toLowerCase().includes(searchLower)
-        )) return true
-        return false
-      })
-      return res.json(filteredDiaries)
+      const searchTerm = search.trim()
+      where.OR = [
+        { generalNotes: { contains: searchTerm, mode: 'insensitive' } },
+        { weatherNotes: { contains: searchTerm, mode: 'insensitive' } },
+        { weatherConditions: { contains: searchTerm, mode: 'insensitive' } },
+        { personnel: { some: { OR: [
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { company: { contains: searchTerm, mode: 'insensitive' } },
+          { role: { contains: searchTerm, mode: 'insensitive' } },
+        ]}}},
+        { activities: { some: { OR: [
+          { description: { contains: searchTerm, mode: 'insensitive' } },
+          { notes: { contains: searchTerm, mode: 'insensitive' } },
+        ]}}},
+        { delays: { some: { OR: [
+          { description: { contains: searchTerm, mode: 'insensitive' } },
+          { delayType: { contains: searchTerm, mode: 'insensitive' } },
+          { impact: { contains: searchTerm, mode: 'insensitive' } },
+        ]}}},
+      ]
     }
 
-    res.json(diaries)
+    const [diaries, total] = await Promise.all([
+      prisma.dailyDiary.findMany({
+        where,
+        include: {
+          submittedBy: { select: { id: true, fullName: true, email: true } },
+          personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          events: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        },
+        orderBy: { date: 'desc' },
+        skip,
+        take,
+      }),
+      prisma.dailyDiary.count({ where }),
+    ])
+
+    res.json({
+      data: diaries,
+      pagination: getPaginationMeta(total, pagination.page, pagination.limit),
+    })
   } catch (error) {
     console.error('Error fetching diaries:', error)
     res.status(500).json({ error: 'Failed to fetch diaries' })

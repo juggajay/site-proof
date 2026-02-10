@@ -13,6 +13,7 @@ const rateLimitStore = new Map<string, RateLimitEntry>()
 const WINDOW_MS = 60 * 1000 // 1 minute window
 const MAX_REQUESTS = 1000 // Max requests per window (increased for dev/testing)
 const CLEANUP_INTERVAL = 5 * 60 * 1000 // Clean up old entries every 5 minutes
+const MAX_MAP_SIZE = 10000 // Prevent unbounded memory growth
 
 // Cleanup old entries periodically
 setInterval(() => {
@@ -22,7 +23,17 @@ setInterval(() => {
       rateLimitStore.delete(ip)
     }
   }
+  // Hard cap: if still too large, remove oldest entries
+  if (rateLimitStore.size > MAX_MAP_SIZE) {
+    const entries = Array.from(rateLimitStore.entries())
+    entries.sort((a, b) => a[1].firstRequestTime - b[1].firstRequestTime)
+    const toRemove = entries.slice(0, entries.length - MAX_MAP_SIZE)
+    for (const [key] of toRemove) {
+      rateLimitStore.delete(key)
+    }
+  }
 }, CLEANUP_INTERVAL)
+// TODO: Migrate to Redis-backed rate limiter for multi-instance scaling (Phase 6)
 
 /**
  * Get client IP address from request

@@ -2,6 +2,7 @@
 import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
 import { supabase, isSupabaseConfigured, getSupabasePublicUrl, DOCUMENTS_BUCKET } from '../lib/supabase.js'
 import multer from 'multer'
 import path from 'path'
@@ -395,26 +396,33 @@ router.get('/:projectId', async (req: Request, res: Response) => {
       }
     }
 
-    let documents = await prisma.document.findMany({
-      where,
-      include: {
-        lot: { select: { id: true, lotNumber: true, description: true } },
-        uploadedBy: { select: { id: true, fullName: true, email: true } },
-      },
-      orderBy: { uploadedAt: 'desc' },
-    })
-
-    // Filter by search term if provided
+    // Push search filtering to database
     if (search && typeof search === 'string' && search.trim()) {
-      const searchLower = search.toLowerCase().trim()
-      documents = documents.filter(doc =>
-        doc.filename.toLowerCase().includes(searchLower) ||
-        doc.caption?.toLowerCase().includes(searchLower) ||
-        doc.category?.toLowerCase().includes(searchLower) ||
-        doc.documentType.toLowerCase().includes(searchLower) ||
-        doc.lot?.lotNumber.toLowerCase().includes(searchLower)
-      )
+      const searchTerm = search.trim()
+      where.OR = [
+        { filename: { contains: searchTerm, mode: 'insensitive' } },
+        { caption: { contains: searchTerm, mode: 'insensitive' } },
+        { category: { contains: searchTerm, mode: 'insensitive' } },
+        { documentType: { contains: searchTerm, mode: 'insensitive' } },
+      ]
     }
+
+    const pagination = parsePagination(req.query)
+    const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit)
+
+    const [documents, total] = await Promise.all([
+      prisma.document.findMany({
+        where,
+        include: {
+          lot: { select: { id: true, lotNumber: true, description: true } },
+          uploadedBy: { select: { id: true, fullName: true, email: true } },
+        },
+        orderBy: { uploadedAt: 'desc' },
+        skip,
+        take,
+      }),
+      prisma.document.count({ where }),
+    ])
 
     // Group by category for convenience
     const categories: Record<string, number> = {}
@@ -425,8 +433,9 @@ router.get('/:projectId', async (req: Request, res: Response) => {
 
     res.json({
       documents,
-      total: documents.length,
+      total,
       categories,
+      pagination: getPaginationMeta(total, pagination.page, pagination.limit),
     })
   } catch (error) {
     console.error('Error fetching documents:', error)
