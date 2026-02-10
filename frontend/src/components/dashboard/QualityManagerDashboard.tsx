@@ -1,7 +1,8 @@
 // Feature #293: Quality Manager Dashboard
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import {
   CheckCircle2,
   AlertTriangle,
@@ -16,8 +17,6 @@ import {
   BarChart3,
   AlertCircle
 } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 interface QMDashboardData {
   // Lot conformance
@@ -101,21 +100,9 @@ export function QualityManagerDashboard() {
   })
 
   const fetchDashboardData = async () => {
-    const token = getAuthToken()
-    if (!token) {
-      setLoading(false)
-      return
-    }
-
     try {
-      const response = await fetch(`${API_URL}/api/dashboard/quality-manager`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setData(result)
-      }
+      const result = await apiFetch<QMDashboardData>('/api/dashboard/quality-manager')
+      setData(result)
     } catch (err) {
       console.error('Error fetching QM dashboard:', err)
     } finally {

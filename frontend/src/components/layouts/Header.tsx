@@ -1,4 +1,5 @@
-import { useAuth, getAuthToken } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, Settings, UserCircle, Search, Sun, Moon } from 'lucide-react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
@@ -64,21 +65,10 @@ export function Header() {
 
   // Fetch notifications from API
   const fetchNotifications = async () => {
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
     try {
-      const response = await fetch(`${apiUrl}/api/notifications`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setNotifications(data.notifications || [])
-        setUnreadCount(data.unreadCount || 0)
-      }
+      const data = await apiFetch<{ notifications: Notification[]; unreadCount: number }>('/api/notifications')
+      setNotifications(data.notifications || [])
+      setUnreadCount(data.unreadCount || 0)
     } catch (err) {
       console.error('Failed to fetch notifications:', err)
     }
@@ -96,20 +86,9 @@ export function Header() {
   // Fetch user's projects
   useEffect(() => {
     async function fetchProjects() {
-      const token = getAuthToken()
-      if (!token) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
       try {
-        const response = await fetch(`${apiUrl}/api/projects`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setProjects(data.projects || [])
-        }
+        const data = await apiFetch<{ projects: Project[] }>('/api/projects')
+        setProjects(data.projects || [])
       } catch (err) {
         console.error('Failed to fetch projects:', err)
       }
@@ -204,16 +183,9 @@ export function Header() {
       return
     }
 
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
     try {
-      await fetch(`${apiUrl}/api/notifications/${notification.id}/read`, {
+      await apiFetch(`/api/notifications/${notification.id}/read`, {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
       setNotifications(prev =>
         prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
@@ -232,16 +204,9 @@ export function Header() {
 
   // Mark all as read
   const markAllAsRead = async () => {
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
     try {
-      await fetch(`${apiUrl}/api/notifications/read-all`, {
+      await apiFetch('/api/notifications/read-all', {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
       setUnreadCount(0)

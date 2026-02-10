@@ -1,7 +1,8 @@
 // Feature #294: Project Manager Dashboard
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import {
   AlertTriangle,
   ClipboardCheck,
@@ -14,8 +15,6 @@ import {
   BarChart3,
   Layers
 } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 interface PMDashboardData {
   // Lot progress summary
@@ -118,21 +117,9 @@ export function ProjectManagerDashboard() {
   })
 
   const fetchDashboardData = async () => {
-    const token = getAuthToken()
-    if (!token) {
-      setLoading(false)
-      return
-    }
-
     try {
-      const response = await fetch(`${API_URL}/api/dashboard/project-manager`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setData(result)
-      }
+      const result = await apiFetch<PMDashboardData>('/api/dashboard/project-manager')
+      setData(result)
     } catch (err) {
       console.error('Error fetching PM dashboard:', err)
     } finally {

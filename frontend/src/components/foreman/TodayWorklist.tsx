@@ -14,10 +14,8 @@ import {
   Calendar
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 type WorklistItemType = 'hold_point' | 'itp_item' | 'inspection' | 'task'
 type UrgencyLevel = 'blocking' | 'due_today' | 'upcoming'
@@ -102,8 +100,7 @@ export function TodayWorklist() {
   })
 
   const fetchWorklist = useCallback(async () => {
-    const token = getAuthToken()
-    if (!token || !projectId) {
+    if (!projectId) {
       setLoading(false)
       return
     }
@@ -111,18 +108,10 @@ export function TodayWorklist() {
     setError(null)
 
     try {
-      const response = await fetch(
-        `${API_URL}/api/dashboard/projects/${projectId}/foreman/today`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const result = await apiFetch<TodayWorklistData>(
+        `/api/dashboard/projects/${projectId}/foreman/today`
       )
-
-      if (response.ok) {
-        const result = await response.json()
-        setData(result)
-      } else {
-        const errData = await response.json().catch(() => ({}))
-        setError(errData.error || 'Failed to load worklist')
-      }
+      setData(result)
     } catch (err) {
       console.error('Error fetching today worklist:', err)
       setError('Unable to connect. Check your connection.')

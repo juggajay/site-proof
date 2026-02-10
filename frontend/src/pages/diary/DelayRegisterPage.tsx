@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
+import { apiFetch } from '@/lib/api'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { MobileDataCard } from '@/components/ui/MobileDataCard'
 
@@ -60,24 +61,16 @@ export function DelayRegisterPage() {
     setLoading(true)
     setError(null)
     try {
-      const token = getAuthToken()
-      let url = `${API_URL}/api/diary/project/${projectId}/delays`
+      let path = `/api/diary/project/${projectId}/delays`
       const params = new URLSearchParams()
       if (filterType) params.append('delayType', filterType)
       if (startDate) params.append('startDate', startDate)
       if (endDate) params.append('endDate', endDate)
-      if (params.toString()) url += `?${params.toString()}`
+      if (params.toString()) path += `?${params.toString()}`
 
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setDelays(data.delays)
-        setSummary(data.summary)
-      } else {
-        setError('Failed to load delays')
-      }
+      const data = await apiFetch<any>(path)
+      setDelays(data.delays)
+      setSummary(data.summary)
     } catch (err) {
       console.error('Error fetching delays:', err)
       setError('Failed to load delays')

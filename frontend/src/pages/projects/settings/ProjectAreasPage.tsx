@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { getAuthToken } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
+import { apiFetch } from '@/lib/api'
 import { MapPin, Plus, Trash2, Edit2, X, Palette } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 interface ProjectArea {
   id: string
@@ -45,18 +43,11 @@ export function ProjectAreasPage() {
   // Fetch areas
   useEffect(() => {
     async function fetchAreas() {
-      const token = getAuthToken()
-      if (!token || !projectId) return
+      if (!projectId) return
 
       try {
-        const response = await fetch(`${API_URL}/api/projects/${projectId}/areas`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setAreas(data.areas || [])
-        }
+        const data = await apiFetch<{ areas: ProjectArea[] }>(`/api/projects/${projectId}/areas`)
+        setAreas(data.areas || [])
       } catch (err) {
         console.error('Failed to fetch project areas:', err)
       } finally {
@@ -106,7 +97,6 @@ export function ProjectAreasPage() {
     }
 
     setSaving(true)
-    const token = getAuthToken()
 
     try {
       const body = {
@@ -116,43 +106,29 @@ export function ProjectAreasPage() {
         colour: formColour,
       }
 
-      const url = editingArea
-        ? `${API_URL}/api/projects/${projectId}/areas/${editingArea.id}`
-        : `${API_URL}/api/projects/${projectId}/areas`
+      const path = editingArea
+        ? `/api/projects/${projectId}/areas/${editingArea.id}`
+        : `/api/projects/${projectId}/areas`
 
-      const response = await fetch(url, {
+      const data = await apiFetch<{ area: ProjectArea }>(path, {
         method: editingArea ? 'PATCH' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify(body),
       })
 
-      const data = await response.json()
-
-      if (response.ok) {
-        if (editingArea) {
-          setAreas(prev => prev.map(a => a.id === editingArea.id ? data.area : a))
-          toast({
-            title: 'Area updated',
-            description: `${data.area.name} has been updated.`,
-          })
-        } else {
-          setAreas(prev => [...prev, data.area])
-          toast({
-            title: 'Area created',
-            description: `${data.area.name} has been added to the project.`,
-          })
-        }
-        closeModal()
-      } else {
+      if (editingArea) {
+        setAreas(prev => prev.map(a => a.id === editingArea.id ? data.area : a))
         toast({
-          title: 'Error',
-          description: data.error || 'Failed to save area',
-          variant: 'error',
+          title: 'Area updated',
+          description: `${data.area.name} has been updated.`,
+        })
+      } else {
+        setAreas(prev => [...prev, data.area])
+        toast({
+          title: 'Area created',
+          description: `${data.area.name} has been added to the project.`,
         })
       }
+      closeModal()
     } catch (err) {
       toast({
         title: 'Error',
@@ -170,28 +146,16 @@ export function ProjectAreasPage() {
     }
 
     setDeletingId(area.id)
-    const token = getAuthToken()
 
     try {
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/areas/${area.id}`, {
+      await apiFetch(`/api/projects/${projectId}/areas/${area.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (response.ok) {
-        setAreas(prev => prev.filter(a => a.id !== area.id))
-        toast({
-          title: 'Area deleted',
-          description: `${area.name} has been removed.`,
-        })
-      } else {
-        const data = await response.json()
-        toast({
-          title: 'Error',
-          description: data.error || 'Failed to delete area',
-          variant: 'error',
-        })
-      }
+      setAreas(prev => prev.filter(a => a.id !== area.id))
+      toast({
+        title: 'Area deleted',
+        description: `${area.name} has been removed.`,
+      })
     } catch (err) {
       toast({
         title: 'Error',

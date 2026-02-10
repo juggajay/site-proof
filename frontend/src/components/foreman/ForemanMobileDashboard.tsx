@@ -1,7 +1,8 @@
 // ForemanMobileDashboard - Mobile-optimized dashboard for foreman role
 import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useAuth, getAuthToken } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import {
   RefreshCw,
   Calendar,
@@ -21,8 +22,6 @@ import { QuickCaptureButton } from './QuickCaptureButton'
 import { PhotoCaptureModal } from './PhotoCaptureModal'
 import { useForemanMobileStore } from '@/stores/foremanMobileStore'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 interface DashboardData {
   todayDiary: {
@@ -87,21 +86,9 @@ export function ForemanMobileDashboard() {
   })
 
   const fetchDashboardData = useCallback(async () => {
-    const token = getAuthToken()
-    if (!token) {
-      setLoading(false)
-      return
-    }
-
     try {
-      const response = await fetch(`${API_URL}/api/dashboard/foreman`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setData(result)
-      }
+      const result = await apiFetch<DashboardData>('/api/dashboard/foreman')
+      setData(result)
     } catch (err) {
       console.error('Error fetching foreman dashboard:', err)
     } finally {

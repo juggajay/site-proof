@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { DollarSign, TrendingUp, Users, Truck, Download, Filter, FolderOpen } from 'lucide-react'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { MobileDataCard } from '@/components/ui/MobileDataCard'
@@ -49,33 +49,12 @@ export function CostsPage() {
   const fetchCostData = async () => {
     if (!projectId) return
     setLoading(true)
-    const token = getAuthToken()
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005'
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/costs`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setSummary(data.summary)
-        setSubcontractorCosts(data.subcontractorCosts || [])
-        setLotCosts(data.lotCosts || [])
-      } else {
-        // Show empty state on error
-        setSummary({
-          totalLabourCost: 0,
-          totalPlantCost: 0,
-          totalCost: 0,
-          budgetTotal: 0,
-          budgetVariance: 0,
-          approvedDockets: 0,
-          pendingDockets: 0
-        })
-        setSubcontractorCosts([])
-        setLotCosts([])
-      }
+      const data = await apiFetch<any>(`/api/projects/${projectId}/costs`)
+      setSummary(data.summary)
+      setSubcontractorCosts(data.subcontractorCosts || [])
+      setLotCosts(data.lotCosts || [])
     } catch (error) {
       console.error('Error fetching cost data:', error)
       // Show empty state on error

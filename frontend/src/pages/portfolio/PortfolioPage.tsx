@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { FolderKanban, TrendingUp, AlertTriangle, CheckCircle2, Clock, DollarSign, AlertCircle, ExternalLink } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
 interface Project {
   id: string
@@ -81,49 +79,31 @@ export function PortfolioPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const token = getAuthToken()
-      if (!token) {
-        setLoading(false)
-        return
-      }
-
       try {
-        // Fetch projects, cash flow, critical NCRs, and risks in parallel
-        const [projectsResponse, cashFlowResponse, ncrsResponse, risksResponse] = await Promise.all([
-          fetch(`${API_URL}/api/projects`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_URL}/api/dashboard/portfolio-cashflow`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_URL}/api/dashboard/portfolio-ncrs`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_URL}/api/dashboard/portfolio-risks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
+        // Fetch projects (required) and supplementary data in parallel
+        const [projectsResult, cashFlowResult, ncrsResult, risksResult] = await Promise.allSettled([
+          apiFetch<{ projects: Project[] }>('/api/projects'),
+          apiFetch<CashFlowSummary>('/api/dashboard/portfolio-cashflow'),
+          apiFetch<{ ncrs: CriticalNCR[] }>('/api/dashboard/portfolio-ncrs'),
+          apiFetch<{ projectsAtRisk: ProjectAtRisk[] }>('/api/dashboard/portfolio-risks'),
         ])
 
-        if (!projectsResponse.ok) {
+        if (projectsResult.status === 'rejected') {
           throw new Error('Failed to fetch projects')
         }
 
-        const projectsData = await projectsResponse.json()
-        setProjects(projectsData.projects || [])
+        setProjects(projectsResult.value.projects || [])
 
-        if (cashFlowResponse.ok) {
-          const cashFlowData = await cashFlowResponse.json()
-          setCashFlow(cashFlowData)
+        if (cashFlowResult.status === 'fulfilled') {
+          setCashFlow(cashFlowResult.value)
         }
 
-        if (ncrsResponse.ok) {
-          const ncrsData = await ncrsResponse.json()
-          setCriticalNCRs(ncrsData.ncrs || [])
+        if (ncrsResult.status === 'fulfilled') {
+          setCriticalNCRs(ncrsResult.value.ncrs || [])
         }
 
-        if (risksResponse.ok) {
-          const risksData = await risksResponse.json()
-          setProjectsAtRisk(risksData.projectsAtRisk || [])
+        if (risksResult.status === 'fulfilled') {
+          setProjectsAtRisk(risksResult.value.projectsAtRisk || [])
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load projects')

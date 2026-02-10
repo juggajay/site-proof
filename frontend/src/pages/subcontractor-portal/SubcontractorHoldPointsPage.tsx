@@ -9,9 +9,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getAuthToken } from '@/lib/auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { apiFetch } from '@/lib/api'
 
 interface HoldPoint {
   id: string
@@ -67,28 +65,15 @@ export function SubcontractorHoldPointsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const token = getAuthToken()
-        const headers = { Authorization: `Bearer ${token}` }
-
         // Get company info
-        const companyRes = await fetch(`${API_URL}/api/subcontractors/my-company`, { headers })
-        if (!companyRes.ok) {
-          setError('Failed to load company data')
-          setLoading(false)
-          return
-        }
-        const companyData = await companyRes.json()
+        const companyData = await apiFetch<{ company: SubcontractorCompany }>(`/api/subcontractors/my-company`)
         setCompany(companyData.company)
 
         // Fetch hold points for assigned lots
-        const hpRes = await fetch(
-          `${API_URL}/api/holdpoints?projectId=${companyData.company.projectId}&subcontractorView=true`,
-          { headers }
+        const hpData = await apiFetch<{ holdPoints: HoldPoint[] }>(
+          `/api/holdpoints?projectId=${companyData.company.projectId}&subcontractorView=true`
         )
-        if (hpRes.ok) {
-          const hpData = await hpRes.json()
-          setHoldPoints(hpData.holdPoints || [])
-        }
+        setHoldPoints(hpData.holdPoints || [])
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load hold points')

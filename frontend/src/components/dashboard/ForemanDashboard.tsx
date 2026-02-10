@@ -1,7 +1,8 @@
 // Feature #292: Foreman Dashboard - Simplified view for foreman role
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import {
   Sun,
   Cloud,
@@ -18,8 +19,6 @@ import {
   ChevronRight,
   Plus
 } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 interface ForemanDashboardData {
   // Today's diary
@@ -86,21 +85,9 @@ export function ForemanDashboard() {
   })
 
   const fetchDashboardData = async () => {
-    const token = getAuthToken()
-    if (!token) {
-      setLoading(false)
-      return
-    }
-
     try {
-      const response = await fetch(`${API_URL}/api/dashboard/foreman`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setData(result)
-      }
+      const result = await apiFetch<ForemanDashboardData>('/api/dashboard/foreman')
+      setData(result)
     } catch (err) {
       console.error('Error fetching foreman dashboard:', err)
     } finally {

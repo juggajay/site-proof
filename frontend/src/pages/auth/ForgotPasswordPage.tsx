@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { apiFetch } from '@/lib/api'
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -13,17 +14,10 @@ export function ForgotPasswordPage() {
     setLoading(true)
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-      const response = await fetch(`${apiUrl}/api/auth/forgot-password`, {
+      await apiFetch('/api/auth/forgot-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to send reset email')
-      }
 
       setSent(true)
     } catch (err) {

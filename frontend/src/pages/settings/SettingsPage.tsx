@@ -4,6 +4,7 @@ import { useTheme } from '@/lib/theme'
 import { useDateFormat, DateFormat } from '@/lib/dateFormat'
 import { useTimezone, TIMEZONES } from '@/lib/timezone'
 import { getAuthToken, useAuth } from '@/lib/auth'
+import { apiFetch, apiUrl } from '@/lib/api'
 import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut, Mail, Bell, Send, Lock, Smartphone, Key, Eye, EyeOff, Copy, CheckCircle2 } from 'lucide-react'
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings'
 
@@ -91,23 +92,12 @@ export function SettingsPage() {
     { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD', example: '2024-12-31' },
   ]
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
-
   // Load email notification preferences
   useEffect(() => {
     const loadEmailPreferences = async () => {
       try {
-        const token = getAuthToken()
-        if (!token) return
-
-        const response = await fetch(`${apiUrl}/api/notifications/email-preferences`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setEmailPreferences(data.preferences)
-        }
+        const data = await apiFetch<{ preferences: typeof emailPreferences }>('/api/notifications/email-preferences')
+        setEmailPreferences(data.preferences)
       } catch (err) {
         console.error('Failed to load email preferences:', err)
       } finally {
@@ -122,17 +112,8 @@ export function SettingsPage() {
   useEffect(() => {
     const loadMfaStatus = async () => {
       try {
-        const token = getAuthToken()
-        if (!token) return
-
-        const response = await fetch(`${apiUrl}/api/mfa/status`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setMfaEnabled(data.mfaEnabled)
-        }
+        const data = await apiFetch<{ mfaEnabled: boolean }>('/api/mfa/status')
+        setMfaEnabled(data.mfaEnabled)
       } catch (err) {
         console.error('Failed to load MFA status:', err)
       } finally {
@@ -149,28 +130,11 @@ export function SettingsPage() {
     setMfaMessage(null)
 
     try {
-      const token = getAuthToken()
-      if (!token) {
-        setMfaMessage({ type: 'error', text: 'You must be logged in' })
-        return
-      }
-
-      const response = await fetch(`${apiUrl}/api/mfa/setup`, {
+      const data = await apiFetch<{ secret: string; qrCode: string; message?: string }>('/api/mfa/setup', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
       })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setMfaSetupData({ secret: data.secret, qrCode: data.qrCode })
-        setShowMfaSetup(true)
-      } else {
-        setMfaMessage({ type: 'error', text: data.message || 'Failed to start MFA setup' })
-      }
+      setMfaSetupData({ secret: data.secret, qrCode: data.qrCode })
+      setShowMfaSetup(true)
     } catch (err) {
       setMfaMessage({ type: 'error', text: 'Failed to start MFA setup' })
     } finally {
@@ -189,34 +153,17 @@ export function SettingsPage() {
     setMfaMessage(null)
 
     try {
-      const token = getAuthToken()
-      if (!token) {
-        setMfaMessage({ type: 'error', text: 'You must be logged in' })
-        return
-      }
-
-      const response = await fetch(`${apiUrl}/api/mfa/verify-setup`, {
+      const data = await apiFetch<{ backupCodes?: string[]; message?: string }>('/api/mfa/verify-setup', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ code: mfaVerifyCode }),
       })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setMfaEnabled(true)
-        setBackupCodes(data.backupCodes || [])
-        setShowBackupCodes(true)
-        setShowMfaSetup(false)
-        setMfaSetupData(null)
-        setMfaVerifyCode('')
-        setMfaMessage({ type: 'success', text: 'Two-factor authentication enabled!' })
-      } else {
-        setMfaMessage({ type: 'error', text: data.message || 'Invalid verification code' })
-      }
+      setMfaEnabled(true)
+      setBackupCodes(data.backupCodes || [])
+      setShowBackupCodes(true)
+      setShowMfaSetup(false)
+      setMfaSetupData(null)
+      setMfaVerifyCode('')
+      setMfaMessage({ type: 'success', text: 'Two-factor authentication enabled!' })
     } catch (err) {
       setMfaMessage({ type: 'error', text: 'Failed to verify code' })
     } finally {
@@ -230,31 +177,14 @@ export function SettingsPage() {
     setMfaMessage(null)
 
     try {
-      const token = getAuthToken()
-      if (!token) {
-        setMfaMessage({ type: 'error', text: 'You must be logged in' })
-        return
-      }
-
-      const response = await fetch(`${apiUrl}/api/mfa/disable`, {
+      await apiFetch('/api/mfa/disable', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ password: disableMfaPassword }),
       })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setMfaEnabled(false)
-        setShowDisableMfa(false)
-        setDisableMfaPassword('')
-        setMfaMessage({ type: 'success', text: 'Two-factor authentication disabled' })
-      } else {
-        setMfaMessage({ type: 'error', text: data.message || 'Failed to disable MFA' })
-      }
+      setMfaEnabled(false)
+      setShowDisableMfa(false)
+      setDisableMfaPassword('')
+      setMfaMessage({ type: 'success', text: 'Two-factor authentication disabled' })
     } catch (err) {
       setMfaMessage({ type: 'error', text: 'Failed to disable MFA' })
     } finally {
@@ -277,32 +207,13 @@ export function SettingsPage() {
     setEmailPrefsMessage(null)
 
     try {
-      const token = getAuthToken()
-      if (!token) {
-        // Rollback on auth error
-        setEmailPreferences(previousPreferences)
-        setEmailPrefsMessage({ type: 'error', text: 'You must be logged in to update preferences' })
-        return
-      }
-
-      const response = await fetch(`${apiUrl}/api/notifications/email-preferences`, {
+      await apiFetch('/api/notifications/email-preferences', {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ preferences: newPreferences }),
       })
-
-      if (response.ok) {
-        // Server confirmed, keep the optimistic update
-        setEmailPrefsMessage({ type: 'success', text: 'Email preferences saved' })
-        setTimeout(() => setEmailPrefsMessage(null), 3000)
-      } else {
-        // Server rejected, rollback to previous state
-        setEmailPreferences(previousPreferences)
-        throw new Error('Failed to save preferences')
-      }
+      // Server confirmed, keep the optimistic update
+      setEmailPrefsMessage({ type: 'success', text: 'Email preferences saved' })
+      setTimeout(() => setEmailPrefsMessage(null), 3000)
     } catch (err) {
       // Error occurred, rollback to previous state
       setEmailPreferences(previousPreferences)
@@ -329,28 +240,11 @@ export function SettingsPage() {
     setEmailPrefsMessage(null)
 
     try {
-      const token = getAuthToken()
-      if (!token) {
-        setEmailPrefsMessage({ type: 'error', text: 'You must be logged in to send test email' })
-        return
-      }
-
-      const response = await fetch(`${apiUrl}/api/notifications/send-test-email`, {
+      const data = await apiFetch<{ sentTo: string }>('/api/notifications/send-test-email', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
       })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setEmailPrefsMessage({ type: 'success', text: `Test email sent to ${data.sentTo}` })
-        setTimeout(() => setEmailPrefsMessage(null), 5000)
-      } else {
-        setEmailPrefsMessage({ type: 'error', text: data.error || 'Failed to send test email' })
-      }
+      setEmailPrefsMessage({ type: 'success', text: `Test email sent to ${data.sentTo}` })
+      setTimeout(() => setEmailPrefsMessage(null), 5000)
     } catch (err) {
       setEmailPrefsMessage({ type: 'error', text: 'Failed to send test email' })
     } finally {
@@ -371,8 +265,7 @@ export function SettingsPage() {
         return
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
-      const response = await fetch(`${apiUrl}/api/auth/export-data`, {
+      const response = await fetch(apiUrl('/api/auth/export-data'), {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -426,30 +319,13 @@ export function SettingsPage() {
     setDeleteError(null)
 
     try {
-      const token = getAuthToken()
-      if (!token) {
-        setDeleteError('You must be logged in to delete your account')
-        return
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
-      const response = await fetch(`${apiUrl}/api/auth/delete-account`, {
+      await apiFetch('/api/auth/delete-account', {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           confirmEmail: deleteConfirmEmail,
           password: deletePassword,
         }),
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete account')
-      }
 
       // Account deleted successfully - sign out and redirect
       signOut()
@@ -468,26 +344,9 @@ export function SettingsPage() {
     setLeaveCompanyError(null)
 
     try {
-      const token = getAuthToken()
-      if (!token) {
-        setLeaveCompanyError('You must be logged in to leave the company')
-        return
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
-      const response = await fetch(`${apiUrl}/api/company/leave`, {
+      await apiFetch('/api/company/leave', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to leave company')
-      }
 
       // Successfully left company - reload to refresh user data
       setShowLeaveCompanyModal(false)

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard'
 import { ForemanMobileDashboard } from '@/components/foreman'
 import { useIsMobile } from '@/hooks/useMediaQuery'
@@ -115,8 +116,6 @@ const DATE_RANGE_PRESETS: { value: DateRangePreset; label: string; getRange: () 
 const formatDateForApi = (date: Date): string => {
   return date.toISOString().split('T')[0]
 }
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
 // Widget configuration
 const WIDGET_CONFIG = [
@@ -276,12 +275,6 @@ export function DashboardPage() {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      const token = getAuthToken()
-      if (!token) {
-        setLoading(false)
-        return
-      }
-
       try {
         // Build URL with date range parameters
         const params = new URLSearchParams({
@@ -289,15 +282,9 @@ export function DashboardPage() {
           endDate: currentDateRange.endDate,
         })
 
-        // Fetch dashboard stats from new endpoint with date range
-        const statsResponse = await fetch(`${API_URL}/api/dashboard/stats?${params}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json()
+        try {
+          // Fetch dashboard stats from new endpoint with date range
+          const statsData = await apiFetch<DashboardStats>(`/api/dashboard/stats?${params}`)
           setStats({
             totalProjects: statsData.totalProjects || 0,
             activeProjects: statsData.activeProjects || 0,
@@ -311,16 +298,10 @@ export function DashboardPage() {
             },
             recentActivities: statsData.recentActivities || [],
           })
-        } else {
+        } catch {
           // Fallback to projects endpoint if dashboard stats fails
-          const response = await fetch(`${API_URL}/api/projects`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          })
-
-          if (response.ok) {
-            const data = await response.json()
+          try {
+            const data = await apiFetch<{ projects: Project[] }>('/api/projects')
             const projectList = data.projects || []
             setProjects(projectList)
 
@@ -341,7 +322,7 @@ export function DashboardPage() {
                 { id: '3', type: 'holdpoint', description: 'Hold point released for concrete pour', timestamp: new Date(Date.now() - 7200000).toISOString() },
               ],
             })
-          }
+          } catch { /* ignore fallback failure */ }
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err)

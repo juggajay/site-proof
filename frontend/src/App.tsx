@@ -100,6 +100,9 @@ const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
 // Subcontractor roles
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
 
+// All internal (non-subcontractor) roles
+const INTERNAL_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'quality_manager', 'site_engineer', 'foreman']
+
 function KeyboardShortcutsProvider({ children }: { children: React.ReactNode }) {
   const { isOpen, closeHelp } = useKeyboardShortcutsHelp()
   return (
@@ -168,7 +171,14 @@ function App() {
           <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
 
           {/* Foreman Mobile Views - nested under ForemanMobileShell for 5-tab nav */}
-          <Route path="/projects/:projectId/foreman" element={<ForemanMobileShell />}>
+          <Route
+            path="/projects/:projectId/foreman"
+            element={
+              <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                <ForemanMobileShell />
+              </RoleProtectedRoute>
+            }
+          >
             <Route index element={<Navigate to="today" replace />} />
             <Route path="today" element={<TodayWorklist />} />
           </Route>
@@ -202,7 +212,14 @@ function App() {
           {/* Lots */}
           <Route path="/projects/:projectId/lots" element={<LotsPage />} />
           <Route path="/projects/:projectId/lots/:lotId" element={<LotDetailPage />} />
-          <Route path="/projects/:projectId/lots/:lotId/edit" element={<LotEditPage />} />
+          <Route
+            path="/projects/:projectId/lots/:lotId/edit"
+            element={
+              <RoleProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
+                <LotEditPage />
+              </RoleProtectedRoute>
+            }
+          />
 
           {/* ITP */}
           <Route path="/projects/:projectId/itp" element={<ITPPage />} />

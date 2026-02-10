@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { useAuth, getAuthToken } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { X, Printer } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -8,8 +9,6 @@ import { generateDocketDetailPDF, DocketDetailPDFData } from '@/lib/pdfGenerator
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { DocketApprovalsMobileView } from '@/components/foreman/DocketApprovalsMobileView'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 interface Docket {
   id: string
@@ -168,25 +167,14 @@ export function DocketApprovalsPage() {
   // Fetch dockets from API
   const fetchDockets = async () => {
     setLoading(true)
-    const token = getAuthToken()
 
     try {
       const queryParams = new URLSearchParams()
       if (projectId) queryParams.append('projectId', projectId)
       if (statusFilter !== 'all') queryParams.append('status', statusFilter)
 
-      const response = await fetch(`${API_URL}/api/dockets?${queryParams.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setDockets(data.dockets || data || [])
-      } else {
-        const error = await response.json()
-        toast({ variant: 'error', description: error.message || 'Failed to fetch dockets' })
-        setDockets([])
-      }
+      const data = await apiFetch<any>(`/api/dockets?${queryParams.toString()}`)
+      setDockets(data.dockets || data || [])
     } catch (error) {
       console.error('Error fetching dockets:', error)
       toast({ variant: 'error', description: 'Failed to fetch dockets' })
@@ -204,15 +192,10 @@ export function DocketApprovalsPage() {
     }
 
     setCreating(true)
-    const token = getAuthToken()
 
     try {
-      const response = await fetch(`${API_URL}/api/dockets`, {
+      await apiFetch(`/api/dockets`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: JSON.stringify({
           projectId,
           date: newDocketDate,
@@ -222,18 +205,13 @@ export function DocketApprovalsPage() {
         }),
       })
 
-      if (response.ok) {
-        toast({ variant: 'success', description: 'Docket created successfully' })
-        setCreateModalOpen(false)
-        setNewDocketDate('')
-        setNewDocketLabourHours('')
-        setNewDocketPlantHours('')
-        setNewDocketNotes('')
-        await fetchDockets()
-      } else {
-        const error = await response.json()
-        toast({ variant: 'error', description: error.message || 'Failed to create docket' })
-      }
+      toast({ variant: 'success', description: 'Docket created successfully' })
+      setCreateModalOpen(false)
+      setNewDocketDate('')
+      setNewDocketLabourHours('')
+      setNewDocketPlantHours('')
+      setNewDocketNotes('')
+      await fetchDockets()
     } catch (error) {
       console.error('Error creating docket:', error)
       toast({ variant: 'error', description: 'Failed to create docket' })
@@ -244,24 +222,10 @@ export function DocketApprovalsPage() {
 
   // Submit a draft docket for approval
   const handleSubmitDocket = async (docket: Docket) => {
-    const token = getAuthToken()
-
     try {
-      const response = await fetch(`${API_URL}/api/dockets/${docket.id}/submit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-
-      if (response.ok) {
-        toast({ variant: 'success', description: 'Docket submitted for approval' })
-        await fetchDockets()
-      } else {
-        const error = await response.json()
-        toast({ variant: 'error', description: error.message || 'Failed to submit docket' })
-      }
+      await apiFetch(`/api/dockets/${docket.id}/submit`, { method: 'POST' })
+      toast({ variant: 'success', description: 'Docket submitted for approval' })
+      await fetchDockets()
     } catch (error) {
       console.error('Error submitting docket:', error)
       toast({ variant: 'error', description: 'Failed to submit docket' })
@@ -284,15 +248,9 @@ export function DocketApprovalsPage() {
     // Fetch full docket detail for labour/plant entries
     setDetailLoading(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/dockets/${docket.id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setLabourEntries(data.docket?.labourEntries || [])
-        setPlantEntries(data.docket?.plantEntries || [])
-      }
+      const data = await apiFetch<any>(`/api/dockets/${docket.id}`)
+      setLabourEntries(data.docket?.labourEntries || [])
+      setPlantEntries(data.docket?.plantEntries || [])
     } catch (err) {
       console.error('Error fetching docket detail:', err)
     } finally {
@@ -305,16 +263,11 @@ export function DocketApprovalsPage() {
     if (!selectedDocket) return
 
     setActionInProgress(true)
-    const token = getAuthToken()
     const endpoint = actionType === 'approve' ? 'approve' : 'reject'
 
     try {
-      const response = await fetch(`${API_URL}/api/dockets/${selectedDocket.id}/${endpoint}`, {
+      await apiFetch(`/api/dockets/${selectedDocket.id}/${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: JSON.stringify(
           actionType === 'approve'
             ? {
@@ -329,22 +282,14 @@ export function DocketApprovalsPage() {
         ),
       })
 
-      if (response.ok) {
-        toast({
-          variant: 'success',
-          description: `Docket ${actionType === 'approve' ? 'approved' : 'rejected'} successfully`,
-        })
-        setActionModalOpen(false)
-        setSelectedDocket(null)
-        setActionNotes('')
-        await fetchDockets()
-      } else {
-        const error = await response.json()
-        toast({
-          variant: 'error',
-          description: error.message || `Failed to ${actionType} docket`,
-        })
-      }
+      toast({
+        variant: 'success',
+        description: `Docket ${actionType === 'approve' ? 'approved' : 'rejected'} successfully`,
+      })
+      setActionModalOpen(false)
+      setSelectedDocket(null)
+      setActionNotes('')
+      await fetchDockets()
     } catch (error) {
       console.error(`Error ${actionType}ing docket:`, error)
       toast({ variant: 'error', description: `Failed to ${actionType} docket` })
@@ -366,34 +311,26 @@ export function DocketApprovalsPage() {
     let pollInterval: NodeJS.Timeout | null = null
 
     const silentFetchDockets = async () => {
-      const token = getAuthToken()
-
       try {
         const queryParams = new URLSearchParams()
         queryParams.append('projectId', projectId)
         if (statusFilter !== 'all') queryParams.append('status', statusFilter)
 
-        const response = await fetch(`${API_URL}/api/dockets?${queryParams.toString()}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        const data = await apiFetch<any>(`/api/dockets?${queryParams.toString()}`)
+        const newDockets = data.dockets || data || []
+
+        // Only update if there are actual changes
+        setDockets((prevDockets: Docket[]) => {
+          const hasChanges = newDockets.length !== prevDockets.length ||
+            newDockets.some((newDocket: Docket, index: number) =>
+              !prevDockets[index] ||
+              newDocket.id !== prevDockets[index].id ||
+              newDocket.status !== prevDockets[index].status ||
+              newDocket.approvedAt !== prevDockets[index].approvedAt ||
+              newDocket.totalLabourApproved !== prevDockets[index].totalLabourApproved
+            )
+          return hasChanges ? newDockets : prevDockets
         })
-
-        if (response.ok) {
-          const data = await response.json()
-          const newDockets = data.dockets || data || []
-
-          // Only update if there are actual changes
-          setDockets((prevDockets: Docket[]) => {
-            const hasChanges = newDockets.length !== prevDockets.length ||
-              newDockets.some((newDocket: Docket, index: number) =>
-                !prevDockets[index] ||
-                newDocket.id !== prevDockets[index].id ||
-                newDocket.status !== prevDockets[index].status ||
-                newDocket.approvedAt !== prevDockets[index].approvedAt ||
-                newDocket.totalLabourApproved !== prevDockets[index].totalLabourApproved
-              )
-            return hasChanges ? newDockets : prevDockets
-          })
-        }
       } catch (err) {
         // Silent fail for background polling
         console.debug('Background docket fetch failed:', err)
@@ -585,12 +522,13 @@ export function DocketApprovalsPage() {
                         <button
                           onClick={async () => {
                             try {
-                              const token = getAuthToken()
                               // Fetch project info
-                              const projectRes = await fetch(`${API_URL}/api/projects/${projectId}`, {
-                                headers: token ? { Authorization: `Bearer ${token}` } : {}
-                              })
-                              const project = projectRes.ok ? await projectRes.json() : { name: 'Unknown Project', projectNumber: null }
+                              let project: any = { name: 'Unknown Project', projectNumber: null }
+                              try {
+                                project = await apiFetch<any>(`/api/projects/${projectId}`)
+                              } catch {
+                                // Use default project info
+                              }
 
                               const pdfData: DocketDetailPDFData = {
                                 docket: {

@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { Building2, ClipboardCheck, User, AlertCircle, Loader2, Check, Eye, EyeOff } from 'lucide-react'
-import { useAuth, getAuthToken } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch, ApiError } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
 interface Invitation {
   id: string
@@ -55,18 +54,7 @@ export function AcceptInvitePage() {
       }
 
       try {
-        const response = await fetch(`${API_URL}/api/subcontractors/invitation/${invitationId}`)
-        if (!response.ok) {
-          if (response.status === 404) {
-            setError('This invitation was not found or has expired.')
-          } else {
-            setError('Failed to load invitation details')
-          }
-          setLoading(false)
-          return
-        }
-
-        const data = await response.json()
+        const data = await apiFetch<{ invitation: Invitation }>(`/api/subcontractors/invitation/${invitationId}`)
         setInvitation(data.invitation)
 
         // Pre-fill email from invitation
@@ -78,7 +66,11 @@ export function AcceptInvitePage() {
         }
       } catch (err) {
         console.error('Error fetching invitation:', err)
-        setError('Failed to load invitation details')
+        if (err instanceof ApiError && err.status === 404) {
+          setError('This invitation was not found or has expired.')
+        } else {
+          setError('Failed to load invitation details')
+        }
       } finally {
         setLoading(false)
       }
@@ -106,22 +98,9 @@ export function AcceptInvitePage() {
     setFormError(null)
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/subcontractors/invitation/${invitationId}/accept`, {
+      await apiFetch(`/api/subcontractors/invitation/${invitationId}/accept`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setFormError(data.error || data.message || 'Failed to accept invitation')
-        setAccepting(false)
-        return
-      }
 
       // Refresh auth to get updated role
       await refreshUser()
@@ -130,7 +109,16 @@ export function AcceptInvitePage() {
       navigate('/subcontractor-portal')
     } catch (err) {
       console.error('Error accepting invitation:', err)
-      setFormError('Failed to accept invitation. Please try again.')
+      if (err instanceof ApiError) {
+        try {
+          const errorData = JSON.parse(err.body)
+          setFormError(errorData.error || errorData.message || 'Failed to accept invitation')
+        } catch {
+          setFormError('Failed to accept invitation. Please try again.')
+        }
+      } else {
+        setFormError('Failed to accept invitation. Please try again.')
+      }
       setAccepting(false)
     }
   }
@@ -175,11 +163,8 @@ export function AcceptInvitePage() {
     setAccepting(true)
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/register-and-accept-invitation`, {
+      const data = await apiFetch<{ user: any; token: string; company: { companyName: string } }>('/api/auth/register-and-accept-invitation', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           email,
           password,
@@ -188,14 +173,6 @@ export function AcceptInvitePage() {
           tosAccepted,
         }),
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setFormError(data.message || 'Failed to create account')
-        setAccepting(false)
-        return
-      }
 
       // Store auth token in localStorage
       localStorage.setItem('siteproof_auth', JSON.stringify({
@@ -210,7 +187,16 @@ export function AcceptInvitePage() {
       window.location.href = '/subcontractor-portal'
     } catch (err) {
       console.error('Error registering:', err)
-      setFormError('Failed to create account. Please try again.')
+      if (err instanceof ApiError) {
+        try {
+          const errorData = JSON.parse(err.body)
+          setFormError(errorData.message || 'Failed to create account')
+        } catch {
+          setFormError('Failed to create account. Please try again.')
+        }
+      } else {
+        setFormError('Failed to create account. Please try again.')
+      }
       setAccepting(false)
     }
   }

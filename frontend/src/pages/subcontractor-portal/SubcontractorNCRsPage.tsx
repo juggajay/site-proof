@@ -9,9 +9,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getAuthToken } from '@/lib/auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { apiFetch } from '@/lib/api'
 
 interface NCR {
   id: string
@@ -98,28 +96,15 @@ export function SubcontractorNCRsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const token = getAuthToken()
-        const headers = { Authorization: `Bearer ${token}` }
-
         // Get company info
-        const companyRes = await fetch(`${API_URL}/api/subcontractors/my-company`, { headers })
-        if (!companyRes.ok) {
-          setError('Failed to load company data')
-          setLoading(false)
-          return
-        }
-        const companyData = await companyRes.json()
+        const companyData = await apiFetch<{ company: SubcontractorCompany }>(`/api/subcontractors/my-company`)
         setCompany(companyData.company)
 
         // Fetch NCRs for assigned lots
-        const ncrsRes = await fetch(
-          `${API_URL}/api/ncrs?projectId=${companyData.company.projectId}&subcontractorView=true`,
-          { headers }
+        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(
+          `/api/ncrs?projectId=${companyData.company.projectId}&subcontractorView=true`
         )
-        if (ncrsRes.ok) {
-          const ncrsData = await ncrsRes.json()
-          setNCRs(ncrsData.ncrs || [])
-        }
+        setNCRs(ncrsData.ncrs || [])
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load NCRs')

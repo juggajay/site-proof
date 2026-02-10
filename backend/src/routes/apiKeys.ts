@@ -190,7 +190,7 @@ export async function authenticateApiKey(req: Request, res: Response, next: Next
 
     // Set user on request
     req.user = apiKeyRecord.user as Express.Request['user']
-    ;(req as any).apiKey = {
+    req.apiKey = {
       id: apiKeyRecord.id,
       scopes: apiKeyRecord.scopes.split(','),
     }
@@ -205,15 +205,14 @@ export async function authenticateApiKey(req: Request, res: Response, next: Next
 // Middleware to check API key scopes
 export function requireScope(scope: string) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const apiKey = (req as any).apiKey
+    const apiKey = req.apiKey
 
     // If not API key auth, allow (JWT auth handles its own permissions)
     if (!apiKey) {
       return next()
     }
 
-    const scopes = apiKey.scopes as string[]
-    if (scopes.includes('admin') || scopes.includes(scope)) {
+    if (apiKey.scopes.includes('admin') || apiKey.scopes.includes(scope)) {
       return next()
     }
 

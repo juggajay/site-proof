@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4015'
+import { apiFetch } from '@/lib/api'
 
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams()
@@ -29,8 +28,7 @@ export function VerifyEmailPage() {
   const verifyEmail = async (verificationToken: string) => {
     try {
       // First check if the token is valid
-      const statusRes = await fetch(`${API_URL}/api/auth/verify-email-status?token=${verificationToken}`)
-      const statusData = await statusRes.json()
+      const statusData = await apiFetch<{ alreadyVerified?: boolean; valid?: boolean; message?: string; email?: string }>(`/api/auth/verify-email-status?token=${verificationToken}`)
 
       if (statusData.alreadyVerified) {
         setStatus('success')
@@ -47,17 +45,12 @@ export function VerifyEmailPage() {
       setEmail(statusData.email || '')
 
       // Now verify the email
-      const res = await fetch(`${API_URL}/api/auth/verify-email`, {
+      const data = await apiFetch<{ verified?: boolean; message?: string }>('/api/auth/verify-email', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ token: verificationToken }),
       })
 
-      const data = await res.json()
-
-      if (res.ok && data.verified) {
+      if (data.verified) {
         setStatus('success')
         setMessage('Your email has been verified successfully!')
       } else {
@@ -76,15 +69,11 @@ export function VerifyEmailPage() {
 
     setResendStatus('loading')
     try {
-      const res = await fetch(`${API_URL}/api/auth/resend-verification`, {
+      const data = await apiFetch<{ message: string }>('/api/auth/resend-verification', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ email: resendEmail }),
       })
 
-      const data = await res.json()
       setResendStatus('success')
       setResendMessage(data.message)
     } catch (error) {

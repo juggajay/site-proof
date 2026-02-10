@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch, ApiError } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { Link2, Check, Download, Eye, X, RefreshCw, ClipboardCheck, AlertTriangle } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
@@ -79,17 +79,7 @@ export function HoldPointsPage() {
     if (!hp.id.startsWith('virtual-')) {
       setGeneratingPdf(hp.id)
       try {
-        const response = await fetch(`${apiUrl}/api/holdpoints/${hp.id}/evidence-package`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch evidence package data')
-        }
-
-        const data = await response.json()
+        const data = await apiFetch<any>(`/api/holdpoints/${hp.id}/evidence-package`)
         const evidencePackage = data.evidencePackage as HPEvidencePackageData
 
         // Generate the PDF
@@ -155,16 +145,12 @@ export function HoldPointsPage() {
     releaseMethod: string = 'digital',
     signatureDataUrl: string | null = null
   ) => {
-    if (!selectedHoldPoint || selectedHoldPoint.id.startsWith('virtual-') || !token) return
+    if (!selectedHoldPoint || selectedHoldPoint.id.startsWith('virtual-')) return
 
     setRecordingRelease(true)
     try {
-      const response = await fetch(`${apiUrl}/api/holdpoints/${selectedHoldPoint.id}/release`, {
+      await apiFetch(`/api/holdpoints/${selectedHoldPoint.id}/release`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           releasedByName,
           releasedByOrg,
@@ -174,20 +160,11 @@ export function HoldPointsPage() {
         }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to record release')
-      }
-
       // Refresh hold points list
-      const refreshResponse = await fetch(`${apiUrl}/api/holdpoints/project/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (refreshResponse.ok) {
-        const refreshData = await refreshResponse.json()
+      try {
+        const refreshData = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
         setHoldPoints(refreshData.holdPoints || [])
-      }
+      } catch { /* ignore refresh failure */ }
 
       toast({
         title: 'Release Recorded',
@@ -210,32 +187,19 @@ export function HoldPointsPage() {
 
   // Chase hold point handler (Feature #183)
   const handleChaseHoldPoint = async (hp: HoldPoint) => {
-    if (hp.id.startsWith('virtual-') || !token) return
+    if (hp.id.startsWith('virtual-')) return
 
     setChasingHpId(hp.id)
     try {
-      const response = await fetch(`${apiUrl}/api/holdpoints/${hp.id}/chase`, {
+      const data = await apiFetch<any>(`/api/holdpoints/${hp.id}/chase`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to chase hold point')
-      }
 
       // Refresh hold points list
-      const refreshResponse = await fetch(`${apiUrl}/api/holdpoints/project/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (refreshResponse.ok) {
-        const refreshData = await refreshResponse.json()
+      try {
+        const refreshData = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
         setHoldPoints(refreshData.holdPoints || [])
-      }
+      } catch { /* ignore refresh failure */ }
 
       toast({
         title: 'Chase sent',
@@ -253,24 +217,13 @@ export function HoldPointsPage() {
     }
   }
 
-  const token = getAuthToken()
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
   useEffect(() => {
     async function fetchHoldPoints() {
-      if (!projectId || !token) return
+      if (!projectId) return
 
       try {
-        const response = await fetch(`${apiUrl}/api/holdpoints/project/${projectId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setHoldPoints(data.holdPoints || [])
-        }
+        const data = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
+        setHoldPoints(data.holdPoints || [])
       } catch (err) {
         console.error('Failed to fetch hold points:', err)
       } finally {
@@ -279,25 +232,16 @@ export function HoldPointsPage() {
     }
 
     fetchHoldPoints()
-  }, [projectId, token, apiUrl])
+  }, [projectId])
 
   const fetchHoldPointDetails = async (hp: HoldPoint) => {
     setLoadingDetails(true)
     setRequestError(null)
     try {
-      const response = await fetch(
-        `${apiUrl}/api/holdpoints/lot/${hp.lotId}/item/${hp.itpChecklistItemId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const data = await apiFetch<HoldPointDetails>(
+        `/api/holdpoints/lot/${hp.lotId}/item/${hp.itpChecklistItemId}`
       )
-
-      if (response.ok) {
-        const data = await response.json()
-        setHoldPointDetails(data)
-      }
+      setHoldPointDetails(data)
     } catch (err) {
       console.error('Failed to fetch hold point details:', err)
     } finally {
@@ -318,18 +262,14 @@ export function HoldPointsPage() {
     overrideNoticePeriod?: boolean,
     overrideReason?: string
   ) => {
-    if (!selectedHoldPoint || !token) return
+    if (!selectedHoldPoint) return
 
     setRequesting(true)
     setRequestError(null)
 
     try {
-      const response = await fetch(`${apiUrl}/api/holdpoints/request-release`, {
+      await apiFetch(`/api/holdpoints/request-release`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           lotId: selectedHoldPoint.lotId,
           itpChecklistItemId: selectedHoldPoint.itpChecklistItemId,
@@ -341,46 +281,44 @@ export function HoldPointsPage() {
         }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        if (data.incompleteItems) {
-          setRequestError({
-            message: data.message,
-            incompleteItems: data.incompleteItems
-          })
-        } else if (data.code === 'NOTICE_PERIOD_WARNING') {
-          // Handle notice period warning - allow user to override
-          setRequestError({
-            message: data.message,
-            code: data.code,
-            details: data.details
-          })
-        } else {
-          setRequestError({ message: data.error || 'Failed to request release' })
-        }
-        return
-      }
-
       // Reset override state on success
       setNoticePeriodOverride(false)
       setNoticePeriodOverrideReason('')
 
       // Success - refresh hold points
-      const refreshResponse = await fetch(`${apiUrl}/api/holdpoints/project/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (refreshResponse.ok) {
-        const refreshData = await refreshResponse.json()
+      try {
+        const refreshData = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
         setHoldPoints(refreshData.holdPoints || [])
-      }
+      } catch { /* ignore refresh failure */ }
 
       setShowRequestModal(false)
       setSelectedHoldPoint(null)
       setHoldPointDetails(null)
     } catch (err) {
       console.error('Failed to request release:', err)
-      setRequestError({ message: 'Network error. Please try again.' })
+      if (err instanceof ApiError) {
+        try {
+          const data = JSON.parse(err.body)
+          if (data.incompleteItems) {
+            setRequestError({
+              message: data.message,
+              incompleteItems: data.incompleteItems
+            })
+          } else if (data.code === 'NOTICE_PERIOD_WARNING') {
+            setRequestError({
+              message: data.message,
+              code: data.code,
+              details: data.details
+            })
+          } else {
+            setRequestError({ message: data.error || 'Failed to request release' })
+          }
+        } catch {
+          setRequestError({ message: 'Failed to request release' })
+        }
+      } else {
+        setRequestError({ message: 'Network error. Please try again.' })
+      }
     } finally {
       setRequesting(false)
     }
@@ -806,8 +744,6 @@ function RequestReleaseModal({
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
 
-  const token = getAuthToken()
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
   // Feature #697 - Pre-fill notification email with default recipients from project settings
   useEffect(() => {
@@ -839,23 +775,13 @@ function RequestReleaseModal({
   const handlePreviewPackage = async () => {
     setLoadingPreview(true)
     try {
-      const response = await fetch(`${apiUrl}/api/holdpoints/preview-evidence-package`, {
+      const data = await apiFetch<{ evidencePackage: HPEvidencePackageData }>('/api/holdpoints/preview-evidence-package', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           lotId: holdPoint.lotId,
           itpChecklistItemId: holdPoint.itpChecklistItemId,
         }),
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch preview data')
-      }
-
-      const data = await response.json()
       setPreviewData(data.evidencePackage)
       setShowPreview(true)
     } catch (err) {

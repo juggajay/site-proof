@@ -1848,13 +1848,13 @@ router.get('/:diaryId/timeline', async (req: Request, res: Response) => {
         id: e.id, type: 'event' as const, createdAt: e.createdAt,
         description: e.description, lot: e.lot, data: e,
       })),
-      ...diary.personnel.filter(p => (p as any).source === 'manual').map(p => ({
-        id: p.id, type: 'personnel' as const, createdAt: (p as any).createdAt || diary.createdAt,
-        description: `${p.name} — ${p.role || 'Worker'}`, lot: (p as any).lot, data: p,
+      ...diary.personnel.filter(p => p.source === 'manual').map(p => ({
+        id: p.id, type: 'personnel' as const, createdAt: p.createdAt || diary.createdAt,
+        description: `${p.name} — ${p.role || 'Worker'}`, lot: p.lot, data: p,
       })),
-      ...diary.plant.filter(p => (p as any).source === 'manual').map(p => ({
-        id: p.id, type: 'plant' as const, createdAt: (p as any).createdAt || diary.createdAt,
-        description: p.description, lot: (p as any).lot, data: p,
+      ...diary.plant.filter(p => p.source === 'manual').map(p => ({
+        id: p.id, type: 'plant' as const, createdAt: p.createdAt || diary.createdAt,
+        description: p.description, lot: p.lot, data: p,
       })),
     ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 

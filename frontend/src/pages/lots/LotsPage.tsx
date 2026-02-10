@@ -5,6 +5,7 @@ import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { getAuthToken, useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard'
 import { ImportLotsModal } from '@/components/lots/ImportLotsModal'
@@ -771,21 +772,9 @@ export function LotsPage() {
       return
     }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
       setLoading(true)
-      const response = await fetch(`${apiUrl}/api/lots?projectId=${projectId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch lots')
-      }
-
-      const data = await response.json()
+      const data = await apiFetch<{ lots: Lot[] }>(`/api/lots?projectId=${projectId}`)
       setLots(data.lots || [])
     } catch (err) {
       setError('Failed to load lots')
@@ -824,32 +813,19 @@ export function LotsPage() {
         if (document.visibilityState === 'visible' && projectId) {
           // Silent fetch without setting loading state to avoid UI flicker
           const silentFetchLots = async () => {
-            const token = getAuthToken()
-            if (!token) return
-
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
             try {
-              const response = await fetch(`${apiUrl}/api/lots?projectId=${projectId}`, {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
+              const data = await apiFetch<{ lots: Lot[] }>(`/api/lots?projectId=${projectId}`)
+              // Only update if there are actual changes
+              const newLots = data.lots || []
+              setLots(prevLots => {
+                // Check if lots have changed by comparing IDs and updated timestamps
+                const hasChanges = newLots.length !== prevLots.length ||
+                  newLots.some((newLot: Lot, index: number) =>
+                    !prevLots[index] || newLot.id !== prevLots[index].id ||
+                    newLot.status !== prevLots[index].status
+                  )
+                return hasChanges ? newLots : prevLots
               })
-
-              if (response.ok) {
-                const data = await response.json()
-                // Only update if there are actual changes
-                const newLots = data.lots || []
-                setLots(prevLots => {
-                  // Check if lots have changed by comparing IDs and updated timestamps
-                  const hasChanges = newLots.length !== prevLots.length ||
-                    newLots.some((newLot: Lot, index: number) =>
-                      !prevLots[index] || newLot.id !== prevLots[index].id ||
-                      newLot.status !== prevLots[index].status
-                    )
-                  return hasChanges ? newLots : prevLots
-                })
-              }
             } catch (err) {
               // Silent fail for background polling
               console.debug('Background lot fetch failed:', err)
@@ -881,22 +857,9 @@ export function LotsPage() {
     const fetchProjectName = async () => {
       if (!projectId) return
 
-      const token = getAuthToken()
-      if (!token) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setProjectName(data.project?.name || data.name || '')
-        }
+        const data = await apiFetch<{ project?: { name?: string }; name?: string }>(`/api/projects/${projectId}`)
+        setProjectName(data.project?.name || data.name || '')
       } catch (err) {
         console.error('Error fetching project name:', err)
       }
@@ -917,22 +880,9 @@ export function LotsPage() {
     const fetchProjectAreas = async () => {
       if (!projectId) return
 
-      const token = getAuthToken()
-      if (!token) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/projects/${projectId}/areas`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setProjectAreas(data.areas || [])
-        }
+        const data = await apiFetch<{ areas: typeof projectAreas }>(`/api/projects/${projectId}/areas`)
+        setProjectAreas(data.areas || [])
       } catch (err) {
         console.error('Error fetching project areas:', err)
       }
@@ -962,22 +912,9 @@ export function LotsPage() {
   const fetchSubcontractors = async () => {
     if (!projectId) return
 
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
-      const response = await fetch(`${apiUrl}/api/subcontractors/for-project/${projectId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setSubcontractors(data.subcontractors || [])
-      }
+      const data = await apiFetch<{ subcontractors: typeof subcontractors }>(`/api/subcontractors/for-project/${projectId}`)
+      setSubcontractors(data.subcontractors || [])
     } catch (err) {
       console.error('Fetch subcontractors error:', err)
     }
@@ -1064,48 +1001,31 @@ export function LotsPage() {
     setSelectedTemplateId('')
     setCreateModalOpen(true)
 
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-    if (projectId && token) {
+    if (projectId) {
       // Fetch suggested lot number, ITP templates, and subcontractors in parallel
       try {
-        const [lotResponse, itpResponse, subResponse] = await Promise.all([
-          fetch(`${apiUrl}/api/lots/suggest-number?projectId=${projectId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
-          fetch(`${apiUrl}/api/itp/templates?projectId=${projectId}&includeGlobal=true`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
-          fetch(`${apiUrl}/api/subcontractors/for-project/${projectId}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
+        const [lotData, itpData, subData] = await Promise.all([
+          apiFetch<{ suggestedNumber?: string }>(`/api/lots/suggest-number?projectId=${projectId}`),
+          apiFetch<{ templates: any[] }>(`/api/itp/templates?projectId=${projectId}&includeGlobal=true`),
+          apiFetch<{ subcontractors: typeof subcontractors }>(`/api/subcontractors/for-project/${projectId}`),
         ])
 
-        if (lotResponse.ok) {
-          const data = await lotResponse.json()
-          if (data.suggestedNumber) {
-            setNewLot(prev => ({ ...prev, lotNumber: data.suggestedNumber }))
-          }
+        if (lotData.suggestedNumber) {
+          setNewLot(prev => ({ ...prev, lotNumber: lotData.suggestedNumber! }))
         }
 
-        if (itpResponse.ok) {
-          const data = await itpResponse.json()
-          const templates = data.templates || []
-          setItpTemplates(templates.filter((t: any) => t.isActive !== false))
-          // Find suggested template for default activity type (Earthworks)
-          const suggested = templates.find((t: any) =>
-            t.activityType?.toLowerCase() === 'earthworks' && t.isActive !== false
-          )
-          if (suggested) {
-            setSuggestedTemplate({ id: suggested.id, name: suggested.name })
-            setSelectedTemplateId(suggested.id)
-          }
+        const templates = itpData.templates || []
+        setItpTemplates(templates.filter((t: any) => t.isActive !== false))
+        // Find suggested template for default activity type (Earthworks)
+        const suggested = templates.find((t: any) =>
+          t.activityType?.toLowerCase() === 'earthworks' && t.isActive !== false
+        )
+        if (suggested) {
+          setSuggestedTemplate({ id: suggested.id, name: suggested.name })
+          setSelectedTemplateId(suggested.id)
         }
 
-        if (subResponse.ok) {
-          const data = await subResponse.json()
-          setSubcontractors(data.subcontractors || [])
-        }
+        setSubcontractors(subData.subcontractors || [])
       } catch (err) {
         console.error('Failed to fetch lot data:', err)
       }
@@ -1199,16 +1119,10 @@ export function LotsPage() {
     }
 
     setCreating(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/lots`, {
+      const data = await apiFetch<{ lot: Lot }>('/api/lots', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           projectId,
           lotNumber: newLot.lotNumber,
@@ -1222,13 +1136,6 @@ export function LotsPage() {
           itpRequiresVerification: newLot.assignedSubcontractorId ? newLot.itpRequiresVerification : undefined,
         }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to create lot')
-      }
-
-      const data = await response.json()
 
       // Add new lot to the list
       setLots((prev) => [...prev, {
@@ -1267,25 +1174,11 @@ export function LotsPage() {
 
   // Clone lot - creates a copy with suggested adjacent chainage
   const handleCloneLot = async (lot: Lot) => {
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
-      const response = await fetch(`${apiUrl}/api/lots/${lot.id}/clone`, {
+      const data = await apiFetch<{ lot: Lot }>(`/api/lots/${lot.id}/clone`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({}), // Backend will auto-generate lot number and adjacent chainage
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to clone lot')
-      }
-
-      const data = await response.json()
 
       // Add cloned lot to the list
       setLots(prev => [...prev, data.lot])
@@ -1372,21 +1265,11 @@ export function LotsPage() {
     }
 
     setDeleting(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/lots/${lotToDelete.id}`, {
+      await apiFetch(`/api/lots/${lotToDelete.id}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to delete lot')
-      }
 
       // Remove lot from list
       setLots((prev) => prev.filter((l) => l.id !== lotToDelete.id))
@@ -1451,27 +1334,14 @@ export function LotsPage() {
     }
 
     setBulkDeleting(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/lots/bulk-delete`, {
+      const data = await apiFetch<{ message: string }>('/api/lots/bulk-delete', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           lotIds: Array.from(selectedLots),
         }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to delete lots')
-      }
-
-      const data = await response.json()
 
       // Remove deleted lots from list
       setLots((prev) => prev.filter((l) => !selectedLots.has(l.id)))
@@ -1504,28 +1374,15 @@ export function LotsPage() {
     }
 
     setBulkStatusUpdating(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/lots/bulk-update-status`, {
+      const data = await apiFetch<{ message: string }>('/api/lots/bulk-update-status', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           lotIds: Array.from(selectedLots),
           status: newBulkStatus,
         }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to update lot status')
-      }
-
-      const data = await response.json()
 
       // Update lots in state
       setLots((prev) => prev.map((lot) =>
@@ -1569,28 +1426,15 @@ export function LotsPage() {
     }
 
     setBulkAssigning(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/lots/bulk-assign-subcontractor`, {
+      const data = await apiFetch<{ message: string }>('/api/lots/bulk-assign-subcontractor', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           lotIds: Array.from(selectedLots),
           subcontractorId: selectedSubcontractorId || null,
         }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to assign subcontractor')
-      }
-
-      const data = await response.json()
 
       // Update lots in state
       const selectedSub = subcontractors.find(s => s.id === selectedSubcontractorId)

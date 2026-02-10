@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search, X, FileText, AlertTriangle, TestTube, Loader2 } from 'lucide-react'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 
 interface SearchResult {
   id: string
@@ -57,23 +57,13 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
     }
 
     setLoading(true)
-    const token = getAuthToken()
-    if (!token) {
-      setLoading(false)
-      return
-    }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
     const searchResults: SearchResult[] = []
 
     try {
       // Search lots
       if (projectId) {
-        const lotsRes = await fetch(`${apiUrl}/api/projects/${projectId}/lots`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (lotsRes.ok) {
-          const data = await lotsRes.json()
+        try {
+          const data = await apiFetch<{ lots: any[] }>(`/api/projects/${projectId}/lots`)
           const lots = data.lots || []
           const matchedLots = lots.filter((lot: any) =>
             lot.lotNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -89,14 +79,11 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
               projectId: projectId,
             })
           })
-        }
+        } catch { /* ignore individual search failures */ }
 
         // Search NCRs
-        const ncrsRes = await fetch(`${apiUrl}/api/projects/${projectId}/ncrs`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (ncrsRes.ok) {
-          const data = await ncrsRes.json()
+        try {
+          const data = await apiFetch<{ ncrs: any[] }>(`/api/projects/${projectId}/ncrs`)
           const ncrs = data.ncrs || []
           const matchedNcrs = ncrs.filter((ncr: any) =>
             ncr.ncrNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -113,14 +100,11 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
               projectId: projectId,
             })
           })
-        }
+        } catch { /* ignore individual search failures */ }
 
         // Search test results
-        const testsRes = await fetch(`${apiUrl}/api/projects/${projectId}/tests`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsRes.ok) {
-          const data = await testsRes.json()
+        try {
+          const data = await apiFetch<{ tests: any[] }>(`/api/projects/${projectId}/tests`)
           const tests = data.tests || []
           const matchedTests = tests.filter((test: any) =>
             test.testNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -137,7 +121,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
               projectId: projectId,
             })
           })
-        }
+        } catch { /* ignore individual search failures */ }
       }
     } catch (err) {
       console.error('Search error:', err)

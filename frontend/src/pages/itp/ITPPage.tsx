@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 
 interface ChecklistItem {
   id?: string
@@ -59,25 +60,17 @@ export function ITPPage() {
   const [responsiblePartyFilter, setResponsiblePartyFilter] = useState<string>('')  // Feature #711
 
   const token = getAuthToken()
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
   useEffect(() => {
     async function fetchTemplates() {
       if (!projectId || !token) return
 
       try {
-        const url = `${apiUrl}/api/itp/templates?projectId=${projectId}&includeGlobal=${includeGlobalTemplates}`
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setTemplates(data.templates || [])
-          setProjectSpecificationSet(data.projectSpecificationSet || null)
-        }
+        const data = await apiFetch<{ templates: ITPTemplate[]; projectSpecificationSet?: string }>(
+          `/api/itp/templates?projectId=${projectId}&includeGlobal=${includeGlobalTemplates}`
+        )
+        setTemplates(data.templates || [])
+        setProjectSpecificationSet(data.projectSpecificationSet || null)
       } catch (err) {
         console.error('Failed to fetch ITP templates:', err)
       } finally {
@@ -86,7 +79,7 @@ export function ITPPage() {
     }
 
     fetchTemplates()
-  }, [projectId, token, apiUrl, includeGlobalTemplates])
+  }, [projectId, token, includeGlobalTemplates])
 
   const handleCreateTemplate = async (data: {
     name: string
@@ -98,23 +91,16 @@ export function ITPPage() {
 
     setCreating(true)
     try {
-      const response = await fetch(`${apiUrl}/api/itp/templates`, {
+      const result = await apiFetch<{ template: ITPTemplate }>('/api/itp/templates', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           projectId,
           ...data,
         }),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        setTemplates([result.template, ...templates])
-        setShowCreateModal(false)
-      }
+      setTemplates([result.template, ...templates])
+      setShowCreateModal(false)
     } catch (err) {
       console.error('Failed to create template:', err)
     } finally {
@@ -126,23 +112,16 @@ export function ITPPage() {
     if (!token || template.isGlobalTemplate) return
 
     try {
-      const response = await fetch(`${apiUrl}/api/itp/templates/${template.id}`, {
+      const result = await apiFetch<{ template: ITPTemplate }>(`/api/itp/templates/${template.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           isActive: !template.isActive,
         }),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        setTemplates(prev =>
-          prev.map(t => t.id === template.id ? { ...t, isActive: result.template.isActive } : t)
-        )
-      }
+      setTemplates(prev =>
+        prev.map(t => t.id === template.id ? { ...t, isActive: result.template.isActive } : t)
+      )
     } catch (err) {
       console.error('Failed to toggle template status:', err)
     }
@@ -152,21 +131,14 @@ export function ITPPage() {
     if (!token || !projectId) return
 
     try {
-      const response = await fetch(`${apiUrl}/api/itp/templates/${template.id}/clone`, {
+      const result = await apiFetch<{ template: ITPTemplate }>(`/api/itp/templates/${template.id}/clone`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           projectId,
         }),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        setTemplates(prev => [result.template, ...prev])
-      }
+      setTemplates(prev => [result.template, ...prev])
     } catch (err) {
       console.error('Failed to clone template:', err)
     }
@@ -189,23 +161,16 @@ export function ITPPage() {
 
     setCreating(true)
     try {
-      const response = await fetch(`${apiUrl}/api/itp/templates/${templateId}`, {
+      const result = await apiFetch<{ template: ITPTemplate }>(`/api/itp/templates/${templateId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify(data),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        setTemplates(prev =>
-          prev.map(t => t.id === templateId ? result.template : t)
-        )
-        setShowEditModal(false)
-        setEditingTemplate(null)
-      }
+      setTemplates(prev =>
+        prev.map(t => t.id === templateId ? result.template : t)
+      )
+      setShowEditModal(false)
+      setEditingTemplate(null)
     } catch (err) {
       console.error('Failed to update template:', err)
     } finally {
@@ -217,23 +182,15 @@ export function ITPPage() {
     if (!token || !projectId) return false
 
     try {
-      const response = await fetch(`${apiUrl}/api/itp/templates/${templateId}/clone`, {
+      const result = await apiFetch<{ template: ITPTemplate }>(`/api/itp/templates/${templateId}/clone`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           projectId,
         }),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        setTemplates(prev => [result.template, ...prev])
-        return true
-      }
-      return false
+      setTemplates(prev => [result.template, ...prev])
+      return true
     } catch (err) {
       console.error('Failed to import template:', err)
       return false
@@ -428,8 +385,6 @@ export function ITPPage() {
           onClose={() => setShowImportModal(false)}
           onImport={handleImportTemplate}
           currentProjectId={projectId}
-          apiUrl={apiUrl}
-          token={token || ''}
         />
       )}
 
@@ -686,14 +641,10 @@ function ImportFromProjectModal({
   onClose,
   onImport,
   currentProjectId,
-  apiUrl,
-  token,
 }: {
   onClose: () => void
   onImport: (templateId: string) => Promise<boolean>
   currentProjectId: string
-  apiUrl: string
-  token: string
 }) {
   const [projects, setProjects] = useState<ProjectWithTemplates[]>([])
   const [loading, setLoading] = useState(true)
@@ -704,21 +655,12 @@ function ImportFromProjectModal({
   useEffect(() => {
     async function fetchCrossProjectTemplates() {
       try {
-        const response = await fetch(
-          `${apiUrl}/api/itp/templates/cross-project?currentProjectId=${currentProjectId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const data = await apiFetch<{ projects: ProjectWithTemplates[] }>(
+          `/api/itp/templates/cross-project?currentProjectId=${currentProjectId}`
         )
-
-        if (response.ok) {
-          const data = await response.json()
-          setProjects(data.projects || [])
-          if (data.projects?.length > 0) {
-            setSelectedProject(data.projects[0].id)
-          }
+        setProjects(data.projects || [])
+        if (data.projects?.length > 0) {
+          setSelectedProject(data.projects[0].id)
         }
       } catch (err) {
         console.error('Failed to fetch cross-project templates:', err)
@@ -728,7 +670,7 @@ function ImportFromProjectModal({
     }
 
     fetchCrossProjectTemplates()
-  }, [apiUrl, token, currentProjectId])
+  }, [currentProjectId])
 
   const handleImport = async (templateId: string) => {
     setImporting(templateId)

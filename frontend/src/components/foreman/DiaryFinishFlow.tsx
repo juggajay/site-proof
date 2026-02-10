@@ -14,10 +14,8 @@ import {
   Loader2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch, ApiError } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 interface DiaryDraft {
   id: string
@@ -51,8 +49,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
 
   // Fetch today's diary draft with auto-filled data
   const fetchDiary = useCallback(async () => {
-    const token = getAuthToken()
-    if (!token || !projectId) {
+    if (!projectId) {
       setLoading(false)
       return
     }
@@ -60,23 +57,18 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
     setError(null)
     try {
       const today = new Date().toISOString().split('T')[0]
-      const response = await fetch(
-        `${API_URL}/api/projects/${projectId}/diary/draft?date=${today}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const data = await apiFetch<DiaryDraft>(
+        `/api/projects/${projectId}/diary/draft?date=${today}`
       )
-
-      if (response.ok) {
-        const data = await response.json()
-        setDiary(data)
-      } else if (response.status === 404) {
+      setDiary(data)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
         // No diary for today - that's ok
         setDiary(null)
       } else {
-        setError('Failed to load diary')
+        console.error('Error fetching diary:', err)
+        setError('Unable to load diary')
       }
-    } catch (err) {
-      console.error('Error fetching diary:', err)
-      setError('Unable to load diary')
     } finally {
       setLoading(false)
     }
@@ -94,26 +86,14 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
 
     setSubmitting(true)
     try {
-      const token = getAuthToken()
-      const response = await fetch(
-        `${API_URL}/api/projects/${projectId}/diary/${diary.id}/submit`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+      await apiFetch(
+        `/api/projects/${projectId}/diary/${diary.id}/submit`,
+        { method: 'POST' }
       )
 
-      if (response.ok) {
-        toast({ description: 'Diary submitted', variant: 'success' })
-        onSubmit?.()
-        onClose()
-      } else {
-        const errData = await response.json().catch(() => ({}))
-        throw new Error(errData.error || 'Failed to submit')
-      }
+      toast({ description: 'Diary submitted', variant: 'success' })
+      onSubmit?.()
+      onClose()
     } catch (err) {
       console.error('Submit error:', err)
       toast({ description: 'Failed to submit diary', variant: 'error' })

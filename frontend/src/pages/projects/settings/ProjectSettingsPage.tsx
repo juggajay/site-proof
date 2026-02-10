@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { Settings, Users, ClipboardList, Bell, AlertTriangle, Save, X, UserPlus, Archive, CheckCircle2, MapPin, Puzzle } from 'lucide-react'
 
 interface Project {
@@ -146,18 +147,10 @@ export function ProjectSettingsPage() {
 
   useEffect(() => {
     async function fetchProject() {
-      const token = getAuthToken()
-      if (!token || !projectId) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+      if (!projectId) return
 
       try {
-        const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
+        const data = await apiFetch<{ project: any }>(`/api/projects/${projectId}`)
           setProject(data.project)
           // Initialize form data from project
           setFormData({
@@ -196,7 +189,6 @@ export function ProjectSettingsPage() {
               // Invalid JSON, use defaults
             }
           }
-        }
       } catch (error) {
         console.error('Failed to fetch project:', error)
       } finally {
@@ -213,23 +205,10 @@ export function ProjectSettingsPage() {
       if (activeTab !== 'team' || !projectId) return
 
       setLoadingTeam(true)
-      const token = getAuthToken()
-      if (!token) {
-        setLoadingTeam(false)
-        return
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
       try {
-        const response = await fetch(`${apiUrl}/api/projects/${projectId}/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setTeamMembers(data.users || [])
-        }
+        const data = await apiFetch<{ users: TeamMember[] }>(`/api/projects/${projectId}/users`)
+        setTeamMembers(data.users || [])
       } catch (error) {
         console.error('Failed to fetch team members:', error)
       } finally {
@@ -246,23 +225,10 @@ export function ProjectSettingsPage() {
       if (activeTab !== 'itp-templates' || !projectId) return
 
       setLoadingTemplates(true)
-      const token = getAuthToken()
-      if (!token) {
-        setLoadingTemplates(false)
-        return
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
       try {
-        const response = await fetch(`${apiUrl}/api/itp/templates?projectId=${projectId}&includeGlobal=true`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setItpTemplates(data.templates || [])
-        }
+        const data = await apiFetch<{ templates: typeof itpTemplates }>(`/api/itp/templates?projectId=${projectId}&includeGlobal=true`)
+        setItpTemplates(data.templates || [])
       } catch (error) {
         console.error('Failed to fetch ITP templates:', error)
       } finally {
@@ -294,34 +260,20 @@ export function ProjectSettingsPage() {
     setDeleting(true)
     setDeleteError('')
 
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-
     try {
-      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+      await apiFetch(`/api/projects/${projectId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ password: deletePassword }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          setDeleteError('Incorrect password')
-        } else {
-          setDeleteError(data.message || 'Failed to delete project')
-        }
-        return
-      }
-
       // Success - navigate to projects list
       navigate('/projects', { replace: true })
-    } catch (error) {
-      setDeleteError('Failed to delete project. Please try again.')
+    } catch (error: any) {
+      if (error?.status === 401) {
+        setDeleteError('Incorrect password')
+      } else {
+        setDeleteError('Failed to delete project. Please try again.')
+      }
     } finally {
       setDeleting(false)
     }
@@ -341,31 +293,18 @@ export function ProjectSettingsPage() {
     setArchiving(true)
     setArchiveError('')
 
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-
     try {
       const newStatus = project?.status === 'archived' ? 'active' : 'archived'
-      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+      await apiFetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ status: newStatus }),
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update project status')
-      }
 
       // Update local project state
       setProject(prev => prev ? { ...prev, status: newStatus } : null)
       setShowArchiveDialog(false)
     } catch (error) {
-      setArchiveError(error instanceof Error ? error.message : 'Failed to update project status')
+      setArchiveError('Failed to update project status')
     } finally {
       setArchiving(false)
     }
@@ -385,31 +324,18 @@ export function ProjectSettingsPage() {
     setCompleting(true)
     setCompleteError('')
 
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-
     try {
       const newStatus = project?.status === 'completed' ? 'active' : 'completed'
-      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+      await apiFetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ status: newStatus }),
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update project status')
-      }
 
       // Update local project state
       setProject(prev => prev ? { ...prev, status: newStatus } : null)
       setShowCompleteDialog(false)
     } catch (error) {
-      setCompleteError(error instanceof Error ? error.message : 'Failed to update project status')
+      setCompleteError('Failed to update project status')
     } finally {
       setCompleting(false)
     }
@@ -472,16 +398,9 @@ export function ProjectSettingsPage() {
 
     setSaving(true)
 
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-
     try {
-      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+      const data = await apiFetch<{ project: Project }>(`/api/projects/${projectId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           name: formData.name,
           code: formData.code,
@@ -495,13 +414,6 @@ export function ProjectSettingsPage() {
           workingHoursEnd: formData.workingHoursEnd,
         }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to save settings')
-      }
-
-      const data = await response.json()
       setProject(data.project)
       setSaveSuccess(true)
       // Auto-hide success message after 3 seconds
@@ -531,37 +443,21 @@ export function ProjectSettingsPage() {
     setInviteError('')
     setInviteSuccess('')
 
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-
     try {
-      const response = await fetch(`${apiUrl}/api/projects/${projectId}/users`, {
+      await apiFetch(`/api/projects/${projectId}/users`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           email: inviteEmail,
           role: inviteRole,
         }),
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Failed to invite team member')
-      }
-
       setInviteSuccess(`Invitation sent to ${inviteEmail}`)
       // Refresh team members list
-      const refreshResponse = await fetch(`${apiUrl}/api/projects/${projectId}/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (refreshResponse.ok) {
-        const refreshData = await refreshResponse.json()
+      try {
+        const refreshData = await apiFetch<{ users: TeamMember[] }>(`/api/projects/${projectId}/users`)
         setTeamMembers(refreshData.users || [])
-      }
+      } catch { /* ignore refresh failure */ }
       // Close modal after short delay
       setTimeout(() => {
         setShowInviteModal(false)
@@ -1192,16 +1088,10 @@ export function ProjectSettingsPage() {
                       const newValue = e.target.value as 'any' | 'superintendent'
                       setHpApprovalRequirement(newValue)
                       // Save to project settings
-                      const token = getAuthToken()
-                      if (!token || !projectId) return
-                      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                      if (!projectId) return
                       try {
-                        await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                        await apiFetch(`/api/projects/${projectId}`, {
                           method: 'PATCH',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${token}`,
-                          },
                           body: JSON.stringify({ settings: { hpApprovalRequirement: newValue } }),
                         })
                       } catch (e) {
@@ -1235,16 +1125,10 @@ export function ProjectSettingsPage() {
                           const newRecipients = hpRecipients.filter((_, i) => i !== index)
                           setHpRecipients(newRecipients)
                           // Save to project settings
-                          const token = getAuthToken()
-                          if (!token || !projectId) return
-                          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                          if (!projectId) return
                           try {
-                            await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                            await apiFetch(`/api/projects/${projectId}`, {
                               method: 'PATCH',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${token}`,
-                              },
                               body: JSON.stringify({ settings: { hpRecipients: newRecipients } }),
                             })
                           } catch (e) {
@@ -1278,16 +1162,10 @@ export function ProjectSettingsPage() {
                     const newValue = !requireSubcontractorVerification
                     setRequireSubcontractorVerification(newValue)
                     // Save to project settings
-                    const token = getAuthToken()
-                    if (!token || !projectId) return
-                    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                    if (!projectId) return
                     try {
-                      await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                      await apiFetch(`/api/projects/${projectId}`, {
                         method: 'PATCH',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          Authorization: `Bearer ${token}`,
-                        },
                         body: JSON.stringify({ settings: { requireSubcontractorVerification: newValue } }),
                       })
                     } catch (e) {
@@ -1339,16 +1217,10 @@ export function ProjectSettingsPage() {
                       const newModules = { ...enabledModules, [module.key]: newValue }
                       setEnabledModules(newModules)
                       // Save to project settings
-                      const token = getAuthToken()
-                      if (!token || !projectId) return
-                      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
+                      if (!projectId) return
                       try {
-                        await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                        await apiFetch(`/api/projects/${projectId}`, {
                           method: 'PATCH',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${token}`,
-                          },
                           body: JSON.stringify({ settings: { enabledModules: newModules } }),
                         })
                       } catch (e) {
@@ -1640,27 +1512,19 @@ export function ProjectSettingsPage() {
                   const newRecipient = { role: newRecipientRole, email: newRecipientEmail }
                   const newRecipients = [...hpRecipients, newRecipient]
 
-                  const token = getAuthToken()
-                  if (!token || !projectId) {
+                  if (!projectId) {
                     setSavingRecipients(false)
                     return
                   }
-                  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
                   try {
-                    const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+                    await apiFetch(`/api/projects/${projectId}`, {
                       method: 'PATCH',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                      },
                       body: JSON.stringify({ settings: { hpRecipients: newRecipients } }),
                     })
-                    if (response.ok) {
-                      setHpRecipients(newRecipients)
-                      setShowAddRecipientModal(false)
-                      setNewRecipientRole('')
-                      setNewRecipientEmail('')
-                    }
+                    setHpRecipients(newRecipients)
+                    setShowAddRecipientModal(false)
+                    setNewRecipientRole('')
+                    setNewRecipientEmail('')
                   } catch (e) {
                     console.error('Failed to save recipient:', e)
                   } finally {

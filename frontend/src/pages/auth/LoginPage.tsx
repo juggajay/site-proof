@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, MfaRequiredError } from '@/lib/auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4007'
+import { apiFetch, API_URL } from '@/lib/api'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -58,19 +57,12 @@ export function LoginPage() {
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_URL}/api/auth/magic-link/request`, {
+      await apiFetch('/api/auth/magic-link/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
       })
 
-      const data = await response.json()
-
-      if (response.ok) {
-        setMagicLinkSent(true)
-      } else {
-        setError(data.error || 'Failed to send magic link')
-      }
+      setMagicLinkSent(true)
     } catch (err) {
       setError('Failed to send magic link. Please try again.')
     } finally {

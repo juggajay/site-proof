@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
+import { apiFetch } from '@/lib/api'
 import { UserPlus, Trash2, Edit2, X, Check, Mail, Shield } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 interface ProjectUser {
   id: string
@@ -48,18 +47,11 @@ export function ProjectUsersPage() {
   // Fetch project users
   useEffect(() => {
     async function fetchUsers() {
-      const token = getAuthToken()
-      if (!token || !projectId) return
+      if (!projectId) return
 
       try {
-        const response = await fetch(`${API_URL}/api/projects/${projectId}/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setUsers(data.users || [])
-        }
+        const data = await apiFetch<{ users: ProjectUser[] }>(`/api/projects/${projectId}/users`)
+        setUsers(data.users || [])
       } catch (err) {
         console.error('Failed to fetch project users:', err)
       } finally {
@@ -75,39 +67,23 @@ export function ProjectUsersPage() {
     if (!inviteEmail.trim()) return
 
     setInviting(true)
-    const token = getAuthToken()
 
     try {
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/users`, {
+      const data = await apiFetch<{ projectUser: ProjectUser }>(`/api/projects/${projectId}/users`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           email: inviteEmail.trim(),
           role: inviteRole,
         }),
       })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        toast({
-          title: 'User invited',
-          description: `${inviteEmail} has been added to the project.`,
-        })
-        setUsers(prev => [...prev, data.projectUser])
-        setShowInviteModal(false)
-        setInviteEmail('')
-        setInviteRole('viewer')
-      } else {
-        toast({
-          title: 'Failed to invite user',
-          description: data.message || 'An error occurred',
-          variant: 'error',
-        })
-      }
+      toast({
+        title: 'User invited',
+        description: `${inviteEmail} has been added to the project.`,
+      })
+      setUsers(prev => [...prev, data.projectUser])
+      setShowInviteModal(false)
+      setInviteEmail('')
+      setInviteRole('viewer')
     } catch (err) {
       toast({
         title: 'Error',
@@ -124,35 +100,19 @@ export function ProjectUsersPage() {
     if (!editingUser || !editRole) return
 
     setSaving(true)
-    const token = getAuthToken()
 
     try {
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/users/${editingUser.userId}`, {
+      await apiFetch(`/api/projects/${projectId}/users/${editingUser.userId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ role: editRole }),
       })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        toast({
-          title: 'Role updated',
-          description: `${editingUser.fullName || editingUser.email}'s role has been updated.`,
-        })
-        setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, role: editRole } : u))
-        setEditingUser(null)
-        setEditRole('')
-      } else {
-        toast({
-          title: 'Failed to update role',
-          description: data.message || 'An error occurred',
-          variant: 'error',
-        })
-      }
+      toast({
+        title: 'Role updated',
+        description: `${editingUser.fullName || editingUser.email}'s role has been updated.`,
+      })
+      setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, role: editRole } : u))
+      setEditingUser(null)
+      setEditRole('')
     } catch (err) {
       toast({
         title: 'Error',
@@ -171,28 +131,16 @@ export function ProjectUsersPage() {
     }
 
     setRemovingUserId(user.id)
-    const token = getAuthToken()
 
     try {
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/users/${user.userId}`, {
+      await apiFetch(`/api/projects/${projectId}/users/${user.userId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (response.ok) {
-        toast({
-          title: 'User removed',
-          description: `${user.fullName || user.email} has been removed from the project.`,
-        })
-        setUsers(prev => prev.filter(u => u.id !== user.id))
-      } else {
-        const data = await response.json()
-        toast({
-          title: 'Failed to remove user',
-          description: data.message || 'An error occurred',
-          variant: 'error',
-        })
-      }
+      toast({
+        title: 'User removed',
+        description: `${user.fullName || user.email} has been removed from the project.`,
+      })
+      setUsers(prev => prev.filter(u => u.id !== user.id))
     } catch (err) {
       toast({
         title: 'Error',

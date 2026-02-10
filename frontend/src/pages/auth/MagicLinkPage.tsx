@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
+import { apiFetch } from '@/lib/api'
 
 // Feature #415: Magic link verification page
 export function MagicLinkPage() {
@@ -23,15 +22,12 @@ export function MagicLinkPage() {
 
     const verifyMagicLink = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/auth/magic-link/verify`, {
+        const data = await apiFetch<{ token: string }>('/api/auth/magic-link/verify', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token })
         })
 
-        const data = await response.json()
-
-        if (response.ok && data.token) {
+        if (data.token) {
           // Use the centralized setToken which handles storage properly
           await setToken(data.token)
 
@@ -43,7 +39,7 @@ export function MagicLinkPage() {
           }, 1500)
         } else {
           setStatus('error')
-          setError(data.error || 'Magic link verification failed')
+          setError('Magic link verification failed')
         }
       } catch (err) {
         setStatus('error')

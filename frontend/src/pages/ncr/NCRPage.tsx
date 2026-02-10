@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams } from 'react-router-dom'
 import { useAuth, getAuthToken } from '../../lib/auth'
+import { apiFetch, apiUrl, ApiError } from '../../lib/api'
 import { toast } from '@/components/ui/toaster'
 import { Link2, Check, Printer, AlertTriangle, ChevronRight, Search } from 'lucide-react'
 import { generateNCRDetailPDF, NCRDetailData } from '../../lib/pdfGenerator'
@@ -11,8 +12,6 @@ import { FilterBottomSheet, FilterTriggerButton, type FilterConfig, type FilterV
 import { ContextFAB } from '@/components/mobile/ContextFAB'
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
 import { SwipeableCard } from '@/components/foreman/SwipeableCard'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
 interface NCR {
   id: string
@@ -182,21 +181,11 @@ export function NCRPage() {
   const fetchNcrs = async () => {
     try {
       setLoading(true)
-      const url = projectId
-        ? `${API_URL}/api/ncrs?projectId=${projectId}`
-        : `${API_URL}/api/ncrs`
+      const path = projectId
+        ? `/api/ncrs?projectId=${projectId}`
+        : `/api/ncrs`
 
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch NCRs')
-      }
-
-      const data = await response.json()
+      const data = await apiFetch<{ ncrs: NCR[] }>(path)
       setNcrs(data.ncrs)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load NCRs')
@@ -210,16 +199,8 @@ export function NCRPage() {
     if (!projectId) return
 
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/check-role/${projectId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setUserRole(data)
-      }
+      const data = await apiFetch<UserRole>(`/api/ncrs/check-role/${projectId}`)
+      setUserRole(data)
     } catch (err) {
       console.error('Failed to check user role:', err)
     }
@@ -240,33 +221,25 @@ export function NCRPage() {
     let pollInterval: NodeJS.Timeout | null = null
 
     const silentFetchNcrs = async () => {
-      const url = projectId
-        ? `${API_URL}/api/ncrs?projectId=${projectId}`
-        : `${API_URL}/api/ncrs`
+      const path = projectId
+        ? `/api/ncrs?projectId=${projectId}`
+        : `/api/ncrs`
 
       try {
-        const response = await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+        const data = await apiFetch<{ ncrs: NCR[] }>(path)
+        // Only update if there are actual changes
+        setNcrs((prevNcrs: NCR[]) => {
+          const newNcrs = data.ncrs || []
+          const hasChanges = newNcrs.length !== prevNcrs.length ||
+            newNcrs.some((newNcr: NCR, index: number) =>
+              !prevNcrs[index] ||
+              newNcr.id !== prevNcrs[index].id ||
+              newNcr.status !== prevNcrs[index].status ||
+              newNcr.closedAt !== prevNcrs[index].closedAt ||
+              newNcr.qmApprovedAt !== prevNcrs[index].qmApprovedAt
+            )
+          return hasChanges ? newNcrs : prevNcrs
         })
-
-        if (response.ok) {
-          const data = await response.json()
-          // Only update if there are actual changes
-          setNcrs((prevNcrs: NCR[]) => {
-            const newNcrs = data.ncrs || []
-            const hasChanges = newNcrs.length !== prevNcrs.length ||
-              newNcrs.some((newNcr: NCR, index: number) =>
-                !prevNcrs[index] ||
-                newNcr.id !== prevNcrs[index].id ||
-                newNcr.status !== prevNcrs[index].status ||
-                newNcr.closedAt !== prevNcrs[index].closedAt ||
-                newNcr.qmApprovedAt !== prevNcrs[index].qmApprovedAt
-              )
-            return hasChanges ? newNcrs : prevNcrs
-          })
-        }
       } catch (err) {
         // Silent fail for background polling
         console.debug('Background NCR fetch failed:', err)
@@ -395,22 +368,13 @@ export function NCRPage() {
 
     setActionLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs`, {
+      await apiFetch('/api/ncrs', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           projectId,
           ...formData,
         }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to create NCR')
-      }
 
       setShowCreateModal(false)
       setSuccessMessage('NCR created successfully')
@@ -434,20 +398,10 @@ export function NCRPage() {
 
     setActionLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/${ncrId}/respond`, {
+      await apiFetch(`/api/ncrs/${ncrId}/respond`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(responseData),
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to submit response')
-      }
 
       setShowRespondModal(false)
       setRespondingNcr(null)
@@ -465,19 +419,9 @@ export function NCRPage() {
   const handleRequestQmApproval = async (ncrId: string) => {
     setActionLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/${ncrId}/qm-approve`, {
+      const data = await apiFetch<{ message: string }>(`/api/ncrs/${ncrId}/qm-approve`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to approve NCR')
-      }
 
       setSuccessMessage(data.message || 'QM approval granted')
       fetchNcrs()
@@ -493,24 +437,10 @@ export function NCRPage() {
   const handleCloseNcr = async (ncrId: string, closeData: { verificationNotes: string; lessonsLearned: string }) => {
     setActionLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/${ncrId}/close`, {
+      const responseData = await apiFetch<{ message: string }>(`/api/ncrs/${ncrId}/close`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ verificationNotes: closeData.verificationNotes, lessonsLearned: closeData.lessonsLearned }),
       })
-
-      const responseData = await response.json()
-
-      if (!response.ok) {
-        // Handle specific error for major NCR requiring QM approval
-        if (responseData.requiresQmApproval) {
-          throw new Error('Major NCRs require Quality Manager approval before closure. Please request QM approval first.')
-        }
-        throw new Error(responseData.message || 'Failed to close NCR')
-      }
 
       setShowCloseModal(false)
       setSelectedNcr(null)
@@ -518,7 +448,20 @@ export function NCRPage() {
       fetchNcrs()
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to close NCR')
+      if (err instanceof ApiError) {
+        try {
+          const data = JSON.parse(err.body)
+          if (data.requiresQmApproval) {
+            setError('Major NCRs require Quality Manager approval before closure. Please request QM approval first.')
+          } else {
+            setError(data.message || 'Failed to close NCR')
+          }
+        } catch {
+          setError('Failed to close NCR')
+        }
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to close NCR')
+      }
     } finally {
       setActionLoading(false)
     }
@@ -536,12 +479,8 @@ export function NCRPage() {
   ) => {
     setActionLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/${ncrId}/close`, {
+      await apiFetch(`/api/ncrs/${ncrId}/close`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           withConcession: true,
           concessionJustification: data.concessionJustification,
@@ -551,22 +490,26 @@ export function NCRPage() {
         }),
       })
 
-      const responseData = await response.json()
-
-      if (!response.ok) {
-        if (responseData.requiresQmApproval) {
-          throw new Error('Major NCRs require Quality Manager approval before closure with concession.')
-        }
-        throw new Error(responseData.message || 'Failed to close NCR with concession')
-      }
-
       setShowConcessionModal(false)
       setSelectedNcr(null)
       setSuccessMessage('NCR closed with concession successfully')
       fetchNcrs()
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to close NCR with concession')
+      if (err instanceof ApiError) {
+        try {
+          const respData = JSON.parse(err.body)
+          if (respData.requiresQmApproval) {
+            setError('Major NCRs require Quality Manager approval before closure with concession.')
+          } else {
+            setError(respData.message || 'Failed to close NCR with concession')
+          }
+        } catch {
+          setError('Failed to close NCR with concession')
+        }
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to close NCR with concession')
+      }
     } finally {
       setActionLoading(false)
     }
@@ -586,16 +529,16 @@ export function NCRPage() {
 
     setUploadingEvidence(true)
     try {
-      // Create form data for file upload
+      // Create form data for file upload (FormData - keep raw fetch)
       const formData = new FormData()
       formData.append('file', file)
       formData.append('projectId', rectifyingNcr.project?.id || projectId || '')
 
       // Upload the file first
-      const uploadResponse = await fetch(`${API_URL}/api/documents/upload`, {
+      const uploadResponse = await fetch(apiUrl('/api/documents/upload'), {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         body: formData,
       })
@@ -607,12 +550,8 @@ export function NCRPage() {
       const uploadData = await uploadResponse.json()
 
       // Link the document to the NCR as evidence
-      const evidenceResponse = await fetch(`${API_URL}/api/ncrs/${rectifyingNcr.id}/evidence`, {
+      await apiFetch(`/api/ncrs/${rectifyingNcr.id}/evidence`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           documentId: uploadData.document?.id,
           evidenceType,
@@ -622,10 +561,6 @@ export function NCRPage() {
           projectId: rectifyingNcr.project?.id || projectId,
         }),
       })
-
-      if (!evidenceResponse.ok) {
-        throw new Error('Failed to link evidence to NCR')
-      }
 
       toast({
         title: 'Evidence Uploaded',
@@ -651,19 +586,10 @@ export function NCRPage() {
 
     setSubmittingRectification(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/${rectifyingNcr.id}/submit-for-verification`, {
+      await apiFetch(`/api/ncrs/${rectifyingNcr.id}/submit-for-verification`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ rectificationNotes }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to submit rectification')
-      }
 
       toast({
         title: 'Rectification Submitted',
@@ -698,19 +624,10 @@ export function NCRPage() {
 
     setRejectingRectification(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/${rejectingRectificationNcr.id}/reject-rectification`, {
+      await apiFetch(`/api/ncrs/${rejectingRectificationNcr.id}/reject-rectification`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ feedback: rejectFeedback }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to reject rectification')
-      }
 
       toast({
         title: 'Rectification Rejected',
@@ -737,24 +654,14 @@ export function NCRPage() {
 
     setNotifyingClient(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/${notifyingNcr.id}/notify-client`, {
+      await apiFetch(`/api/ncrs/${notifyingNcr.id}/notify-client`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           recipientEmail: notifyClientEmail || undefined,
           additionalMessage: notifyClientMessage || undefined,
         }),
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to notify client')
-      }
-
-      await response.json() // Consume response body
       toast({
         title: 'Client Notified',
         description: `Client notification sent for ${notifyingNcr.ncrNumber}`,
@@ -781,24 +688,14 @@ export function NCRPage() {
 
     setSubmittingReview(true)
     try {
-      const response = await fetch(`${API_URL}/api/ncrs/${reviewingNcr.id}/qm-review`, {
+      const data = await apiFetch<{ message: string }>(`/api/ncrs/${reviewingNcr.id}/qm-review`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           action,
           comments: qmReviewComments || undefined,
         }),
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to submit review')
-      }
-
-      const data = await response.json()
       toast({
         title: action === 'accept' ? 'Response Accepted' : 'Revision Requested',
         description: data.message,
@@ -1906,15 +1803,8 @@ function CreateNCRModal({
         return
       }
       try {
-        const response = await fetch(`${API_URL}/api/lots?projectId=${projectId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setLots(data.lots || [])
-        }
+        const data = await apiFetch<{ lots: Array<{ id: string; lotNumber: string; description: string }> }>(`/api/lots?projectId=${projectId}`)
+        setLots(data.lots || [])
       } catch (err) {
         console.error('Failed to fetch lots:', err)
       } finally {

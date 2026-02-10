@@ -13,11 +13,9 @@ import {
   Check,
   X,
 } from 'lucide-react'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
 interface Employee {
   id: string
@@ -172,57 +170,47 @@ export function DocketEditPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const token = getAuthToken()
-        const headers = { Authorization: `Bearer ${token}` }
-
         // Fetch company data
-        const companyRes = await fetch(`${API_URL}/api/subcontractors/my-company`, { headers })
-        if (!companyRes.ok) {
-          setError('Failed to load company data')
-          setLoading(false)
-          return
-        }
-        const companyData = await companyRes.json()
+        const companyData = await apiFetch<{ company: Company }>(`/api/subcontractors/my-company`)
         setCompany(companyData.company)
 
         // Fetch assigned lots
-        const lotsRes = await fetch(
-          `${API_URL}/api/lots?projectId=${companyData.company.projectId}`,
-          { headers }
-        )
-        if (lotsRes.ok) {
-          const lotsData = await lotsRes.json()
+        try {
+          const lotsData = await apiFetch<{ lots: Lot[] }>(
+            `/api/lots?projectId=${companyData.company.projectId}`
+          )
           setAssignedLots(lotsData.lots || [])
           // Auto-select if only one lot
           if (lotsData.lots?.length === 1) {
             setSelectedLotId(lotsData.lots[0].id)
           }
+        } catch {
+          // Lots fetch failed, continue with empty
         }
 
         // If editing existing docket, fetch it
         if (!isNewDocket) {
-          const docketRes = await fetch(`${API_URL}/api/dockets/${docketId}`, { headers })
-          if (docketRes.ok) {
-            const docketData = await docketRes.json()
+          try {
+            const docketData = await apiFetch<{ docket: Docket }>(`/api/dockets/${docketId}`)
             setDocket(docketData.docket)
             setNotes(docketData.docket.notes || '')
-          } else {
+          } catch {
             setError('Docket not found')
           }
         } else {
           // Check if a docket already exists for today
-          const existingRes = await fetch(
-            `${API_URL}/api/dockets?projectId=${companyData.company.projectId}`,
-            { headers }
-          )
-          if (existingRes.ok) {
-            const existingData = await existingRes.json()
+          try {
+            const existingData = await apiFetch<{ dockets: Docket[] }>(
+              `/api/dockets?projectId=${companyData.company.projectId}`
+            )
             const todayDocket = existingData.dockets.find((d: Docket) => d.date === today)
             if (todayDocket) {
               // Redirect to existing docket
               navigate(`/subcontractor-portal/docket/${todayDocket.id}`, { replace: true })
               return
             }
+          } catch {
+            // Existing dockets fetch failed, continue
           }
         }
       } catch (err) {
@@ -241,13 +229,8 @@ export function DocketEditPage() {
     if (docket) return docket
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/dockets`, {
+      const data = await apiFetch<{ docket: Docket }>(`/api/dockets`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           projectId: company?.projectId,
           date: today,
@@ -255,11 +238,6 @@ export function DocketEditPage() {
         }),
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to create docket')
-      }
-
-      const data = await response.json()
       const newDocket: Docket = {
         ...data.docket,
         labourEntries: [],
@@ -291,15 +269,10 @@ export function DocketEditPage() {
     setSaving(true)
     try {
       const currentDocket = await ensureDocket()
-      const token = getAuthToken()
       const hours = calculateHours(startTime, finishTime)
 
-      const response = await fetch(`${API_URL}/api/dockets/${currentDocket.id}/labour`, {
+      const data = await apiFetch<{ labourEntry: LabourEntry; runningTotal: { cost: number } }>(`/api/dockets/${currentDocket.id}/labour`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           employeeId: selectedEmployee.id,
           startTime,
@@ -307,12 +280,6 @@ export function DocketEditPage() {
           lotAllocations: [{ lotId: selectedLotId, hours }],
         }),
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to add entry')
-      }
-
-      const data = await response.json()
 
       // Update local state
       setDocket(prev => {
@@ -353,26 +320,15 @@ export function DocketEditPage() {
     setSaving(true)
     try {
       const currentDocket = await ensureDocket()
-      const token = getAuthToken()
 
-      const response = await fetch(`${API_URL}/api/dockets/${currentDocket.id}/plant`, {
+      const data = await apiFetch<{ plantEntry: PlantEntry; runningTotal: { cost: number } }>(`/api/dockets/${currentDocket.id}/plant`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           plantId: selectedPlant.id,
           hoursOperated: parseFloat(hoursOperated),
           wetOrDry,
         }),
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to add entry')
-      }
-
-      const data = await response.json()
 
       // Update local state
       setDocket(prev => {
@@ -404,15 +360,9 @@ export function DocketEditPage() {
     if (!docket) return
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/dockets/${docket.id}/labour/${entryId}`, {
+      await apiFetch(`/api/dockets/${docket.id}/labour/${entryId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete entry')
-      }
 
       // Update local state
       setDocket(prev => {
@@ -442,15 +392,9 @@ export function DocketEditPage() {
     if (!docket) return
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/dockets/${docket.id}/plant/${entryId}`, {
+      await apiFetch(`/api/dockets/${docket.id}/plant/${entryId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete entry')
-      }
 
       // Update local state
       setDocket(prev => {
@@ -491,19 +435,9 @@ export function DocketEditPage() {
 
     setSubmitting(true)
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/dockets/${docket.id}/submit`, {
+      await apiFetch(`/api/dockets/${docket.id}/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to submit')
-      }
 
       toast({
         title: 'Docket submitted',
@@ -530,20 +464,10 @@ export function DocketEditPage() {
 
     setRespondingToQuery(true)
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/dockets/${docket.id}/respond`, {
+      await apiFetch(`/api/dockets/${docket.id}/respond`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ response: queryResponse.trim() }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to respond')
-      }
 
       toast({
         title: 'Response sent',

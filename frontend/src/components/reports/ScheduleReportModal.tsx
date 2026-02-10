@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, Calendar, Clock, Mail, AlertCircle } from 'lucide-react'
-import { getAuthToken } from '../../lib/auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { apiFetch } from '@/lib/api'
 
 interface ScheduledReport {
   id: string
@@ -69,19 +67,9 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
     setError(null)
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(
-        `${API_URL}/api/reports/schedules?projectId=${projectId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const data = await apiFetch<{ schedules: ScheduledReport[] }>(
+        `/api/reports/schedules?projectId=${projectId}`
       )
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch schedules')
-      }
-
-      const data = await response.json()
       setSchedules(data.schedules || [])
     } catch (err) {
       console.error('Error fetching schedules:', err)
@@ -97,13 +85,8 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
     setError(null)
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/reports/schedules`, {
+      await apiFetch('/api/reports/schedules', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           projectId,
           reportType,
@@ -114,11 +97,6 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
           recipients: recipients.split(',').map((e) => e.trim()).filter(Boolean),
         }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to create schedule')
-      }
 
       // Refresh the list and reset form
       await fetchSchedules()
@@ -134,21 +112,12 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
 
   const handleToggleActive = async (schedule: ScheduledReport) => {
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/reports/schedules/${schedule.id}`, {
+      await apiFetch(`/api/reports/schedules/${schedule.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           isActive: !schedule.isActive,
         }),
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to update schedule')
-      }
 
       // Refresh the list
       await fetchSchedules()
@@ -164,15 +133,9 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
     }
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/reports/schedules/${scheduleId}`, {
+      await apiFetch(`/api/reports/schedules/${scheduleId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete schedule')
-      }
 
       // Refresh the list
       await fetchSchedules()

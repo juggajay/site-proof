@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { Plus, Users, Building2, CheckCircle, Clock, X, DollarSign, Truck, ChevronDown, ChevronUp, Settings2, MapPin, ClipboardCheck, AlertTriangle, TestTube, FileWarning, FileText, Eye, EyeOff, Search, Trash2 } from 'lucide-react'
 import { validateABN, formatABN } from '@/lib/abnValidation'
 
@@ -124,86 +124,77 @@ export function SubcontractorsPage() {
   const fetchSubcontractors = async () => {
     if (!projectId) return
     setLoading(true)
-    const token = getAuthToken()
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
       const queryParams = showRemoved ? '?includeRemoved=true' : ''
-      const response = await fetch(`${API_URL}/api/subcontractors/project/${projectId}${queryParams}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const allSubs = data.subcontractors || []
-        setSubcontractors(allSubs)
-        // Track removed count for the toggle label
-        if (showRemoved) {
-          setRemovedCount(allSubs.filter((s: Subcontractor) => s.status === 'removed').length)
-        }
-      } else {
-        // Demo data
-        setSubcontractors([
-          {
-            id: '1',
-            companyName: 'ABC Earthworks Pty Ltd',
-            abn: '12 345 678 901',
-            primaryContact: 'John Smith',
-            email: 'john@abcearthworks.com.au',
-            phone: '0412 345 678',
-            status: 'approved',
-            employees: [
-              { id: 'e1', name: 'John Smith', role: 'Supervisor', hourlyRate: 95, status: 'approved' },
-              { id: 'e2', name: 'Mike Johnson', role: 'Operator', hourlyRate: 85, status: 'approved' },
-              { id: 'e3', name: 'Dave Williams', role: 'Labourer', hourlyRate: 65, status: 'pending' }
-            ],
-            plant: [
-              { id: 'p1', type: 'Excavator', description: '20T Excavator', idRego: 'EXC-001', dryRate: 150, wetRate: 200, status: 'approved' },
-              { id: 'p2', type: 'Roller', description: 'Padfoot Roller', idRego: 'ROL-001', dryRate: 120, wetRate: 160, status: 'approved' }
-            ],
-            totalApprovedDockets: 18,
-            totalCost: 77300
-          },
-          {
-            id: '2',
-            companyName: 'XYZ Drainage Services',
-            abn: '98 765 432 109',
-            primaryContact: 'Sarah Brown',
-            email: 'sarah@xyzdrainage.com.au',
-            phone: '0423 456 789',
-            status: 'approved',
-            employees: [
-              { id: 'e4', name: 'Sarah Brown', role: 'Supervisor', hourlyRate: 90, status: 'approved' },
-              { id: 'e5', name: 'Tom Wilson', role: 'Pipe Layer', hourlyRate: 80, status: 'approved' }
-            ],
-            plant: [
-              { id: 'p3', type: 'Mini Excavator', description: '5T Mini Excavator', idRego: 'MEX-001', dryRate: 100, wetRate: 140, status: 'approved' }
-            ],
-            totalApprovedDockets: 15,
-            totalCost: 66950
-          },
-          {
-            id: '3',
-            companyName: 'New Paving Co',
-            abn: '11 222 333 444',
-            primaryContact: 'Peter Jones',
-            email: 'peter@newpaving.com.au',
-            phone: '0434 567 890',
-            status: 'pending_approval',
-            employees: [
-              { id: 'e6', name: 'Peter Jones', role: 'Foreman', hourlyRate: 100, status: 'pending' },
-              { id: 'e7', name: 'Chris Lee', role: 'Operator', hourlyRate: 88, status: 'pending' }
-            ],
-            plant: [
-              { id: 'p4', type: 'Paver', description: 'Asphalt Paver', idRego: 'PAV-001', dryRate: 250, wetRate: 0, status: 'pending' }
-            ],
-            totalApprovedDockets: 0,
-            totalCost: 0
-          }
-        ])
+      const data = await apiFetch<{ subcontractors: Subcontractor[] }>(`/api/subcontractors/project/${projectId}${queryParams}`)
+      const allSubs = data.subcontractors || []
+      setSubcontractors(allSubs)
+      // Track removed count for the toggle label
+      if (showRemoved) {
+        setRemovedCount(allSubs.filter((s: Subcontractor) => s.status === 'removed').length)
       }
     } catch (error) {
       console.error('Error fetching subcontractors:', error)
+      // Demo data
+      setSubcontractors([
+        {
+          id: '1',
+          companyName: 'ABC Earthworks Pty Ltd',
+          abn: '12 345 678 901',
+          primaryContact: 'John Smith',
+          email: 'john@abcearthworks.com.au',
+          phone: '0412 345 678',
+          status: 'approved',
+          employees: [
+            { id: 'e1', name: 'John Smith', role: 'Supervisor', hourlyRate: 95, status: 'approved' },
+            { id: 'e2', name: 'Mike Johnson', role: 'Operator', hourlyRate: 85, status: 'approved' },
+            { id: 'e3', name: 'Dave Williams', role: 'Labourer', hourlyRate: 65, status: 'pending' }
+          ],
+          plant: [
+            { id: 'p1', type: 'Excavator', description: '20T Excavator', idRego: 'EXC-001', dryRate: 150, wetRate: 200, status: 'approved' },
+            { id: 'p2', type: 'Roller', description: 'Padfoot Roller', idRego: 'ROL-001', dryRate: 120, wetRate: 160, status: 'approved' }
+          ],
+          totalApprovedDockets: 18,
+          totalCost: 77300
+        },
+        {
+          id: '2',
+          companyName: 'XYZ Drainage Services',
+          abn: '98 765 432 109',
+          primaryContact: 'Sarah Brown',
+          email: 'sarah@xyzdrainage.com.au',
+          phone: '0423 456 789',
+          status: 'approved',
+          employees: [
+            { id: 'e4', name: 'Sarah Brown', role: 'Supervisor', hourlyRate: 90, status: 'approved' },
+            { id: 'e5', name: 'Tom Wilson', role: 'Pipe Layer', hourlyRate: 80, status: 'approved' }
+          ],
+          plant: [
+            { id: 'p3', type: 'Mini Excavator', description: '5T Mini Excavator', idRego: 'MEX-001', dryRate: 100, wetRate: 140, status: 'approved' }
+          ],
+          totalApprovedDockets: 15,
+          totalCost: 66950
+        },
+        {
+          id: '3',
+          companyName: 'New Paving Co',
+          abn: '11 222 333 444',
+          primaryContact: 'Peter Jones',
+          email: 'peter@newpaving.com.au',
+          phone: '0434 567 890',
+          status: 'pending_approval',
+          employees: [
+            { id: 'e6', name: 'Peter Jones', role: 'Foreman', hourlyRate: 100, status: 'pending' },
+            { id: 'e7', name: 'Chris Lee', role: 'Operator', hourlyRate: 88, status: 'pending' }
+          ],
+          plant: [
+            { id: 'p4', type: 'Paver', description: 'Asphalt Paver', idRego: 'PAV-001', dryRate: 250, wetRate: 0, status: 'pending' }
+          ],
+          totalApprovedDockets: 0,
+          totalCost: 0
+        }
+      ])
     } finally {
       setLoading(false)
     }
@@ -212,21 +203,10 @@ export function SubcontractorsPage() {
   // Fetch global subcontractor directory when invite modal opens
   const fetchGlobalDirectory = async () => {
     setLoadingDirectory(true)
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/directory`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setGlobalSubcontractors(data.subcontractors || [])
-      } else {
-        console.error('Failed to fetch directory')
-        setGlobalSubcontractors([])
-      }
+      const data = await apiFetch<{ subcontractors: GlobalSubcontractor[] }>(`/api/subcontractors/directory`)
+      setGlobalSubcontractors(data.subcontractors || [])
     } catch (error) {
       console.error('Error fetching directory:', error)
       setGlobalSubcontractors([])
@@ -266,35 +246,23 @@ export function SubcontractorsPage() {
   }
 
   const updateEmployeeStatus = async (subId: string, empId: string, status: 'pending' | 'approved' | 'inactive') => {
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/employees/${empId}/status`, {
+      await apiFetch(`/api/subcontractors/${subId}/employees/${empId}/status`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({ status })
       })
 
-      if (response.ok) {
-        setSubcontractors(subs => subs.map(sub => {
-          if (sub.id === subId) {
-            return {
-              ...sub,
-              employees: sub.employees.map(emp =>
-                emp.id === empId ? { ...emp, status } : emp
-              )
-            }
+      setSubcontractors(subs => subs.map(sub => {
+        if (sub.id === subId) {
+          return {
+            ...sub,
+            employees: sub.employees.map(emp =>
+              emp.id === empId ? { ...emp, status } : emp
+            )
           }
-          return sub
-        }))
-      } else {
-        const error = await response.json()
-        alert(error.message || 'Failed to update employee status')
-      }
+        }
+        return sub
+      }))
     } catch (error) {
       console.error('Update employee status error:', error)
       alert('Failed to update employee status')
@@ -318,16 +286,9 @@ export function SubcontractorsPage() {
       return
     }
 
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/employees`, {
+      const data = await apiFetch<{ employee: Employee }>(`/api/subcontractors/${subId}/employees`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({
           name: employeeData.name,
           role: employeeData.role,
@@ -335,23 +296,17 @@ export function SubcontractorsPage() {
         })
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setSubcontractors(subs => subs.map(sub => {
-          if (sub.id === subId) {
-            return {
-              ...sub,
-              employees: [...sub.employees, data.employee]
-            }
+      setSubcontractors(subs => subs.map(sub => {
+        if (sub.id === subId) {
+          return {
+            ...sub,
+            employees: [...sub.employees, data.employee]
           }
-          return sub
-        }))
-        setShowAddEmployeeModal(null)
-        setEmployeeData({ name: '', role: '', hourlyRate: '' })
-      } else {
-        const error = await response.json()
-        alert(error.message || 'Failed to add employee')
-      }
+        }
+        return sub
+      }))
+      setShowAddEmployeeModal(null)
+      setEmployeeData({ name: '', role: '', hourlyRate: '' })
     } catch (error) {
       console.error('Add employee error:', error)
       alert('Failed to add employee')
@@ -359,35 +314,23 @@ export function SubcontractorsPage() {
   }
 
   const updatePlantStatus = async (subId: string, plantId: string, status: 'pending' | 'approved' | 'inactive') => {
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/plant/${plantId}/status`, {
+      await apiFetch(`/api/subcontractors/${subId}/plant/${plantId}/status`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({ status })
       })
 
-      if (response.ok) {
-        setSubcontractors(subs => subs.map(sub => {
-          if (sub.id === subId) {
-            return {
-              ...sub,
-              plant: sub.plant.map(p =>
-                p.id === plantId ? { ...p, status } : p
-              )
-            }
+      setSubcontractors(subs => subs.map(sub => {
+        if (sub.id === subId) {
+          return {
+            ...sub,
+            plant: sub.plant.map(p =>
+              p.id === plantId ? { ...p, status } : p
+            )
           }
-          return sub
-        }))
-      } else {
-        const error = await response.json()
-        alert(error.message || 'Failed to update plant status')
-      }
+        }
+        return sub
+      }))
     } catch (error) {
       console.error('Update plant status error:', error)
       alert('Failed to update plant status')
@@ -411,16 +354,9 @@ export function SubcontractorsPage() {
       return
     }
 
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/plant`, {
+      const data = await apiFetch<{ plant: Plant }>(`/api/subcontractors/${subId}/plant`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({
           type: plantData.type,
           description: plantData.description,
@@ -430,23 +366,17 @@ export function SubcontractorsPage() {
         })
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setSubcontractors(subs => subs.map(sub => {
-          if (sub.id === subId) {
-            return {
-              ...sub,
-              plant: [...sub.plant, data.plant]
-            }
+      setSubcontractors(subs => subs.map(sub => {
+        if (sub.id === subId) {
+          return {
+            ...sub,
+            plant: [...sub.plant, data.plant]
           }
-          return sub
-        }))
-        setShowAddPlantModal(null)
-        setPlantData({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
-      } else {
-        const error = await response.json()
-        alert(error.message || 'Failed to add plant')
-      }
+        }
+        return sub
+      }))
+      setShowAddPlantModal(null)
+      setPlantData({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
     } catch (error) {
       console.error('Add plant error:', error)
       alert('Failed to add plant')
@@ -476,32 +406,20 @@ export function SubcontractorsPage() {
   }
 
   const updateSubcontractorStatus = async (subId: string, status: string) => {
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/status`, {
+      await apiFetch(`/api/subcontractors/${subId}/status`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({ status })
       })
 
-      if (response.ok) {
-        // If removing and not showing removed, filter it out; otherwise update in place
-        if (status === 'removed' && !showRemoved) {
-          setSubcontractors(subs => subs.filter(sub => sub.id !== subId))
-          setExpandedId(null)
-        } else {
-          setSubcontractors(subs => subs.map(sub =>
-            sub.id === subId ? { ...sub, status: status as any } : sub
-          ))
-        }
+      // If removing and not showing removed, filter it out; otherwise update in place
+      if (status === 'removed' && !showRemoved) {
+        setSubcontractors(subs => subs.filter(sub => sub.id !== subId))
+        setExpandedId(null)
       } else {
-        const error = await response.json()
-        alert(error.message || 'Failed to update subcontractor status')
+        setSubcontractors(subs => subs.map(sub =>
+          sub.id === subId ? { ...sub, status: status as any } : sub
+        ))
       }
     } catch (error) {
       console.error('Update subcontractor status error:', error)
@@ -524,24 +442,13 @@ export function SubcontractorsPage() {
 
     if (!confirmed) return
 
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/${sub.id}`, {
+      await apiFetch(`/api/subcontractors/${sub.id}`, {
         method: 'DELETE',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
       })
 
-      if (response.ok) {
-        setSubcontractors(subs => subs.filter(s => s.id !== sub.id))
-        setExpandedId(null)
-      } else {
-        const error = await response.json()
-        alert(error.message || 'Failed to delete subcontractor')
-      }
+      setSubcontractors(subs => subs.filter(s => s.id !== sub.id))
+      setExpandedId(null)
     } catch (error) {
       console.error('Delete subcontractor error:', error)
       alert('Failed to delete subcontractor')
@@ -550,16 +457,10 @@ export function SubcontractorsPage() {
 
   const inviteSubcontractor = async () => {
     setInviting(true)
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/invite`, {
+      const data = await apiFetch<{ subcontractor: Subcontractor }>(`/api/subcontractors/invite`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({
           projectId,
           // Include globalSubcontractorId if selecting from directory
@@ -572,18 +473,12 @@ export function SubcontractorsPage() {
         })
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        // Add the new subcontractor to local state
-        setSubcontractors(prev => [...prev, data.subcontractor])
-        setShowInviteModal(false)
-        setInviteData({ companyName: '', abn: '', contactName: '', email: '', phone: '' })
-        setSelectedGlobalId(null)
-        setAbnError(null)
-      } else {
-        const error = await response.json()
-        alert(error.message || 'Failed to invite subcontractor')
-      }
+      // Add the new subcontractor to local state
+      setSubcontractors(prev => [...prev, data.subcontractor])
+      setShowInviteModal(false)
+      setInviteData({ companyName: '', abn: '', contactName: '', email: '', phone: '' })
+      setSelectedGlobalId(null)
+      setAbnError(null)
     } catch (error) {
       console.error('Invite subcontractor error:', error)
       alert('Failed to invite subcontractor')
@@ -594,31 +489,20 @@ export function SubcontractorsPage() {
 
   const updatePortalAccess = async (subId: string, access: PortalAccess) => {
     setSavingAccess(true)
-    const token = getAuthToken()
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
     try {
-      const response = await fetch(`${API_URL}/api/subcontractors/${subId}/portal-access`, {
+      await apiFetch(`/api/subcontractors/${subId}/portal-access`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({ portalAccess: access })
       })
 
-      if (response.ok) {
-        // Update local state
-        setSubcontractors(subs => subs.map(sub =>
-          sub.id === subId ? { ...sub, portalAccess: access } : sub
-        ))
-        // Update the panel state too
-        if (selectedSubForPanel?.id === subId) {
-          setSelectedSubForPanel(prev => prev ? { ...prev, portalAccess: access } : null)
-        }
-      } else {
-        const error = await response.json()
-        alert(error.message || 'Failed to update portal access')
+      // Update local state
+      setSubcontractors(subs => subs.map(sub =>
+        sub.id === subId ? { ...sub, portalAccess: access } : sub
+      ))
+      // Update the panel state too
+      if (selectedSubForPanel?.id === subId) {
+        setSelectedSubForPanel(prev => prev ? { ...prev, portalAccess: access } : null)
       }
     } catch (error) {
       console.error('Update portal access error:', error)

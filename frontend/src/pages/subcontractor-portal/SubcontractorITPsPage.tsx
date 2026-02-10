@@ -9,9 +9,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getAuthToken } from '@/lib/auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { apiFetch } from '@/lib/api'
 
 interface LotAssignment {
   id: string
@@ -80,32 +78,19 @@ export function SubcontractorITPsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const token = getAuthToken()
-        const headers = { Authorization: `Bearer ${token}` }
-
         // Get company info
-        const companyRes = await fetch(`${API_URL}/api/subcontractors/my-company`, { headers })
-        if (!companyRes.ok) {
-          setError('Failed to load company data')
-          setLoading(false)
-          return
-        }
-        const companyData = await companyRes.json()
+        const companyData = await apiFetch<{ company: SubcontractorCompany }>(`/api/subcontractors/my-company`)
         setCompany(companyData.company)
 
         // Fetch lots with ITP data - the backend filters to assigned lots
-        const lotsRes = await fetch(
-          `${API_URL}/api/lots?projectId=${companyData.company.projectId}&includeITP=true`,
-          { headers }
+        const lotsData = await apiFetch<{ lots: Lot[] }>(
+          `/api/lots?projectId=${companyData.company.projectId}&includeITP=true`
         )
-        if (lotsRes.ok) {
-          const lotsData = await lotsRes.json()
-          // Show all assigned lots with ITPs (backend already filters to assigned lots)
-          const assignedLots = (lotsData.lots || []).filter((lot: Lot) => {
-            return lot.itpInstances && lot.itpInstances.length > 0
-          })
-          setLots(assignedLots)
-        }
+        // Show all assigned lots with ITPs (backend already filters to assigned lots)
+        const assignedLots = (lotsData.lots || []).filter((lot: Lot) => {
+          return lot.itpInstances && lot.itpInstances.length > 0
+        })
+        setLots(assignedLots)
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load ITPs')

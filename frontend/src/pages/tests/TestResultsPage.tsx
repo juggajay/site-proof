@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { getAuthToken } from '@/lib/auth'
+import { apiFetch, apiUrl } from '@/lib/api'
 import { generateTestCertificatePDF, TestCertificateData } from '@/lib/pdfGenerator'
 import { toast } from '@/components/ui/toaster'
 
@@ -139,10 +140,6 @@ export function TestResultsPage() {
   const [rejectingTestId, setRejectingTestId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [rejecting, setRejecting] = useState(false)
-
-  // Auth token and API URL for PDF generation
-  const token = getAuthToken()
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
   // Feature #205: Test register filtering state
   const [filterTestType, setFilterTestType] = useState('')
@@ -373,36 +370,17 @@ export function TestResultsPage() {
         return
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
         // Fetch test results, lots, and project in parallel
-        const [testsResponse, lotsResponse, projectResponse] = await Promise.all([
-          fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${apiUrl}/api/lots?projectId=${projectId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${apiUrl}/api/projects/${projectId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+        const [testsData, lotsData, projectData] = await Promise.all([
+          apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`),
+          apiFetch<{ lots: Lot[] }>(`/api/lots?projectId=${projectId}`),
+          apiFetch<{ project?: { state?: string } }>(`/api/projects/${projectId}`),
         ])
 
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestResults(testsData.testResults || [])
-        }
-
-        if (lotsResponse.ok) {
-          const lotsData = await lotsResponse.json()
-          setLots(lotsData.lots || [])
-        }
-
-        if (projectResponse.ok) {
-          const projectData = await projectResponse.json()
-          setProjectState(projectData.project?.state || 'NSW')
-        }
+        setTestResults(testsData.testResults || [])
+        setLots(lotsData.lots || [])
+        setProjectState(projectData.project?.state || 'NSW')
       } catch (err) {
         setError('Failed to load test results')
       } finally {
@@ -416,32 +394,16 @@ export function TestResultsPage() {
   // Feature #196: Update test status workflow
   const handleUpdateStatus = async (testId: string, newStatus: string) => {
     setUpdatingStatusId(testId)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/test-results/${testId}/status`, {
+      await apiFetch(`/api/test-results/${testId}/status`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ status: newStatus }),
       })
 
-      if (response.ok) {
-        // Refetch to get updated test results
-        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestResults(testsData.testResults || [])
-        }
-      } else {
-        const data = await response.json()
-        alert(data.message || 'Failed to update status')
-      }
+      // Refetch to get updated test results
+      const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
+      setTestResults(testsData.testResults || [])
     } catch (err) {
       alert('Failed to update test status')
     } finally {
@@ -465,16 +427,10 @@ export function TestResultsPage() {
     }
 
     setCreatingNcr(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/ncrs`, {
+      const data = await apiFetch<{ ncr: { ncrNumber: string } }>('/api/ncrs', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           projectId,
           description: ncrFormData.description,
@@ -486,22 +442,16 @@ export function TestResultsPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        alert(`NCR ${data.ncr.ncrNumber} created successfully`)
-        setShowNcrModal(false)
-        setShowNcrPromptModal(false)
-        setFailedTestForNcr(null)
-        setNcrFormData({
-          description: '',
-          category: 'materials',
-          severity: 'minor',
-          specificationReference: '',
-        })
-      } else {
-        const data = await response.json()
-        alert(data.message || 'Failed to create NCR')
-      }
+      alert(`NCR ${data.ncr.ncrNumber} created successfully`)
+      setShowNcrModal(false)
+      setShowNcrPromptModal(false)
+      setFailedTestForNcr(null)
+      setNcrFormData({
+        description: '',
+        category: 'materials',
+        severity: 'minor',
+        specificationReference: '',
+      })
     } catch (err) {
       alert('Failed to create NCR')
     } finally {
@@ -516,35 +466,19 @@ export function TestResultsPage() {
     }
 
     setRejecting(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/test-results/${rejectingTestId}/reject`, {
+      await apiFetch(`/api/test-results/${rejectingTestId}/reject`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ reason: rejectReason.trim() }),
       })
 
-      if (response.ok) {
-        // Refetch to get updated test results
-        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestResults(testsData.testResults || [])
-        }
-        setShowRejectModal(false)
-        setRejectingTestId(null)
-        setRejectReason('')
-      } else {
-        const data = await response.json()
-        alert(data.message || 'Failed to reject test result')
-      }
+      // Refetch to get updated test results
+      const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
+      setTestResults(testsData.testResults || [])
+      setShowRejectModal(false)
+      setRejectingTestId(null)
+      setRejectReason('')
     } catch (err) {
       alert('Failed to reject test result')
     } finally {
@@ -559,16 +493,10 @@ export function TestResultsPage() {
     }
 
     setCreating(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/test-results`, {
+      const data = await apiFetch<{ testResult: { id: string } }>('/api/test-results', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           projectId,
           ...formData,
@@ -576,62 +504,51 @@ export function TestResultsPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        // Refetch to get the full test result with lot info
-        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestResults(testsData.testResults || [])
-        }
-        setShowCreateModal(false)
+      // Refetch to get the full test result with lot info
+      const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
+      setTestResults(testsData.testResults || [])
+      setShowCreateModal(false)
 
-        // Feature #210: If test failed, prompt to raise NCR
-        if (formData.passFail === 'fail') {
-          setFailedTestForNcr({
-            testId: data.testResult.id,
-            testType: formData.testType,
-            resultValue: formData.resultValue,
-            lotId: formData.lotId || null,
-          })
-          setNcrFormData({
-            description: `Test failure: ${formData.testType} result (${formData.resultValue} ${formData.resultUnit}) is outside specification (min: ${formData.specificationMin || 'N/A'}, max: ${formData.specificationMax || 'N/A'})`,
-            category: 'materials',
-            severity: 'minor',
-            specificationReference: '',
-          })
-          setShowNcrPromptModal(true)
-        }
-
-        setFormData({
-          testType: '',
-          testMethod: '',
-          testRequestNumber: '',
-          laboratoryName: '',
-          laboratoryReportNumber: '',
-          nataSiteNumber: '',
-          sampleLocation: '',
-          sampleDepth: '',
-          materialType: '',
-          layerLift: '',
-          sampledBy: '',
-          sampleDate: '',
-          testDate: '',
-          resultDate: '',
-          lotId: '',
-          resultValue: '',
-          resultUnit: '',
-          specificationMin: '',
-          specificationMax: '',
-          specificationRef: '',
-          passFail: 'pending',
+      // Feature #210: If test failed, prompt to raise NCR
+      if (formData.passFail === 'fail') {
+        setFailedTestForNcr({
+          testId: data.testResult.id,
+          testType: formData.testType,
+          resultValue: formData.resultValue,
+          lotId: formData.lotId || null,
         })
-      } else {
-        const data = await response.json()
-        alert(data.message || 'Failed to create test result')
+        setNcrFormData({
+          description: `Test failure: ${formData.testType} result (${formData.resultValue} ${formData.resultUnit}) is outside specification (min: ${formData.specificationMin || 'N/A'}, max: ${formData.specificationMax || 'N/A'})`,
+          category: 'materials',
+          severity: 'minor',
+          specificationReference: '',
+        })
+        setShowNcrPromptModal(true)
       }
+
+      setFormData({
+        testType: '',
+        testMethod: '',
+        testRequestNumber: '',
+        laboratoryName: '',
+        laboratoryReportNumber: '',
+        nataSiteNumber: '',
+        sampleLocation: '',
+        sampleDepth: '',
+        materialType: '',
+        layerLift: '',
+        sampledBy: '',
+        sampleDate: '',
+        testDate: '',
+        resultDate: '',
+        lotId: '',
+        resultValue: '',
+        resultUnit: '',
+        specificationMin: '',
+        specificationMax: '',
+        specificationRef: '',
+        passFail: 'pending',
+      })
     } catch (err) {
       alert('Failed to create test result')
     } finally {
@@ -639,7 +556,7 @@ export function TestResultsPage() {
     }
   }
 
-  // Feature #200: Handle certificate upload with AI extraction
+  // Feature #200: Handle certificate upload with AI extraction (FormData - uses raw fetch)
   const handleUploadCertificate = async () => {
     if (!uploadedFile) {
       alert('Please select a file first')
@@ -648,19 +565,18 @@ export function TestResultsPage() {
 
     setUploading(true)
     const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const formData = new FormData()
-      formData.append('certificate', uploadedFile)
-      formData.append('projectId', projectId || '')
+      const formDataObj = new FormData()
+      formDataObj.append('certificate', uploadedFile)
+      formDataObj.append('projectId', projectId || '')
 
-      const response = await fetch(`${apiUrl}/api/test-results/upload-certificate`, {
+      const response = await fetch(apiUrl('/api/test-results/upload-certificate'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        body: formData,
+        body: formDataObj,
       })
 
       if (response.ok) {
@@ -688,13 +604,8 @@ export function TestResultsPage() {
         setPdfUrl(previewUrl)
 
         // Refresh test results list
-        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestResults(testsData.testResults || [])
-        }
+        const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
+        setTestResults(testsData.testResults || [])
       } else {
         const data = await response.json()
         alert(data.message || 'Failed to upload certificate')
@@ -711,40 +622,24 @@ export function TestResultsPage() {
     if (!extractedTestId) return
 
     setConfirmingExtraction(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/test-results/${extractedTestId}/confirm-extraction`, {
+      await apiFetch(`/api/test-results/${extractedTestId}/confirm-extraction`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ corrections: reviewFormData }),
       })
 
-      if (response.ok) {
-        // Close modal and refresh
-        setShowUploadModal(false)
-        setUploadedFile(null)
-        setExtractionResult(null)
-        setExtractedTestId(null)
-        setPdfUrl(null)
-        setReviewFormData({})
+      // Close modal and refresh
+      setShowUploadModal(false)
+      setUploadedFile(null)
+      setExtractionResult(null)
+      setExtractedTestId(null)
+      setPdfUrl(null)
+      setReviewFormData({})
 
-        // Refresh test results
-        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestResults(testsData.testResults || [])
-        }
-      } else {
-        const data = await response.json()
-        alert(data.message || 'Failed to confirm extraction')
-      }
+      // Refresh test results
+      const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
+      setTestResults(testsData.testResults || [])
     } catch (err) {
       alert('Failed to confirm extraction')
     } finally {
@@ -766,7 +661,7 @@ export function TestResultsPage() {
     return { color: 'border-green-500 bg-green-50 dark:bg-green-900/20', text: `${Math.round(confidence * 100)}% confidence` }
   }
 
-  // Feature #202: Batch upload handler
+  // Feature #202: Batch upload handler (FormData - uses raw fetch)
   const handleBatchUpload = async () => {
     if (batchFiles.length === 0) {
       alert('Please select files first')
@@ -777,21 +672,20 @@ export function TestResultsPage() {
     setBatchProgress({ current: 0, total: batchFiles.length })
 
     const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const formData = new FormData()
+      const formDataObj = new FormData()
       for (const file of batchFiles) {
-        formData.append('certificates', file)
+        formDataObj.append('certificates', file)
       }
-      formData.append('projectId', projectId || '')
+      formDataObj.append('projectId', projectId || '')
 
-      const response = await fetch(`${apiUrl}/api/test-results/batch-upload`, {
+      const response = await fetch(apiUrl('/api/test-results/batch-upload'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        body: formData,
+        body: formDataObj,
       })
 
       if (response.ok) {
@@ -821,13 +715,8 @@ export function TestResultsPage() {
         setBatchReviewData(reviewData)
 
         // Refresh test results list
-        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestResults(testsData.testResults || [])
-        }
+        const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
+        setTestResults(testsData.testResults || [])
       } else {
         const data = await response.json()
         alert(data.message || 'Failed to upload certificates')
@@ -844,8 +733,6 @@ export function TestResultsPage() {
   // Feature #202: Batch confirm all handler
   const handleBatchConfirmAll = async () => {
     setBatchConfirming(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
       const confirmations = batchResults
@@ -855,35 +742,21 @@ export function TestResultsPage() {
           corrections: batchReviewData[r.testResult.id] || {}
         }))
 
-      const response = await fetch(`${apiUrl}/api/test-results/batch-confirm`, {
+      await apiFetch('/api/test-results/batch-confirm', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ confirmations }),
       })
 
-      if (response.ok) {
-        // Close modal and reset
-        setShowBatchUploadModal(false)
-        setBatchFiles([])
-        setBatchResults([])
-        setBatchReviewData({})
-        setSelectedBatchResult(null)
+      // Close modal and reset
+      setShowBatchUploadModal(false)
+      setBatchFiles([])
+      setBatchResults([])
+      setBatchReviewData({})
+      setSelectedBatchResult(null)
 
-        // Refresh test results
-        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestResults(testsData.testResults || [])
-        }
-      } else {
-        const data = await response.json()
-        alert(data.message || 'Failed to confirm extractions')
-      }
+      // Refresh test results
+      const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
+      setTestResults(testsData.testResults || [])
     } catch (err) {
       alert('Failed to confirm extractions')
     } finally {
@@ -1233,10 +1106,12 @@ export function TestResultsPage() {
                         onClick={async () => {
                           try {
                             // Fetch project info for the certificate
-                            const projectResponse = await fetch(`${apiUrl}/api/projects/${projectId}`, {
-                              headers: { Authorization: `Bearer ${token}` }
-                            })
-                            const projectData = projectResponse.ok ? await projectResponse.json() : null
+                            let projectData = null
+                            try {
+                              projectData = await apiFetch<any>(`/api/projects/${projectId}`)
+                            } catch (e) {
+                              // ignore - projectData stays null
+                            }
 
                             // Get lot info if test is linked to a lot
                             const lotInfo = test.lot ? {

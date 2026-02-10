@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { passwordSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation'
+import { apiFetch } from '@/lib/api'
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
@@ -26,9 +27,7 @@ export function ResetPasswordPage() {
       }
 
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-        const response = await fetch(`${apiUrl}/api/auth/validate-reset-token?token=${token}`)
-        const data = await response.json()
+        const data = await apiFetch<{ valid: boolean; message?: string }>(`/api/auth/validate-reset-token?token=${token}`)
 
         if (data.valid) {
           setTokenValid(true)
@@ -65,18 +64,10 @@ export function ResetPasswordPage() {
     setLoading(true)
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-      const response = await fetch(`${apiUrl}/api/auth/reset-password`, {
+      await apiFetch('/api/auth/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to reset password')
-      }
 
       setSuccess(true)
 
@@ -85,7 +76,7 @@ export function ResetPasswordPage() {
         navigate('/login')
       }, 3000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reset password. Please try again.')
+      setError('Failed to reset password. Please try again.')
     } finally {
       setLoading(false)
     }

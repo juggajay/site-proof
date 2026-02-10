@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
 import { Building2, Save, AlertTriangle, Upload, Crown, UserCog, Loader2, X, DollarSign } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
 
 interface CompanyMember {
   id: string
@@ -55,38 +56,23 @@ export function CompanySettingsPage() {
 
   useEffect(() => {
     async function fetchCompany() {
-      const token = getAuthToken()
-      if (!token) {
-        setError('Not authenticated')
-        setLoading(false)
-        return
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/company`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const data = await apiFetch<{ company: Company }>('/api/company')
+        setCompany(data.company)
+        // Initialize form data from company
+        setFormData({
+          name: data.company.name || '',
+          abn: data.company.abn || '',
+          address: data.company.address || '',
+          logoUrl: data.company.logoUrl || '',
         })
-
-        if (response.ok) {
-          const data = await response.json()
-          setCompany(data.company)
-          // Initialize form data from company
-          setFormData({
-            name: data.company.name || '',
-            abn: data.company.abn || '',
-            address: data.company.address || '',
-            logoUrl: data.company.logoUrl || '',
-          })
-        } else if (response.status === 404) {
+      } catch (err: any) {
+        console.error('Failed to fetch company:', err)
+        if (err?.status === 404) {
           setError('No company associated with your account')
         } else {
           setError('Failed to load company settings')
         }
-      } catch (err) {
-        console.error('Failed to fetch company:', err)
-        setError('Failed to load company settings')
       } finally {
         setLoading(false)
       }
@@ -96,9 +82,6 @@ export function CompanySettingsPage() {
   }, [])
 
   const handleSaveSettings = async () => {
-    const token = getAuthToken()
-    if (!token) return
-
     // Validate required fields
     if (!formData.name.trim()) {
       setSaveError('Company name is required')
@@ -109,15 +92,9 @@ export function CompanySettingsPage() {
     setSaveError('')
     setSaveSuccess(false)
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
-      const response = await fetch(`${apiUrl}/api/company`, {
+      const data = await apiFetch<{ company: Company }>('/api/company', {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           name: formData.name,
           abn: formData.abn || null,
@@ -126,15 +103,9 @@ export function CompanySettingsPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setCompany(data.company)
-        setSaveSuccess(true)
-        setTimeout(() => setSaveSuccess(false), 3000)
-      } else {
-        const data = await response.json()
-        setSaveError(data.message || 'Failed to save settings')
-      }
+      setCompany(data.company)
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
       console.error('Save settings error:', err)
       setSaveError('Failed to save settings')
@@ -191,25 +162,11 @@ export function CompanySettingsPage() {
     setTransferError('')
     setSelectedNewOwner('')
 
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
-      const response = await fetch(`${apiUrl}/api/company/members`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        // Filter out the current user (owner)
-        const otherMembers = data.members.filter((m: CompanyMember) => m.id !== user?.id)
-        setMembers(otherMembers)
-      } else {
-        const data = await response.json()
-        setTransferError(data.message || 'Failed to load company members')
-      }
+      const data = await apiFetch<{ members: CompanyMember[] }>('/api/company/members')
+      // Filter out the current user (owner)
+      const otherMembers = data.members.filter((m: CompanyMember) => m.id !== user?.id)
+      setMembers(otherMembers)
     } catch (err) {
       console.error('Load members error:', err)
       setTransferError('Failed to load company members')
@@ -228,34 +185,20 @@ export function CompanySettingsPage() {
     setTransferring(true)
     setTransferError('')
 
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
-      const response = await fetch(`${apiUrl}/api/company/transfer-ownership`, {
+      await apiFetch('/api/company/transfer-ownership', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ newOwnerId: selectedNewOwner }),
       })
 
-      if (response.ok) {
-        setShowTransferModal(false)
-        // Refresh user data to reflect new role
-        if (refreshUser) {
-          await refreshUser()
-        }
-        // Show success message
-        setSaveSuccess(true)
-        setTimeout(() => setSaveSuccess(false), 5000)
-      } else {
-        const data = await response.json()
-        setTransferError(data.message || 'Failed to transfer ownership')
+      setShowTransferModal(false)
+      // Refresh user data to reflect new role
+      if (refreshUser) {
+        await refreshUser()
       }
+      // Show success message
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 5000)
     } catch (err) {
       console.error('Transfer ownership error:', err)
       setTransferError('Failed to transfer ownership')

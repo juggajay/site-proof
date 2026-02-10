@@ -101,7 +101,7 @@ export function errorHandler(
       userId: req.user?.id,
       ip: req.ip || req.connection?.remoteAddress,
       userAgent: req.headers['user-agent'],
-      apiKeyId: (req as any).apiKey?.id,
+      apiKeyId: req.apiKey?.id,
     },
     metadata: {
       requestId: req.headers['x-request-id'],

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import {
   MapPin,
   Layers,
@@ -12,8 +12,6 @@ import {
   ExternalLink,
   Clock
 } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 interface LotQuickViewProps {
   lotId: string
@@ -62,19 +60,11 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
 
     async function fetchLotDetails() {
       try {
-        const token = getAuthToken()
-        const response = await fetch(`${API_URL}/api/lots/${lotId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const data = await apiFetch<{ lot: LotDetails }>(`/api/lots/${lotId}`)
 
         if (cancelled) return
 
-        if (response.ok) {
-          const data = await response.json()
-          setLot(data.lot)
-        } else {
-          setError('Failed to load lot details')
-        }
+        setLot(data.lot)
       } catch (err) {
         if (!cancelled) {
           console.error('Error fetching lot details:', err)

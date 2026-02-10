@@ -1513,7 +1513,7 @@ itpRouter.post('/completions', requireAuth, async (req: Request, res: Response) 
         const lot = itpInstance.lot
 
         // Get checklist item description for NCR context
-        const checklistItemDescription = (completion as any).checklistItem?.description || 'ITP checklist item'
+        const checklistItemDescription = completion.checklistItem?.description || 'ITP checklist item'
 
         // Generate NCR number
         const existingNcrCount = await prisma.nCR.count({
@@ -1597,7 +1597,7 @@ itpRouter.post('/completions', requireAuth, async (req: Request, res: Response) 
         if (itpInstance && itpInstance.lot && itpInstance.lot.project) {
           const lot = itpInstance.lot
           const project = lot.project
-          const itemDescription = (completion as any).checklistItem?.description || 'ITP item'
+          const itemDescription = completion.checklistItem?.description || 'ITP item'
           const subbieName = subcontractorUser?.subcontractorCompany?.companyName || 'Subcontractor'
 
           // Find project managers and superintendents to notify
@@ -1644,7 +1644,7 @@ itpRouter.post('/completions', requireAuth, async (req: Request, res: Response) 
       isFailed: completion.status === 'failed',
       isVerified: completion.verificationStatus === 'verified',
       isPendingVerification: completion.verificationStatus === 'pending_verification',
-      attachments: (completion as any).attachments || [],
+      attachments: completion.attachments || [],
       linkedNcr: createdNcr
     }
 
@@ -1862,7 +1862,7 @@ itpRouter.get('/pending-verifications', requireAuth, async (req: Request, res: R
       checklistItem: c.checklistItem,
       lot: c.itpInstance.lot,
       template: c.itpInstance.template,
-      subcontractor: (c.itpInstance.lot as any)?.assignedSubcontractor || null,
+      subcontractor: c.itpInstance.lot?.assignedSubcontractor || null,
       attachments: c.attachments.map(a => ({
         id: a.id,
         document: a.document

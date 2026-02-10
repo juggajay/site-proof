@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useAuth, getAuthToken } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { Plus, Users, Truck, CheckCircle, Clock, X, Trash2 } from 'lucide-react'
 
 interface Employee {
@@ -53,40 +54,31 @@ export function MyCompanyPage() {
 
   const fetchCompanyData = async () => {
     setLoading(true)
-    const token = getAuthToken()
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3007'
-      const response = await fetch(`${API_URL}/api/subcontractors/my-company`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setCompanyData(data.company)
-      } else {
-        // Demo data for development
-        setCompanyData({
-          id: '1',
-          companyName: 'ABC Earthmoving Pty Ltd',
-          abn: '12 345 678 901',
-          primaryContactName: 'Subcontractor Admin',
-          primaryContactEmail: 'subadmin@test.com',
-          primaryContactPhone: '0412 345 678',
-          status: 'active',
-          employees: [
-            { id: 'e1', name: 'John Smith', phone: '0412 111 222', role: 'Supervisor', hourlyRate: 95, status: 'approved' },
-            { id: 'e2', name: 'Mike Johnson', phone: '0412 333 444', role: 'Operator', hourlyRate: 85, status: 'approved' },
-            { id: 'e3', name: 'Dave Williams', phone: '0412 555 666', role: 'Labourer', hourlyRate: 65, status: 'pending' }
-          ],
-          plant: [
-            { id: 'p1', type: 'Excavator', description: '20T Excavator', idRego: 'EXC-001', dryRate: 150, wetRate: 200, status: 'approved' },
-            { id: 'p2', type: 'Roller', description: 'Padfoot Roller', idRego: 'ROL-001', dryRate: 120, wetRate: 160, status: 'approved' }
-          ]
-        })
-      }
+      const data = await apiFetch<{ company: CompanyData }>(`/api/subcontractors/my-company`)
+      setCompanyData(data.company)
     } catch (error) {
       console.error('Error fetching company data:', error)
+      // Demo data for development
+      setCompanyData({
+        id: '1',
+        companyName: 'ABC Earthmoving Pty Ltd',
+        abn: '12 345 678 901',
+        primaryContactName: 'Subcontractor Admin',
+        primaryContactEmail: 'subadmin@test.com',
+        primaryContactPhone: '0412 345 678',
+        status: 'active',
+        employees: [
+          { id: 'e1', name: 'John Smith', phone: '0412 111 222', role: 'Supervisor', hourlyRate: 95, status: 'approved' },
+          { id: 'e2', name: 'Mike Johnson', phone: '0412 333 444', role: 'Operator', hourlyRate: 85, status: 'approved' },
+          { id: 'e3', name: 'Dave Williams', phone: '0412 555 666', role: 'Labourer', hourlyRate: 65, status: 'pending' }
+        ],
+        plant: [
+          { id: 'p1', type: 'Excavator', description: '20T Excavator', idRego: 'EXC-001', dryRate: 150, wetRate: 200, status: 'approved' },
+          { id: 'p2', type: 'Roller', description: 'Padfoot Roller', idRego: 'ROL-001', dryRate: 120, wetRate: 160, status: 'approved' }
+        ]
+      })
     } finally {
       setLoading(false)
     }
@@ -97,14 +89,8 @@ export function MyCompanyPage() {
     setSaving(true)
 
     try {
-      const token = getAuthToken()
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3007'
-      const response = await fetch(`${API_URL}/api/subcontractors/my-company/employees`, {
+      await apiFetch(`/api/subcontractors/my-company/employees`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({
           name: employeeForm.name,
           phone: employeeForm.phone,
@@ -113,28 +99,26 @@ export function MyCompanyPage() {
         })
       })
 
-      if (response.ok) {
-        await fetchCompanyData()
-      } else {
-        // Demo mode - add locally
-        const newEmployee: Employee = {
-          id: String(Date.now()),
-          name: employeeForm.name,
-          phone: employeeForm.phone,
-          role: employeeForm.role,
-          hourlyRate: parseFloat(employeeForm.hourlyRate),
-          status: 'pending'
-        }
-        setCompanyData(prev => prev ? {
-          ...prev,
-          employees: [...prev.employees, newEmployee]
-        } : null)
-      }
-
+      await fetchCompanyData()
       setShowAddEmployeeModal(false)
       setEmployeeForm({ name: '', phone: '', role: '', hourlyRate: '' })
     } catch (error) {
       console.error('Error adding employee:', error)
+      // Demo mode - add locally
+      const newEmployee: Employee = {
+        id: String(Date.now()),
+        name: employeeForm.name,
+        phone: employeeForm.phone,
+        role: employeeForm.role,
+        hourlyRate: parseFloat(employeeForm.hourlyRate),
+        status: 'pending'
+      }
+      setCompanyData(prev => prev ? {
+        ...prev,
+        employees: [...prev.employees, newEmployee]
+      } : null)
+      setShowAddEmployeeModal(false)
+      setEmployeeForm({ name: '', phone: '', role: '', hourlyRate: '' })
     } finally {
       setSaving(false)
     }
@@ -145,14 +129,8 @@ export function MyCompanyPage() {
     setSaving(true)
 
     try {
-      const token = getAuthToken()
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3007'
-      const response = await fetch(`${API_URL}/api/subcontractors/my-company/plant`, {
+      await apiFetch(`/api/subcontractors/my-company/plant`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
         body: JSON.stringify({
           type: plantForm.type,
           description: plantForm.description,
@@ -162,29 +140,27 @@ export function MyCompanyPage() {
         })
       })
 
-      if (response.ok) {
-        await fetchCompanyData()
-      } else {
-        // Demo mode - add locally
-        const newPlant: Plant = {
-          id: String(Date.now()),
-          type: plantForm.type,
-          description: plantForm.description,
-          idRego: plantForm.idRego,
-          dryRate: parseFloat(plantForm.dryRate),
-          wetRate: plantForm.wetRate ? parseFloat(plantForm.wetRate) : 0,
-          status: 'pending'
-        }
-        setCompanyData(prev => prev ? {
-          ...prev,
-          plant: [...prev.plant, newPlant]
-        } : null)
-      }
-
+      await fetchCompanyData()
       setShowAddPlantModal(false)
       setPlantForm({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
     } catch (error) {
       console.error('Error adding plant:', error)
+      // Demo mode - add locally
+      const newPlant: Plant = {
+        id: String(Date.now()),
+        type: plantForm.type,
+        description: plantForm.description,
+        idRego: plantForm.idRego,
+        dryRate: parseFloat(plantForm.dryRate),
+        wetRate: plantForm.wetRate ? parseFloat(plantForm.wetRate) : 0,
+        status: 'pending'
+      }
+      setCompanyData(prev => prev ? {
+        ...prev,
+        plant: [...prev.plant, newPlant]
+      } : null)
+      setShowAddPlantModal(false)
+      setPlantForm({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
     } finally {
       setSaving(false)
     }

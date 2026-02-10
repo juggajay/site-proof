@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { Upload, FileText, AlertCircle, AlertTriangle, CheckCircle2, X, Loader2, Download } from 'lucide-react'
 
@@ -40,8 +40,6 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
   const [importProgress, setImportProgress] = useState(0)
   const [strictMode, setStrictMode] = useState(true) // Default to strict mode for atomicity
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
   // Parse CSV content
   const parseCSV = (content: string): ParsedLot[] => {
@@ -272,7 +270,6 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
     setStep('importing')
     setImportProgress(0)
 
-    const token = getAuthToken()
     const lotsToImport = validationResult.lots
 
     // Strict mode: Use bulk endpoint with transaction (all or nothing)
@@ -288,12 +285,8 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
           activityType: lot.activityType || 'Earthworks',
         }))
 
-        const response = await fetch(`${apiUrl}/api/lots/bulk`, {
+        const data = await apiFetch<{ count: number }>('/api/lots/bulk', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
           body: JSON.stringify({
             projectId,
             lots: lotsData,
@@ -303,23 +296,17 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
         setImportProgress(100)
         setImporting(false)
 
-        if (response.ok) {
-          const data = await response.json()
-          toast({ variant: 'success', description: `Successfully imported ${data.count} lots (strict mode - all or nothing)` })
-          onSuccess()
-          onClose()
-        } else {
-          const errorData = await response.json().catch(() => ({}))
-          toast({
-            variant: 'error',
-            description: errorData.message || 'Import failed - no lots were created (strict mode rollback)'
-          })
-          // Don't close - let user try again or use non-strict mode
-          setStep('validation')
-        }
+        toast({ variant: 'success', description: `Successfully imported ${data.count} lots (strict mode - all or nothing)` })
+        onSuccess()
+        onClose()
       } catch (err) {
+        setImportProgress(100)
         setImporting(false)
-        toast({ variant: 'error', description: 'Import failed - no lots were created (strict mode rollback)' })
+        toast({
+          variant: 'error',
+          description: 'Import failed - no lots were created (strict mode rollback)'
+        })
+        // Don't close - let user try again or use non-strict mode
         setStep('validation')
       }
       return
@@ -333,12 +320,8 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
       const lot = lotsToImport[i]
 
       try {
-        const response = await fetch(`${apiUrl}/api/lots`, {
+        await apiFetch('/api/lots', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
           body: JSON.stringify({
             projectId,
             lotNumber: lot.lotNumber,
@@ -349,12 +332,7 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
             status: lot.status || 'pending',
           }),
         })
-
-        if (response.ok) {
-          successCount++
-        } else {
-          failCount++
-        }
+        successCount++
       } catch (err) {
         failCount++
       }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 
 interface BulkCreateLotsWizardProps {
@@ -39,8 +39,6 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
 
   // Generated lots preview
   const [lotsPreview, setLotsPreview] = useState<LotPreview[]>([])
-
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
   // Generate lot previews based on chainage range and parameters
   const generatePreview = () => {
@@ -88,13 +86,8 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
   const createLots = async () => {
     setCreating(true)
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${apiUrl}/api/lots/bulk`, {
+      const data = await apiFetch<{ count: number }>('/api/lots/bulk', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           projectId,
           lots: lotsPreview.map(lot => ({
@@ -109,12 +102,6 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
         }),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to create lots')
-      }
-
-      const data = await response.json()
       toast({ variant: 'success', description: `Successfully created ${data.count} lots` })
       onSuccess()
     } catch (error) {

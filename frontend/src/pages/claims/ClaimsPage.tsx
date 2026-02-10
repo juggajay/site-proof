@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, Package, Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react'
 import { LazyCumulativeChart, LazyMonthlyChart } from '@/components/charts/LazyCharts'
 import { generateClaimEvidencePackagePDF } from '@/lib/pdfGenerator'
@@ -86,16 +86,10 @@ export function ClaimsPage() {
     setCompletenessData(null)
 
     try {
-      const token = getAuthToken()
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/claims/${claimId}/completeness-check`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
-
-      if (response.ok) {
-        const data = await response.json()
+      try {
+        const data = await apiFetch(`/api/projects/${projectId}/claims/${claimId}/completeness-check`)
         setCompletenessData(data)
-      } else {
+      } catch {
         // Demo mode fallback
         setCompletenessData({
           claimId,
@@ -188,17 +182,7 @@ export function ClaimsPage() {
     const startTime = Date.now()
 
     try {
-      const token = getAuthToken()
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4008'
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/claims/${claimId}/evidence-package`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch evidence package data')
-      }
-
-      const data = await response.json()
+      const data = await apiFetch<any>(`/api/projects/${projectId}/claims/${claimId}/evidence-package`)
 
       // Generate the PDF with customization options
       generateClaimEvidencePackagePDF(data, options)
@@ -220,18 +204,12 @@ export function ClaimsPage() {
   const fetchClaims = async () => {
     if (!projectId) return
     setLoading(true)
-    const token = getAuthToken()
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005'
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/claims`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
-
-      if (response.ok) {
-        const data = await response.json()
+      try {
+        const data = await apiFetch<any>(`/api/projects/${projectId}/claims`)
         setClaims(data.claims || [])
-      } else {
+      } catch {
         // Demo data - multiple claims over months for cumulative chart
         setClaims([
           {
@@ -314,33 +292,18 @@ export function ClaimsPage() {
   }
 
   const fetchConformedLots = async () => {
-    const token = getAuthToken()
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005'
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/lots?status=conformed&unclaimed=true`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const lots = data.lots?.map((lot: any) => ({ ...lot, selected: false, percentComplete: 100 })) || []
-        // Use demo data if no real lots available (for demonstration purposes)
-        if (lots.length === 0) {
-          setConformedLots([
-            { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false, percentComplete: 100 },
-            { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false, percentComplete: 100 },
-            { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false, percentComplete: 100 }
-          ])
-        } else {
-          setConformedLots(lots)
-        }
-      } else {
-        // Demo data
+      const data = await apiFetch<any>(`/api/projects/${projectId}/lots?status=conformed&unclaimed=true`)
+      const lots = data.lots?.map((lot: any) => ({ ...lot, selected: false, percentComplete: 100 })) || []
+      // Use demo data if no real lots available (for demonstration purposes)
+      if (lots.length === 0) {
         setConformedLots([
           { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false, percentComplete: 100 },
           { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false, percentComplete: 100 },
           { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false, percentComplete: 100 }
         ])
+      } else {
+        setConformedLots(lots)
       }
     } catch (error) {
       console.error('Error fetching conformed lots:', error)
@@ -390,26 +353,19 @@ export function ClaimsPage() {
     }
 
     setCreating(true)
-    const token = getAuthToken()
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005'
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/claims`, {
-        method: 'POST',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          periodStart: newClaim.periodStart,
-          periodEnd: newClaim.periodEnd,
-          lotIds: selectedLots.map(l => l.id)
+      try {
+        await apiFetch(`/api/projects/${projectId}/claims`, {
+          method: 'POST',
+          body: JSON.stringify({
+            periodStart: newClaim.periodStart,
+            periodEnd: newClaim.periodEnd,
+            lotIds: selectedLots.map(l => l.id)
+          })
         })
-      })
-
-      if (response.ok) {
         await fetchClaims()
         setShowCreateModal(false)
-      } else {
+      } catch {
         // Demo mode - add to local state
         const totalAmount = selectedLots.reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0)
         setClaims(prev => [...prev, {
@@ -514,37 +470,24 @@ export function ClaimsPage() {
     setDisputing(true)
 
     try {
-      const token = getAuthToken()
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3005'
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/claims/${showDisputeModal}`, {
-        method: 'PUT',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          status: 'disputed',
-          disputeNotes: disputeNotes.trim()
+      try {
+        await apiFetch(`/api/projects/${projectId}/claims/${showDisputeModal}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            status: 'disputed',
+            disputeNotes: disputeNotes.trim()
+          })
         })
-      })
-
-      if (response.ok) {
-        // Update local state
-        setClaims(prev => prev.map(c =>
-          c.id === showDisputeModal
-            ? { ...c, status: 'disputed' as const, disputeNotes: disputeNotes.trim(), disputedAt: new Date().toISOString().split('T')[0] }
-            : c
-        ))
-        alert('Claim marked as disputed')
-      } else {
-        // Fallback to demo mode
-        setClaims(prev => prev.map(c =>
-          c.id === showDisputeModal
-            ? { ...c, status: 'disputed' as const, disputeNotes: disputeNotes.trim(), disputedAt: new Date().toISOString().split('T')[0] }
-            : c
-        ))
-        alert('Claim marked as disputed')
+      } catch {
+        // Fallback to demo mode - continue below
       }
+      // Update local state
+      setClaims(prev => prev.map(c =>
+        c.id === showDisputeModal
+          ? { ...c, status: 'disputed' as const, disputeNotes: disputeNotes.trim(), disputedAt: new Date().toISOString().split('T')[0] }
+          : c
+      ))
+      alert('Claim marked as disputed')
       setShowDisputeModal(null)
     } catch (error) {
       console.error('Error disputing claim:', error)

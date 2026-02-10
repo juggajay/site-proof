@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
-import { useAuth, getAuthToken } from '../../lib/auth'
+import { useAuth } from '../../lib/auth'
+import { apiFetch } from '@/lib/api'
 import { X } from 'lucide-react'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3004'
 
 interface Project {
   id: string
@@ -28,11 +27,11 @@ const STATE_OPTIONS = [
 ]
 
 const SPEC_SET_OPTIONS = [
-  { value: 'austroads', label: 'Austroads' },
-  { value: 'mrts', label: 'MRTS (QLD)' },
-  { value: 'rms', label: 'RMS (NSW)' },
-  { value: 'vicroads', label: 'VicRoads' },
-  { value: 'mainroads_wa', label: 'Main Roads WA' },
+  { value: 'Austroads', label: 'Austroads (National)' },
+  { value: 'TfNSW', label: 'TfNSW (NSW)' },
+  { value: 'MRTS', label: 'MRTS (QLD)' },
+  { value: 'VicRoads', label: 'VicRoads (VIC)' },
+  { value: 'MRWA', label: 'Main Roads WA' },
   { value: 'custom', label: 'Custom' },
 ]
 
@@ -99,24 +98,8 @@ export function ProjectsPage() {
 
   useEffect(() => {
     const fetchProjects = async () => {
-      const token = getAuthToken()
-      if (!token) {
-        setLoading(false)
-        return
-      }
-
       try {
-        const response = await fetch(`${API_URL}/api/projects`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch projects')
-        }
-
-        const data = await response.json()
+        const data = await apiFetch<{ projects: Project[] }>('/api/projects')
         setProjects(data.projects)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load projects')
@@ -135,20 +118,9 @@ export function ProjectsPage() {
     setCreating(true)
     setCreateError(null)
 
-    const token = getAuthToken()
-    if (!token) {
-      setCreateError('Not authenticated')
-      setCreating(false)
-      return
-    }
-
     try {
-      const response = await fetch(`${API_URL}/api/projects`, {
+      const data = await apiFetch<{ project: Project }>('/api/projects', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           name: formData.name,
           projectNumber: formData.projectNumber || null,
@@ -161,12 +133,6 @@ export function ProjectsPage() {
         }),
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to create project')
-      }
-
-      const data = await response.json()
       // Add new project to list
       setProjects((prev) => [...prev, data.project])
       // Reset form and close modal

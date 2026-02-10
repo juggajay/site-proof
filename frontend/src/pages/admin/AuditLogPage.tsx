@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ClipboardList, Search, Filter, Calendar, User, ChevronLeft, ChevronRight, X, Download } from 'lucide-react'
-import { getAuthToken } from '@/lib/auth'
 import { useDateFormat } from '@/lib/dateFormat'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { apiFetch } from '@/lib/api'
 
 interface AuditLog {
   id: string
@@ -83,33 +81,15 @@ export function AuditLogPage() {
 
   const fetchFilterOptions = async () => {
     try {
-      const token = getAuthToken()
-      const [actionsRes, entityTypesRes, usersRes] = await Promise.all([
-        fetch(`${API_URL}/api/audit-logs/actions`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_URL}/api/audit-logs/entity-types`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_URL}/api/audit-logs/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [actionsData, entityTypesData, usersData] = await Promise.all([
+        apiFetch<{ actions: string[] }>('/api/audit-logs/actions'),
+        apiFetch<{ entityTypes: string[] }>('/api/audit-logs/entity-types'),
+        apiFetch<{ users: { id: string; email: string; fullName: string | null }[] }>('/api/audit-logs/users'),
       ])
 
-      if (actionsRes.ok) {
-        const data = await actionsRes.json()
-        setActions(data.actions || [])
-      }
-
-      if (entityTypesRes.ok) {
-        const data = await entityTypesRes.json()
-        setEntityTypes(data.entityTypes || [])
-      }
-
-      if (usersRes.ok) {
-        const data = await usersRes.json()
-        setUsers(data.users || [])
-      }
+      setActions(actionsData.actions || [])
+      setEntityTypes(entityTypesData.entityTypes || [])
+      setUsers(usersData.users || [])
     } catch (err) {
       console.error('Error fetching filter options:', err)
     }
@@ -120,7 +100,6 @@ export function AuditLogPage() {
     setError(null)
 
     try {
-      const token = getAuthToken()
       const params = new URLSearchParams()
       params.append('page', page.toString())
       params.append('limit', limit.toString())
@@ -133,15 +112,7 @@ export function AuditLogPage() {
       if (filters.startDate) params.append('startDate', filters.startDate)
       if (filters.endDate) params.append('endDate', filters.endDate)
 
-      const response = await fetch(`${API_URL}/api/audit-logs?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch audit logs')
-      }
-
-      const data = await response.json()
+      const data = await apiFetch<{ logs: AuditLog[]; pagination?: { totalPages: number; total: number } }>(`/api/audit-logs?${params.toString()}`)
       setLogs(data.logs || [])
       setTotalPages(data.pagination?.totalPages || 1)
       setTotal(data.pagination?.total || 0)

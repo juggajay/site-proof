@@ -7,10 +7,8 @@ import {
   Clock,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
 interface Lot {
   id: string
@@ -49,28 +47,15 @@ export function AssignedWorkPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const token = getAuthToken()
-        const headers = { Authorization: `Bearer ${token}` }
-
         // Get company info
-        const companyRes = await fetch(`${API_URL}/api/subcontractors/my-company`, { headers })
-        if (!companyRes.ok) {
-          setError('Failed to load company data')
-          setLoading(false)
-          return
-        }
-        const companyData = await companyRes.json()
+        const companyData = await apiFetch<{ company: { projectName: string; projectId: string } }>(`/api/subcontractors/my-company`)
         setProjectName(companyData.company.projectName)
 
         // Fetch assigned lots
-        const lotsRes = await fetch(
-          `${API_URL}/api/lots?projectId=${companyData.company.projectId}`,
-          { headers }
+        const lotsData = await apiFetch<{ lots: Lot[] }>(
+          `/api/lots?projectId=${companyData.company.projectId}`
         )
-        if (lotsRes.ok) {
-          const lotsData = await lotsRes.json()
-          setLots(lotsData.lots || [])
-        }
+        setLots(lotsData.lots || [])
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load assigned work')

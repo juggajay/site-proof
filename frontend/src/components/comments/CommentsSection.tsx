@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { MessageSquare, Send, CornerDownRight, Edit2, Trash2, X, Check, Paperclip, Download, FileText, Image } from 'lucide-react'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 interface CommentAuthor {
   id: string
@@ -78,31 +77,23 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
 
     const silentFetchComments = async () => {
       try {
-        const token = getAuthToken()
-        const response = await fetch(
-          `${API_URL}/api/comments?entityType=${entityType}&entityId=${entityId}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
+        const data = await apiFetch<{ comments: Comment[] }>(
+          `/api/comments?entityType=${entityType}&entityId=${entityId}`
         )
+        const newComments = data.comments || []
 
-        if (response.ok) {
-          const data = await response.json()
-          const newComments = data.comments || []
-
-          // Only update if there are actual changes
-          setComments((prevComments: Comment[]) => {
-            // Check if comments have changed by comparing lengths and IDs
-            const hasChanges = newComments.length !== prevComments.length ||
-              newComments.some((newComment: Comment, index: number) =>
-                !prevComments[index] ||
-                newComment.id !== prevComments[index].id ||
-                newComment.isEdited !== prevComments[index].isEdited ||
-                (newComment.replies?.length || 0) !== (prevComments[index].replies?.length || 0)
-              )
-            return hasChanges ? newComments : prevComments
-          })
-        }
+        // Only update if there are actual changes
+        setComments((prevComments: Comment[]) => {
+          // Check if comments have changed by comparing lengths and IDs
+          const hasChanges = newComments.length !== prevComments.length ||
+            newComments.some((newComment: Comment, index: number) =>
+              !prevComments[index] ||
+              newComment.id !== prevComments[index].id ||
+              newComment.isEdited !== prevComments[index].isEdited ||
+              (newComment.replies?.length || 0) !== (prevComments[index].replies?.length || 0)
+            )
+          return hasChanges ? newComments : prevComments
+        })
       } catch (err) {
         // Silent fail for background polling
         console.debug('Background comments fetch failed:', err)
@@ -138,20 +129,10 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     setError(null)
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(
-        `${API_URL}/api/comments?entityType=${entityType}&entityId=${entityId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const data = await apiFetch<{ comments: Comment[] }>(
+        `/api/comments?entityType=${entityType}&entityId=${entityId}`
       )
-
-      if (response.ok) {
-        const data = await response.json()
-        setComments(data.comments || [])
-      } else {
-        setError('Failed to load comments')
-      }
+      setComments(data.comments || [])
     } catch (err) {
       console.error('Error fetching comments:', err)
       setError('Failed to load comments')
@@ -315,13 +296,8 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
         attachments = await uploadFiles(pendingAttachments)
       }
 
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/comments`, {
+      await apiFetch('/api/comments', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           entityType,
           entityId,
@@ -330,18 +306,13 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
         }),
       })
 
-      if (response.ok) {
-        setNewComment('')
-        // Clean up previews
-        pendingAttachments.forEach(att => {
-          if (att.preview) URL.revokeObjectURL(att.preview)
-        })
-        setPendingAttachments([])
-        fetchComments()
-      } else {
-        const data = await response.json()
-        setError(data.error || 'Failed to post comment')
-      }
+      setNewComment('')
+      // Clean up previews
+      pendingAttachments.forEach(att => {
+        if (att.preview) URL.revokeObjectURL(att.preview)
+      })
+      setPendingAttachments([])
+      fetchComments()
     } catch (err) {
       console.error('Error posting comment:', err)
       setError('Failed to post comment')
@@ -362,13 +333,8 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
         attachments = await uploadFiles(replyAttachments)
       }
 
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/comments`, {
+      await apiFetch('/api/comments', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           entityType,
           entityId,
@@ -378,19 +344,14 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
         }),
       })
 
-      if (response.ok) {
-        setReplyContent('')
-        setReplyingTo(null)
-        // Clean up previews
-        replyAttachments.forEach(att => {
-          if (att.preview) URL.revokeObjectURL(att.preview)
-        })
-        setReplyAttachments([])
-        fetchComments()
-      } else {
-        const data = await response.json()
-        setError(data.error || 'Failed to post reply')
-      }
+      setReplyContent('')
+      setReplyingTo(null)
+      // Clean up previews
+      replyAttachments.forEach(att => {
+        if (att.preview) URL.revokeObjectURL(att.preview)
+      })
+      setReplyAttachments([])
+      fetchComments()
     } catch (err) {
       console.error('Error posting reply:', err)
       setError('Failed to post reply')
@@ -405,26 +366,16 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     setSubmitting(true)
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/comments/${commentId}`, {
+      await apiFetch(`/api/comments/${commentId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           content: editContent.trim(),
         }),
       })
 
-      if (response.ok) {
-        setEditingId(null)
-        setEditContent('')
-        fetchComments()
-      } else {
-        const data = await response.json()
-        setError(data.error || 'Failed to update comment')
-      }
+      setEditingId(null)
+      setEditContent('')
+      fetchComments()
     } catch (err) {
       console.error('Error updating comment:', err)
       setError('Failed to update comment')
@@ -437,18 +388,11 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     if (!confirm('Are you sure you want to delete this comment?')) return
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/comments/${commentId}`, {
+      await apiFetch(`/api/comments/${commentId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
 
-      if (response.ok) {
-        fetchComments()
-      } else {
-        const data = await response.json()
-        setError(data.error || 'Failed to delete comment')
-      }
+      fetchComments()
     } catch (err) {
       console.error('Error deleting comment:', err)
       setError('Failed to delete comment')

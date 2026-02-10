@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
 import { AlertTriangle } from 'lucide-react'
 import { LazyPDFViewer } from '../../components/ui/LazyPDFViewer'  // Feature #446: React-PDF viewer (lazy loaded)
-import { API_URL } from '../../lib/api'
+import { API_URL, apiFetch } from '../../lib/api'
 
 // Helper to construct document URLs - handles both relative paths and full Supabase URLs
 const getDocumentUrl = (fileUrl: string | null | undefined): string => {
@@ -117,8 +117,7 @@ export function DocumentsPage() {
     setLoading(true)
     setError(null)
     try {
-      const token = getAuthToken()
-      let url = `${API_URL}/api/documents/${projectId}`
+      let path = `/api/documents/${projectId}`
       const params = new URLSearchParams()
       if (filterType) params.append('documentType', filterType)
       if (filterCategory) params.append('category', filterCategory)
@@ -126,18 +125,11 @@ export function DocumentsPage() {
       if (dateFrom) params.append('dateFrom', dateFrom)
       if (dateTo) params.append('dateTo', dateTo)
       if (searchQuery.trim()) params.append('search', searchQuery.trim())
-      if (params.toString()) url += `?${params.toString()}`
+      if (params.toString()) path += `?${params.toString()}`
 
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setDocuments(data.documents)
-        setCategories(data.categories)
-      } else {
-        setError('Failed to load documents')
-      }
+      const data = await apiFetch<any>(path)
+      setDocuments(data.documents)
+      setCategories(data.categories)
     } catch (err) {
       console.error('Error fetching documents:', err)
       setError('Failed to load documents')
@@ -148,14 +140,8 @@ export function DocumentsPage() {
 
   const fetchLots = async () => {
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/lots?projectId=${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setLots(data.lots || [])
-      }
+      const data = await apiFetch<any>(`/api/lots?projectId=${projectId}`)
+      setLots(data.lots || [])
     } catch (err) {
       console.error('Error fetching lots:', err)
     }
@@ -277,16 +263,8 @@ export function DocumentsPage() {
     if (!confirm('Are you sure you want to delete this document?')) return
 
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/documents/${documentId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        setDocuments(prev => prev.filter(d => d.id !== documentId))
-      } else {
-        alert('Failed to delete document')
-      }
+      await apiFetch(`/api/documents/${documentId}`, { method: 'DELETE' })
+      setDocuments(prev => prev.filter(d => d.id !== documentId))
     } catch (err) {
       console.error('Error deleting document:', err)
       alert('Failed to delete document')
@@ -295,23 +273,14 @@ export function DocumentsPage() {
 
   const toggleFavourite = async (doc: Document) => {
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/documents/${doc.id}`, {
+      const updated = await apiFetch<Document>(`/api/documents/${doc.id}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ isFavourite: !doc.isFavourite }),
       })
-      if (res.ok) {
-        const updated = await res.json()
-        setDocuments(prev => prev.map(d => d.id === doc.id ? updated : d))
-      } else {
-        alert('Failed to update favourite status')
-      }
+      setDocuments(prev => prev.map(d => d.id === doc.id ? updated : d))
     } catch (err) {
       console.error('Error toggling favourite:', err)
+      alert('Failed to update favourite status')
     }
   }
 

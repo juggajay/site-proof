@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { getAuthToken, getCurrentUser } from '@/lib/auth'
+import { apiFetch, ApiError } from '@/lib/api'
 import { TagInput } from '@/components/ui/TagInput'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
 import { useOfflineStatus } from '@/lib/useOfflineStatus'
@@ -200,32 +201,8 @@ export function LotEditPage() {
         return
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/lots/${lotId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.status === 404) {
-          setError('Lot not found')
-          setLoading(false)
-          return
-        }
-
-        if (response.status === 403) {
-          setError('You do not have access to this lot')
-          setLoading(false)
-          return
-        }
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch lot')
-        }
-
-        const data = await response.json()
+        const data = await apiFetch<any>(`/api/lots/${lotId}`)
         setLot(data.lot)
         setServerUpdatedAt(data.lot.updatedAt)
 
@@ -252,6 +229,18 @@ export function LotEditPage() {
         setFormData(initialData)
         initialFormData.current = initialData
       } catch (err) {
+        if (err instanceof ApiError) {
+          if (err.status === 404) {
+            setError('Lot not found')
+            setLoading(false)
+            return
+          }
+          if (err.status === 403) {
+            setError('You do not have access to this lot')
+            setLoading(false)
+            return
+          }
+        }
         // If offline and we have cached data, use it
         if (!isOnline && offlineLot) {
           toast({
@@ -274,22 +263,9 @@ export function LotEditPage() {
     async function fetchSubcontractors() {
       if (!projectId) return
 
-      const token = getAuthToken()
-      if (!token) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/subcontractors/for-project/${projectId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setSubcontractors(data.subcontractors || [])
-        }
+        const data = await apiFetch<any>(`/api/subcontractors/for-project/${projectId}`)
+        setSubcontractors(data.subcontractors || [])
       } catch (err) {
         console.error('Failed to fetch subcontractors:', err)
       }
@@ -395,37 +371,29 @@ export function LotEditPage() {
       return
     }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
-      const response = await fetch(`${apiUrl}/api/lots/${lotId}`, {
+      await apiFetch(`/api/lots/${lotId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(updatePayload),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-
-        // Feature #871: Handle concurrent edit conflict
-        if (response.status === 409) {
-          setConcurrentEditInfo({ serverUpdatedAt: data.serverUpdatedAt })
-          setShowConcurrentEditWarning(true)
-          setSaving(false)
-          return
-        }
-
-        throw new Error(data.message || 'Failed to update lot')
-      }
 
       // Clear dirty state before navigating
       setIsDirty(false)
       // Navigate back to lot detail page
       navigate(`/projects/${projectId}/lots/${lotId}`)
     } catch (err) {
+      // Feature #871: Handle concurrent edit conflict
+      if (err instanceof ApiError && err.status === 409) {
+        try {
+          const data = JSON.parse(err.body)
+          setConcurrentEditInfo({ serverUpdatedAt: data.serverUpdatedAt })
+        } catch {
+          setConcurrentEditInfo({ serverUpdatedAt: '' })
+        }
+        setShowConcurrentEditWarning(true)
+        setSaving(false)
+        return
+      }
       // If network error and we're actually offline, save offline
       if (!navigator.onLine && lotId && projectId && user) {
         try {

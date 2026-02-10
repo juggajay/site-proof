@@ -497,7 +497,7 @@ subcontractorsRouter.get('/my-company', async (req, res) => {
           wetRate: p.wetRate?.toNumber() || 0,
           status: p.status === 'approved' ? 'approved' : 'pending'
         })),
-        portalAccess: (company as any).portalAccess || {
+        portalAccess: company.portalAccess || {
           lots: true,
           itps: false,
           holdPoints: false,

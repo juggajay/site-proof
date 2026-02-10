@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken } from '@/lib/auth'
-import { apiFetch } from '@/lib/api'
+import { apiFetch, ApiError, apiUrl } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal'
@@ -182,22 +182,9 @@ export function LotDetailPage() {
     async function fetchQualityAccess() {
       if (!projectId) return
 
-      const token = getAuthToken()
-      if (!token) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/lots/check-role/${projectId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setQualityAccess(data)
-        }
+        const data = await apiFetch<QualityAccess>(`/api/lots/check-role/${projectId}`)
+        setQualityAccess(data)
       } catch (err) {
         console.error('Failed to fetch quality access:', err)
       }
@@ -210,41 +197,21 @@ export function LotDetailPage() {
     async function fetchLot() {
       if (!lotId) return
 
-      const token = getAuthToken()
-      if (!token) {
-        navigate('/login')
-        return
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/lots/${lotId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.status === 404) {
-          setError({ type: 'not_found', message: 'Lot not found' })
-          setLoading(false)
-          return
-        }
-
-        if (response.status === 403) {
-          setError({ type: 'forbidden', message: 'You do not have access to this lot' })
-          setLoading(false)
-          return
-        }
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch lot')
-        }
-
-        const data = await response.json()
+        const data = await apiFetch<{ lot: Lot }>(`/api/lots/${lotId}`)
         setLot(data.lot)
       } catch (err) {
-        setError({ type: 'error', message: 'Failed to load lot' })
+        if (err instanceof ApiError) {
+          if (err.status === 404) {
+            setError({ type: 'not_found', message: 'Lot not found' })
+          } else if (err.status === 403) {
+            setError({ type: 'forbidden', message: 'You do not have access to this lot' })
+          } else {
+            setError({ type: 'error', message: 'Failed to load lot' })
+          }
+        } else {
+          setError({ type: 'error', message: 'Failed to load lot' })
+        }
       } finally {
         setLoading(false)
       }
@@ -258,23 +225,11 @@ export function LotDetailPage() {
     async function fetchConformStatus() {
       if (!lotId || !lot || lot.status === 'conformed' || lot.status === 'claimed') return
 
-      const token = getAuthToken()
-      if (!token) return
-
       setLoadingConformStatus(true)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
       try {
-        const response = await fetch(`${apiUrl}/api/lots/${lotId}/conform-status`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setConformStatus(data)
-        }
+        const data = await apiFetch<ConformStatus>(`/api/lots/${lotId}/conform-status`)
+        setConformStatus(data)
       } catch (err) {
         console.error('Failed to fetch conform status:', err)
       } finally {
@@ -290,33 +245,18 @@ export function LotDetailPage() {
     async function fetchTabCounts() {
       if (!projectId || !lotId) return
 
-      const token = getAuthToken()
-      if (!token) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       // Fetch test results count
       try {
-        const testsResponse = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}&lotId=${lotId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (testsResponse.ok) {
-          const testsData = await testsResponse.json()
-          setTestsCount(testsData.testResults?.length || 0)
-        }
+        const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}&lotId=${lotId}`)
+        setTestsCount(testsData.testResults?.length || 0)
       } catch (err) {
         console.error('Failed to fetch tests count:', err)
       }
 
       // Fetch NCRs count
       try {
-        const ncrsResponse = await fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (ncrsResponse.ok) {
-          const ncrsData = await ncrsResponse.json()
-          setNcrsCount(ncrsData.ncrs?.length || 0)
-        }
+        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(`/api/ncrs?projectId=${projectId}&lotId=${lotId}`)
+        setNcrsCount(ncrsData.ncrs?.length || 0)
       } catch (err) {
         console.error('Failed to fetch NCRs count:', err)
       }
@@ -330,24 +270,12 @@ export function LotDetailPage() {
     async function fetchTestResults() {
       if (!projectId || !lotId || currentTab !== 'tests') return
 
-      const token = getAuthToken()
-      if (!token) return
-
       setLoadingTests(true)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
       try {
-        const response = await fetch(`${apiUrl}/api/test-results?projectId=${projectId}&lotId=${lotId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setTestResults(data.testResults || [])
-          setTestsCount(data.testResults?.length || 0)
-        }
+        const data = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}&lotId=${lotId}`)
+        setTestResults(data.testResults || [])
+        setTestsCount(data.testResults?.length || 0)
       } catch (err) {
         console.error('Failed to fetch test results:', err)
       } finally {
@@ -363,24 +291,12 @@ export function LotDetailPage() {
     async function fetchNcrs() {
       if (!projectId || !lotId || currentTab !== 'ncrs') return
 
-      const token = getAuthToken()
-      if (!token) return
-
       setLoadingNcrs(true)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
       try {
-        const response = await fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setNcrs(data.ncrs || [])
-          setNcrsCount(data.ncrs?.length || 0)
-        }
+        const data = await apiFetch<{ ncrs: NCR[] }>(`/api/ncrs?projectId=${projectId}&lotId=${lotId}`)
+        setNcrs(data.ncrs || [])
+        setNcrsCount(data.ncrs?.length || 0)
       } catch (err) {
         console.error('Failed to fetch NCRs:', err)
       } finally {
@@ -396,12 +312,8 @@ export function LotDetailPage() {
     async function fetchItpInstance() {
       if (!projectId || !lotId || currentTab !== 'itp') return
 
-      const token = getAuthToken()
-      if (!token) return
-
       setLoadingItp(true)
       setIsOfflineData(false)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
       // Check offline pending count
       const pendingCount = await getPendingSyncCount()
@@ -409,100 +321,93 @@ export function LotDetailPage() {
 
       try {
         // Try to fetch from server first
-        const response = await fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+        const data = await apiFetch<{ instance: ITPInstance }>(`/api/itp/instances/lot/${lotId}`)
+        setItpInstance(data.instance)
+        setIsOfflineData(false)
 
-        if (response.ok) {
-          const data = await response.json()
-          setItpInstance(data.instance)
-          setIsOfflineData(false)
+        // Cache the ITP data for offline use
+        if (data.instance?.template) {
+          const items: OfflineChecklistItem[] = data.instance.template.checklistItems.map((item: ITPChecklistItem) => {
+            const completion = data.instance.completions.find((c: ITPCompletion) => c.checklistItemId === item.id)
+            let status: 'pending' | 'completed' | 'na' | 'failed' = 'pending'
+            if (completion?.isCompleted) status = 'completed'
+            else if (completion?.isNotApplicable) status = 'na'
+            else if (completion?.isFailed) status = 'failed'
 
-          // Cache the ITP data for offline use
-          if (data.instance?.template) {
-            const items: OfflineChecklistItem[] = data.instance.template.checklistItems.map((item: ITPChecklistItem) => {
-              const completion = data.instance.completions.find((c: ITPCompletion) => c.checklistItemId === item.id)
-              let status: 'pending' | 'completed' | 'na' | 'failed' = 'pending'
-              if (completion?.isCompleted) status = 'completed'
-              else if (completion?.isNotApplicable) status = 'na'
-              else if (completion?.isFailed) status = 'failed'
-
-              return {
-                id: item.id,
-                name: item.description,
-                description: item.acceptanceCriteria || undefined,
-                responsibleParty: item.responsibleParty,
-                isHoldPoint: item.isHoldPoint,
-                status,
-                notes: completion?.notes || undefined,
-                completedAt: completion?.completedAt || undefined,
-                completedBy: completion?.completedBy?.fullName || undefined
-              }
-            })
-
-            await cacheITPChecklist(lotId, data.instance.template.id, data.instance.template.name, items)
-          }
-        } else if (response.status === 404) {
-          // No ITP assigned - fetch available templates
-          const templatesResponse = await fetch(`${apiUrl}/api/itp/templates?projectId=${projectId}`, {
-            headers: { Authorization: `Bearer ${token}` },
+            return {
+              id: item.id,
+              name: item.description,
+              description: item.acceptanceCriteria || undefined,
+              responsibleParty: item.responsibleParty,
+              isHoldPoint: item.isHoldPoint,
+              status,
+              notes: completion?.notes || undefined,
+              completedAt: completion?.completedAt || undefined,
+              completedBy: completion?.completedBy?.fullName || undefined
+            }
           })
-          if (templatesResponse.ok) {
-            const templatesData = await templatesResponse.json()
-            setTemplates(templatesData.templates || [])
-          }
+
+          await cacheITPChecklist(lotId, data.instance.template.id, data.instance.template.name, items)
         }
       } catch (err) {
-        console.error('Failed to fetch ITP instance, trying offline cache:', err)
-
-        // Try to load from offline cache
-        const cachedData = await getCachedITPChecklist(lotId)
-        if (cachedData) {
-          // Convert cached data to ITPInstance format
-          const offlineInstance: ITPInstance = {
-            id: `offline-${cachedData.id}`,
-            template: {
-              id: cachedData.templateId,
-              name: cachedData.templateName,
-              checklistItems: cachedData.items.map((item, index) => ({
-                id: item.id,
-                description: item.name,
-                category: 'General',
-                responsibleParty: item.responsibleParty as any,
-                isHoldPoint: item.isHoldPoint,
-                pointType: item.isHoldPoint ? 'hold_point' : 'standard' as any,
-                evidenceRequired: 'none' as any,
-                order: index,
-                acceptanceCriteria: item.description || null,
-                testType: null
-              }))
-            },
-            completions: cachedData.items
-              .filter(item => item.status !== 'pending')
-              .map(item => ({
-                id: `offline-${item.id}`,
-                checklistItemId: item.id,
-                isCompleted: item.status === 'completed',
-                isNotApplicable: item.status === 'na',
-                isFailed: item.status === 'failed',
-                notes: item.notes || null,
-                completedAt: item.completedAt || null,
-                completedBy: item.completedBy ? { id: 'offline', fullName: item.completedBy, email: '' } : null,
-                isVerified: false,
-                verifiedAt: null,
-                verifiedBy: null,
-                attachments: []
-              }))
+        if (err instanceof ApiError && err.status === 404) {
+          // No ITP assigned - fetch available templates
+          try {
+            const templatesData = await apiFetch<{ templates: ITPTemplate[] }>(`/api/itp/templates?projectId=${projectId}`)
+            setTemplates(templatesData.templates || [])
+          } catch {
+            // ignore template fetch errors
           }
-          setItpInstance(offlineInstance)
-          setIsOfflineData(true)
-          toast({
-            title: 'Offline Mode',
-            description: `Showing cached data from ${new Date(cachedData.cachedAt).toLocaleDateString()}`,
-            variant: 'default'
-          })
+        } else {
+          console.error('Failed to fetch ITP instance, trying offline cache:', err)
+
+          // Try to load from offline cache
+          const cachedData = await getCachedITPChecklist(lotId)
+          if (cachedData) {
+            // Convert cached data to ITPInstance format
+            const offlineInstance: ITPInstance = {
+              id: `offline-${cachedData.id}`,
+              template: {
+                id: cachedData.templateId,
+                name: cachedData.templateName,
+                checklistItems: cachedData.items.map((item, index) => ({
+                  id: item.id,
+                  description: item.name,
+                  category: 'General',
+                  responsibleParty: item.responsibleParty as any,
+                  isHoldPoint: item.isHoldPoint,
+                  pointType: item.isHoldPoint ? 'hold_point' : 'standard' as any,
+                  evidenceRequired: 'none' as any,
+                  order: index,
+                  acceptanceCriteria: item.description || null,
+                  testType: null
+                }))
+              },
+              completions: cachedData.items
+                .filter(item => item.status !== 'pending')
+                .map(item => ({
+                  id: `offline-${item.id}`,
+                  checklistItemId: item.id,
+                  isCompleted: item.status === 'completed',
+                  isNotApplicable: item.status === 'na',
+                  isFailed: item.status === 'failed',
+                  notes: item.notes || null,
+                  completedAt: item.completedAt || null,
+                  completedBy: item.completedBy ? { id: 'offline', fullName: item.completedBy, email: '' } : null,
+                  isVerified: false,
+                  verifiedAt: null,
+                  verifiedBy: null,
+                  attachments: []
+                }))
+            }
+            setItpInstance(offlineInstance)
+            setIsOfflineData(true)
+            toast({
+              title: 'Offline Mode',
+              description: `Showing cached data from ${new Date(cachedData.cachedAt).toLocaleDateString()}`,
+              variant: 'default'
+            })
+          }
         }
       } finally {
         setLoadingItp(false)
@@ -517,42 +422,30 @@ export function LotDetailPage() {
   useEffect(() => {
     if (!lotId || currentTab !== 'itp' || !isOnline) return
 
-    const token = getAuthToken()
-    if (!token) return
-
     let pollInterval: NodeJS.Timeout | null = null
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     const silentFetchItpUpdates = async () => {
       try {
-        const response = await fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const data = await apiFetch<{ instance: ITPInstance }>(`/api/itp/instances/lot/${lotId}`)
+        // Only update if there are actual changes in completions
+        setItpInstance(prevInstance => {
+          if (!prevInstance || !data.instance) return data.instance || prevInstance
+
+          const prevCompletions = prevInstance.completions || []
+          const newCompletions = data.instance.completions || []
+
+          // Check if completions have changed
+          const hasChanges = newCompletions.length !== prevCompletions.length ||
+            newCompletions.some((newComp: ITPCompletion) => {
+              const prevComp = prevCompletions.find(p => p.checklistItemId === newComp.checklistItemId)
+              return !prevComp ||
+                prevComp.isCompleted !== newComp.isCompleted ||
+                prevComp.isVerified !== newComp.isVerified ||
+                prevComp.completedAt !== newComp.completedAt
+            })
+
+          return hasChanges ? data.instance : prevInstance
         })
-
-        if (response.ok) {
-          const data = await response.json()
-          // Only update if there are actual changes in completions
-          setItpInstance(prevInstance => {
-            if (!prevInstance || !data.instance) return data.instance || prevInstance
-
-            const prevCompletions = prevInstance.completions || []
-            const newCompletions = data.instance.completions || []
-
-            // Check if completions have changed
-            const hasChanges = newCompletions.length !== prevCompletions.length ||
-              newCompletions.some((newComp: ITPCompletion) => {
-                const prevComp = prevCompletions.find(p => p.checklistItemId === newComp.checklistItemId)
-                return !prevComp ||
-                  prevComp.isCompleted !== newComp.isCompleted ||
-                  prevComp.isVerified !== newComp.isVerified ||
-                  prevComp.completedAt !== newComp.completedAt
-              })
-
-            return hasChanges ? data.instance : prevInstance
-          })
-        }
       } catch (err) {
         // Silent fail for background polling
         console.debug('Background ITP fetch failed:', err)
@@ -588,25 +481,11 @@ export function LotDetailPage() {
     async function fetchActivityHistory() {
       if (!lotId || currentTab !== 'history') return
 
-      const token = getAuthToken()
-      if (!token) return
-
       setLoadingHistory(true)
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
       try {
-        // Fetch audit logs for this specific lot entity
-        const response = await fetch(
-          `${apiUrl}/api/audit-logs?entityType=Lot&search=${lotId}&limit=100`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        )
-
-        if (response.ok) {
-          const data = await response.json()
-          setActivityLogs(data.logs || [])
-        }
+        const data = await apiFetch<{ logs: ActivityLog[] }>(`/api/audit-logs?entityType=Lot&search=${lotId}&limit=100`)
+        setActivityLogs(data.logs || [])
       } catch (err) {
         console.error('Failed to fetch activity history:', err)
       } finally {
@@ -621,17 +500,9 @@ export function LotDetailPage() {
   useEffect(() => {
     if (showSubcontractorModal && projectId) {
       const fetchSubcontractors = async () => {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
         try {
-          const token = getAuthToken()
-          const response = await fetch(
-            `${apiUrl}/api/subcontractors?projectId=${projectId}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          )
-          if (response.ok) {
-            const data = await response.json()
-            setSubcontractors(data.subcontractors || [])
-          }
+          const data = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(`/api/subcontractors?projectId=${projectId}`)
+          setSubcontractors(data.subcontractors || [])
         } catch (err) {
           console.error('Failed to fetch subcontractors:', err)
         }
@@ -720,27 +591,15 @@ export function LotDetailPage() {
   const handleAssignTemplate = async (templateId: string) => {
     if (!lotId) return
 
-    const token = getAuthToken()
-    if (!token) return
-
     setAssigningTemplate(true)
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/itp/instances`, {
+      const data = await apiFetch<{ instance: ITPInstance }>('/api/itp/instances', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ lotId, templateId }),
       })
-
-      if (response.ok) {
-        const data = await response.json()
-        setItpInstance(data.instance)
-        // Modal closing is handled by the ITPChecklistTab component
-      }
+      setItpInstance(data.instance)
+      // Modal closing is handled by the ITPChecklistTab component
     } catch (err) {
       console.error('Failed to assign template:', err)
     } finally {
@@ -784,19 +643,11 @@ export function LotDetailPage() {
       }
     }
 
-    const token = getAuthToken()
-    if (!token) return
-
     setUpdatingCompletion(checklistItemId)
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
@@ -811,26 +662,23 @@ export function LotDetailPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        // Update the completions in state
-        setItpInstance(prev => {
-          if (!prev) return prev
-          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
-          const newCompletions = [...prev.completions]
-          if (existingIndex >= 0) {
-            newCompletions[existingIndex] = data.completion
-          } else {
-            newCompletions.push(data.completion)
-          }
-          return { ...prev, completions: newCompletions }
-        })
-
-        // Update offline cache with the new completion status
-        if (lotId) {
-          const newStatus = !currentlyCompleted ? 'completed' : 'pending'
-          await updateChecklistItemOffline(lotId, checklistItemId, newStatus, existingNotes || undefined, 'Current User')
+      // Update the completions in state
+      setItpInstance(prev => {
+        if (!prev) return prev
+        const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+        const newCompletions = [...prev.completions]
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion
+        } else {
+          newCompletions.push(data.completion)
         }
+        return { ...prev, completions: newCompletions }
+      })
+
+      // Update offline cache with the new completion status
+      if (lotId) {
+        const newStatus = !currentlyCompleted ? 'completed' : 'pending'
+        await updateChecklistItemOffline(lotId, checklistItemId, newStatus, existingNotes || undefined, 'Current User')
       }
     } catch (err) {
       console.error('Failed to update completion:', err)
@@ -892,19 +740,11 @@ export function LotDetailPage() {
   const handleUpdateNotes = async (checklistItemId: string, notes: string) => {
     if (!itpInstance) return
 
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
     const existingCompletion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
 
     try {
-      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
@@ -913,20 +753,17 @@ export function LotDetailPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setItpInstance(prev => {
-          if (!prev) return prev
-          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
-          const newCompletions = [...prev.completions]
-          if (existingIndex >= 0) {
-            newCompletions[existingIndex] = data.completion
-          } else {
-            newCompletions.push(data.completion)
-          }
-          return { ...prev, completions: newCompletions }
-        })
-      }
+      setItpInstance(prev => {
+        if (!prev) return prev
+        const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+        const newCompletions = [...prev.completions]
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion
+        } else {
+          newCompletions.push(data.completion)
+        }
+        return { ...prev, completions: newCompletions }
+      })
     } catch (err) {
       console.error('Failed to update notes:', err)
     }
@@ -943,19 +780,11 @@ export function LotDetailPage() {
       return
     }
 
-    const token = getAuthToken()
-    if (!token) return
-
     setSubmittingNa(true)
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId: naModal.checklistItemId,
@@ -964,33 +793,23 @@ export function LotDetailPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        // Update the completions in state
-        setItpInstance(prev => {
-          if (!prev) return prev
-          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === naModal.checklistItemId)
-          const newCompletions = [...prev.completions]
-          if (existingIndex >= 0) {
-            newCompletions[existingIndex] = data.completion
-          } else {
-            newCompletions.push(data.completion)
-          }
-          return { ...prev, completions: newCompletions }
-        })
-        toast({
-          title: 'Item marked as N/A',
-          description: 'The checklist item has been marked as not applicable.',
-        })
-        setNaModal(null)
-      } else {
-        const errData = await response.json()
-        toast({
-          title: 'Failed to mark as N/A',
-          description: errData.error || 'An error occurred. Please try again.',
-          variant: 'error'
-        })
-      }
+      // Update the completions in state
+      setItpInstance(prev => {
+        if (!prev) return prev
+        const existingIndex = prev.completions.findIndex(c => c.checklistItemId === naModal.checklistItemId)
+        const newCompletions = [...prev.completions]
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion
+        } else {
+          newCompletions.push(data.completion)
+        }
+        return { ...prev, completions: newCompletions }
+      })
+      toast({
+        title: 'Item marked as N/A',
+        description: 'The checklist item has been marked as not applicable.',
+      })
+      setNaModal(null)
     } catch (err) {
       console.error('Failed to mark as N/A:', err)
       toast({
@@ -1009,19 +828,11 @@ export function LotDetailPage() {
       return
     }
 
-    const token = getAuthToken()
-    if (!token) return
-
     setSubmittingFailed(true)
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+      const data = await apiFetch<{ completion: ITPCompletion; ncr?: { ncrNumber: string } }>('/api/itp/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId: failedModal.checklistItemId,
@@ -1033,55 +844,39 @@ export function LotDetailPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        // Update the completions in state
-        setItpInstance(prev => {
-          if (!prev) return prev
-          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === failedModal.checklistItemId)
-          const newCompletions = [...prev.completions]
-          if (existingIndex >= 0) {
-            newCompletions[existingIndex] = data.completion
-          } else {
-            newCompletions.push(data.completion)
-          }
-          return { ...prev, completions: newCompletions }
-        })
-
-        // Refresh the lot data to reflect status change
-        const lotResponse = await fetch(`${apiUrl}/api/lots/${lotId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (lotResponse.ok) {
-          const lotData = await lotResponse.json()
-          setLot(lotData.lot)
+      // Update the completions in state
+      setItpInstance(prev => {
+        if (!prev) return prev
+        const existingIndex = prev.completions.findIndex(c => c.checklistItemId === failedModal.checklistItemId)
+        const newCompletions = [...prev.completions]
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion
+        } else {
+          newCompletions.push(data.completion)
         }
+        return { ...prev, completions: newCompletions }
+      })
 
-        // Refresh NCRs list
-        const ncrsResponse = await fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (ncrsResponse.ok) {
-          const ncrsData = await ncrsResponse.json()
-          setNcrs(ncrsData.ncrs || [])
-          setNcrsCount(ncrsData.ncrs?.length || 0)
-        }
+      // Refresh the lot data to reflect status change
+      try {
+        const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${lotId}`)
+        setLot(lotData.lot)
+      } catch { /* ignore */ }
 
-        toast({
-          title: 'Item marked as Failed - NCR created',
-          description: data.ncr
-            ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
-            : 'The item has been marked as failed.',
-        })
-        setFailedModal(null)
-      } else {
-        const errData = await response.json()
-        toast({
-          title: 'Failed to mark item',
-          description: errData.error || 'An error occurred. Please try again.',
-          variant: 'error'
-        })
-      }
+      // Refresh NCRs list
+      try {
+        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(`/api/ncrs?projectId=${projectId}&lotId=${lotId}`)
+        setNcrs(ncrsData.ncrs || [])
+        setNcrsCount(ncrsData.ncrs?.length || 0)
+      } catch { /* ignore */ }
+
+      toast({
+        title: 'Item marked as Failed - NCR created',
+        description: data.ncr
+          ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
+          : 'The item has been marked as failed.',
+      })
+      setFailedModal(null)
     } catch (err) {
       console.error('Failed to mark as Failed:', err)
       toast({
@@ -1098,19 +893,10 @@ export function LotDetailPage() {
   const handleMobileMarkNA = async (checklistItemId: string, reason: string) => {
     if (!itpInstance) return
 
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
       setUpdatingCompletion(checklistItemId)
-      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
@@ -1119,24 +905,21 @@ export function LotDetailPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setItpInstance(prev => {
-          if (!prev) return prev
-          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
-          const newCompletions = [...prev.completions]
-          if (existingIndex >= 0) {
-            newCompletions[existingIndex] = data.completion
-          } else {
-            newCompletions.push(data.completion)
-          }
-          return { ...prev, completions: newCompletions }
-        })
-        toast({
-          title: 'Item marked as N/A',
-          description: 'The checklist item has been marked as not applicable.',
-        })
-      }
+      setItpInstance(prev => {
+        if (!prev) return prev
+        const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+        const newCompletions = [...prev.completions]
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion
+        } else {
+          newCompletions.push(data.completion)
+        }
+        return { ...prev, completions: newCompletions }
+      })
+      toast({
+        title: 'Item marked as N/A',
+        description: 'The checklist item has been marked as not applicable.',
+      })
     } catch (err) {
       console.error('Failed to mark as N/A:', err)
       toast({
@@ -1152,19 +935,10 @@ export function LotDetailPage() {
   const handleMobileMarkFailed = async (checklistItemId: string, reason: string) => {
     if (!itpInstance) return
 
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
       setUpdatingCompletion(checklistItemId)
-      const response = await fetch(`${apiUrl}/api/itp/completions`, {
+      const data = await apiFetch<{ completion: ITPCompletion; ncr?: { ncrNumber: string } }>('/api/itp/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
@@ -1176,37 +950,31 @@ export function LotDetailPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setItpInstance(prev => {
-          if (!prev) return prev
-          const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
-          const newCompletions = [...prev.completions]
-          if (existingIndex >= 0) {
-            newCompletions[existingIndex] = data.completion
-          } else {
-            newCompletions.push(data.completion)
-          }
-          return { ...prev, completions: newCompletions }
-        })
-
-        // Refresh NCRs list
-        const ncrsResponse = await fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (ncrsResponse.ok) {
-          const ncrsData = await ncrsResponse.json()
-          setNcrs(ncrsData.ncrs || [])
-          setNcrsCount(ncrsData.ncrs?.length || 0)
+      setItpInstance(prev => {
+        if (!prev) return prev
+        const existingIndex = prev.completions.findIndex(c => c.checklistItemId === checklistItemId)
+        const newCompletions = [...prev.completions]
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion
+        } else {
+          newCompletions.push(data.completion)
         }
+        return { ...prev, completions: newCompletions }
+      })
 
-        toast({
-          title: 'Item marked as Failed',
-          description: data.ncr
-            ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
-            : 'The item has been marked as failed.',
-        })
-      }
+      // Refresh NCRs list
+      try {
+        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(`/api/ncrs?projectId=${projectId}&lotId=${lotId}`)
+        setNcrs(ncrsData.ncrs || [])
+        setNcrsCount(ncrsData.ncrs?.length || 0)
+      } catch { /* ignore */ }
+
+      toast({
+        title: 'Item marked as Failed',
+        description: data.ncr
+          ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
+          : 'The item has been marked as failed.',
+      })
     } catch (err) {
       console.error('Failed to mark as Failed:', err)
       toast({
@@ -1222,11 +990,6 @@ export function LotDetailPage() {
   const handleMobileAddPhoto = async (checklistItemId: string, file: File) => {
     if (!itpInstance) return
 
-    const token = getAuthToken()
-    if (!token) return
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
     try {
       setUpdatingCompletion(checklistItemId)
 
@@ -1235,27 +998,24 @@ export function LotDetailPage() {
 
       if (!completion?.id) {
         // Create completion first
-        const createResponse = await fetch(`${apiUrl}/api/itp/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            itpInstanceId: itpInstance.id,
-            checklistItemId,
-            status: 'pending',
-            notes: '',
-          }),
-        })
-        if (createResponse.ok) {
-          const data = await createResponse.json()
+        try {
+          const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
+            method: 'POST',
+            body: JSON.stringify({
+              itpInstanceId: itpInstance.id,
+              checklistItemId,
+              status: 'pending',
+              notes: '',
+            }),
+          })
           completion = data.completion
           // Update local state
           setItpInstance(prev => {
             if (!prev) return prev
             return { ...prev, completions: [...prev.completions, data.completion] }
           })
+        } catch {
+          // creation failed
         }
       }
 
@@ -1268,16 +1028,17 @@ export function LotDetailPage() {
         return
       }
 
-      // Upload photo
+      // Upload photo (FormData - keep raw fetch)
+      const token = getAuthToken()
       const formData = new FormData()
       formData.append('file', file)
       formData.append('projectId', projectId!)
       formData.append('lotId', lotId!)
 
-      const uploadResponse = await fetch(`${apiUrl}/api/itp/completions/${completion.id}/attachments`, {
+      const uploadResponse = await fetch(apiUrl(`/api/itp/completions/${completion.id}/attachments`), {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: formData,
       })
@@ -1392,11 +1153,7 @@ export function LotDetailPage() {
       return
     }
 
-    const token = getAuthToken()
-    if (!token) return
-
     setUploadingPhoto(checklistItemId)
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     // Helper function to get GPS location
     const getGPSLocation = (): Promise<{ latitude: number; longitude: number } | null> => {
@@ -1433,23 +1190,18 @@ export function LotDetailPage() {
         const fileUrl = reader.result as string
         const gpsLocation = await gpsPromise
 
-        const response = await fetch(`${apiUrl}/api/itp/completions/${completionId}/attachments`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            filename: file.name,
-            fileUrl,
-            caption: `ITP Evidence Photo - ${new Date().toLocaleString()}`,
-            gpsLatitude: gpsLocation?.latitude ?? null,
-            gpsLongitude: gpsLocation?.longitude ?? null,
-          }),
-        })
+        try {
+          const data = await apiFetch<{ attachment: any }>(`/api/itp/completions/${completionId}/attachments`, {
+            method: 'POST',
+            body: JSON.stringify({
+              filename: file.name,
+              fileUrl,
+              caption: `ITP Evidence Photo - ${new Date().toLocaleString()}`,
+              gpsLatitude: gpsLocation?.latitude ?? null,
+              gpsLongitude: gpsLocation?.longitude ?? null,
+            }),
+          })
 
-        if (response.ok) {
-          const data = await response.json()
           // Update the ITP instance with the new attachment
           setItpInstance(prev => {
             if (!prev) return prev
@@ -1470,31 +1222,18 @@ export function LotDetailPage() {
           // Call the AI classification endpoint after successful upload
           setClassifying(true)
           try {
-            const classifyResponse = await fetch(`${apiUrl}/api/documents/${data.attachment.documentId}/classify`, {
+            const classificationData = await apiFetch<any>(`/api/documents/${data.attachment.documentId}/classify`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
             })
 
-            if (classifyResponse.ok) {
-              const classificationData = await classifyResponse.json()
-              // Show the classification modal
-              setClassificationModal({
-                documentId: classificationData.documentId,
-                filename: file.name,
-                suggestedClassification: classificationData.suggestedClassification,
-                confidence: classificationData.confidence,
-                categories: classificationData.categories,
-              })
-            } else {
-              console.warn('AI classification failed, photo uploaded without classification')
-              toast({
-                title: 'Photo uploaded',
-                description: 'Photo was uploaded but AI classification is unavailable.',
-              })
-            }
+            // Show the classification modal
+            setClassificationModal({
+              documentId: classificationData.documentId,
+              filename: file.name,
+              suggestedClassification: classificationData.suggestedClassification,
+              confidence: classificationData.confidence,
+              categories: classificationData.categories,
+            })
           } catch (classifyErr) {
             console.warn('AI classification error:', classifyErr)
             toast({
@@ -1504,7 +1243,7 @@ export function LotDetailPage() {
           } finally {
             setClassifying(false)
           }
-        } else {
+        } catch {
           console.error('Failed to upload photo')
           alert('Failed to upload photo. Please try again.')
         }
@@ -1526,34 +1265,20 @@ export function LotDetailPage() {
     if (!classificationModal) return
 
     setSavingClassification(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/documents/${classificationModal.documentId}/save-classification`, {
+      await apiFetch(`/api/documents/${classificationModal.documentId}/save-classification`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           classification
         }),
       })
 
-      if (response.ok) {
-        toast({
-          title: 'Classification saved',
-          description: `Photo classified as "${classification}"`,
-        })
-        setClassificationModal(null)
-      } else {
-        toast({
-          title: 'Failed to save',
-          description: 'Could not save the classification. Please try again.',
-          variant: 'error'
-        })
-      }
+      toast({
+        title: 'Classification saved',
+        description: `Photo classified as "${classification}"`,
+      })
+      setClassificationModal(null)
     } catch (err) {
       console.error('Error saving classification:', err)
       toast({
@@ -1580,29 +1305,27 @@ export function LotDetailPage() {
       return
     }
     setConforming(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
     try {
-      const response = await fetch(`${apiUrl}/api/lots/${lotId}/conform`, {
+      await apiFetch(`/api/lots/${lotId}/conform`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
       })
-      if (response.ok) {
-        setLot((prev) => prev ? { ...prev, status: 'conformed' } : null)
-        alert('Lot conformed successfully!')
-      } else {
-        const data = await response.json()
-        if (data.blockingReasons) {
-          alert(`Cannot conform lot:\n\n${data.blockingReasons.join('\n')}`)
-        } else {
-          alert(data.message || data.error || 'Failed to conform lot')
-        }
-      }
+      setLot((prev) => prev ? { ...prev, status: 'conformed' } : null)
+      alert('Lot conformed successfully!')
     } catch (err) {
-      alert('Failed to conform lot')
+      if (err instanceof ApiError) {
+        try {
+          const data = JSON.parse(err.body)
+          if (data.blockingReasons) {
+            alert(`Cannot conform lot:\n\n${data.blockingReasons.join('\n')}`)
+          } else {
+            alert(data.message || data.error || 'Failed to conform lot')
+          }
+        } catch {
+          alert('Failed to conform lot')
+        }
+      } else {
+        alert('Failed to conform lot')
+      }
     } finally {
       setConforming(false)
     }
@@ -1629,50 +1352,30 @@ export function LotDetailPage() {
     }
 
     setOverriding(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/lots/${lotId}/override-status`, {
+      const data = await apiFetch<{ lot: Lot; previousStatus: string }>(`/api/lots/${lotId}/override-status`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           status: newStatus,
           reason: reason.trim()
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setLot((prev) => prev ? { ...prev, status: data.lot.status } : null)
-        setShowOverrideModal(false)
-        toast({
-          title: 'Status overridden',
-          description: `Status changed from "${data.previousStatus.replace('_', ' ')}" to "${data.lot.status.replace('_', ' ')}".`,
-        })
-        // Refresh history if we're on that tab
-        if (currentTab === 'history') {
-          setLoadingHistory(true)
-          const historyResponse = await fetch(
-            `${apiUrl}/api/audit-logs?entityType=Lot&search=${lotId}&limit=100`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          )
-          if (historyResponse.ok) {
-            const historyData = await historyResponse.json()
-            setActivityLogs(historyData.logs || [])
-          }
-          setLoadingHistory(false)
-        }
-      } else {
-        const data = await response.json()
-        toast({
-          title: 'Override failed',
-          description: data.message || data.error || 'Failed to override status',
-          variant: 'error'
-        })
+      setLot((prev) => prev ? { ...prev, status: data.lot.status } : null)
+      setShowOverrideModal(false)
+      toast({
+        title: 'Status overridden',
+        description: `Status changed from "${data.previousStatus.replace('_', ' ')}" to "${data.lot.status.replace('_', ' ')}".`,
+      })
+      // Refresh history if we're on that tab
+      if (currentTab === 'history') {
+        setLoadingHistory(true)
+        try {
+          const historyData = await apiFetch<{ logs: ActivityLog[] }>(`/api/audit-logs?entityType=Lot&search=${lotId}&limit=100`)
+          setActivityLogs(historyData.logs || [])
+        } catch { /* ignore */ }
+        setLoadingHistory(false)
       }
     } catch (err) {
       toast({
@@ -1699,31 +1402,16 @@ export function LotDetailPage() {
 
     setShowReportFormatDialog(false)
     setGeneratingReport(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
       // Fetch all data needed for the report
-      const [projectRes, itpRes, testsRes, ncrsRes] = await Promise.all([
-        fetch(`${apiUrl}/api/projects/${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        itpInstance ? Promise.resolve({ ok: true, json: () => Promise.resolve({ instance: itpInstance }) }) :
-          fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        fetch(`${apiUrl}/api/test-results?projectId=${projectId}&lotId=${lotId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${apiUrl}/api/ncrs?projectId=${projectId}&lotId=${lotId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [projectData, itpData, testsData, ncrsData] = await Promise.all([
+        apiFetch<any>(`/api/projects/${projectId}`).catch(() => ({ project: { name: 'Unknown Project' } })),
+        itpInstance ? Promise.resolve({ instance: itpInstance }) :
+          apiFetch<any>(`/api/itp/instances/lot/${lotId}`).catch(() => ({ instance: null })),
+        apiFetch<any>(`/api/test-results?projectId=${projectId}&lotId=${lotId}`).catch(() => ({ testResults: [] })),
+        apiFetch<any>(`/api/ncrs?projectId=${projectId}&lotId=${lotId}`).catch(() => ({ ncrs: [] })),
       ])
-
-      const projectData = projectRes.ok ? await projectRes.json() : { project: { name: 'Unknown Project' } }
-      const itpData = itpRes.ok ? await itpRes.json() : { instance: null }
-      const testsData = testsRes.ok ? await testsRes.json() : { testResults: [] }
-      const ncrsData = ncrsRes.ok ? await ncrsRes.json() : { ncrs: [] }
 
       // Count photos from ITP completions
       let photoCount = 0
@@ -1815,27 +1503,14 @@ export function LotDetailPage() {
     if (!lot) return
 
     setAssigningSubcontractor(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/lots/${lot.id}/assign`, {
+      const data = await apiFetch<{ message: string }>(`/api/lots/${lot.id}/assign`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           subcontractorId: selectedSubcontractor || null,
         }),
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.message || 'Failed to assign subcontractor')
-      }
-
-      const data = await response.json()
 
       toast({
         title: selectedSubcontractor ? 'Subcontractor assigned' : 'Subcontractor unassigned',
@@ -1846,13 +1521,10 @@ export function LotDetailPage() {
       setShowSubcontractorModal(false)
       setSelectedSubcontractor('')
       // Refetch lot data
-      const lotResponse = await fetch(`${apiUrl}/api/lots/${lot.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (lotResponse.ok) {
-        const lotData = await lotResponse.json()
+      try {
+        const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${lot.id}`)
         setLot(lotData.lot)
-      }
+      } catch { /* ignore */ }
     } catch (err: any) {
       console.error('Failed to assign subcontractor:', err)
       toast({

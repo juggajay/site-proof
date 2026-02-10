@@ -2,7 +2,7 @@
 // Shows project health at a glance: attention items, progress, stats ribbon, activity
 import { useState, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch, ApiError } from '@/lib/api'
 import {
   MapPin,
   Calendar,
@@ -22,8 +22,6 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 interface AttentionItem {
   id: string
@@ -86,29 +84,22 @@ export function ProjectDashboard() {
   const [data, setData] = useState<ProjectDashboardData | null>(null)
 
   const fetchDashboardData = async () => {
-    const token = getAuthToken()
-    if (!token || !projectId) {
+    if (!projectId) {
       setLoading(false)
       return
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/projects/${projectId}/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setData(result)
-        setError(null)
-      } else if (response.status === 404) {
+      const result = await apiFetch<ProjectDashboardData>(`/api/projects/${projectId}/dashboard`)
+      setData(result)
+      setError(null)
+    } catch (err) {
+      console.error('Error fetching project dashboard:', err)
+      if (err instanceof ApiError && err.status === 404) {
         setError('Project not found')
       } else {
         setError('Failed to load project dashboard')
       }
-    } catch (err) {
-      console.error('Error fetching project dashboard:', err)
-      setError('Failed to load project dashboard')
     } finally {
       setLoading(false)
       setRefreshing(false)

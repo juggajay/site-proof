@@ -19,10 +19,9 @@ import {
   Hand,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { useAuth, getAuthToken } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
 interface PortalAccess {
   lots: boolean
@@ -162,52 +161,47 @@ export function SubcontractorDashboard() {
     if (showRefresh) setRefreshing(true)
 
     try {
-      const token = getAuthToken()
-      const headers = { Authorization: `Bearer ${token}` }
-
       // Fetch company info
-      const companyRes = await fetch(`${API_URL}/api/subcontractors/my-company`, { headers })
-      if (companyRes.ok) {
-        const companyData = await companyRes.json()
-        setCompany(companyData.company)
+      const companyData = await apiFetch<{ company: Company }>(`/api/subcontractors/my-company`)
+      setCompany(companyData.company)
 
-        // Fetch dockets for this project
-        const docketsRes = await fetch(
-          `${API_URL}/api/dockets?projectId=${companyData.company.projectId}`,
-          { headers }
+      // Fetch dockets for this project
+      try {
+        const docketsData = await apiFetch<{ dockets: Docket[] }>(
+          `/api/dockets?projectId=${companyData.company.projectId}`
         )
-        if (docketsRes.ok) {
-          const docketsData = await docketsRes.json()
-          const today = getToday()
+        const today = getToday()
 
-          // Find today's docket
-          const todayDocket = docketsData.dockets.find((d: Docket) => d.date === today)
-          setTodaysDocket(todayDocket || null)
+        // Find today's docket
+        const todayDocket = docketsData.dockets.find((d: Docket) => d.date === today)
+        setTodaysDocket(todayDocket || null)
 
-          // Get recent dockets (excluding today)
-          const recent = docketsData.dockets
-            .filter((d: Docket) => d.date !== today)
-            .slice(0, 5)
-          setRecentDockets(recent)
-        }
+        // Get recent dockets (excluding today)
+        const recent = docketsData.dockets
+          .filter((d: Docket) => d.date !== today)
+          .slice(0, 5)
+        setRecentDockets(recent)
+      } catch {
+        // Dockets fetch failed, continue
+      }
 
-        // Fetch assigned lots
-        const lotsRes = await fetch(
-          `${API_URL}/api/lots?projectId=${companyData.company.projectId}`,
-          { headers }
+      // Fetch assigned lots
+      try {
+        const lotsData = await apiFetch<{ lots: Lot[] }>(
+          `/api/lots?projectId=${companyData.company.projectId}`
         )
-        if (lotsRes.ok) {
-          const lotsData = await lotsRes.json()
-          setAssignedLots(lotsData.lots.slice(0, 5))
-        }
+        setAssignedLots(lotsData.lots.slice(0, 5))
+      } catch {
+        // Lots fetch failed, continue
       }
 
       // Fetch notifications
-      const notifRes = await fetch(`${API_URL}/api/notifications?limit=10`, { headers })
-      if (notifRes.ok) {
-        const notifData = await notifRes.json()
+      try {
+        const notifData = await apiFetch<{ notifications: Notification[]; unreadCount: number }>(`/api/notifications?limit=10`)
         setNotifications(notifData.notifications || [])
         setUnreadCount(notifData.unreadCount || 0)
+      } catch {
+        // Notifications fetch failed, continue
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err)

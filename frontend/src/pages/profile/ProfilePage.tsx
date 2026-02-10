@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth, getAuthToken } from '@/lib/auth'
 import { Mail, Shield, Calendar, Building2, Phone, X, Lock, LogOut, Camera, Trash2 } from 'lucide-react'
 import { toast } from '@/components/ui/toaster'
+import { apiFetch, apiUrl } from '@/lib/api'
 
 export function ProfilePage() {
   const { user, refreshUser, signOut } = useAuth()
@@ -78,41 +79,26 @@ export function ProfilePage() {
   // Handle profile update
   const handleSaveProfile = async () => {
     setSaving(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/auth/profile`, {
+      await apiFetch('/api/auth/profile', {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           fullName: formData.fullName,
           phone: formData.phone,
         }),
       })
 
-      if (response.ok) {
-        // Refresh user data
-        if (refreshUser) {
-          await refreshUser()
-        }
-        setEditModalOpen(false)
-        toast({
-          title: 'Profile Updated',
-          description: 'Your profile has been updated successfully.',
-          variant: 'success',
-        })
-      } else {
-        const data = await response.json()
-        toast({
-          title: 'Update Failed',
-          description: data.message || 'Failed to update profile',
-          variant: 'error',
-        })
+      // Refresh user data
+      if (refreshUser) {
+        await refreshUser()
       }
+      setEditModalOpen(false)
+      toast({
+        title: 'Profile Updated',
+        description: 'Your profile has been updated successfully.',
+        variant: 'success',
+      })
     } catch (err) {
       toast({
         title: 'Error',
@@ -144,16 +130,10 @@ export function ProfilePage() {
 
     setPasswordError('')
     setChangingPassword(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/auth/change-password`, {
+      await apiFetch('/api/auth/change-password', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           currentPassword: passwordData.currentPassword,
           newPassword: passwordData.newPassword,
@@ -161,17 +141,12 @@ export function ProfilePage() {
         }),
       })
 
-      if (response.ok) {
-        setPasswordModalOpen(false)
-        toast({
-          title: 'Password Changed',
-          description: 'Your password has been changed successfully.',
-          variant: 'success',
-        })
-      } else {
-        const data = await response.json()
-        setPasswordError(data.message || 'Failed to change password')
-      }
+      setPasswordModalOpen(false)
+      toast({
+        title: 'Password Changed',
+        description: 'Your password has been changed successfully.',
+        variant: 'success',
+      })
     } catch (err) {
       setPasswordError('Failed to change password')
     } finally {
@@ -186,34 +161,19 @@ export function ProfilePage() {
     }
 
     setLoggingOutAll(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/auth/logout-all-devices`, {
+      await apiFetch('/api/auth/logout-all-devices', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
       })
 
-      if (response.ok) {
-        toast({
-          title: 'Logged Out',
-          description: 'You have been logged out from all devices.',
-          variant: 'success',
-        })
-        // Sign out from current session
-        await signOut()
-      } else {
-        const data = await response.json()
-        toast({
-          title: 'Error',
-          description: data.message || 'Failed to logout from all devices',
-          variant: 'error',
-        })
-      }
+      toast({
+        title: 'Logged Out',
+        description: 'You have been logged out from all devices.',
+        variant: 'success',
+      })
+      // Sign out from current session
+      await signOut()
     } catch (err) {
       toast({
         title: 'Error',
@@ -259,7 +219,7 @@ export function ProfilePage() {
     reader.readAsDataURL(file)
   }
 
-  // Handle avatar upload
+  // Handle avatar upload (FormData - cannot use apiFetch)
   const handleAvatarUpload = async () => {
     const file = avatarInputRef.current?.files?.[0]
     if (!file) {
@@ -273,13 +233,12 @@ export function ProfilePage() {
 
     setUploadingAvatar(true)
     const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
       const formData = new FormData()
       formData.append('avatar', file)
 
-      const response = await fetch(`${apiUrl}/api/auth/avatar`, {
+      const response = await fetch(apiUrl('/api/auth/avatar'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -327,35 +286,21 @@ export function ProfilePage() {
     }
 
     setUploadingAvatar(true)
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
     try {
-      const response = await fetch(`${apiUrl}/api/auth/avatar`, {
+      await apiFetch('/api/auth/avatar', {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       })
 
-      if (response.ok) {
-        // Refresh user data
-        if (refreshUser) {
-          await refreshUser()
-        }
-        toast({
-          title: 'Avatar Removed',
-          description: 'Your avatar has been removed.',
-          variant: 'success',
-        })
-      } else {
-        const data = await response.json()
-        toast({
-          title: 'Removal Failed',
-          description: data.message || 'Failed to remove avatar',
-          variant: 'error',
-        })
+      // Refresh user data
+      if (refreshUser) {
+        await refreshUser()
       }
+      toast({
+        title: 'Avatar Removed',
+        description: 'Your avatar has been removed.',
+        variant: 'success',
+      })
     } catch (err) {
       toast({
         title: 'Error',

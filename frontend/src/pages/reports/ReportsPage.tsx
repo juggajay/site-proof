@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { getAuthToken } from '../../lib/auth'
+import { apiFetch, API_URL } from '@/lib/api'
 import { Lock, Sparkles, Mail } from 'lucide-react'
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 // Feature gating tiers
 const ADVANCED_ANALYTICS_TIERS = ['professional', 'enterprise', 'unlimited']
@@ -301,23 +299,15 @@ export function ReportsPage() {
   // Fetch subscription tier for feature gating
   useEffect(() => {
     const fetchSubscriptionTier = async () => {
-      const token = getAuthToken()
-      if (!token) return
-
       try {
-        const response = await fetch(`${API_URL}/api/company`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setSubscriptionTier(data.company?.subscriptionTier || 'basic')
-          // Feature #702: Company logo on reports
-          if (data.company?.logoUrl) {
-            setCompanyLogo(data.company.logoUrl)
-          }
-          if (data.company?.name) {
-            setCompanyName(data.company.name)
-          }
+        const data = await apiFetch<any>(`/api/company`)
+        setSubscriptionTier(data.company?.subscriptionTier || 'basic')
+        // Feature #702: Company logo on reports
+        if (data.company?.logoUrl) {
+          setCompanyLogo(data.company.logoUrl)
+        }
+        if (data.company?.name) {
+          setCompanyName(data.company.name)
         }
       } catch (err) {
         console.error('Failed to fetch subscription tier:', err)
@@ -331,17 +321,10 @@ export function ReportsPage() {
   useEffect(() => {
     const fetchProjectName = async () => {
       if (!projectId) return
-      const token = getAuthToken()
-      if (!token) return
 
       try {
-        const response = await fetch(`${API_URL}/api/projects/${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setProjectName(data.name || data.project?.name || 'Project')
-        }
+        const data = await apiFetch<any>(`/api/projects/${projectId}`)
+        setProjectName(data.name || data.project?.name || 'Project')
       } catch (err) {
         console.error('Failed to fetch project name:', err)
       }
@@ -361,7 +344,6 @@ export function ReportsPage() {
     setError(null)
 
     try {
-      const token = getAuthToken()
       let endpoint = ''
       let queryParams = `projectId=${projectId}`
 
@@ -401,17 +383,7 @@ export function ReportsPage() {
           endpoint = 'lot-status'
       }
 
-      const response = await fetch(`${API_URL}/api/reports/${endpoint}?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch report')
-      }
-
-      const data = await response.json()
+      const data = await apiFetch<any>(`/api/reports/${endpoint}?${queryParams}`)
 
       switch (reportType) {
         case 'lot-status':

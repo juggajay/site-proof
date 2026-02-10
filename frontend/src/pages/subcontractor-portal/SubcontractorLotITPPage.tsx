@@ -3,10 +3,8 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, AlertCircle } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch, getAuthToken, apiUrl } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 interface ITPChecklistItem {
   id: string
@@ -79,17 +77,8 @@ export function SubcontractorLotITPPage() {
 
   const fetchData = async () => {
     try {
-      const token = getAuthToken()
-      const headers = { Authorization: `Bearer ${token}` }
-
       // Fetch lot details
-      const lotRes = await fetch(`${API_URL}/api/lots/${lotId}`, { headers })
-      if (!lotRes.ok) {
-        setError('Failed to load lot data')
-        setLoading(false)
-        return
-      }
-      const lotData = await lotRes.json()
+      const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${lotId}`)
       setLot(lotData.lot)
 
       // Check if subcontractor can complete items (check all assignments)
@@ -99,10 +88,11 @@ export function SubcontractorLotITPPage() {
       setCanCompleteItems(canComplete)
 
       // Fetch ITP instance for this lot
-      const itpRes = await fetch(`${API_URL}/api/itp/instances/lot/${lotId}`, { headers })
-      if (itpRes.ok) {
-        const itpData = await itpRes.json()
+      try {
+        const itpData = await apiFetch<{ instance: ITPInstance }>(`/api/itp/instances/lot/${lotId}`)
         setItpInstance(itpData.instance)
+      } catch {
+        // No ITP instance for this lot
       }
     } catch (err) {
       console.error('Error fetching data:', err)
@@ -123,13 +113,8 @@ export function SubcontractorLotITPPage() {
     setUpdatingItem(checklistItemId)
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/itp/completions`, {
+      await apiFetch(`/api/itp/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
@@ -137,11 +122,6 @@ export function SubcontractorLotITPPage() {
           notes,
         }),
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to update completion')
-      }
 
       await fetchData()
       toast({ title: 'Success', description: 'Item updated', variant: 'success' })
@@ -157,13 +137,8 @@ export function SubcontractorLotITPPage() {
     setUpdatingItem(checklistItemId)
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/itp/completions`, {
+      await apiFetch(`/api/itp/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
@@ -171,11 +146,6 @@ export function SubcontractorLotITPPage() {
           notes: reason,
         }),
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to mark as N/A')
-      }
 
       await fetchData()
       toast({ title: 'Success', description: 'Item marked as N/A', variant: 'success' })
@@ -191,13 +161,8 @@ export function SubcontractorLotITPPage() {
     setUpdatingItem(checklistItemId)
 
     try {
-      const token = getAuthToken()
-      const response = await fetch(`${API_URL}/api/itp/completions`, {
+      await apiFetch(`/api/itp/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
@@ -205,11 +170,6 @@ export function SubcontractorLotITPPage() {
           notes: reason,
         }),
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to mark as failed')
-      }
 
       await fetchData()
       toast({ title: 'Success', description: 'Item marked as failed', variant: 'success' })
@@ -225,23 +185,14 @@ export function SubcontractorLotITPPage() {
     setUpdatingItem(checklistItemId)
 
     try {
-      const token = getAuthToken()
       const completion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
 
       if (completion) {
         // Update existing completion
-        const response = await fetch(`${API_URL}/api/itp/completions/${completion.id}`, {
+        await apiFetch(`/api/itp/completions/${completion.id}`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
           body: JSON.stringify({ notes }),
         })
-
-        if (!response.ok) {
-          throw new Error('Failed to update notes')
-        }
       }
 
       await fetchData()
@@ -257,7 +208,6 @@ export function SubcontractorLotITPPage() {
     setUpdatingItem(checklistItemId)
 
     try {
-      const token = getAuthToken()
       const completion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
 
       if (!completion) {
@@ -267,12 +217,13 @@ export function SubcontractorLotITPPage() {
         return
       }
 
-      // Upload photo
+      // Upload photo - uses FormData so we use raw fetch
       const formData = new FormData()
       formData.append('file', file)
+      const token = getAuthToken()
 
       const response = await fetch(
-        `${API_URL}/api/itp/completions/${completion.id}/attachments`,
+        apiUrl(`/api/itp/completions/${completion.id}/attachments`),
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },

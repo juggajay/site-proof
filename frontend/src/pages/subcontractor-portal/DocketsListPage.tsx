@@ -10,11 +10,9 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/useMediaQuery'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002'
 
 interface Docket {
   id: string
@@ -92,30 +90,14 @@ export function DocketsListPage() {
   useEffect(() => {
     async function fetchDockets() {
       try {
-        const token = getAuthToken()
-
         // First get company to get projectId
-        const companyRes = await fetch(`${API_URL}/api/subcontractors/my-company`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (!companyRes.ok) {
-          setLoading(false)
-          return
-        }
-
-        const companyData = await companyRes.json()
+        const companyData = await apiFetch<{ company: { projectId: string } }>(`/api/subcontractors/my-company`)
 
         // Then fetch dockets
-        const docketsRes = await fetch(
-          `${API_URL}/api/dockets?projectId=${companyData.company.projectId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+        const data = await apiFetch<{ dockets: Docket[] }>(
+          `/api/dockets?projectId=${companyData.company.projectId}`
         )
-
-        if (docketsRes.ok) {
-          const data = await docketsRes.json()
-          setDockets(data.dockets || [])
-        }
+        setDockets(data.dockets || [])
       } catch (err) {
         console.error('Error fetching dockets:', err)
       } finally {

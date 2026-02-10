@@ -24,7 +24,8 @@ import {
   Briefcase,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuth, getAuthToken } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 import { useUIStore } from '@/stores/uiStore'  // Feature #442: Zustand client state
 
 // Role-based access definitions
@@ -120,31 +121,21 @@ export function Sidebar() {
       if (!projectId) return
 
       try {
-        const token = getAuthToken()
-        if (!token) return
-
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3002'
-        const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          console.log('[Sidebar] Project data received:', data.project?.name)
-          if (data.project?.settings) {
-            try {
-              const settings = typeof data.project.settings === 'string'
-                ? JSON.parse(data.project.settings)
-                : data.project.settings
-              console.log('[Sidebar] Parsed settings.enabledModules:', settings.enabledModules)
-              if (settings.enabledModules) {
-                console.log('[Sidebar] Setting enabledModules state:', settings.enabledModules)
-                setEnabledModules(prev => ({ ...prev, ...settings.enabledModules }))
-              }
-            } catch (e) {
-              console.error('[Sidebar] Failed to parse settings:', e)
-              // Invalid JSON, use defaults
+        const data = await apiFetch<{ project?: { name?: string; settings?: any } }>(`/api/projects/${projectId}`)
+        console.log('[Sidebar] Project data received:', data.project?.name)
+        if (data.project?.settings) {
+          try {
+            const settings = typeof data.project.settings === 'string'
+              ? JSON.parse(data.project.settings)
+              : data.project.settings
+            console.log('[Sidebar] Parsed settings.enabledModules:', settings.enabledModules)
+            if (settings.enabledModules) {
+              console.log('[Sidebar] Setting enabledModules state:', settings.enabledModules)
+              setEnabledModules(prev => ({ ...prev, ...settings.enabledModules }))
             }
+          } catch (e) {
+            console.error('[Sidebar] Failed to parse settings:', e)
+            // Invalid JSON, use defaults
           }
         }
       } catch (error) {

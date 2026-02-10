@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthToken } from '../../lib/auth'
+import { apiFetch } from '@/lib/api'
 
 interface Drawing {
   id: string
@@ -97,23 +98,15 @@ export function DrawingsPage() {
     setLoading(true)
     setError(null)
     try {
-      const token = getAuthToken()
-      let url = `${API_URL}/api/drawings/${projectId}`
+      let path = `/api/drawings/${projectId}`
       const params = new URLSearchParams()
       if (filterStatus) params.append('status', filterStatus)
       if (searchQuery.trim()) params.append('search', searchQuery.trim())
-      if (params.toString()) url += `?${params.toString()}`
+      if (params.toString()) path += `?${params.toString()}`
 
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setDrawings(data.drawings)
-        setStats(data.stats)
-      } else {
-        setError('Failed to load drawings')
-      }
+      const data = await apiFetch<any>(path)
+      setDrawings(data.drawings)
+      setStats(data.stats)
     } catch (err) {
       console.error('Error fetching drawings:', err)
       setError('Failed to load drawings')
@@ -180,17 +173,9 @@ export function DrawingsPage() {
     if (!confirm('Are you sure you want to delete this drawing?')) return
 
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/drawings/${drawingId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        setDrawings(prev => prev.filter(d => d.id !== drawingId))
-        fetchDrawings() // Refresh stats
-      } else {
-        alert('Failed to delete drawing')
-      }
+      await apiFetch(`/api/drawings/${drawingId}`, { method: 'DELETE' })
+      setDrawings(prev => prev.filter(d => d.id !== drawingId))
+      fetchDrawings() // Refresh stats
     } catch (err) {
       console.error('Error deleting drawing:', err)
       alert('Failed to delete drawing')
@@ -254,24 +239,15 @@ export function DrawingsPage() {
 
   const handleStatusChange = async (drawingId: string, newStatus: string) => {
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/drawings/${drawingId}`, {
+      const updated = await apiFetch<any>(`/api/drawings/${drawingId}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ status: newStatus }),
       })
-      if (res.ok) {
-        const updated = await res.json()
-        setDrawings(prev => prev.map(d => d.id === drawingId ? updated : d))
-        fetchDrawings() // Refresh stats
-      } else {
-        alert('Failed to update status')
-      }
+      setDrawings(prev => prev.map(d => d.id === drawingId ? updated : d))
+      fetchDrawings() // Refresh stats
     } catch (err) {
       console.error('Error updating status:', err)
+      alert('Failed to update status')
     }
   }
 
@@ -279,23 +255,16 @@ export function DrawingsPage() {
   const downloadCurrentSet = async () => {
     setDownloadingCurrentSet(true)
     try {
-      const token = getAuthToken()
-      // Get the list of current drawings
-      const res = await fetch(`${API_URL}/api/drawings/${projectId}/current-set`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const data = await apiFetch<any>(`/api/drawings/${projectId}/current-set`)
+      if (data.drawings.length === 0) {
+        alert('No current drawings to download')
+        return
+      }
 
-      if (res.ok) {
-        const data = await res.json()
-        if (data.drawings.length === 0) {
-          alert('No current drawings to download')
-          return
-        }
-
-        // Download each file (for a real production app, you'd want to create a ZIP)
-        // For now, we'll open each file in a new tab
-        for (const drawing of data.drawings) {
-          const link = document.createElement('a')
+      // Download each file (for a real production app, you'd want to create a ZIP)
+      // For now, we'll open each file in a new tab
+      for (const drawing of data.drawings) {
+        const link = document.createElement('a')
           link.href = getDocumentUrl(drawing.fileUrl)
           link.download = `${drawing.drawingNumber}_Rev${drawing.revision || '0'}_${drawing.filename}`
           link.target = '_blank'
@@ -307,9 +276,6 @@ export function DrawingsPage() {
         }
 
         alert(`Downloaded ${data.drawings.length} current drawing(s)`)
-      } else {
-        alert('Failed to fetch current drawings')
-      }
     } catch (err) {
       console.error('Error downloading current set:', err)
       alert('Failed to download current drawings')

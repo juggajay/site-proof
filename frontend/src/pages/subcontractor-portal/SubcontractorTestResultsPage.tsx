@@ -9,9 +9,7 @@ import {
   Clock,
 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { getAuthToken } from '@/lib/auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { apiFetch } from '@/lib/api'
 
 interface TestResult {
   id: string
@@ -67,28 +65,15 @@ export function SubcontractorTestResultsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const token = getAuthToken()
-        const headers = { Authorization: `Bearer ${token}` }
-
         // Get company info
-        const companyRes = await fetch(`${API_URL}/api/subcontractors/my-company`, { headers })
-        if (!companyRes.ok) {
-          setError('Failed to load company data')
-          setLoading(false)
-          return
-        }
-        const companyData = await companyRes.json()
+        const companyData = await apiFetch<{ company: SubcontractorCompany }>(`/api/subcontractors/my-company`)
         setCompany(companyData.company)
 
         // Fetch test results for assigned lots
-        const testsRes = await fetch(
-          `${API_URL}/api/tests?projectId=${companyData.company.projectId}&subcontractorView=true`,
-          { headers }
+        const testsData = await apiFetch<{ testResults?: TestResult[]; tests?: TestResult[] }>(
+          `/api/tests?projectId=${companyData.company.projectId}&subcontractorView=true`
         )
-        if (testsRes.ok) {
-          const testsData = await testsRes.json()
-          setTestResults(testsData.testResults || testsData.tests || [])
-        }
+        setTestResults(testsData.testResults || testsData.tests || [])
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load test results')

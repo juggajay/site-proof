@@ -64,7 +64,9 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   }
 
   if (!EMAIL_CONFIG.enabled) {
-    console.log('[Email Service] Email sending disabled')
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[Email Service] Email sending disabled')
+    }
     return { success: false, error: 'Email sending disabled' }
   }
 
@@ -74,10 +76,9 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   // Try to use Resend if configured
   if (resend) {
     try {
-      console.log('[Email Service] Sending email via Resend API:')
-      console.log('  To:', email.to)
-      console.log('  Subject:', email.subject)
-      console.log('  From:', email.from)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Email Service] Sending via Resend:', email.subject, '->', email.to)
+      }
 
       // Prepare attachments for Resend format
       const resendAttachments = email.attachments?.map(att => {
@@ -115,8 +116,9 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
         }
       }
 
-      console.log('[Email Service] Email sent successfully via Resend')
-      console.log('  Message ID:', response.data?.id)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Email Service] Sent successfully, ID:', response.data?.id)
+      }
 
       return {
         success: true,
@@ -133,27 +135,11 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
     }
   }
 
-  // Fallback to mock/console logging
-  console.log('[Email Service] Sending email (MOCK - Resend not configured):')
-  console.log('  To:', email.to)
-  console.log('  Subject:', email.subject)
-  console.log('  From:', email.from)
-
-  // Generate a mock message ID
+  // Fallback to mock logging
   const messageId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-  // Log HTML content in dev mode
-  if (email.html) {
-    console.log('  HTML Content Preview:', email.html.substring(0, 200) + '...')
-  }
-
-  // Log attachments in dev mode
-  if (email.attachments && email.attachments.length > 0) {
-    console.log('  Attachments:')
-    for (const att of email.attachments) {
-      const size = att.content ? (typeof att.content === 'string' ? att.content.length : att.content.length) : (att.path ? '[file]' : 'unknown')
-      console.log(`    - ${att.filename} (${att.contentType || 'application/octet-stream'}, size: ${size})`)
-    }
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[Email Service] MOCK:', email.subject, '->', email.to)
   }
 
   return {
@@ -376,23 +362,15 @@ This invitation was sent by ${data.inviterEmail}.
 If you were not expecting this invitation, please contact the sender.
   `
 
-  // Also log to console in dev mode for easy testing
-  console.log('\n========================================')
-  console.log('📧 SUBCONTRACTOR INVITATION EMAIL')
-  console.log('========================================')
-  console.log('To:', data.to)
-  console.log('Subject:', subject)
-  console.log('----------------------------------------')
-  console.log('Hi ' + data.contactName + ',')
-  console.log('')
-  console.log('You have been invited to join the project "' + data.projectName + '" on SiteProof')
-  console.log('as a subcontractor for ' + data.companyName + '.')
-  console.log('')
-  console.log('Click the link below to accept your invitation and set up your account:')
-  console.log(data.inviteUrl)
-  console.log('')
-  console.log('This invitation was sent by ' + data.inviterEmail + '.')
-  console.log('========================================\n')
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n========================================')
+    console.log('SUBCONTRACTOR INVITATION EMAIL')
+    console.log('========================================')
+    console.log('To:', data.to)
+    console.log('Subject:', subject)
+    console.log('Invite URL:', data.inviteUrl)
+    console.log('========================================\n')
+  }
 
   return sendEmail({
     to: data.to,
@@ -552,31 +530,14 @@ This notification was sent from SiteProof Quality Management System.
 Project: ${data.projectName}
   `
 
-  // Also log to console in dev mode for easy testing
-  console.log('\n========================================')
-  console.log('📧 HP RELEASE REQUEST EMAIL')
-  console.log('========================================')
-  console.log('To:', data.to)
-  console.log('Subject:', subject)
-  console.log('----------------------------------------')
-  console.log('Hi ' + data.superintendentName + ',')
-  console.log('')
-  console.log('A hold point release has been requested on project ' + data.projectName + '.')
-  console.log('')
-  console.log('Lot:', data.lotNumber)
-  console.log('Hold Point:', data.holdPointDescription)
-  console.log('Scheduled:', data.scheduledDate || 'ASAP')
-  console.log('Requested By:', data.requestedBy)
-  if (data.noticeOverrideReason) {
-    console.log('Notice Override:', data.noticeOverrideReason)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n========================================')
+    console.log('HP RELEASE REQUEST EMAIL')
+    console.log('========================================')
+    console.log('To:', data.to, '| Lot:', data.lotNumber)
+    console.log('Hold Point:', data.holdPointDescription)
+    console.log('========================================\n')
   }
-  if (data.evidencePackageUrl) {
-    console.log('')
-    console.log('Evidence Package:', data.evidencePackageUrl)
-  }
-  console.log('')
-  console.log('Release URL:', data.releaseUrl)
-  console.log('========================================\n')
 
   return sendEmail({
     to: data.to,
@@ -727,28 +688,14 @@ This is reminder #${data.chaseCount} for this hold point release request.
 Project: ${data.projectName}
   `
 
-  // Also log to console in dev mode for easy testing
-  console.log('\n========================================')
-  console.log('📧 HP CHASE EMAIL (Reminder #' + data.chaseCount + ')')
-  console.log('========================================')
-  console.log('To:', data.to)
-  console.log('Subject:', subject)
-  console.log('----------------------------------------')
-  console.log('Hi ' + data.superintendentName + ',')
-  console.log('')
-  console.log('REMINDER: Hold point awaiting release for ' + data.daysSinceRequest + ' days')
-  console.log('')
-  console.log('Lot:', data.lotNumber)
-  console.log('Hold Point:', data.holdPointDescription)
-  console.log('Originally Requested:', data.originalRequestDate)
-  console.log('Requested By:', data.requestedBy)
-  if (data.evidencePackageUrl) {
-    console.log('')
-    console.log('Evidence Package:', data.evidencePackageUrl)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n========================================')
+    console.log('HP CHASE EMAIL (Reminder #' + data.chaseCount + ')')
+    console.log('========================================')
+    console.log('To:', data.to, '| Lot:', data.lotNumber)
+    console.log('Hold Point:', data.holdPointDescription)
+    console.log('========================================\n')
   }
-  console.log('')
-  console.log('Release URL:', data.releaseUrl)
-  console.log('========================================\n')
 
   return sendEmail({
     to: data.to,
@@ -880,29 +827,14 @@ This confirmation was sent from SiteProof Quality Management System.
 Project: ${data.projectName}
   `
 
-  // Also log to console in dev mode for easy testing
-  console.log('\n========================================')
-  console.log('📧 HP RELEASE CONFIRMATION EMAIL')
-  console.log('========================================')
-  console.log('To:', data.to)
-  console.log('Subject:', subject)
-  console.log('Recipient Role:', data.recipientRole)
-  console.log('----------------------------------------')
-  console.log('Hi ' + data.recipientName + ',')
-  console.log('')
-  console.log('Hold Point Released Successfully!')
-  console.log('')
-  console.log('Lot:', data.lotNumber)
-  console.log('Hold Point:', data.holdPointDescription)
-  console.log('Released By:', data.releasedByName)
-  console.log('Released At:', data.releasedAt)
-  if (data.releaseMethod) {
-    console.log('Release Method:', data.releaseMethod)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n========================================')
+    console.log('HP RELEASE CONFIRMATION EMAIL')
+    console.log('========================================')
+    console.log('To:', data.to, '| Lot:', data.lotNumber)
+    console.log('Released By:', data.releasedByName)
+    console.log('========================================\n')
   }
-  if (data.releaseNotes) {
-    console.log('Notes:', data.releaseNotes)
-  }
-  console.log('========================================\n')
 
   return sendEmail({
     to: data.to,
@@ -993,20 +925,14 @@ If you didn't create an account, you can safely ignore this email.
 This verification link was sent from SiteProof.
   `
 
-  // Also log to console in dev mode for easy testing
-  console.log('\n========================================')
-  console.log('EMAIL VERIFICATION')
-  console.log('========================================')
-  console.log('To:', data.to)
-  console.log('Subject:', subject)
-  console.log('----------------------------------------')
-  console.log('Hi' + (data.userName ? ` ${data.userName}` : '') + ',')
-  console.log('')
-  console.log('Verify your email by clicking:')
-  console.log(data.verificationUrl)
-  console.log('')
-  console.log('Expires in:', expiresIn, 'hours')
-  console.log('========================================\n')
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n========================================')
+    console.log('EMAIL VERIFICATION')
+    console.log('========================================')
+    console.log('To:', data.to)
+    console.log('URL:', data.verificationUrl)
+    console.log('========================================\n')
+  }
 
   return sendEmail({
     to: data.to,
@@ -1099,20 +1025,14 @@ This password reset was requested from SiteProof.
 For security reasons, this link can only be used once.
   `
 
-  // Also log to console in dev mode for easy testing
-  console.log('\n========================================')
-  console.log('PASSWORD RESET EMAIL')
-  console.log('========================================')
-  console.log('To:', data.to)
-  console.log('Subject:', subject)
-  console.log('----------------------------------------')
-  console.log('Hi' + (data.userName ? ` ${data.userName}` : '') + ',')
-  console.log('')
-  console.log('Reset your password by clicking:')
-  console.log(data.resetUrl)
-  console.log('')
-  console.log('Expires in:', expiresIn, 'minutes')
-  console.log('========================================\n')
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n========================================')
+    console.log('PASSWORD RESET EMAIL')
+    console.log('========================================')
+    console.log('To:', data.to)
+    console.log('URL:', data.resetUrl)
+    console.log('========================================\n')
+  }
 
   return sendEmail({
     to: data.to,
@@ -1207,20 +1127,14 @@ For security, this link can only be used once.
 This login link was requested from SiteProof.
   `
 
-  // Also log to console in dev mode for easy testing
-  console.log('\n========================================')
-  console.log('📧 MAGIC LINK LOGIN EMAIL')
-  console.log('========================================')
-  console.log('To:', data.to)
-  console.log('Subject:', subject)
-  console.log('----------------------------------------')
-  console.log('Hi' + (data.userName ? ` ${data.userName}` : '') + ',')
-  console.log('')
-  console.log('Click the link below to sign in (no password needed):')
-  console.log(data.magicLinkUrl)
-  console.log('')
-  console.log('Expires in:', data.expiresInMinutes, 'minutes')
-  console.log('========================================\n')
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n========================================')
+    console.log('MAGIC LINK LOGIN EMAIL')
+    console.log('========================================')
+    console.log('To:', data.to)
+    console.log('URL:', data.magicLinkUrl)
+    console.log('========================================\n')
+  }
 
   return sendEmail({
     to: data.to,
@@ -1363,30 +1277,14 @@ Project: ${data.projectName}
     })
   }
 
-  // Also log to console in dev mode for easy testing
-  console.log('\n========================================')
-  console.log('📧 SCHEDULED REPORT EMAIL')
-  console.log('========================================')
-  console.log('To:', data.to)
-  console.log('Subject:', subject)
-  console.log('----------------------------------------')
-  console.log('Hi' + (data.recipientName ? ` ${data.recipientName}` : '') + ',')
-  console.log('')
-  console.log('Report:', data.reportName)
-  console.log('Type:', data.reportType)
-  console.log('Project:', data.projectName)
-  if (data.dateRange) {
-    console.log('Date Range:', data.dateRange.from, 'to', data.dateRange.to)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('\n========================================')
+    console.log('SCHEDULED REPORT EMAIL')
+    console.log('========================================')
+    console.log('To:', data.to, '| Report:', data.reportName)
+    console.log('Project:', data.projectName)
+    console.log('========================================\n')
   }
-  console.log('Generated:', data.generatedAt)
-  console.log('')
-  if (attachments.length > 0) {
-    console.log('Attachments:')
-    attachments.forEach(att => {
-      console.log(`  - ${att.filename} (${att.contentType})`)
-    })
-  }
-  console.log('========================================\n')
 
   return sendEmail({
     to: data.to,

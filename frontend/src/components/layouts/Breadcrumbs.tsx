@@ -1,7 +1,7 @@
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { ChevronRight, Home } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getAuthToken } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 
 interface BreadcrumbItem {
   label: string
@@ -28,22 +28,9 @@ export function Breadcrumbs() {
     async function fetchLotInfo() {
       if (!lotId) return
 
-      const token = getAuthToken()
-      if (!token) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/lots/${lotId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setLotNumber(data.lot?.lotNumber || null)
-        }
+        const data = await apiFetch<{ lot?: { lotNumber?: string } }>(`/api/lots/${lotId}`)
+        setLotNumber(data.lot?.lotNumber || null)
       } catch (err) {
         console.error('Failed to fetch lot info for breadcrumb:', err)
       }
@@ -57,22 +44,9 @@ export function Breadcrumbs() {
     async function fetchProjectInfo() {
       if (!projectId) return
 
-      const token = getAuthToken()
-      if (!token) return
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       try {
-        const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setProjectName(data.project?.name || null)
-        }
+        const data = await apiFetch<{ project?: { name?: string } }>(`/api/projects/${projectId}`)
+        setProjectName(data.project?.name || null)
       } catch (err) {
         console.error('Failed to fetch project info for breadcrumb:', err)
       }

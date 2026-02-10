@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { sendNotificationIfEnabled } from './notifications.js'
 import { sendHPReleaseRequestEmail, sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../lib/email.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { parsePagination, getPaginationMeta } from '../lib/pagination.js'
 
 // Type for hold point list item
 interface HoldPointListItem {
@@ -251,7 +252,16 @@ holdpointsRouter.get('/project/:projectId', requireAuth, async (req: Request, re
       return a.sequenceNumber - b.sequenceNumber
     })
 
-    res.json({ holdPoints })
+    // Apply pagination
+    const { page, limit } = parsePagination(req.query)
+    const total = holdPoints.length
+    const start = (page - 1) * limit
+    const paginatedHoldPoints = holdPoints.slice(start, start + limit)
+
+    res.json({
+      holdPoints: paginatedHoldPoints,
+      pagination: getPaginationMeta(total, page, limit),
+    })
   } catch (error) {
     console.error('Error fetching hold points:', error)
     res.status(500).json({ error: 'Failed to fetch hold points' })

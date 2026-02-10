@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import DOMPurify from 'dompurify'
-import { getAuthToken } from '../../lib/auth'
+import { apiFetch, ApiError } from '../../lib/api'
 import { RichTextEditor } from '../../components/ui/RichTextEditor'
 import { VoiceInputButton } from '../../components/ui/VoiceInputButton'
 import { generateDailyDiaryPDF, DailyDiaryPDFData } from '../../lib/pdfGenerator'
@@ -117,8 +117,6 @@ interface Lot {
   id: string
   lotNumber: string
 }
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
 
 const WEATHER_CONDITIONS = ['Fine', 'Partly Cloudy', 'Cloudy', 'Rain', 'Heavy Rain', 'Storm', 'Wind', 'Fog']
 const DELAY_TYPES = ['Weather', 'Client Instruction', 'Design Change', 'Material Delay', 'Plant Breakdown', 'Labor Shortage', 'Safety Incident', 'Other']
@@ -410,13 +408,8 @@ export function DailyDiaryPage() {
 
     setAutoSaving(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary`, {
+      const data = await apiFetch<DailyDiary>('/api/diary', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           projectId,
           date: selectedDate,
@@ -429,13 +422,10 @@ export function DailyDiaryPage() {
         }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        setDiary(data)
-        setLastAutoSaved(new Date())
-        setHasUnsavedChanges(false)
-        previousWeatherFormRef.current = currentFormJson
-      }
+      setDiary(data)
+      setLastAutoSaved(new Date())
+      setHasUnsavedChanges(false)
+      previousWeatherFormRef.current = currentFormJson
     } catch (err) {
       console.error('Auto-save failed:', err)
     } finally {
@@ -504,14 +494,8 @@ export function DailyDiaryPage() {
 
   const fetchDiaries = async () => {
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setDiaries(data)
-      }
+      const data = await apiFetch<DailyDiary[]>(`/api/diary/${projectId}`)
+      setDiaries(data)
     } catch (err) {
       console.error('Error fetching diaries:', err)
     }
@@ -519,14 +503,8 @@ export function DailyDiaryPage() {
 
   const fetchLots = async () => {
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/lots?projectId=${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setLots(data.lots || [])
-      }
+      const data = await apiFetch<{ lots: Lot[] }>(`/api/lots?projectId=${projectId}`)
+      setLots(data.lots || [])
     } catch (err) {
       console.error('Error fetching lots:', err)
     }
@@ -538,14 +516,8 @@ export function DailyDiaryPage() {
     const id = diaryId || diary?.id
     if (!id) return
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${id}/timeline`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setTimeline(data.timeline)
-      }
+      const data = await apiFetch<{ timeline: any[] }>(`/api/diary/${id}/timeline`)
+      setTimeline(data.timeline)
     } catch (err) {
       console.error('Error fetching timeline:', err)
     }
@@ -556,14 +528,8 @@ export function DailyDiaryPage() {
     if (!projectId || !selectedDate) return
     setDocketSummaryLoading(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/project/${projectId}/docket-summary/${selectedDate}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setDocketSummary(data)
-      }
+      const data = await apiFetch<any>(`/api/diary/project/${projectId}/docket-summary/${selectedDate}`)
+      setDocketSummary(data)
     } catch (err) {
       console.error('Error fetching docket summary:', err)
     } finally {
@@ -582,60 +548,49 @@ export function DailyDiaryPage() {
   // Mobile: ensure diary exists before adding entries
   const ensureDiaryExists = async (): Promise<DailyDiary | null> => {
     if (diary) return diary
-    const token = getAuthToken()
-    const res = await fetch(`${API_URL}/api/diary`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ projectId, date: selectedDate }),
-    })
-    if (res.ok) {
-      const newDiary = await res.json()
+    try {
+      const newDiary = await apiFetch<DailyDiary>('/api/diary', {
+        method: 'POST',
+        body: JSON.stringify({ projectId, date: selectedDate }),
+      })
       setDiary(newDiary)
       return newDiary
+    } catch {
+      return null
     }
-    return null
   }
 
   // Mobile: add activity from sheet
   const addActivityFromSheet = async (data: { description: string; lotId?: string; quantity?: number; unit?: string; notes?: string }) => {
     let currentDiary = diary
     if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
-    const token = getAuthToken()
-    const res = await fetch(`${API_URL}/api/diary/${currentDiary.id}/activities`, {
+    await apiFetch(`/api/diary/${currentDiary.id}/activities`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     })
-    if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
-    else throw new Error('Failed to add activity')
+    await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate)
   }
 
   // Mobile: add delay from sheet
   const addDelayFromSheet = async (data: { delayType: string; description: string; durationHours?: number; impact?: string; lotId?: string }) => {
     let currentDiary = diary
     if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
-    const token = getAuthToken()
-    const res = await fetch(`${API_URL}/api/diary/${currentDiary.id}/delays`, {
+    await apiFetch(`/api/diary/${currentDiary.id}/delays`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     })
-    if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
-    else throw new Error('Failed to add delay')
+    await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate)
   }
 
   // Mobile: add delivery from sheet
   const addDeliveryFromSheet = async (data: { description: string; supplier?: string; docketNumber?: string; quantity?: number; unit?: string; lotId?: string; notes?: string }) => {
     let currentDiary = diary
     if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
-    const token = getAuthToken()
-    const res = await fetch(`${API_URL}/api/diary/${currentDiary.id}/deliveries`, {
+    await apiFetch(`/api/diary/${currentDiary.id}/deliveries`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     })
-    if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
-    else throw new Error('Failed to add delivery')
+    await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate)
   }
 
   // Mobile: delete entry from timeline
@@ -651,14 +606,14 @@ export function DailyDiaryPage() {
     }
     const endpoint = typeToEndpoint[entry.type]
     if (!endpoint) return
-    const token = getAuthToken()
-    const res = await fetch(`${API_URL}/api/diary/${diary.id}/${endpoint}/${entry.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) {
+    try {
+      await apiFetch(`/api/diary/${diary.id}/${endpoint}/${entry.id}`, {
+        method: 'DELETE',
+      })
       await fetchTimeline(diary.id)
       await fetchDiaryForDate(selectedDate)
+    } catch {
+      // ignore delete errors
     }
   }
 
@@ -672,14 +627,11 @@ export function DailyDiaryPage() {
   const addEventFromSheet = async (data: { eventType: string; description: string; notes?: string; lotId?: string }) => {
     let currentDiary = diary
     if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
-    const token = getAuthToken()
-    const res = await fetch(`${API_URL}/api/diary/${currentDiary.id}/events`, {
+    await apiFetch(`/api/diary/${currentDiary.id}/events`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     })
-    if (res.ok) { await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate) }
-    else throw new Error('Failed to add event')
+    await fetchTimeline(currentDiary.id); await fetchDiaryForDate(selectedDate)
   }
 
   // Feature #240: Search diaries by content
@@ -690,14 +642,8 @@ export function DailyDiaryPage() {
     }
     setSearching(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${projectId}?search=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setFilteredDiaries(data)
-      }
+      const data = await apiFetch<DailyDiary[]>(`/api/diary/${projectId}?search=${encodeURIComponent(query)}`)
+      setFilteredDiaries(data)
     } catch (err) {
       console.error('Error searching diaries:', err)
     } finally {
@@ -730,23 +676,17 @@ export function DailyDiaryPage() {
     setFetchingWeather(true)
     setWeatherSource(null)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${projectId}/weather/${date}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setWeatherForm(prev => ({
-          ...prev,
-          weatherConditions: data.weatherConditions || prev.weatherConditions,
-          temperatureMin: data.temperatureMin?.toString() || prev.temperatureMin,
-          temperatureMax: data.temperatureMax?.toString() || prev.temperatureMax,
-          rainfallMm: data.rainfallMm?.toString() || prev.rainfallMm,
-        }))
-        setWeatherSource(data.location?.fromProjectState
-          ? `Weather auto-populated from ${data.source} (state capital)`
-          : `Weather auto-populated from ${data.source}`)
-      }
+      const data = await apiFetch<any>(`/api/diary/${projectId}/weather/${date}`)
+      setWeatherForm(prev => ({
+        ...prev,
+        weatherConditions: data.weatherConditions || prev.weatherConditions,
+        temperatureMin: data.temperatureMin?.toString() || prev.temperatureMin,
+        temperatureMax: data.temperatureMax?.toString() || prev.temperatureMax,
+        rainfallMm: data.rainfallMm?.toString() || prev.rainfallMm,
+      }))
+      setWeatherSource(data.location?.fromProjectState
+        ? `Weather auto-populated from ${data.source} (state capital)`
+        : `Weather auto-populated from ${data.source}`)
     } catch (err) {
       console.error('Error fetching weather:', err)
       // Silently fail - weather is optional
@@ -759,23 +699,19 @@ export function DailyDiaryPage() {
     setLoading(true)
     setError(null)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${projectId}/${date}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const data = await apiFetch<DailyDiary>(`/api/diary/${projectId}/${date}`)
+      setDiary(data)
+      setWeatherForm({
+        weatherConditions: data.weatherConditions || '',
+        temperatureMin: data.temperatureMin?.toString() || '',
+        temperatureMax: data.temperatureMax?.toString() || '',
+        rainfallMm: data.rainfallMm?.toString() || '',
+        weatherNotes: data.weatherNotes || '',
+        generalNotes: data.generalNotes || '',
       })
-      if (res.ok) {
-        const data = await res.json()
-        setDiary(data)
-        setWeatherForm({
-          weatherConditions: data.weatherConditions || '',
-          temperatureMin: data.temperatureMin?.toString() || '',
-          temperatureMax: data.temperatureMax?.toString() || '',
-          rainfallMm: data.rainfallMm?.toString() || '',
-          weatherNotes: data.weatherNotes || '',
-          generalNotes: data.generalNotes || '',
-        })
-        setShowNewEntry(true)
-      } else if (res.status === 404) {
+      setShowNewEntry(true)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
         setDiary(null)
         setWeatherForm({
           weatherConditions: '',
@@ -789,10 +725,10 @@ export function DailyDiaryPage() {
         setShowNewEntry(false)
         // Feature #226: Auto-fetch weather when no diary exists for the date
         fetchWeatherForDate(date)
+      } else {
+        console.error('Error fetching diary:', err)
+        setError('Failed to fetch diary')
       }
-    } catch (err) {
-      console.error('Error fetching diary:', err)
-      setError('Failed to fetch diary')
     } finally {
       setLoading(false)
     }
@@ -805,13 +741,8 @@ export function DailyDiaryPage() {
     setSaving(true)
     setError(null)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary`, {
+      const data = await apiFetch<DailyDiary>('/api/diary', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           projectId,
           date: selectedDate,
@@ -824,19 +755,13 @@ export function DailyDiaryPage() {
         }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        setDiary(data)
-        setShowNewEntry(true)
-        fetchDiaries()
-        // Feature #234: Reset auto-save state after manual save
-        setHasUnsavedChanges(false)
-        setLastAutoSaved(new Date())
-        previousWeatherFormRef.current = JSON.stringify(weatherForm)
-      } else {
-        const errorData = await res.json()
-        setError(errorData.error || 'Failed to save diary')
-      }
+      setDiary(data)
+      setShowNewEntry(true)
+      fetchDiaries()
+      // Feature #234: Reset auto-save state after manual save
+      setHasUnsavedChanges(false)
+      setLastAutoSaved(new Date())
+      previousWeatherFormRef.current = JSON.stringify(weatherForm)
     } catch (err) {
       console.error('Error saving diary:', err)
       setError('Failed to save diary')
@@ -849,13 +774,8 @@ export function DailyDiaryPage() {
     if (!diary || !personnelForm.name) return
     setSaving(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/personnel`, {
+      const personnel = await apiFetch<Personnel>(`/api/diary/${diary.id}/personnel`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           name: personnelForm.name,
           company: personnelForm.company || undefined,
@@ -866,11 +786,8 @@ export function DailyDiaryPage() {
         }),
       })
 
-      if (res.ok) {
-        const personnel = await res.json()
-        setDiary({ ...diary, personnel: [...diary.personnel, personnel] })
-        setPersonnelForm({ name: '', company: '', role: '', startTime: '', finishTime: '', hours: '' })
-      }
+      setDiary({ ...diary, personnel: [...diary.personnel, personnel] })
+      setPersonnelForm({ name: '', company: '', role: '', startTime: '', finishTime: '', hours: '' })
     } catch (err) {
       console.error('Error adding personnel:', err)
     } finally {
@@ -881,15 +798,10 @@ export function DailyDiaryPage() {
   const removePersonnel = async (personnelId: string) => {
     if (!diary) return
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/personnel/${personnelId}`, {
+      await apiFetch(`/api/diary/${diary.id}/personnel/${personnelId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (res.ok) {
-        setDiary({ ...diary, personnel: diary.personnel.filter(p => p.id !== personnelId) })
-      }
+      setDiary({ ...diary, personnel: diary.personnel.filter(p => p.id !== personnelId) })
     } catch (err) {
       console.error('Error removing personnel:', err)
     }
@@ -899,45 +811,34 @@ export function DailyDiaryPage() {
     if (!diary || !projectId) return
     setSaving(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${projectId}/${selectedDate}/previous-personnel`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const data = await apiFetch<{ personnel: any[] }>(`/api/diary/${projectId}/${selectedDate}/previous-personnel`)
 
-      if (res.ok) {
-        const data = await res.json()
-        if (data.personnel && data.personnel.length > 0) {
-          // Add each personnel from previous day to current diary
-          let addedCount = 0
-          for (const person of data.personnel) {
-            // Filter out null/undefined values to avoid validation errors
-            const cleanPerson: Record<string, unknown> = { name: person.name }
-            if (person.company) cleanPerson.company = person.company
-            if (person.role) cleanPerson.role = person.role
-            if (person.startTime) cleanPerson.startTime = person.startTime
-            if (person.finishTime) cleanPerson.finishTime = person.finishTime
-            if (person.hours !== null && person.hours !== undefined) cleanPerson.hours = person.hours
+      if (data.personnel && data.personnel.length > 0) {
+        // Add each personnel from previous day to current diary
+        let addedCount = 0
+        for (const person of data.personnel) {
+          // Filter out null/undefined values to avoid validation errors
+          const cleanPerson: Record<string, unknown> = { name: person.name }
+          if (person.company) cleanPerson.company = person.company
+          if (person.role) cleanPerson.role = person.role
+          if (person.startTime) cleanPerson.startTime = person.startTime
+          if (person.finishTime) cleanPerson.finishTime = person.finishTime
+          if (person.hours !== null && person.hours !== undefined) cleanPerson.hours = person.hours
 
-            const addRes = await fetch(`${API_URL}/api/diary/${diary.id}/personnel`, {
+          try {
+            const newPerson = await apiFetch<Personnel>(`/api/diary/${diary.id}/personnel`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
               body: JSON.stringify(cleanPerson),
             })
-            if (addRes.ok) {
-              const newPerson = await addRes.json()
-              setDiary(prev => prev ? { ...prev, personnel: [...prev.personnel, newPerson] } : null)
-              addedCount++
-            }
+            setDiary(prev => prev ? { ...prev, personnel: [...prev.personnel, newPerson] } : null)
+            addedCount++
+          } catch {
+            // skip individual failures
           }
-          alert(`Copied ${addedCount} personnel from previous day`)
-        } else {
-          alert('No personnel found from previous day')
         }
+        alert(`Copied ${addedCount} personnel from previous day`)
       } else {
-        alert('Failed to fetch previous day personnel')
+        alert('No personnel found from previous day')
       }
     } catch (err) {
       console.error('Error copying personnel:', err)
@@ -951,13 +852,8 @@ export function DailyDiaryPage() {
     if (!diary || !plantForm.description) return
     setSaving(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/plant`, {
+      const plant = await apiFetch<Plant>(`/api/diary/${diary.id}/plant`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           description: plantForm.description,
           idRego: plantForm.idRego || undefined,
@@ -967,11 +863,8 @@ export function DailyDiaryPage() {
         }),
       })
 
-      if (res.ok) {
-        const plant = await res.json()
-        setDiary({ ...diary, plant: [...diary.plant, plant] })
-        setPlantForm({ description: '', idRego: '', company: '', hoursOperated: '', notes: '' })
-      }
+      setDiary({ ...diary, plant: [...diary.plant, plant] })
+      setPlantForm({ description: '', idRego: '', company: '', hoursOperated: '', notes: '' })
     } catch (err) {
       console.error('Error adding plant:', err)
     } finally {
@@ -982,15 +875,10 @@ export function DailyDiaryPage() {
   const removePlant = async (plantId: string) => {
     if (!diary) return
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/plant/${plantId}`, {
+      await apiFetch(`/api/diary/${diary.id}/plant/${plantId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (res.ok) {
-        setDiary({ ...diary, plant: diary.plant.filter(p => p.id !== plantId) })
-      }
+      setDiary({ ...diary, plant: diary.plant.filter(p => p.id !== plantId) })
     } catch (err) {
       console.error('Error removing plant:', err)
     }
@@ -1000,13 +888,8 @@ export function DailyDiaryPage() {
     if (!diary || !activityForm.description) return
     setSaving(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/activities`, {
+      const activity = await apiFetch<Activity>(`/api/diary/${diary.id}/activities`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           description: activityForm.description,
           lotId: activityForm.lotId || undefined,
@@ -1016,11 +899,8 @@ export function DailyDiaryPage() {
         }),
       })
 
-      if (res.ok) {
-        const activity = await res.json()
-        setDiary({ ...diary, activities: [...diary.activities, activity] })
-        setActivityForm({ description: '', lotId: '', quantity: '', unit: '', notes: '' })
-      }
+      setDiary({ ...diary, activities: [...diary.activities, activity] })
+      setActivityForm({ description: '', lotId: '', quantity: '', unit: '', notes: '' })
     } catch (err) {
       console.error('Error adding activity:', err)
     } finally {
@@ -1031,15 +911,10 @@ export function DailyDiaryPage() {
   const removeActivity = async (activityId: string) => {
     if (!diary) return
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/activities/${activityId}`, {
+      await apiFetch(`/api/diary/${diary.id}/activities/${activityId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (res.ok) {
-        setDiary({ ...diary, activities: diary.activities.filter(a => a.id !== activityId) })
-      }
+      setDiary({ ...diary, activities: diary.activities.filter(a => a.id !== activityId) })
     } catch (err) {
       console.error('Error removing activity:', err)
     }
@@ -1049,13 +924,8 @@ export function DailyDiaryPage() {
     if (!diary || !delayForm.delayType || !delayForm.description) return
     setSaving(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/delays`, {
+      const delay = await apiFetch<Delay>(`/api/diary/${diary.id}/delays`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({
           delayType: delayForm.delayType,
           startTime: delayForm.startTime || undefined,
@@ -1066,11 +936,8 @@ export function DailyDiaryPage() {
         }),
       })
 
-      if (res.ok) {
-        const delay = await res.json()
-        setDiary({ ...diary, delays: [...diary.delays, delay] })
-        setDelayForm({ delayType: '', startTime: '', endTime: '', durationHours: '', description: '', impact: '' })
-      }
+      setDiary({ ...diary, delays: [...diary.delays, delay] })
+      setDelayForm({ delayType: '', startTime: '', endTime: '', durationHours: '', description: '', impact: '' })
     } catch (err) {
       console.error('Error adding delay:', err)
     } finally {
@@ -1081,15 +948,10 @@ export function DailyDiaryPage() {
   const removeDelay = async (delayId: string) => {
     if (!diary) return
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/delays/${delayId}`, {
+      await apiFetch(`/api/diary/${diary.id}/delays/${delayId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       })
-
-      if (res.ok) {
-        setDiary({ ...diary, delays: diary.delays.filter(d => d.id !== delayId) })
-      }
+      setDiary({ ...diary, delays: diary.delays.filter(d => d.id !== delayId) })
     } catch (err) {
       console.error('Error removing delay:', err)
     }
@@ -1133,21 +995,13 @@ export function DailyDiaryPage() {
     setSaving(true)
     setShowSubmitConfirm(false)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/submit`, {
+      const data = await apiFetch<DailyDiary>(`/api/diary/${diary.id}/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ acknowledgeWarnings: true }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        setDiary(data)
-        fetchDiaries()
-      }
+      setDiary(data)
+      fetchDiaries()
     } catch (err) {
       console.error('Error submitting diary:', err)
     } finally {
@@ -1159,21 +1013,13 @@ export function DailyDiaryPage() {
     if (!diary) return
     setSaving(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/submit`, {
+      const data = await apiFetch<DailyDiary>(`/api/diary/${diary.id}/submit`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ acknowledgeWarnings: true }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        setDiary(data)
-        fetchDiaries()
-      }
+      setDiary(data)
+      fetchDiaries()
     } catch (err) {
       console.error('Error submitting diary:', err)
     } finally {
@@ -1186,14 +1032,8 @@ export function DailyDiaryPage() {
   // Fetch addendums when diary changes
   const fetchAddendums = async (diaryId: string) => {
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diaryId}/addendums`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setAddendums(data)
-      }
+      const data = await apiFetch<Addendum[]>(`/api/diary/${diaryId}/addendums`)
+      setAddendums(data)
     } catch (err) {
       console.error('Error fetching addendums:', err)
     }
@@ -1204,21 +1044,13 @@ export function DailyDiaryPage() {
     if (!diary || !addendumContent.trim()) return
     setAddingAddendum(true)
     try {
-      const token = getAuthToken()
-      const res = await fetch(`${API_URL}/api/diary/${diary.id}/addendum`, {
+      const newAddendum = await apiFetch<Addendum>(`/api/diary/${diary.id}/addendum`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ content: addendumContent.trim() }),
       })
 
-      if (res.ok) {
-        const newAddendum = await res.json()
-        setAddendums([...addendums, newAddendum])
-        setAddendumContent('')
-      }
+      setAddendums([...addendums, newAddendum])
+      setAddendumContent('')
     } catch (err) {
       console.error('Error adding addendum:', err)
     } finally {
@@ -1369,10 +1201,8 @@ export function DailyDiaryPage() {
               if (editingEntry?.type === 'personnel') { await handleDeleteEntry(editingEntry); setEditingEntry(null) }
               let currentDiary = diary
               if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
-              const token = getAuthToken()
-              await fetch(`${API_URL}/api/diary/${currentDiary.id}/personnel`, {
+              await apiFetch(`/api/diary/${currentDiary.id}/personnel`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ ...data, source: 'manual', lotId: data.lotId || activeLotId || undefined }),
               })
               await fetchTimeline(currentDiary.id)
@@ -1382,10 +1212,8 @@ export function DailyDiaryPage() {
               if (editingEntry?.type === 'plant') { await handleDeleteEntry(editingEntry); setEditingEntry(null) }
               let currentDiary = diary
               if (!currentDiary) { currentDiary = await ensureDiaryExists(); if (!currentDiary) return }
-              const token = getAuthToken()
-              await fetch(`${API_URL}/api/diary/${currentDiary.id}/plant`, {
+              await apiFetch(`/api/diary/${currentDiary.id}/plant`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ ...data, source: 'manual', lotId: data.lotId || activeLotId || undefined }),
               })
               await fetchTimeline(currentDiary.id)
@@ -1402,21 +1230,18 @@ export function DailyDiaryPage() {
             onSave={async (data) => {
               const currentDiary = await ensureDiaryExists()
               if (!currentDiary) return
-              const token = getAuthToken()
-              const res = await fetch(`${API_URL}/api/diary`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                  projectId,
-                  date: selectedDate,
-                  weatherConditions: data.conditions || undefined,
-                  temperatureMin: data.temperatureMin ? parseFloat(data.temperatureMin) : undefined,
-                  temperatureMax: data.temperatureMax ? parseFloat(data.temperatureMax) : undefined,
-                  rainfallMm: data.rainfallMm ? parseFloat(data.rainfallMm) : undefined,
-                }),
-              })
-              if (res.ok) {
-                const updated = await res.json()
+              try {
+                const updated = await apiFetch<DailyDiary>('/api/diary', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    projectId,
+                    date: selectedDate,
+                    weatherConditions: data.conditions || undefined,
+                    temperatureMin: data.temperatureMin ? parseFloat(data.temperatureMin) : undefined,
+                    temperatureMax: data.temperatureMax ? parseFloat(data.temperatureMax) : undefined,
+                    rainfallMm: data.rainfallMm ? parseFloat(data.rainfallMm) : undefined,
+                  }),
+                })
                 setDiary(updated)
                 setWeatherForm({
                   weatherConditions: updated.weatherConditions || '',
@@ -1426,6 +1251,8 @@ export function DailyDiaryPage() {
                   weatherNotes: updated.weatherNotes || '',
                   generalNotes: updated.generalNotes || '',
                 })
+              } catch {
+                // ignore weather save errors
               }
             }}
             initialData={diary ? {
@@ -2334,11 +2161,12 @@ export function DailyDiaryPage() {
                 onClick={async () => {
                   try {
                     // Fetch project info for PDF
-                    const token = getAuthToken()
-                    const projectRes = await fetch(`${API_URL}/api/projects/${projectId}`, {
-                      headers: { Authorization: `Bearer ${token}` }
-                    })
-                    const project = projectRes.ok ? await projectRes.json() : { name: 'Unknown Project', projectNumber: '' }
+                    let project: any
+                    try {
+                      project = await apiFetch(`/api/projects/${projectId}`)
+                    } catch {
+                      project = { name: 'Unknown Project', projectNumber: '' }
+                    }
 
                     // Build PDF data
                     const pdfData: DailyDiaryPDFData = {

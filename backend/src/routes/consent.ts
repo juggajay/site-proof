@@ -172,8 +172,8 @@ router.get('/history', async (req: Request, res: Response) => {
 
     const { consentType } = req.query
 
-    const where: any = { userId }
-    if (consentType && CONSENT_TYPES.includes(consentType as any)) {
+    const where: { userId: string; consentType?: string } = { userId }
+    if (consentType && typeof consentType === 'string' && CONSENT_TYPES.includes(consentType as typeof CONSENT_TYPES[number])) {
       where.consentType = consentType
     }
 

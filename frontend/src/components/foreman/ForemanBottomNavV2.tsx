@@ -7,9 +7,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Camera, ListChecks, CheckSquare, BookOpen, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
-import { getAuthToken } from '@/lib/auth'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3031'
+import { apiFetch } from '@/lib/api'
 
 type NavTab = 'capture' | 'today' | 'approve' | 'diary' | 'lots'
 
@@ -71,19 +69,12 @@ export function ForemanBottomNavV2({ onCapturePress, todayBadgeCount: externalBa
   const fetchBadgeCount = useCallback(async () => {
     if (externalBadgeCount !== undefined || !projectId) return
 
-    const token = getAuthToken()
-    if (!token) return
-
     try {
-      const response = await fetch(
-        `${API_URL}/api/dashboard/projects/${projectId}/foreman/today`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const data = await apiFetch<{ blocking?: unknown[]; dueToday?: unknown[] }>(
+        `/api/dashboard/projects/${projectId}/foreman/today`
       )
-      if (response.ok) {
-        const data = await response.json()
-        const count = (data.blocking?.length || 0) + (data.dueToday?.length || 0)
-        setInternalBadgeCount(count)
-      }
+      const count = (data.blocking?.length || 0) + (data.dueToday?.length || 0)
+      setInternalBadgeCount(count)
     } catch {
       // Silently fail - badge is non-critical
     }

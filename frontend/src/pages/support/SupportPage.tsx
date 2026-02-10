@@ -14,7 +14,8 @@ import {
   Clock,
   HeadphonesIcon,
 } from 'lucide-react'
-import { getAuthToken, useAuth } from '@/lib/auth'
+import { useAuth } from '@/lib/auth'
+import { apiFetch } from '@/lib/api'
 
 export function SupportPage() {
   const { user } = useAuth()
@@ -32,15 +33,8 @@ export function SupportPage() {
     setSubmitSuccess(false)
 
     try {
-      const token = getAuthToken()
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4015'
-
-      const response = await fetch(`${apiUrl}/api/support/request`, {
+      await apiFetch('/api/support/request', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: JSON.stringify({
           subject,
           message,
@@ -49,10 +43,6 @@ export function SupportPage() {
           userName: user?.name,
         }),
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to submit support request')
-      }
 
       setSubmitSuccess(true)
       setSubject('')

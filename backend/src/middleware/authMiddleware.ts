@@ -17,6 +17,10 @@ declare global {
         role: string
         companyId: string | null
       }
+      apiKey?: {
+        id: string
+        scopes: string[]
+      }
     }
   }
 }

@@ -475,7 +475,7 @@ reportsRouter.get('/diary', async (req, res) => {
       orderBy: { date: 'desc' },
       skip,
       take: limitNum,
-    }) as any[]
+    })
 
     // Calculate summary statistics (from paginated results)
     const submittedCount = diaries.filter(d => d.status === 'submitted').length
@@ -540,7 +540,7 @@ reportsRouter.get('/diary', async (req, res) => {
         if (diary.activities) {
           for (const activity of diary.activities) {
             activitiesSummary.totalActivities++
-            const lotNumber = activity.lot?.lotNumber || 'No Lot'
+            const lotNumber = (activity as { lot?: { lotNumber: string } }).lot?.lotNumber || 'No Lot'
             activitiesSummary.byLot[lotNumber] = (activitiesSummary.byLot[lotNumber] || 0) + 1
           }
         }
