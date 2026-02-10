@@ -10,7 +10,6 @@ export function OAuthCallbackPage() {
 
   useEffect(() => {
     const token = searchParams.get('token')
-    const provider = searchParams.get('provider')
     const errorParam = searchParams.get('error')
 
     if (errorParam) {
@@ -20,10 +19,8 @@ export function OAuthCallbackPage() {
     }
 
     if (token) {
-      // Store the token and redirect to dashboard
-      localStorage.setItem('auth_token', token)
+      // Use the centralized setToken which handles storage properly
       setToken(token)
-      console.log(`[OAuth] Successfully authenticated via ${provider}`)
       navigate('/dashboard', { replace: true })
     } else {
       setError('No authentication token received')

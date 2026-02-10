@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { passwordSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation'
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
@@ -54,9 +55,10 @@ export function ResetPasswordPage() {
       return
     }
 
-    // Validate password length
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long')
+    // Validate password strength using shared schema
+    const result = passwordSchema.safeParse(password)
+    if (!result.success) {
+      setError(result.error.issues[0].message)
       return
     }
 
@@ -147,7 +149,7 @@ export function ResetPasswordPage() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <h2 className="text-2xl font-bold">Create New Password</h2>
       <p className="text-sm text-muted-foreground">
-        Enter your new password below. Password must be at least 8 characters long.
+        Enter your new password below. Password must be at least {MIN_PASSWORD_LENGTH} characters with uppercase, lowercase, and a number.
       </p>
 
       {error && (
@@ -167,7 +169,7 @@ export function ResetPasswordPage() {
           onChange={(e) => setPassword(e.target.value)}
           className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
           placeholder="Enter new password"
-          minLength={8}
+          minLength={MIN_PASSWORD_LENGTH}
           required
         />
       </div>
@@ -183,7 +185,7 @@ export function ResetPasswordPage() {
           onChange={(e) => setConfirmPassword(e.target.value)}
           className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
           placeholder="Confirm new password"
-          minLength={8}
+          minLength={MIN_PASSWORD_LENGTH}
           required
         />
       </div>

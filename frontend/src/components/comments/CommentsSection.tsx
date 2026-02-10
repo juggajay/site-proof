@@ -498,11 +498,14 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
         { regex: /~~(.+?)~~/g, render: (_match: string, text: string) =>
           <span key={keyIndex++} className="line-through">{text}</span>
         },
-        // Links ([text](url))
-        { regex: /\[([^\]]+)\]\(([^)]+)\)/g, render: (_match: string, text: string, url: string) =>
-          <a key={keyIndex++} href={url} target="_blank" rel="noopener noreferrer"
-             className="text-primary underline hover:no-underline">{text}</a>
-        },
+        // Links ([text](url)) - only allow safe protocols
+        { regex: /\[([^\]]+)\]\(([^)]+)\)/g, render: (_match: string, text: string, url: string) => {
+          const isSafeUrl = /^(https?:|mailto:)/i.test(url.trim())
+          return isSafeUrl
+            ? <a key={keyIndex++} href={url} target="_blank" rel="noopener noreferrer"
+                 className="text-primary underline hover:no-underline">{text}</a>
+            : <span key={keyIndex++} className="text-muted-foreground">{text}</span>
+        }},
         // @mentions
         { regex: /@([\w.+-]+@[\w.-]+|[\w]+)/g, render: (_match: string, name: string) =>
           <span key={keyIndex++} className="text-primary font-medium bg-primary/10 px-0.5 rounded">@{name}</span>

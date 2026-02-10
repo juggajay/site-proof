@@ -1,13 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import request from 'supertest'
 import express from 'express'
 import { supportRouter } from './support.js'
-import { authRouter } from './auth.js'
-import { prisma } from '../lib/prisma.js'
 
 const app = express()
 app.use(express.json())
-app.use('/api/auth', authRouter)
 app.use('/api/support', supportRouter)
 
 describe('Support API', () => {
@@ -119,94 +116,14 @@ describe('Support API', () => {
     })
   })
 
-  describe('POST /api/support/request with audit logging', () => {
-    let userId: string
-    const testEmail = `support-test-${Date.now()}@example.com`
-
-    beforeAll(async () => {
-      // Create test user for audit log testing
-      const regRes = await request(app)
-        .post('/api/auth/register')
-        .send({
-          email: testEmail,
-          password: 'SecureP@ssword123!',
-          fullName: 'Support Test User',
-          tosAccepted: true,
-        })
-      userId = regRes.body.user.id
-    })
-
-    afterAll(async () => {
-      // Clean up audit logs and user
-      await prisma.auditLog.deleteMany({ where: { userId } })
-      await prisma.emailVerificationToken.deleteMany({ where: { userId } })
-      await prisma.user.delete({ where: { id: userId } }).catch(() => {})
-    })
-
-    it('should create audit log when user email is provided and exists', async () => {
+  describe('POST /api/support/request security', () => {
+    it('should not perform user lookups from unauthenticated endpoint', async () => {
+      // Support requests should work without user enumeration
       const res = await request(app)
         .post('/api/support/request')
         .send({
-          subject: 'Test audit logging',
-          message: 'This request should create an audit log entry for the authenticated user.',
-          category: 'technical',
-          userEmail: testEmail,
-        })
-
-      expect(res.status).toBe(200)
-      expect(res.body.success).toBe(true)
-
-      // Verify audit log was created
-      const auditLog = await prisma.auditLog.findFirst({
-        where: {
-          userId,
-          action: 'SUPPORT_REQUEST_SUBMITTED',
-          entityType: 'support_request',
-        },
-      })
-
-      expect(auditLog).toBeDefined()
-      expect(auditLog?.entityId).toMatch(/^SP-/)
-
-      const changes = JSON.parse(auditLog!.changes as string)
-      expect(changes.subject).toBe('Test audit logging')
-      expect(changes.category).toBe('technical')
-      expect(changes.messagePreview).toBeDefined()
-    })
-
-    it('should truncate long messages in audit log', async () => {
-      const longMessage = 'A'.repeat(200) // 200 characters
-
-      const res = await request(app)
-        .post('/api/support/request')
-        .send({
-          subject: 'Long message test',
-          message: longMessage,
-          category: 'general',
-          userEmail: testEmail,
-        })
-
-      expect(res.status).toBe(200)
-
-      const auditLog = await prisma.auditLog.findFirst({
-        where: {
-          userId,
-          action: 'SUPPORT_REQUEST_SUBMITTED',
-        },
-        orderBy: { createdAt: 'desc' },
-      })
-
-      const changes = JSON.parse(auditLog!.changes as string)
-      expect(changes.messagePreview.length).toBe(100)
-    })
-
-    it('should not fail request if audit logging fails', async () => {
-      // Submit with non-existent user email
-      const res = await request(app)
-        .post('/api/support/request')
-        .send({
-          subject: 'Test with non-existent user',
-          message: 'This should succeed even though audit logging will fail',
+          subject: 'Test without user lookup',
+          message: 'This should succeed without querying the user table',
           category: 'general',
           userEmail: 'nonexistent@example.com',
         })

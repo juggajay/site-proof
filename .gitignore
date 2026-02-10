@@ -64,7 +64,21 @@ workbox-*.js
 *.seed
 *.pid.lock
 
+# Uploads (user-generated content)
+backend/uploads/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+playwright-report/
+test-results/
+
+# Windows artifacts
+nul
+
 # Local development
 .turbo/
 .vercel/
 .worktrees/
+
+# Production env (should use CI/CD environment variables)
+frontend/.env.production

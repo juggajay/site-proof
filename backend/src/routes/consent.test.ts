@@ -4,25 +4,13 @@ import express from 'express'
 import { authRouter } from './auth.js'
 import { consentRouter } from './consent.js'
 import { prisma } from '../lib/prisma.js'
-import { requireAuth } from '../middleware/authMiddleware.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 
-// Create a consent router with auth middleware
-// In production, consent routes manually check req.user, but for tests we apply middleware
-const authenticatedConsentRouter = express.Router()
-authenticatedConsentRouter.use((req, res, next) => {
-  // Skip auth for /types endpoint
-  if (req.path === '/types') {
-    return next()
-  }
-  return requireAuth(req, res, next)
-})
-authenticatedConsentRouter.use(consentRouter)
-
-app.use('/api/consent', authenticatedConsentRouter)
+// Consent router now has auth middleware built-in
+app.use('/api/consent', consentRouter)
 
 describe('Consent API', () => {
   let authToken: string
@@ -51,9 +39,17 @@ describe('Consent API', () => {
   })
 
   describe('GET /api/consent/types', () => {
+    it('should require authentication', async () => {
+      const res = await request(app)
+        .get('/api/consent/types')
+
+      expect(res.status).toBe(401)
+    })
+
     it('should return available consent types', async () => {
       const res = await request(app)
         .get('/api/consent/types')
+        .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(200)
       expect(res.body.consentTypes).toBeDefined()
@@ -69,6 +65,7 @@ describe('Consent API', () => {
     it('should include all expected consent types', async () => {
       const res = await request(app)
         .get('/api/consent/types')
+        .set('Authorization', `Bearer ${authToken}`)
 
       const types = res.body.consentTypes.map((t: any) => t.type)
       expect(types).toContain('terms_of_service')

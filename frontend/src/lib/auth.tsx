@@ -17,9 +17,10 @@ interface User {
 // Role override key for dev testing
 const ROLE_OVERRIDE_KEY = 'siteproof_role_override'
 
-// Helper to get role override (used by RoleSwitcher)
+// Helper to get role override (used by RoleSwitcher) - dev only
 export function getRoleOverride(): string | null {
   if (typeof window === 'undefined') return null
+  if (!import.meta.env.DEV) return null
   return localStorage.getItem(ROLE_OVERRIDE_KEY)
 }
 
@@ -59,11 +60,14 @@ export function getAuthStorage(): Storage {
   return rememberMe ? localStorage : sessionStorage
 }
 
-// Helper to clear auth from both storages
+// Helper to clear auth from both storages (including any orphaned keys)
 function clearAuthFromAllStorages() {
   localStorage.removeItem(AUTH_STORAGE_KEY)
   sessionStorage.removeItem(AUTH_STORAGE_KEY)
   localStorage.removeItem(REMEMBER_ME_KEY)
+  // Clean up orphaned token keys from older code paths
+  localStorage.removeItem('auth_token')
+  localStorage.removeItem('refresh_token')
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

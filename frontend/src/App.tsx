@@ -28,6 +28,9 @@ const MagicLinkPage = lazy(() => import('@/pages/auth/MagicLinkPage').then(m => 
 const OAuthCallbackPage = lazy(() => import('@/pages/auth/OAuthCallbackPage').then(m => ({ default: m.OAuthCallbackPage })))
 const OAuthMockPage = lazy(() => import('@/pages/auth/OAuthMockPage').then(m => ({ default: m.OAuthMockPage })))
 
+// Landing Page
+const LandingPage = lazy(() => import('@/pages/LandingPage').then(m => ({ default: m.LandingPage })))
+
 // Lazy load Main Pages
 const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(m => ({ default: m.DashboardPage })))
 const ProjectsPage = lazy(() => import('@/pages/projects/ProjectsPage').then(m => ({ default: m.ProjectsPage })))
@@ -126,8 +129,11 @@ function App() {
           <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/auth/magic-link" element={<MagicLinkPage />} />
           <Route path="/auth/oauth-callback" element={<OAuthCallbackPage />} />
-          <Route path="/auth/oauth-mock" element={<OAuthMockPage />} />
+          {import.meta.env.DEV && <Route path="/auth/oauth-mock" element={<OAuthMockPage />} />}
         </Route>
+
+        {/* Landing Page (public) */}
+        <Route path="/landing" element={<LandingPage />} />
 
         {/* Legal Pages (public, no layout) */}
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
@@ -393,7 +399,7 @@ function App() {
       <Toaster />
       <OfflineIndicator />
       <CookieConsentBanner />
-      <RoleSwitcher />
+      {import.meta.env.DEV && <RoleSwitcher />}
       </KeyboardShortcutsProvider>
     </AuthProvider>
     </ErrorBoundary>

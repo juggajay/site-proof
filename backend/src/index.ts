@@ -22,6 +22,7 @@ import { appRouter } from './trpc/router.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestLogger, getPerformanceMetrics } from './middleware/requestLogger.js'
 import { rateLimiter, authRateLimiter } from './middleware/rateLimiter.js'
+import { requireAuth, requireRole } from './middleware/authMiddleware.js'
 import { authRouter } from './routes/auth.js'
 import { projectsRouter } from './routes/projects.js'
 import { lotsRouter } from './routes/lots.js'
@@ -74,66 +75,35 @@ if (process.env.NODE_ENV === 'production') {
     next()
   })
 }
-// Use a function for CORS origin to ensure proper handling
+// Environment-based CORS configuration
 app.use(cors({
   origin: function(origin, callback) {
-    const allowedOrigins = [
-      // Production URLs
-      'https://site-proof.vercel.app',
-      'https://site-proof-production.up.railway.app',
-      // Development URLs
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:5176',
-      'http://localhost:5177',
-      'http://localhost:5178',
-      'http://localhost:5179',
-      'http://localhost:5180',
-      'http://localhost:5181',
-      'http://localhost:5182',
-      'http://localhost:5183',
-      'http://localhost:5184',
-      'http://localhost:5185',
-      'http://localhost:5186',
-      'http://localhost:5187',
-      'http://localhost:5188',
-      'http://localhost:5189',
-      'http://localhost:5190',
-      'http://localhost:5191',
-      'http://localhost:5192',
-      'http://localhost:5193',
-      'http://localhost:5194',
-      'http://localhost:5195',
-      'http://localhost:5196',
-      'http://localhost:5197',
-      'http://localhost:5198',
-      'http://localhost:5199',
-      'http://localhost:5200',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:5174',
-      'http://127.0.0.1:5177',
-      'http://127.0.0.1:5179',
-      'http://127.0.0.1:5182',
-      'http://127.0.0.1:5185',
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
+    // Allow requests with no origin (like mobile apps or curl) only in development
+    if (!origin) {
+      return callback(null, process.env.NODE_ENV !== 'production')
+    }
 
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
+    if (process.env.NODE_ENV === 'production') {
+      const allowedOrigins = [process.env.FRONTEND_URL].filter(Boolean) as string[]
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true)
+      } else {
+        callback(null, false)
+      }
     } else {
-      console.log('CORS blocked origin:', origin);
-      callback(null, false);
+      // Development: allow any localhost origin
+      if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+        callback(null, true)
+      } else {
+        callback(null, false)
+      }
     }
   },
   credentials: true
 }))
 
 // Body parsing
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
 
 // Request logging
@@ -176,8 +146,8 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// Feature #751: Performance metrics endpoint
-app.get('/api/metrics', (_req, res) => {
+// Feature #751: Performance metrics endpoint (admin only)
+app.get('/api/metrics', requireAuth, requireRole(['owner', 'admin']), (_req, res) => {
   const metrics = getPerformanceMetrics()
   res.json(metrics)
 })

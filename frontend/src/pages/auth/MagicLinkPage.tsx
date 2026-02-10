@@ -10,7 +10,7 @@ export function MagicLinkPage() {
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying')
   const [error, setError] = useState('')
   const navigate = useNavigate()
-  const { refreshUser } = useAuth()
+  const { setToken } = useAuth()
 
   useEffect(() => {
     const token = searchParams.get('token')
@@ -32,14 +32,8 @@ export function MagicLinkPage() {
         const data = await response.json()
 
         if (response.ok && data.token) {
-          // Store the auth token
-          localStorage.setItem('auth_token', data.token)
-          if (data.refreshToken) {
-            localStorage.setItem('refresh_token', data.refreshToken)
-          }
-
-          // Refresh auth state
-          await refreshUser()
+          // Use the centralized setToken which handles storage properly
+          await setToken(data.token)
 
           setStatus('success')
 
@@ -58,7 +52,7 @@ export function MagicLinkPage() {
     }
 
     verifyMagicLink()
-  }, [searchParams, navigate, refreshUser])
+  }, [searchParams, navigate, setToken])
 
   if (status === 'verifying') {
     return (

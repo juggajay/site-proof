@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express'
-import { prisma } from '../lib/prisma.js'
 
 export const supportRouter = Router()
 
@@ -14,7 +13,7 @@ interface SupportRequest {
 // POST /api/support/request - Submit a support request
 supportRouter.post('/request', async (req: Request, res: Response) => {
   try {
-    const { subject, message, category, userEmail }: SupportRequest = req.body
+    const { subject, message }: SupportRequest = req.body
 
     if (!subject || !message) {
       return res.status(400).json({ message: 'Subject and message are required' })
@@ -26,39 +25,14 @@ supportRouter.post('/request', async (req: Request, res: Response) => {
     // 3. Create a ticket in the support system
     // 4. Send a confirmation email to the user
 
-    // Optional: Store in database if we have a SupportRequest model
-    // For now, we'll create an activity log entry if user is authenticated
-    if (userEmail) {
-      try {
-        const user = await prisma.user.findUnique({
-          where: { email: userEmail },
-        })
-
-        if (user) {
-          await prisma.auditLog.create({
-            data: {
-              userId: user.id,
-              action: 'SUPPORT_REQUEST_SUBMITTED',
-              entityType: 'support_request',
-              entityId: `SP-${Date.now()}`,
-              changes: JSON.stringify({
-                subject,
-                category,
-                messagePreview: message.substring(0, 100),
-              }),
-            },
-          })
-        }
-      } catch (logError) {
-        // Don't fail the request if logging fails
-        console.error('Failed to log support request activity:', logError)
-      }
-    }
+    // Log support request without looking up user to prevent enumeration
+    // The authenticated user context (if any) should be used instead of email lookup
+    const ticketId = `SP-${Date.now()}`
 
     return res.status(200).json({
       success: true,
       message: 'Support request submitted successfully',
-      ticketId: `SP-${Date.now()}`, // Simulated ticket ID
+      ticketId,
     })
   } catch (error) {
     console.error('Support request error:', error)

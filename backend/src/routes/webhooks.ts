@@ -63,10 +63,15 @@ router.post('/test-receiver', (req: Request, res: Response) => {
   try {
     const signature = req.headers['x-webhook-signature'] as string | undefined
 
+    // Strip sensitive headers before storing
+    const sanitizedHeaders = { ...req.headers }
+    delete sanitizedHeaders.authorization
+    delete sanitizedHeaders.cookie
+
     const received = {
       id: crypto.randomUUID(),
       timestamp: new Date(),
-      headers: req.headers,
+      headers: sanitizedHeaders,
       body: req.body,
       signature: signature || null
     }
@@ -435,8 +440,8 @@ export async function deliverWebhook(
   // Store delivery record
   webhookDeliveries.push(delivery)
 
-  // Keep only last 1000 deliveries
-  if (webhookDeliveries.length > 1000) {
+  // Keep only last 100 deliveries to limit memory usage
+  if (webhookDeliveries.length > 100) {
     webhookDeliveries.shift()
   }
 

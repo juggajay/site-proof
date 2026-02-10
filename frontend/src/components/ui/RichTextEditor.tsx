@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import { Bold, Italic, Underline, List, ListOrdered, Undo, Redo } from 'lucide-react'
 
 interface RichTextEditorProps {
@@ -22,7 +23,7 @@ export function RichTextEditor({
   // Initialize content when value changes externally
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value
+      editorRef.current.innerHTML = DOMPurify.sanitize(value)
     }
   }, [value])
 

@@ -11,7 +11,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'SiteProof v2',
+        name: 'SiteProof v3',
         short_name: 'SiteProof',
         description: 'Civil Execution and Conformance Platform',
         theme_color: '#1e40af',

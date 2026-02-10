@@ -5,9 +5,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAuth } from '@/lib/auth'
+import { passwordSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation'
 import { Check, X, Mail, FileText } from 'lucide-react'
-
-const MIN_PASSWORD_LENGTH = 12
 
 // Zod validation schema for registration
 const registerSchema = z.object({
@@ -16,11 +15,7 @@ const registerSchema = z.object({
   email: z.string()
     .min(1, 'Email is required')
     .email('Please enter a valid email address'),
-  password: z.string()
-    .min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/[0-9]/, 'Password must contain at least one number'),
+  password: passwordSchema,
   confirmPassword: z.string()
     .min(1, 'Please confirm your password'),
   tosAccepted: z.boolean().refine(val => val === true, {

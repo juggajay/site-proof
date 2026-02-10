@@ -1,9 +1,13 @@
 // Feature #776: Privacy Consent Tracking
 import { Router, Request, Response } from 'express'
+import { requireAuth } from '../middleware/authMiddleware.js'
 import { prisma } from '../lib/prisma.js'
 import { z } from 'zod'
 
 const router = Router()
+
+// All consent routes require authentication
+router.use(requireAuth)
 
 // Consent types supported
 const CONSENT_TYPES = [
@@ -42,10 +46,7 @@ const bulkConsentSchema = z.object({
 // GET /api/consent - Get user's current consent status
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
+    const userId = req.user!.id
 
     // Get most recent consent record for each type
     const consents: Record<string, {
@@ -80,10 +81,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/consent - Record a consent decision
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
+    const userId = req.user!.id
 
     const validation = recordConsentSchema.safeParse(req.body)
     if (!validation.success) {
@@ -124,10 +122,7 @@ router.post('/', async (req: Request, res: Response) => {
 // POST /api/consent/bulk - Record multiple consent decisions at once
 router.post('/bulk', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
+    const userId = req.user!.id
 
     const validation = bulkConsentSchema.safeParse(req.body)
     if (!validation.success) {
@@ -173,10 +168,7 @@ router.post('/bulk', async (req: Request, res: Response) => {
 // GET /api/consent/history - Get user's consent history
 router.get('/history', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
+    const userId = req.user!.id
 
     const { consentType } = req.query
 
@@ -209,10 +201,7 @@ router.get('/history', async (req: Request, res: Response) => {
 // POST /api/consent/withdraw-all - Withdraw all consents (for data deletion requests)
 router.post('/withdraw-all', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
-    }
+    const userId = req.user!.id
 
     const ipAddress = req.ip || req.connection?.remoteAddress || null
     const userAgent = req.headers['user-agent'] || null
