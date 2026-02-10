@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js'
 import { z } from 'zod'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
+import { checkProjectAccess } from '../lib/projectAccess.js'
 
 const router = Router()
 
@@ -82,24 +83,6 @@ const addEventSchema = z.object({
   notes: z.string().optional(),
   lotId: z.string().optional(),
 })
-
-// Helper to check project access
-async function checkProjectAccess(userId: string, projectId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) return false
-
-  // Admins and owners can access all projects in their company
-  if (user.roleInCompany === 'admin' || user.roleInCompany === 'owner') {
-    const project = await prisma.project.findUnique({ where: { id: projectId } })
-    return project?.companyId === user.companyId
-  }
-
-  // Check if user is a member of the project
-  const projectUser = await prisma.projectUser.findUnique({
-    where: { projectId_userId: { projectId, userId } }
-  })
-  return !!projectUser
-}
 
 // GET /api/diary/:projectId - List diaries for a project with pagination
 // Supports ?search=text, ?page=1, ?limit=20

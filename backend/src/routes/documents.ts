@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
 import { supabase, isSupabaseConfigured, getSupabasePublicUrl, DOCUMENTS_BUCKET } from '../lib/supabase.js'
+import { checkProjectAccess } from '../lib/projectAccess.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -318,47 +319,6 @@ async function deleteFromSupabase(fileUrl: string): Promise<void> {
   if (error) {
     console.error('Supabase delete error:', error)
   }
-}
-
-// Helper to check project access
-async function checkProjectAccess(userId: string, projectId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) return false
-
-  // For admin/owner users, check if project belongs to their company
-  if (user.roleInCompany === 'admin' || user.roleInCompany === 'owner') {
-    const project = await prisma.project.findUnique({ where: { id: projectId } })
-    if (project?.companyId === user.companyId) {
-      return true
-    }
-    // Fall through to check ProjectUser if company doesn't match
-  }
-
-  // Check if user has explicit access via ProjectUser record
-  const projectUser = await prisma.projectUser.findUnique({
-    where: { projectId_userId: { projectId, userId } }
-  })
-  if (projectUser) return true
-
-  // Check subcontractor access
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: { userId },
-    include: {
-      subcontractorCompany: true
-    }
-  })
-
-  if (subcontractorUser) {
-    const company = subcontractorUser.subcontractorCompany
-    // Verify company belongs to this project
-    if (company.projectId !== projectId) return false
-
-    // Check portalAccess.documents permission
-    const portalAccess = (company.portalAccess as any) || {}
-    return portalAccess.documents === true
-  }
-
-  return false
 }
 
 // GET /api/documents/:projectId - List documents for a project

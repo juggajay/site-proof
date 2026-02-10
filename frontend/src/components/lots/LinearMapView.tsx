@@ -162,22 +162,18 @@ export function LinearMapView({ lots, onLotClick, statusColors: _statusColors, a
     if (!mapContainerRef.current) return
 
     try {
-      // Use html2canvas if available, otherwise fall back to print
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(mapContainerRef.current, {
+      const { toPng } = await import('html-to-image')
+      const dataUrl = await toPng(mapContainerRef.current, {
         backgroundColor: '#ffffff',
-        scale: 2, // Higher resolution
-        logging: false,
+        pixelRatio: 2,
       })
 
-      // Create download link
       const link = document.createElement('a')
       link.download = `linear-map-${new Date().toISOString().split('T')[0]}.png`
-      link.href = canvas.toDataURL('image/png')
+      link.href = dataUrl
       link.click()
     } catch (error) {
-      // Fallback to print if html2canvas is not available
-      console.warn('html2canvas not available, falling back to print:', error)
+      console.warn('Export failed, falling back to print:', error)
       window.print()
     }
   }, [])

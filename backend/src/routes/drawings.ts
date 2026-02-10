@@ -2,6 +2,7 @@
 import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { checkProjectAccess } from '../lib/projectAccess.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -50,22 +51,6 @@ const upload = multer({
     }
   }
 })
-
-// Helper to check project access
-async function checkProjectAccess(userId: string, projectId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) return false
-
-  if (user.roleInCompany === 'admin' || user.roleInCompany === 'owner') {
-    const project = await prisma.project.findUnique({ where: { id: projectId } })
-    return project?.companyId === user.companyId
-  }
-
-  const projectUser = await prisma.projectUser.findUnique({
-    where: { projectId_userId: { projectId, userId } }
-  })
-  return !!projectUser
-}
 
 // GET /api/drawings/:projectId - List drawings for a project
 router.get('/:projectId', async (req: Request, res: Response) => {
