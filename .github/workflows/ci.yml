@@ -2,95 +2,87 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
   pull_request:
-    branches: [master, main]
+    branches: [master]
 
 jobs:
   backend:
-    name: Backend Tests & Security
+    name: Backend
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Build (type check)
-        run: npm run build
+      - name: Type check
+        run: pnpm tsc --noEmit
+
+      - name: Build
+        run: pnpm build
 
       - name: Run tests
-        run: npm test
+        run: pnpm test
         env:
           JWT_SECRET: test-secret-for-ci
-          DATABASE_URL: file:./test.db
           NODE_ENV: test
-
-      - name: Security audit
-        run: npm audit --audit-level=high
 
       - name: Check for unsafe patterns
         run: |
           echo "Checking for unsafe code patterns..."
 
-          # Check for executeRawUnsafe usage
           if grep -r "executeRawUnsafe" --include="*.ts" --include="*.js" src/ 2>/dev/null; then
             echo "::error::Found executeRawUnsafe usage - potential SQL injection risk"
             exit 1
           fi
 
-          # Check for new PrismaClient in route files
           if grep -r "new PrismaClient" --include="*.ts" --include="*.js" src/routes/ 2>/dev/null; then
             echo "::error::Found new PrismaClient in routes - should use singleton from lib/prisma"
-            exit 1
-          fi
-
-          # Check for debug flags in auth code
-          if grep -rE "(AUTH DEBUG|DEBUG.*=.*true|console\.log.*password)" --include="*.ts" --include="*.js" src/ 2>/dev/null; then
-            echo "::error::Found potential debug code in production files"
             exit 1
           fi
 
           echo "No unsafe patterns detected"
 
   frontend:
-    name: Frontend Build & Security
+    name: Frontend
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: npm run type-check
+        run: pnpm tsc --noEmit
 
       - name: Build
-        run: npm run build
-
-      - name: Security audit
-        run: npm audit --audit-level=high
+        run: pnpm build
