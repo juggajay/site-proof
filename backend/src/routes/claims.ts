@@ -158,7 +158,7 @@ router.get('/:projectId/claims/:claimId', async (req, res) => {
 router.post('/:projectId/claims', async (req, res) => {
   try {
     const { projectId } = req.params
-    const userId = (req as any).userId
+    const userId = req.user!.userId
 
     // Validate request body
     const validation = createClaimSchema.safeParse(req.body)
@@ -269,7 +269,7 @@ router.post('/:projectId/claims', async (req, res) => {
 router.put('/:projectId/claims/:claimId', async (req, res) => {
   try {
     const { projectId, claimId } = req.params
-    const userId = (req as any).userId
+    const userId = req.user!.userId
 
     // Validate request body
     const validation = updateClaimSchema.safeParse(req.body)
@@ -1091,7 +1091,7 @@ router.get('/:projectId/claims/:claimId/completeness-check', async (req, res) =>
 router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
   try {
     const { projectId, claimId } = req.params
-    const userId = (req as any).userId
+    const userId = req.user!.userId
 
     // Validate request body
     const validation = certifyClaimSchema.safeParse(req.body)
@@ -1260,7 +1260,7 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
 router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
   try {
     const { projectId, claimId } = req.params
-    const userId = (req as any).userId
+    const userId = req.user!.userId
 
     // Validate request body
     const validation = recordPaymentSchema.safeParse(req.body)

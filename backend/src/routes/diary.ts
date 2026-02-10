@@ -107,7 +107,7 @@ router.get('/:projectId', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
     const { search } = req.query
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -187,7 +187,7 @@ router.get('/:projectId/:date', async (req: Request, res: Response, next) => {
 
   try {
     const { projectId, date } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -239,7 +239,7 @@ router.get('/:projectId/:date', async (req: Request, res: Response, next) => {
 // POST /api/diary - Create or update diary entry
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -326,7 +326,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.post('/:diaryId/personnel', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -369,7 +369,7 @@ router.post('/:diaryId/personnel', async (req: Request, res: Response) => {
 router.delete('/:diaryId/personnel/:personnelId', async (req: Request, res: Response) => {
   try {
     const { diaryId, personnelId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -401,7 +401,7 @@ router.delete('/:diaryId/personnel/:personnelId', async (req: Request, res: Resp
 router.post('/:diaryId/plant', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -444,7 +444,7 @@ router.post('/:diaryId/plant', async (req: Request, res: Response) => {
 router.delete('/:diaryId/plant/:plantId', async (req: Request, res: Response) => {
   try {
     const { diaryId, plantId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -476,7 +476,7 @@ router.delete('/:diaryId/plant/:plantId', async (req: Request, res: Response) =>
 router.post('/:diaryId/visitors', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -519,7 +519,7 @@ router.post('/:diaryId/visitors', async (req: Request, res: Response) => {
 router.put('/:diaryId/visitors/:visitorId', async (req: Request, res: Response) => {
   try {
     const { diaryId, visitorId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -560,7 +560,7 @@ router.put('/:diaryId/visitors/:visitorId', async (req: Request, res: Response) 
 router.delete('/:diaryId/visitors/:visitorId', async (req: Request, res: Response) => {
   try {
     const { diaryId, visitorId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -592,7 +592,7 @@ router.delete('/:diaryId/visitors/:visitorId', async (req: Request, res: Respons
 router.get('/project/:projectId/recent-plant', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -659,7 +659,7 @@ router.get('/project/:projectId/activity-suggestions', async (req: Request, res:
   try {
     const { projectId } = req.params
     const { search } = req.query
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -769,7 +769,7 @@ router.get('/project/:projectId/activity-suggestions', async (req: Request, res:
 router.post('/:diaryId/activities', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -815,7 +815,7 @@ router.post('/:diaryId/activities', async (req: Request, res: Response) => {
 router.delete('/:diaryId/activities/:activityId', async (req: Request, res: Response) => {
   try {
     const { diaryId, activityId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -847,7 +847,7 @@ router.delete('/:diaryId/activities/:activityId', async (req: Request, res: Resp
 router.post('/:diaryId/delays', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -890,7 +890,7 @@ router.post('/:diaryId/delays', async (req: Request, res: Response) => {
 router.delete('/:diaryId/delays/:delayId', async (req: Request, res: Response) => {
   try {
     const { diaryId, delayId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -922,7 +922,7 @@ router.delete('/:diaryId/delays/:delayId', async (req: Request, res: Response) =
 router.get('/:diaryId/validate', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1040,7 +1040,7 @@ router.post('/:diaryId/submit', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
     const { acknowledgeWarnings } = req.body
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1130,7 +1130,7 @@ router.post('/:diaryId/submit', async (req: Request, res: Response) => {
 router.get('/:projectId/:date/previous-personnel', async (req: Request, res: Response) => {
   try {
     const { projectId, date } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1209,7 +1209,7 @@ router.get('/:projectId/:date/previous-personnel', async (req: Request, res: Res
 router.get('/entry/:diaryId', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1250,7 +1250,7 @@ router.post('/:diaryId/addendum', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
     const { content } = req.body
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1303,7 +1303,7 @@ router.post('/:diaryId/addendum', async (req: Request, res: Response) => {
 router.get('/:diaryId/addendums', async (req: Request, res: Response) => {
   try {
     const { diaryId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1345,7 +1345,7 @@ router.get('/:diaryId/addendums', async (req: Request, res: Response) => {
 router.get('/:projectId/weather/:date', async (req: Request, res: Response) => {
   try {
     const { projectId, date } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1471,7 +1471,7 @@ router.get('/project/:projectId/delays', async (req: Request, res: Response) => 
   try {
     const { projectId } = req.params
     const { delayType, startDate, endDate } = req.query
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1556,7 +1556,7 @@ router.get('/project/:projectId/delays/export', async (req: Request, res: Respon
   try {
     const { projectId } = req.params
     const { delayType, startDate, endDate } = req.query
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1634,7 +1634,7 @@ router.get('/project/:projectId/delays/export', async (req: Request, res: Respon
 // GET /api/diary/project/:projectId/docket-summary/:date - Get docket summary for a date
 router.get('/project/:projectId/docket-summary/:date', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) return res.status(401).json({ error: 'Unauthorized' })
     const { projectId, date } = req.params
 
@@ -1712,7 +1712,7 @@ router.get('/project/:projectId/docket-summary/:date', async (req: Request, res:
 // POST /api/diary/:diaryId/deliveries - Add delivery to diary
 router.post('/:diaryId/deliveries', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) return res.status(401).json({ error: 'Unauthorized' })
     const { diaryId } = req.params
     const data = addDeliverySchema.parse(req.body)
@@ -1749,7 +1749,7 @@ router.post('/:diaryId/deliveries', async (req: Request, res: Response) => {
 // DELETE /api/diary/:diaryId/deliveries/:deliveryId - Remove delivery
 router.delete('/:diaryId/deliveries/:deliveryId', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) return res.status(401).json({ error: 'Unauthorized' })
     const { diaryId, deliveryId } = req.params
 
@@ -1771,7 +1771,7 @@ router.delete('/:diaryId/deliveries/:deliveryId', async (req: Request, res: Resp
 // POST /api/diary/:diaryId/events - Add event to diary
 router.post('/:diaryId/events', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) return res.status(401).json({ error: 'Unauthorized' })
     const { diaryId } = req.params
     const data = addEventSchema.parse(req.body)
@@ -1805,7 +1805,7 @@ router.post('/:diaryId/events', async (req: Request, res: Response) => {
 // DELETE /api/diary/:diaryId/events/:eventId - Remove event
 router.delete('/:diaryId/events/:eventId', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) return res.status(401).json({ error: 'Unauthorized' })
     const { diaryId, eventId } = req.params
 
@@ -1827,7 +1827,7 @@ router.delete('/:diaryId/events/:eventId', async (req: Request, res: Response) =
 // GET /api/diary/:diaryId/timeline - Get merged chronological timeline
 router.get('/:diaryId/timeline', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) return res.status(401).json({ error: 'Unauthorized' })
     const { diaryId } = req.params
 

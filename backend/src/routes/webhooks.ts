@@ -127,7 +127,7 @@ router.use(requireAuth)
 // GET /api/webhooks - List webhook configurations for the company
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user
+    const user = req.user!
     if (!user?.companyId) {
       return res.status(403).json({ error: 'Company context required' })
     }
@@ -149,7 +149,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/webhooks - Create webhook configuration
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user
+    const user = req.user!
     if (!user?.companyId) {
       return res.status(403).json({ error: 'Company context required' })
     }
@@ -200,7 +200,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params
-    const user = (req as any).user
+    const user = req.user!
 
     const config = webhookConfigs.get(id)
     if (!config) {
@@ -225,7 +225,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params
-    const user = (req as any).user
+    const user = req.user!
     const { url, events, enabled } = req.body
 
     const config = webhookConfigs.get(id)
@@ -265,7 +265,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params
-    const user = (req as any).user
+    const user = req.user!
 
     const config = webhookConfigs.get(id)
     if (!config) {
@@ -289,7 +289,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.post('/:id/regenerate-secret', async (req: Request, res: Response) => {
   try {
     const { id } = req.params
-    const user = (req as any).user
+    const user = req.user!
 
     const config = webhookConfigs.get(id)
     if (!config) {
@@ -319,7 +319,7 @@ router.get('/:id/deliveries', async (req: Request, res: Response) => {
   try {
     const { id } = req.params
     const { limit = 20 } = req.query
-    const user = (req as any).user
+    const user = req.user!
 
     const config = webhookConfigs.get(id)
     if (!config) {
@@ -349,7 +349,7 @@ router.get('/:id/deliveries', async (req: Request, res: Response) => {
 router.post('/:id/test', async (req: Request, res: Response) => {
   try {
     const { id } = req.params
-    const user = (req as any).user
+    const user = req.user!
 
     const config = webhookConfigs.get(id)
     if (!config) {

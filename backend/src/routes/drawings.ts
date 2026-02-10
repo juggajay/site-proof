@@ -72,7 +72,7 @@ router.get('/:projectId', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
     const { status, search, revision } = req.query
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -142,7 +142,7 @@ router.get('/:projectId', async (req: Request, res: Response) => {
 // POST /api/drawings - Create a new drawing with file upload
 router.post('/', upload.single('file'), async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
@@ -230,7 +230,7 @@ router.patch('/:drawingId', async (req: Request, res: Response) => {
   try {
     const { drawingId } = req.params
     const { title, revision, issueDate, status, supersededById } = req.body
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -285,7 +285,7 @@ router.patch('/:drawingId', async (req: Request, res: Response) => {
 router.delete('/:drawingId', async (req: Request, res: Response) => {
   try {
     const { drawingId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -327,7 +327,7 @@ router.delete('/:drawingId', async (req: Request, res: Response) => {
 router.post('/:drawingId/supersede', upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { drawingId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -415,7 +415,7 @@ router.post('/:drawingId/supersede', upload.single('file'), async (req: Request,
 router.get('/:projectId/current-set', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })

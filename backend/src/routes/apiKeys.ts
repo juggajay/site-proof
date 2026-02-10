@@ -189,7 +189,7 @@ export async function authenticateApiKey(req: Request, res: Response, next: Next
     }).catch(err => console.error('Failed to update API key last used:', err))
 
     // Set user on request
-    ;(req as any).user = apiKeyRecord.user
+    req.user = apiKeyRecord.user as Express.Request['user']
     ;(req as any).apiKey = {
       id: apiKeyRecord.id,
       scopes: apiKeyRecord.scopes.split(','),

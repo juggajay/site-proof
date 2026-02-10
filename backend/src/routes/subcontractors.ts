@@ -1139,7 +1139,7 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
   try {
     const { id, empId } = req.params
     const { status, counterRate } = req.body
-    const userId = (req as any).user?.userId
+    const userId = req.user?.userId
 
     const validStatuses = ['pending', 'approved', 'inactive', 'counter']
     if (!validStatuses.includes(status)) {
@@ -1332,7 +1332,7 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
   try {
     const { id, plantId } = req.params
     const { status, counterDryRate, counterWetRate } = req.body
-    const userId = (req as any).user?.userId
+    const userId = req.user?.userId
 
     const validStatuses = ['pending', 'approved', 'inactive', 'counter']
     if (!validStatuses.includes(status)) {

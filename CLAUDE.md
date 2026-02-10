@@ -8,7 +8,7 @@ Construction quality management platform for civil contractors. Manages lots, IT
 # Backend (runs on :3001)
 cd backend && pnpm install && pnpm dev
 
-# Frontend (runs on :5173)
+# Frontend (runs on :5174)
 cd frontend && pnpm install && pnpm dev
 ```
 
@@ -41,7 +41,7 @@ site-proofv3/
 | Layer | Technology |
 |-------|------------|
 | Frontend | React 18, Vite, TailwindCSS, shadcn/ui |
-| State | TanStack Query (server), Zustand (client) |
+| State | TanStack Query (server state) |
 | Forms | React Hook Form + Zod validation |
 | Backend | Express.js, tRPC v10 |
 | Database | PostgreSQL via Prisma ORM (Supabase hosted) |
@@ -93,12 +93,12 @@ const { hasAccess } = useCommercialAccess()
 ```typescript
 // backend/src/routes/example.ts
 import { Router } from 'express'
-import { authenticateToken } from '../middleware/authMiddleware.js'
+import { requireAuth } from '../middleware/authMiddleware.js'
 import { prisma } from '../lib/prisma.js'
 
 const router = Router()
 
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   const userId = req.user!.id
   // ... handler logic
 })
@@ -187,7 +187,7 @@ JWT_SECRET=...
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_KEY=...
 RESEND_API_KEY=...
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://localhost:5174
 ```
 
 ### Frontend (.env)
@@ -226,7 +226,7 @@ VITE_SUPABASE_ANON_KEY=...
 ## Security Checklist
 
 ### Backend
-- [ ] Always use `authenticateToken` middleware on protected routes
+- [ ] Always use `requireAuth` middleware on protected routes
 - [ ] Check user permissions in route handler (don't trust client-side checks)
 - [ ] Validate all input with Zod schemas before processing
 - [ ] Use Prisma parameterized queries (never raw SQL with user input)

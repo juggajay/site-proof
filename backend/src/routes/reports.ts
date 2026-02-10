@@ -1000,7 +1000,7 @@ reportsRouter.get('/schedules', async (req, res) => {
 reportsRouter.post('/schedules', async (req, res) => {
   try {
     const { projectId, reportType, frequency, dayOfWeek, dayOfMonth, timeOfDay, recipients } = req.body
-    const userId = (req as any).user?.id
+    const userId = req.user?.id
 
     if (!projectId || !reportType || !frequency || !recipients) {
       return res.status(400).json({

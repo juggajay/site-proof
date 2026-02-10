@@ -98,7 +98,7 @@ export function errorHandler(
       method: req.method,
       path: req.path,
       query: req.query,
-      userId: (req as any).user?.id,
+      userId: req.user?.id,
       ip: req.ip || req.connection?.remoteAddress,
       userAgent: req.headers['user-agent'],
       apiKeyId: (req as any).apiKey?.id,

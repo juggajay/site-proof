@@ -20,7 +20,7 @@ const avatarStorage = multer.diskStorage({
     cb(null, avatarUploadDir)
   },
   filename: (req, file, cb) => {
-    const userId = (req as any).userId || 'unknown'
+    const userId = req.user?.userId || 'unknown'
     const ext = path.extname(file.originalname).toLowerCase()
     cb(null, `avatar-${userId}-${Date.now()}${ext}`)
   }

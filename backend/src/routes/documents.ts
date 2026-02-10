@@ -366,7 +366,7 @@ router.get('/:projectId', async (req: Request, res: Response) => {
   try {
     const { projectId } = req.params
     const { category, documentType, lotId, search, dateFrom, dateTo } = req.query
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -446,7 +446,7 @@ router.get('/:projectId', async (req: Request, res: Response) => {
 // POST /api/documents/upload - Upload a document
 router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
@@ -533,7 +533,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
 router.post('/:documentId/version', upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
     }
@@ -654,7 +654,7 @@ router.post('/:documentId/version', upload.single('file'), async (req: Request, 
 router.get('/:documentId/versions', async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -705,7 +705,7 @@ router.get('/:documentId/versions', async (req: Request, res: Response) => {
 router.get('/file/:documentId', async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -742,7 +742,7 @@ router.post('/:documentId/signed-url', async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
     const { expiresInMinutes = 15 } = req.body
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -792,7 +792,7 @@ router.post('/:documentId/signed-url', async (req: Request, res: Response) => {
 router.delete('/:documentId', async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -838,7 +838,7 @@ router.delete('/:documentId', async (req: Request, res: Response) => {
 router.post('/:documentId/classify', async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1081,7 +1081,7 @@ router.post('/:documentId/save-classification', async (req: Request, res: Respon
   try {
     const { documentId } = req.params
     const { classification, classifications } = req.body
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
@@ -1138,7 +1138,7 @@ router.patch('/:documentId', async (req: Request, res: Response) => {
   try {
     const { documentId } = req.params
     const { lotId, category, caption, tags, isFavourite } = req.body
-    const userId = (req as any).user?.id
+    const userId = req.user!.id
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' })
