@@ -1,0 +1,7 @@
+dist/
+build/
+node_modules/
+coverage/
+prisma/
+uploads/
+logs/
