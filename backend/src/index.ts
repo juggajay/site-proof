@@ -16,9 +16,6 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import path from 'path'
-import * as trpcExpress from '@trpc/server/adapters/express'
-import { createContext } from './trpc/context.js'
-import { appRouter } from './trpc/router.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestLogger, getPerformanceMetrics } from './middleware/requestLogger.js'
 import { rateLimiter, authRateLimiter } from './middleware/rateLimiter.js'
@@ -185,22 +182,12 @@ app.use('/api/auth', oauthRouter)  // Feature #414, #1004: Google OAuth support
 app.use('/api/webhooks', webhooksRouter)  // Feature #746: Webhook external integration
 app.use('/api/push', pushNotificationsRouter)  // Feature #657: Mobile push notifications
 
-// tRPC
-app.use(
-  '/trpc',
-  trpcExpress.createExpressMiddleware({
-    router: appRouter,
-    createContext,
-  })
-)
-
 // Error handling
 app.use(errorHandler)
 
 // Start server
 const server = app.listen(PORT, () => {
   console.log(`🚀 SiteProof API server running on http://localhost:${PORT}`)
-  console.log(`📊 tRPC endpoint: http://localhost:${PORT}/trpc`)
   console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`)
   console.log(`❤️  Health check: http://localhost:${PORT}/health`)
 })
@@ -264,5 +251,3 @@ async function gracefulShutdown(signal: string) {
 // Handle shutdown signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
-
-export type { AppRouter } from './trpc/router.js'

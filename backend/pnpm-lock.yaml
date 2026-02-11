@@ -14,9 +14,6 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.39.0
         version: 2.90.0
-      '@trpc/server':
-        specifier: ^10.45.0
-        version: 10.45.4
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -589,9 +586,6 @@ packages:
   '@supabase/supabase-js@2.90.0':
     resolution: {integrity: sha512-foWQl5x1+LuqT7qdnAoCDcKHTNBSaED+eSEOEmmpqXiQuCfJU2K0lDkfGm7PUBx/BDaw3tFObzuJyZtHDbrehA==}
     engines: {node: '>=20.0.0'}
-
-  '@trpc/server@10.45.4':
-    resolution: {integrity: sha512-5MuyK5sDuFVGHOT9EMVHgRjP5I5j3RqGymcb5D47UOp8tzn6LH0g1lEgYrAsOZ12vmk1gpxMw/v/y4xHHK/Qdg==}
 
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
@@ -2457,8 +2451,6 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
-
-  '@trpc/server@10.45.4': {}
 
   '@types/body-parser@1.19.6':
     dependencies:
