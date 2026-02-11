@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import express from 'express'
-import { ncrsRouter } from './ncrs.js'
+import { ncrsRouter } from './ncrs/index.js'
 import { authRouter } from './auth.js'
 import { lotsRouter } from './lots.js'
 import { prisma } from '../lib/prisma.js'

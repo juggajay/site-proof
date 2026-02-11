@@ -1,49 +1,18 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiFetch, ApiError } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
-import { Link2, Check, Download, Eye, X, RefreshCw, ClipboardCheck, AlertTriangle } from 'lucide-react'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
 import { LazyHoldPointsChart } from '@/components/charts/LazyCharts'
-import { SignaturePad } from '@/components/ui/SignaturePad'
 
-interface HoldPoint {
-  id: string
-  lotId: string
-  lotNumber: string
-  itpChecklistItemId: string
-  description: string
-  pointType: string
-  status: string
-  notificationSentAt: string | null
-  scheduledDate: string | null
-  releasedAt: string | null
-  releasedByName: string | null
-  releaseNotes: string | null
-  sequenceNumber: number
-  isCompleted: boolean
-  isVerified: boolean
-  createdAt: string
-}
+// Types
+import type { HoldPoint, HoldPointDetails, RequestError, StatusFilter } from './types'
 
-interface PrerequisiteItem {
-  id: string
-  description: string
-  sequenceNumber: number
-  isHoldPoint: boolean
-  isCompleted: boolean
-  isVerified: boolean
-  completedAt: string | null
-}
-
-interface HoldPointDetails {
-  holdPoint: HoldPoint
-  prerequisites: PrerequisiteItem[]
-  incompletePrerequisites: PrerequisiteItem[]
-  canRequestRelease: boolean
-  defaultRecipients?: string[] // Feature #697 - HP default recipients
-  approvalRequirement?: 'any' | 'superintendent' // Feature #698 - HP approval requirements
-}
+// Extracted components
+import { HoldPointStatusFilter, HoldPointSummaryCards } from './components/HoldPointStatusFilter'
+import { HoldPointsTable, isOverdue, getStatusLabel } from './components/HoldPointsTable'
+import { RequestReleaseModal } from './components/RequestReleaseModal'
+import { RecordReleaseModal } from './components/RecordReleaseModal'
 
 export function HoldPointsPage() {
   const { projectId } = useParams()
@@ -54,173 +23,19 @@ export function HoldPointsPage() {
   const [holdPointDetails, setHoldPointDetails] = useState<HoldPointDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [requesting, setRequesting] = useState(false)
-  const [requestError, setRequestError] = useState<{
-    message: string;
-    incompleteItems?: PrerequisiteItem[];
-    code?: string;
-    details?: {
-      scheduledDate?: string;
-      workingDaysNotice?: number;
-      minimumNoticeDays?: number;
-      requiresOverride?: boolean;
-    };
-  } | null>(null)
-  const [_noticePeriodOverride, setNoticePeriodOverride] = useState(false)
-  const [_noticePeriodOverrideReason, setNoticePeriodOverrideReason] = useState('')
+  const [requestError, setRequestError] = useState<RequestError | null>(null)
   const [copiedHpId, setCopiedHpId] = useState<string | null>(null)
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null)
   const [chasingHpId, setChasingHpId] = useState<string | null>(null)
   const [showRecordReleaseModal, setShowRecordReleaseModal] = useState(false)
   const [recordingRelease, setRecordingRelease] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'notified' | 'released'>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
-  // Generate Evidence Package PDF handler
-  const handleGenerateEvidencePackage = async (hp: HoldPoint) => {
-    if (!hp.id.startsWith('virtual-')) {
-      setGeneratingPdf(hp.id)
-      try {
-        const data = await apiFetch<any>(`/api/holdpoints/${hp.id}/evidence-package`)
-        const evidencePackage = data.evidencePackage as HPEvidencePackageData
-
-        // Generate the PDF
-        generateHPEvidencePackagePDF(evidencePackage)
-
-        toast({
-          title: 'Evidence Package Generated',
-          description: `PDF downloaded for ${hp.lotNumber}`,
-        })
-      } catch (err) {
-        console.error('Failed to generate evidence package:', err)
-        toast({
-          title: 'Error',
-          description: 'Failed to generate evidence package PDF',
-          variant: 'error',
-        })
-      } finally {
-        setGeneratingPdf(null)
-      }
-    }
-  }
-
-  // Copy HP link handler
-  const handleCopyHpLink = async (hpId: string, lotNumber: string, _description: string) => {
-    const url = `${window.location.origin}/projects/${projectId}/holdpoints?hp=${hpId}`
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopiedHpId(hpId)
-      toast({
-        title: 'Link copied!',
-        description: `Link to HP for ${lotNumber} has been copied.`,
-      })
-      setTimeout(() => setCopiedHpId(null), 2000)
-    } catch (err) {
-      // Fallback
-      const textArea = document.createElement('textarea')
-      textArea.value = url
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
-      setCopiedHpId(hpId)
-      toast({
-        title: 'Link copied!',
-        description: `Link to HP for ${lotNumber} has been copied.`,
-      })
-      setTimeout(() => setCopiedHpId(null), 2000)
-    }
-  }
-
-  // Record release handler (Feature #184)
-  const handleRecordRelease = (hp: HoldPoint) => {
-    setSelectedHoldPoint(hp)
-    setShowRecordReleaseModal(true)
-  }
-
-  const handleSubmitRecordRelease = async (
-    releasedByName: string,
-    releasedByOrg: string,
-    _releaseDate: string,
-    _releaseTime: string,
-    releaseNotes: string,
-    releaseMethod: string = 'digital',
-    signatureDataUrl: string | null = null
-  ) => {
-    if (!selectedHoldPoint || selectedHoldPoint.id.startsWith('virtual-')) return
-
-    setRecordingRelease(true)
-    try {
-      await apiFetch(`/api/holdpoints/${selectedHoldPoint.id}/release`, {
-        method: 'POST',
-        body: JSON.stringify({
-          releasedByName,
-          releasedByOrg,
-          releaseMethod,
-          releaseNotes: releaseNotes || null,
-          signatureDataUrl: signatureDataUrl || null,
-        }),
-      })
-
-      // Refresh hold points list
-      try {
-        const refreshData = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
-        setHoldPoints(refreshData.holdPoints || [])
-      } catch { /* ignore refresh failure */ }
-
-      toast({
-        title: 'Release Recorded',
-        description: `Hold point for ${selectedHoldPoint.lotNumber} has been released`,
-      })
-
-      setShowRecordReleaseModal(false)
-      setSelectedHoldPoint(null)
-    } catch (err) {
-      console.error('Failed to record release:', err)
-      toast({
-        title: 'Error',
-        description: 'Failed to record hold point release',
-        variant: 'error',
-      })
-    } finally {
-      setRecordingRelease(false)
-    }
-  }
-
-  // Chase hold point handler (Feature #183)
-  const handleChaseHoldPoint = async (hp: HoldPoint) => {
-    if (hp.id.startsWith('virtual-')) return
-
-    setChasingHpId(hp.id)
-    try {
-      const data = await apiFetch<any>(`/api/holdpoints/${hp.id}/chase`, {
-        method: 'POST',
-      })
-
-      // Refresh hold points list
-      try {
-        const refreshData = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
-        setHoldPoints(refreshData.holdPoints || [])
-      } catch { /* ignore refresh failure */ }
-
-      toast({
-        title: 'Chase sent',
-        description: `Follow-up notification sent for ${hp.lotNumber}. Chase count: ${(data.holdPoint?.chaseCount || 1)}`,
-      })
-    } catch (err) {
-      console.error('Failed to chase hold point:', err)
-      toast({
-        title: 'Error',
-        description: 'Failed to send chase notification',
-        variant: 'error',
-      })
-    } finally {
-      setChasingHpId(null)
-    }
-  }
+  // --- Data fetching ---
 
   useEffect(() => {
     async function fetchHoldPoints() {
       if (!projectId) return
-
       try {
         const data = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
         setHoldPoints(data.holdPoints || [])
@@ -230,11 +45,17 @@ export function HoldPointsPage() {
         setLoading(false)
       }
     }
-
     fetchHoldPoints()
   }, [projectId])
 
-  const fetchHoldPointDetails = async (hp: HoldPoint) => {
+  const refreshHoldPoints = useCallback(async () => {
+    try {
+      const data = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
+      setHoldPoints(data.holdPoints || [])
+    } catch { /* ignore refresh failure */ }
+  }, [projectId])
+
+  const fetchHoldPointDetails = useCallback(async (hp: HoldPoint) => {
     setLoadingDetails(true)
     setRequestError(null)
     try {
@@ -247,15 +68,126 @@ export function HoldPointsPage() {
     } finally {
       setLoadingDetails(false)
     }
-  }
+  }, [])
 
-  const handleRequestRelease = (hp: HoldPoint) => {
+  // --- Derived data ---
+
+  const filteredHoldPoints = useMemo(
+    () => statusFilter === 'all' ? holdPoints : holdPoints.filter(hp => hp.status === statusFilter),
+    [holdPoints, statusFilter]
+  )
+
+  const stats = useMemo(() => ({
+    total: holdPoints.length,
+    pending: holdPoints.filter(hp => hp.status === 'pending').length,
+    notified: holdPoints.filter(hp => hp.status === 'notified').length,
+    releasedThisWeek: holdPoints.filter(hp => {
+      if (hp.status !== 'released' || !hp.releasedAt) return false
+      const releasedDate = new Date(hp.releasedAt)
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      return releasedDate >= weekAgo
+    }).length,
+    overdue: holdPoints.filter(hp => isOverdue(hp)).length,
+  }), [holdPoints])
+
+  const chartData = useMemo(() => {
+    const releasesOverTime: { date: string; releases: number }[] = []
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const dayStart = new Date(date)
+      dayStart.setHours(0, 0, 0, 0)
+      const dayEnd = new Date(date)
+      dayEnd.setHours(23, 59, 59, 999)
+      const releases = holdPoints.filter(hp => {
+        if (!hp.releasedAt) return false
+        const releasedDate = new Date(hp.releasedAt)
+        return releasedDate >= dayStart && releasedDate <= dayEnd
+      }).length
+      releasesOverTime.push({ date: dateStr, releases })
+    }
+    const releasedHPs = holdPoints.filter(hp => hp.status === 'released' && hp.notificationSentAt && hp.releasedAt)
+    let avgTimeToRelease = 0
+    if (releasedHPs.length > 0) {
+      const totalHours = releasedHPs.reduce((sum, hp) => {
+        const notified = new Date(hp.notificationSentAt!).getTime()
+        const released = new Date(hp.releasedAt!).getTime()
+        return sum + (released - notified) / (1000 * 60 * 60)
+      }, 0)
+      avgTimeToRelease = Math.round(totalHours / releasedHPs.length)
+    }
+    return { releasesOverTime, avgTimeToRelease }
+  }, [holdPoints])
+
+  // --- Handlers ---
+
+  const handleGenerateEvidencePackage = useCallback(async (hp: HoldPoint) => {
+    if (hp.id.startsWith('virtual-')) return
+    setGeneratingPdf(hp.id)
+    try {
+      const data = await apiFetch<any>(`/api/holdpoints/${hp.id}/evidence-package`)
+      generateHPEvidencePackagePDF(data.evidencePackage as HPEvidencePackageData)
+      toast({ title: 'Evidence Package Generated', description: `PDF downloaded for ${hp.lotNumber}` })
+    } catch (err) {
+      console.error('Failed to generate evidence package:', err)
+      toast({ title: 'Error', description: 'Failed to generate evidence package PDF', variant: 'error' })
+    } finally {
+      setGeneratingPdf(null)
+    }
+  }, [])
+
+  const handleCopyHpLink = useCallback(async (hpId: string, lotNumber: string, _description: string) => {
+    const url = `${window.location.origin}/projects/${projectId}/holdpoints?hp=${hpId}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedHpId(hpId)
+      toast({ title: 'Link copied!', description: `Link to HP for ${lotNumber} has been copied.` })
+      setTimeout(() => setCopiedHpId(null), 2000)
+    } catch {
+      const textArea = document.createElement('textarea')
+      textArea.value = url
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      setCopiedHpId(hpId)
+      toast({ title: 'Link copied!', description: `Link to HP for ${lotNumber} has been copied.` })
+      setTimeout(() => setCopiedHpId(null), 2000)
+    }
+  }, [projectId])
+
+  const handleRequestRelease = useCallback((hp: HoldPoint) => {
     setSelectedHoldPoint(hp)
     setShowRequestModal(true)
     fetchHoldPointDetails(hp)
-  }
+  }, [fetchHoldPointDetails])
 
-  const handleSubmitRequest = async (
+  const handleRecordRelease = useCallback((hp: HoldPoint) => {
+    setSelectedHoldPoint(hp)
+    setShowRecordReleaseModal(true)
+  }, [])
+
+  const handleChaseHoldPoint = useCallback(async (hp: HoldPoint) => {
+    if (hp.id.startsWith('virtual-')) return
+    setChasingHpId(hp.id)
+    try {
+      const data = await apiFetch<any>(`/api/holdpoints/${hp.id}/chase`, { method: 'POST' })
+      await refreshHoldPoints()
+      toast({
+        title: 'Chase sent',
+        description: `Follow-up notification sent for ${hp.lotNumber}. Chase count: ${(data.holdPoint?.chaseCount || 1)}`,
+      })
+    } catch (err) {
+      console.error('Failed to chase hold point:', err)
+      toast({ title: 'Error', description: 'Failed to send chase notification', variant: 'error' })
+    } finally {
+      setChasingHpId(null)
+    }
+  }, [refreshHoldPoints])
+
+  const handleSubmitRequest = useCallback(async (
     scheduledDate: string,
     scheduledTime: string,
     notificationSentTo: string,
@@ -263,10 +195,8 @@ export function HoldPointsPage() {
     overrideReason?: string
   ) => {
     if (!selectedHoldPoint) return
-
     setRequesting(true)
     setRequestError(null)
-
     try {
       await apiFetch(`/api/holdpoints/request-release`, {
         method: 'POST',
@@ -280,17 +210,7 @@ export function HoldPointsPage() {
           noticePeriodOverrideReason: overrideReason || null,
         }),
       })
-
-      // Reset override state on success
-      setNoticePeriodOverride(false)
-      setNoticePeriodOverrideReason('')
-
-      // Success - refresh hold points
-      try {
-        const refreshData = await apiFetch<any>(`/api/holdpoints/project/${projectId}`)
-        setHoldPoints(refreshData.holdPoints || [])
-      } catch { /* ignore refresh failure */ }
-
+      await refreshHoldPoints()
       setShowRequestModal(false)
       setSelectedHoldPoint(null)
       setHoldPointDetails(null)
@@ -300,16 +220,9 @@ export function HoldPointsPage() {
         try {
           const data = JSON.parse(err.body)
           if (data.incompleteItems) {
-            setRequestError({
-              message: data.message,
-              incompleteItems: data.incompleteItems
-            })
+            setRequestError({ message: data.message, incompleteItems: data.incompleteItems })
           } else if (data.code === 'NOTICE_PERIOD_WARNING') {
-            setRequestError({
-              message: data.message,
-              code: data.code,
-              details: data.details
-            })
+            setRequestError({ message: data.message, code: data.code, details: data.details })
           } else {
             setRequestError({ message: data.error || 'Failed to request release' })
           }
@@ -322,96 +235,46 @@ export function HoldPointsPage() {
     } finally {
       setRequesting(false)
     }
-  }
+  }, [selectedHoldPoint, refreshHoldPoints])
 
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      pending: 'bg-gray-100 text-gray-800',
-      notified: 'bg-amber-100 text-amber-800',
-      released: 'bg-green-100 text-green-800',
+  const handleSubmitRecordRelease = useCallback(async (
+    releasedByName: string,
+    releasedByOrg: string,
+    _releaseDate: string,
+    _releaseTime: string,
+    releaseNotes: string,
+    releaseMethod: string = 'digital',
+    signatureDataUrl: string | null = null
+  ) => {
+    if (!selectedHoldPoint || selectedHoldPoint.id.startsWith('virtual-')) return
+    setRecordingRelease(true)
+    try {
+      await apiFetch(`/api/holdpoints/${selectedHoldPoint.id}/release`, {
+        method: 'POST',
+        body: JSON.stringify({
+          releasedByName,
+          releasedByOrg,
+          releaseMethod,
+          releaseNotes: releaseNotes || null,
+          signatureDataUrl: signatureDataUrl || null,
+        }),
+      })
+      await refreshHoldPoints()
+      toast({
+        title: 'Release Recorded',
+        description: `Hold point for ${selectedHoldPoint.lotNumber} has been released`,
+      })
+      setShowRecordReleaseModal(false)
+      setSelectedHoldPoint(null)
+    } catch (err) {
+      console.error('Failed to record release:', err)
+      toast({ title: 'Error', description: 'Failed to record hold point release', variant: 'error' })
+    } finally {
+      setRecordingRelease(false)
     }
-    return styles[status] || styles.pending
-  }
+  }, [selectedHoldPoint, refreshHoldPoints])
 
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      pending: 'Pending',
-      notified: 'Awaiting Release',
-      released: 'Released',
-    }
-    return labels[status] || status
-  }
-
-  // Check if HP is overdue (Feature #190)
-  // An HP is overdue if status is 'notified' and scheduled date has passed
-  const isOverdue = (hp: HoldPoint): boolean => {
-    if (hp.status !== 'notified') return false
-    if (!hp.scheduledDate) return false
-    const scheduled = new Date(hp.scheduledDate)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return scheduled < today
-  }
-
-  // Filter hold points by status (Feature #189)
-  const filteredHoldPoints = statusFilter === 'all'
-    ? holdPoints
-    : holdPoints.filter(hp => hp.status === statusFilter)
-
-  // Calculate summary stats (Feature #191)
-  const stats = {
-    total: holdPoints.length,
-    pending: holdPoints.filter(hp => hp.status === 'pending').length,
-    notified: holdPoints.filter(hp => hp.status === 'notified').length,
-    releasedThisWeek: holdPoints.filter(hp => {
-      if (hp.status !== 'released' || !hp.releasedAt) return false
-      const releasedDate = new Date(hp.releasedAt)
-      const weekAgo = new Date()
-      weekAgo.setDate(weekAgo.getDate() - 7)
-      return releasedDate >= weekAgo
-    }).length,
-    overdue: holdPoints.filter(hp => isOverdue(hp)).length
-  }
-
-  // Calculate chart data (Feature #192)
-  const chartData = useMemo(() => {
-    // HP releases over time - last 7 days
-    const releasesOverTime: { date: string; releases: number }[] = []
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      const dayStart = new Date(date)
-      dayStart.setHours(0, 0, 0, 0)
-      const dayEnd = new Date(date)
-      dayEnd.setHours(23, 59, 59, 999)
-
-      const releases = holdPoints.filter(hp => {
-        if (!hp.releasedAt) return false
-        const releasedDate = new Date(hp.releasedAt)
-        return releasedDate >= dayStart && releasedDate <= dayEnd
-      }).length
-
-      releasesOverTime.push({ date: dateStr, releases })
-    }
-
-    // Average time from notification to release
-    const releasedHPs = holdPoints.filter(hp => hp.status === 'released' && hp.notificationSentAt && hp.releasedAt)
-    let avgTimeToRelease = 0
-    if (releasedHPs.length > 0) {
-      const totalHours = releasedHPs.reduce((sum, hp) => {
-        const notified = new Date(hp.notificationSentAt!).getTime()
-        const released = new Date(hp.releasedAt!).getTime()
-        return sum + (released - notified) / (1000 * 60 * 60) // hours
-      }, 0)
-      avgTimeToRelease = Math.round(totalHours / releasedHPs.length)
-    }
-
-    return { releasesOverTime, avgTimeToRelease }
-  }, [holdPoints])
-
-  // Export hold points to CSV
-  const handleExportCSV = () => {
+  const handleExportCSV = useCallback(() => {
     const headers = ['Lot', 'Description', 'Point Type', 'Status', 'Scheduled Date', 'Released At', 'Released By', 'Release Notes']
     const rows = holdPoints.map(hp => [
       hp.lotNumber,
@@ -421,9 +284,8 @@ export function HoldPointsPage() {
       hp.scheduledDate ? new Date(hp.scheduledDate).toLocaleDateString() : '-',
       hp.releasedAt ? new Date(hp.releasedAt).toLocaleDateString() : '-',
       hp.releasedByName || '-',
-      hp.releaseNotes ? `"${hp.releaseNotes.replace(/"/g, '""')}"` : '-'
+      hp.releaseNotes ? `"${hp.releaseNotes.replace(/"/g, '""')}"` : '-',
     ])
-
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
@@ -432,7 +294,23 @@ export function HoldPointsPage() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }
+  }, [holdPoints, projectId])
+
+  const handleCloseRequestModal = useCallback(() => {
+    setShowRequestModal(false)
+    setSelectedHoldPoint(null)
+    setHoldPointDetails(null)
+    setRequestError(null)
+  }, [])
+
+  const handleCloseRecordModal = useCallback(() => {
+    setShowRecordReleaseModal(false)
+    setSelectedHoldPoint(null)
+  }, [])
+
+  const handleClearFilter = useCallback(() => setStatusFilter('all'), [])
+
+  // --- Render ---
 
   return (
     <div className="space-y-6">
@@ -444,58 +322,18 @@ export function HoldPointsPage() {
           </p>
         </div>
         {holdPoints.length > 0 && (
-          <div className="flex items-center gap-3">
-            {/* Status Filter (Feature #189) */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'pending' | 'notified' | 'released')}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="notified">Awaiting Release</option>
-              <option value="released">Released</option>
-            </select>
-            <button
-              onClick={handleExportCSV}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-            >
-              Export CSV
-            </button>
-          </div>
+          <HoldPointStatusFilter
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            onExportCSV={handleExportCSV}
+          />
         )}
       </div>
 
-      {/* Summary Cards (Feature #191) */}
       {!loading && holdPoints.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-lg border bg-card p-4">
-            <div className="text-sm text-muted-foreground">Total HPs</div>
-            <div className="text-2xl font-bold mt-1">{stats.total}</div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <div className="text-sm text-muted-foreground">Pending</div>
-            <div className="text-2xl font-bold mt-1 text-gray-600">{stats.pending}</div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <div className="text-sm text-muted-foreground">Awaiting Release</div>
-            <div className="text-2xl font-bold mt-1 text-amber-600">
-              {stats.notified}
-              {stats.overdue > 0 && (
-                <span className="ml-2 text-sm font-normal text-red-600">
-                  ({stats.overdue} overdue)
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <div className="text-sm text-muted-foreground">Released This Week</div>
-            <div className="text-2xl font-bold mt-1 text-green-600">{stats.releasedThisWeek}</div>
-          </div>
-        </div>
+        <HoldPointSummaryCards stats={stats} />
       )}
 
-      {/* Charts Section (Feature #192) - Lazy Loaded */}
       {!loading && holdPoints.length > 0 && (
         <LazyHoldPointsChart
           releasesOverTime={chartData.releasesOverTime}
@@ -504,177 +342,22 @@ export function HoldPointsPage() {
         />
       )}
 
-      {loading ? (
-        <div className="flex justify-center p-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      ) : holdPoints.length === 0 ? (
-        <div className="rounded-lg border p-8 text-center">
-          <div className="text-4xl mb-4">🔒</div>
-          <h3 className="text-lg font-semibold mb-2">No Hold Points</h3>
-          <p className="text-muted-foreground mb-4">
-            Hold points are created when ITPs with hold point items are assigned to lots.
-            Create an ITP template with hold point items and assign it to a lot to see hold points here.
-          </p>
-        </div>
-      ) : filteredHoldPoints.length === 0 ? (
-        <div className="rounded-lg border p-8 text-center">
-          <div className="text-4xl mb-4">🔍</div>
-          <h3 className="text-lg font-semibold mb-2">No Hold Points Match Filter</h3>
-          <p className="text-muted-foreground mb-4">
-            No hold points with status "{getStatusLabel(statusFilter)}" found.
-            Try selecting a different status filter.
-          </p>
-          <button
-            onClick={() => setStatusFilter('all')}
-            className="text-primary hover:underline"
-          >
-            Show all hold points
-          </button>
-        </div>
-      ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium">Lot</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Description</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Scheduled</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Released</th>
-                <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredHoldPoints.map((hp) => (
-                <tr
-                  key={hp.id}
-                  className={`hover:bg-muted/25 ${isOverdue(hp) ? 'bg-red-50 border-l-4 border-l-red-500' : ''}`}
-                >
-                  <td className="px-4 py-3 font-medium">
-                    {hp.lotNumber}
-                    {isOverdue(hp) && (
-                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-normal">
-                        OVERDUE
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="max-w-md truncate">{hp.description}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(hp.status)}`}>
-                      {getStatusLabel(hp.status)}
-                    </span>
-                  </td>
-                  <td className={`px-4 py-3 text-sm ${isOverdue(hp) ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
-                    {hp.scheduledDate
-                      ? new Date(hp.scheduledDate).toLocaleDateString()
-                      : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {hp.releasedAt ? (
-                      <div>
-                        <div>{new Date(hp.releasedAt).toLocaleDateString()}</div>
-                        {hp.releasedByName && (
-                          <div className="text-xs text-muted-foreground">{hp.releasedByName}</div>
-                        )}
-                      </div>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleCopyHpLink(hp.id, hp.lotNumber, hp.description)}
-                        className="p-1.5 border rounded hover:bg-muted/50 transition-colors"
-                        title="Copy link to this hold point"
-                      >
-                        {copiedHpId === hp.id ? (
-                          <Check className="h-3.5 w-3.5 text-green-600" />
-                        ) : (
-                          <Link2 className="h-3.5 w-3.5" />
-                        )}
-                      </button>
-                      {hp.status === 'pending' && (
-                        <button
-                          onClick={() => handleRequestRelease(hp)}
-                          className="text-sm text-primary hover:underline"
-                        >
-                          Request Release
-                        </button>
-                      )}
-                      {hp.status === 'notified' && (
-                        <>
-                          <span className="text-sm text-amber-600">Awaiting...</span>
-                          {!hp.id.startsWith('virtual-') && (
-                            <>
-                              <button
-                                onClick={() => handleRecordRelease(hp)}
-                                className="flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100"
-                                title="Record hold point release"
-                              >
-                                <ClipboardCheck className="h-3 w-3" />
-                                <span>Record Release</span>
-                              </button>
-                              <button
-                                onClick={() => handleChaseHoldPoint(hp)}
-                                disabled={chasingHpId === hp.id}
-                                className="flex items-center gap-1 px-2 py-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Send follow-up notification"
-                              >
-                                {chasingHpId === hp.id ? (
-                                  <>
-                                    <RefreshCw className="h-3 w-3 animate-spin" />
-                                    <span>Chasing...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <RefreshCw className="h-3 w-3" />
-                                    <span>Chase</span>
-                                  </>
-                                )}
-                              </button>
-                            </>
-                          )}
-                        </>
-                      )}
-                      {hp.status === 'released' && (
-                        <>
-                          <span className="text-sm text-green-600">✓ Released</span>
-                          {!hp.id.startsWith('virtual-') && (
-                            <button
-                              onClick={() => handleGenerateEvidencePackage(hp)}
-                              disabled={generatingPdf === hp.id}
-                              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Generate Evidence Package PDF"
-                            >
-                              {generatingPdf === hp.id ? (
-                                <>
-                                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
-                                  <span>Generating...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="h-3 w-3" />
-                                  <span>Evidence PDF</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <HoldPointsTable
+        holdPoints={holdPoints}
+        filteredHoldPoints={filteredHoldPoints}
+        loading={loading}
+        statusFilter={statusFilter}
+        copiedHpId={copiedHpId}
+        generatingPdf={generatingPdf}
+        chasingHpId={chasingHpId}
+        onCopyLink={handleCopyHpLink}
+        onRequestRelease={handleRequestRelease}
+        onRecordRelease={handleRecordRelease}
+        onChase={handleChaseHoldPoint}
+        onGenerateEvidence={handleGenerateEvidencePackage}
+        onClearFilter={handleClearFilter}
+      />
 
-      {/* Request Release Modal */}
       {showRequestModal && selectedHoldPoint && (
         <RequestReleaseModal
           holdPoint={selectedHoldPoint}
@@ -682,838 +365,20 @@ export function HoldPointsPage() {
           loading={loadingDetails}
           requesting={requesting}
           error={requestError}
-          onClose={() => {
-            setShowRequestModal(false)
-            setSelectedHoldPoint(null)
-            setHoldPointDetails(null)
-            setRequestError(null)
-          }}
+          onClose={handleCloseRequestModal}
           onSubmit={handleSubmitRequest}
         />
       )}
 
-      {/* Record Release Modal (Feature #184) */}
       {showRecordReleaseModal && selectedHoldPoint && (
         <RecordReleaseModal
           holdPoint={selectedHoldPoint}
           recording={recordingRelease}
           approvalRequirement={holdPointDetails?.approvalRequirement}
-          onClose={() => {
-            setShowRecordReleaseModal(false)
-            setSelectedHoldPoint(null)
-          }}
+          onClose={handleCloseRecordModal}
           onSubmit={handleSubmitRecordRelease}
         />
       )}
-    </div>
-  )
-}
-
-function RequestReleaseModal({
-  holdPoint,
-  details,
-  loading,
-  requesting,
-  error,
-  onClose,
-  onSubmit,
-}: {
-  holdPoint: HoldPoint
-  details: HoldPointDetails | null
-  loading: boolean
-  requesting: boolean
-  error: {
-    message: string;
-    incompleteItems?: PrerequisiteItem[];
-    code?: string;
-    details?: {
-      scheduledDate?: string;
-      workingDaysNotice?: number;
-      minimumNoticeDays?: number;
-      requiresOverride?: boolean;
-    };
-  } | null
-  onClose: () => void
-  onSubmit: (scheduledDate: string, scheduledTime: string, notificationSentTo: string, overrideNoticePeriod?: boolean, overrideReason?: string) => void
-}) {
-  const [scheduledDate, setScheduledDate] = useState('')
-  const [scheduledTime, setScheduledTime] = useState('')
-  const [notificationSentTo, setNotificationSentTo] = useState('')
-  const [showPreview, setShowPreview] = useState(false)
-  const [previewData, setPreviewData] = useState<HPEvidencePackageData | null>(null)
-  const [loadingPreview, setLoadingPreview] = useState(false)
-  const [overrideReason, setOverrideReason] = useState('')
-
-
-  // Feature #697 - Pre-fill notification email with default recipients from project settings
-  useEffect(() => {
-    if (details?.defaultRecipients && details.defaultRecipients.length > 0 && !notificationSentTo) {
-      setNotificationSentTo(details.defaultRecipients.join(', '))
-    }
-  }, [details?.defaultRecipients])
-
-  // Check if we have a notice period warning that needs override
-  const hasNoticePeriodWarning = error?.code === 'NOTICE_PERIOD_WARNING'
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSubmit(scheduledDate, scheduledTime, notificationSentTo)
-  }
-
-  const handleOverrideSubmit = () => {
-    if (!overrideReason.trim()) {
-      toast({
-        title: 'Override reason required',
-        description: 'Please provide a reason for overriding the notice period',
-        variant: 'error',
-      })
-      return
-    }
-    onSubmit(scheduledDate, scheduledTime, notificationSentTo, true, overrideReason)
-  }
-
-  const handlePreviewPackage = async () => {
-    setLoadingPreview(true)
-    try {
-      const data = await apiFetch<{ evidencePackage: HPEvidencePackageData }>('/api/holdpoints/preview-evidence-package', {
-        method: 'POST',
-        body: JSON.stringify({
-          lotId: holdPoint.lotId,
-          itpChecklistItemId: holdPoint.itpChecklistItemId,
-        }),
-      })
-      setPreviewData(data.evidencePackage)
-      setShowPreview(true)
-    } catch (err) {
-      console.error('Failed to fetch preview:', err)
-      toast({
-        title: 'Error',
-        description: 'Failed to load evidence package preview',
-        variant: 'error',
-      })
-    } finally {
-      setLoadingPreview(false)
-    }
-  }
-
-  const handleDownloadPreviewPDF = () => {
-    if (previewData) {
-      generateHPEvidencePackagePDF(previewData)
-      toast({
-        title: 'PDF Downloaded',
-        description: 'Evidence package preview PDF has been downloaded',
-      })
-    }
-  }
-
-  const canSubmit = details?.canRequestRelease && !requesting
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-semibold mb-4">Request Hold Point Release</h2>
-
-        <div className="mb-4 p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Lot</div>
-          <div className="font-medium">{holdPoint.lotNumber}</div>
-          <div className="text-sm text-muted-foreground mt-2">Hold Point</div>
-          <div className="font-medium">{holdPoint.description}</div>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center p-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          </div>
-        ) : (
-          <>
-            {/* Prerequisites Section */}
-            {details && details.prerequisites.length > 0 && (
-              <div className="mb-4">
-                <h3 className="text-sm font-medium mb-2">Prerequisites</h3>
-                <div className="space-y-2">
-                  {details.prerequisites.map((prereq) => (
-                    <div
-                      key={prereq.id}
-                      className={`flex items-center gap-2 p-2 rounded text-sm ${
-                        prereq.isCompleted
-                          ? 'bg-green-50 text-green-800'
-                          : 'bg-red-50 text-red-800'
-                      }`}
-                    >
-                      <span className="text-lg">
-                        {prereq.isCompleted ? '✓' : '✗'}
-                      </span>
-                      <span className="flex-1">
-                        {prereq.sequenceNumber}. {prereq.description}
-                        {prereq.isHoldPoint && (
-                          <span className="ml-2 text-xs px-1 bg-amber-200 rounded">HP</span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Error / Block Message */}
-            {error && !hasNoticePeriodWarning && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <span className="text-red-500 text-xl">⚠️</span>
-                  <div>
-                    <div className="font-medium text-red-800">{error.message}</div>
-                    {error.incompleteItems && error.incompleteItems.length > 0 && (
-                      <div className="mt-2">
-                        <div className="text-sm text-red-700 mb-1">Missing prerequisites:</div>
-                        <ul className="text-sm text-red-600 list-disc list-inside">
-                          {error.incompleteItems.map((item) => (
-                            <li key={item.id}>
-                              {item.sequenceNumber}. {item.description}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Notice Period Warning - Allow Override (Feature #180) */}
-            {hasNoticePeriodWarning && (
-              <div className="mb-4 p-4 bg-amber-50 border border-amber-300 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <span className="text-amber-500 text-xl">⚠️</span>
-                  <div className="flex-1">
-                    <div className="font-medium text-amber-800">{error.message}</div>
-                    {error.details && (
-                      <div className="mt-2 text-sm text-amber-700">
-                        <p>Scheduled date provides only {error.details.workingDaysNotice} working day{error.details.workingDaysNotice !== 1 ? 's' : ''} notice.</p>
-                        <p>Minimum required: {error.details.minimumNoticeDays} working day{error.details.minimumNoticeDays !== 1 ? 's' : ''}.</p>
-                      </div>
-                    )}
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-amber-800 mb-1">
-                          Override Reason (required)
-                        </label>
-                        <textarea
-                          value={overrideReason}
-                          onChange={(e) => setOverrideReason(e.target.value)}
-                          className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm"
-                          placeholder="Explain why this short notice is necessary..."
-                          rows={2}
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleOverrideSubmit}
-                          disabled={requesting || !overrideReason.trim()}
-                          className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 text-sm"
-                        >
-                          {requesting ? 'Requesting...' : 'Override & Submit'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onClose}
-                          className="px-4 py-2 border border-amber-300 rounded-lg hover:bg-amber-100 text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Can Request - Show Form */}
-            {details?.canRequestRelease && !error && (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
-                  <div className="flex items-center gap-2 text-green-800">
-                    <span className="text-lg">✓</span>
-                    <span className="font-medium">All prerequisites completed</span>
-                  </div>
-                  <p className="text-sm text-green-700 mt-1">
-                    You can now request release for this hold point.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Scheduled Date</label>
-                  <input
-                    type="date"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Scheduled Time</label>
-                  <input
-                    type="time"
-                    value={scheduledTime}
-                    onChange={(e) => setScheduledTime(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Notify (Email)</label>
-                  <input
-                    type="email"
-                    value={notificationSentTo}
-                    onChange={(e) => setNotificationSentTo(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg"
-                    placeholder="inspector@example.com"
-                  />
-                </div>
-
-                <div className="flex justify-between items-center pt-4 border-t">
-                  <button
-                    type="button"
-                    onClick={handlePreviewPackage}
-                    disabled={loadingPreview}
-                    className="flex items-center gap-2 px-4 py-2 border border-blue-300 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50"
-                  >
-                    {loadingPreview ? (
-                      <>
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
-                        <span>Loading...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-4 w-4" />
-                        <span>Preview Package</span>
-                      </>
-                    )}
-                  </button>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="px-4 py-2 border rounded-lg hover:bg-muted"
-                      disabled={requesting}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                      disabled={!canSubmit}
-                    >
-                      {requesting ? 'Requesting...' : 'Request Release'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
-
-            {/* Cannot Request - Show Block */}
-            {details && !details.canRequestRelease && !error && (
-              <div className="space-y-4">
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <span className="text-amber-500 text-xl">⚠️</span>
-                    <div>
-                      <div className="font-medium text-amber-800">
-                        Cannot request release yet
-                      </div>
-                      <p className="text-sm text-amber-700 mt-1">
-                        Complete all preceding checklist items before requesting hold point release.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {details.incompletePrerequisites.length > 0 && (
-                  <div>
-                    <div className="text-sm font-medium mb-2">Items to complete:</div>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      {details.incompletePrerequisites.map((item) => (
-                        <li key={item.id} className="flex items-center gap-2">
-                          <span className="text-red-500">✗</span>
-                          {item.sequenceNumber}. {item.description}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="flex justify-end pt-4 border-t">
-                  <button
-                    onClick={onClose}
-                    className="px-4 py-2 border rounded-lg hover:bg-muted"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Evidence Package Preview Modal */}
-      {showPreview && previewData && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
-          <div className="bg-background rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Preview Header */}
-            <div className="flex items-center justify-between p-4 border-b bg-blue-50">
-              <div className="flex items-center gap-2">
-                <Eye className="h-5 w-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-blue-900">Evidence Package Preview</h3>
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">PREVIEW</span>
-              </div>
-              <button
-                onClick={() => setShowPreview(false)}
-                className="p-1 hover:bg-blue-100 rounded"
-              >
-                <X className="h-5 w-5 text-blue-600" />
-              </button>
-            </div>
-
-            {/* Preview Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Hold Point Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <div className="text-sm text-muted-foreground">Hold Point</div>
-                  <div className="font-medium">{previewData.holdPoint.description}</div>
-                </div>
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <div className="text-sm text-muted-foreground">Lot</div>
-                  <div className="font-medium">{previewData.lot.lotNumber}</div>
-                  {previewData.lot.activityType && (
-                    <div className="text-sm text-muted-foreground">{previewData.lot.activityType}</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Project & ITP Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <div className="text-sm text-muted-foreground">Project</div>
-                  <div className="font-medium">{previewData.project.name}</div>
-                  <div className="text-sm text-muted-foreground">{previewData.project.projectNumber}</div>
-                </div>
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <div className="text-sm text-muted-foreground">ITP Template</div>
-                  <div className="font-medium">{previewData.itpTemplate.name}</div>
-                </div>
-              </div>
-
-              {/* Checklist Items */}
-              <div>
-                <h4 className="font-medium mb-3">Checklist Items ({previewData.summary.completedItems}/{previewData.summary.totalChecklistItems} completed)</h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="px-3 py-2 text-left">#</th>
-                        <th className="px-3 py-2 text-left">Description</th>
-                        <th className="px-3 py-2 text-left">Type</th>
-                        <th className="px-3 py-2 text-left">Status</th>
-                        <th className="px-3 py-2 text-left">Completed By</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {previewData.checklist.map((item: any) => (
-                        <tr key={item.sequenceNumber} className={item.isCompleted ? 'bg-green-50/50' : 'bg-red-50/50'}>
-                          <td className="px-3 py-2">{item.sequenceNumber}</td>
-                          <td className="px-3 py-2">{item.description}</td>
-                          <td className="px-3 py-2">
-                            {item.pointType === 'hold' && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded">HP</span>}
-                            {item.pointType === 'witness' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">WP</span>}
-                            {item.pointType === 'standard' && <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-xs rounded">Std</span>}
-                          </td>
-                          <td className="px-3 py-2">
-                            {item.isCompleted ? (
-                              <span className="text-green-600">✓ Completed</span>
-                            ) : (
-                              <span className="text-red-600">✗ Incomplete</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground">{item.completedBy || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Test Results */}
-              {previewData.testResults.length > 0 && (
-                <div>
-                  <h4 className="font-medium mb-3">Test Results ({previewData.summary.passingTests}/{previewData.summary.totalTestResults} passing)</h4>
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="px-3 py-2 text-left">Test Type</th>
-                          <th className="px-3 py-2 text-left">Lab</th>
-                          <th className="px-3 py-2 text-left">Result</th>
-                          <th className="px-3 py-2 text-left">Pass/Fail</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {previewData.testResults.map((test: any) => (
-                          <tr key={test.id}>
-                            <td className="px-3 py-2">{test.testType}</td>
-                            <td className="px-3 py-2">{test.laboratoryName || '-'}</td>
-                            <td className="px-3 py-2">{test.resultValue} {test.resultUnit}</td>
-                            <td className="px-3 py-2">
-                              {test.passFail === 'pass' ? (
-                                <span className="text-green-600">✓ Pass</span>
-                              ) : (
-                                <span className="text-red-600">✗ Fail</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Summary */}
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-2">Evidence Summary</h4>
-                <div className="grid grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <div className="text-blue-700">Checklist Items</div>
-                    <div className="font-semibold text-blue-900">{previewData.summary.completedItems}/{previewData.summary.totalChecklistItems}</div>
-                  </div>
-                  <div>
-                    <div className="text-blue-700">Verified Items</div>
-                    <div className="font-semibold text-blue-900">{previewData.summary.verifiedItems}</div>
-                  </div>
-                  <div>
-                    <div className="text-blue-700">Test Results</div>
-                    <div className="font-semibold text-blue-900">{previewData.summary.passingTests}/{previewData.summary.totalTestResults}</div>
-                  </div>
-                  <div>
-                    <div className="text-blue-700">Photos/Attachments</div>
-                    <div className="font-semibold text-blue-900">{previewData.summary.totalPhotos + previewData.summary.totalAttachments}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Preview Footer */}
-            <div className="flex items-center justify-between p-4 border-t bg-muted/30">
-              <p className="text-sm text-muted-foreground">
-                This is a preview of the evidence package that will be generated.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleDownloadPreviewPDF}
-                  className="flex items-center gap-2 px-4 py-2 border border-blue-300 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100"
-                >
-                  <Download className="h-4 w-4" />
-                  Download PDF
-                </button>
-                <button
-                  onClick={() => setShowPreview(false)}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
-                >
-                  Continue to Request
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Record Release Modal Component (Feature #184, #185, #698)
-function RecordReleaseModal({
-  holdPoint,
-  recording,
-  approvalRequirement,
-  onClose,
-  onSubmit,
-}: {
-  holdPoint: HoldPoint
-  recording: boolean
-  approvalRequirement?: 'any' | 'superintendent'
-  onClose: () => void
-  onSubmit: (
-    releasedByName: string,
-    releasedByOrg: string,
-    releaseDate: string,
-    releaseTime: string,
-    releaseNotes: string,
-    releaseMethod: string,
-    signatureDataUrl: string | null
-  ) => void
-}) {
-  const [releasedByName, setReleasedByName] = useState('')
-  const [releasedByOrg, setReleasedByOrg] = useState('')
-  const [releaseDate, setReleaseDate] = useState(new Date().toISOString().split('T')[0])
-  const [releaseTime, setReleaseTime] = useState(
-    new Date().toTimeString().slice(0, 5)
-  )
-  const [releaseNotes, setReleaseNotes] = useState('')
-  const [releaseMethod, setReleaseMethod] = useState<'digital' | 'email' | 'paper'>('digital')
-  const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
-  // Feature #884: Signature capture state
-  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setEvidenceFile(e.target.files[0])
-    }
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!releasedByName.trim()) {
-      toast({
-        title: 'Name required',
-        description: 'Please enter the name of the person releasing the hold point',
-        variant: 'error',
-      })
-      return
-    }
-    // Feature #884: Require signature for digital release
-    if (releaseMethod === 'digital' && !signatureDataUrl) {
-      toast({
-        title: 'Signature required',
-        description: 'Please provide your signature to release the hold point',
-        variant: 'error',
-      })
-      return
-    }
-    // Note: File upload would be handled separately in a production system
-    // For now, we'll include the filename in the notes if a file was selected
-    let notes = releaseNotes
-    if ((releaseMethod === 'email' || releaseMethod === 'paper') && evidenceFile) {
-      notes = `${releaseNotes}\n[Evidence attached: ${evidenceFile.name}]`.trim()
-    }
-    onSubmit(releasedByName, releasedByOrg, releaseDate, releaseTime, notes, releaseMethod, signatureDataUrl)
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Record Hold Point Release</h2>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-muted rounded"
-            disabled={recording}
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mb-4 p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Lot</div>
-          <div className="font-medium">{holdPoint.lotNumber}</div>
-          <div className="text-sm text-muted-foreground mt-2">Hold Point</div>
-          <div className="font-medium">{holdPoint.description}</div>
-        </div>
-
-        {/* Feature #698 - Superintendent approval requirement notice */}
-        {approvalRequirement === 'superintendent' && (
-          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="text-sm font-medium">Superintendent Approval Required</span>
-            </div>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              This project requires superintendent-level authorization to release hold points.
-            </p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Release Method Selection (Feature #185) */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Release Method</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="releaseMethod"
-                  value="digital"
-                  checked={releaseMethod === 'digital'}
-                  onChange={() => setReleaseMethod('digital')}
-                  className="w-4 h-4 text-primary"
-                />
-                <span className="text-sm">Digital (On-site)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="releaseMethod"
-                  value="email"
-                  checked={releaseMethod === 'email'}
-                  onChange={() => setReleaseMethod('email')}
-                  className="w-4 h-4 text-primary"
-                />
-                <span className="text-sm">Email Confirmation</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="releaseMethod"
-                  value="paper"
-                  checked={releaseMethod === 'paper'}
-                  onChange={() => setReleaseMethod('paper')}
-                  className="w-4 h-4 text-primary"
-                />
-                <span className="text-sm">Paper Form</span>
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Releaser Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={releasedByName}
-              onChange={(e) => setReleasedByName(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
-              placeholder="Enter name of person releasing"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Organization
-            </label>
-            <input
-              type="text"
-              value={releasedByOrg}
-              onChange={(e) => setReleasedByOrg(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
-              placeholder="Enter organization (e.g., Superintendent's Rep)"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Release Date</label>
-              <input
-                type="date"
-                value={releaseDate}
-                onChange={(e) => setReleaseDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Release Time</label>
-              <input
-                type="time"
-                value={releaseTime}
-                onChange={(e) => setReleaseTime(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Notes</label>
-            <textarea
-              value={releaseNotes}
-              onChange={(e) => setReleaseNotes(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
-              rows={3}
-              placeholder="Any additional notes about the release..."
-            />
-          </div>
-
-          {/* Signature or Evidence based on method */}
-          {releaseMethod === 'digital' ? (
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Digital Signature <span className="text-red-500">*</span></label>
-              <SignaturePad
-                onChange={setSignatureDataUrl}
-                width={380}
-                height={150}
-                className="mx-auto"
-              />
-              <p className="text-xs text-muted-foreground">
-                Draw your signature above to authorize this release
-              </p>
-            </div>
-          ) : releaseMethod === 'email' ? (
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Email Evidence</label>
-              <div className="p-4 border border-dashed rounded-lg bg-blue-50/50">
-                <input
-                  type="file"
-                  accept=".pdf,.eml,.msg,.png,.jpg,.jpeg"
-                  onChange={handleFileChange}
-                  className="w-full text-sm"
-                  id="evidence-upload"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Upload email or screenshot as evidence (PDF, EML, MSG, PNG, JPG)
-                </p>
-                {evidenceFile && (
-                  <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700 flex items-center gap-2">
-                    <Check className="h-4 w-4" />
-                    <span>Selected: {evidenceFile.name}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Paper Form Evidence</label>
-              <div className="p-4 border border-dashed rounded-lg bg-amber-50/50">
-                <input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={handleFileChange}
-                  className="w-full text-sm"
-                  id="paper-evidence-upload"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Upload photo or scan of signed release form (PDF, PNG, JPG)
-                </p>
-                {evidenceFile && (
-                  <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700 flex items-center gap-2">
-                    <Check className="h-4 w-4" />
-                    <span>Selected: {evidenceFile.name}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded-lg hover:bg-muted"
-              disabled={recording}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-              disabled={recording || !releasedByName.trim()}
-            >
-              {recording ? 'Recording...' : 'Record Release'}
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   )
 }

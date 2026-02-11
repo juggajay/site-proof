@@ -5,7 +5,7 @@ import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
 
 // Import ITP router - named export
-import { itpRouter } from './itp.js'
+import { itpRouter } from './itp/index.js'
 
 const app = express()
 app.use(express.json())

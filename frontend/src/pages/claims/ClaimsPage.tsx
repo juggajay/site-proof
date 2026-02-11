@@ -1,749 +1,183 @@
 import { useParams } from 'react-router-dom'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { apiFetch } from '@/lib/api'
-import { Plus, FileText, DollarSign, CheckCircle, Clock, AlertCircle, Download, X, Send, Mail, Upload, Package, Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { LazyCumulativeChart, LazyMonthlyChart } from '@/components/charts/LazyCharts'
 import { generateClaimEvidencePackagePDF } from '@/lib/pdfGenerator'
+import type { ClaimPackageOptions } from '@/lib/pdfGenerator'
 
-interface Claim {
-  id: string
-  claimNumber: number
-  periodStart: string
-  periodEnd: string
-  status: 'draft' | 'submitted' | 'certified' | 'paid' | 'disputed'
-  totalClaimedAmount: number
-  certifiedAmount: number | null
-  paidAmount: number | null
-  submittedAt: string | null
-  disputeNotes: string | null
-  disputedAt: string | null
-  lotCount: number
-  paymentDueDate?: string | null
-}
+import type { Claim, CompletenessData, SubmitMethod } from './types'
+import { DEMO_CLAIMS } from './constants'
+import { formatCurrency, calculatePaymentDueDate, exportChartDataToCSV } from './utils'
 
-// SOPA timeframes by Australian state (business days for payment)
-const SOPA_TIMEFRAMES: Record<string, { responseTime: number; paymentTime: number; label: string }> = {
-  NSW: { responseTime: 10, paymentTime: 15, label: 'NSW (Building and Construction Industry Security of Payment Act 1999)' },
-  VIC: { responseTime: 10, paymentTime: 15, label: 'VIC (Building and Construction Industry Security of Payment Act 2002)' },
-  QLD: { responseTime: 10, paymentTime: 15, label: 'QLD (Building Industry Fairness (Security of Payment) Act 2017)' },
-  WA: { responseTime: 14, paymentTime: 28, label: 'WA (Building and Construction Industry (Security of Payment) Act 2021)' },
-  SA: { responseTime: 10, paymentTime: 15, label: 'SA (Building and Construction Industry Security of Payment Act 2009)' },
-  TAS: { responseTime: 10, paymentTime: 15, label: 'TAS (Building and Construction Industry Security of Payment Act 2009)' },
-  NT: { responseTime: 10, paymentTime: 15, label: 'NT (Construction Contracts (Security of Payments) Act 2004)' },
-  ACT: { responseTime: 10, paymentTime: 15, label: 'ACT (Building and Construction Industry (Security of Payment) Act 2009)' },
-}
-
-interface ConformedLot {
-  id: string
-  lotNumber: string
-  activity: string
-  budgetAmount: number
-  selected: boolean
-  percentComplete: number  // 0-100, for partial claims
-}
+import { ClaimsSummary } from './components/ClaimsSummary'
+import { ClaimsTable } from './components/ClaimsTable'
+import { CreateClaimModal } from './components/CreateClaimModal'
+import { SubmitClaimModal } from './components/SubmitClaimModal'
+import { DisputeModal } from './components/DisputeModal'
+import { CompletenessCheckModal } from './components/CompletenessCheckModal'
+import { EvidencePackageModal } from './components/EvidencePackageModal'
 
 export function ClaimsPage() {
   const { projectId } = useParams()
   const [claims, setClaims] = useState<Claim[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Modal visibility state
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [conformedLots, setConformedLots] = useState<ConformedLot[]>([])
-  const [newClaim, setNewClaim] = useState({
-    periodStart: '',
-    periodEnd: '',
-    selectedLots: [] as string[]
-  })
-  const [creating, setCreating] = useState(false)
-  const [showSubmitModal, setShowSubmitModal] = useState<string | null>(null)  // claim id
-  const [submitting, setSubmitting] = useState(false)
-  const [showDisputeModal, setShowDisputeModal] = useState<string | null>(null)  // claim id
-  const [disputeNotes, setDisputeNotes] = useState('')
-  const [disputing, setDisputing] = useState(false)
-  const [generatingEvidence, setGeneratingEvidence] = useState<string | null>(null) // claim id being generated
-  const [showPackageCustomizeModal, setShowPackageCustomizeModal] = useState<string | null>(null) // claim id for customization
-  const [showCompletenessModal, setShowCompletenessModal] = useState<string | null>(null) // claim id for completeness check
-  const [completenessData, setCompletenessData] = useState<any>(null)
+  const [showSubmitModal, setShowSubmitModal] = useState<string | null>(null)
+  const [showDisputeModal, setShowDisputeModal] = useState<string | null>(null)
+  const [showPackageModal, setShowPackageModal] = useState<string | null>(null)
+  const [showCompletenessModal, setShowCompletenessModal] = useState<string | null>(null)
+
+  // Async operation state
+  const [generatingEvidence, setGeneratingEvidence] = useState<string | null>(null)
   const [loadingCompleteness, setLoadingCompleteness] = useState(false)
-  const [packageOptions, setPackageOptions] = useState({
-    includeLotSummary: true,
-    includeLotDetails: true,
-    includeITPChecklists: true,
-    includeTestResults: true,
-    includeNCRs: true,
-    includeHoldPoints: true,
-    includePhotos: true,
-    includeDeclaration: true,
-  })
+  const [completenessData, setCompletenessData] = useState<CompletenessData | null>(null)
 
-  useEffect(() => {
-    fetchClaims()
-  }, [projectId])
-
-  // Run AI completeness check for a claim
-  const runCompletenessCheck = async (claimId: string) => {
-    setShowCompletenessModal(claimId)
-    setLoadingCompleteness(true)
-    setCompletenessData(null)
-
-    try {
-      try {
-        const data = await apiFetch(`/api/projects/${projectId}/claims/${claimId}/completeness-check`)
-        setCompletenessData(data)
-      } catch {
-        // Demo mode fallback
-        setCompletenessData({
-          claimId,
-          claimNumber: claims.find(c => c.id === claimId)?.claimNumber || 0,
-          analyzedAt: new Date().toISOString(),
-          summary: {
-            totalLots: 3,
-            includeCount: 1,
-            reviewCount: 1,
-            excludeCount: 1,
-            averageCompletenessScore: 65,
-            totalClaimAmount: 75000,
-            recommendedAmount: 50000
-          },
-          overallSuggestions: [
-            'Consider excluding 1 lot(s) with critical issues to avoid payment disputes.',
-            'Review 1 lot(s) with warnings before finalizing the claim.',
-            'Excluding recommended lots would reduce the claim by $25,000.'
-          ],
-          lots: [
-            {
-              lotId: '1',
-              lotNumber: 'LOT-001',
-              activityType: 'Earthworks',
-              claimAmount: 25000,
-              completenessScore: 95,
-              recommendation: 'include',
-              issues: [],
-              summary: { itpStatus: '10/10 items complete', testStatus: '5/5 tests passed', holdPointStatus: '2/2 released', ncrStatus: 'None', photoCount: 8 }
-            },
-            {
-              lotId: '2',
-              lotNumber: 'LOT-002',
-              activityType: 'Drainage',
-              claimAmount: 25000,
-              completenessScore: 72,
-              recommendation: 'review',
-              issues: [
-                { type: 'itp_incomplete', severity: 'warning', message: 'ITP 80% complete (2 items remaining)', suggestion: 'Complete remaining ITP checklist items to strengthen the evidence package.' },
-                { type: 'low_photos', severity: 'info', message: 'Only 2 photo(s) uploaded', suggestion: 'Consider adding more photos (minimum 3 recommended) to strengthen evidence.' }
-              ],
-              summary: { itpStatus: '8/10 items complete', testStatus: '3/3 tests passed', holdPointStatus: '1/1 released', ncrStatus: 'None', photoCount: 2 }
-            },
-            {
-              lotId: '3',
-              lotNumber: 'LOT-003',
-              activityType: 'Pavement',
-              claimAmount: 25000,
-              completenessScore: 35,
-              recommendation: 'exclude',
-              issues: [
-                { type: 'unreleased_hp', severity: 'critical', message: '2 hold point(s) not verified/released', suggestion: 'Hold points must be released before claiming. Exclude this lot or obtain hold point releases.' },
-                { type: 'failed_tests', severity: 'critical', message: '1 test(s) failed', suggestion: 'Failed tests indicate non-conformance. Consider excluding this lot or addressing the test failures with retests.' },
-                { type: 'open_ncr', severity: 'warning', message: '1 minor NCR(s) open', suggestion: 'Consider resolving NCRs before claiming for a cleaner evidence package.' }
-              ],
-              summary: { itpStatus: '5/10 items complete', testStatus: '2/3 tests passed', holdPointStatus: '0/2 released', ncrStatus: '0/1 closed', photoCount: 1 }
-            }
-          ]
-        })
-      }
-    } catch (error) {
-      console.error('Error running completeness check:', error)
-      alert('Failed to run completeness check. Please try again.')
-      setShowCompletenessModal(null)
-    } finally {
-      setLoadingCompleteness(false)
-    }
-  }
-
-  // Open package customization modal
-  const openPackageCustomizeModal = (claimId: string) => {
-    // Reset options to default when opening
-    setPackageOptions({
-      includeLotSummary: true,
-      includeLotDetails: true,
-      includeITPChecklists: true,
-      includeTestResults: true,
-      includeNCRs: true,
-      includeHoldPoints: true,
-      includePhotos: true,
-      includeDeclaration: true,
-    })
-    setShowPackageCustomizeModal(claimId)
-  }
-
-  // Generate evidence package for a claim with customization options
-  const handleGenerateEvidencePackage = async (claimId: string, options = packageOptions) => {
-    setShowPackageCustomizeModal(null)
-    setGeneratingEvidence(claimId)
-    const startTime = Date.now()
-
-    try {
-      const data = await apiFetch<any>(`/api/projects/${projectId}/claims/${claimId}/evidence-package`)
-
-      // Generate the PDF with customization options
-      generateClaimEvidencePackagePDF(data, options)
-
-      const totalTime = Date.now() - startTime
-      console.log(`Total evidence package generation time: ${totalTime}ms`)
-
-      // Show success alert with timing
-      alert(`Evidence package generated successfully!\n\nGeneration time: ${(totalTime / 1000).toFixed(1)} seconds\nLots included: ${data.summary.totalLots}`)
-
-    } catch (error) {
-      console.error('Error generating evidence package:', error)
-      alert('Failed to generate evidence package. Please try again.')
-    } finally {
-      setGeneratingEvidence(null)
-    }
-  }
+  useEffect(() => { fetchClaims() }, [projectId])
 
   const fetchClaims = async () => {
     if (!projectId) return
     setLoading(true)
-
     try {
       try {
         const data = await apiFetch<any>(`/api/projects/${projectId}/claims`)
         setClaims(data.claims || [])
       } catch {
-        // Demo data - multiple claims over months for cumulative chart
-        setClaims([
-          {
-            id: '1',
-            claimNumber: 1,
-            periodStart: '2025-09-01',
-            periodEnd: '2025-09-30',
-            status: 'paid',
-            totalClaimedAmount: 85000,
-            certifiedAmount: 82000,
-            paidAmount: 82000,
-            submittedAt: '2025-10-05',
-            disputeNotes: null,
-            disputedAt: null,
-            lotCount: 6
-          },
-          {
-            id: '2',
-            claimNumber: 2,
-            periodStart: '2025-10-01',
-            periodEnd: '2025-10-31',
-            status: 'paid',
-            totalClaimedAmount: 112000,
-            certifiedAmount: 110000,
-            paidAmount: 110000,
-            submittedAt: '2025-11-05',
-            disputeNotes: null,
-            disputedAt: null,
-            lotCount: 9
-          },
-          {
-            id: '3',
-            claimNumber: 3,
-            periodStart: '2025-11-01',
-            periodEnd: '2025-11-30',
-            status: 'paid',
-            totalClaimedAmount: 145000,
-            certifiedAmount: 142500,
-            paidAmount: 142500,
-            submittedAt: '2025-12-05',
-            disputeNotes: null,
-            disputedAt: null,
-            lotCount: 12
-          },
-          {
-            id: '4',
-            claimNumber: 4,
-            periodStart: '2025-12-01',
-            periodEnd: '2025-12-31',
-            status: 'certified',
-            totalClaimedAmount: 168000,
-            certifiedAmount: 165000,
-            paidAmount: null,
-            submittedAt: '2026-01-05',
-            disputeNotes: null,
-            disputedAt: null,
-            lotCount: 14
-          },
-          {
-            id: '5',
-            claimNumber: 5,
-            periodStart: '2026-01-01',
-            periodEnd: '2026-01-31',
-            status: 'submitted',
-            totalClaimedAmount: 89500,
-            certifiedAmount: null,
-            paidAmount: null,
-            submittedAt: '2026-01-07',
-            disputeNotes: null,
-            disputedAt: null,
-            lotCount: 8
-          }
-        ])
+        setClaims([...DEMO_CLAIMS])
       }
-    } catch (error) {
-      console.error('Error fetching claims:', error)
+    } catch {
+      console.error('Error fetching claims')
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchConformedLots = async () => {
-    try {
-      const data = await apiFetch<any>(`/api/projects/${projectId}/lots?status=conformed&unclaimed=true`)
-      const lots = data.lots?.map((lot: any) => ({ ...lot, selected: false, percentComplete: 100 })) || []
-      // Use demo data if no real lots available (for demonstration purposes)
-      if (lots.length === 0) {
-        setConformedLots([
-          { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false, percentComplete: 100 },
-          { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false, percentComplete: 100 },
-          { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false, percentComplete: 100 }
-        ])
-      } else {
-        setConformedLots(lots)
-      }
-    } catch (error) {
-      console.error('Error fetching conformed lots:', error)
-      setConformedLots([
-        { id: '1', lotNumber: 'LOT-005', activity: 'Earthworks', budgetAmount: 25000, selected: false, percentComplete: 100 },
-        { id: '2', lotNumber: 'LOT-006', activity: 'Drainage', budgetAmount: 18000, selected: false, percentComplete: 100 },
-        { id: '3', lotNumber: 'LOT-007', activity: 'Pavement', budgetAmount: 32000, selected: false, percentComplete: 100 }
-      ])
-    }
-  }
+  // --- Summary computations ---
+  const totalClaimed = useMemo(() => claims.reduce((sum, c) => sum + c.totalClaimedAmount, 0), [claims])
+  const totalCertified = useMemo(() => claims.reduce((sum, c) => sum + (c.certifiedAmount || 0), 0), [claims])
+  const totalPaid = useMemo(() => claims.reduce((sum, c) => sum + (c.paidAmount || 0), 0), [claims])
+  const outstanding = useMemo(() => totalCertified - totalPaid, [totalCertified, totalPaid])
 
-  const openCreateModal = () => {
-    setShowCreateModal(true)
-    fetchConformedLots()
-    // Set default dates
-    const today = new Date()
-    const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-    const lastOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    setNewClaim({
-      periodStart: firstOfMonth.toISOString().split('T')[0],
-      periodEnd: lastOfMonth.toISOString().split('T')[0],
-      selectedLots: []
+  // --- Chart data ---
+  const cumulativeChartData = useMemo(() => {
+    if (claims.length === 0) return []
+    const sorted = [...claims].sort((a, b) => new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime())
+    let cumClaimed = 0, cumCertified = 0, cumPaid = 0
+    return sorted.map(c => {
+      cumClaimed += c.totalClaimedAmount; cumCertified += c.certifiedAmount || 0; cumPaid += c.paidAmount || 0
+      return { name: new Date(c.periodEnd).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }), claimNumber: c.claimNumber, claimed: cumClaimed, certified: cumCertified, paid: cumPaid, claimAmount: c.totalClaimedAmount, certifiedAmount: c.certifiedAmount, paidAmount: c.paidAmount }
     })
-  }
+  }, [claims])
 
-  const toggleLotSelection = (lotId: string) => {
-    setConformedLots(lots => lots.map(lot =>
-      lot.id === lotId ? { ...lot, selected: !lot.selected } : lot
-    ))
-  }
+  const monthlyBreakdownData = useMemo(() => {
+    if (claims.length === 0) return []
+    return [...claims].sort((a, b) => new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime())
+      .map(c => ({ name: new Date(c.periodEnd).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }), claimNumber: c.claimNumber, claimed: c.totalClaimedAmount, certified: c.certifiedAmount || 0, paid: c.paidAmount || 0, status: c.status }))
+  }, [claims])
 
-  const updateLotPercentage = (lotId: string, percent: number) => {
-    setConformedLots(lots => lots.map(lot =>
-      lot.id === lotId ? { ...lot, percentComplete: Math.min(100, Math.max(0, percent)) } : lot
-    ))
-  }
-
-  const calculateLotClaimAmount = (lot: ConformedLot) => {
-    return lot.budgetAmount * (lot.percentComplete / 100)
-  }
-
-  const createClaim = async () => {
-    const selectedLots = conformedLots.filter(l => l.selected)
-    if (selectedLots.length === 0) {
-      alert('Please select at least one lot to include in the claim')
-      return
-    }
-
-    setCreating(true)
-    try {
-      try {
-        await apiFetch(`/api/projects/${projectId}/claims`, {
-          method: 'POST',
-          body: JSON.stringify({
-            periodStart: newClaim.periodStart,
-            periodEnd: newClaim.periodEnd,
-            lotIds: selectedLots.map(l => l.id)
-          })
-        })
-        await fetchClaims()
-        setShowCreateModal(false)
-      } catch {
-        // Demo mode - add to local state
-        const totalAmount = selectedLots.reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0)
-        setClaims(prev => [...prev, {
-          id: String(Date.now()),
-          claimNumber: prev.length + 1,
-          periodStart: newClaim.periodStart,
-          periodEnd: newClaim.periodEnd,
-          status: 'draft',
-          totalClaimedAmount: totalAmount,
-          certifiedAmount: null,
-          paidAmount: null,
-          submittedAt: null,
-          disputeNotes: null,
-          disputedAt: null,
-          lotCount: selectedLots.length
-        }])
-        setShowCreateModal(false)
-      }
-    } catch (error) {
-      console.error('Error creating claim:', error)
-      // Demo mode fallback
-      const selectedLots = conformedLots.filter(l => l.selected)
-      const totalAmount = selectedLots.reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0)
-      setClaims(prev => [...prev, {
-        id: String(Date.now()),
-        claimNumber: prev.length + 1,
-        periodStart: newClaim.periodStart,
-        periodEnd: newClaim.periodEnd,
-        status: 'draft',
-        totalClaimedAmount: totalAmount,
-        certifiedAmount: null,
-        paidAmount: null,
-        submittedAt: null,
-        disputeNotes: null,
-        disputedAt: null,
-        lotCount: selectedLots.length
-      }])
-      setShowCreateModal(false)
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const openSubmitModal = (claimId: string) => {
-    setShowSubmitModal(claimId)
-  }
-
-  const handleSubmit = async (method: 'email' | 'download' | 'portal') => {
-    if (!showSubmitModal) return
-    setSubmitting(true)
-
-    const claim = claims.find(c => c.id === showSubmitModal)
-    if (!claim) return
-
-    try {
-      // Update claim status to submitted
-      const updatedClaims = claims.map(c =>
-        c.id === showSubmitModal
-          ? { ...c, status: 'submitted' as const, submittedAt: new Date().toISOString() }
-          : c
-      )
-      setClaims(updatedClaims)
-
-      // Simulate submission based on method
-      if (method === 'email') {
-        alert(`Claim ${claim.claimNumber} submitted via email successfully!`)
-      } else if (method === 'download') {
-        // Create a simple CSV download
-        const csvContent = `Claim Number,${claim.claimNumber}\nPeriod,${claim.periodStart} to ${claim.periodEnd}\nTotal Amount,$${claim.totalClaimedAmount.toLocaleString()}\nLots,${claim.lotCount}\nStatus,Submitted`
-        const blob = new Blob([csvContent], { type: 'text/csv' })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `claim-${claim.claimNumber}.csv`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        alert(`Claim ${claim.claimNumber} downloaded and marked as submitted!`)
-      } else if (method === 'portal') {
-        alert(`Claim ${claim.claimNumber} uploaded to portal successfully!`)
-      }
-
-      setShowSubmitModal(null)
-    } catch (error) {
-      console.error('Error submitting claim:', error)
-      alert('Error submitting claim. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const openDisputeModal = (claimId: string) => {
-    setShowDisputeModal(claimId)
-    setDisputeNotes('')
-  }
-
-  const handleDispute = async () => {
-    if (!showDisputeModal || !disputeNotes.trim()) {
-      alert('Please enter dispute notes')
-      return
-    }
-    setDisputing(true)
-
-    try {
-      try {
-        await apiFetch(`/api/projects/${projectId}/claims/${showDisputeModal}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            status: 'disputed',
-            disputeNotes: disputeNotes.trim()
-          })
-        })
-      } catch {
-        // Fallback to demo mode - continue below
-      }
-      // Update local state
-      setClaims(prev => prev.map(c =>
-        c.id === showDisputeModal
-          ? { ...c, status: 'disputed' as const, disputeNotes: disputeNotes.trim(), disputedAt: new Date().toISOString().split('T')[0] }
-          : c
-      ))
-      alert('Claim marked as disputed')
-      setShowDisputeModal(null)
-    } catch (error) {
-      console.error('Error disputing claim:', error)
-      // Demo mode fallback
-      setClaims(prev => prev.map(c =>
-        c.id === showDisputeModal
-          ? { ...c, status: 'disputed' as const, disputeNotes: disputeNotes.trim(), disputedAt: new Date().toISOString().split('T')[0] }
-          : c
-      ))
-      alert('Claim marked as disputed')
-      setShowDisputeModal(null)
-    } finally {
-      setDisputing(false)
-    }
-  }
-
-  // Calculate business days from a date
-  const addBusinessDays = (startDate: Date, days: number): Date => {
-    let currentDate = new Date(startDate)
-    let businessDays = days
-
-    while (businessDays > 0) {
-      currentDate.setDate(currentDate.getDate() + 1)
-      const dayOfWeek = currentDate.getDay()
-      // Skip weekends (0 = Sunday, 6 = Saturday)
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        businessDays--
-      }
-    }
-
-    return currentDate
-  }
-
-  // Calculate certification due date based on SOPA response timeframes
-  const calculateCertificationDueDate = (submittedAt: string, state: string = 'NSW'): string => {
-    const timeframe = SOPA_TIMEFRAMES[state] || SOPA_TIMEFRAMES.NSW
-    const submissionDate = new Date(submittedAt)
-    return addBusinessDays(submissionDate, timeframe.responseTime).toISOString()
-  }
-
-  // Calculate payment due date based on SOPA timeframes
-  const calculatePaymentDueDate = (submittedAt: string, state: string = 'NSW'): string => {
-    const timeframe = SOPA_TIMEFRAMES[state] || SOPA_TIMEFRAMES.NSW
-    const submissionDate = new Date(submittedAt)
-    return addBusinessDays(submissionDate, timeframe.paymentTime).toISOString()
-  }
-
-  // Get certification due status - only for submitted claims awaiting certification
-  const getCertificationDueStatus = (claim: Claim): { text: string; className: string; isOverdue: boolean } | null => {
-    // Only show certification due for submitted claims (not yet certified/paid)
-    if (!claim.submittedAt || claim.status !== 'submitted') {
-      return null
-    }
-
-    const dueDate = calculateCertificationDueDate(claim.submittedAt)
-    const now = new Date()
-    const due = new Date(dueDate)
-    const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (daysUntilDue < 0) {
-      return { text: `Certification overdue by ${Math.abs(daysUntilDue)} days`, className: 'text-red-600 font-semibold', isOverdue: true }
-    } else if (daysUntilDue <= 3) {
-      return { text: `Certification due in ${daysUntilDue} days`, className: 'text-amber-600', isOverdue: false }
-    } else {
-      return { text: `Cert due ${due.toLocaleDateString('en-AU')}`, className: 'text-muted-foreground', isOverdue: false }
-    }
-  }
-
-  const getPaymentDueStatus = (claim: Claim): { text: string; className: string } | null => {
-    if (!claim.submittedAt || claim.status === 'draft' || claim.status === 'paid') {
-      return null
-    }
-
-    const dueDate = calculatePaymentDueDate(claim.submittedAt)
-    const now = new Date()
-    const due = new Date(dueDate)
-    const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (daysUntilDue < 0) {
-      return { text: `Overdue by ${Math.abs(daysUntilDue)} days`, className: 'text-red-600' }
-    } else if (daysUntilDue <= 3) {
-      return { text: `Due in ${daysUntilDue} days`, className: 'text-amber-600' }
-    } else {
-      return { text: `Due ${due.toLocaleDateString('en-AU')}`, className: 'text-muted-foreground' }
-    }
-  }
-
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null) return '-'
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      minimumFractionDigits: 0
-    }).format(amount)
-  }
-
-  // Export claims to CSV
-  const handleExportCSV = () => {
+  // --- Handlers ---
+  const handleExportCSV = useCallback(() => {
     const headers = ['Claim #', 'Period Start', 'Period End', 'Status', 'Lots', 'Claimed Amount', 'Certified Amount', 'Paid Amount', 'Submitted At', 'Payment Due Date']
-    const rows = claims.map(claim => [
-      `Claim ${claim.claimNumber}`,
-      new Date(claim.periodStart).toLocaleDateString(),
-      new Date(claim.periodEnd).toLocaleDateString(),
-      claim.status,
-      claim.lotCount,
-      claim.totalClaimedAmount,
-      claim.certifiedAmount ?? '-',
-      claim.paidAmount ?? '-',
-      claim.submittedAt ? new Date(claim.submittedAt).toLocaleDateString() : '-',
-      claim.paymentDueDate ? new Date(claim.paymentDueDate).toLocaleDateString() : (claim.submittedAt ? new Date(calculatePaymentDueDate(claim.submittedAt)).toLocaleDateString() : '-')
+    const rows = claims.map(c => [
+      `Claim ${c.claimNumber}`, new Date(c.periodStart).toLocaleDateString(), new Date(c.periodEnd).toLocaleDateString(),
+      c.status, c.lotCount, c.totalClaimedAmount, c.certifiedAmount ?? '-', c.paidAmount ?? '-',
+      c.submittedAt ? new Date(c.submittedAt).toLocaleDateString() : '-',
+      c.paymentDueDate ? new Date(c.paymentDueDate).toLocaleDateString() : (c.submittedAt ? new Date(calculatePaymentDueDate(c.submittedAt)).toLocaleDateString() : '-')
     ])
-
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
     link.setAttribute('download', `progress-claims-${projectId}-${new Date().toISOString().split('T')[0]}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
+    document.body.appendChild(link); link.click(); document.body.removeChild(link)
+  }, [claims, projectId])
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700"><Clock className="h-3 w-3" /> Draft</span>
-      case 'submitted':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><FileText className="h-3 w-3" /> Submitted</span>
-      case 'certified':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><CheckCircle className="h-3 w-3" /> Certified</span>
-      case 'paid':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700"><DollarSign className="h-3 w-3" /> Paid</span>
-      case 'disputed':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><AlertCircle className="h-3 w-3" /> Disputed</span>
-      default:
-        return <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status}</span>
+  const handleExportCumulativeData = useCallback(() => {
+    exportChartDataToCSV(cumulativeChartData.map(i => ({ name: i.name, claimed: i.claimed, certified: i.certified, paid: i.paid })), 'cumulative-claims', ['Name', 'Claimed', 'Certified', 'Paid'])
+  }, [cumulativeChartData])
+
+  const handleExportMonthlyData = useCallback(() => {
+    exportChartDataToCSV(monthlyBreakdownData.map(i => ({ name: i.name, claimed: i.claimed, certified: i.certified, paid: i.paid })), 'monthly-claims-breakdown', ['Name', 'Claimed', 'Certified', 'Paid'])
+  }, [monthlyBreakdownData])
+
+  const handleClaimCreated = useCallback((claim: Claim | null) => {
+    if (claim) {
+      setClaims(prev => [...prev, claim])
+    } else {
+      fetchClaims()
     }
-  }
+  }, [projectId])
 
-  // Calculate summary
-  const totalClaimed = claims.reduce((sum, c) => sum + c.totalClaimedAmount, 0)
-  const totalCertified = claims.reduce((sum, c) => sum + (c.certifiedAmount || 0), 0)
-  const totalPaid = claims.reduce((sum, c) => sum + (c.paidAmount || 0), 0)
-  const outstanding = totalCertified - totalPaid
-
-  // Calculate cumulative chart data - sorted by period end date
-  const cumulativeChartData = useMemo(() => {
-    if (claims.length === 0) return []
-
-    // Sort claims by period end date
-    const sortedClaims = [...claims].sort((a, b) =>
-      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
-    )
-
-    let cumulativeClaimed = 0
-    let cumulativeCertified = 0
-    let cumulativePaid = 0
-
-    return sortedClaims.map(claim => {
-      cumulativeClaimed += claim.totalClaimedAmount
-      cumulativeCertified += claim.certifiedAmount || 0
-      cumulativePaid += claim.paidAmount || 0
-
-      // Format month label
-      const periodEnd = new Date(claim.periodEnd)
-      const monthLabel = periodEnd.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' })
-
-      return {
-        name: monthLabel,
-        claimNumber: claim.claimNumber,
-        claimed: cumulativeClaimed,
-        certified: cumulativeCertified,
-        paid: cumulativePaid,
-        // Individual amounts for tooltip
-        claimAmount: claim.totalClaimedAmount,
-        certifiedAmount: claim.certifiedAmount,
-        paidAmount: claim.paidAmount
-      }
-    })
+  const handleSubmitClaim = useCallback((claimId: string, method: SubmitMethod) => {
+    const claim = claims.find(c => c.id === claimId)
+    if (!claim) return
+    setClaims(prev => prev.map(c => c.id === claimId ? { ...c, status: 'submitted' as const, submittedAt: new Date().toISOString() } : c))
+    if (method === 'email') { alert(`Claim ${claim.claimNumber} submitted via email successfully!`) }
+    else if (method === 'download') {
+      const csvContent = `Claim Number,${claim.claimNumber}\nPeriod,${claim.periodStart} to ${claim.periodEnd}\nTotal Amount,$${claim.totalClaimedAmount.toLocaleString()}\nLots,${claim.lotCount}\nStatus,Submitted`
+      const blob = new Blob([csvContent], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `claim-${claim.claimNumber}.csv`
+      document.body.appendChild(link); link.click(); document.body.removeChild(link)
+      alert(`Claim ${claim.claimNumber} downloaded and marked as submitted!`)
+    } else if (method === 'portal') { alert(`Claim ${claim.claimNumber} uploaded to portal successfully!`) }
+    setShowSubmitModal(null)
   }, [claims])
 
-  // Calculate monthly breakdown chart data (individual amounts per claim/month)
-  const monthlyBreakdownData = useMemo(() => {
-    if (claims.length === 0) return []
+  const handleDisputeClaim = useCallback(async (claimId: string, notes: string) => {
+    try {
+      try {
+        await apiFetch(`/api/projects/${projectId}/claims/${claimId}`, { method: 'PUT', body: JSON.stringify({ status: 'disputed', disputeNotes: notes }) })
+      } catch { /* Demo mode fallback */ }
+      setClaims(prev => prev.map(c => c.id === claimId ? { ...c, status: 'disputed' as const, disputeNotes: notes, disputedAt: new Date().toISOString().split('T')[0] } : c))
+      alert('Claim marked as disputed')
+    } catch {
+      setClaims(prev => prev.map(c => c.id === claimId ? { ...c, status: 'disputed' as const, disputeNotes: notes, disputedAt: new Date().toISOString().split('T')[0] } : c))
+      alert('Claim marked as disputed')
+    }
+    setShowDisputeModal(null)
+  }, [projectId])
 
-    // Sort claims by period end date
-    const sortedClaims = [...claims].sort((a, b) =>
-      new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime()
-    )
-
-    return sortedClaims.map(claim => {
-      const periodEnd = new Date(claim.periodEnd)
-      const monthLabel = periodEnd.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' })
-
-      return {
-        name: monthLabel,
-        claimNumber: claim.claimNumber,
-        claimed: claim.totalClaimedAmount,
-        certified: claim.certifiedAmount || 0,
-        paid: claim.paidAmount || 0,
-        status: claim.status
+  const handleCompletenessCheck = useCallback(async (claimId: string) => {
+    setShowCompletenessModal(claimId); setLoadingCompleteness(true); setCompletenessData(null)
+    try {
+      try {
+        const data = await apiFetch<CompletenessData>(`/api/projects/${projectId}/claims/${claimId}/completeness-check`)
+        setCompletenessData(data)
+      } catch {
+        setCompletenessData({
+          claimId, claimNumber: claims.find(c => c.id === claimId)?.claimNumber || 0, analyzedAt: new Date().toISOString(),
+          summary: { totalLots: 3, includeCount: 1, reviewCount: 1, excludeCount: 1, averageCompletenessScore: 65, totalClaimAmount: 75000, recommendedAmount: 50000 },
+          overallSuggestions: ['Consider excluding 1 lot(s) with critical issues to avoid payment disputes.', 'Review 1 lot(s) with warnings before finalizing the claim.', 'Excluding recommended lots would reduce the claim by $25,000.'],
+          lots: [
+            { lotId: '1', lotNumber: 'LOT-001', activityType: 'Earthworks', claimAmount: 25000, completenessScore: 95, recommendation: 'include', issues: [], summary: { itpStatus: '10/10 items complete', testStatus: '5/5 tests passed', holdPointStatus: '2/2 released', ncrStatus: 'None', photoCount: 8 } },
+            { lotId: '2', lotNumber: 'LOT-002', activityType: 'Drainage', claimAmount: 25000, completenessScore: 72, recommendation: 'review', issues: [{ type: 'itp_incomplete', severity: 'warning', message: 'ITP 80% complete (2 items remaining)', suggestion: 'Complete remaining ITP checklist items to strengthen the evidence package.' }, { type: 'low_photos', severity: 'info', message: 'Only 2 photo(s) uploaded', suggestion: 'Consider adding more photos (minimum 3 recommended) to strengthen evidence.' }], summary: { itpStatus: '8/10 items complete', testStatus: '3/3 tests passed', holdPointStatus: '1/1 released', ncrStatus: 'None', photoCount: 2 } },
+            { lotId: '3', lotNumber: 'LOT-003', activityType: 'Pavement', claimAmount: 25000, completenessScore: 35, recommendation: 'exclude', issues: [{ type: 'unreleased_hp', severity: 'critical', message: '2 hold point(s) not verified/released', suggestion: 'Hold points must be released before claiming. Exclude this lot or obtain hold point releases.' }, { type: 'failed_tests', severity: 'critical', message: '1 test(s) failed', suggestion: 'Failed tests indicate non-conformance. Consider excluding this lot or addressing the test failures with retests.' }, { type: 'open_ncr', severity: 'warning', message: '1 minor NCR(s) open', suggestion: 'Consider resolving NCRs before claiming for a cleaner evidence package.' }], summary: { itpStatus: '5/10 items complete', testStatus: '2/3 tests passed', holdPointStatus: '0/2 released', ncrStatus: '0/1 closed', photoCount: 1 } }
+          ]
+        })
       }
-    })
-  }, [claims])
+    } catch { console.error('Error running completeness check'); alert('Failed to run completeness check. Please try again.'); setShowCompletenessModal(null) }
+    finally { setLoadingCompleteness(false) }
+  }, [projectId, claims])
 
-  // Export chart data to CSV
-  const exportChartDataToCSV = (data: any[], filename: string, headers: string[]) => {
-    // Build CSV content
-    const csvRows = [headers.join(',')]
+  const handleGenerateEvidencePackage = useCallback(async (claimId: string, options: ClaimPackageOptions) => {
+    setShowPackageModal(null); setGeneratingEvidence(claimId); const startTime = Date.now()
+    try {
+      const data = await apiFetch<any>(`/api/projects/${projectId}/claims/${claimId}/evidence-package`)
+      generateClaimEvidencePackagePDF(data, options)
+      const totalTime = Date.now() - startTime
+      alert(`Evidence package generated successfully!\n\nGeneration time: ${(totalTime / 1000).toFixed(1)} seconds\nLots included: ${data.summary.totalLots}`)
+    } catch { console.error('Error generating evidence package'); alert('Failed to generate evidence package. Please try again.') }
+    finally { setGeneratingEvidence(null) }
+  }, [projectId])
 
-    data.forEach(row => {
-      const values = headers.map(header => {
-        // Convert header to camelCase key
-        const key = header.toLowerCase().replace(/ /g, '')
-        const value = row[key] ?? row[header.toLowerCase()] ?? ''
-        // Escape values that contain commas
-        return typeof value === 'string' && value.includes(',')
-          ? `"${value}"`
-          : value
-      })
-      csvRows.push(values.join(','))
-    })
+  const handleExcludeLots = useCallback(() => {
+    alert('In a full implementation, this would remove excluded lots from the claim and recalculate totals.')
+  }, [])
 
-    const csvContent = csvRows.join('\n')
-
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', `${filename}-${new Date().toISOString().split('T')[0]}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-  }
-
-  const handleExportCumulativeData = () => {
-    const exportData = cumulativeChartData.map(item => ({
-      name: item.name,
-      claimed: item.claimed,
-      certified: item.certified,
-      paid: item.paid
-    }))
-    exportChartDataToCSV(exportData, 'cumulative-claims', ['Name', 'Claimed', 'Certified', 'Paid'])
-  }
-
-  const handleExportMonthlyData = () => {
-    const exportData = monthlyBreakdownData.map(item => ({
-      name: item.name,
-      claimed: item.claimed,
-      certified: item.certified,
-      paid: item.paid
-    }))
-    exportChartDataToCSV(exportData, 'monthly-claims-breakdown', ['Name', 'Claimed', 'Certified', 'Paid'])
-  }
+  // --- Find claim for submit modal ---
+  const submitClaim = useMemo(() => showSubmitModal ? claims.find(c => c.id === showSubmitModal) : null, [showSubmitModal, claims])
 
   if (loading) {
     return (
@@ -759,798 +193,42 @@ export function ClaimsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Progress Claims</h1>
-          <p className="text-muted-foreground mt-1">
-            SOPA-compliant progress claims and payment tracking
-          </p>
+          <p className="text-muted-foreground mt-1">SOPA-compliant progress claims and payment tracking</p>
         </div>
         <div className="flex gap-2">
           {claims.length > 0 && (
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-            >
-              Export CSV
-            </button>
+            <button onClick={handleExportCSV} className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">Export CSV</button>
           )}
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            New Claim
+          <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-4 w-4" /> New Claim
           </button>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Claimed</p>
-          <p className="text-2xl font-bold">{formatCurrency(totalClaimed)}</p>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Certified</p>
-          <p className="text-2xl font-bold">{formatCurrency(totalCertified)}</p>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Paid</p>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Outstanding</p>
-          <p className="text-2xl font-bold text-amber-600">{formatCurrency(outstanding)}</p>
-        </div>
-      </div>
-
-      {/* Cumulative Claims Chart - Lazy Loaded */}
-      <LazyCumulativeChart
-        data={cumulativeChartData}
-        formatCurrency={formatCurrency}
-        onExport={handleExportCumulativeData}
+      <ClaimsSummary totalClaimed={totalClaimed} totalCertified={totalCertified} totalPaid={totalPaid} outstanding={outstanding} />
+      <LazyCumulativeChart data={cumulativeChartData} formatCurrency={formatCurrency} onExport={handleExportCumulativeData} />
+      <LazyMonthlyChart data={monthlyBreakdownData} formatCurrency={formatCurrency} onExport={handleExportMonthlyData} />
+      <ClaimsTable
+        claims={claims} loadingCompleteness={loadingCompleteness} showCompletenessModal={showCompletenessModal} generatingEvidence={generatingEvidence}
+        onCreateClaim={() => setShowCreateModal(true)} onSubmitClaim={setShowSubmitModal} onDisputeClaim={setShowDisputeModal}
+        onCompletenessCheck={handleCompletenessCheck} onEvidencePackage={setShowPackageModal}
       />
 
-      {/* Monthly Breakdown Chart - Lazy Loaded */}
-      <LazyMonthlyChart
-        data={monthlyBreakdownData}
-        formatCurrency={formatCurrency}
-        onExport={handleExportMonthlyData}
-      />
-
-      {/* Claims List */}
-      {claims.length === 0 ? (
-        <div className="rounded-lg border bg-card p-8 text-center">
-          <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-          <h3 className="mt-4 font-semibold">No claims yet</h3>
-          <p className="text-muted-foreground mt-1">Create your first progress claim to get started</p>
-          <button
-            onClick={openCreateModal}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Create Claim
-          </button>
-        </div>
-      ) : (
-        <div className="rounded-lg border">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left p-4 font-medium">Claim #</th>
-                <th className="text-left p-4 font-medium">Period</th>
-                <th className="text-left p-4 font-medium">Status</th>
-                <th className="text-left p-4 font-medium">Certification Due</th>
-                <th className="text-left p-4 font-medium">Payment Due (SOPA)</th>
-                <th className="text-right p-4 font-medium">Lots</th>
-                <th className="text-right p-4 font-medium">Claimed</th>
-                <th className="text-right p-4 font-medium">Certified</th>
-                <th className="text-right p-4 font-medium">Paid</th>
-                <th className="text-right p-4 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {claims.map((claim) => {
-                const certStatus = getCertificationDueStatus(claim)
-                const isOverdue = certStatus?.isOverdue || false
-                return (
-                <tr key={claim.id} className={`border-t hover:bg-muted/30 ${isOverdue ? 'bg-red-50' : ''}`}>
-                  <td className="p-4 font-medium">Claim {claim.claimNumber}</td>
-                  <td className="p-4">
-                    {new Date(claim.periodStart).toLocaleDateString()} - {new Date(claim.periodEnd).toLocaleDateString()}
-                  </td>
-                  <td className="p-4">{getStatusBadge(claim.status)}</td>
-                  <td className="p-4">
-                    {certStatus ? (
-                      <span className={`text-sm ${certStatus.className}`}>{certStatus.text}</span>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                  <td className="p-4">
-                    {(() => {
-                      const dueStatus = getPaymentDueStatus(claim)
-                      if (!dueStatus) return <span className="text-muted-foreground">-</span>
-                      return <span className={`text-sm ${dueStatus.className}`}>{dueStatus.text}</span>
-                    })()}
-                  </td>
-                  <td className="p-4 text-right">{claim.lotCount}</td>
-                  <td className="p-4 text-right font-semibold">{formatCurrency(claim.totalClaimedAmount)}</td>
-                  <td className="p-4 text-right">{formatCurrency(claim.certifiedAmount)}</td>
-                  <td className="p-4 text-right text-green-600">{formatCurrency(claim.paidAmount)}</td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {claim.status === 'draft' && (
-                        <button
-                          onClick={() => openSubmitModal(claim.id)}
-                          className="p-2 hover:bg-primary/10 rounded-lg text-primary"
-                          title="Submit Claim"
-                        >
-                          <Send className="h-4 w-4" />
-                        </button>
-                      )}
-                      {(claim.status === 'submitted' || claim.status === 'certified') && (
-                        <button
-                          onClick={() => openDisputeModal(claim.id)}
-                          className="p-2 hover:bg-red-100 rounded-lg text-red-600"
-                          title="Mark as Disputed"
-                        >
-                          <AlertCircle className="h-4 w-4" />
-                        </button>
-                      )}
-                      <button
-                          onClick={() => runCompletenessCheck(claim.id)}
-                          disabled={loadingCompleteness && showCompletenessModal === claim.id}
-                          className="p-2 hover:bg-purple-100 rounded-lg text-purple-600 disabled:opacity-50"
-                          title="AI Completeness Check"
-                        >
-                          {loadingCompleteness && showCompletenessModal === claim.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Brain className="h-4 w-4" />
-                          )}
-                        </button>
-                      <button
-                          onClick={() => openPackageCustomizeModal(claim.id)}
-                          disabled={generatingEvidence === claim.id}
-                          className="p-2 hover:bg-green-100 rounded-lg text-green-600 disabled:opacity-50"
-                          title="Generate Evidence Package"
-                        >
-                          {generatingEvidence === claim.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Package className="h-4 w-4" />
-                          )}
-                        </button>
-                      <button className="p-2 hover:bg-muted rounded-lg" title="Download CSV">
-                        <Download className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+      {/* Modals */}
+      {showCreateModal && projectId && (
+        <CreateClaimModal projectId={projectId} claims={claims} onClose={() => setShowCreateModal(false)} onClaimCreated={handleClaimCreated} />
       )}
-
-      {/* Create Claim Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-auto">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-xl font-semibold">Create New Progress Claim</h2>
-              <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-muted rounded-lg">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Period Selection */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Period Start</label>
-                  <input
-                    type="date"
-                    value={newClaim.periodStart}
-                    onChange={(e) => setNewClaim(prev => ({ ...prev, periodStart: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Period End</label>
-                  <input
-                    type="date"
-                    value={newClaim.periodEnd}
-                    onChange={(e) => setNewClaim(prev => ({ ...prev, periodEnd: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              </div>
-
-              {/* Lot Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Select Conformed Lots to Include</label>
-                <div className="border rounded-lg divide-y max-h-80 overflow-auto">
-                  {conformedLots.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">
-                      No conformed lots available for claiming
-                    </div>
-                  ) : (
-                    conformedLots.map((lot) => (
-                      <div key={lot.id} className="p-3 hover:bg-muted/30">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={lot.selected}
-                            onChange={() => toggleLotSelection(lot.id)}
-                            className="h-4 w-4 rounded border-gray-300"
-                          />
-                          <div className="flex-1">
-                            <span className="font-medium">{lot.lotNumber}</span>
-                            <span className="text-muted-foreground ml-2">{lot.activity}</span>
-                          </div>
-                          <span className="text-muted-foreground text-sm">{formatCurrency(lot.budgetAmount)}</span>
-                        </div>
-                        {lot.selected && (
-                          <div className="mt-2 ml-7 flex items-center gap-3">
-                            <label className="text-sm text-muted-foreground">% Complete:</label>
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              value={lot.percentComplete}
-                              onChange={(e) => updateLotPercentage(lot.id, Number(e.target.value))}
-                              className="w-20 px-2 py-1 border rounded text-sm text-center"
-                            />
-                            <span className="text-sm">%</span>
-                            <span className="ml-auto font-semibold text-primary">
-                              {formatCurrency(calculateLotClaimAmount(lot))}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Total */}
-              <div className="bg-muted/50 rounded-lg p-4">
-                <div className="flex justify-between items-center">
-                  <span className="font-medium">Total Claim Amount</span>
-                  <span className="text-xl font-bold">
-                    {formatCurrency(conformedLots.filter(l => l.selected).reduce((sum, lot) => sum + calculateLotClaimAmount(lot), 0))}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {conformedLots.filter(l => l.selected).length} lots selected
-                  {conformedLots.filter(l => l.selected).some(l => l.percentComplete < 100) && (
-                    <span className="ml-1">(includes partial progress)</span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 p-4 border-t">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createClaim}
-                disabled={creating || conformedLots.filter(l => l.selected).length === 0}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-              >
-                {creating ? 'Creating...' : 'Create Claim'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {submitClaim && (
+        <SubmitClaimModal claim={submitClaim} onClose={() => setShowSubmitModal(null)} onSubmitted={handleSubmitClaim} />
       )}
-
-      {/* Submit Claim Modal */}
-      {showSubmitModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-xl font-semibold">Submit Claim</h2>
-              <button onClick={() => setShowSubmitModal(null)} className="p-2 hover:bg-muted rounded-lg">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <p className="text-muted-foreground mb-6">
-                Choose how you would like to submit this progress claim:
-              </p>
-
-              <div className="space-y-3">
-                <button
-                  onClick={() => handleSubmit('email')}
-                  disabled={submitting}
-                  className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
-                >
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Mail className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <div className="font-medium">Email</div>
-                    <div className="text-sm text-muted-foreground">Send claim via email to client</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleSubmit('download')}
-                  disabled={submitting}
-                  className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
-                >
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <Download className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <div className="font-medium">Download</div>
-                    <div className="text-sm text-muted-foreground">Download package for manual submission</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleSubmit('portal')}
-                  disabled={submitting}
-                  className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
-                >
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <Upload className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <div className="font-medium">Portal Upload</div>
-                    <div className="text-sm text-muted-foreground">Upload directly to client portal</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex justify-end p-4 border-t">
-              <button
-                onClick={() => setShowSubmitModal(null)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Dispute Claim Modal */}
       {showDisputeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-xl font-semibold text-red-600">Mark Claim as Disputed</h2>
-              <button onClick={() => setShowDisputeModal(null)} className="p-2 hover:bg-muted rounded-lg">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
-                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-red-800">
-                  <p className="font-medium">This action will mark the claim as disputed.</p>
-                  <p className="mt-1">The claim will remain in disputed status until resolved. Please provide details about the dispute.</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Dispute Notes <span className="text-red-500">*</span></label>
-                <textarea
-                  value={disputeNotes}
-                  onChange={(e) => setDisputeNotes(e.target.value)}
-                  placeholder="Describe the reason for the dispute, including any specific items or amounts in question..."
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[120px] resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 p-4 border-t">
-              <button
-                onClick={() => setShowDisputeModal(null)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDispute}
-                disabled={disputing || !disputeNotes.trim()}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                {disputing ? 'Marking...' : 'Mark as Disputed'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DisputeModal claimId={showDisputeModal} onClose={() => setShowDisputeModal(null)} onDisputed={handleDisputeClaim} />
       )}
-
-      {/* Package Customization Modal */}
-      {showPackageCustomizeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-xl font-semibold">Customize Evidence Package</h2>
-              <button onClick={() => setShowPackageCustomizeModal(null)} className="p-2 hover:bg-muted rounded-lg">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <p className="text-muted-foreground text-sm">
-                Select which sections to include in the evidence package PDF:
-              </p>
-
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={packageOptions.includeLotSummary}
-                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeLotSummary: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <div>
-                    <div className="font-medium">Lot Summary Table</div>
-                    <div className="text-sm text-muted-foreground">Overview table of all lots in the claim</div>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={packageOptions.includeLotDetails}
-                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeLotDetails: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <div>
-                    <div className="font-medium">Individual Lot Details</div>
-                    <div className="text-sm text-muted-foreground">Detailed breakdown for each lot</div>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={packageOptions.includeITPChecklists}
-                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeITPChecklists: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <div>
-                    <div className="font-medium">ITP Checklists</div>
-                    <div className="text-sm text-muted-foreground">Inspection and test plan completions</div>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={packageOptions.includeTestResults}
-                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeTestResults: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <div>
-                    <div className="font-medium">Test Results</div>
-                    <div className="text-sm text-muted-foreground">Laboratory test results and pass/fail status</div>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={packageOptions.includeNCRs}
-                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeNCRs: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <div>
-                    <div className="font-medium">Non-Conformance Reports</div>
-                    <div className="text-sm text-muted-foreground">NCR status and resolution details</div>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={packageOptions.includeHoldPoints}
-                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeHoldPoints: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <div>
-                    <div className="font-medium">Hold Points</div>
-                    <div className="text-sm text-muted-foreground">Hold point release information</div>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={packageOptions.includePhotos}
-                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includePhotos: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <div>
-                    <div className="font-medium">Photo Evidence</div>
-                    <div className="text-sm text-muted-foreground">Photo counts and references</div>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={packageOptions.includeDeclaration}
-                    onChange={(e) => setPackageOptions(prev => ({ ...prev, includeDeclaration: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <div>
-                    <div className="font-medium">Declaration Page</div>
-                    <div className="text-sm text-muted-foreground">Signature page for verification</div>
-                  </div>
-                </label>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => setPackageOptions({
-                    includeLotSummary: true,
-                    includeLotDetails: true,
-                    includeITPChecklists: true,
-                    includeTestResults: true,
-                    includeNCRs: true,
-                    includeHoldPoints: true,
-                    includePhotos: true,
-                    includeDeclaration: true,
-                  })}
-                  className="text-sm text-primary hover:underline"
-                >
-                  Select All
-                </button>
-                <span className="text-muted-foreground">|</span>
-                <button
-                  onClick={() => setPackageOptions({
-                    includeLotSummary: false,
-                    includeLotDetails: false,
-                    includeITPChecklists: false,
-                    includeTestResults: false,
-                    includeNCRs: false,
-                    includeHoldPoints: false,
-                    includePhotos: false,
-                    includeDeclaration: false,
-                  })}
-                  className="text-sm text-primary hover:underline"
-                >
-                  Clear All
-                </button>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 p-4 border-t">
-              <button
-                onClick={() => setShowPackageCustomizeModal(null)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleGenerateEvidencePackage(showPackageCustomizeModal, packageOptions)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-              >
-                <Package className="h-4 w-4" />
-                Generate Package
-              </button>
-            </div>
-          </div>
-        </div>
+      {showPackageModal && (
+        <EvidencePackageModal claimId={showPackageModal} onClose={() => setShowPackageModal(null)} onGenerate={handleGenerateEvidencePackage} />
       )}
-
-      {/* AI Completeness Check Modal */}
       {showCompletenessModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-auto">
-            <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
-              <div className="flex items-center gap-2">
-                <Brain className="h-5 w-5 text-purple-600" />
-                <h2 className="text-xl font-semibold">AI Completeness Analysis</h2>
-              </div>
-              <button onClick={() => setShowCompletenessModal(null)} className="p-2 hover:bg-muted rounded-lg">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {loadingCompleteness ? (
-              <div className="flex flex-col items-center justify-center p-12">
-                <Loader2 className="h-12 w-12 animate-spin text-purple-600 mb-4" />
-                <p className="text-muted-foreground">Analyzing claim completeness...</p>
-                <p className="text-sm text-muted-foreground mt-1">Checking ITP completion, hold points, test results, NCRs, and evidence</p>
-              </div>
-            ) : completenessData ? (
-              <div className="p-6 space-y-6">
-                {/* Summary Section */}
-                <div className="grid gap-4 md:grid-cols-4">
-                  <div className="rounded-lg border bg-card p-4 text-center">
-                    <div className={`text-3xl font-bold ${
-                      completenessData.summary.averageCompletenessScore >= 80 ? 'text-green-600' :
-                      completenessData.summary.averageCompletenessScore >= 60 ? 'text-amber-600' : 'text-red-600'
-                    }`}>
-                      {completenessData.summary.averageCompletenessScore}%
-                    </div>
-                    <p className="text-sm text-muted-foreground">Average Score</p>
-                  </div>
-                  <div className="rounded-lg border bg-card p-4 text-center">
-                    <div className="flex justify-center gap-2">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                        <CheckCircle2 className="h-3 w-3" /> {completenessData.summary.includeCount}
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                        <AlertTriangle className="h-3 w-3" /> {completenessData.summary.reviewCount}
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                        <XCircle className="h-3 w-3" /> {completenessData.summary.excludeCount}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-1">Lot Status</p>
-                  </div>
-                  <div className="rounded-lg border bg-card p-4 text-center">
-                    <div className="text-xl font-bold">{formatCurrency(completenessData.summary.totalClaimAmount)}</div>
-                    <p className="text-sm text-muted-foreground">Total Claim</p>
-                  </div>
-                  <div className="rounded-lg border bg-card p-4 text-center">
-                    <div className="text-xl font-bold text-green-600">{formatCurrency(completenessData.summary.recommendedAmount)}</div>
-                    <p className="text-sm text-muted-foreground">Recommended</p>
-                  </div>
-                </div>
-
-                {/* Overall Suggestions */}
-                {completenessData.overallSuggestions.length > 0 && (
-                  <div className="rounded-lg border bg-purple-50 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Brain className="h-4 w-4 text-purple-600" />
-                      <span className="font-medium text-purple-900">AI Suggestions</span>
-                    </div>
-                    <ul className="space-y-1">
-                      {completenessData.overallSuggestions.map((suggestion: string, index: number) => (
-                        <li key={index} className="text-sm text-purple-800 flex items-start gap-2">
-                          <span className="text-purple-400">•</span>
-                          {suggestion}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Lot-by-Lot Analysis */}
-                <div>
-                  <h3 className="font-semibold mb-3">Lot Analysis</h3>
-                  <div className="space-y-3">
-                    {completenessData.lots.map((lot: any) => (
-                      <div key={lot.lotId} className={`rounded-lg border p-4 ${
-                        lot.recommendation === 'exclude' ? 'border-red-200 bg-red-50' :
-                        lot.recommendation === 'review' ? 'border-amber-200 bg-amber-50' :
-                        'border-green-200 bg-green-50'
-                      }`}>
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold">{lot.lotNumber}</span>
-                              <span className="text-sm text-muted-foreground">{lot.activityType}</span>
-                              {lot.recommendation === 'include' && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                  <CheckCircle2 className="h-3 w-3" /> Ready
-                                </span>
-                              )}
-                              {lot.recommendation === 'review' && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                                  <AlertTriangle className="h-3 w-3" /> Review
-                                </span>
-                              )}
-                              {lot.recommendation === 'exclude' && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                                  <XCircle className="h-3 w-3" /> Exclude
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm text-muted-foreground mt-1">
-                              {formatCurrency(lot.claimAmount)}
-                            </div>
-                          </div>
-                          <div className={`text-2xl font-bold ${
-                            lot.completenessScore >= 80 ? 'text-green-600' :
-                            lot.completenessScore >= 60 ? 'text-amber-600' : 'text-red-600'
-                          }`}>
-                            {lot.completenessScore}%
-                          </div>
-                        </div>
-
-                        {/* Summary Stats */}
-                        <div className="grid grid-cols-5 gap-2 mb-3 text-xs">
-                          <div className="text-center p-1 bg-white/50 rounded">
-                            <div className="font-medium">ITP</div>
-                            <div className="text-muted-foreground">{lot.summary.itpStatus}</div>
-                          </div>
-                          <div className="text-center p-1 bg-white/50 rounded">
-                            <div className="font-medium">Tests</div>
-                            <div className="text-muted-foreground">{lot.summary.testStatus}</div>
-                          </div>
-                          <div className="text-center p-1 bg-white/50 rounded">
-                            <div className="font-medium">Hold Points</div>
-                            <div className="text-muted-foreground">{lot.summary.holdPointStatus}</div>
-                          </div>
-                          <div className="text-center p-1 bg-white/50 rounded">
-                            <div className="font-medium">NCRs</div>
-                            <div className="text-muted-foreground">{lot.summary.ncrStatus}</div>
-                          </div>
-                          <div className="text-center p-1 bg-white/50 rounded">
-                            <div className="font-medium">Photos</div>
-                            <div className="text-muted-foreground">{lot.summary.photoCount}</div>
-                          </div>
-                        </div>
-
-                        {/* Issues */}
-                        {lot.issues.length > 0 && (
-                          <div className="space-y-2">
-                            {lot.issues.map((issue: any, index: number) => (
-                              <div key={index} className={`flex items-start gap-2 p-2 rounded text-sm ${
-                                issue.severity === 'critical' ? 'bg-red-100' :
-                                issue.severity === 'warning' ? 'bg-amber-100' : 'bg-blue-100'
-                              }`}>
-                                {issue.severity === 'critical' && <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />}
-                                {issue.severity === 'warning' && <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />}
-                                {issue.severity === 'info' && <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />}
-                                <div>
-                                  <div className={`font-medium ${
-                                    issue.severity === 'critical' ? 'text-red-800' :
-                                    issue.severity === 'warning' ? 'text-amber-800' : 'text-blue-800'
-                                  }`}>{issue.message}</div>
-                                  <div className={`text-xs mt-0.5 ${
-                                    issue.severity === 'critical' ? 'text-red-700' :
-                                    issue.severity === 'warning' ? 'text-amber-700' : 'text-blue-700'
-                                  }`}>{issue.suggestion}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {lot.issues.length === 0 && (
-                          <div className="flex items-center gap-2 text-sm text-green-700">
-                            <CheckCircle2 className="h-4 w-4" />
-                            This lot is complete and ready for claiming
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="flex justify-end gap-2 p-4 border-t sticky bottom-0 bg-background">
-              <button
-                onClick={() => setShowCompletenessModal(null)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
-                Close
-              </button>
-              {completenessData && completenessData.summary.excludeCount > 0 && (
-                <button
-                  onClick={() => {
-                    alert('In a full implementation, this would remove excluded lots from the claim and recalculate totals.')
-                  }}
-                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Exclude Problem Lots
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <CompletenessCheckModal loading={loadingCompleteness} data={completenessData} onClose={() => setShowCompletenessModal(null)} onExcludeLots={handleExcludeLots} />
       )}
     </div>
   )

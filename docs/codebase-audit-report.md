@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-10
 **Scope:** Full-stack security, performance, code quality, database, and DevOps analysis
-**Last Updated:** 2026-02-11 (post-Phase 7 remediation)
+**Last Updated:** 2026-02-11 (post-Phase 8 remediation)
 
 > **AGENT INSTRUCTIONS — READ BEFORE WORKING ON AUDIT ITEMS**
 >
@@ -31,9 +31,9 @@ SiteProof v3 is a well-structured construction management platform with solid fu
 
 | Status | Count | Description |
 |--------|-------|-------------|
-| RESOLVED | 45 | Fully addressed |
+| RESOLVED | 48 | Fully addressed |
 | PARTIAL | 5 | Partially addressed, remaining work noted |
-| DEFERRED | 22 | Intentionally deferred (low value, high risk, or needs future planning) |
+| DEFERRED | 19 | Intentionally deferred (low value, high risk, or needs future planning) |
 
 | Phase | Branch | Commit | Summary |
 |-------|--------|--------|---------|
@@ -45,6 +45,7 @@ SiteProof v3 is a well-structured construction management platform with solid fu
 | Phase 6 | `feat/architecture-improvements` | `9008142` | Component extraction, code splitting, checkProjectAccess |
 | Safe Batch | `refactor/safe-batch` | `2019f5d` | apiFetch migration, as any removal, console.log cleanup, role guards |
 | Phase 7 | `master` | `09cdf26` | Audit logging (D13), ESLint/Prettier (O10), tRPC removal (Q8), constant dedup (Q4) |
+| Phase 8 | `master` | `e863bb7` | Component extraction (P2), virtualization (P3), memoization (P4) for 9 pages + 3 backend routes |
 
 ---
 
@@ -300,53 +301,58 @@ The diary list endpoint loads **ALL diary entries** for a project with **7 relat
 
 ### 2.2 High
 
-#### [P2] Giant Component Files (14 files over 1,000 lines) — DEFERRED
+#### [P2] Giant Component Files (14 files over 1,000 lines) — RESOLVED (Phase 8)
 **Severity:** HIGH
 
-| File | Lines |
-|------|-------|
-| `LotsPage.tsx` | 3,403 |
-| `DailyDiaryPage.tsx` | 2,670 |
-| `TestResultsPage.tsx` | 2,529 |
-| `NCRPage.tsx` | 2,493 |
-| `LotDetailPage.tsx` | 2,222 |
-| `ProjectSettingsPage.tsx` | 1,681 |
-| `ClaimsPage.tsx` | 1,614 |
-| `ReportsPage.tsx` | 1,611 |
-| `HoldPointsPage.tsx` | 1,593 |
-| `SubcontractorsPage.tsx` | 1,532 |
-| `pdfGenerator.ts` (backend) | 2,915 |
-| `diary.ts` (backend) | ~1,800 |
-| `itp.ts` (backend) | ~2,000 |
-| `ncrs.ts` (backend) | ~1,800 |
+All 9 monolithic frontend pages decomposed into orchestration shells with extracted components, hooks, types, and constants. 3 backend route files split into modular sub-files.
 
-These are 3-10x the recommended 500-line limit. They increase bundle size (no tree-shaking), slow HMR, and cause massive re-renders from any state change.
+| File | Before | After | Reduction |
+|------|--------|-------|-----------|
+| `LotsPage.tsx` | 3,247 | 406 | 87% |
+| `DailyDiaryPage.tsx` | 2,498 | 210 | 92% |
+| `TestResultsPage.tsx` | 2,404 | 418 | 83% |
+| `NCRPage.tsx` | 2,383 | 257 | 89% |
+| `ReportsPage.tsx` | 1,583 | 331 | 79% |
+| `ClaimsPage.tsx` | 1,557 | 235 | 85% |
+| `ProjectSettingsPage.tsx` | 1,545 | 191 | 88% |
+| `HoldPointsPage.tsx` | 1,519 | 384 | 75% |
+| `SubcontractorsPage.tsx` | 1,416 | 241 | 83% |
+| `diary.ts` (backend) | 1,868 | ~50 index | Split into 5 modules |
+| `itp.ts` (backend) | 2,088 | ~50 index | Split into 5 modules |
+| `ncrs.ts` (backend) | 1,782 | ~50 index | Split into 5 modules |
 
-**Fix:** Extract sub-components, data fetching hooks, and form logic. For tabbed pages, lazy-load each tab.
+~80 new files created. All pages under 500 lines. Remaining oversized files: `LotDetailPage.tsx` (already refactored in Phase 6), `pdfGenerator.ts` (2,915 lines, deferred).
 
-**Status:** Deferred — some extraction done in Phase 6 (ITPChecklistTab, PhotosTab extracted from LotDetailPage), but full extraction of all 14 files is a large effort best done incrementally. Risk of UI regressions requires thorough testing per component.
+**Resolution:** Extracted sub-components, custom hooks (`useNCRData`, `useNCRActions`, `useNCRModals`, `useLotsData`, `useLotsActions`, `useDiaryData`, `useDiaryMobileHandlers`), types, and constants. Backend routes split into functional modules (core CRUD, workflow, evidence, analytics, reporting, submissions). Commit `e863bb7`.
 
 ---
 
-#### [P3] No List Virtualization on Main Data Pages — DEFERRED
+#### [P3] No List Virtualization on Main Data Pages — RESOLVED (Phase 8)
 **Severity:** HIGH
 
-Only `HoldPointsPage.tsx` references virtualization. The lots page, NCR page, test results page, diary page, and documents page all render full list items without virtualization. A project with 500+ lots renders 500+ DOM nodes, causing layout thrashing.
+Added `@tanstack/react-virtual` (`useVirtualizer`) to 7 table/list components:
+- `LotTable.tsx` — desktop table with expanded row support
+- `LotMobileList.tsx` — mobile card grid
+- `NCRTable.tsx` — NCR register table
+- `NCRMobileList.tsx` — NCR mobile cards
+- `TestResultsTable.tsx` — test results register
+- `HoldPointsTable.tsx` — hold points table
+- `SubcontractorList.tsx` — subcontractor cards with expandable sections
 
-**Fix:** Use `@tanstack/react-virtual` for all long scrollable lists.
-
-**Status:** Deferred — requires significant per-page refactoring, especially for pages with complex row layouts. Best addressed alongside P2 component extraction.
+All use dynamic measurement (`measureElement`), appropriate `estimateSize` values, and `overscan` for smooth scrolling. Commit `e863bb7`.
 
 ---
 
-#### [P4] Minimal React.memo / useMemo / useCallback Usage — DEFERRED
+#### [P4] Minimal React.memo / useMemo / useCallback Usage — RESOLVED (Phase 8)
 **Severity:** HIGH
 
-Only ~30 files across the entire frontend use `useMemo`, `useCallback`, or `React.memo` (~105 total occurrences). Given the monolithic 2,000-3,400 line page components, every state change (toggling a checkbox, typing in a filter) re-renders the entire component tree.
+Applied memoization throughout all extracted components as part of the P2 extraction:
+- `React.memo` on all table, list, modal, and tab components (~50+ components)
+- `useMemo` on filtered/sorted data computations in all orchestration shells
+- `useCallback` on all event handlers passed as props to child components
+- Custom hooks encapsulate state and memoize return values
 
-**Fix:** Add `React.memo` to list item rows, filter panels, and toolbars. Use `useMemo` for derived/filtered data.
-
-**Status:** Deferred — most impactful when combined with P2 (component extraction) and P3 (virtualization).
+**Resolution:** Integrated into P2 component extraction. Every extracted component uses appropriate memoization. Commit `e863bb7`.
 
 ---
 
@@ -1144,6 +1150,11 @@ Only used in `LinearMapView.tsx`. `html-to-image` is ~10KB and could replace it.
 44. ~~**[Q8]** Remove tRPC dead code (router, context, middleware, dependencies)~~ DONE
 45. ~~**[O10]** Create ESLint v9 flat config + Prettier v3 config~~ DONE
 
+### Completed — Phase 8 (Component Extraction, Virtualization, Memoization)
+46. ~~**[P2]** Extract 9 monolithic frontend pages into components + hooks (18,152 → 2,673 lines)~~ DONE
+47. ~~**[P3]** Add @tanstack/react-virtual virtualization to 7 table/list components~~ DONE
+48. ~~**[P4]** Apply React.memo, useMemo, useCallback throughout all extracted components~~ DONE
+
 ### Remaining — Deferred Items (sorted by value/risk)
 
 **Worth Doing Eventually (safe, good value):**
@@ -1154,7 +1165,6 @@ Only used in `LinearMapView.tsx`. `html-to-image` is ~10KB and could replace it.
 
 **Larger Efforts (plan carefully):**
 - **[S5, S11]** httpOnly cookie auth + token refresh
-- **[P2, P3, P4]** Component extraction + virtualization + memoization (P2 partially done — LotDetailPage refactored)
 - **[Q6]** Service layer extraction
 - **[D7]** Supabase RLS policies for multi-tenancy
 
@@ -1199,4 +1209,4 @@ Credit where due - these are solid patterns already in the codebase:
 
 *Report generated by multi-agent codebase analysis. 6 parallel analysis agents examined security, performance, database schema, code quality, frontend security, and DevOps configuration across 56 route files, 1,269 lines of schema, and hundreds of frontend components.*
 
-*Remediation completed across 8 phases (Phases 1-7 + Safe Batch), addressing 45 of 92 issues with 5 partially resolved and 22 intentionally deferred.*
+*Remediation completed across 9 phases (Phases 1-8 + Safe Batch), addressing 48 of 92 issues with 5 partially resolved and 19 intentionally deferred.*
