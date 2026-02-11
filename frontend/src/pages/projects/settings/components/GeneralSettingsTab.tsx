@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Save } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 import type { Project, GeneralFormData } from '../types'
 import { DEFAULT_FORM_DATA } from '../types'
 
@@ -118,7 +119,7 @@ export function GeneralSettingsTab({
       // Auto-hide success message after 3 seconds
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save settings')
+      setSaveError(extractErrorMessage(error, 'Failed to save settings'))
     } finally {
       setSaving(false)
     }

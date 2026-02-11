@@ -2,6 +2,8 @@
 import { Router, Request, Response } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
 import { supabase, isSupabaseConfigured, getSupabasePublicUrl, DOCUMENTS_BUCKET } from '../lib/supabase.js'
 import { checkProjectAccess } from '../lib/projectAccess.js'
@@ -129,16 +131,12 @@ const router = Router()
 
 // Feature #741: Public route for signed URL download (no auth required)
 // This MUST be defined BEFORE the requireAuth middleware
-router.get('/download/:documentId', async (req: Request, res: Response) => {
-  try {
+router.get('/download/:documentId', asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const { token } = req.query
 
     if (!token || typeof token !== 'string') {
-      return res.status(400).json({
-        error: 'Token is required',
-        message: 'Please provide a valid signed URL token'
-      })
+      throw AppError.badRequest('Token is required', { message: 'Please provide a valid signed URL token' })
     }
 
     // Validate the signed token
@@ -146,15 +144,9 @@ router.get('/download/:documentId', async (req: Request, res: Response) => {
 
     if (!validation.valid) {
       if (validation.expired) {
-        return res.status(410).json({
-          error: 'URL expired',
-          message: 'This signed URL has expired. Please request a new one.'
-        })
+        throw new AppError(410, 'This signed URL has expired. Please request a new one.', 'URL_EXPIRED')
       }
-      return res.status(403).json({
-        error: 'Invalid token',
-        message: 'The signed URL token is invalid or does not match this document.'
-      })
+      throw AppError.forbidden('The signed URL token is invalid or does not match this document.')
     }
 
     // Get document
@@ -163,7 +155,7 @@ router.get('/download/:documentId', async (req: Request, res: Response) => {
     })
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' })
+      throw AppError.notFound('Document')
     }
 
     const filePath = path.join(process.cwd(), 'uploads', 'documents', path.basename(document.fileUrl))
@@ -171,7 +163,7 @@ router.get('/download/:documentId', async (req: Request, res: Response) => {
       // Try alternative path structure
       const altPath = path.join(process.cwd(), document.fileUrl)
       if (!fs.existsSync(altPath)) {
-        return res.status(404).json({ error: 'File not found on server' })
+        throw AppError.notFound('File')
       }
       // Set content disposition header for download
       res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`)
@@ -184,23 +176,18 @@ router.get('/download/:documentId', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', document.mimeType || 'application/octet-stream')
 
     res.sendFile(filePath)
-  } catch (error) {
-    console.error('Error downloading document via signed URL:', error)
-    res.status(500).json({ error: 'Failed to download document' })
-  }
-})
+}))
 
 // Feature #741: Public route for token validation (no auth required)
-router.get('/signed-url/validate', async (req: Request, res: Response) => {
-  try {
+router.get('/signed-url/validate', asyncHandler(async (req: Request, res: Response) => {
     const { token, documentId } = req.query
 
     if (!token || typeof token !== 'string') {
-      return res.status(400).json({ error: 'Token is required' })
+      throw AppError.badRequest('Token is required')
     }
 
     if (!documentId || typeof documentId !== 'string') {
-      return res.status(400).json({ error: 'Document ID is required' })
+      throw AppError.badRequest('Document ID is required')
     }
 
     const validation = validateSignedUrlToken(token, documentId)
@@ -224,11 +211,7 @@ router.get('/signed-url/validate', async (req: Request, res: Response) => {
       createdAt: tokenData?.createdAt.toISOString(),
       message: 'Token is valid'
     })
-  } catch (error) {
-    console.error('Error validating signed URL:', error)
-    res.status(500).json({ error: 'Failed to validate token' })
-  }
-})
+}))
 
 // Apply auth middleware for all subsequent routes
 router.use(requireAuth)
@@ -323,19 +306,18 @@ async function deleteFromSupabase(fileUrl: string): Promise<void> {
 }
 
 // GET /api/documents/:projectId - List documents for a project
-router.get('/:projectId', async (req: Request, res: Response) => {
-  try {
+router.get('/:projectId', asyncHandler(async (req: Request, res: Response) => {
     const { projectId } = req.params
     const { category, documentType, lotId, search, dateFrom, dateTo } = req.query
     const userId = req.user!.id
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const hasAccess = await checkProjectAccess(userId, projectId)
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     const where: any = { projectId }
@@ -398,22 +380,17 @@ router.get('/:projectId', async (req: Request, res: Response) => {
       categories,
       pagination: getPaginationMeta(total, pagination.page, pagination.limit),
     })
-  } catch (error) {
-    console.error('Error fetching documents:', error)
-    res.status(500).json({ error: 'Failed to fetch documents' })
-  }
-})
+}))
 
 // POST /api/documents/upload - Upload a document
-router.post('/upload', upload.single('file'), async (req: Request, res: Response) => {
-  try {
+router.post('/upload', upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.id
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' })
+      throw AppError.badRequest('No file uploaded')
     }
 
     const { projectId, lotId, documentType, category, caption, tags } = req.body
@@ -423,7 +400,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       if (req.file.path) {
         fs.unlinkSync(req.file.path)
       }
-      return res.status(400).json({ error: 'projectId and documentType are required' })
+      throw AppError.badRequest('projectId and documentType are required')
     }
 
     const hasAccess = await checkProjectAccess(userId, projectId)
@@ -431,7 +408,7 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
       if (req.file.path) {
         fs.unlinkSync(req.file.path)
       }
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     let fileUrl: string
@@ -484,23 +461,18 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     })
 
     res.status(201).json(document)
-  } catch (error) {
-    console.error('Error uploading document:', error)
-    res.status(500).json({ error: 'Failed to upload document' })
-  }
-})
+}))
 
 // Feature #481: POST /api/documents/:documentId/version - Upload a new version of a document
-router.post('/:documentId/version', upload.single('file'), async (req: Request, res: Response) => {
-  try {
+router.post('/:documentId/version', upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const userId = req.user!.id
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' })
+      throw AppError.badRequest('No file uploaded')
     }
 
     // Find the original document
@@ -510,13 +482,13 @@ router.post('/:documentId/version', upload.single('file'), async (req: Request, 
 
     if (!originalDocument) {
       if (req.file.path) fs.unlinkSync(req.file.path)
-      return res.status(404).json({ error: 'Original document not found' })
+      throw AppError.notFound('Original document')
     }
 
     const hasAccess = await checkProjectAccess(userId, originalDocument.projectId)
     if (!hasAccess) {
       if (req.file.path) fs.unlinkSync(req.file.path)
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     // Find the root document (first version)
@@ -605,20 +577,15 @@ router.post('/:documentId/version', upload.single('file'), async (req: Request, 
     })
 
     res.status(201).json(newDocument)
-  } catch (error) {
-    console.error('Error uploading document version:', error)
-    res.status(500).json({ error: 'Failed to upload document version' })
-  }
-})
+}))
 
 // Feature #481: GET /api/documents/:documentId/versions - Get all versions of a document
-router.get('/:documentId/versions', async (req: Request, res: Response) => {
-  try {
+router.get('/:documentId/versions', asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const userId = req.user!.id
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const document = await prisma.document.findUnique({
@@ -626,12 +593,12 @@ router.get('/:documentId/versions', async (req: Request, res: Response) => {
     })
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' })
+      throw AppError.notFound('Document')
     }
 
     const hasAccess = await checkProjectAccess(userId, document.projectId)
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     // Find the root document ID
@@ -656,20 +623,15 @@ router.get('/:documentId/versions', async (req: Request, res: Response) => {
       totalVersions: versions.length,
       versions,
     })
-  } catch (error) {
-    console.error('Error getting document versions:', error)
-    res.status(500).json({ error: 'Failed to get document versions' })
-  }
-})
+}))
 
 // GET /api/documents/file/:documentId - Get document file (requires auth)
-router.get('/file/:documentId', async (req: Request, res: Response) => {
-  try {
+router.get('/file/:documentId', asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const userId = req.user!.id
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const document = await prisma.document.findUnique({
@@ -677,36 +639,31 @@ router.get('/file/:documentId', async (req: Request, res: Response) => {
     })
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' })
+      throw AppError.notFound('Document')
     }
 
     const hasAccess = await checkProjectAccess(userId, document.projectId)
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     const filePath = path.join(process.cwd(), document.fileUrl)
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found on server' })
+      throw AppError.notFound('File')
     }
 
     res.sendFile(filePath)
-  } catch (error) {
-    console.error('Error fetching document file:', error)
-    res.status(500).json({ error: 'Failed to fetch document file' })
-  }
-})
+}))
 
 // Feature #741: POST /api/documents/:documentId/signed-url - Generate a signed URL for file download
 // This creates a time-limited, secure URL that can be shared without requiring auth
-router.post('/:documentId/signed-url', async (req: Request, res: Response) => {
-  try {
+router.post('/:documentId/signed-url', asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const { expiresInMinutes = 15 } = req.body
     const userId = req.user!.id
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const document = await prisma.document.findUnique({
@@ -714,12 +671,12 @@ router.post('/:documentId/signed-url', async (req: Request, res: Response) => {
     })
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' })
+      throw AppError.notFound('Document')
     }
 
     const hasAccess = await checkProjectAccess(userId, document.projectId)
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     // Validate expiry time (1 minute to 24 hours)
@@ -743,20 +700,15 @@ router.post('/:documentId/signed-url', async (req: Request, res: Response) => {
       expiresInMinutes: validExpiry,
       message: `Signed URL valid for ${validExpiry} minutes`
     })
-  } catch (error) {
-    console.error('Error generating signed URL:', error)
-    res.status(500).json({ error: 'Failed to generate signed URL' })
-  }
-})
+}))
 
 // DELETE /api/documents/:documentId - Delete a document
-router.delete('/:documentId', async (req: Request, res: Response) => {
-  try {
+router.delete('/:documentId', asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const userId = req.user!.id
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const document = await prisma.document.findUnique({
@@ -764,12 +716,12 @@ router.delete('/:documentId', async (req: Request, res: Response) => {
     })
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' })
+      throw AppError.notFound('Document')
     }
 
     const hasAccess = await checkProjectAccess(userId, document.projectId)
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     // Delete file from storage
@@ -799,21 +751,16 @@ router.delete('/:documentId', async (req: Request, res: Response) => {
     await prisma.document.delete({ where: { id: documentId } })
 
     res.status(204).send()
-  } catch (error) {
-    console.error('Error deleting document:', error)
-    res.status(500).json({ error: 'Failed to delete document' })
-  }
-})
+}))
 
 // Feature #247: AI Photo Classification
 // POST /api/documents/:documentId/classify - Classify a photo using AI
-router.post('/:documentId/classify', async (req: Request, res: Response) => {
-  try {
+router.post('/:documentId/classify', asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const userId = req.user!.id
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const document = await prisma.document.findUnique({
@@ -821,12 +768,12 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
     })
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' })
+      throw AppError.notFound('Document')
     }
 
     const hasAccess = await checkProjectAccess(userId, document.projectId)
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied', debug: { userId, projectId: document.projectId } })
+      throw AppError.forbidden('Access denied')
     }
 
     // Only classify images
@@ -842,7 +789,7 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
     }
 
     if (!mimeType || !imageTypes.includes(mimeType)) {
-      return res.status(400).json({ error: 'Only image files can be classified' })
+      throw AppError.badRequest('Only image files can be classified')
     }
 
     // Classification categories for civil construction
@@ -876,14 +823,14 @@ router.post('/:documentId/classify', async (req: Request, res: Response) => {
           // Extract base64 data from data URL
           const base64Match = document.fileUrl.match(/^data:[^;]+;base64,(.+)$/)
           if (!base64Match) {
-            return res.status(400).json({ error: 'Invalid base64 data URL format' })
+            throw AppError.badRequest('Invalid base64 data URL format')
           }
           base64Image = base64Match[1]
         } else {
           // Read from file path
           const filePath = path.join(process.cwd(), document.fileUrl)
           if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'Image file not found on server' })
+            throw AppError.notFound('Image file')
           }
           const imageData = fs.readFileSync(filePath)
           base64Image = imageData.toString('base64')
@@ -961,7 +908,6 @@ Respond with ONLY the category lines, nothing else.`
           throw new Error('Anthropic API request failed')
         }
       } catch (aiError) {
-        console.error('AI classification error:', aiError)
         // Fall back to simulated multi-label classification
         suggestedClassifications = simulateMultiLabelClassification(document.filename, document.caption)
       }
@@ -987,11 +933,7 @@ Respond with ONLY the category lines, nothing else.`
       isMultiLabel: suggestedClassifications.length > 1,
       categories: CLASSIFICATION_CATEGORIES
     })
-  } catch (error) {
-    console.error('Error classifying photo:', error)
-    res.status(500).json({ error: 'Failed to classify photo' })
-  }
-})
+}))
 
 // Feature #729: Multi-label classification based on keywords
 function simulateMultiLabelClassification(
@@ -1049,14 +991,13 @@ function simulateMultiLabelClassification(
 
 // POST /api/documents/:documentId/save-classification - Save the classification
 // Feature #729: Supports both single classification and multi-label classifications
-router.post('/:documentId/save-classification', async (req: Request, res: Response) => {
-  try {
+router.post('/:documentId/save-classification', asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const { classification, classifications } = req.body
     const userId = req.user!.id
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     // Support both single classification (backward compat) and multi-label
@@ -1065,7 +1006,7 @@ router.post('/:documentId/save-classification', async (req: Request, res: Respon
       : null)
 
     if (!finalClassification) {
-      return res.status(400).json({ error: 'Classification is required' })
+      throw AppError.badRequest('Classification is required')
     }
 
     const document = await prisma.document.findUnique({
@@ -1073,12 +1014,12 @@ router.post('/:documentId/save-classification', async (req: Request, res: Respon
     })
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' })
+      throw AppError.notFound('Document')
     }
 
     const hasAccess = await checkProjectAccess(userId, document.projectId)
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     // Update the document with the classification
@@ -1099,21 +1040,16 @@ router.post('/:documentId/save-classification', async (req: Request, res: Respon
       // Feature #729: Return parsed classifications array for convenience
       classificationLabels: finalClassification.split(', ').filter(Boolean)
     })
-  } catch (error) {
-    console.error('Error saving classification:', error)
-    res.status(500).json({ error: 'Failed to save classification' })
-  }
-})
+}))
 
 // PATCH /api/documents/:documentId - Update document metadata
-router.patch('/:documentId', async (req: Request, res: Response) => {
-  try {
+router.patch('/:documentId', asyncHandler(async (req: Request, res: Response) => {
     const { documentId } = req.params
     const { lotId, category, caption, tags, isFavourite } = req.body
     const userId = req.user!.id
 
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const document = await prisma.document.findUnique({
@@ -1121,12 +1057,12 @@ router.patch('/:documentId', async (req: Request, res: Response) => {
     })
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' })
+      throw AppError.notFound('Document')
     }
 
     const hasAccess = await checkProjectAccess(userId, document.projectId)
     if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     const updatedDocument = await prisma.document.update({
@@ -1145,10 +1081,6 @@ router.patch('/:documentId', async (req: Request, res: Response) => {
     })
 
     res.json(updatedDocument)
-  } catch (error) {
-    console.error('Error updating document:', error)
-    res.status(500).json({ error: 'Failed to update document' })
-  }
-})
+}))
 
 export default router

@@ -4,11 +4,13 @@ import express from 'express'
 import apiKeysRouter from './apiKeys.js'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/api-keys', apiKeysRouter)
+app.use(errorHandler)
 
 describe('API Keys Management', () => {
   let authToken: string
@@ -113,7 +115,7 @@ describe('API Keys Management', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toBe('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
 
     it('should reject API key creation with empty name', async () => {
@@ -126,7 +128,7 @@ describe('API Keys Management', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toBe('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
 
     it('should reject API key creation with name too long', async () => {
@@ -139,7 +141,7 @@ describe('API Keys Management', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toBe('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
 
     it('should reject API key creation without authentication', async () => {
@@ -338,7 +340,7 @@ describe('API Keys Management', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toContain('not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should reject revoking another user\'s API key', async () => {
@@ -372,7 +374,7 @@ describe('API Keys Management', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toContain('not found')
+      expect(res.body.error.message).toContain('not found')
 
       // Verify key is still active
       const key = await prisma.apiKey.findUnique({
@@ -439,13 +441,14 @@ describe('API Keys Management', () => {
       testApp.get('/test', authenticateApiKey, (_req, res) => {
         res.json({ success: true })
       })
+      testApp.use(errorHandler)
 
       const res = await request(testApp)
         .get('/test')
         .set('x-api-key', 'sp_invalid_key_123')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toContain('Invalid or expired')
+      expect(res.body.error.message).toContain('Invalid or expired')
     })
 
     it('should set apiKey property on request when authenticated with API key', async () => {
@@ -496,13 +499,14 @@ describe('API Keys Management', () => {
       testApp.get('/test', authenticateApiKey, (_req, res) => {
         res.json({ success: true })
       })
+      testApp.use(errorHandler)
 
       const res = await request(testApp)
         .get('/test')
         .set('x-api-key', revokedKey)
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toContain('Invalid or expired')
+      expect(res.body.error.message).toContain('Invalid or expired')
 
       // Cleanup
       await prisma.apiKey.delete({ where: { id: revokedKeyId } })
@@ -529,6 +533,7 @@ describe('API Keys Management', () => {
       testApp.get('/test', authenticateApiKey, (_req, res) => {
         res.json({ success: true })
       })
+      testApp.use(errorHandler)
 
       const res = await request(testApp)
         .get('/test')
@@ -625,13 +630,14 @@ describe('API Keys Management', () => {
       testApp.get('/test', authenticateApiKey, requireScope('write'), (_req, res) => {
         res.json({ success: true })
       })
+      testApp.use(errorHandler)
 
       const res = await request(testApp)
         .get('/test')
         .set('x-api-key', readScopeKey)
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('Insufficient scope')
+      expect(res.body.error.message).toContain('Insufficient scope')
     })
 
     it('should allow JWT-authenticated requests to bypass scope checks', async () => {

@@ -4,6 +4,7 @@ import express from 'express'
 import { authRouter } from './auth.js'
 import { consentRouter } from './consent.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
@@ -11,6 +12,7 @@ app.use('/api/auth', authRouter)
 
 // Consent router now has auth middleware built-in
 app.use('/api/consent', consentRouter)
+app.use(errorHandler)
 
 describe('Consent API', () => {
   let authToken: string
@@ -83,7 +85,7 @@ describe('Consent API', () => {
         .get('/api/consent')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toContain('Unauthorized')
+      expect(res.body.error.message).toContain('Authentication required')
     })
 
     it('should get current consent status for authenticated user', async () => {
@@ -123,7 +125,7 @@ describe('Consent API', () => {
         })
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toContain('Unauthorized')
+      expect(res.body.error.message).toContain('Authentication required')
     })
 
     it('should record consent for valid consent type', async () => {
@@ -182,7 +184,7 @@ describe('Consent API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
 
     it('should reject missing consentType', async () => {
@@ -194,7 +196,7 @@ describe('Consent API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
 
     it('should reject missing granted field', async () => {
@@ -206,7 +208,7 @@ describe('Consent API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
 
     it('should reject non-boolean granted value', async () => {
@@ -219,7 +221,7 @@ describe('Consent API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
   })
 
@@ -235,7 +237,7 @@ describe('Consent API', () => {
         })
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toContain('Unauthorized')
+      expect(res.body.error.message).toContain('Authentication required')
     })
 
     it('should record multiple consents at once', async () => {
@@ -293,7 +295,7 @@ describe('Consent API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
 
     it('should reject missing consents field', async () => {
@@ -303,7 +305,7 @@ describe('Consent API', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
 
     it('should reject non-array consents field', async () => {
@@ -315,7 +317,7 @@ describe('Consent API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid request')
+      expect(res.body.error.message).toContain('Invalid request')
     })
   })
 
@@ -343,7 +345,7 @@ describe('Consent API', () => {
         .get('/api/consent/history')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toContain('Unauthorized')
+      expect(res.body.error.message).toContain('Authentication required')
     })
 
     it('should get full consent history', async () => {
@@ -435,7 +437,7 @@ describe('Consent API', () => {
         .post('/api/consent/withdraw-all')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toContain('Unauthorized')
+      expect(res.body.error.message).toContain('Authentication required')
     })
 
     it('should withdraw all consents', async () => {

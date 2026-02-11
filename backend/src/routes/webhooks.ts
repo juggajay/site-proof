@@ -2,6 +2,8 @@
 import { Router, Request, Response } from 'express'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import crypto from 'crypto'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 const router = Router()
 
@@ -60,57 +62,47 @@ function verifySignature(payload: string, signature: string, secret: string): bo
 
 // POST /api/webhooks/test-receiver - Test endpoint to receive webhooks
 router.post('/test-receiver', (req: Request, res: Response) => {
-  try {
-    const signature = req.headers['x-webhook-signature'] as string | undefined
+  const signature = req.headers['x-webhook-signature'] as string | undefined
 
-    // Strip sensitive headers before storing
-    const sanitizedHeaders = { ...req.headers }
-    delete sanitizedHeaders.authorization
-    delete sanitizedHeaders.cookie
+  // Strip sensitive headers before storing
+  const sanitizedHeaders = { ...req.headers }
+  delete sanitizedHeaders.authorization
+  delete sanitizedHeaders.cookie
 
-    const received = {
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-      headers: sanitizedHeaders,
-      body: req.body,
-      signature: signature || null
-    }
-
-    testWebhookReceived.push(received)
-
-    // Keep only last 100 webhooks
-    if (testWebhookReceived.length > 100) {
-      testWebhookReceived.shift()
-    }
-
-    res.status(200).json({
-      received: true,
-      id: received.id,
-      timestamp: received.timestamp.toISOString()
-    })
-  } catch (error) {
-    console.error('Error receiving test webhook:', error)
-    res.status(500).json({ error: 'Failed to process webhook' })
+  const received = {
+    id: crypto.randomUUID(),
+    timestamp: new Date(),
+    headers: sanitizedHeaders,
+    body: req.body,
+    signature: signature || null
   }
+
+  testWebhookReceived.push(received)
+
+  // Keep only last 100 webhooks
+  if (testWebhookReceived.length > 100) {
+    testWebhookReceived.shift()
+  }
+
+  res.status(200).json({
+    received: true,
+    id: received.id,
+    timestamp: received.timestamp.toISOString()
+  })
 })
 
 // GET /api/webhooks/test-receiver/logs - Get received test webhooks (for verification)
 router.get('/test-receiver/logs', (req: Request, res: Response) => {
-  try {
-    const { limit = 10 } = req.query
-    const logs = testWebhookReceived
-      .slice(-parseInt(String(limit)))
-      .reverse()
+  const { limit = 10 } = req.query
+  const logs = testWebhookReceived
+    .slice(-parseInt(String(limit)))
+    .reverse()
 
-    res.json({
-      logs,
-      total: testWebhookReceived.length,
-      message: `Showing last ${logs.length} received webhooks`
-    })
-  } catch (error) {
-    console.error('Error fetching test webhook logs:', error)
-    res.status(500).json({ error: 'Failed to fetch logs' })
-  }
+  res.json({
+    logs,
+    total: testWebhookReceived.length,
+    message: `Showing last ${logs.length} received webhooks`
+  })
 })
 
 // Clear test logs
@@ -125,266 +117,242 @@ router.delete('/test-receiver/logs', (_req: Request, res: Response) => {
 router.use(requireAuth)
 
 // GET /api/webhooks - List webhook configurations for the company
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const user = req.user!
-    if (!user?.companyId) {
-      return res.status(403).json({ error: 'Company context required' })
-    }
+router.get('/', asyncHandler(async (req: Request, res: Response) => {
 
-    const configs = Array.from(webhookConfigs.values())
-      .filter(c => c.companyId === user.companyId)
-      .map(c => ({
-        ...c,
-        secret: '****' // Don't expose secret
-      }))
-
-    res.json({ webhooks: configs })
-  } catch (error) {
-    console.error('Error listing webhooks:', error)
-    res.status(500).json({ error: 'Failed to list webhooks' })
+  const user = req.user!
+  if (!user?.companyId) {
+    throw AppError.forbidden('Company context required')
   }
-})
+
+  const configs = Array.from(webhookConfigs.values())
+    .filter(c => c.companyId === user.companyId)
+    .map(c => ({
+      ...c,
+      secret: '****' // Don't expose secret
+    }))
+
+  res.json({ webhooks: configs })
+  
+}))
 
 // POST /api/webhooks - Create webhook configuration
-router.post('/', async (req: Request, res: Response) => {
-  try {
-    const user = req.user!
-    if (!user?.companyId) {
-      return res.status(403).json({ error: 'Company context required' })
-    }
+router.post('/', asyncHandler(async (req: Request, res: Response) => {
 
-    const { url, events = ['*'] } = req.body
-
-    if (!url) {
-      return res.status(400).json({ error: 'URL is required' })
-    }
-
-    // Validate URL format
-    try {
-      new URL(url)
-    } catch {
-      return res.status(400).json({ error: 'Invalid URL format' })
-    }
-
-    // Generate webhook config
-    const config: WebhookConfig = {
-      id: crypto.randomUUID(),
-      companyId: user.companyId,
-      url,
-      secret: crypto.randomBytes(32).toString('hex'),
-      events,
-      enabled: true,
-      createdAt: new Date(),
-      createdById: user.id
-    }
-
-    webhookConfigs.set(config.id, config)
-
-    res.status(201).json({
-      id: config.id,
-      url: config.url,
-      secret: config.secret, // Return secret only on creation
-      events: config.events,
-      enabled: config.enabled,
-      createdAt: config.createdAt.toISOString(),
-      message: 'Webhook configured successfully. Save the secret - it will not be shown again.'
-    })
-  } catch (error) {
-    console.error('Error creating webhook:', error)
-    res.status(500).json({ error: 'Failed to create webhook' })
+  const user = req.user!
+  if (!user?.companyId) {
+    throw AppError.forbidden('Company context required')
   }
-})
+
+  const { url, events = ['*'] } = req.body
+
+  if (!url) {
+    throw AppError.badRequest('URL is required')
+  }
+
+  // Validate URL format
+  try {
+    new URL(url)
+  } catch {
+    throw AppError.badRequest('Invalid URL format')
+  }
+
+  // Generate webhook config
+  const config: WebhookConfig = {
+    id: crypto.randomUUID(),
+    companyId: user.companyId,
+    url,
+    secret: crypto.randomBytes(32).toString('hex'),
+    events,
+    enabled: true,
+    createdAt: new Date(),
+    createdById: user.id
+  }
+
+  webhookConfigs.set(config.id, config)
+
+  res.status(201).json({
+    id: config.id,
+    url: config.url,
+    secret: config.secret, // Return secret only on creation
+    events: config.events,
+    enabled: config.enabled,
+    createdAt: config.createdAt.toISOString(),
+    message: 'Webhook configured successfully. Save the secret - it will not be shown again.'
+  })
+  
+}))
 
 // GET /api/webhooks/:id - Get specific webhook config
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
 
-    const config = webhookConfigs.get(id)
-    if (!config) {
-      return res.status(404).json({ error: 'Webhook not found' })
-    }
+  const { id } = req.params
+  const user = req.user!
 
-    if (config.companyId !== user.companyId) {
-      return res.status(403).json({ error: 'Access denied' })
-    }
-
-    res.json({
-      ...config,
-      secret: '****' // Don't expose secret
-    })
-  } catch (error) {
-    console.error('Error fetching webhook:', error)
-    res.status(500).json({ error: 'Failed to fetch webhook' })
+  const config = webhookConfigs.get(id)
+  if (!config) {
+    throw AppError.notFound('Webhook not found')
   }
-})
+
+  if (config.companyId !== user.companyId) {
+    throw AppError.forbidden('Access denied')
+  }
+
+  res.json({
+    ...config,
+    secret: '****' // Don't expose secret
+  })
+  
+}))
 
 // PATCH /api/webhooks/:id - Update webhook config
-router.patch('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
-    const { url, events, enabled } = req.body
+router.patch('/:id', asyncHandler(async (req: Request, res: Response) => {
 
-    const config = webhookConfigs.get(id)
-    if (!config) {
-      return res.status(404).json({ error: 'Webhook not found' })
-    }
+  const { id } = req.params
+  const user = req.user!
+  const { url, events, enabled } = req.body
 
-    if (config.companyId !== user.companyId) {
-      return res.status(403).json({ error: 'Access denied' })
-    }
-
-    // Update allowed fields
-    if (url !== undefined) {
-      try {
-        new URL(url)
-        config.url = url
-      } catch {
-        return res.status(400).json({ error: 'Invalid URL format' })
-      }
-    }
-    if (events !== undefined) config.events = events
-    if (enabled !== undefined) config.enabled = enabled
-
-    webhookConfigs.set(id, config)
-
-    res.json({
-      ...config,
-      secret: '****'
-    })
-  } catch (error) {
-    console.error('Error updating webhook:', error)
-    res.status(500).json({ error: 'Failed to update webhook' })
+  const config = webhookConfigs.get(id)
+  if (!config) {
+    throw AppError.notFound('Webhook not found')
   }
-})
+
+  if (config.companyId !== user.companyId) {
+    throw AppError.forbidden('Access denied')
+  }
+
+  // Update allowed fields
+  if (url !== undefined) {
+    try {
+      new URL(url)
+      config.url = url
+    } catch {
+      throw AppError.badRequest('Invalid URL format')
+    }
+  }
+  if (events !== undefined) config.events = events
+  if (enabled !== undefined) config.enabled = enabled
+
+  webhookConfigs.set(id, config)
+
+  res.json({
+    ...config,
+    secret: '****'
+  })
+  
+}))
 
 // DELETE /api/webhooks/:id - Delete webhook config
-router.delete('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
 
-    const config = webhookConfigs.get(id)
-    if (!config) {
-      return res.status(404).json({ error: 'Webhook not found' })
-    }
+  const { id } = req.params
+  const user = req.user!
 
-    if (config.companyId !== user.companyId) {
-      return res.status(403).json({ error: 'Access denied' })
-    }
-
-    webhookConfigs.delete(id)
-
-    res.status(204).send()
-  } catch (error) {
-    console.error('Error deleting webhook:', error)
-    res.status(500).json({ error: 'Failed to delete webhook' })
+  const config = webhookConfigs.get(id)
+  if (!config) {
+    throw AppError.notFound('Webhook not found')
   }
-})
+
+  if (config.companyId !== user.companyId) {
+    throw AppError.forbidden('Access denied')
+  }
+
+  webhookConfigs.delete(id)
+
+  res.status(204).send()
+  
+}))
 
 // POST /api/webhooks/:id/regenerate-secret - Regenerate webhook secret
-router.post('/:id/regenerate-secret', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+router.post('/:id/regenerate-secret', asyncHandler(async (req: Request, res: Response) => {
 
-    const config = webhookConfigs.get(id)
-    if (!config) {
-      return res.status(404).json({ error: 'Webhook not found' })
-    }
+  const { id } = req.params
+  const user = req.user!
 
-    if (config.companyId !== user.companyId) {
-      return res.status(403).json({ error: 'Access denied' })
-    }
-
-    config.secret = crypto.randomBytes(32).toString('hex')
-    webhookConfigs.set(id, config)
-
-    res.json({
-      id: config.id,
-      secret: config.secret,
-      message: 'Secret regenerated. Save the new secret - it will not be shown again.'
-    })
-  } catch (error) {
-    console.error('Error regenerating secret:', error)
-    res.status(500).json({ error: 'Failed to regenerate secret' })
+  const config = webhookConfigs.get(id)
+  if (!config) {
+    throw AppError.notFound('Webhook not found')
   }
-})
+
+  if (config.companyId !== user.companyId) {
+    throw AppError.forbidden('Access denied')
+  }
+
+  config.secret = crypto.randomBytes(32).toString('hex')
+  webhookConfigs.set(id, config)
+
+  res.json({
+    id: config.id,
+    secret: config.secret,
+    message: 'Secret regenerated. Save the new secret - it will not be shown again.'
+  })
+  
+}))
 
 // GET /api/webhooks/:id/deliveries - Get delivery history for a webhook
-router.get('/:id/deliveries', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params
-    const { limit = 20 } = req.query
-    const user = req.user!
+router.get('/:id/deliveries', asyncHandler(async (req: Request, res: Response) => {
 
-    const config = webhookConfigs.get(id)
-    if (!config) {
-      return res.status(404).json({ error: 'Webhook not found' })
-    }
+  const { id } = req.params
+  const { limit = 20 } = req.query
+  const user = req.user!
 
-    if (config.companyId !== user.companyId) {
-      return res.status(403).json({ error: 'Access denied' })
-    }
-
-    const deliveries = webhookDeliveries
-      .filter(d => d.webhookId === id)
-      .slice(-parseInt(String(limit)))
-      .reverse()
-
-    res.json({
-      deliveries,
-      total: webhookDeliveries.filter(d => d.webhookId === id).length
-    })
-  } catch (error) {
-    console.error('Error fetching deliveries:', error)
-    res.status(500).json({ error: 'Failed to fetch deliveries' })
+  const config = webhookConfigs.get(id)
+  if (!config) {
+    throw AppError.notFound('Webhook not found')
   }
-})
+
+  if (config.companyId !== user.companyId) {
+    throw AppError.forbidden('Access denied')
+  }
+
+  const deliveries = webhookDeliveries
+    .filter(d => d.webhookId === id)
+    .slice(-parseInt(String(limit)))
+    .reverse()
+
+  res.json({
+    deliveries,
+    total: webhookDeliveries.filter(d => d.webhookId === id).length
+  })
+  
+}))
 
 // POST /api/webhooks/:id/test - Send test webhook
-router.post('/:id/test', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+router.post('/:id/test', asyncHandler(async (req: Request, res: Response) => {
 
-    const config = webhookConfigs.get(id)
-    if (!config) {
-      return res.status(404).json({ error: 'Webhook not found' })
-    }
+  const { id } = req.params
+  const user = req.user!
 
-    if (config.companyId !== user.companyId) {
-      return res.status(403).json({ error: 'Access denied' })
-    }
-
-    // Create test payload
-    const testPayload = {
-      event: 'test',
-      timestamp: new Date().toISOString(),
-      data: {
-        message: 'This is a test webhook delivery',
-        triggeredBy: user.email
-      }
-    }
-
-    // Deliver the webhook
-    const delivery = await deliverWebhook(config, 'test', testPayload)
-
-    res.json({
-      success: delivery.success,
-      deliveryId: delivery.id,
-      responseStatus: delivery.responseStatus,
-      responseBody: delivery.responseBody,
-      error: delivery.error
-    })
-  } catch (error) {
-    console.error('Error sending test webhook:', error)
-    res.status(500).json({ error: 'Failed to send test webhook' })
+  const config = webhookConfigs.get(id)
+  if (!config) {
+    throw AppError.notFound('Webhook not found')
   }
-})
+
+  if (config.companyId !== user.companyId) {
+    throw AppError.forbidden('Access denied')
+  }
+
+  // Create test payload
+  const testPayload = {
+    event: 'test',
+    timestamp: new Date().toISOString(),
+    data: {
+      message: 'This is a test webhook delivery',
+      triggeredBy: user.email
+    }
+  }
+
+  // Deliver the webhook
+  const delivery = await deliverWebhook(config, 'test', testPayload)
+
+  res.json({
+    success: delivery.success,
+    deliveryId: delivery.id,
+    responseStatus: delivery.responseStatus,
+    responseBody: delivery.responseBody,
+    error: delivery.error
+  })
+  
+}))
 
 // ================================
 // WEBHOOK DELIVERY FUNCTION (exported for use by other routes)

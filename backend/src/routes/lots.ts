@@ -5,6 +5,8 @@ import { prisma } from '../lib/prisma.js'
 import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js'
 import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pagination.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 // ============================================================================
 // Zod Validation Schemas
@@ -128,21 +130,6 @@ const updateSubcontractorAssignmentSchema = z.object({
   itpRequiresVerification: z.boolean().optional(),
 })
 
-// Helper function to format Zod validation errors for consistent API responses
-function formatValidationError(error: z.ZodError) {
-  const messages = error.issues.map(issue => {
-    const path = issue.path.join('.')
-    // Lowercase the message for backward compatibility with existing tests
-    const message = issue.message.toLowerCase()
-    return path ? `${path}: ${message}` : message
-  })
-  return {
-    error: 'Validation failed',
-    message: messages.join('; '),
-    details: error.issues
-  }
-}
-
 export const lotsRouter = Router()
 
 // Apply authentication middleware to all lot routes
@@ -156,16 +143,12 @@ const LOT_DELETERS = ['owner', 'admin', 'project_manager']
 const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 
 // GET /api/lots - List all lots for a project (paginated)
-lotsRouter.get('/', async (req, res) => {
-  try {
+lotsRouter.get('/', asyncHandler(async (req, res) => {
     const user = req.user!
     const { projectId, status, unclaimed, includeITP } = req.query
 
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
+      throw AppError.badRequest('projectId query parameter is required')
     }
 
     // Parse pagination parameters
@@ -309,20 +292,15 @@ lotsRouter.get('/', async (req, res) => {
       // Backward compatibility - keep 'lots' alias during transition
       lots: transformedLots
     })
-  } catch (error) {
-    console.error('Get lots error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/lots/suggest-number - Get suggested next lot number for a project
-lotsRouter.get('/suggest-number', async (req, res) => {
-  try {
+lotsRouter.get('/suggest-number', asyncHandler(async (req, res) => {
     const { projectId } = req.query
     const user = req.user!
 
     if (!projectId) {
-      return res.status(400).json({ error: 'projectId is required' })
+      throw AppError.badRequest('projectId is required')
     }
 
     // Verify user has access to the project
@@ -331,7 +309,7 @@ lotsRouter.get('/suggest-number', async (req, res) => {
     })
 
     if (!projectAccess) {
-      return res.status(403).json({ error: 'Access denied' })
+      throw AppError.forbidden('Access denied')
     }
 
     // Get project settings
@@ -344,7 +322,7 @@ lotsRouter.get('/suggest-number', async (req, res) => {
     })
 
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' })
+      throw AppError.notFound('Project')
     }
 
     const prefix = project.lotPrefix || 'LOT-'
@@ -386,15 +364,10 @@ lotsRouter.get('/suggest-number', async (req, res) => {
       nextNumber,
       startingNumber
     })
-  } catch (error) {
-    console.error('Suggest lot number error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/lots/:id - Get a single lot
-lotsRouter.get('/:id', async (req, res) => {
-  try {
+lotsRouter.get('/:id', asyncHandler(async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
@@ -457,7 +430,7 @@ lotsRouter.get('/:id', async (req, res) => {
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Authorization check 1: Verify user has access to the project
@@ -480,10 +453,7 @@ lotsRouter.get('/:id', async (req, res) => {
 
     // If user has no project access and no company-level access, deny
     if (!projectAccess && !projectCompanyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this lot'
-      })
+      throw AppError.forbidden('You do not have access to this lot')
     }
 
     // Authorization check 2: Subcontractors can only access lots assigned to their company
@@ -502,10 +472,7 @@ lotsRouter.get('/:id', async (req, res) => {
       )
 
       if (!hasLegacyAssignment && !hasNewAssignment) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'You do not have access to this lot'
-        })
+        throw AppError.forbidden('You do not have access to this lot')
       }
     }
 
@@ -513,41 +480,28 @@ lotsRouter.get('/:id', async (req, res) => {
     const { projectId, assignedSubcontractorId, ...lotResponse } = lot
 
     res.json({ lot: lotResponse })
-  } catch (error) {
-    console.error('Get lot error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/lots - Create a new lot (requires creator role in project)
-lotsRouter.post('/', async (req, res) => {
-  try {
+lotsRouter.post('/', asyncHandler(async (req, res) => {
     const user = req.user!
 
     // Validate request body
     const validation = createLotSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { projectId, lotNumber, description, activityType, chainageStart, chainageEnd, lotType, itpTemplateId, assignedSubcontractorId, areaZone, canCompleteITP, itpRequiresVerification } = validation.data
 
     // Feature #853: Area zone required for area lot type
     if (lotType === 'area' && !areaZone) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Area zone is required for area lot type',
-        code: 'AREA_ZONE_REQUIRED'
-      })
+      throw AppError.badRequest('Area zone is required for area lot type', { code: 'AREA_ZONE_REQUIRED' })
     }
 
     // Feature #854: Structure ID required for structure lot type
     const structureId = req.body.structureId
     if (lotType === 'structure' && !structureId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Structure ID is required for structure lot type',
-        code: 'STRUCTURE_ID_REQUIRED'
-      })
+      throw AppError.badRequest('Structure ID is required for structure lot type', { code: 'STRUCTURE_ID_REQUIRED' })
     }
 
     // Check if user has creator role - either via company role or project membership
@@ -569,10 +523,7 @@ lotsRouter.post('/', async (req, res) => {
     }
 
     if (!hasPermission) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to create lots in this project.'
-      })
+      throw AppError.forbidden('You do not have permission to create lots in this project.')
     }
 
     const lot = await prisma.lot.create({
@@ -636,29 +587,14 @@ lotsRouter.post('/', async (req, res) => {
     }
 
     res.status(201).json({ lot })
-  } catch (error) {
-    console.error('Create lot error:', error)
-
-    // Handle Prisma unique constraint violation
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return res.status(409).json({
-        error: 'Conflict',
-        message: 'A lot with this number already exists in this project',
-        code: 'DUPLICATE_LOT_NUMBER'
-      })
-    }
-
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/lots/bulk - Bulk create lots (requires creator role)
-lotsRouter.post('/bulk', requireRole(LOT_CREATORS), async (req, res) => {
-  try {
+lotsRouter.post('/bulk', requireRole(LOT_CREATORS), asyncHandler(async (req, res) => {
     // Validate request body
     const validation = bulkCreateLotsSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { projectId, lots: lotsData } = validation.data
 
@@ -695,21 +631,16 @@ lotsRouter.post('/bulk', requireRole(LOT_CREATORS), async (req, res) => {
       lots: createdLots,
       count: createdLots.length
     })
-  } catch (error) {
-    console.error('Bulk create lots error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/lots/:id/clone - Clone a lot with suggested adjacent chainage
-lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), async (req, res) => {
-  try {
+lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), asyncHandler(async (req, res) => {
     const { id } = req.params
 
     // Validate request body
     const validation = cloneLotSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { lotNumber, chainageStart, chainageEnd } = validation.data
 
@@ -734,7 +665,7 @@ lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), async (req, res) => {
     })
 
     if (!sourceLot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Calculate suggested adjacent chainage if not provided
@@ -802,34 +733,20 @@ lotsRouter.post('/:id/clone', requireRole(LOT_CREATORS), async (req, res) => {
       sourceLotId: sourceLot.id,
       message: `Lot cloned from ${sourceLot.lotNumber}`,
     })
-  } catch (error) {
-    console.error('Clone lot error:', error)
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return res.status(409).json({
-        error: 'Conflict',
-        message: 'A lot with this number already exists in this project',
-        code: 'DUPLICATE_LOT_NUMBER'
-      })
-    }
-
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Roles that can edit lots
 const LOT_EDITORS = ['owner', 'admin', 'project_manager', 'site_engineer', 'quality_manager', 'foreman']
 
 // PATCH /api/lots/:id - Update a lot
-lotsRouter.patch('/:id', async (req, res) => {
-  try {
+lotsRouter.patch('/:id', asyncHandler(async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
     // Validate request body
     const validation = updateLotSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
 
     const lot = await prisma.lot.findUnique({
@@ -843,7 +760,7 @@ lotsRouter.patch('/:id', async (req, res) => {
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Get user's role on this project
@@ -859,18 +776,12 @@ lotsRouter.patch('/:id', async (req, res) => {
 
     // Check if user has permission to edit lots
     if (!LOT_EDITORS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to edit lots'
-      })
+      throw AppError.forbidden('You do not have permission to edit lots')
     }
 
     // Don't allow editing conformed or claimed lots (without special override)
     if (lot.status === 'conformed' || lot.status === 'claimed') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Cannot edit a ${lot.status} lot`
-      })
+      throw AppError.badRequest(`Cannot edit a ${lot.status} lot`)
     }
 
     // Feature #871: Concurrent edit detection (optimistic locking)
@@ -883,9 +794,7 @@ lotsRouter.patch('/:id', async (req, res) => {
 
       // Allow 1 second tolerance for timing differences
       if (timeDiff > 1000) {
-        return res.status(409).json({
-          error: 'Conflict',
-          message: 'This lot has been modified by another user. Please refresh and try again.',
+        throw AppError.conflict('This lot has been modified by another user. Please refresh and try again.', {
           serverUpdatedAt: lot.updatedAt.toISOString(),
           clientExpectedAt: expectedUpdatedAt
         })
@@ -918,20 +827,12 @@ lotsRouter.patch('/:id', async (req, res) => {
     const newStructureId = validatedStructureId ?? existingLot?.structureId
 
     if (newLotType === 'area' && !newAreaZone) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Area zone is required for area lot type',
-        code: 'AREA_ZONE_REQUIRED'
-      })
+      throw AppError.badRequest('Area zone is required for area lot type', { code: 'AREA_ZONE_REQUIRED' })
     }
 
     // Feature #854: Structure ID required for structure lot type
     if (newLotType === 'structure' && !newStructureId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Structure ID is required for structure lot type',
-        code: 'STRUCTURE_ID_REQUIRED'
-      })
+      throw AppError.badRequest('Structure ID is required for structure lot type', { code: 'STRUCTURE_ID_REQUIRED' })
     }
 
     // Build update data - only include fields that were provided
@@ -980,16 +881,11 @@ lotsRouter.patch('/:id', async (req, res) => {
     })
 
     res.json({ lot: updatedLot })
-  } catch (error) {
-    console.error('Update lot error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // DELETE /api/lots/:id - Delete a lot (requires deleter role)
 // Feature #585: Added docket allocation integrity check
-lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
-  try {
+lotsRouter.delete('/:id', requireRole(LOT_DELETERS), asyncHandler(async (req, res) => {
     const { id } = req.params
 
     const lot = await prisma.lot.findUnique({
@@ -1029,31 +925,25 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Check if lot is conformed or claimed - cannot delete these
     if (lot.status === 'conformed') {
-      return res.status(400).json({
-        error: 'Cannot delete lot',
-        message: 'Cannot delete a conformed lot. Conformed lots have been quality-approved.',
+      throw AppError.badRequest('Cannot delete a conformed lot. Conformed lots have been quality-approved.', {
         code: 'LOT_CONFORMED'
       })
     }
 
     if (lot.status === 'claimed') {
-      return res.status(400).json({
-        error: 'Cannot delete lot',
-        message: 'Cannot delete a claimed lot. This lot is part of a progress claim.',
+      throw AppError.badRequest('Cannot delete a claimed lot. This lot is part of a progress claim.', {
         code: 'LOT_CLAIMED'
       })
     }
 
     // Check for unreleased hold points (actual records in hold_points table)
     if (lot.holdPoints && lot.holdPoints.length > 0) {
-      return res.status(400).json({
-        error: 'Cannot delete lot',
-        message: `This lot has ${lot.holdPoints.length} unreleased hold point(s). Release all hold points before deleting the lot.`,
+      throw AppError.badRequest(`This lot has ${lot.holdPoints.length} unreleased hold point(s). Release all hold points before deleting the lot.`, {
         code: 'UNRELEASED_HOLD_POINTS',
         unreleasedHoldPoints: lot.holdPoints.length
       })
@@ -1072,9 +962,7 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
       )
 
       if (unreleasedHoldPoints.length > 0) {
-        return res.status(400).json({
-          error: 'Cannot delete lot',
-          message: `This lot has ${unreleasedHoldPoints.length} unreleased hold point(s). Release all hold points before deleting the lot.`,
+        throw AppError.badRequest(`This lot has ${unreleasedHoldPoints.length} unreleased hold point(s). Release all hold points before deleting the lot.`, {
           code: 'UNRELEASED_HOLD_POINTS',
           unreleasedHoldPoints: unreleasedHoldPoints.length
         })
@@ -1087,9 +975,7 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
     const totalDocketAllocations = docketLabourCount + docketPlantCount
 
     if (totalDocketAllocations > 0) {
-      return res.status(400).json({
-        error: 'Cannot delete lot',
-        message: `This lot has ${totalDocketAllocations} docket allocation(s) (${docketLabourCount} labour, ${docketPlantCount} plant). Remove docket allocations before deleting the lot.`,
+      throw AppError.badRequest(`This lot has ${totalDocketAllocations} docket allocation(s) (${docketLabourCount} labour, ${docketPlantCount} plant). Remove docket allocations before deleting the lot.`, {
         code: 'HAS_DOCKET_ALLOCATIONS',
         docketAllocations: {
           labour: docketLabourCount,
@@ -1104,20 +990,15 @@ lotsRouter.delete('/:id', requireRole(LOT_DELETERS), async (req, res) => {
     })
 
     res.json({ message: 'Lot deleted successfully' })
-  } catch (error) {
-    console.error('Delete lot error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 
 // POST /api/lots/bulk-delete - Bulk delete lots (requires deleter role)
-lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
-  try {
+lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), asyncHandler(async (req, res) => {
     // Validate request body
     const validation = bulkDeleteSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { lotIds } = validation.data
 
@@ -1145,10 +1026,7 @@ lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
     )
 
     if (undeletableLots.length > 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Cannot delete ${undeletableLots.length} lot(s) that are conformed or claimed: ${undeletableLots.map(l => l.lotNumber).join(', ')}`
-      })
+      throw AppError.badRequest(`Cannot delete ${undeletableLots.length} lot(s) that are conformed or claimed: ${undeletableLots.map(l => l.lotNumber).join(', ')}`)
     }
 
     // Check for lots with unreleased hold points
@@ -1157,9 +1035,7 @@ lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
     )
 
     if (lotsWithUnreleasedHP.length > 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Cannot delete ${lotsWithUnreleasedHP.length} lot(s) with unreleased hold points: ${lotsWithUnreleasedHP.map(l => l.lotNumber).join(', ')}`,
+      throw AppError.badRequest(`Cannot delete ${lotsWithUnreleasedHP.length} lot(s) with unreleased hold points: ${lotsWithUnreleasedHP.map(l => l.lotNumber).join(', ')}`, {
         code: 'UNRELEASED_HOLD_POINTS'
       })
     }
@@ -1176,19 +1052,14 @@ lotsRouter.post('/bulk-delete', requireRole(LOT_DELETERS), async (req, res) => {
       message: `Successfully deleted ${result.count} lot(s)`,
       count: result.count,
     })
-  } catch (error) {
-    console.error('Bulk delete lots error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/lots/bulk-update-status - Bulk update lot status (requires creator role)
-lotsRouter.post('/bulk-update-status', requireRole(LOT_CREATORS), async (req, res) => {
-  try {
+lotsRouter.post('/bulk-update-status', requireRole(LOT_CREATORS), asyncHandler(async (req, res) => {
     // Validate request body
     const validation = bulkUpdateStatusSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { lotIds, status } = validation.data
 
@@ -1210,10 +1081,9 @@ lotsRouter.post('/bulk-update-status', requireRole(LOT_CREATORS), async (req, re
     )
 
     if (unupdatableLots.length > 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Cannot update ${unupdatableLots.length} lot(s) that are conformed or claimed: ${unupdatableLots.map(l => l.lotNumber).join(', ')}`
-      })
+      throw AppError.badRequest(
+        `Cannot update ${unupdatableLots.length} lot(s) that are conformed or claimed: ${unupdatableLots.map(l => l.lotNumber).join(', ')}`
+      )
     }
 
     // Update all lots
@@ -1232,19 +1102,14 @@ lotsRouter.post('/bulk-update-status', requireRole(LOT_CREATORS), async (req, re
       message: `Successfully updated ${result.count} lot(s) to "${status.replace('_', ' ')}"`,
       count: result.count,
     })
-  } catch (error) {
-    console.error('Bulk update lot status error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/lots/bulk-assign-subcontractor - Bulk assign lots to subcontractor (requires creator role)
-lotsRouter.post('/bulk-assign-subcontractor', requireRole(LOT_CREATORS), async (req, res) => {
-  try {
+lotsRouter.post('/bulk-assign-subcontractor', requireRole(LOT_CREATORS), asyncHandler(async (req, res) => {
     // Validate request body
     const validation = bulkAssignSubcontractorSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { lotIds, subcontractorId } = validation.data
 
@@ -1257,10 +1122,7 @@ lotsRouter.post('/bulk-assign-subcontractor', requireRole(LOT_CREATORS), async (
       })
 
       if (!subcontractor) {
-        return res.status(404).json({
-          error: 'Not Found',
-          message: 'Subcontractor company not found'
-        })
+        throw AppError.notFound('Subcontractor company')
       }
     }
 
@@ -1282,10 +1144,9 @@ lotsRouter.post('/bulk-assign-subcontractor', requireRole(LOT_CREATORS), async (
     )
 
     if (unupdatableLots.length > 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Cannot update ${unupdatableLots.length} lot(s) that are conformed or claimed: ${unupdatableLots.map(l => l.lotNumber).join(', ')}`
-      })
+      throw AppError.badRequest(
+        `Cannot update ${unupdatableLots.length} lot(s) that are conformed or claimed: ${unupdatableLots.map(l => l.lotNumber).join(', ')}`
+      )
     }
 
     // Update all lots
@@ -1305,22 +1166,17 @@ lotsRouter.post('/bulk-assign-subcontractor', requireRole(LOT_CREATORS), async (
       message: `Successfully ${action} ${result.count} lot(s)`,
       count: result.count,
     })
-  } catch (error) {
-    console.error('Bulk assign subcontractor error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/lots/:id/assign - Assign a subcontractor to a lot with notification
-lotsRouter.post('/:id/assign', async (req, res) => {
-  try {
+lotsRouter.post('/:id/assign', asyncHandler(async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
     // Validate request body
     const validation = assignSubcontractorSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { subcontractorId } = validation.data
 
@@ -1338,15 +1194,12 @@ lotsRouter.post('/:id/assign', async (req, res) => {
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Don't allow assigning claimed lots
     if (lot.status === 'claimed') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot assign a claimed lot',
-      })
+      throw AppError.badRequest('Cannot assign a claimed lot')
     }
 
     // Check user permission (only PMs and above can assign)
@@ -1362,10 +1215,7 @@ lotsRouter.post('/:id/assign', async (req, res) => {
     const canAssign = ['owner', 'admin', 'project_manager', 'site_manager'].includes(userRole)
 
     if (!canAssign) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to assign lots',
-      })
+      throw AppError.forbidden('You do not have permission to assign lots')
     }
 
     // Update the lot
@@ -1445,15 +1295,10 @@ lotsRouter.post('/:id/assign', async (req, res) => {
       lot: updatedLot,
       notificationsSent: subcontractorId ? true : false,
     })
-  } catch (error) {
-    console.error('Assign subcontractor error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/lots/check-role/:projectId - Check user's role on a project
-lotsRouter.get('/check-role/:projectId', async (req, res) => {
-  try {
+lotsRouter.get('/check-role/:projectId', asyncHandler(async (req, res) => {
     const { projectId } = req.params
     const user = req.user!
 
@@ -1483,22 +1328,17 @@ lotsRouter.get('/check-role/:projectId', async (req, res) => {
       canCloseNCRs,
       canManageITPTemplates,
     })
-  } catch (error) {
-    console.error('Check role error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/lots/:id/conform-status - Get lot conformance prerequisites status
-lotsRouter.get('/:id/conform-status', async (req, res) => {
-  try {
+lotsRouter.get('/:id/conform-status', asyncHandler(async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
     const result = await checkConformancePrerequisites(id)
 
     if (result.error) {
-      return res.status(404).json({ error: result.error })
+      throw AppError.notFound('Lot')
     }
 
     // Check if user has access to this lot's project
@@ -1518,29 +1358,21 @@ lotsRouter.get('/:id/conform-status', async (req, res) => {
     })
 
     if (!projectAccess && !projectCompanyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this lot'
-      })
+      throw AppError.forbidden('You do not have access to this lot')
     }
 
     res.json(result)
-  } catch (error) {
-    console.error('Get conform status error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/lots/:id/conform - Conform a lot (quality management)
-lotsRouter.post('/:id/conform', async (req, res) => {
-  try {
+lotsRouter.post('/:id/conform', asyncHandler(async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
     // Validate request body
     const validation = conformLotSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { force } = validation.data // Optional force parameter to skip prerequisite check
 
@@ -1548,7 +1380,7 @@ lotsRouter.post('/:id/conform', async (req, res) => {
     const conformStatus = await checkConformancePrerequisites(id)
 
     if (conformStatus.error) {
-      return res.status(404).json({ error: conformStatus.error })
+      throw AppError.notFound('Lot')
     }
 
     const lot = conformStatus.lot!
@@ -1566,27 +1398,19 @@ lotsRouter.post('/:id/conform', async (req, res) => {
 
     // Check if user has permission to conform lots
     if (!LOT_CONFORMERS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to conform lots. Required roles: Quality Manager, Project Manager, Admin, or Owner.'
-      })
+      throw AppError.forbidden('You do not have permission to conform lots. Required roles: Quality Manager, Project Manager, Admin, or Owner.')
     }
 
     // Check if lot is already conformed or claimed
     if (lot.status === 'conformed' || lot.status === 'claimed') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Lot is already ${lot.status}`
-      })
+      throw AppError.badRequest(`Lot is already ${lot.status}`)
     }
 
     // Check prerequisites unless force flag is provided (only for admins)
     if (!conformStatus.canConform && !force) {
-      return res.status(400).json({
-        error: 'Prerequisites not met',
-        message: 'Cannot conform lot - prerequisites not met',
-        blockingReasons: conformStatus.blockingReasons,
-        prerequisites: conformStatus.prerequisites
+      throw AppError.badRequest('Cannot conform lot - prerequisites not met', {
+        blockingReasons: conformStatus.blockingReasons as unknown as Record<string, unknown>,
+        prerequisites: conformStatus.prerequisites as unknown as Record<string, unknown>,
       })
     }
 
@@ -1612,25 +1436,20 @@ lotsRouter.post('/:id/conform', async (req, res) => {
       message: 'Lot conformed successfully',
       lot: updatedLot
     })
-  } catch (error) {
-    console.error('Conform lot error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Roles that can override lot status
 const STATUS_OVERRIDERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 
 // POST /api/lots/:id/override-status - Manual status override with reason (Feature #159)
-lotsRouter.post('/:id/override-status', async (req, res) => {
-  try {
+lotsRouter.post('/:id/override-status', asyncHandler(async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
     // Validate request body
     const validation = overrideStatusSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { status, reason } = validation.data
 
@@ -1646,15 +1465,12 @@ lotsRouter.post('/:id/override-status', async (req, res) => {
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Don't allow overriding claimed lots
     if (lot.status === 'claimed') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot override status of a claimed lot'
-      })
+      throw AppError.badRequest('Cannot override status of a claimed lot')
     }
 
     // Check user permission
@@ -1669,10 +1485,7 @@ lotsRouter.post('/:id/override-status', async (req, res) => {
     const userProjectRole = projectUser?.role || user.roleInCompany
 
     if (!STATUS_OVERRIDERS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to override lot status. Required roles: Quality Manager, Project Manager, Admin, or Owner.'
-      })
+      throw AppError.forbidden('You do not have permission to override lot status. Required roles: Quality Manager, Project Manager, Admin, or Owner.')
     }
 
     const previousStatus = lot.status
@@ -1714,19 +1527,14 @@ lotsRouter.post('/:id/override-status', async (req, res) => {
       previousStatus,
       reason: reason.trim()
     })
-  } catch (error) {
-    console.error('Override status error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // ============================================================================
 // Lot Subcontractor Assignment Management (new permission system)
 // ============================================================================
 
 // GET /api/lots/:id/subcontractors - List all subcontractor assignments for a lot
-lotsRouter.get('/:id/subcontractors', async (req, res) => {
-  try {
+lotsRouter.get('/:id/subcontractors', asyncHandler(async (req, res) => {
     const { id } = req.params
 
     const assignments = await prisma.lotSubcontractorAssignment.findMany({
@@ -1740,22 +1548,17 @@ lotsRouter.get('/:id/subcontractors', async (req, res) => {
     })
 
     res.json(assignments)
-  } catch (error) {
-    console.error('Get lot subcontractors error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/lots/:id/subcontractors - Assign a subcontractor to a lot
-lotsRouter.post('/:id/subcontractors', async (req, res) => {
-  try {
+lotsRouter.post('/:id/subcontractors', asyncHandler(async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
     // Validate request body
     const validation = createSubcontractorAssignmentSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { subcontractorCompanyId, canCompleteITP, itpRequiresVerification } = validation.data
 
@@ -1766,7 +1569,7 @@ lotsRouter.post('/:id/subcontractors', async (req, res) => {
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Check user permission (PM and above)
@@ -1777,7 +1580,7 @@ lotsRouter.post('/:id/subcontractors', async (req, res) => {
     const canAssign = ['owner', 'admin', 'project_manager', 'site_manager'].includes(userRole)
 
     if (!canAssign) {
-      return res.status(403).json({ error: 'You do not have permission to assign subcontractors' })
+      throw AppError.forbidden('You do not have permission to assign subcontractors')
     }
 
     // Verify subcontractor exists and belongs to this project
@@ -1786,7 +1589,7 @@ lotsRouter.post('/:id/subcontractors', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Subcontractor not found for this project' })
+      throw AppError.notFound('Subcontractor not found for this project')
     }
 
     // Check for existing active assignment
@@ -1795,7 +1598,7 @@ lotsRouter.post('/:id/subcontractors', async (req, res) => {
     })
 
     if (existingAssignment) {
-      return res.status(409).json({ error: 'This subcontractor is already assigned to this lot' })
+      throw AppError.conflict('This subcontractor is already assigned to this lot')
     }
 
     // Create the assignment
@@ -1817,22 +1620,17 @@ lotsRouter.post('/:id/subcontractors', async (req, res) => {
     })
 
     res.status(201).json(assignment)
-  } catch (error) {
-    console.error('Assign subcontractor to lot error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // PATCH /api/lots/:id/subcontractors/:assignmentId - Update assignment permissions
-lotsRouter.patch('/:id/subcontractors/:assignmentId', async (req, res) => {
-  try {
+lotsRouter.patch('/:id/subcontractors/:assignmentId', asyncHandler(async (req, res) => {
     const { id, assignmentId } = req.params
     const user = req.user!
 
     // Validate request body
     const validation = updateSubcontractorAssignmentSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json(formatValidationError(validation.error))
+      throw AppError.fromZodError(validation.error)
     }
     const { canCompleteITP, itpRequiresVerification } = validation.data
 
@@ -1843,7 +1641,7 @@ lotsRouter.patch('/:id/subcontractors/:assignmentId', async (req, res) => {
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Check user permission
@@ -1854,7 +1652,7 @@ lotsRouter.patch('/:id/subcontractors/:assignmentId', async (req, res) => {
     const canManage = ['owner', 'admin', 'project_manager', 'site_manager'].includes(userRole)
 
     if (!canManage) {
-      return res.status(403).json({ error: 'You do not have permission to manage subcontractor assignments' })
+      throw AppError.forbidden('You do not have permission to manage subcontractor assignments')
     }
 
     // Verify assignment exists and belongs to this lot
@@ -1863,7 +1661,7 @@ lotsRouter.patch('/:id/subcontractors/:assignmentId', async (req, res) => {
     })
 
     if (!assignment) {
-      return res.status(404).json({ error: 'Assignment not found' })
+      throw AppError.notFound('Assignment')
     }
 
     // Update the assignment
@@ -1881,15 +1679,10 @@ lotsRouter.patch('/:id/subcontractors/:assignmentId', async (req, res) => {
     })
 
     res.json(updated)
-  } catch (error) {
-    console.error('Update lot assignment error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // DELETE /api/lots/:id/subcontractors/:assignmentId - Remove assignment
-lotsRouter.delete('/:id/subcontractors/:assignmentId', async (req, res) => {
-  try {
+lotsRouter.delete('/:id/subcontractors/:assignmentId', asyncHandler(async (req, res) => {
     const { id, assignmentId } = req.params
     const user = req.user!
 
@@ -1900,7 +1693,7 @@ lotsRouter.delete('/:id/subcontractors/:assignmentId', async (req, res) => {
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     // Check user permission
@@ -1911,7 +1704,7 @@ lotsRouter.delete('/:id/subcontractors/:assignmentId', async (req, res) => {
     const canManage = ['owner', 'admin', 'project_manager', 'site_manager'].includes(userRole)
 
     if (!canManage) {
-      return res.status(403).json({ error: 'You do not have permission to manage subcontractor assignments' })
+      throw AppError.forbidden('You do not have permission to manage subcontractor assignments')
     }
 
     // Verify assignment exists and belongs to this lot
@@ -1920,7 +1713,7 @@ lotsRouter.delete('/:id/subcontractors/:assignmentId', async (req, res) => {
     })
 
     if (!assignment) {
-      return res.status(404).json({ error: 'Assignment not found' })
+      throw AppError.notFound('Assignment')
     }
 
     // Soft delete by setting status to 'removed'
@@ -1930,8 +1723,4 @@ lotsRouter.delete('/:id/subcontractors/:assignmentId', async (req, res) => {
     })
 
     res.json({ message: 'Assignment removed successfully' })
-  } catch (error) {
-    console.error('Remove lot assignment error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))

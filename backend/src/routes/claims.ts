@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 import { sendNotificationIfEnabled } from './notifications.js'
 import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 
@@ -42,8 +44,7 @@ const router = Router()
 router.use(requireAuth)
 
 // GET /api/projects/:projectId/lots - Get conformed lots for claiming
-router.get('/:projectId/lots', async (req, res) => {
-  try {
+router.get('/:projectId/lots', asyncHandler(async (req, res) => {
     const { projectId } = req.params
     const { status, unclaimed } = req.query
 
@@ -81,15 +82,10 @@ router.get('/:projectId/lots', async (req, res) => {
     }))
 
     res.json({ lots: transformedLots })
-  } catch (error) {
-    console.error('Error fetching lots:', error)
-    res.status(500).json({ error: 'Failed to fetch lots' })
-  }
-})
+}))
 
 // GET /api/projects/:projectId/claims - List all claims for a project
-router.get('/:projectId/claims', async (req, res) => {
-  try {
+router.get('/:projectId/claims', asyncHandler(async (req, res) => {
     const { projectId } = req.params
 
     const claims = await prisma.progressClaim.findMany({
@@ -119,15 +115,10 @@ router.get('/:projectId/claims', async (req, res) => {
     }))
 
     res.json({ claims: transformedClaims })
-  } catch (error) {
-    console.error('Error fetching claims:', error)
-    res.status(500).json({ error: 'Failed to fetch claims' })
-  }
-})
+}))
 
 // GET /api/projects/:projectId/claims/:claimId - Get a single claim
-router.get('/:projectId/claims/:claimId', async (req, res) => {
-  try {
+router.get('/:projectId/claims/:claimId', asyncHandler(async (req, res) => {
     const { projectId, claimId } = req.params
 
     const claim = await prisma.progressClaim.findFirst({
@@ -145,29 +136,21 @@ router.get('/:projectId/claims/:claimId', async (req, res) => {
     })
 
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' })
+      throw AppError.notFound('Claim')
     }
 
     res.json({ claim })
-  } catch (error) {
-    console.error('Error fetching claim:', error)
-    res.status(500).json({ error: 'Failed to fetch claim' })
-  }
-})
+}))
 
 // POST /api/projects/:projectId/claims - Create a new claim
-router.post('/:projectId/claims', async (req, res) => {
-  try {
+router.post('/:projectId/claims', asyncHandler(async (req, res) => {
     const { projectId } = req.params
     const userId = req.user!.userId
 
     // Validate request body
     const validation = createClaimSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: validation.error.issues
-      })
+      throw AppError.fromZodError(validation.error)
     }
     const { periodStart, periodEnd, lotIds } = validation.data
 
@@ -188,18 +171,16 @@ router.post('/:projectId/claims', async (req, res) => {
     })
 
     if (lots.length === 0) {
-      return res.status(400).json({ error: 'No valid conformed lots found' })
+      throw AppError.badRequest('No valid conformed lots found')
     }
 
     // Feature #894: Verify all lots have a rate (budgetAmount) set
     const lotsWithoutRate = lots.filter(lot => !lot.budgetAmount || Number(lot.budgetAmount) <= 0)
     if (lotsWithoutRate.length > 0) {
-      return res.status(400).json({
-        error: 'Rate required',
-        message: `The following lots do not have a rate set: ${lotsWithoutRate.map(l => l.lotNumber).join(', ')}. Please set a budget amount for each lot before adding to a claim.`,
-        code: 'RATE_REQUIRED',
-        lotsWithoutRate: lotsWithoutRate.map(l => ({ id: l.id, lotNumber: l.lotNumber }))
-      })
+      throw AppError.badRequest(
+        `The following lots do not have a rate set: ${lotsWithoutRate.map(l => l.lotNumber).join(', ')}. Please set a budget amount for each lot before adding to a claim.`,
+        { code: 'RATE_REQUIRED', lotsWithoutRate: lotsWithoutRate.map(l => ({ id: l.id, lotNumber: l.lotNumber })) }
+      )
     }
 
     // Calculate total claimed amount from lot budget amounts
@@ -271,25 +252,17 @@ router.post('/:projectId/claims', async (req, res) => {
     })
 
     res.status(201).json({ claim: transformedClaim })
-  } catch (error) {
-    console.error('Error creating claim:', error)
-    res.status(500).json({ error: 'Failed to create claim' })
-  }
-})
+}))
 
 // PUT /api/projects/:projectId/claims/:claimId - Update a claim
-router.put('/:projectId/claims/:claimId', async (req, res) => {
-  try {
+router.put('/:projectId/claims/:claimId', asyncHandler(async (req, res) => {
     const { projectId, claimId } = req.params
     const userId = req.user!.userId
 
     // Validate request body
     const validation = updateClaimSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: validation.error.issues
-      })
+      throw AppError.fromZodError(validation.error)
     }
     const { status, certifiedAmount, paidAmount, paymentReference, disputeNotes } = validation.data
 
@@ -303,12 +276,12 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
     })
 
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' })
+      throw AppError.notFound('Claim')
     }
 
     // Don't allow updates to paid claims
     if (claim.status === 'paid') {
-      return res.status(400).json({ error: 'Cannot update a paid claim' })
+      throw AppError.badRequest('Cannot update a paid claim')
     }
 
     const updateData: any = {}
@@ -491,15 +464,10 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
     }
 
     res.json({ claim: updatedClaim })
-  } catch (error) {
-    console.error('Error updating claim:', error)
-    res.status(500).json({ error: 'Failed to update claim' })
-  }
-})
+}))
 
 // GET /api/projects/:projectId/claims/:claimId/evidence-package - Get evidence package data for a claim
-router.get('/:projectId/claims/:claimId/evidence-package', async (req, res) => {
-  try {
+router.get('/:projectId/claims/:claimId/evidence-package', asyncHandler(async (req, res) => {
     const { projectId, claimId } = req.params
     const startTime = Date.now()
 
@@ -585,7 +553,7 @@ router.get('/:projectId/claims/:claimId/evidence-package', async (req, res) => {
     })
 
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' })
+      throw AppError.notFound('Claim')
     }
 
     // Transform the data for the frontend PDF generator
@@ -785,15 +753,10 @@ router.get('/:projectId/claims/:claimId/evidence-package', async (req, res) => {
     }
 
     res.json(evidencePackage)
-  } catch (error) {
-    console.error('Error generating evidence package:', error)
-    res.status(500).json({ error: 'Failed to generate evidence package' })
-  }
-})
+}))
 
 // GET /api/projects/:projectId/claims/:claimId/completeness-check - AI completeness analysis for a claim
-router.get('/:projectId/claims/:claimId/completeness-check', async (req, res) => {
-  try {
+router.get('/:projectId/claims/:claimId/completeness-check', asyncHandler(async (req, res) => {
     const { projectId, claimId } = req.params
 
     // Get the claim with all related data for completeness analysis
@@ -830,7 +793,7 @@ router.get('/:projectId/claims/:claimId/completeness-check', async (req, res) =>
     })
 
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' })
+      throw AppError.notFound('Claim')
     }
 
     // Analyze each lot for completeness
@@ -1105,26 +1068,18 @@ router.get('/:projectId/claims/:claimId/completeness-check', async (req, res) =>
       overallSuggestions,
       lots: lotAnalysis
     })
-  } catch (error) {
-    console.error('Error analyzing claim completeness:', error)
-    res.status(500).json({ error: 'Failed to analyze claim completeness' })
-  }
-})
+}))
 
 // Feature #284: POST /api/projects/:projectId/claims/:claimId/certify - Record certification
 // Dedicated endpoint for recording claim certification with all details
-router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
-  try {
+router.post('/:projectId/claims/:claimId/certify', asyncHandler(async (req, res) => {
     const { projectId, claimId } = req.params
     const userId = req.user!.userId
 
     // Validate request body
     const validation = certifyClaimSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: validation.error.issues
-      })
+      throw AppError.fromZodError(validation.error)
     }
     const {
       certifiedAmount,
@@ -1144,15 +1099,12 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
     })
 
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' })
+      throw AppError.notFound('Claim')
     }
 
     // Only allow certification of submitted claims
     if (claim.status !== 'submitted' && claim.status !== 'disputed') {
-      return res.status(400).json({
-        error: 'Invalid claim status',
-        message: `Can only certify submitted or disputed claims. Current status: ${claim.status}`
-      })
+      throw AppError.badRequest(`Can only certify submitted or disputed claims. Current status: ${claim.status}`)
     }
 
     const previousStatus = claim.status
@@ -1285,26 +1237,18 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
     })
 
     res.json(response)
-  } catch (error) {
-    console.error('Error certifying claim:', error)
-    res.status(500).json({ error: 'Failed to certify claim' })
-  }
-})
+}))
 
 // Feature #285: POST /api/projects/:projectId/claims/:claimId/payment - Record payment
 // Dedicated endpoint for recording claim payment with support for partial payments
-router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
-  try {
+router.post('/:projectId/claims/:claimId/payment', asyncHandler(async (req, res) => {
     const { projectId, claimId } = req.params
     const userId = req.user!.userId
 
     // Validate request body
     const validation = recordPaymentSchema.safeParse(req.body)
     if (!validation.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: validation.error.issues
-      })
+      throw AppError.fromZodError(validation.error)
     }
     const {
       paidAmount,
@@ -1322,15 +1266,12 @@ router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
     })
 
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' })
+      throw AppError.notFound('Claim')
     }
 
     // Only allow payment of certified or partially paid claims
     if (claim.status !== 'certified' && claim.status !== 'partially_paid') {
-      return res.status(400).json({
-        error: 'Invalid claim status',
-        message: `Can only record payment for certified or partially paid claims. Current status: ${claim.status}`
-      })
+      throw AppError.badRequest(`Can only record payment for certified or partially paid claims. Current status: ${claim.status}`)
     }
 
     const previousStatus = claim.status
@@ -1497,15 +1438,10 @@ router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
     })
 
     res.json(response)
-  } catch (error) {
-    console.error('Error recording payment:', error)
-    res.status(500).json({ error: 'Failed to record payment' })
-  }
-})
+}))
 
 // DELETE /api/projects/:projectId/claims/:claimId - Delete a draft claim
-router.delete('/:projectId/claims/:claimId', async (req, res) => {
-  try {
+router.delete('/:projectId/claims/:claimId', asyncHandler(async (req, res) => {
     const { projectId, claimId } = req.params
 
     const claim = await prisma.progressClaim.findFirst({
@@ -1513,11 +1449,11 @@ router.delete('/:projectId/claims/:claimId', async (req, res) => {
     })
 
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' })
+      throw AppError.notFound('Claim')
     }
 
     if (claim.status !== 'draft') {
-      return res.status(400).json({ error: 'Can only delete draft claims' })
+      throw AppError.badRequest('Can only delete draft claims')
     }
 
     // Unlink lots from this claim
@@ -1532,10 +1468,6 @@ router.delete('/:projectId/claims/:claimId', async (req, res) => {
     })
 
     res.json({ success: true })
-  } catch (error) {
-    console.error('Error deleting claim:', error)
-    res.status(500).json({ error: 'Failed to delete claim' })
-  }
-})
+}))
 
 export default router

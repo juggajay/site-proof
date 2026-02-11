@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 import { sendSubcontractorInvitationEmail } from '../lib/email.js'
 import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 
@@ -51,8 +53,7 @@ export const subcontractorsRouter = Router()
 
 // Feature #484: GET /api/subcontractors/invitation/:id - Get invitation details (no auth required)
 // This allows the frontend to display invitation info before user creates account
-subcontractorsRouter.get('/invitation/:id', async (req, res) => {
-  try {
+subcontractorsRouter.get('/invitation/:id', asyncHandler(async (req, res) => {
     const { id } = req.params
 
     const subcontractor = await prisma.subcontractorCompany.findUnique({
@@ -63,7 +64,7 @@ subcontractorsRouter.get('/invitation/:id', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Invitation not found or expired' })
+      throw AppError.notFound('Invitation')
     }
 
     // Get the head contractor company name
@@ -83,11 +84,7 @@ subcontractorsRouter.get('/invitation/:id', async (req, res) => {
         status: subcontractor.status
       }
     })
-  } catch (error) {
-    console.error('Get invitation error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // ================================================================================
 // PROTECTED ENDPOINTS (auth required)
@@ -98,16 +95,12 @@ subcontractorsRouter.use(requireAuth)
 
 // GET /api/subcontractors/directory - Get global subcontractors for the user's organization
 // This allows selecting existing subcontractors when inviting to a new project
-subcontractorsRouter.get('/directory', async (req, res) => {
-  try {
+subcontractorsRouter.get('/directory', asyncHandler(async (req, res) => {
     const user = req.user!
 
     // User must belong to a company
     if (!user.companyId) {
-      return res.status(400).json({
-        error: 'No organization',
-        message: 'User must belong to an organization to access the subcontractor directory'
-      })
+      throw AppError.badRequest('User must belong to an organization to access the subcontractor directory')
     }
 
     // Get all global subcontractors for this organization
@@ -129,16 +122,11 @@ subcontractorsRouter.get('/directory', async (req, res) => {
         primaryContactPhone: gs.primaryContactPhone || ''
       }))
     })
-  } catch (error) {
-    console.error('Get directory error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/subcontractors/invite - Invite/create a new subcontractor company for a project
 // Now supports selecting from global directory via globalSubcontractorId
-subcontractorsRouter.post('/invite', async (req, res) => {
-  try {
+subcontractorsRouter.post('/invite', asyncHandler(async (req, res) => {
     const user = req.user!
     const {
       projectId,
@@ -153,26 +141,17 @@ subcontractorsRouter.post('/invite', async (req, res) => {
     // Only allow head contractor roles to invite subcontractors
     const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
     if (!allowedRoles.includes(user.roleInCompany || '')) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only project managers or higher can invite subcontractors'
-      })
+      throw AppError.forbidden('Only project managers or higher can invite subcontractors')
     }
 
     // Validate required fields
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId is required'
-      })
+      throw AppError.badRequest('projectId is required')
     }
 
     // If not selecting from directory, require all fields
     if (!globalSubcontractorId && (!companyName || !primaryContactName || !primaryContactEmail)) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'companyName, primaryContactName, and primaryContactEmail are required when not selecting from directory'
-      })
+      throw AppError.badRequest('companyName, primaryContactName, and primaryContactEmail are required when not selecting from directory')
     }
 
     // Verify project exists and user has access
@@ -181,7 +160,7 @@ subcontractorsRouter.post('/invite', async (req, res) => {
     })
 
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' })
+      throw AppError.notFound('Project')
     }
 
     // Determine the company details to use
@@ -199,15 +178,12 @@ subcontractorsRouter.post('/invite', async (req, res) => {
       })
 
       if (!globalSub) {
-        return res.status(404).json({ error: 'Global subcontractor not found' })
+        throw AppError.notFound('Global subcontractor')
       }
 
       // Verify it belongs to the same organization
       if (globalSub.organizationId !== user.companyId) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'This subcontractor does not belong to your organization'
-        })
+        throw AppError.forbidden('This subcontractor does not belong to your organization')
       }
 
       // Check if this global subcontractor is already invited to this project
@@ -219,10 +195,7 @@ subcontractorsRouter.post('/invite', async (req, res) => {
       })
 
       if (existingLink) {
-        return res.status(409).json({
-          error: 'Conflict',
-          message: 'This subcontractor has already been invited to this project'
-        })
+        throw AppError.conflict('This subcontractor has already been invited to this project')
       }
 
       finalCompanyName = globalSub.companyName
@@ -236,11 +209,7 @@ subcontractorsRouter.post('/invite', async (req, res) => {
       if (abn) {
         const abnValidation = validateABN(abn)
         if (!abnValidation.valid) {
-          return res.status(400).json({
-            error: 'Invalid ABN',
-            message: abnValidation.error,
-            code: 'INVALID_ABN'
-          })
+          throw AppError.badRequest(abnValidation.error || 'Invalid ABN', { code: 'INVALID_ABN' })
         }
       }
 
@@ -253,10 +222,7 @@ subcontractorsRouter.post('/invite', async (req, res) => {
       })
 
       if (existingSubcontractor) {
-        return res.status(409).json({
-          error: 'Conflict',
-          message: 'A subcontractor with this company name already exists for this project'
-        })
+        throw AppError.conflict('A subcontractor with this company name already exists for this project')
       }
 
       // Create a new GlobalSubcontractor record
@@ -328,15 +294,10 @@ subcontractorsRouter.post('/invite', async (req, res) => {
         assignedLotCount: 0
       }
     })
-  } catch (error) {
-    console.error('Invite subcontractor error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/subcontractors/for-project/:projectId - Get subcontractors for a project
-subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
-  try {
+subcontractorsRouter.get('/for-project/:projectId', asyncHandler(async (req, res) => {
     const { projectId } = req.params
 
     // Get all subcontractor companies associated with this project
@@ -353,15 +314,10 @@ subcontractorsRouter.get('/for-project/:projectId', async (req, res) => {
     })
 
     res.json({ subcontractors })
-  } catch (error) {
-    console.error('Get subcontractors for project error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Feature #484: POST /api/subcontractors/invitation/:id/accept - Accept invitation and link user
-subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
-  try {
+subcontractorsRouter.post('/invitation/:id/accept', asyncHandler(async (req, res) => {
     const { id } = req.params
     const user = req.user!
 
@@ -374,7 +330,7 @@ subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Invitation not found or expired' })
+      throw AppError.notFound('Invitation')
     }
 
     // Check if user is already linked to THIS specific subcontractor company
@@ -387,10 +343,7 @@ subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
     })
 
     if (existingLink) {
-      return res.status(400).json({
-        error: 'Already linked',
-        message: 'Your account is already linked to this subcontractor company'
-      })
+      throw AppError.badRequest('Your account is already linked to this subcontractor company')
     }
 
     // Link user to subcontractor company
@@ -440,20 +393,15 @@ subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
         status: 'approved'
       }
     })
-  } catch (error) {
-    console.error('Accept invitation error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/subcontractors/my-company - Get the current user's subcontractor company
-subcontractorsRouter.get('/my-company', async (req, res) => {
-  try {
+subcontractorsRouter.get('/my-company', asyncHandler(async (req, res) => {
     const user = req.user!
 
     // Check if user is a subcontractor
     if (!['subcontractor', 'subcontractor_admin'].includes(user.roleInCompany || '')) {
-      return res.status(403).json({ error: 'Only subcontractors can access this endpoint' })
+      throw AppError.forbidden('Only subcontractors can access this endpoint')
     }
 
     // Get the user's subcontractor company via SubcontractorUser
@@ -476,7 +424,7 @@ subcontractorsRouter.get('/my-company', async (req, res) => {
     })
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      return res.status(404).json({ error: 'No subcontractor company found for this user' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     const company = subcontractorUser.subcontractorCompany
@@ -519,20 +467,15 @@ subcontractorsRouter.get('/my-company', async (req, res) => {
         }
       }
     })
-  } catch (error) {
-    console.error('Get my company error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/subcontractors/my-company/employees - Add a new employee
-subcontractorsRouter.post('/my-company/employees', async (req, res) => {
-  try {
+subcontractorsRouter.post('/my-company/employees', asyncHandler(async (req, res) => {
     const user = req.user!
 
     // Check if user is a subcontractor admin
     if (user.roleInCompany !== 'subcontractor_admin') {
-      return res.status(403).json({ error: 'Only subcontractor admins can add employees' })
+      throw AppError.forbidden('Only subcontractor admins can add employees')
     }
 
     // Get the user's subcontractor company
@@ -542,13 +485,13 @@ subcontractorsRouter.post('/my-company/employees', async (req, res) => {
     })
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      return res.status(404).json({ error: 'No subcontractor company found' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     const { name, phone, role, hourlyRate } = req.body
 
     if (!name || !role || !hourlyRate) {
-      return res.status(400).json({ error: 'Name, role, and hourlyRate are required' })
+      throw AppError.badRequest('Name, role, and hourlyRate are required')
     }
 
     const employee = await prisma.employeeRoster.create({
@@ -572,20 +515,15 @@ subcontractorsRouter.post('/my-company/employees', async (req, res) => {
         status: 'pending'
       }
     })
-  } catch (error) {
-    console.error('Add employee error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/subcontractors/my-company/plant - Add new plant
-subcontractorsRouter.post('/my-company/plant', async (req, res) => {
-  try {
+subcontractorsRouter.post('/my-company/plant', asyncHandler(async (req, res) => {
     const user = req.user!
 
     // Check if user is a subcontractor admin
     if (user.roleInCompany !== 'subcontractor_admin') {
-      return res.status(403).json({ error: 'Only subcontractor admins can add plant' })
+      throw AppError.forbidden('Only subcontractor admins can add plant')
     }
 
     // Get the user's subcontractor company
@@ -595,13 +533,13 @@ subcontractorsRouter.post('/my-company/plant', async (req, res) => {
     })
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      return res.status(404).json({ error: 'No subcontractor company found' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     const { type, description, idRego, dryRate, wetRate } = req.body
 
     if (!type || !description || !dryRate) {
-      return res.status(400).json({ error: 'Type, description, and dryRate are required' })
+      throw AppError.badRequest('Type, description, and dryRate are required')
     }
 
     const plant = await prisma.plantRegister.create({
@@ -627,21 +565,16 @@ subcontractorsRouter.post('/my-company/plant', async (req, res) => {
         status: 'pending'
       }
     })
-  } catch (error) {
-    console.error('Add plant error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // DELETE /api/subcontractors/my-company/employees/:id - Delete an employee
-subcontractorsRouter.delete('/my-company/employees/:id', async (req, res) => {
-  try {
+subcontractorsRouter.delete('/my-company/employees/:id', asyncHandler(async (req, res) => {
     const user = req.user!
     const { id } = req.params
 
     // Check if user is a subcontractor admin
     if (user.roleInCompany !== 'subcontractor_admin') {
-      return res.status(403).json({ error: 'Only subcontractor admins can delete employees' })
+      throw AppError.forbidden('Only subcontractor admins can delete employees')
     }
 
     // Get the user's subcontractor company
@@ -650,7 +583,7 @@ subcontractorsRouter.delete('/my-company/employees/:id', async (req, res) => {
     })
 
     if (!subcontractorUser) {
-      return res.status(404).json({ error: 'No subcontractor company found' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     // Verify the employee belongs to this company
@@ -659,7 +592,7 @@ subcontractorsRouter.delete('/my-company/employees/:id', async (req, res) => {
     })
 
     if (!employee || employee.subcontractorCompanyId !== subcontractorUser.subcontractorCompanyId) {
-      return res.status(404).json({ error: 'Employee not found' })
+      throw AppError.notFound('Employee')
     }
 
     await prisma.employeeRoster.delete({
@@ -667,21 +600,16 @@ subcontractorsRouter.delete('/my-company/employees/:id', async (req, res) => {
     })
 
     res.json({ message: 'Employee deleted successfully' })
-  } catch (error) {
-    console.error('Delete employee error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // DELETE /api/subcontractors/my-company/plant/:id - Delete plant
-subcontractorsRouter.delete('/my-company/plant/:id', async (req, res) => {
-  try {
+subcontractorsRouter.delete('/my-company/plant/:id', asyncHandler(async (req, res) => {
     const user = req.user!
     const { id } = req.params
 
     // Check if user is a subcontractor admin
     if (user.roleInCompany !== 'subcontractor_admin') {
-      return res.status(403).json({ error: 'Only subcontractor admins can delete plant' })
+      throw AppError.forbidden('Only subcontractor admins can delete plant')
     }
 
     // Get the user's subcontractor company
@@ -690,7 +618,7 @@ subcontractorsRouter.delete('/my-company/plant/:id', async (req, res) => {
     })
 
     if (!subcontractorUser) {
-      return res.status(404).json({ error: 'No subcontractor company found' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     // Verify the plant belongs to this company
@@ -699,7 +627,7 @@ subcontractorsRouter.delete('/my-company/plant/:id', async (req, res) => {
     })
 
     if (!plant || plant.subcontractorCompanyId !== subcontractorUser.subcontractorCompanyId) {
-      return res.status(404).json({ error: 'Plant not found' })
+      throw AppError.notFound('Plant')
     }
 
     await prisma.plantRegister.delete({
@@ -707,16 +635,11 @@ subcontractorsRouter.delete('/my-company/plant/:id', async (req, res) => {
     })
 
     res.json({ message: 'Plant deleted successfully' })
-  } catch (error) {
-    console.error('Delete plant error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // PATCH /api/subcontractors/:id/status - Update subcontractor status (suspend/remove)
 // Only project managers, admins, or owners can suspend subcontractors
-subcontractorsRouter.patch('/:id/status', async (req, res) => {
-  try {
+subcontractorsRouter.patch('/:id/status', asyncHandler(async (req, res) => {
     const user = req.user!
     const { id } = req.params
     const { status } = req.body
@@ -724,19 +647,13 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
     // Only allow head contractor roles to change status
     const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
     if (!allowedRoles.includes(user.roleInCompany || '')) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only project managers or higher can update subcontractor status'
-      })
+      throw AppError.forbidden('Only project managers or higher can update subcontractor status')
     }
 
     // Validate status
     const validStatuses = ['pending_approval', 'approved', 'suspended', 'removed']
     if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Status must be one of: ${validStatuses.join(', ')}`
-      })
+      throw AppError.badRequest(`Status must be one of: ${validStatuses.join(', ')}`)
     }
 
     // Find the subcontractor company
@@ -746,7 +663,7 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Subcontractor company not found' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     // Verify user has access to this project (company-based access or ProjectUser)
@@ -766,10 +683,7 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
     const isCompanyProject = project?.companyId === user.companyId
 
     if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this project'
-      })
+      throw AppError.forbidden('You do not have access to this project')
     }
 
     // Update the status
@@ -806,25 +720,17 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
       message: `Subcontractor status updated to ${status}`,
       subcontractor: updatedSubcontractor
     })
-  } catch (error) {
-    console.error('Update subcontractor status error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // DELETE /api/subcontractors/:id - Permanently delete a subcontractor and all associated records
-subcontractorsRouter.delete('/:id', async (req, res) => {
-  try {
+subcontractorsRouter.delete('/:id', asyncHandler(async (req, res) => {
     const user = req.user!
     const { id } = req.params
 
     // Only allow head contractor roles to delete subcontractors
     const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
     if (!allowedRoles.includes(user.roleInCompany || '')) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only project managers or higher can delete subcontractors'
-      })
+      throw AppError.forbidden('Only project managers or higher can delete subcontractors')
     }
 
     // Find the subcontractor company with counts
@@ -840,7 +746,7 @@ subcontractorsRouter.delete('/:id', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Subcontractor company not found' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     // Verify user has access to this project
@@ -860,10 +766,7 @@ subcontractorsRouter.delete('/:id', async (req, res) => {
     const isCompanyProject = project?.companyId === user.companyId
 
     if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this project'
-      })
+      throw AppError.forbidden('You do not have access to this project')
     }
 
     // Nullify foreign keys in Lot and NCR before deleting
@@ -892,11 +795,7 @@ subcontractorsRouter.delete('/:id', async (req, res) => {
       message: `Subcontractor ${subcontractor.companyName} permanently deleted`,
       deletedCounts
     })
-  } catch (error) {
-    console.error('Delete subcontractor error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Default portal access settings
 const DEFAULT_PORTAL_ACCESS = {
@@ -909,8 +808,7 @@ const DEFAULT_PORTAL_ACCESS = {
 }
 
 // PATCH /api/subcontractors/:id/portal-access - Update portal access settings
-subcontractorsRouter.patch('/:id/portal-access', async (req, res) => {
-  try {
+subcontractorsRouter.patch('/:id/portal-access', asyncHandler(async (req, res) => {
     const user = req.user!
     const { id } = req.params
     const { portalAccess } = req.body
@@ -918,28 +816,19 @@ subcontractorsRouter.patch('/:id/portal-access', async (req, res) => {
     // Only allow head contractor roles to change portal access
     const allowedRoles = ['owner', 'admin', 'project_manager', 'site_manager']
     if (!allowedRoles.includes(user.roleInCompany || '')) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only project managers or higher can update portal access settings'
-      })
+      throw AppError.forbidden('Only project managers or higher can update portal access settings')
     }
 
     // Validate portal access object
     if (!portalAccess || typeof portalAccess !== 'object') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'portalAccess object is required'
-      })
+      throw AppError.badRequest('portalAccess object is required')
     }
 
     // Validate the structure - ensure all keys are valid booleans
     const validKeys = ['lots', 'itps', 'holdPoints', 'testResults', 'ncrs', 'documents']
     for (const key of validKeys) {
       if (portalAccess[key] !== undefined && typeof portalAccess[key] !== 'boolean') {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: `Invalid value for ${key} - must be a boolean`
-        })
+        throw AppError.badRequest(`Invalid value for ${key} - must be a boolean`)
       }
     }
 
@@ -950,7 +839,7 @@ subcontractorsRouter.patch('/:id/portal-access', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Subcontractor company not found' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     // Verify user has access to this project
@@ -970,10 +859,7 @@ subcontractorsRouter.patch('/:id/portal-access', async (req, res) => {
     const isCompanyProject = project?.companyId === user.companyId
 
     if (!projectUser && !(isCompanyAdmin && isCompanyProject)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this project'
-      })
+      throw AppError.forbidden('You do not have access to this project')
     }
 
     // Merge with defaults to ensure all keys exist
@@ -1010,15 +896,10 @@ subcontractorsRouter.patch('/:id/portal-access', async (req, res) => {
       message: 'Portal access updated successfully',
       portalAccess: updatedSubcontractor.portalAccess
     })
-  } catch (error) {
-    console.error('Update portal access error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/subcontractors/:id/portal-access - Get portal access settings
-subcontractorsRouter.get('/:id/portal-access', async (req, res) => {
-  try {
+subcontractorsRouter.get('/:id/portal-access', asyncHandler(async (req, res) => {
     const { id } = req.params
 
     const subcontractor = await prisma.subcontractorCompany.findUnique({
@@ -1031,22 +912,17 @@ subcontractorsRouter.get('/:id/portal-access', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Subcontractor company not found' })
+      throw AppError.notFound('Subcontractor company')
     }
 
     // Return stored access or defaults
     const portalAccess = subcontractor.portalAccess || DEFAULT_PORTAL_ACCESS
 
     res.json({ portalAccess })
-  } catch (error) {
-    console.error('Get portal access error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/subcontractors/project/:projectId - Get all subcontractors for a project (head contractor view)
-subcontractorsRouter.get('/project/:projectId', async (req, res) => {
-  try {
+subcontractorsRouter.get('/project/:projectId', asyncHandler(async (req, res) => {
     const { projectId } = req.params
     const { includeRemoved } = req.query
 
@@ -1117,20 +993,15 @@ subcontractorsRouter.get('/project/:projectId', async (req, res) => {
     })
 
     res.json({ subcontractors: formattedSubcontractors })
-  } catch (error) {
-    console.error('Get project subcontractors error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/subcontractors/:id/employees - Add employee to a subcontractor (admin)
-subcontractorsRouter.post('/:id/employees', async (req, res) => {
-  try {
+subcontractorsRouter.post('/:id/employees', asyncHandler(async (req, res) => {
     const { id } = req.params
     const { name, role, hourlyRate, phone } = req.body
 
     if (!name || hourlyRate === undefined) {
-      return res.status(400).json({ error: 'Name and hourly rate are required' })
+      throw AppError.badRequest('Name and hourly rate are required')
     }
 
     // Verify subcontractor exists
@@ -1139,7 +1010,7 @@ subcontractorsRouter.post('/:id/employees', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Subcontractor not found' })
+      throw AppError.notFound('Subcontractor')
     }
 
     const employee = await prisma.employeeRoster.create({
@@ -1162,27 +1033,22 @@ subcontractorsRouter.post('/:id/employees', async (req, res) => {
         status: employee.status
       }
     })
-  } catch (error) {
-    console.error('Add employee error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // PATCH /api/subcontractors/:id/employees/:empId/status - Update employee status
-subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
-  try {
+subcontractorsRouter.patch('/:id/employees/:empId/status', asyncHandler(async (req, res) => {
     const { id, empId } = req.params
     const { status, counterRate } = req.body
     const userId = req.user?.userId
 
     const validStatuses = ['pending', 'approved', 'inactive', 'counter']
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be: pending, approved, inactive, or counter' })
+      throw AppError.badRequest('Invalid status. Must be: pending, approved, inactive, or counter')
     }
 
     // Counter-proposals require a counter rate
     if (status === 'counter' && (counterRate === undefined || counterRate === null)) {
-      return res.status(400).json({ error: 'Counter-proposal requires a counterRate value' })
+      throw AppError.badRequest('Counter-proposal requires a counterRate value')
     }
 
     // Verify employee belongs to this subcontractor
@@ -1194,7 +1060,7 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
     })
 
     if (!employee) {
-      return res.status(404).json({ error: 'Employee not found' })
+      throw AppError.notFound('Employee')
     }
 
     const updateData: any = { status }
@@ -1322,20 +1188,15 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
         ...(status === 'counter' && counterRate !== undefined && { counterRate: Number(counterRate) })
       }
     })
-  } catch (error) {
-    console.error('Update employee status error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/subcontractors/:id/plant - Add plant to a subcontractor (admin)
-subcontractorsRouter.post('/:id/plant', async (req, res) => {
-  try {
+subcontractorsRouter.post('/:id/plant', asyncHandler(async (req, res) => {
     const { id } = req.params
     const { type, description, idRego, dryRate, wetRate } = req.body
 
     if (!type || dryRate === undefined) {
-      return res.status(400).json({ error: 'Type and dry rate are required' })
+      throw AppError.badRequest('Type and dry rate are required')
     }
 
     // Verify subcontractor exists
@@ -1344,7 +1205,7 @@ subcontractorsRouter.post('/:id/plant', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ error: 'Subcontractor not found' })
+      throw AppError.notFound('Subcontractor')
     }
 
     const plant = await prisma.plantRegister.create({
@@ -1370,27 +1231,22 @@ subcontractorsRouter.post('/:id/plant', async (req, res) => {
         status: plant.status
       }
     })
-  } catch (error) {
-    console.error('Add plant error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // PATCH /api/subcontractors/:id/plant/:plantId/status - Update plant status
-subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
-  try {
+subcontractorsRouter.patch('/:id/plant/:plantId/status', asyncHandler(async (req, res) => {
     const { id, plantId } = req.params
     const { status, counterDryRate, counterWetRate } = req.body
     const userId = req.user?.userId
 
     const validStatuses = ['pending', 'approved', 'inactive', 'counter']
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be: pending, approved, inactive, or counter' })
+      throw AppError.badRequest('Invalid status. Must be: pending, approved, inactive, or counter')
     }
 
     // Counter-proposals require at least a counter dry rate
     if (status === 'counter' && (counterDryRate === undefined || counterDryRate === null)) {
-      return res.status(400).json({ error: 'Counter-proposal requires a counterDryRate value' })
+      throw AppError.badRequest('Counter-proposal requires a counterDryRate value')
     }
 
     // Verify plant belongs to this subcontractor
@@ -1402,7 +1258,7 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
     })
 
     if (!plant) {
-      return res.status(404).json({ error: 'Plant not found' })
+      throw AppError.notFound('Plant')
     }
 
     const updateData: any = { status }
@@ -1549,22 +1405,14 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
         })
       }
     })
-  } catch (error) {
-    console.error('Update plant status error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Feature #483: POST /api/subcontractors/validate-abn - Validate an ABN
-subcontractorsRouter.post('/validate-abn', async (req, res) => {
-  try {
+subcontractorsRouter.post('/validate-abn', asyncHandler(async (req, res) => {
     const { abn } = req.body
 
     if (!abn) {
-      return res.status(400).json({
-        error: 'ABN required',
-        message: 'Please provide an ABN to validate'
-      })
+      throw AppError.badRequest('Please provide an ABN to validate')
     }
 
     const validation = validateABN(abn)
@@ -1575,11 +1423,7 @@ subcontractorsRouter.post('/validate-abn', async (req, res) => {
       error: validation.error || null,
       formatted: validation.valid ? formatABN(abn.replace(/[\s-]/g, '')) : null
     })
-  } catch (error) {
-    console.error('ABN validation error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Helper to format ABN with spaces: XX XXX XXX XXX
 function formatABN(abn: string): string {

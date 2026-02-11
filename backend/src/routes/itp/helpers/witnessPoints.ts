@@ -188,6 +188,7 @@ export async function checkAndNotifyWitnessPoint(
       clientName
     }
   } catch (error) {
+    // Note: This helper intentionally catches errors since notification is non-critical
     console.error('Error checking witness point notification:', error)
     return null
   }

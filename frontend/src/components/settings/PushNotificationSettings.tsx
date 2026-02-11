@@ -9,6 +9,7 @@ import {
   sendTestPush,
   getPushStatus
 } from '@/lib/pushNotifications'
+import { extractErrorMessage } from '@/lib/errorHandling'
 
 export function PushNotificationSettings() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -88,7 +89,7 @@ export function PushNotificationSettings() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      setError(extractErrorMessage(err, 'An error occurred'))
     } finally {
       setSubscribing(false)
     }
@@ -113,7 +114,7 @@ export function PushNotificationSettings() {
     } catch (err) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : 'An error occurred'
+        message: extractErrorMessage(err, 'An error occurred')
       })
     } finally {
       setSendingTest(false)

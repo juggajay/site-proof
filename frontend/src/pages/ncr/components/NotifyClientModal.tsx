@@ -2,6 +2,7 @@ import { useState, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { handleApiError } from '@/lib/errorHandling'
 import type { NCR } from '../types'
 
 interface NotifyClientModalProps {
@@ -41,11 +42,7 @@ function NotifyClientModalInner({
       handleClose()
       onSuccess()
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to notify client',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to notify client')
     } finally {
       setNotifyingClient(false)
     }

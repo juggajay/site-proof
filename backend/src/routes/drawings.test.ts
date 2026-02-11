@@ -6,11 +6,13 @@ import fs from 'fs'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
 import { drawingsRouter } from './drawings.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/drawings', drawingsRouter)
+app.use(errorHandler)
 
 // Ensure upload directory exists for tests
 const uploadDir = path.join(process.cwd(), 'uploads', 'drawings')
@@ -253,7 +255,7 @@ describe('Drawings API', () => {
         .field('drawingNumber', 'DRW-003')
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('file')
+      expect(res.body.error.message).toContain('file')
     })
 
     it('should reject drawing without projectId', async () => {
@@ -264,7 +266,7 @@ describe('Drawings API', () => {
         .attach('file', testFilePath)
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('projectId')
+      expect(res.body.error.message).toContain('projectId')
     })
 
     it('should reject drawing without drawingNumber', async () => {
@@ -275,7 +277,7 @@ describe('Drawings API', () => {
         .attach('file', testFilePath)
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('drawingNumber')
+      expect(res.body.error.message).toContain('drawingNumber')
     })
 
     it('should reject duplicate drawing number and revision', async () => {
@@ -288,7 +290,7 @@ describe('Drawings API', () => {
         .attach('file', testFilePath)
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('already exists')
+      expect(res.body.error.message).toContain('already exists')
     })
 
     it('should default to preliminary status if not provided', async () => {
@@ -556,7 +558,7 @@ describe('Drawings API', () => {
         .field('revision', 'C')
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('file')
+      expect(res.body.error.message).toContain('file')
     })
 
     it('should reject supersede without revision', async () => {
@@ -566,7 +568,7 @@ describe('Drawings API', () => {
         .attach('file', testFilePath)
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('revision')
+      expect(res.body.error.message).toContain('revision')
     })
 
     it('should return 404 for non-existent drawing', async () => {

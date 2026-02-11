@@ -4,11 +4,13 @@ import express from 'express'
 import { authRouter } from './auth.js'
 import { auditLogRouter } from './auditLog.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/audit-logs', auditLogRouter)
+app.use(errorHandler)
 
 describe('Audit Log API', () => {
   let authToken: string
@@ -572,7 +574,7 @@ describe('Audit Log API', () => {
 
       // Should either return 500 or handle gracefully with valid response
       if (res.status === 500) {
-        expect(res.body.error).toBeDefined()
+        expect(res.body.error.message).toBeDefined()
       } else {
         expect(res.status).toBe(200)
       }
@@ -617,7 +619,7 @@ describe('Audit Log API', () => {
         .query({ page: '-1' })
 
       expect(res.status).toBe(500)
-      expect(res.body.error).toBeDefined()
+      expect(res.body.error.message).toBeDefined()
     })
   })
 })

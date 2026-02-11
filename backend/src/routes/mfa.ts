@@ -8,12 +8,13 @@ import { requireAuth } from '../middleware/authMiddleware.js'
 import { generateSecret, verify as verifyOtp, generateURI } from 'otplib'
 import QRCode from 'qrcode'
 import { encrypt, decrypt } from '../lib/encryption.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 export const mfaRouter = Router()
 
 // GET /api/mfa/status - Get current MFA status for user
-mfaRouter.get('/status', requireAuth, async (req: any, res) => {
-  try {
+mfaRouter.get('/status', requireAuth, asyncHandler(async (req: any, res) => {
     const userId = req.user.userId
 
     // Use raw SQL to get MFA status
@@ -23,21 +24,16 @@ mfaRouter.get('/status', requireAuth, async (req: any, res) => {
 
     const user = userResult[0]
     if (!user) {
-      return res.status(404).json({ message: 'User not found' })
+      throw AppError.notFound('User')
     }
 
     res.json({
       mfaEnabled: Boolean(user.two_factor_enabled),
     })
-  } catch (error) {
-    console.error('Error getting MFA status:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/mfa/setup - Generate MFA secret and QR code
-mfaRouter.post('/setup', requireAuth, async (req: any, res) => {
-  try {
+mfaRouter.post('/setup', requireAuth, asyncHandler(async (req: any, res) => {
     const userId = req.user.userId
     const userEmail = req.user.email
 
@@ -48,11 +44,11 @@ mfaRouter.post('/setup', requireAuth, async (req: any, res) => {
 
     const user = userResult[0]
     if (!user) {
-      return res.status(404).json({ message: 'User not found' })
+      throw AppError.notFound('User')
     }
 
     if (user.two_factor_enabled) {
-      return res.status(400).json({ message: 'MFA is already enabled. Disable it first to set up again.' })
+      throw AppError.badRequest('MFA is already enabled. Disable it first to set up again.')
     }
 
     // Generate a new secret using otplib v13 functional API
@@ -80,20 +76,15 @@ mfaRouter.post('/setup', requireAuth, async (req: any, res) => {
       otpAuthUrl,
       message: 'Scan the QR code with your authenticator app, then verify with a code.',
     })
-  } catch (error) {
-    console.error('Error setting up MFA:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/mfa/verify-setup - Verify the setup code and enable MFA
-mfaRouter.post('/verify-setup', requireAuth, async (req: any, res) => {
-  try {
+mfaRouter.post('/verify-setup', requireAuth, asyncHandler(async (req: any, res) => {
     const userId = req.user.userId
     const { code } = req.body
 
     if (!code) {
-      return res.status(400).json({ message: 'Verification code is required' })
+      throw AppError.badRequest('Verification code is required')
     }
 
     // Get the user's pending secret
@@ -104,15 +95,15 @@ mfaRouter.post('/verify-setup', requireAuth, async (req: any, res) => {
 
     const user = userResult[0]
     if (!user) {
-      return res.status(404).json({ message: 'User not found' })
+      throw AppError.notFound('User')
     }
 
     if (user.two_factor_enabled) {
-      return res.status(400).json({ message: 'MFA is already enabled' })
+      throw AppError.badRequest('MFA is already enabled')
     }
 
     if (!user.two_factor_secret) {
-      return res.status(400).json({ message: 'No MFA setup in progress. Please start setup first.' })
+      throw AppError.badRequest('No MFA setup in progress. Please start setup first.')
     }
 
     // Decrypt the secret before verifying
@@ -125,7 +116,7 @@ mfaRouter.post('/verify-setup', requireAuth, async (req: any, res) => {
     })
 
     if (!isValid) {
-      return res.status(400).json({ message: 'Invalid verification code. Please try again.' })
+      throw AppError.badRequest('Invalid verification code. Please try again.')
     }
 
     // Enable MFA
@@ -141,20 +132,15 @@ mfaRouter.post('/verify-setup', requireAuth, async (req: any, res) => {
       message: 'Two-factor authentication has been enabled successfully.',
       backupCodes,
     })
-  } catch (error) {
-    console.error('Error verifying MFA setup:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/mfa/disable - Disable MFA (requires password)
-mfaRouter.post('/disable', requireAuth, async (req: any, res) => {
-  try {
+mfaRouter.post('/disable', requireAuth, asyncHandler(async (req: any, res) => {
     const userId = req.user.userId
     const { password, code } = req.body
 
     if (!password && !code) {
-      return res.status(400).json({ message: 'Password or MFA code is required to disable MFA' })
+      throw AppError.badRequest('Password or MFA code is required to disable MFA')
     }
 
     // Get user details
@@ -166,11 +152,11 @@ mfaRouter.post('/disable', requireAuth, async (req: any, res) => {
 
     const user = userResult[0]
     if (!user) {
-      return res.status(404).json({ message: 'User not found' })
+      throw AppError.notFound('User')
     }
 
     if (!user.two_factor_enabled) {
-      return res.status(400).json({ message: 'MFA is not enabled' })
+      throw AppError.badRequest('MFA is not enabled')
     }
 
     // Verify either password or MFA code
@@ -191,7 +177,7 @@ mfaRouter.post('/disable', requireAuth, async (req: any, res) => {
     }
 
     if (!verified) {
-      return res.status(401).json({ message: 'Invalid password or MFA code' })
+      throw AppError.unauthorized('Invalid password or MFA code')
     }
 
     // Disable MFA and clear secret
@@ -201,19 +187,14 @@ mfaRouter.post('/disable', requireAuth, async (req: any, res) => {
       success: true,
       message: 'Two-factor authentication has been disabled.',
     })
-  } catch (error) {
-    console.error('Error disabling MFA:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/mfa/verify - Verify MFA code during login
-mfaRouter.post('/verify', async (req, res) => {
-  try {
+mfaRouter.post('/verify', asyncHandler(async (req, res) => {
     const { userId, code } = req.body
 
     if (!userId || !code) {
-      return res.status(400).json({ message: 'User ID and code are required' })
+      throw AppError.badRequest('User ID and code are required')
     }
 
     // Get user's MFA secret
@@ -229,11 +210,11 @@ mfaRouter.post('/verify', async (req, res) => {
 
     const user = userResult[0]
     if (!user) {
-      return res.status(404).json({ message: 'User not found' })
+      throw AppError.notFound('User')
     }
 
     if (!user.two_factor_enabled || !user.two_factor_secret) {
-      return res.status(400).json({ message: 'MFA is not enabled for this user' })
+      throw AppError.badRequest('MFA is not enabled for this user')
     }
 
     // Decrypt the secret before verifying
@@ -246,7 +227,7 @@ mfaRouter.post('/verify', async (req, res) => {
     })
 
     if (!isValid) {
-      return res.status(401).json({ message: 'Invalid verification code' })
+      throw AppError.unauthorized('Invalid verification code')
     }
 
     // Return user info for token generation
@@ -260,8 +241,4 @@ mfaRouter.post('/verify', async (req, res) => {
         companyId: user.company_id,
       },
     })
-  } catch (error) {
-    console.error('Error verifying MFA code:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))

@@ -104,6 +104,7 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
     }
   } catch (error) {
     // Log but don't throw - status update is not critical
+    // Note: This helper intentionally catches errors since lot status update is non-critical
     console.error('Error auto-progressing lot status:', error)
   }
 }

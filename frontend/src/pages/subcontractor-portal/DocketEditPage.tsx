@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { extractErrorMessage, handleApiError } from '@/lib/errorHandling'
 import { cn } from '@/lib/utils'
 
 interface Employee {
@@ -214,8 +215,7 @@ export function DocketEditPage() {
           }
         }
       } catch (err) {
-        console.error('Error fetching data:', err)
-        setError('Failed to load data')
+        setError(extractErrorMessage(err, 'Failed to load data'))
       } finally {
         setLoading(false)
       }
@@ -295,12 +295,7 @@ export function DocketEditPage() {
       resetSheetState()
       toast({ title: 'Labour entry added', variant: 'success' })
     } catch (err) {
-      console.error('Error adding labour:', err)
-      toast({
-        title: 'Failed to add entry',
-        description: 'Please try again',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to add labour entry')
     } finally {
       setSaving(false)
     }
@@ -344,12 +339,7 @@ export function DocketEditPage() {
       resetSheetState()
       toast({ title: 'Plant entry added', variant: 'success' })
     } catch (err) {
-      console.error('Error adding plant:', err)
-      toast({
-        title: 'Failed to add entry',
-        description: 'Please try again',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to add plant entry')
     } finally {
       setSaving(false)
     }
@@ -378,12 +368,7 @@ export function DocketEditPage() {
 
       toast({ title: 'Entry deleted', variant: 'success' })
     } catch (err) {
-      console.error('Error deleting entry:', err)
-      toast({
-        title: 'Failed to delete',
-        description: 'Please try again',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to delete entry')
     }
   }
 
@@ -410,12 +395,7 @@ export function DocketEditPage() {
 
       toast({ title: 'Entry deleted', variant: 'success' })
     } catch (err) {
-      console.error('Error deleting entry:', err)
-      toast({
-        title: 'Failed to delete',
-        description: 'Please try again',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to delete entry')
     }
   }
 
@@ -446,13 +426,8 @@ export function DocketEditPage() {
       })
 
       navigate('/subcontractor-portal')
-    } catch (err: any) {
-      console.error('Error submitting docket:', err)
-      toast({
-        title: 'Failed to submit',
-        description: err.message || 'Please try again',
-        variant: 'error',
-      })
+    } catch (err) {
+      handleApiError(err, 'Failed to submit docket')
     } finally {
       setSubmitting(false)
     }
@@ -476,13 +451,8 @@ export function DocketEditPage() {
       })
 
       navigate('/subcontractor-portal')
-    } catch (err: any) {
-      console.error('Error responding to query:', err)
-      toast({
-        title: 'Failed to respond',
-        description: err.message || 'Please try again',
-        variant: 'error',
-      })
+    } catch (err) {
+      handleApiError(err, 'Failed to respond to query')
     } finally {
       setRespondingToQuery(false)
     }

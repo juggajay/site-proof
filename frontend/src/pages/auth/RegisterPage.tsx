@@ -76,7 +76,7 @@ export function RegisterPage() {
       // Show verification message instead of navigating to login
       setRegisteredEmail(data.email)
       setRegistrationSuccess(true)
-    } catch (err: any) {
+    } catch (err) {
       // Set form-level error (could be improved with setError)
       console.error('Registration error:', err)
     } finally {

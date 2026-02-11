@@ -4,11 +4,13 @@ import express from 'express'
 import { authRouter } from './auth.js'
 import webhooksRouter, { webhookConfigs } from './webhooks.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/webhooks', webhooksRouter)
+app.use(errorHandler)
 
 describe('Webhooks API', () => {
   let authToken: string
@@ -212,7 +214,7 @@ describe('Webhooks API', () => {
           })
 
         expect(res.status).toBe(400)
-        expect(res.body.error).toContain('URL')
+        expect(res.body.error.message).toContain('URL')
       })
 
       it('should validate URL format', async () => {
@@ -224,7 +226,7 @@ describe('Webhooks API', () => {
           })
 
         expect(res.status).toBe(400)
-        expect(res.body.error).toContain('Invalid URL')
+        expect(res.body.error.message).toContain('Invalid URL')
       })
 
       it('should require authentication', async () => {
@@ -259,7 +261,7 @@ describe('Webhooks API', () => {
           })
 
         expect(res.status).toBe(403)
-        expect(res.body.error).toContain('Company context required')
+        expect(res.body.error.message).toContain('Company context required')
 
         // Cleanup
         await prisma.emailVerificationToken.deleteMany({ where: { userId: noCompanyUserId } })
@@ -366,7 +368,7 @@ describe('Webhooks API', () => {
           .set('Authorization', `Bearer ${authToken}`)
 
         expect(res.status).toBe(404)
-        expect(res.body.error).toContain('not found')
+        expect(res.body.error.message).toContain('not found')
       })
 
       it('should deny access to webhook from different company', async () => {
@@ -396,7 +398,7 @@ describe('Webhooks API', () => {
           .set('Authorization', `Bearer ${otherToken}`)
 
         expect(res.status).toBe(403)
-        expect(res.body.error).toContain('Access denied')
+        expect(res.body.error.message).toContain('Access denied')
 
         // Cleanup
         await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } })
@@ -462,7 +464,7 @@ describe('Webhooks API', () => {
           })
 
         expect(res.status).toBe(400)
-        expect(res.body.error).toContain('Invalid URL')
+        expect(res.body.error.message).toContain('Invalid URL')
       })
 
       it('should return 404 for non-existent webhook', async () => {

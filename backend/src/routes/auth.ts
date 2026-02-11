@@ -6,6 +6,8 @@ import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
 import crypto from 'crypto'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 export const authRouter = Router()
 
@@ -75,26 +77,24 @@ function validatePassword(password: string): { valid: boolean; errors: string[] 
 }
 
 // POST /api/auth/register
-authRouter.post('/register', async (req, res) => {
-  try {
+authRouter.post('/register', asyncHandler(async (req, res) => {
     const { email, password, fullName, firstName, lastName, tosAccepted } = req.body
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' })
+      throw AppError.badRequest('Email and password are required')
     }
 
     // Validate password strength
     const passwordValidation = validatePassword(password)
     if (!passwordValidation.valid) {
-      return res.status(400).json({
-        message: 'Password does not meet security requirements',
-        errors: passwordValidation.errors
+      throw AppError.badRequest('Password does not meet security requirements', {
+        errors: passwordValidation.errors as unknown as Record<string, unknown>,
       })
     }
 
     // Require ToS acceptance
     if (!tosAccepted) {
-      return res.status(400).json({ message: 'You must accept the Terms of Service to create an account' })
+      throw AppError.badRequest('You must accept the Terms of Service to create an account')
     }
 
     // Check if user already exists
@@ -103,7 +103,7 @@ authRouter.post('/register', async (req, res) => {
     })
 
     if (existingUser) {
-      return res.status(400).json({ message: 'Email already in use' })
+      throw AppError.badRequest('Email already in use')
     }
 
     // Build full name from parts if not provided directly
@@ -177,19 +177,14 @@ authRouter.post('/register', async (req, res) => {
       message: 'Account created. Please check your email to verify your account.',
       verificationRequired: true,
     })
-  } catch (error) {
-    console.error('Registration error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/login
-authRouter.post('/login', async (req, res) => {
-  try {
+authRouter.post('/login', asyncHandler(async (req, res) => {
     const { email, password, mfaCode } = req.body
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' })
+      throw AppError.badRequest('Email and password are required')
     }
 
     // Find user with MFA fields using raw SQL
@@ -207,12 +202,12 @@ authRouter.post('/login', async (req, res) => {
     const user = userResult[0]
 
     if (!user || !user.password_hash) {
-      return res.status(401).json({ message: 'Invalid email or password' })
+      throw AppError.unauthorized('Invalid email or password')
     }
 
     // Verify password
     if (!verifyPassword(password, user.password_hash)) {
-      return res.status(401).json({ message: 'Invalid email or password' })
+      throw AppError.unauthorized('Invalid email or password')
     }
 
     // Check if MFA is enabled
@@ -226,7 +221,7 @@ authRouter.post('/login', async (req, res) => {
         })
 
         if (!isValid) {
-          return res.status(401).json({ message: 'Invalid MFA code' })
+          throw AppError.unauthorized('Invalid MFA code')
         }
         // MFA verified, continue to generate token
       } else {
@@ -264,22 +259,17 @@ authRouter.post('/login', async (req, res) => {
       },
       token,
     })
-  } catch (error) {
-    console.error('Login error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // Magic link expiry time in minutes
 const MAGIC_LINK_EXPIRY_MINUTES = 15
 
 // POST /api/auth/magic-link/request - Request a magic link login email (Feature #1005)
-authRouter.post('/magic-link/request', async (req, res) => {
-  try {
+authRouter.post('/magic-link/request', asyncHandler(async (req, res) => {
     const { email } = req.body
 
     if (!email) {
-      return res.status(400).json({ message: 'Email is required' })
+      throw AppError.badRequest('Email is required')
     }
 
     // Find user
@@ -333,24 +323,19 @@ authRouter.post('/magic-link/request', async (req, res) => {
     res.json({
       message: 'If an account exists with this email, a login link has been sent.',
     })
-  } catch (error) {
-    console.error('Magic link request error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/magic-link/verify - Verify magic link and login (Feature #1005)
-authRouter.post('/magic-link/verify', async (req, res) => {
-  try {
+authRouter.post('/magic-link/verify', asyncHandler(async (req, res) => {
     const { token } = req.body
 
     if (!token) {
-      return res.status(400).json({ message: 'Token is required' })
+      throw AppError.badRequest('Token is required')
     }
 
     // Only accept magic_ prefixed tokens
     if (!token.startsWith('magic_')) {
-      return res.status(400).json({ message: 'Invalid token format' })
+      throw AppError.badRequest('Invalid token format')
     }
 
     // Find the token
@@ -373,7 +358,7 @@ authRouter.post('/magic-link/verify', async (req, res) => {
     })
 
     if (!tokenRecord) {
-      return res.status(400).json({ message: 'Invalid or expired link' })
+      throw AppError.badRequest('Invalid or expired link')
     }
 
     // Check if token has expired
@@ -382,12 +367,12 @@ authRouter.post('/magic-link/verify', async (req, res) => {
       await prisma.passwordResetToken.delete({
         where: { token },
       })
-      return res.status(400).json({ message: 'This link has expired. Please request a new one.' })
+      throw AppError.badRequest('This link has expired. Please request a new one.')
     }
 
     // Check if token has already been used
     if (tokenRecord.usedAt) {
-      return res.status(400).json({ message: 'This link has already been used. Please request a new one.' })
+      throw AppError.badRequest('This link has already been used. Please request a new one.')
     }
 
     // Mark token as used
@@ -414,18 +399,13 @@ authRouter.post('/magic-link/verify', async (req, res) => {
       },
       token: authToken,
     })
-  } catch (error) {
-    console.error('Magic link verify error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/auth/me
-authRouter.get('/me', async (req, res) => {
-  try {
+authRouter.get('/me', asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const token = authHeader.substring(7)
@@ -435,15 +415,11 @@ authRouter.get('/me', async (req, res) => {
     const user = await verifyToken(token)
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid token' })
+      throw AppError.unauthorized('Invalid token')
     }
 
     res.json({ user })
-  } catch (error) {
-    console.error('Get me error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/logout
 authRouter.post('/logout', (_req, res) => {
@@ -452,19 +428,18 @@ authRouter.post('/logout', (_req, res) => {
 })
 
 // POST /api/auth/logout-all-devices - Invalidate all existing sessions
-authRouter.post('/logout-all-devices', async (req, res) => {
-  try {
+authRouter.post('/logout-all-devices', asyncHandler(async (req, res) => {
     // Get the authorization header
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Authentication required' })
+      throw AppError.unauthorized('Authentication required')
     }
 
     const token = authHeader.substring(7)
     const user = await verifyToken(token)
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid or expired token' })
+      throw AppError.unauthorized('Invalid or expired token')
     }
 
     // Update the token_invalidated_at timestamp to invalidate all existing tokens
@@ -477,19 +452,14 @@ authRouter.post('/logout-all-devices', async (req, res) => {
       message: 'Successfully logged out from all devices',
       loggedOutAt: now
     })
-  } catch (error) {
-    console.error('Logout all devices error:', error)
-    res.status(500).json({ message: 'Failed to logout from all devices' })
-  }
-})
+}))
 
 // POST /api/auth/forgot-password - Request a password reset
-authRouter.post('/forgot-password', async (req, res) => {
-  try {
+authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
     const { email } = req.body
 
     if (!email) {
-      return res.status(400).json({ message: 'Email is required' })
+      throw AppError.badRequest('Email is required')
     }
 
     // Find user - but don't reveal if email exists (security best practice)
@@ -543,24 +513,19 @@ authRouter.post('/forgot-password', async (req, res) => {
     res.json({
       message: 'If an account exists with this email, a password reset link has been sent.'
     })
-  } catch (error) {
-    console.error('Forgot password error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/reset-password - Reset password with token
-authRouter.post('/reset-password', async (req, res) => {
-  try {
+authRouter.post('/reset-password', asyncHandler(async (req, res) => {
     const { token, password } = req.body
 
     if (!token || !password) {
-      return res.status(400).json({ message: 'Token and new password are required' })
+      throw AppError.badRequest('Token and new password are required')
     }
 
     // Validate password requirements
     if (password.length < 8) {
-      return res.status(400).json({ message: 'Password must be at least 8 characters long' })
+      throw AppError.badRequest('Password must be at least 8 characters long')
     }
 
     // Find the token
@@ -570,17 +535,17 @@ authRouter.post('/reset-password', async (req, res) => {
     })
 
     if (!resetToken) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' })
+      throw AppError.badRequest('Invalid or expired reset token')
     }
 
     // Check if token has been used
     if (resetToken.usedAt) {
-      return res.status(400).json({ message: 'This reset token has already been used' })
+      throw AppError.badRequest('This reset token has already been used')
     }
 
     // Check if token has expired
     if (resetToken.expiresAt < new Date()) {
-      return res.status(400).json({ message: 'This reset token has expired' })
+      throw AppError.badRequest('This reset token has expired')
     }
 
     // Hash the new password
@@ -599,15 +564,10 @@ authRouter.post('/reset-password', async (req, res) => {
     ])
 
     res.json({ message: 'Password has been reset successfully. You can now log in with your new password.' })
-  } catch (error) {
-    console.error('Reset password error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/auth/validate-reset-token - Check if a reset token is valid
-authRouter.get('/validate-reset-token', async (req, res) => {
-  try {
+authRouter.get('/validate-reset-token', asyncHandler(async (req, res) => {
     const { token } = req.query
 
     if (!token || typeof token !== 'string') {
@@ -631,18 +591,13 @@ authRouter.get('/validate-reset-token', async (req, res) => {
     }
 
     res.json({ valid: true })
-  } catch (error) {
-    console.error('Validate reset token error:', error)
-    res.status(500).json({ valid: false, message: 'Internal server error' })
-  }
-})
+}))
 
 // PATCH /api/auth/profile - Update user profile
-authRouter.patch('/profile', async (req, res) => {
-  try {
+authRouter.patch('/profile', asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const token = authHeader.substring(7)
@@ -652,7 +607,7 @@ authRouter.patch('/profile', async (req, res) => {
     const userData = await verifyToken(token)
 
     if (!userData) {
-      return res.status(401).json({ message: 'Invalid token' })
+      throw AppError.unauthorized('Invalid token')
     }
 
     const { fullName, phone } = req.body
@@ -692,18 +647,13 @@ authRouter.patch('/profile', async (req, res) => {
         companyName: updatedUser.company?.name || null,
       },
     })
-  } catch (error) {
-    console.error('Update profile error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/avatar - Upload user avatar (Feature #690)
-authRouter.post('/avatar', avatarUpload.single('avatar'), async (req, res) => {
-  try {
+authRouter.post('/avatar', avatarUpload.single('avatar'), asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const token = authHeader.substring(7)
@@ -711,11 +661,11 @@ authRouter.post('/avatar', avatarUpload.single('avatar'), async (req, res) => {
     const userData = await verifyToken(token)
 
     if (!userData) {
-      return res.status(401).json({ message: 'Invalid token' })
+      throw AppError.unauthorized('Invalid token')
     }
 
     if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' })
+      throw AppError.badRequest('No file uploaded')
     }
 
     // Get the old avatar to delete it later
@@ -772,18 +722,13 @@ authRouter.post('/avatar', avatarUpload.single('avatar'), async (req, res) => {
         companyId: updatedUser.companyId,
       },
     })
-  } catch (error) {
-    console.error('Avatar upload error:', error)
-    res.status(500).json({ message: 'Failed to upload avatar' })
-  }
-})
+}))
 
 // DELETE /api/auth/avatar - Remove user avatar
-authRouter.delete('/avatar', async (req, res) => {
-  try {
+authRouter.delete('/avatar', asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const token = authHeader.substring(7)
@@ -791,7 +736,7 @@ authRouter.delete('/avatar', async (req, res) => {
     const userData = await verifyToken(token)
 
     if (!userData) {
-      return res.status(401).json({ message: 'Invalid token' })
+      throw AppError.unauthorized('Invalid token')
     }
 
     // Get the current avatar URL to delete the file
@@ -821,18 +766,13 @@ authRouter.delete('/avatar', async (req, res) => {
     })
 
     res.json({ message: 'Avatar removed successfully' })
-  } catch (error) {
-    console.error('Avatar delete error:', error)
-    res.status(500).json({ message: 'Failed to remove avatar' })
-  }
-})
+}))
 
 // POST /api/auth/change-password - Change user password (requires current password)
-authRouter.post('/change-password', async (req, res) => {
-  try {
+authRouter.post('/change-password', asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const token = authHeader.substring(7)
@@ -842,22 +782,22 @@ authRouter.post('/change-password', async (req, res) => {
     const userData = await verifyToken(token)
 
     if (!userData) {
-      return res.status(401).json({ message: 'Invalid token' })
+      throw AppError.unauthorized('Invalid token')
     }
 
     const { currentPassword, newPassword, confirmPassword } = req.body
 
     // Validate input
     if (!currentPassword || !newPassword || !confirmPassword) {
-      return res.status(400).json({ message: 'Current password, new password, and confirm password are required' })
+      throw AppError.badRequest('Current password, new password, and confirm password are required')
     }
 
     if (newPassword !== confirmPassword) {
-      return res.status(400).json({ message: 'New password and confirm password do not match' })
+      throw AppError.badRequest('New password and confirm password do not match')
     }
 
     if (newPassword.length < 8) {
-      return res.status(400).json({ message: 'New password must be at least 8 characters long' })
+      throw AppError.badRequest('New password must be at least 8 characters long')
     }
 
     // Get user with password hash
@@ -867,12 +807,12 @@ authRouter.post('/change-password', async (req, res) => {
     })
 
     if (!user || !user.passwordHash) {
-      return res.status(404).json({ message: 'User not found' })
+      throw AppError.notFound('User')
     }
 
     // Verify current password
     if (!verifyPassword(currentPassword, user.passwordHash)) {
-      return res.status(401).json({ message: 'Current password is incorrect' })
+      throw AppError.unauthorized('Current password is incorrect')
     }
 
     // Hash and update password
@@ -883,19 +823,14 @@ authRouter.post('/change-password', async (req, res) => {
     })
 
     res.json({ message: 'Password changed successfully' })
-  } catch (error) {
-    console.error('Change password error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/verify-email - Verify email with token
-authRouter.post('/verify-email', async (req, res) => {
-  try {
+authRouter.post('/verify-email', asyncHandler(async (req, res) => {
     const { token } = req.body
 
     if (!token) {
-      return res.status(400).json({ message: 'Verification token is required' })
+      throw AppError.badRequest('Verification token is required')
     }
 
     // Find the token
@@ -905,22 +840,22 @@ authRouter.post('/verify-email', async (req, res) => {
     })
 
     if (!verificationToken) {
-      return res.status(400).json({ message: 'Invalid verification token' })
+      throw AppError.badRequest('Invalid verification token')
     }
 
     // Check if token has been used
     if (verificationToken.usedAt) {
-      return res.status(400).json({ message: 'This verification token has already been used' })
+      throw AppError.badRequest('This verification token has already been used')
     }
 
     // Check if token has expired
     if (verificationToken.expiresAt < new Date()) {
-      return res.status(400).json({ message: 'This verification token has expired' })
+      throw AppError.badRequest('This verification token has expired')
     }
 
     // Check if user is already verified
     if (verificationToken.user.emailVerified) {
-      return res.status(400).json({ message: 'Email is already verified' })
+      throw AppError.badRequest('Email is already verified')
     }
 
     // Update user and mark token as used
@@ -942,15 +877,10 @@ authRouter.post('/verify-email', async (req, res) => {
       message: 'Email verified successfully. You can now log in.',
       verified: true,
     })
-  } catch (error) {
-    console.error('Verify email error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/auth/verify-email-status - Check verification status
-authRouter.get('/verify-email-status', async (req, res) => {
-  try {
+authRouter.get('/verify-email-status', asyncHandler(async (req, res) => {
     const { token } = req.query
 
     if (!token || typeof token !== 'string') {
@@ -979,19 +909,14 @@ authRouter.get('/verify-email-status', async (req, res) => {
     }
 
     res.json({ valid: true, email: verificationToken.user.email })
-  } catch (error) {
-    console.error('Verify email status error:', error)
-    res.status(500).json({ valid: false, message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/resend-verification - Resend verification email
-authRouter.post('/resend-verification', async (req, res) => {
-  try {
+authRouter.post('/resend-verification', asyncHandler(async (req, res) => {
     const { email } = req.body
 
     if (!email) {
-      return res.status(400).json({ message: 'Email is required' })
+      throw AppError.badRequest('Email is required')
     }
 
     const user = await prisma.user.findUnique({
@@ -1053,24 +978,19 @@ authRouter.post('/resend-verification', async (req, res) => {
     res.json({
       message: 'If an account exists with this email, a new verification link has been sent.'
     })
-  } catch (error) {
-    console.error('Resend verification error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/test-expired-token - Generate an expired token for testing
 // Only available in development
-authRouter.post('/test-expired-token', async (req, res) => {
+authRouter.post('/test-expired-token', asyncHandler(async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
-    return res.status(404).json({ message: 'Not found' })
+    throw AppError.notFound('Resource')
   }
 
-  try {
     const { email, password } = req.body
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' })
+      throw AppError.badRequest('Email and password are required')
     }
 
     const user = await prisma.user.findUnique({
@@ -1084,11 +1004,11 @@ authRouter.post('/test-expired-token', async (req, res) => {
     })
 
     if (!user || !user.passwordHash) {
-      return res.status(401).json({ message: 'Invalid credentials' })
+      throw AppError.unauthorized('Invalid credentials')
     }
 
     if (!verifyPassword(password, user.passwordHash)) {
-      return res.status(401).json({ message: 'Invalid credentials' })
+      throw AppError.unauthorized('Invalid credentials')
     }
 
     // Generate an expired token for testing
@@ -1099,19 +1019,14 @@ authRouter.post('/test-expired-token', async (req, res) => {
     })
 
     res.json({ expiredToken })
-  } catch (error) {
-    console.error('Test expired token error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/auth/export-data - GDPR compliant data export
 // Returns all user data in a portable JSON format
-authRouter.get('/export-data', async (req, res) => {
-  try {
+authRouter.get('/export-data', asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const token = authHeader.substring(7)
@@ -1120,7 +1035,7 @@ authRouter.get('/export-data', async (req, res) => {
     const userData = await verifyToken(token)
 
     if (!userData) {
-      return res.status(401).json({ message: 'Invalid token' })
+      throw AppError.unauthorized('Invalid token')
     }
 
     const userId = userData.userId || userData.id
@@ -1154,7 +1069,7 @@ authRouter.get('/export-data', async (req, res) => {
     })
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' })
+      throw AppError.notFound('User')
     }
 
     // Get NCRs raised by or assigned to the user
@@ -1313,34 +1228,28 @@ authRouter.get('/export-data', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="siteproof-data-export-${user.email}-${new Date().toISOString().split('T')[0]}.json"`)
 
     res.json(exportData)
-  } catch (error) {
-    console.error('Data export error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/auth/register-and-accept-invitation - Register new user and accept subcontractor invitation
 // This is a public endpoint (no auth required) for onboarding new subcontractor users
-authRouter.post('/register-and-accept-invitation', async (req, res) => {
-  try {
+authRouter.post('/register-and-accept-invitation', asyncHandler(async (req, res) => {
     const { email, password, fullName, invitationId, tosAccepted } = req.body
 
     if (!email || !password || !invitationId) {
-      return res.status(400).json({ message: 'Email, password, and invitationId are required' })
+      throw AppError.badRequest('Email, password, and invitationId are required')
     }
 
     // Validate password strength
     const passwordValidation = validatePassword(password)
     if (!passwordValidation.valid) {
-      return res.status(400).json({
-        message: 'Password does not meet security requirements',
-        errors: passwordValidation.errors
+      throw AppError.badRequest('Password does not meet security requirements', {
+        errors: passwordValidation.errors as unknown as Record<string, unknown>,
       })
     }
 
     // Require ToS acceptance
     if (!tosAccepted) {
-      return res.status(400).json({ message: 'You must accept the Terms of Service to create an account' })
+      throw AppError.badRequest('You must accept the Terms of Service to create an account')
     }
 
     // Find the subcontractor company invitation
@@ -1352,12 +1261,12 @@ authRouter.post('/register-and-accept-invitation', async (req, res) => {
     })
 
     if (!subcontractor) {
-      return res.status(404).json({ message: 'Invitation not found or expired' })
+      throw AppError.notFound('Invitation not found or expired')
     }
 
     // Verify email matches the invitation (case-insensitive)
     if (subcontractor.primaryContactEmail?.toLowerCase() !== email.toLowerCase()) {
-      return res.status(400).json({ message: 'Email does not match the invitation' })
+      throw AppError.badRequest('Email does not match the invitation')
     }
 
     // Check if user already exists
@@ -1366,7 +1275,7 @@ authRouter.post('/register-and-accept-invitation', async (req, res) => {
     })
 
     if (existingUser) {
-      return res.status(400).json({ message: 'An account with this email already exists. Please log in and accept the invitation.' })
+      throw AppError.badRequest('An account with this email already exists. Please log in and accept the invitation.')
     }
 
     // Check if another user is already linked to this subcontractor company
@@ -1375,7 +1284,7 @@ authRouter.post('/register-and-accept-invitation', async (req, res) => {
     })
 
     if (existingLink) {
-      return res.status(400).json({ message: 'This invitation has already been accepted by another user' })
+      throw AppError.badRequest('This invitation has already been accepted by another user')
     }
 
     // Create the user account
@@ -1439,18 +1348,13 @@ authRouter.post('/register-and-accept-invitation', async (req, res) => {
       token,
       message: 'Account created and invitation accepted successfully',
     })
-  } catch (error) {
-    console.error('Register and accept invitation error:', error)
-    res.status(500).json({ message: 'Internal server error' })
-  }
-})
+}))
 
 // GDPR Data Deletion endpoint
-authRouter.delete('/delete-account', async (req, res) => {
-  try {
+authRouter.delete('/delete-account', asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization
     if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Unauthorized' })
+      throw AppError.unauthorized()
     }
 
     const token = authHeader.substring(7)
@@ -1458,7 +1362,7 @@ authRouter.delete('/delete-account', async (req, res) => {
     const userData = await verifyToken(token)
 
     if (!userData) {
-      return res.status(401).json({ message: 'Invalid token' })
+      throw AppError.unauthorized('Invalid token')
     }
 
     const userId = userData.userId || userData.id
@@ -1467,7 +1371,7 @@ authRouter.delete('/delete-account', async (req, res) => {
     const { password, confirmEmail } = req.body
 
     if (!confirmEmail) {
-      return res.status(400).json({ message: 'Email confirmation required' })
+      throw AppError.badRequest('Email confirmation required')
     }
 
     // Verify the user exists and get their data
@@ -1484,12 +1388,12 @@ authRouter.delete('/delete-account', async (req, res) => {
     })
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' })
+      throw AppError.notFound('User')
     }
 
     // Verify email matches
     if (confirmEmail.toLowerCase() !== user.email.toLowerCase()) {
-      return res.status(400).json({ message: 'Email confirmation does not match' })
+      throw AppError.badRequest('Email confirmation does not match')
     }
 
     // Verify password if the user has one set
@@ -1497,7 +1401,7 @@ authRouter.delete('/delete-account', async (req, res) => {
       const bcrypt = await import('bcryptjs')
       const isValidPassword = await bcrypt.compare(password, user.passwordHash)
       if (!isValidPassword) {
-        return res.status(400).json({ message: 'Invalid password' })
+        throw AppError.badRequest('Invalid password')
       }
     }
 
@@ -1557,8 +1461,4 @@ authRouter.delete('/delete-account', async (req, res) => {
       success: true,
       message: 'Your account and associated data have been permanently deleted.',
     })
-  } catch (error) {
-    console.error('Account deletion error:', error)
-    res.status(500).json({ message: 'Failed to delete account. Please contact support.' })
-  }
-})
+}))

@@ -3,6 +3,7 @@ import request from 'supertest'
 import express from 'express'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 // Import holdpoints router - named export
 import { holdpointsRouter } from './holdpoints.js'
@@ -11,6 +12,7 @@ const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/holdpoints', holdpointsRouter)
+app.use(errorHandler)
 
 describe('Hold Points API', () => {
   let authToken: string

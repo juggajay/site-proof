@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import { AppError } from '../lib/AppError.js'
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -20,14 +21,11 @@ const UUID_PARAM_NAMES = new Set([
  *   router.get('/:projectId/:lotId', validateUuidParams('projectId', 'lotId'), handler)
  */
 export function validateUuidParams(...paramNames: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
     for (const param of paramNames) {
       const value = req.params[param]
       if (value && !UUID_REGEX.test(value)) {
-        return res.status(400).json({
-          error: 'Invalid parameter',
-          message: `Parameter '${param}' must be a valid UUID`,
-        })
+        throw AppError.badRequest(`Parameter '${param}' must be a valid UUID`)
       }
     }
     next()
@@ -38,13 +36,10 @@ export function validateUuidParams(...paramNames: string[]) {
  * Global middleware that validates all known UUID route params.
  * Apply once at the app level before route handlers.
  */
-export function validateUuidRouteParams(req: Request, res: Response, next: NextFunction) {
+export function validateUuidRouteParams(req: Request, _res: Response, next: NextFunction) {
   for (const [param, value] of Object.entries(req.params)) {
     if (UUID_PARAM_NAMES.has(param) && value && !UUID_REGEX.test(value)) {
-      return res.status(400).json({
-        error: 'Invalid parameter',
-        message: `Parameter '${param}' must be a valid UUID`,
-      })
+      throw AppError.badRequest(`Parameter '${param}' must be a valid UUID`)
     }
   }
   next()

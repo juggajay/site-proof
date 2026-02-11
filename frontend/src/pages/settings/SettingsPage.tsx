@@ -5,6 +5,7 @@ import { useDateFormat, DateFormat } from '@/lib/dateFormat'
 import { useTimezone, TIMEZONES } from '@/lib/timezone'
 import { getAuthToken, useAuth } from '@/lib/auth'
 import { apiFetch, apiUrl } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut, Mail, Bell, Send, Lock, Smartphone, Key, Eye, EyeOff, Copy, CheckCircle2 } from 'lucide-react'
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings'
 
@@ -332,7 +333,7 @@ export function SettingsPage() {
       navigate('/login', { state: { message: 'Your account has been successfully deleted.' } })
     } catch (error) {
       console.error('Delete account error:', error)
-      setDeleteError(error instanceof Error ? error.message : 'Failed to delete account. Please try again.')
+      setDeleteError(extractErrorMessage(error, 'Failed to delete account. Please try again.'))
     } finally {
       setIsDeleting(false)
     }
@@ -353,7 +354,7 @@ export function SettingsPage() {
       window.location.reload()
     } catch (error) {
       console.error('Leave company error:', error)
-      setLeaveCompanyError(error instanceof Error ? error.message : 'Failed to leave company. Please try again.')
+      setLeaveCompanyError(extractErrorMessage(error, 'Failed to leave company. Please try again.'))
     } finally {
       setIsLeavingCompany(false)
     }

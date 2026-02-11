@@ -13,16 +13,15 @@ import { ApiError } from './api'
  */
 export function extractErrorMessage(error: unknown, fallbackMessage: string): string {
   if (error instanceof ApiError) {
-    try {
-      const body = JSON.parse(error.body)
-      return body.error?.message || body.message || body.error || fallbackMessage
-    } catch {
-      // Body is not JSON, use it directly if it looks like a message
-      if (error.body && error.body.length < 200 && !error.body.startsWith('<')) {
-        return error.body
-      }
-      return fallbackMessage
+    // Use pre-parsed data field (avoids double-parsing)
+    if (error.data) {
+      return error.data.error?.message || error.data.message || (typeof error.data.error === 'string' ? error.data.error : null) || fallbackMessage
     }
+    // Body is not JSON, use it directly if it looks like a message
+    if (error.body && error.body.length < 200 && !error.body.startsWith('<')) {
+      return error.body
+    }
+    return fallbackMessage
   }
 
   if (error instanceof Error) {
@@ -34,6 +33,28 @@ export function extractErrorMessage(error: unknown, fallbackMessage: string): st
   }
 
   return fallbackMessage
+}
+
+/**
+ * Extract the error details object from an API error response.
+ * Returns the `details` field from `{ error: { details } }`, or null.
+ */
+export function extractErrorDetails(error: unknown): Record<string, any> | null {
+  if (error instanceof ApiError && error.data) {
+    return error.data.error?.details ?? null
+  }
+  return null
+}
+
+/**
+ * Extract the machine-readable error code from an API error response.
+ * Returns the `code` field from `{ error: { code } }`, or null.
+ */
+export function extractErrorCode(error: unknown): string | null {
+  if (error instanceof ApiError && error.data) {
+    return error.data.error?.code ?? null
+  }
+  return null
 }
 
 /**

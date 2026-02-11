@@ -4,12 +4,14 @@ import express from 'express'
 import { authRouter } from './auth.js'
 import { lotAssignmentsRouter } from './lotAssignments.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 // Only use lotAssignmentsRouter to test those specific routes
 app.use('/api/lots', lotAssignmentsRouter)
+app.use(errorHandler)
 
 describe('Lot Assignments API', () => {
   let authToken: string
@@ -183,7 +185,7 @@ describe('Lot Assignments API', () => {
         })
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toBe('Lot not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should reject assignment with non-existent subcontractor', async () => {
@@ -590,7 +592,7 @@ describe('Lot Assignments API', () => {
         .set('Authorization', `Bearer ${subToken}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toBe('No assignment found for this lot')
+      expect(res.body.error.message).toContain('No assignment found for this lot')
 
       // Clean up
       await prisma.lot.delete({ where: { id: unassignedLotId } })
@@ -602,7 +604,7 @@ describe('Lot Assignments API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toBe('Not a subcontractor')
+      expect(res.body.error.message).toContain('Not a subcontractor')
     })
 
     it('should require authentication', async () => {
@@ -663,7 +665,7 @@ describe('Lot Assignments API', () => {
         })
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toBe('Assignment not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should reject update without proper role', async () => {
@@ -782,7 +784,7 @@ describe('Lot Assignments API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toBe('Assignment not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should reject deletion without proper role', async () => {

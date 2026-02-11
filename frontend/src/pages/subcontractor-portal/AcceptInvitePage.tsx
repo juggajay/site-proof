@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { Building2, ClipboardCheck, User, AlertCircle, Loader2, Check, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
-import { apiFetch, ApiError } from '@/lib/api'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { extractErrorMessage, isNotFound } from '@/lib/errorHandling'
 
 interface Invitation {
   id: string
@@ -65,11 +66,10 @@ export function AcceptInvitePage() {
           setFullName(data.invitation.primaryContactName)
         }
       } catch (err) {
-        console.error('Error fetching invitation:', err)
-        if (err instanceof ApiError && err.status === 404) {
+        if (isNotFound(err)) {
           setError('This invitation was not found or has expired.')
         } else {
-          setError('Failed to load invitation details')
+          setError(extractErrorMessage(err, 'Failed to load invitation details'))
         }
       } finally {
         setLoading(false)
@@ -109,16 +109,7 @@ export function AcceptInvitePage() {
       navigate('/subcontractor-portal')
     } catch (err) {
       console.error('Error accepting invitation:', err)
-      if (err instanceof ApiError) {
-        try {
-          const errorData = JSON.parse(err.body)
-          setFormError(errorData.error || errorData.message || 'Failed to accept invitation')
-        } catch {
-          setFormError('Failed to accept invitation. Please try again.')
-        }
-      } else {
-        setFormError('Failed to accept invitation. Please try again.')
-      }
+      setFormError(extractErrorMessage(err, 'Failed to accept invitation. Please try again.'))
       setAccepting(false)
     }
   }
@@ -187,16 +178,7 @@ export function AcceptInvitePage() {
       window.location.href = '/subcontractor-portal'
     } catch (err) {
       console.error('Error registering:', err)
-      if (err instanceof ApiError) {
-        try {
-          const errorData = JSON.parse(err.body)
-          setFormError(errorData.message || 'Failed to create account')
-        } catch {
-          setFormError('Failed to create account. Please try again.')
-        }
-      } else {
-        setFormError('Failed to create account. Please try again.')
-      }
+      setFormError(extractErrorMessage(err, 'Failed to create account. Please try again.'))
       setAccepting(false)
     }
   }

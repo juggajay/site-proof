@@ -5,12 +5,14 @@ import { ncrsRouter } from './ncrs/index.js'
 import { authRouter } from './auth.js'
 import { lotsRouter } from './lots.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/ncrs', ncrsRouter)
 app.use('/api/lots', lotsRouter)
+app.use(errorHandler)
 
 describe('NCR API', () => {
   let authToken: string
@@ -145,8 +147,8 @@ describe('NCR API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toBe('Validation failed')
-      expect(res.body.details).toBeDefined()
+      expect(res.body.error.message).toBe('Validation failed')
+      expect(res.body.error.details).toBeDefined()
     })
 
     it('should reject NCR without projectId', async () => {
@@ -335,7 +337,7 @@ describe('NCR Workflow', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('not in open status')
+    expect(res.body.error.message).toContain('not in open status')
   })
 
   it('should accept response via QM review', async () => {
@@ -501,8 +503,8 @@ describe('NCR QM Review - Request Revision', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.error).toBe('Validation failed')
-    expect(res.body.details).toBeDefined()
+    expect(res.body.error.message).toBe('Validation failed')
+    expect(res.body.error.details).toBeDefined()
   })
 })
 
@@ -614,7 +616,7 @@ describe('Major NCR QM Approval', () => {
       .send({ verificationNotes: 'Done' })
 
     expect(res.status).toBe(403)
-    expect(res.body.requiresQmApproval).toBe(true)
+    expect(res.body.error.message).toContain('Quality Manager approval')
   })
 
   it('should grant QM approval', async () => {

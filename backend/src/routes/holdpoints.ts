@@ -8,6 +8,8 @@ import { sendHPReleaseRequestEmail, sendHPChaseEmail, sendHPReleaseConfirmationE
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 import { parsePagination, getPaginationMeta } from '../lib/pagination.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 // Type for hold point list item
 interface HoldPointListItem {
@@ -148,8 +150,7 @@ function calculateNotificationTime(
 }
 
 // Get all hold points for a project
-holdpointsRouter.get('/project/:projectId', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.get('/project/:projectId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { projectId } = req.params
     const user = req.user!
 
@@ -263,15 +264,10 @@ holdpointsRouter.get('/project/:projectId', requireAuth, async (req: Request, re
       holdPoints: paginatedHoldPoints,
       pagination: getPaginationMeta(total, page, limit),
     })
-  } catch (error) {
-    console.error('Error fetching hold points:', error)
-    res.status(500).json({ error: 'Failed to fetch hold points' })
-  }
-})
+}))
 
 // Get hold point details with prerequisite status
-holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { lotId, itemId } = req.params
 
     // Get the lot with ITP instance and all checklist items
@@ -299,13 +295,13 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: Reques
     })
 
     if (!lot || !lot.itpInstance) {
-      return res.status(404).json({ error: 'Lot or ITP instance not found' })
+      throw AppError.notFound('Lot or ITP instance')
     }
 
     // Find the hold point item
     const holdPointItem = lot.itpInstance.template.checklistItems.find(i => i.id === itemId)
     if (!holdPointItem || holdPointItem.pointType !== 'hold_point') {
-      return res.status(404).json({ error: 'Hold point item not found' })
+      throw AppError.notFound('Hold point item')
     }
 
     // Get all preceding items (items with lower sequence number)
@@ -373,11 +369,7 @@ holdpointsRouter.get('/lot/:lotId/item/:itemId', requireAuth, async (req: Reques
       defaultRecipients, // Feature #697 - HP default recipients from project settings
       approvalRequirement // Feature #698 - HP approval requirement from project settings
     })
-  } catch (error) {
-    console.error('Error fetching hold point details:', error)
-    res.status(500).json({ error: 'Failed to fetch hold point details' })
-  }
-})
+}))
 
 // Utility function to calculate working days between two dates
 function calculateWorkingDays(
@@ -403,14 +395,10 @@ function calculateWorkingDays(
 }
 
 // Request hold point release - checks prerequisites first
-holdpointsRouter.post('/request-release', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.post('/request-release', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const parseResult = requestReleaseSchema.safeParse(req.body)
     if (!parseResult.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: parseResult.error.flatten().fieldErrors
-      })
+      throw AppError.fromZodError(parseResult.error)
     }
 
     const { lotId, itpChecklistItemId, scheduledDate, scheduledTime, notificationSentTo, noticePeriodOverride, noticePeriodOverrideReason } = parseResult.data
@@ -439,13 +427,13 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: Request, res:
     })
 
     if (!lot || !lot.itpInstance) {
-      return res.status(404).json({ error: 'Lot or ITP instance not found' })
+      throw AppError.notFound('Lot or ITP instance')
     }
 
     // Find the hold point item
     const holdPointItem = lot.itpInstance.template.checklistItems.find(i => i.id === itpChecklistItemId)
     if (!holdPointItem || holdPointItem.pointType !== 'hold_point') {
-      return res.status(400).json({ error: 'Item is not a hold point' })
+      throw AppError.badRequest('Item is not a hold point')
     }
 
     // Get all preceding items
@@ -461,15 +449,13 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: Request, res:
 
     // If there are incomplete prerequisites, return error with list
     if (incompleteItems.length > 0) {
-      return res.status(400).json({
-        error: 'Prerequisites not completed',
-        message: 'Cannot request hold point release until all preceding checklist items are completed.',
+      throw AppError.badRequest('Cannot request hold point release until all preceding checklist items are completed.', {
         incompleteItems: incompleteItems.map(item => ({
           id: item.id,
           description: item.description,
           sequenceNumber: item.sequenceNumber,
           isHoldPoint: item.pointType === 'hold_point'
-        }))
+        })) as unknown as Record<string, unknown>,
       })
     }
 
@@ -496,17 +482,16 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: Request, res:
       )
 
       if (workingDays < minimumNoticeDays) {
-        return res.status(400).json({
-          error: 'Notice period not met',
-          code: 'NOTICE_PERIOD_WARNING',
-          message: `The scheduled date is less than the minimum ${minimumNoticeDays} working day${minimumNoticeDays > 1 ? 's' : ''} notice period.`,
-          details: {
+        throw new AppError(400,
+          `The scheduled date is less than the minimum ${minimumNoticeDays} working day${minimumNoticeDays > 1 ? 's' : ''} notice period.`,
+          'NOTICE_PERIOD_WARNING',
+          {
             scheduledDate,
             workingDaysNotice: workingDays,
             minimumNoticeDays,
             requiresOverride: true
           }
-        })
+        )
       }
     }
 
@@ -653,22 +638,14 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: Request, res:
       message: 'Hold point release requested successfully',
       holdPoint
     })
-  } catch (error) {
-    console.error('Error requesting hold point release:', error)
-    res.status(500).json({ error: 'Failed to request hold point release' })
-  }
-})
+}))
 
 // Release a hold point
-holdpointsRouter.post('/:id/release', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.post('/:id/release', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params
     const parseResult = releaseHoldPointSchema.safeParse(req.body)
     if (!parseResult.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: parseResult.error.flatten().fieldErrors
-      })
+      throw AppError.fromZodError(parseResult.error)
     }
 
     const { releasedByName, releasedByOrg, releaseMethod, releaseNotes } = parseResult.data
@@ -686,7 +663,7 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: Request, res: Res
     })
 
     if (!existingHP) {
-      return res.status(404).json({ error: 'Hold point not found' })
+      throw AppError.notFound('Hold point')
     }
 
     // Check if project requires superintendent-only release
@@ -717,11 +694,7 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: Request, res: Res
         // Allow superintendent, admin, and project_manager roles
         const allowedRoles = ['superintendent', 'admin', 'project_manager', 'owner']
         if (!userRole || !allowedRoles.includes(userRole)) {
-          return res.status(403).json({
-            error: 'Unauthorized',
-            message: 'This project requires superintendent approval to release hold points.',
-            code: 'SUPERINTENDENT_REQUIRED'
-          })
+          throw new AppError(403, 'This project requires superintendent approval to release hold points.', 'SUPERINTENDENT_REQUIRED')
         }
       }
     }
@@ -884,15 +857,10 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: Request, res: Res
         fullName: pu.user.fullName
       }))
     })
-  } catch (error) {
-    console.error('Error releasing hold point:', error)
-    res.status(500).json({ error: 'Failed to release hold point' })
-  }
-})
+}))
 
 // Chase a hold point (send reminder)
-holdpointsRouter.post('/:id/chase', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.post('/:id/chase', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params
 
     // Get the hold point with lot and project details before updating
@@ -908,7 +876,7 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: Request, res: Respo
     })
 
     if (!existingHP) {
-      return res.status(404).json({ error: 'Hold point not found' })
+      throw AppError.notFound('Hold point')
     }
 
     const holdPoint = await prisma.holdPoint.update({
@@ -999,22 +967,14 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: Request, res: Respo
       message: 'Chase notification sent',
       holdPoint
     })
-  } catch (error) {
-    console.error('Error chasing hold point:', error)
-    res.status(500).json({ error: 'Failed to chase hold point' })
-  }
-})
+}))
 
 // Escalate a hold point to QM/PM
-holdpointsRouter.post('/:id/escalate', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.post('/:id/escalate', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params
     const parseResult = escalateSchema.safeParse(req.body)
     if (!parseResult.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: parseResult.error.flatten().fieldErrors
-      })
+      throw AppError.fromZodError(parseResult.error)
     }
 
     const { escalatedTo, escalationReason } = parseResult.data
@@ -1033,7 +993,7 @@ holdpointsRouter.post('/:id/escalate', requireAuth, async (req: Request, res: Re
     })
 
     if (!existingHP) {
-      return res.status(404).json({ error: 'Hold point not found' })
+      throw AppError.notFound('Hold point')
     }
 
     // Update hold point with escalation info
@@ -1102,15 +1062,10 @@ holdpointsRouter.post('/:id/escalate', requireAuth, async (req: Request, res: Re
         role: pu.role
       }))
     })
-  } catch (error) {
-    console.error('Error escalating hold point:', error)
-    res.status(500).json({ error: 'Failed to escalate hold point' })
-  }
-})
+}))
 
 // Resolve an escalated hold point
-holdpointsRouter.post('/:id/resolve-escalation', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.post('/:id/resolve-escalation', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params
 
     const holdPoint = await prisma.holdPoint.update({
@@ -1138,15 +1093,10 @@ holdpointsRouter.post('/:id/resolve-escalation', requireAuth, async (req: Reques
       message: 'Escalation resolved',
       holdPoint
     })
-  } catch (error) {
-    console.error('Error resolving escalation:', error)
-    res.status(500).json({ error: 'Failed to resolve escalation' })
-  }
-})
+}))
 
 // Generate evidence package for a hold point
-holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.get('/:id/evidence-package', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params
 
     // Get the hold point with all related data
@@ -1204,14 +1154,14 @@ holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: Request, 
     })
 
     if (!holdPoint) {
-      return res.status(404).json({ error: 'Hold point not found' })
+      throw AppError.notFound('Hold point')
     }
 
     const lot = holdPoint.lot
     const itpInstance = lot.itpInstance
 
     if (!itpInstance) {
-      return res.status(400).json({ error: 'No ITP assigned to this lot' })
+      throw AppError.badRequest('No ITP assigned to this lot')
     }
 
     // Get all checklist items up to and including the hold point
@@ -1314,21 +1264,13 @@ holdpointsRouter.get('/:id/evidence-package', requireAuth, async (req: Request, 
     }
 
     res.json({ evidencePackage })
-  } catch (error) {
-    console.error('Error generating evidence package:', error)
-    res.status(500).json({ error: 'Failed to generate evidence package' })
-  }
-})
+}))
 
 // Get notification timing for a hold point request based on working hours
-holdpointsRouter.post('/calculate-notification-time', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.post('/calculate-notification-time', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const parseResult = calculateNotificationTimeSchema.safeParse(req.body)
     if (!parseResult.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: parseResult.error.flatten().fieldErrors
-      })
+      throw AppError.fromZodError(parseResult.error)
     }
 
     const { projectId, requestedDateTime } = parseResult.data
@@ -1344,7 +1286,7 @@ holdpointsRouter.post('/calculate-notification-time', requireAuth, async (req: R
     })
 
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' })
+      throw AppError.notFound('Project')
     }
 
     const requestedDate = new Date(requestedDateTime)
@@ -1366,15 +1308,10 @@ holdpointsRouter.post('/calculate-notification-time', requireAuth, async (req: R
         days: project.workingDays || '1,2,3,4,5'
       }
     })
-  } catch (error) {
-    console.error('Error calculating notification time:', error)
-    res.status(500).json({ error: 'Failed to calculate notification time' })
-  }
-})
+}))
 
 // Get project working hours configuration
-holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { projectId } = req.params
 
     const project = await prisma.project.findUnique({
@@ -1389,7 +1326,7 @@ holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, async (re
     })
 
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' })
+      throw AppError.notFound('Project')
     }
 
     // Parse working days to human-readable format
@@ -1407,21 +1344,13 @@ holdpointsRouter.get('/project/:projectId/working-hours', requireAuth, async (re
         dayNames: workingDayNames
       }
     })
-  } catch (error) {
-    console.error('Error fetching working hours:', error)
-    res.status(500).json({ error: 'Failed to fetch working hours' })
-  }
-})
+}))
 
 // Preview evidence package before submitting HP release request (Feature #179)
-holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.post('/preview-evidence-package', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const parseResult = previewEvidencePackageSchema.safeParse(req.body)
     if (!parseResult.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: parseResult.error.flatten().fieldErrors
-      })
+      throw AppError.fromZodError(parseResult.error)
     }
 
     const { lotId, itpChecklistItemId } = parseResult.data
@@ -1476,12 +1405,12 @@ holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: Requ
     })
 
     if (!lot) {
-      return res.status(404).json({ error: 'Lot not found' })
+      throw AppError.notFound('Lot')
     }
 
     const itpInstance = lot.itpInstance
     if (!itpInstance) {
-      return res.status(400).json({ error: 'No ITP assigned to this lot' })
+      throw AppError.badRequest('No ITP assigned to this lot')
     }
 
     // Get the hold point checklist item
@@ -1490,7 +1419,7 @@ holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: Requ
     )
 
     if (!holdPointItem) {
-      return res.status(404).json({ error: 'Hold point checklist item not found' })
+      throw AppError.notFound('Hold point checklist item')
     }
 
     // Get all checklist items up to and including the hold point
@@ -1593,11 +1522,7 @@ holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: Requ
     }
 
     res.json({ evidencePackage })
-  } catch (error) {
-    console.error('Error generating evidence package preview:', error)
-    res.status(500).json({ error: 'Failed to generate evidence package preview' })
-  }
-})
+}))
 
 // ============================================================================
 // PUBLIC ENDPOINTS - No authentication required (Feature #23)
@@ -1605,8 +1530,7 @@ holdpointsRouter.post('/preview-evidence-package', requireAuth, async (req: Requ
 // ============================================================================
 
 // Get hold point and evidence package via secure link (no auth required)
-holdpointsRouter.get('/public/:token', async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.get('/public/:token', asyncHandler(async (req: Request, res: Response) => {
     const { token } = req.params
 
     // Find the token and validate it
@@ -1668,26 +1592,19 @@ holdpointsRouter.get('/public/:token', async (req: Request, res: Response) => {
     })
 
     if (!releaseToken) {
-      return res.status(404).json({ error: 'Invalid or expired link' })
+      throw AppError.notFound('Invalid or expired link')
     }
 
     // Check if token has expired
     if (new Date() > releaseToken.expiresAt) {
-      return res.status(410).json({
-        error: 'Link has expired',
-        code: 'TOKEN_EXPIRED',
-        message: 'This secure release link has expired. Please contact the site team for a new link.'
-      })
+      throw new AppError(410, 'This secure release link has expired. Please contact the site team for a new link.', 'TOKEN_EXPIRED')
     }
 
     // Check if token has been used (hold point already released via this token)
     if (releaseToken.usedAt) {
-      return res.status(410).json({
-        error: 'Link already used',
-        code: 'TOKEN_USED',
-        message: 'This hold point has already been released using this link.',
-        releasedAt: releaseToken.usedAt,
-        releasedByName: releaseToken.releasedByName
+      throw new AppError(410, 'This hold point has already been released using this link.', 'TOKEN_USED', {
+        releasedAt: releaseToken.usedAt as unknown as Record<string, unknown>,
+        releasedByName: releaseToken.releasedByName as unknown as Record<string, unknown>,
       })
     }
 
@@ -1696,7 +1613,7 @@ holdpointsRouter.get('/public/:token', async (req: Request, res: Response) => {
     const itpInstance = lot.itpInstance
 
     if (!itpInstance) {
-      return res.status(400).json({ error: 'No ITP assigned to this lot' })
+      throw AppError.badRequest('No ITP assigned to this lot')
     }
 
     // Get all checklist items up to and including the hold point
@@ -1812,22 +1729,14 @@ holdpointsRouter.get('/public/:token', async (req: Request, res: Response) => {
       tokenInfo,
       isPublicAccess: true
     })
-  } catch (error) {
-    console.error('Error fetching HP via secure link:', error)
-    res.status(500).json({ error: 'Failed to fetch hold point details' })
-  }
-})
+}))
 
 // Release hold point via secure link (no auth required)
-holdpointsRouter.post('/public/:token/release', async (req: Request, res: Response) => {
-  try {
+holdpointsRouter.post('/public/:token/release', asyncHandler(async (req: Request, res: Response) => {
     const { token } = req.params
     const parseResult = publicReleaseSchema.safeParse(req.body)
     if (!parseResult.success) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        details: parseResult.error.flatten().fieldErrors
-      })
+      throw AppError.fromZodError(parseResult.error)
     }
 
     const { releasedByName, releasedByOrg, releaseNotes, signatureDataUrl } = parseResult.data
@@ -1850,38 +1759,25 @@ holdpointsRouter.post('/public/:token/release', async (req: Request, res: Respon
     })
 
     if (!releaseToken) {
-      return res.status(404).json({ error: 'Invalid or expired link' })
+      throw AppError.notFound('Invalid or expired link')
     }
 
     // Check if token has expired
     if (new Date() > releaseToken.expiresAt) {
-      return res.status(410).json({
-        error: 'Link has expired',
-        code: 'TOKEN_EXPIRED',
-        message: 'This secure release link has expired. Please contact the site team for a new link.'
-      })
+      throw new AppError(410, 'This secure release link has expired. Please contact the site team for a new link.', 'TOKEN_EXPIRED')
     }
 
     // Check if token has been used
     if (releaseToken.usedAt) {
-      return res.status(410).json({
-        error: 'Link already used',
-        code: 'TOKEN_USED',
-        message: 'This hold point has already been released using this link.',
-        releasedAt: releaseToken.usedAt,
-        releasedByName: releaseToken.releasedByName
+      throw new AppError(410, 'This hold point has already been released using this link.', 'TOKEN_USED', {
+        releasedAt: releaseToken.usedAt as unknown as Record<string, unknown>,
+        releasedByName: releaseToken.releasedByName as unknown as Record<string, unknown>,
       })
     }
 
     // Check if hold point is already released
     if (releaseToken.holdPoint.status === 'released') {
-      return res.status(400).json({
-        error: 'Hold point already released',
-        code: 'ALREADY_RELEASED',
-        message: 'This hold point has already been released.',
-        releasedAt: releaseToken.holdPoint.releasedAt,
-        releasedByName: releaseToken.holdPoint.releasedByName
-      })
+      throw AppError.badRequest('This hold point has already been released.')
     }
 
     // Update the release token as used
@@ -2045,10 +1941,6 @@ holdpointsRouter.post('/public/:token/release', async (req: Request, res: Respon
         lotNumber: holdPoint.lot.lotNumber
       }
     })
-  } catch (error) {
-    console.error('Error releasing HP via secure link:', error)
-    res.status(500).json({ error: 'Failed to release hold point' })
-  }
-})
+}))
 
 export { holdpointsRouter }

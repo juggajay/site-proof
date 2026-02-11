@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { handleApiError } from '@/lib/errorHandling'
 import type { Lot } from '../lotsPageTypes'
 
 // Lot number length constraints
@@ -217,11 +218,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
 
       onSuccess(createdLot)
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to create lot',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to create lot')
     } finally {
       setCreating(false)
     }

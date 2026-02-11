@@ -5,6 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 // Import documents router
 import documentsRouter from './documents.js'
@@ -13,6 +14,7 @@ const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/documents', documentsRouter)
+app.use(errorHandler)
 
 // Ensure upload directory exists for tests
 const uploadDir = path.join(process.cwd(), 'uploads', 'documents')
@@ -202,7 +204,7 @@ describe('Documents API', () => {
         .get(`/api/documents/download/${documentId}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Token')
+      expect(res.body.error.message).toContain('Token')
     })
 
     it('should reject invalid token', async () => {

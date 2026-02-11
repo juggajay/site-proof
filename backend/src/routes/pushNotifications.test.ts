@@ -4,12 +4,14 @@ import express from 'express'
 import { pushNotificationsRouter, sendPushNotification, broadcastPushNotification } from './pushNotifications.js'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 import webpush from 'web-push'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/push', pushNotificationsRouter)
+app.use(errorHandler)
 
 describe('Push Notifications API', () => {
   let authToken: string
@@ -63,7 +65,7 @@ describe('Push Notifications API', () => {
         .get('/api/push/vapid-public-key')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toBe('Unauthorized')
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
     })
   })
 
@@ -86,7 +88,7 @@ describe('Push Notifications API', () => {
         .send({ subscription: mockSubscription })
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toBe('Unauthorized')
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
     })
 
     it('should reject invalid subscription object without endpoint', async () => {
@@ -100,7 +102,7 @@ describe('Push Notifications API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid subscription')
+      expect(res.body.error.message).toContain('Invalid subscription')
     })
 
     it('should reject invalid subscription object without keys', async () => {
@@ -114,7 +116,7 @@ describe('Push Notifications API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid subscription')
+      expect(res.body.error.message).toContain('Invalid subscription')
     })
 
     it('should reject request without subscription object', async () => {
@@ -124,7 +126,7 @@ describe('Push Notifications API', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Invalid subscription')
+      expect(res.body.error.message).toContain('Invalid subscription')
     })
 
     it('should allow multiple subscriptions for the same user', async () => {
@@ -186,7 +188,7 @@ describe('Push Notifications API', () => {
         .get('/api/push/subscriptions')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toBe('Unauthorized')
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
     })
   })
 
@@ -219,7 +221,7 @@ describe('Push Notifications API', () => {
         .get('/api/push/status')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toBe('Unauthorized')
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
     })
   })
 
@@ -264,7 +266,7 @@ describe('Push Notifications API', () => {
         .set('Authorization', `Bearer ${newUserToken}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('No push subscriptions found')
+      expect(res.body.error.message).toContain('No push subscriptions found')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: newUserId } })
@@ -276,7 +278,7 @@ describe('Push Notifications API', () => {
         .post('/api/push/test')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toBe('Unauthorized')
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
     })
 
     it('should include success count in response', async () => {
@@ -327,7 +329,7 @@ describe('Push Notifications API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject request without targetUserId', async () => {
@@ -340,7 +342,7 @@ describe('Push Notifications API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject request without authentication', async () => {
@@ -353,7 +355,7 @@ describe('Push Notifications API', () => {
         })
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toBe('Unauthorized')
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
     })
   })
 
@@ -392,7 +394,7 @@ describe('Push Notifications API', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Endpoint is required')
+      expect(res.body.error.message).toContain('Endpoint is required')
     })
 
     it('should return 404 for non-existent subscription', async () => {
@@ -402,7 +404,7 @@ describe('Push Notifications API', () => {
         .send({ endpoint: 'https://fcm.googleapis.com/fcm/send/non-existent' })
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toContain('not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should prevent unsubscribing other user subscriptions', async () => {
@@ -438,7 +440,7 @@ describe('Push Notifications API', () => {
         .send({ endpoint: otherEndpoint })
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('Not authorized')
+      expect(res.body.error.message).toContain('Not authorized')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } })
@@ -451,7 +453,7 @@ describe('Push Notifications API', () => {
         .send({ endpoint: 'test-endpoint' })
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toBe('Unauthorized')
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
     })
   })
 
@@ -465,7 +467,7 @@ describe('Push Notifications API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('Not available in production')
+      expect(res.body.error.message).toContain('Not available in production')
 
       process.env.NODE_ENV = originalEnv
     })
@@ -492,7 +494,7 @@ describe('Push Notifications API', () => {
         .get('/api/push/generate-vapid-keys')
 
       expect(res.status).toBe(401)
-      expect(res.body.error).toBe('Unauthorized')
+      expect(res.body.error.code).toBe('UNAUTHORIZED')
     })
   })
 })

@@ -4,11 +4,13 @@ import express from 'express'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
 import { commentsRouter } from './comments.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/comments', commentsRouter)
+app.use(errorHandler)
 
 describe('Comments API', () => {
   let authToken: string
@@ -182,7 +184,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('entityType')
+      expect(res.body.error.message).toContain('entityType')
     })
 
     it('should require entityId', async () => {
@@ -195,7 +197,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('entityId')
+      expect(res.body.error.message).toContain('entityId')
     })
 
     it('should require content', async () => {
@@ -208,7 +210,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('content')
+      expect(res.body.error.message).toContain('content')
     })
 
     it('should trim whitespace from content', async () => {
@@ -237,7 +239,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('Parent comment not found')
+      expect(res.body.error.message).toContain('Parent comment not found')
     })
 
     it('should reject reply to comment from different entity', async () => {
@@ -263,7 +265,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('different entity')
+      expect(res.body.error.message).toContain('different entity')
 
       // Cleanup
       await prisma.lot.delete({ where: { id: otherLot.id } })
@@ -451,7 +453,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('entityType')
+      expect(res.body.error.message).toContain('entityType')
     })
 
     it('should require entityId', async () => {
@@ -463,7 +465,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('entityId')
+      expect(res.body.error.message).toContain('entityId')
     })
 
     it('should require authentication', async () => {
@@ -567,7 +569,7 @@ describe('Comments API', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('content')
+      expect(res.body.error.message).toContain('content')
     })
 
     it('should return 404 for non-existent comment', async () => {
@@ -579,7 +581,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toContain('not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should not allow editing other users comments', async () => {
@@ -604,7 +606,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('own comments')
+      expect(res.body.error.message).toContain('own comments')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } })
@@ -705,7 +707,7 @@ describe('Comments API', () => {
         .set('Authorization', `Bearer ${otherToken}`)
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('own comments')
+      expect(res.body.error.message).toContain('own comments')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } })
@@ -822,7 +824,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('own comments')
+      expect(res.body.error.message).toContain('own comments')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } })
@@ -836,7 +838,7 @@ describe('Comments API', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('attachments')
+      expect(res.body.error.message).toContain('attachments')
     })
 
     it('should reject empty attachments array', async () => {
@@ -848,7 +850,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('attachments')
+      expect(res.body.error.message).toContain('attachments')
     })
 
     it('should reject attachments with missing required fields', async () => {
@@ -869,7 +871,7 @@ describe('Comments API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('No valid attachments')
+      expect(res.body.error.message).toContain('No valid attachments')
     })
 
     it('should handle attachments with optional fields omitted', async () => {
@@ -986,7 +988,7 @@ describe('Comments API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toContain('Attachment not found')
+      expect(res.body.error.message).toContain('Attachment not found')
     })
 
     it('should not allow deleting attachments from other users comments', async () => {
@@ -1023,7 +1025,7 @@ describe('Comments API', () => {
         .set('Authorization', `Bearer ${otherToken}`)
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('own comments')
+      expect(res.body.error.message).toContain('own comments')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } })

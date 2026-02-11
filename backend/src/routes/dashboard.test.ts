@@ -4,11 +4,13 @@ import express from 'express'
 import { dashboardRouter } from './dashboard.js'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/dashboard', dashboardRouter)
+app.use(errorHandler)
 
 describe('Dashboard Stats API', () => {
   let authToken: string

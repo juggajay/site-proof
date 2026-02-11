@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { verifyToken } from '../lib/auth.js'
+import { AppError } from '../lib/AppError.js'
 
 // Type alias for requests that will have user populated
 export type AuthRequest = Request
@@ -29,25 +30,19 @@ declare global {
  * Middleware to require authentication for API routes
  * Returns 401 if no valid token is provided
  */
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Authentication required. Please provide a valid token.'
-      })
+      throw AppError.unauthorized('Authentication required. Please provide a valid token.')
     }
 
     const token = authHeader.substring(7) // Remove 'Bearer ' prefix
     const user = await verifyToken(token)
 
     if (!user) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Invalid or expired token. Please sign in again.'
-      })
+      throw AppError.unauthorized('Invalid or expired token. Please sign in again.')
     }
 
     // Attach user to request for use in route handlers
@@ -64,11 +59,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     next()
   } catch (error) {
-    console.error('Auth middleware error:', error)
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Authentication failed.'
-    })
+    next(error instanceof AppError ? error : AppError.unauthorized('Authentication failed.'))
   }
 }
 
@@ -122,23 +113,15 @@ const ROLE_HIERARCHY: Record<string, number> = {
  * Returns 403 if user's role is below the required level
  */
 export function requireRole(allowedRoles: string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const user = req.user
-
-    if (!user) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Authentication required.'
-      })
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) {
+      throw AppError.unauthorized('Authentication required.')
     }
 
-    const userRole = user.roleInCompany || 'member'
+    const userRole = req.user.roleInCompany || 'member'
 
     if (!allowedRoles.includes(userRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to perform this action.'
-      })
+      throw AppError.forbidden('You do not have permission to perform this action.')
     }
 
     next()
@@ -150,25 +133,17 @@ export function requireRole(allowedRoles: string[]) {
  * Returns 403 if user's role is below the minimum
  */
 export function requireMinRole(minRole: string) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const user = req.user
-
-    if (!user) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Authentication required.'
-      })
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) {
+      throw AppError.unauthorized('Authentication required.')
     }
 
-    const userRole = user.roleInCompany || 'member'
+    const userRole = req.user.roleInCompany || 'member'
     const userLevel = ROLE_HIERARCHY[userRole] || 0
     const requiredLevel = ROLE_HIERARCHY[minRole] || 100
 
     if (userLevel < requiredLevel) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to perform this action.'
-      })
+      throw AppError.forbidden('You do not have permission to perform this action.')
     }
 
     next()

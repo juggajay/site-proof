@@ -3,6 +3,7 @@ import request from 'supertest'
 import express from 'express'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 // Import diary router
 import diaryRouter from './diary/index.js'
@@ -11,6 +12,7 @@ const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/diary', diaryRouter)
+app.use(errorHandler)
 
 describe('Daily Diary API', () => {
   let authToken: string
@@ -238,7 +240,7 @@ describe('Daily Diary API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('submitted')
+      expect(res.body.error.message).toContain('submitted')
     })
   })
 })

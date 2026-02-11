@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 // Type definitions for dashboard work items
 interface ForemanWorkItem {
@@ -25,15 +27,11 @@ export const dashboardRouter = Router()
 dashboardRouter.use(requireAuth)
 
 // GET /api/dashboard/stats - Get dashboard statistics including attention items
-dashboardRouter.get('/stats', async (req, res) => {
-  try {
+dashboardRouter.get('/stats', asyncHandler(async (req, res) => {
     const userId = req.user?.userId || req.user?.id
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Get all projects the user has access to
@@ -250,22 +248,14 @@ dashboardRouter.get('/stats', async (req, res) => {
       },
       recentActivities
     })
-  } catch (error) {
-    console.error('Dashboard stats error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/dashboard/portfolio-cashflow - Get portfolio-wide cash flow summary
-dashboardRouter.get('/portfolio-cashflow', async (req, res) => {
-  try {
+dashboardRouter.get('/portfolio-cashflow', asyncHandler(async (req, res) => {
     const userId = req.user?.userId || req.user?.id
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Get all projects the user has access to
@@ -317,22 +307,14 @@ dashboardRouter.get('/portfolio-cashflow', async (req, res) => {
       totalPaid,
       outstanding
     })
-  } catch (error) {
-    console.error('Portfolio cash flow error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/dashboard/portfolio-ncrs - Get critical NCRs across all projects
-dashboardRouter.get('/portfolio-ncrs', async (req, res) => {
-  try {
+dashboardRouter.get('/portfolio-ncrs', asyncHandler(async (req, res) => {
     const userId = req.user?.userId || req.user?.id
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Get all projects the user has access to
@@ -397,22 +379,14 @@ dashboardRouter.get('/portfolio-ncrs', async (req, res) => {
     }))
 
     res.json({ ncrs: formattedNCRs })
-  } catch (error) {
-    console.error('Portfolio NCRs error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/dashboard/portfolio-risks - Get projects at risk with risk indicators
-dashboardRouter.get('/portfolio-risks', async (req, res) => {
-  try {
+dashboardRouter.get('/portfolio-risks', asyncHandler(async (req, res) => {
     const userId = req.user?.userId || req.user?.id
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Get all projects the user has access to
@@ -574,24 +548,16 @@ dashboardRouter.get('/portfolio-risks', async (req, res) => {
     })
 
     res.json({ projectsAtRisk })
-  } catch (error) {
-    console.error('Portfolio risks error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Feature #275: GET /api/dashboard/cost-trend - Get daily cost trend chart data
 // Shows daily costs with labour vs plant split, filterable by subcontractor
-dashboardRouter.get('/cost-trend', async (req, res) => {
-  try {
+dashboardRouter.get('/cost-trend', asyncHandler(async (req, res) => {
     const { projectId, subcontractorId, startDate, endDate, days } = req.query
     const userId = req.user?.userId || req.user?.id
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Get accessible projects
@@ -606,7 +572,7 @@ dashboardRouter.get('/cost-trend', async (req, res) => {
     if (projectId) {
       // Verify user has access to specified project
       if (!accessibleProjectIds.includes(projectId as string)) {
-        return res.status(403).json({ error: 'Access denied to project' })
+        throw AppError.forbidden('Access denied to project')
       }
       targetProjectIds = [projectId as string]
     } else {
@@ -727,23 +693,15 @@ dashboardRouter.get('/cost-trend', async (req, res) => {
         daysWithData: dailyCosts.length
       }
     })
-  } catch (error) {
-    console.error('Cost trend error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Feature #292: GET /api/dashboard/foreman - Simplified dashboard for foreman role
 // Shows today's diary status, pending dockets, inspections due today, and weather
-dashboardRouter.get('/foreman', async (req, res) => {
-  try {
+dashboardRouter.get('/foreman', asyncHandler(async (req, res) => {
     const userId = req.user?.userId || req.user?.id
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Get accessible projects
@@ -920,23 +878,15 @@ dashboardRouter.get('/foreman', async (req, res) => {
       weather,
       project: primaryProject
     })
-  } catch (error) {
-    console.error('Foreman dashboard error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Feature #293: GET /api/dashboard/quality-manager - Dashboard for QM role
 // Shows conformance rate, NCRs by category, pending verifications, HP release rate, ITP trends, audit readiness
-dashboardRouter.get('/quality-manager', async (req, res) => {
-  try {
+dashboardRouter.get('/quality-manager', asyncHandler(async (req, res) => {
     const userId = req.user?.userId || req.user?.id
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Get accessible projects
@@ -1137,23 +1087,15 @@ dashboardRouter.get('/quality-manager', async (req, res) => {
       },
       project: primaryProject
     })
-  } catch (error) {
-    console.error('Quality manager dashboard error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Feature #294: GET /api/dashboard/project-manager - Dashboard for PM role
 // Shows lot progress, NCRs, HP pipeline, claims, cost tracking, attention items
-dashboardRouter.get('/project-manager', async (req, res) => {
-  try {
+dashboardRouter.get('/project-manager', asyncHandler(async (req, res) => {
     const userId = req.user?.userId || req.user?.id
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Get accessible projects
@@ -1408,25 +1350,17 @@ dashboardRouter.get('/project-manager', async (req, res) => {
       attentionItems,
       project: primaryProject
     })
-  } catch (error) {
-    console.error('Project manager dashboard error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/projects/:projectId/foreman/today - Unified "Today" worklist for foreman
 // Shows everything requiring attention: hold points, ITP items, inspections
 // Categorized by urgency: blocking (past due), due_today, upcoming (next 48h)
-dashboardRouter.get('/projects/:projectId/foreman/today', async (req, res) => {
-  try {
+dashboardRouter.get('/projects/:projectId/foreman/today', asyncHandler(async (req, res) => {
     const userId = req.user?.userId || req.user?.id
     const { projectId } = req.params
 
     if (!userId) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found'
-      })
+      throw AppError.unauthorized('User not found')
     }
 
     // Verify user has access to this project (project membership or company-level)
@@ -1442,10 +1376,7 @@ dashboardRouter.get('/projects/:projectId/foreman/today', async (req, res) => {
     }) : null
 
     if (!projectAccess && !companyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this project'
-      })
+      throw AppError.forbidden('You do not have access to this project')
     }
 
     // Calculate date boundaries
@@ -1647,8 +1578,4 @@ dashboardRouter.get('/projects/:projectId/foreman/today', async (req, res) => {
       upcoming,
       summary
     })
-  } catch (error) {
-    console.error('Foreman today worklist error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))

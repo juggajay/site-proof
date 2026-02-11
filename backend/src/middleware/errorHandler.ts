@@ -2,11 +2,8 @@
 import type { Request, Response, NextFunction } from 'express'
 import fs from 'fs'
 import path from 'path'
-
-interface AppError extends Error {
-  statusCode?: number
-  code?: string
-}
+import { AppError } from '../lib/AppError.js'
+import { ZodError } from 'zod'
 
 // Structured error log format
 interface ErrorLogEntry {
@@ -62,12 +59,6 @@ function logError(entry: ErrorLogEntry) {
 // Placeholder for external monitoring integration
 function sendToMonitoringService(entry: ErrorLogEntry) {
   // Integration point for external services
-  // Examples:
-  // - Sentry.captureException(entry)
-  // - DataDog.logError(entry)
-  // - LogRocket.captureException(entry)
-
-  // For now, just log that we would send this
   if (process.env.SENTRY_DSN) {
     console.debug('[Monitoring] Would send to Sentry:', entry.code)
   }
@@ -76,15 +67,102 @@ function sendToMonitoringService(entry: ErrorLogEntry) {
 // Export the log function for use elsewhere
 export { logError, ErrorLogEntry }
 
+/**
+ * Normalize any thrown value into { statusCode, message, code, details }.
+ * Handles: AppError, ZodError, Prisma known errors, plain Error, unknown.
+ */
+function normalizeError(err: unknown): {
+  statusCode: number
+  message: string
+  code: string
+  details?: Record<string, unknown>
+} {
+  // AppError — already structured
+  if (err instanceof AppError) {
+    return {
+      statusCode: err.statusCode,
+      message: err.message,
+      code: err.code,
+      details: err.details,
+    }
+  }
+
+  // ZodError — validation failure
+  if (err instanceof ZodError) {
+    return {
+      statusCode: 400,
+      message: 'Validation failed',
+      code: 'VALIDATION_ERROR',
+      details: { issues: err.issues },
+    }
+  }
+
+  // Prisma known request errors
+  if (
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    'name' in err &&
+    (err as any).name === 'PrismaClientKnownRequestError'
+  ) {
+    const prismaErr = err as unknown as { code: string; message: string; meta?: Record<string, unknown> }
+    if (prismaErr.code === 'P2002') {
+      return {
+        statusCode: 409,
+        message: 'A record with this value already exists',
+        code: 'CONFLICT',
+        details: prismaErr.meta ? { target: prismaErr.meta.target } : undefined,
+      }
+    }
+    if (prismaErr.code === 'P2025') {
+      return {
+        statusCode: 404,
+        message: 'Record not found',
+        code: 'NOT_FOUND',
+      }
+    }
+    // Other Prisma errors → 500
+    return {
+      statusCode: 500,
+      message: 'Database error',
+      code: 'DATABASE_ERROR',
+    }
+  }
+
+  // Legacy errors with statusCode (e.g. from libraries)
+  if (err instanceof Error && 'statusCode' in err) {
+    const legacyErr = err as Error & { statusCode?: number; code?: string }
+    return {
+      statusCode: legacyErr.statusCode || 500,
+      message: legacyErr.message || 'Internal Server Error',
+      code: legacyErr.code || 'INTERNAL_ERROR',
+    }
+  }
+
+  // Plain Error
+  if (err instanceof Error) {
+    return {
+      statusCode: 500,
+      message: err.message || 'Internal Server Error',
+      code: 'INTERNAL_ERROR',
+    }
+  }
+
+  // Unknown
+  return {
+    statusCode: 500,
+    message: 'Internal Server Error',
+    code: 'INTERNAL_ERROR',
+  }
+}
+
 export function errorHandler(
-  err: AppError,
+  err: unknown,
   req: Request,
   res: Response,
   _next: NextFunction
 ) {
-  const statusCode = err.statusCode || 500
-  const message = err.message || 'Internal Server Error'
-  const code = err.code || 'INTERNAL_ERROR'
+  const { statusCode, message, code, details } = normalizeError(err)
 
   // Build structured error log entry
   const logEntry: ErrorLogEntry = {
@@ -93,7 +171,7 @@ export function errorHandler(
     message,
     code,
     statusCode,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    stack: process.env.NODE_ENV === 'development' && err instanceof Error ? err.stack : undefined,
     context: {
       method: req.method,
       path: req.path,
@@ -118,7 +196,8 @@ export function errorHandler(
     error: {
       message,
       code,
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+      ...(details && { details }),
+      ...(process.env.NODE_ENV === 'development' && err instanceof Error && { stack: err.stack }),
     },
   })
 }

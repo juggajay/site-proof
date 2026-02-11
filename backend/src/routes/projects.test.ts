@@ -4,11 +4,13 @@ import express from 'express'
 import { projectsRouter } from './projects.js'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/projects', projectsRouter)
+app.use(errorHandler)
 
 describe('Projects API', () => {
   let authToken: string
@@ -79,7 +81,7 @@ describe('Projects API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should auto-generate project number if not provided', async () => {
@@ -180,7 +182,7 @@ describe('Projects API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('greater than')
+      expect(res.body.error.message).toContain('greater than')
     })
   })
 })

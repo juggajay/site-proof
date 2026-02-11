@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 import type { NCR, UserRole } from '../types'
 
 interface UseNCRDataOptions {
@@ -31,7 +32,7 @@ export function useNCRData({ projectId, token }: UseNCRDataOptions): UseNCRDataR
       const data = await apiFetch<{ ncrs: NCR[] }>(path)
       setNcrs(data.ncrs)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load NCRs')
+      setError(extractErrorMessage(err, 'Failed to load NCRs'))
     } finally {
       setLoading(false)
     }

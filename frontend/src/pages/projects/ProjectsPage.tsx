@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 import { X } from 'lucide-react'
 
 interface Project {
@@ -103,7 +104,7 @@ export function ProjectsPage() {
         const data = await apiFetch<{ projects: Project[] }>('/api/projects')
         setProjects(data.projects)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load projects')
+        setError(extractErrorMessage(err, 'Failed to load projects'))
       } finally {
         setLoading(false)
       }
@@ -140,7 +141,7 @@ export function ProjectsPage() {
       setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '', startDate: '', targetCompletion: '', contractValue: '' })
       setShowCreateModal(false)
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create project')
+      setCreateError(extractErrorMessage(err, 'Failed to create project'))
     } finally {
       setCreating(false)
     }

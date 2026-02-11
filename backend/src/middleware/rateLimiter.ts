@@ -1,5 +1,6 @@
 // Feature #742: API rate limiting middleware
 import { Request, Response, NextFunction } from 'express'
+import { AppError } from '../lib/AppError.js'
 
 interface RateLimitEntry {
   count: number
@@ -87,11 +88,7 @@ export function rateLimiter(req: Request, res: Response, next: NextFunction) {
 
   // Check if over limit
   if (entry.count > MAX_REQUESTS) {
-    return res.status(429).json({
-      error: 'Too Many Requests',
-      message: `Rate limit exceeded. Maximum ${MAX_REQUESTS} requests per minute. Please try again in ${resetTime} seconds.`,
-      retryAfter: resetTime
-    })
+    throw new AppError(429, `Rate limit exceeded. Maximum ${MAX_REQUESTS} requests per minute. Please try again in ${resetTime} seconds.`, 'RATE_LIMITED', { retryAfter: resetTime })
   }
 
   next()
@@ -196,12 +193,7 @@ export function authRateLimiter(req: Request, res: Response, next: NextFunction)
   // Check for account lockout first
   const lockout = isLockedOut(clientIp)
   if (lockout.locked) {
-    return res.status(429).json({
-      error: 'Account Temporarily Locked',
-      message: `Too many failed attempts. Please try again in ${Math.ceil(lockout.remainingSeconds / 60)} minutes.`,
-      retryAfter: lockout.remainingSeconds,
-      locked: true
-    })
+    throw new AppError(429, `Too many failed attempts. Please try again in ${Math.ceil(lockout.remainingSeconds / 60)} minutes.`, 'ACCOUNT_LOCKED', { retryAfter: lockout.remainingSeconds, locked: true })
   }
 
   let entry = authRateLimitStore.get(clientIp)
@@ -228,11 +220,7 @@ export function authRateLimiter(req: Request, res: Response, next: NextFunction)
   setRateLimitHeaders(res, remaining, resetTime)
 
   if (entry.count > AUTH_MAX_REQUESTS) {
-    return res.status(429).json({
-      error: 'Too Many Requests',
-      message: `Too many authentication attempts. Please try again in ${resetTime} seconds.`,
-      retryAfter: resetTime
-    })
+    throw new AppError(429, `Too many authentication attempts. Please try again in ${resetTime} seconds.`, 'RATE_LIMITED', { retryAfter: resetTime })
   }
 
   next()

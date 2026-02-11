@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { getAuthToken, getCurrentUser } from '@/lib/auth'
 import { apiFetch, ApiError } from '@/lib/api'
+import { extractErrorMessage, extractErrorDetails, hasStatus } from '@/lib/errorHandling'
 import { TagInput } from '@/components/ui/TagInput'
 import { DateTimePicker } from '@/components/ui/DateTimePicker'
 import { useOfflineStatus } from '@/lib/useOfflineStatus'
@@ -383,13 +384,10 @@ export function LotEditPage() {
       navigate(`/projects/${projectId}/lots/${lotId}`)
     } catch (err) {
       // Feature #871: Handle concurrent edit conflict
-      if (err instanceof ApiError && err.status === 409) {
-        try {
-          const data = JSON.parse(err.body)
-          setConcurrentEditInfo({ serverUpdatedAt: data.serverUpdatedAt })
-        } catch {
-          setConcurrentEditInfo({ serverUpdatedAt: '' })
-        }
+      if (hasStatus(err, 409)) {
+        const details = extractErrorDetails(err)
+        const serverUpdatedAt = details?.serverUpdatedAt || ''
+        setConcurrentEditInfo({ serverUpdatedAt })
         setShowConcurrentEditWarning(true)
         setSaving(false)
         return
@@ -431,7 +429,7 @@ export function LotEditPage() {
           // Fall through to regular error
         }
       }
-      setSaveError(err instanceof Error ? err.message : 'Failed to save changes')
+      setSaveError(extractErrorMessage(err, 'Failed to save changes'))
     } finally {
       setSaving(false)
     }

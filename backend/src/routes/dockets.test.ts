@@ -3,6 +3,7 @@ import request from 'supertest'
 import express from 'express'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 // Import dockets router
 import { docketsRouter } from './dockets.js'
@@ -11,6 +12,7 @@ const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/dockets', docketsRouter)
+app.use(errorHandler)
 
 describe('Dockets API', () => {
   let authToken: string
@@ -419,7 +421,7 @@ describe('Dockets API', () => {
         .set('Authorization', `Bearer ${subcontractorToken}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.code).toBe('ENTRY_REQUIRED')
+      expect(res.body.error.code).toBe('ENTRY_REQUIRED')
 
       await prisma.dailyDocket.delete({ where: { id: emptyDocket.id } })
     })

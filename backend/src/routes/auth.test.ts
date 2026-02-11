@@ -3,10 +3,12 @@ import request from 'supertest'
 import express from 'express'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
+app.use(errorHandler)
 
 describe('POST /api/auth/register', () => {
   const testEmail = `test-reg-${Date.now()}@example.com`
@@ -46,7 +48,7 @@ describe('POST /api/auth/register', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('required')
+    expect(res.body.error.message).toContain('required')
   })
 
   it('should reject registration without password', async () => {
@@ -58,7 +60,7 @@ describe('POST /api/auth/register', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('required')
+    expect(res.body.error.message).toContain('required')
   })
 
   it('should reject weak passwords', async () => {
@@ -71,8 +73,8 @@ describe('POST /api/auth/register', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.errors).toBeDefined()
-    expect(res.body.errors.length).toBeGreaterThan(0)
+    expect(res.body.error.details.errors).toBeDefined()
+    expect(res.body.error.details.errors.length).toBeGreaterThan(0)
   })
 
   it('should reject password without uppercase', async () => {
@@ -85,8 +87,8 @@ describe('POST /api/auth/register', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.errors).toBeDefined()
-    expect(res.body.errors.some((e: string) => e.toLowerCase().includes('uppercase'))).toBe(true)
+    expect(res.body.error.details.errors).toBeDefined()
+    expect(res.body.error.details.errors.some((e: string) => e.toLowerCase().includes('uppercase'))).toBe(true)
   })
 
   it('should reject password without special character', async () => {
@@ -99,8 +101,8 @@ describe('POST /api/auth/register', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.errors).toBeDefined()
-    expect(res.body.errors.some((e: string) => e.toLowerCase().includes('special'))).toBe(true)
+    expect(res.body.error.details.errors).toBeDefined()
+    expect(res.body.error.details.errors.some((e: string) => e.toLowerCase().includes('special'))).toBe(true)
   })
 
   it('should reject registration without ToS acceptance', async () => {
@@ -113,7 +115,7 @@ describe('POST /api/auth/register', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('Terms of Service')
+    expect(res.body.error.message).toContain('Terms of Service')
   })
 
   it('should reject duplicate email registration', async () => {
@@ -127,7 +129,7 @@ describe('POST /api/auth/register', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('already in use')
+    expect(res.body.error.message).toContain('already in use')
   })
 })
 
@@ -177,7 +179,7 @@ describe('POST /api/auth/login', () => {
       })
 
     expect(res.status).toBe(401)
-    expect(res.body.message).toContain('Invalid')
+    expect(res.body.error.message).toContain('Invalid')
   })
 
   it('should reject wrong password', async () => {
@@ -189,7 +191,7 @@ describe('POST /api/auth/login', () => {
       })
 
     expect(res.status).toBe(401)
-    expect(res.body.message).toContain('Invalid')
+    expect(res.body.error.message).toContain('Invalid')
   })
 
   it('should reject login without email', async () => {
@@ -200,7 +202,7 @@ describe('POST /api/auth/login', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('required')
+    expect(res.body.error.message).toContain('required')
   })
 
   it('should reject login without password', async () => {
@@ -211,7 +213,7 @@ describe('POST /api/auth/login', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('required')
+    expect(res.body.error.message).toContain('required')
   })
 })
 
@@ -265,7 +267,7 @@ describe('Password Reset Flow', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('Invalid')
+    expect(res.body.error.message).toContain('Invalid')
   })
 })
 

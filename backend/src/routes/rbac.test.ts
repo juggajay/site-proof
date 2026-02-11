@@ -5,12 +5,14 @@ import { authRouter } from './auth.js'
 import { lotsRouter } from './lots.js'
 import { ncrsRouter } from './ncrs/index.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/lots', lotsRouter)
 app.use('/api/ncrs', ncrsRouter)
+app.use(errorHandler)
 
 describe('Role-Based Access Control', () => {
   let companyId: string

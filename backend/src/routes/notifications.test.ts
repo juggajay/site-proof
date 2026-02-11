@@ -4,11 +4,13 @@ import express from 'express'
 import { authRouter } from './auth.js'
 import { notificationsRouter } from './notifications.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/notifications', notificationsRouter)
+app.use(errorHandler)
 
 describe('Notifications API', () => {
   let authToken: string
@@ -247,7 +249,7 @@ describe('Notifications API', () => {
         .set('Authorization', `Bearer ${secondUserToken}`)
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('Access denied')
+      expect(res.body.error.message).toContain('Access denied')
     })
 
     it('should return 404 for non-existent notification', async () => {
@@ -256,7 +258,7 @@ describe('Notifications API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toContain('not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should reject unauthorized requests', async () => {
@@ -351,7 +353,7 @@ describe('Notifications API', () => {
         .set('Authorization', `Bearer ${secondUserToken}`)
 
       expect(res.status).toBe(403)
-      expect(res.body.error).toContain('Access denied')
+      expect(res.body.error.message).toContain('Access denied')
     })
 
     it('should return 404 for non-existent notification', async () => {
@@ -360,7 +362,7 @@ describe('Notifications API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.error).toContain('not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should reject unauthorized requests', async () => {
@@ -543,6 +545,7 @@ describe('Notifications API', () => {
       } else {
         // Email quota exceeded is acceptable in test environment
         expect(res.body.error).toBeDefined()
+        expect(res.body.error.message).toBeDefined()
       }
     })
 
@@ -560,7 +563,7 @@ describe('Notifications API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('disabled')
+      expect(res.body.error.message).toContain('disabled')
     })
 
     it('should reject unauthorized requests', async () => {
@@ -639,7 +642,7 @@ describe('Notifications API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject unauthorized requests', async () => {
@@ -685,10 +688,11 @@ describe('Notifications API', () => {
 
         expect(checkRes.body.count).toBe(0)
       } else if (res.status === 403) {
-        expect(res.body.error).toContain('production')
+        expect(res.body.error.message).toContain('production')
       } else {
         // 404 - route not found due to /:id matching first
         expect(res.body.error).toBeDefined()
+        expect(res.body.error.message).toBeDefined()
       }
     })
 
@@ -722,6 +726,7 @@ describe('Notifications API', () => {
       // Accept 400 (expected) or 500 (rate limit/quota error)
       expect([400, 500]).toContain(res.status)
       expect(res.body.error).toBeDefined()
+      expect(res.body.error.message).toBeDefined()
     })
 
     it('should send digest with items', async () => {
@@ -755,6 +760,7 @@ describe('Notifications API', () => {
       } else {
         // Email quota exceeded is acceptable in test environment
         expect(res.body.error).toBeDefined()
+        expect(res.body.error.message).toBeDefined()
       }
     })
 
@@ -782,7 +788,7 @@ describe('Notifications API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.error).toContain('disabled')
+      expect(res.body.error.message).toContain('disabled')
     })
 
     it('should reject unauthorized requests', async () => {
@@ -827,7 +833,7 @@ describe('Notifications API', () => {
           })
 
         expect(res.status).toBe(400)
-        expect(res.body.error).toContain('required')
+        expect(res.body.error.message).toContain('required')
       })
 
       it('should create notification for assigned user', async () => {
@@ -981,7 +987,7 @@ describe('Notifications API', () => {
           .set('Authorization', `Bearer ${authToken}`)
 
         expect(res.status).toBe(400)
-        expect(res.body.error).toContain('already resolved')
+        expect(res.body.error.message).toContain('already resolved')
       })
 
       it('should return 404 for non-existent alert', async () => {
@@ -990,7 +996,7 @@ describe('Notifications API', () => {
           .set('Authorization', `Bearer ${authToken}`)
 
         expect(res.status).toBe(404)
-        expect(res.body.error).toContain('not found')
+        expect(res.body.error.message).toContain('not found')
       })
 
       it('should reject unauthorized requests', async () => {
@@ -1079,7 +1085,7 @@ describe('Notifications API', () => {
           })
 
         expect(res.status).toBe(400)
-        expect(res.body.error).toContain('required')
+        expect(res.body.error.message).toContain('required')
       })
 
       it('should return 404 for non-existent project', async () => {
@@ -1091,7 +1097,7 @@ describe('Notifications API', () => {
           })
 
         expect(res.status).toBe(404)
-        expect(res.body.error).toContain('not found')
+        expect(res.body.error.message).toContain('not found')
       })
 
       it('should reject unauthorized requests', async () => {

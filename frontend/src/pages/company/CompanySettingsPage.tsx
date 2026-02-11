@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/auth'
 import { Building2, Save, AlertTriangle, Upload, Crown, UserCog, Loader2, X, DollarSign } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage, isNotFound } from '@/lib/errorHandling'
 
 interface CompanyMember {
   id: string
@@ -66,12 +67,12 @@ export function CompanySettingsPage() {
           address: data.company.address || '',
           logoUrl: data.company.logoUrl || '',
         })
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to fetch company:', err)
-        if (err?.status === 404) {
+        if (isNotFound(err)) {
           setError('No company associated with your account')
         } else {
-          setError('Failed to load company settings')
+          setError(extractErrorMessage(err, 'Failed to load company settings'))
         }
       } finally {
         setLoading(false)
@@ -107,8 +108,7 @@ export function CompanySettingsPage() {
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
-      console.error('Save settings error:', err)
-      setSaveError('Failed to save settings')
+      setSaveError(extractErrorMessage(err, 'Failed to save settings'))
     } finally {
       setSaving(false)
     }
@@ -168,8 +168,7 @@ export function CompanySettingsPage() {
       const otherMembers = data.members.filter((m: CompanyMember) => m.id !== user?.id)
       setMembers(otherMembers)
     } catch (err) {
-      console.error('Load members error:', err)
-      setTransferError('Failed to load company members')
+      setTransferError(extractErrorMessage(err, 'Failed to load company members'))
     } finally {
       setLoadingMembers(false)
     }
@@ -200,8 +199,7 @@ export function CompanySettingsPage() {
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 5000)
     } catch (err) {
-      console.error('Transfer ownership error:', err)
-      setTransferError('Failed to transfer ownership')
+      setTransferError(extractErrorMessage(err, 'Failed to transfer ownership'))
     } finally {
       setTransferring(false)
     }

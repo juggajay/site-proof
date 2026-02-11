@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest'
 import request from 'supertest'
 import express from 'express'
 import { supportRouter } from './support.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/support', supportRouter)
+app.use(errorHandler)
 
 describe('Support API', () => {
   describe('POST /api/support/request', () => {
@@ -49,7 +51,7 @@ describe('Support API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject request without message', async () => {
@@ -61,7 +63,7 @@ describe('Support API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject request with empty subject', async () => {
@@ -74,7 +76,7 @@ describe('Support API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject request with empty message', async () => {
@@ -87,7 +89,7 @@ describe('Support API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should accept request without category', async () => {

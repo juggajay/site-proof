@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist'
 import { apiFetch, getAuthToken, apiUrl } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { extractErrorMessage, handleApiError } from '@/lib/errorHandling'
 
 interface ITPChecklistItem {
   id: string
@@ -96,7 +97,7 @@ export function SubcontractorLotITPPage() {
       }
     } catch (err) {
       console.error('Error fetching data:', err)
-      setError('Failed to load ITP data')
+      setError(extractErrorMessage(err, 'Failed to load ITP data'))
     } finally {
       setLoading(false)
     }
@@ -125,8 +126,8 @@ export function SubcontractorLotITPPage() {
 
       await fetchData()
       toast({ title: 'Success', description: 'Item updated', variant: 'success' })
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'error' })
+    } catch (err) {
+      handleApiError(err, 'Failed to update item')
     } finally {
       setUpdatingItem(null)
     }
@@ -149,8 +150,8 @@ export function SubcontractorLotITPPage() {
 
       await fetchData()
       toast({ title: 'Success', description: 'Item marked as N/A', variant: 'success' })
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'error' })
+    } catch (err) {
+      handleApiError(err, 'Failed to mark as N/A')
     } finally {
       setUpdatingItem(null)
     }
@@ -173,8 +174,8 @@ export function SubcontractorLotITPPage() {
 
       await fetchData()
       toast({ title: 'Success', description: 'Item marked as failed', variant: 'success' })
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'error' })
+    } catch (err) {
+      handleApiError(err, 'Failed to mark as failed')
     } finally {
       setUpdatingItem(null)
     }
@@ -196,8 +197,8 @@ export function SubcontractorLotITPPage() {
       }
 
       await fetchData()
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'error' })
+    } catch (err) {
+      handleApiError(err, 'Failed to update notes')
     } finally {
       setUpdatingItem(null)
     }
@@ -237,8 +238,8 @@ export function SubcontractorLotITPPage() {
 
       await fetchData()
       toast({ title: 'Success', description: 'Photo uploaded', variant: 'success' })
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'error' })
+    } catch (err) {
+      handleApiError(err, 'Failed to upload photo')
     } finally {
       setUpdatingItem(null)
     }

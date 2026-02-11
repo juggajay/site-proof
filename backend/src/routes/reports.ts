@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 export const reportsRouter = Router()
 
@@ -8,15 +10,11 @@ export const reportsRouter = Router()
 reportsRouter.use(requireAuth)
 
 // GET /api/reports/lot-status - Lot status report
-reportsRouter.get('/lot-status', async (req, res) => {
-  try {
+reportsRouter.get('/lot-status', asyncHandler(async (req, res) => {
     const { projectId, page = '1', limit = '100' } = req.query
 
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
+      throw AppError.badRequest('projectId query parameter is required')
     }
 
     // Pagination parameters
@@ -126,22 +124,14 @@ reportsRouter.get('/lot-status', async (req, res) => {
     }
 
     res.json(report)
-  } catch (error) {
-    console.error('Lot status report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/reports/ncr - NCR report
-reportsRouter.get('/ncr', async (req, res) => {
-  try {
+reportsRouter.get('/ncr', asyncHandler(async (req, res) => {
     const { projectId, page = '1', limit = '100' } = req.query
 
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
+      throw AppError.badRequest('projectId query parameter is required')
     }
 
     // Pagination parameters
@@ -282,22 +272,14 @@ reportsRouter.get('/ncr', async (req, res) => {
     }
 
     res.json(report)
-  } catch (error) {
-    console.error('NCR report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/reports/test - Test results report (Feature #208)
-reportsRouter.get('/test', async (req, res) => {
-  try {
+reportsRouter.get('/test', asyncHandler(async (req, res) => {
     const { projectId, startDate, endDate, testTypes, lotIds, page = '1', limit = '100' } = req.query
 
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
+      throw AppError.badRequest('projectId query parameter is required')
     }
 
     // Pagination parameters
@@ -412,22 +394,14 @@ reportsRouter.get('/test', async (req, res) => {
     }
 
     res.json(report)
-  } catch (error) {
-    console.error('Test report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/reports/diary - Diary report with section selection
-reportsRouter.get('/diary', async (req, res) => {
-  try {
+reportsRouter.get('/diary', asyncHandler(async (req, res) => {
     const { projectId, startDate, endDate, sections, page = '1', limit = '100' } = req.query
 
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
+      throw AppError.badRequest('projectId query parameter is required')
     }
 
     // Pagination parameters
@@ -615,22 +589,14 @@ reportsRouter.get('/diary', async (req, res) => {
     }
 
     res.json(report)
-  } catch (error) {
-    console.error('Diary report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // GET /api/reports/summary - Dashboard summary report
-reportsRouter.get('/summary', async (req, res) => {
-  try {
+reportsRouter.get('/summary', asyncHandler(async (req, res) => {
     const { projectId } = req.query
 
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
+      throw AppError.badRequest('projectId query parameter is required')
     }
 
     // Get lot counts by status
@@ -736,22 +702,14 @@ reportsRouter.get('/summary', async (req, res) => {
     }
 
     res.json(summary)
-  } catch (error) {
-    console.error('Summary report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // Feature #287: GET /api/reports/claims - Claim history report
-reportsRouter.get('/claims', async (req, res) => {
-  try {
+reportsRouter.get('/claims', asyncHandler(async (req, res) => {
     const { projectId, startDate, endDate, status } = req.query
 
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
+      throw AppError.badRequest('projectId query parameter is required')
     }
 
     // Build where clause with optional filters
@@ -921,11 +879,7 @@ reportsRouter.get('/claims', async (req, res) => {
     }
 
     res.json(report)
-  } catch (error) {
-    console.error('Claim history report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // ============================================================================
 // Scheduled Reports API
@@ -973,15 +927,11 @@ function calculateNextRunAt(frequency: string, dayOfWeek: number | null, dayOfMo
 }
 
 // GET /api/reports/schedules - List scheduled reports for a project
-reportsRouter.get('/schedules', async (req, res) => {
-  try {
+reportsRouter.get('/schedules', asyncHandler(async (req, res) => {
     const { projectId } = req.query
 
     if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
+      throw AppError.badRequest('projectId query parameter is required')
     }
 
     const schedules = await prisma.scheduledReport.findMany({
@@ -990,39 +940,25 @@ reportsRouter.get('/schedules', async (req, res) => {
     })
 
     res.json({ schedules })
-  } catch (error) {
-    console.error('List scheduled reports error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // POST /api/reports/schedules - Create a new scheduled report
-reportsRouter.post('/schedules', async (req, res) => {
-  try {
+reportsRouter.post('/schedules', asyncHandler(async (req, res) => {
     const { projectId, reportType, frequency, dayOfWeek, dayOfMonth, timeOfDay, recipients } = req.body
     const userId = req.user?.id
 
     if (!projectId || !reportType || !frequency || !recipients) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId, reportType, frequency, and recipients are required'
-      })
+      throw AppError.badRequest('projectId, reportType, frequency, and recipients are required')
     }
 
     // Validate frequency
     if (!['daily', 'weekly', 'monthly'].includes(frequency)) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'frequency must be daily, weekly, or monthly'
-      })
+      throw AppError.badRequest('frequency must be daily, weekly, or monthly')
     }
 
     // Validate reportType
     if (!['lot-status', 'ncr', 'test', 'diary'].includes(reportType)) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'reportType must be lot-status, ncr, test, or diary'
-      })
+      throw AppError.badRequest('reportType must be lot-status, ncr, test, or diary')
     }
 
     // Calculate next run time
@@ -1049,15 +985,10 @@ reportsRouter.post('/schedules', async (req, res) => {
     })
 
     res.status(201).json({ schedule })
-  } catch (error) {
-    console.error('Create scheduled report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // PUT /api/reports/schedules/:id - Update a scheduled report
-reportsRouter.put('/schedules/:id', async (req, res) => {
-  try {
+reportsRouter.put('/schedules/:id', asyncHandler(async (req, res) => {
     const { id } = req.params
     const { reportType, frequency, dayOfWeek, dayOfMonth, timeOfDay, recipients, isActive } = req.body
 
@@ -1067,10 +998,7 @@ reportsRouter.put('/schedules/:id', async (req, res) => {
     })
 
     if (!existing) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Scheduled report not found'
-      })
+      throw AppError.notFound('Scheduled report')
     }
 
     // Calculate new next run time if scheduling parameters changed
@@ -1103,15 +1031,10 @@ reportsRouter.put('/schedules/:id', async (req, res) => {
     })
 
     res.json({ schedule })
-  } catch (error) {
-    console.error('Update scheduled report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))
 
 // DELETE /api/reports/schedules/:id - Delete a scheduled report
-reportsRouter.delete('/schedules/:id', async (req, res) => {
-  try {
+reportsRouter.delete('/schedules/:id', asyncHandler(async (req, res) => {
     const { id } = req.params
 
     // Check if schedule exists
@@ -1120,10 +1043,7 @@ reportsRouter.delete('/schedules/:id', async (req, res) => {
     })
 
     if (!existing) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Scheduled report not found'
-      })
+      throw AppError.notFound('Scheduled report')
     }
 
     await prisma.scheduledReport.delete({
@@ -1131,8 +1051,4 @@ reportsRouter.delete('/schedules/:id', async (req, res) => {
     })
 
     res.json({ success: true, message: 'Scheduled report deleted' })
-  } catch (error) {
-    console.error('Delete scheduled report error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+}))

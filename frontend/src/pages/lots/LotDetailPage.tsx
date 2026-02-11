@@ -5,6 +5,7 @@ import { useCommercialAccess } from '@/hooks/useCommercialAccess'
 import { useViewerAccess } from '@/hooks/useViewerAccess'
 import { getAuthToken } from '@/lib/auth'
 import { apiFetch, ApiError, apiUrl } from '@/lib/api'
+import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/errorHandling'
 import { toast } from '@/components/ui/toaster'
 import { CommentsSection } from '@/components/comments/CommentsSection'
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal'
@@ -811,12 +812,7 @@ export function LotDetailPage() {
       })
       setNaModal(null)
     } catch (err) {
-      console.error('Failed to mark as N/A:', err)
-      toast({
-        title: 'Failed to mark as N/A',
-        description: 'An error occurred. Please try again.',
-        variant: 'error'
-      })
+      handleApiError(err, 'Failed to mark as N/A')
     } finally {
       setSubmittingNa(false)
     }
@@ -878,12 +874,7 @@ export function LotDetailPage() {
       })
       setFailedModal(null)
     } catch (err) {
-      console.error('Failed to mark as Failed:', err)
-      toast({
-        title: 'Failed to mark item',
-        description: 'An error occurred. Please try again.',
-        variant: 'error'
-      })
+      handleApiError(err, 'Failed to mark item')
     } finally {
       setSubmittingFailed(false)
     }
@@ -921,12 +912,7 @@ export function LotDetailPage() {
         description: 'The checklist item has been marked as not applicable.',
       })
     } catch (err) {
-      console.error('Failed to mark as N/A:', err)
-      toast({
-        title: 'Failed to mark as N/A',
-        description: 'An error occurred. Please try again.',
-        variant: 'error'
-      })
+      handleApiError(err, 'Failed to mark as N/A')
     } finally {
       setUpdatingCompletion(null)
     }
@@ -976,12 +962,7 @@ export function LotDetailPage() {
           : 'The item has been marked as failed.',
       })
     } catch (err) {
-      console.error('Failed to mark as Failed:', err)
-      toast({
-        title: 'Failed to mark item',
-        description: 'An error occurred. Please try again.',
-        variant: 'error'
-      })
+      handleApiError(err, 'Failed to mark item')
     } finally {
       setUpdatingCompletion(null)
     }
@@ -1071,12 +1052,7 @@ export function LotDetailPage() {
         })
       }
     } catch (err) {
-      console.error('Failed to add photo:', err)
-      toast({
-        title: 'Upload failed',
-        description: 'An error occurred. Please try again.',
-        variant: 'error'
-      })
+      handleApiError(err, 'Failed to upload photo')
     } finally {
       setUpdatingCompletion(null)
     }
@@ -1113,12 +1089,7 @@ export function LotDetailPage() {
 
       setWitnessModal(null)
     } catch (err) {
-      console.error('Failed to complete witness point:', err)
-      toast({
-        title: 'Failed to complete',
-        description: 'An error occurred. Please try again.',
-        variant: 'error'
-      })
+      handleApiError(err, 'Failed to complete witness point')
     } finally {
       setSubmittingWitness(false)
     }
@@ -1280,12 +1251,7 @@ export function LotDetailPage() {
       })
       setClassificationModal(null)
     } catch (err) {
-      console.error('Error saving classification:', err)
-      toast({
-        title: 'Error',
-        description: 'Failed to save classification.',
-        variant: 'error'
-      })
+      handleApiError(err, 'Failed to save classification')
     } finally {
       setSavingClassification(false)
     }
@@ -1312,19 +1278,11 @@ export function LotDetailPage() {
       setLot((prev) => prev ? { ...prev, status: 'conformed' } : null)
       alert('Lot conformed successfully!')
     } catch (err) {
-      if (err instanceof ApiError) {
-        try {
-          const data = JSON.parse(err.body)
-          if (data.blockingReasons) {
-            alert(`Cannot conform lot:\n\n${data.blockingReasons.join('\n')}`)
-          } else {
-            alert(data.message || data.error || 'Failed to conform lot')
-          }
-        } catch {
-          alert('Failed to conform lot')
-        }
+      const details = extractErrorDetails(err)
+      if (details?.blockingReasons) {
+        alert(`Cannot conform lot:\n\n${details.blockingReasons.join('\n')}`)
       } else {
-        alert('Failed to conform lot')
+        alert(extractErrorMessage(err, 'Failed to conform lot'))
       }
     } finally {
       setConforming(false)
@@ -1378,11 +1336,7 @@ export function LotDetailPage() {
         setLoadingHistory(false)
       }
     } catch (err) {
-      toast({
-        title: 'Override failed',
-        description: 'An error occurred. Please try again.',
-        variant: 'error'
-      })
+      handleApiError(err, 'Failed to override status')
     } finally {
       setOverriding(false)
     }
@@ -1487,12 +1441,7 @@ export function LotDetailPage() {
         description: `The conformance report PDF${formatName} has been downloaded.`,
       })
     } catch (err) {
-      console.error('Failed to generate report:', err)
-      toast({
-        title: 'Report generation failed',
-        description: 'An error occurred while generating the report.',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to generate conformance report')
     } finally {
       setGeneratingReport(false)
     }
@@ -1525,11 +1474,11 @@ export function LotDetailPage() {
         const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${lot.id}`)
         setLot(lotData.lot)
       } catch { /* ignore */ }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to assign subcontractor:', err)
       toast({
         title: 'Assignment failed',
-        description: err.message || 'An error occurred',
+        description: extractErrorMessage(err, 'An error occurred'),
         variant: 'error',
       })
     } finally {

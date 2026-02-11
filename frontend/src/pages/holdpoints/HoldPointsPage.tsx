@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { apiFetch, ApiError } from '@/lib/api'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { extractErrorMessage, extractErrorDetails, extractErrorCode, handleApiError } from '@/lib/errorHandling'
 import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
 import { LazyHoldPointsChart } from '@/components/charts/LazyCharts'
 
@@ -131,8 +132,7 @@ export function HoldPointsPage() {
       generateHPEvidencePackagePDF(data.evidencePackage as HPEvidencePackageData)
       toast({ title: 'Evidence Package Generated', description: `PDF downloaded for ${hp.lotNumber}` })
     } catch (err) {
-      console.error('Failed to generate evidence package:', err)
-      toast({ title: 'Error', description: 'Failed to generate evidence package PDF', variant: 'error' })
+      handleApiError(err, 'Failed to generate evidence package PDF')
     } finally {
       setGeneratingPdf(null)
     }
@@ -180,8 +180,7 @@ export function HoldPointsPage() {
         description: `Follow-up notification sent for ${hp.lotNumber}. Chase count: ${(data.holdPoint?.chaseCount || 1)}`,
       })
     } catch (err) {
-      console.error('Failed to chase hold point:', err)
-      toast({ title: 'Error', description: 'Failed to send chase notification', variant: 'error' })
+      handleApiError(err, 'Failed to send chase notification')
     } finally {
       setChasingHpId(null)
     }
@@ -215,22 +214,14 @@ export function HoldPointsPage() {
       setSelectedHoldPoint(null)
       setHoldPointDetails(null)
     } catch (err) {
-      console.error('Failed to request release:', err)
-      if (err instanceof ApiError) {
-        try {
-          const data = JSON.parse(err.body)
-          if (data.incompleteItems) {
-            setRequestError({ message: data.message, incompleteItems: data.incompleteItems })
-          } else if (data.code === 'NOTICE_PERIOD_WARNING') {
-            setRequestError({ message: data.message, code: data.code, details: data.details })
-          } else {
-            setRequestError({ message: data.error || 'Failed to request release' })
-          }
-        } catch {
-          setRequestError({ message: 'Failed to request release' })
-        }
+      const details = extractErrorDetails(err)
+      const code = extractErrorCode(err)
+      if (details?.incompleteItems) {
+        setRequestError({ message: extractErrorMessage(err, 'Failed to request release'), incompleteItems: details.incompleteItems })
+      } else if (code === 'NOTICE_PERIOD_WARNING') {
+        setRequestError({ message: extractErrorMessage(err, 'Failed to request release'), code, details: details || undefined })
       } else {
-        setRequestError({ message: 'Network error. Please try again.' })
+        setRequestError({ message: extractErrorMessage(err, 'Failed to request release') })
       }
     } finally {
       setRequesting(false)
@@ -267,8 +258,7 @@ export function HoldPointsPage() {
       setShowRecordReleaseModal(false)
       setSelectedHoldPoint(null)
     } catch (err) {
-      console.error('Failed to record release:', err)
-      toast({ title: 'Error', description: 'Failed to record hold point release', variant: 'error' })
+      handleApiError(err, 'Failed to record hold point release')
     } finally {
       setRecordingRelease(false)
     }

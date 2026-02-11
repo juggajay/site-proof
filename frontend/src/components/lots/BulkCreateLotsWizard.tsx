@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { handleApiError } from '@/lib/errorHandling'
 
 interface BulkCreateLotsWizardProps {
   projectId: string
@@ -105,8 +106,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
       toast({ variant: 'success', description: `Successfully created ${data.count} lots` })
       onSuccess()
     } catch (error) {
-      console.error('Bulk create error:', error)
-      toast({ variant: 'error', description: error instanceof Error ? error.message : 'Failed to create lots' })
+      handleApiError(error, 'Failed to create lots')
     } finally {
       setCreating(false)
     }

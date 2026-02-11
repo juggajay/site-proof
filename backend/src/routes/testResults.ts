@@ -7,6 +7,8 @@ import { requireAuth } from '../middleware/authMiddleware.js'
 import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
 import { sendNotificationIfEnabled } from './notifications.js'
 import { createAuditLog, AuditAction } from '../lib/auditLog.js'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 export const testResultsRouter = Router()
 
@@ -165,400 +167,194 @@ const TEST_CREATORS = ['owner', 'admin', 'project_manager', 'site_engineer', 'qu
 const TEST_VERIFIERS = ['owner', 'admin', 'project_manager', 'quality_manager']
 
 // GET /api/test-results/specifications - Get all test type specifications
-testResultsRouter.get('/specifications', async (_req, res) => {
-  try {
-    res.json({
-      specifications: Object.entries(testTypeSpecifications).map(([key, spec]) => ({
-        testType: key,
-        ...spec
-      }))
-    })
-  } catch (error) {
-    console.error('Get test specifications error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+testResultsRouter.get('/specifications', asyncHandler(async (_req, res) => {
+  res.json({
+    specifications: Object.entries(testTypeSpecifications).map(([key, spec]) => ({
+      testType: key,
+      ...spec
+    }))
+  })
+}))
 
 // GET /api/test-results/specifications/:testType - Get specification for a specific test type
-testResultsRouter.get('/specifications/:testType', async (req, res) => {
-  try {
-    const { testType } = req.params
+testResultsRouter.get('/specifications/:testType', asyncHandler(async (req, res) => {
+  const { testType } = req.params
 
-    // Normalize test type key (lowercase, replace spaces with underscore)
-    const normalizedType = testType.toLowerCase().replace(/\s+/g, '_')
+  // Normalize test type key (lowercase, replace spaces with underscore)
+  const normalizedType = testType.toLowerCase().replace(/\s+/g, '_')
 
-    const spec = testTypeSpecifications[normalizedType]
+  const spec = testTypeSpecifications[normalizedType]
 
-    if (!spec) {
-      // Try to find a partial match
-      const partialMatch = Object.entries(testTypeSpecifications).find(([key, value]) =>
-        key.includes(normalizedType) ||
-        value.name.toLowerCase().includes(testType.toLowerCase())
-      )
+  if (!spec) {
+    // Try to find a partial match
+    const partialMatch = Object.entries(testTypeSpecifications).find(([key, value]) =>
+      key.includes(normalizedType) ||
+      value.name.toLowerCase().includes(testType.toLowerCase())
+    )
 
-      if (partialMatch) {
-        return res.json({
-          testType: partialMatch[0],
-          ...partialMatch[1]
-        })
-      }
-
-      return res.status(404).json({
-        error: 'Specification not found',
-        message: `No specification found for test type: ${testType}`,
-        availableTypes: Object.keys(testTypeSpecifications)
+    if (partialMatch) {
+      return res.json({
+        testType: partialMatch[0],
+        ...partialMatch[1]
       })
     }
 
-    res.json({
-      testType: normalizedType,
-      ...spec
+    throw new AppError(404, `No specification found for test type: ${testType}`, 'NOT_FOUND', {
+      availableTypes: Object.keys(testTypeSpecifications)
     })
-  } catch (error) {
-    console.error('Get test specification error:', error)
-    res.status(500).json({ error: 'Internal server error' })
   }
-})
+
+  res.json({
+    testType: normalizedType,
+    ...spec
+  })
+}))
 
 // GET /api/test-results/laboratories - Get recent laboratory names for auto-population (Feature #470)
-testResultsRouter.get('/laboratories', async (req, res) => {
-  try {
-    const { projectId, search } = req.query
+testResultsRouter.get('/laboratories', asyncHandler(async (req, res) => {
+  const { projectId, search } = req.query
 
-    // Build where clause for recent test results with laboratory names
-    const whereClause: any = {
-      laboratoryName: { not: null }
-    }
-
-    if (projectId) {
-      whereClause.projectId = projectId as string
-    }
-
-    if (search) {
-      whereClause.laboratoryName = {
-        contains: search as string,
-        mode: 'insensitive'
-      }
-    }
-
-    // Get distinct laboratory names, ordered by most recently used
-    const recentLabs = await prisma.testResult.groupBy({
-      by: ['laboratoryName'],
-      where: whereClause,
-      _max: {
-        createdAt: true
-      },
-      orderBy: {
-        _max: {
-          createdAt: 'desc'
-        }
-      },
-      take: 20
-    })
-
-    const laboratories = recentLabs
-      .filter(lab => lab.laboratoryName)
-      .map(lab => lab.laboratoryName)
-
-    res.json({ laboratories })
-  } catch (error) {
-    console.error('Error fetching laboratories:', error)
-    res.status(500).json({ error: 'Failed to fetch laboratories' })
+  // Build where clause for recent test results with laboratory names
+  const whereClause: any = {
+    laboratoryName: { not: null }
   }
-})
+
+  if (projectId) {
+    whereClause.projectId = projectId as string
+  }
+
+  if (search) {
+    whereClause.laboratoryName = {
+      contains: search as string,
+      mode: 'insensitive'
+    }
+  }
+
+  // Get distinct laboratory names, ordered by most recently used
+  const recentLabs = await prisma.testResult.groupBy({
+    by: ['laboratoryName'],
+    where: whereClause,
+    _max: {
+      createdAt: true
+    },
+    orderBy: {
+      _max: {
+        createdAt: 'desc'
+      }
+    },
+    take: 20
+  })
+
+  const laboratories = recentLabs
+    .filter(lab => lab.laboratoryName)
+    .map(lab => lab.laboratoryName)
+
+  res.json({ laboratories })
+}))
 
 // GET /api/test-results - List all test results for a project
-testResultsRouter.get('/', async (req, res) => {
-  try {
-    const user = req.user!
-    const { projectId, lotId } = req.query
+testResultsRouter.get('/', asyncHandler(async (req, res) => {
+  const user = req.user!
+  const { projectId, lotId } = req.query
 
-    if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId query parameter is required'
-      })
-    }
+  if (!projectId) {
+    throw AppError.badRequest('projectId query parameter is required')
+  }
 
-    // Verify user has access to the project
-    const projectAccess = await prisma.projectUser.findFirst({
-      where: {
-        projectId: projectId as string,
-        userId: user.id,
-        status: 'active',
-      },
+  // Verify user has access to the project
+  const projectAccess = await prisma.projectUser.findFirst({
+    where: {
+      projectId: projectId as string,
+      userId: user.id,
+      status: 'active',
+    },
+  })
+
+  const projectCompanyAccess = await prisma.project.findFirst({
+    where: {
+      id: projectId as string,
+      companyId: user.companyId || undefined,
+    },
+  })
+
+  if (!projectAccess && !projectCompanyAccess) {
+    throw AppError.forbidden('You do not have access to this project')
+  }
+
+  // Build where clause
+  const whereClause: any = { projectId: projectId as string }
+
+  // Filter by lot if provided
+  if (lotId) {
+    whereClause.lotId = lotId as string
+  }
+
+  // Subcontractors can only see test results on their assigned lots
+  if (user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin') {
+    const subcontractorUser = await prisma.subcontractorUser.findFirst({
+      where: { userId: user.id },
+      include: { subcontractorCompany: true }
     })
 
-    const projectCompanyAccess = await prisma.project.findFirst({
-      where: {
-        id: projectId as string,
-        companyId: user.companyId || undefined,
-      },
-    })
+    if (subcontractorUser) {
+      const subCompanyId = subcontractorUser.subcontractorCompanyId
 
-    if (!projectAccess && !projectCompanyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this project'
+      // Get lots assigned via LotSubcontractorAssignment
+      const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
+        where: {
+          subcontractorCompanyId: subCompanyId,
+          status: 'active',
+          projectId: projectId as string,
+        },
+        select: { lotId: true }
       })
-    }
+      const assignedLotIds = lotAssignments.map(a => a.lotId)
 
-    // Build where clause
-    const whereClause: any = { projectId: projectId as string }
-
-    // Filter by lot if provided
-    if (lotId) {
-      whereClause.lotId = lotId as string
-    }
-
-    // Subcontractors can only see test results on their assigned lots
-    if (user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin') {
-      const subcontractorUser = await prisma.subcontractorUser.findFirst({
-        where: { userId: user.id },
-        include: { subcontractorCompany: true }
+      // Get lots assigned via legacy field
+      const legacyLots = await prisma.lot.findMany({
+        where: {
+          projectId: projectId as string,
+          assignedSubcontractorId: subCompanyId,
+        },
+        select: { id: true }
       })
+      const legacyLotIds = legacyLots.map(l => l.id)
 
-      if (subcontractorUser) {
-        const subCompanyId = subcontractorUser.subcontractorCompanyId
+      // Combine both sets of lot IDs
+      const allAssignedLotIds = [...new Set([...assignedLotIds, ...legacyLotIds])]
 
-        // Get lots assigned via LotSubcontractorAssignment
-        const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
-          where: {
-            subcontractorCompanyId: subCompanyId,
-            status: 'active',
-            projectId: projectId as string,
-          },
-          select: { lotId: true }
-        })
-        const assignedLotIds = lotAssignments.map(a => a.lotId)
-
-        // Get lots assigned via legacy field
-        const legacyLots = await prisma.lot.findMany({
-          where: {
-            projectId: projectId as string,
-            assignedSubcontractorId: subCompanyId,
-          },
-          select: { id: true }
-        })
-        const legacyLotIds = legacyLots.map(l => l.id)
-
-        // Combine both sets of lot IDs
-        const allAssignedLotIds = [...new Set([...assignedLotIds, ...legacyLotIds])]
-
-        if (allAssignedLotIds.length === 0) {
-          return res.json({ testResults: [] })
-        }
-
-        whereClause.lotId = { in: allAssignedLotIds }
-      } else {
+      if (allAssignedLotIds.length === 0) {
         return res.json({ testResults: [] })
       }
+
+      whereClause.lotId = { in: allAssignedLotIds }
+    } else {
+      return res.json({ testResults: [] })
     }
-
-    const pagination = parsePagination(req.query)
-    const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit)
-
-    const [testResults, total] = await Promise.all([
-      prisma.testResult.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          testType: true,
-          testRequestNumber: true,
-          laboratoryName: true,
-          laboratoryReportNumber: true,
-          sampleDate: true,
-          sampleLocation: true,
-          testDate: true,
-          resultDate: true,
-          resultValue: true,
-          resultUnit: true,
-          specificationMin: true,
-          specificationMax: true,
-          passFail: true,
-          status: true,
-          lotId: true,
-          lot: {
-            select: {
-              id: true,
-              lotNumber: true,
-            }
-          },
-          aiExtracted: true,  // Feature #200
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take,
-      }),
-      prisma.testResult.count({ where: whereClause }),
-    ])
-
-    res.json({
-      testResults,
-      pagination: getPaginationMeta(total, pagination.page, pagination.limit),
-    })
-  } catch (error) {
-    console.error('Get test results error:', error)
-    res.status(500).json({ error: 'Internal server error' })
   }
-})
 
-// GET /api/test-results/:id - Get a single test result
-testResultsRouter.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+  const pagination = parsePagination(req.query)
+  const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit)
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-      include: {
-        lot: {
-          select: {
-            id: true,
-            lotNumber: true,
-            description: true,
-          }
-        },
-        enteredBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          }
-        },
-        verifiedBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          }
-        },
-      },
-    })
-
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
-
-    // Verify user has access to the project
-    const projectAccess = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const projectCompanyAccess = await prisma.project.findFirst({
-      where: {
-        id: testResult.projectId,
-        companyId: user.companyId || undefined,
-      },
-    })
-
-    if (!projectAccess && !projectCompanyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this test result'
-      })
-    }
-
-    res.json({ testResult })
-  } catch (error) {
-    console.error('Get test result error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
-// POST /api/test-results - Create a new test result
-testResultsRouter.post('/', async (req, res) => {
-  try {
-    const user = req.user!
-    const {
-      projectId,
-      lotId,
-      testType,
-      testRequestNumber,
-      laboratoryName,
-      laboratoryReportNumber,
-      sampleDate,
-      sampleLocation,
-      testDate,
-      resultDate,
-      resultValue,
-      resultUnit,
-      specificationMin,
-      specificationMax,
-      passFail,
-    } = req.body
-
-    if (!projectId || !testType) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId and testType are required'
-      })
-    }
-
-    // Verify user has access and permission
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const userProjectRole = projectUser?.role || user.roleInCompany
-
-    if (!TEST_CREATORS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to create test results'
-      })
-    }
-
-    // If lotId is provided, verify lot exists and belongs to project
-    if (lotId) {
-      const lot = await prisma.lot.findFirst({
-        where: {
-          id: lotId,
-          projectId,
-        },
-      })
-
-      if (!lot) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Lot not found or does not belong to this project'
-        })
-      }
-    }
-
-    const testResult = await prisma.testResult.create({
-      data: {
-        projectId,
-        lotId: lotId || null,
-        testType,
-        testRequestNumber,
-        laboratoryName,
-        laboratoryReportNumber,
-        sampleDate: sampleDate ? new Date(sampleDate) : null,
-        sampleLocation,
-        testDate: testDate ? new Date(testDate) : null,
-        resultDate: resultDate ? new Date(resultDate) : null,
-        resultValue: resultValue ? parseFloat(resultValue) : null,
-        resultUnit,
-        specificationMin: specificationMin ? parseFloat(specificationMin) : null,
-        specificationMax: specificationMax ? parseFloat(specificationMax) : null,
-        passFail: passFail || 'pending',
-        status: 'requested', // Feature #196: Start in 'requested' status
-      },
+  const [testResults, total] = await Promise.all([
+    prisma.testResult.findMany({
+      where: whereClause,
       select: {
         id: true,
         testType: true,
         testRequestNumber: true,
+        laboratoryName: true,
+        laboratoryReportNumber: true,
+        sampleDate: true,
+        sampleLocation: true,
+        testDate: true,
+        resultDate: true,
+        resultValue: true,
+        resultUnit: true,
+        specificationMin: true,
+        specificationMax: true,
+        passFail: true,
+        status: true,
         lotId: true,
         lot: {
           select: {
@@ -566,273 +362,409 @@ testResultsRouter.post('/', async (req, res) => {
             lotNumber: true,
           }
         },
-        passFail: true,
-        status: true,
+        aiExtracted: true,  // Feature #200
         createdAt: true,
-      },
-    })
-
-    // Audit log for test result creation
-    await createAuditLog({
-      projectId,
-      userId: user.id,
-      entityType: 'test_result',
-      entityId: testResult.id,
-      action: AuditAction.TEST_RESULT_CREATED,
-      changes: { testType, lotId, passFail },
-      req
-    })
-
-    res.status(201).json({ testResult })
-  } catch (error) {
-    console.error('Create test result error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
-// PATCH /api/test-results/:id - Update a test result
-testResultsRouter.patch('/:id', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
-
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-    })
-
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
-
-    // Verify user has access and permission
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const userProjectRole = projectUser?.role || user.roleInCompany
-
-    if (!TEST_CREATORS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to edit test results'
-      })
-    }
-
-    const {
-      lotId,
-      testType,
-      testRequestNumber,
-      laboratoryName,
-      laboratoryReportNumber,
-      sampleDate,
-      sampleLocation,
-      testDate,
-      resultDate,
-      resultValue,
-      resultUnit,
-      specificationMin,
-      specificationMax,
-      passFail,
-    } = req.body
-
-    // Build update data
-    const updateData: any = {}
-    if (lotId !== undefined) updateData.lotId = lotId || null
-    if (testType !== undefined) updateData.testType = testType
-    if (testRequestNumber !== undefined) updateData.testRequestNumber = testRequestNumber
-    if (laboratoryName !== undefined) updateData.laboratoryName = laboratoryName
-    if (laboratoryReportNumber !== undefined) updateData.laboratoryReportNumber = laboratoryReportNumber
-    if (sampleDate !== undefined) updateData.sampleDate = sampleDate ? new Date(sampleDate) : null
-    if (sampleLocation !== undefined) updateData.sampleLocation = sampleLocation
-    if (testDate !== undefined) updateData.testDate = testDate ? new Date(testDate) : null
-    if (resultDate !== undefined) updateData.resultDate = resultDate ? new Date(resultDate) : null
-    if (resultValue !== undefined) updateData.resultValue = resultValue ? parseFloat(resultValue) : null
-    if (resultUnit !== undefined) updateData.resultUnit = resultUnit
-    if (specificationMin !== undefined) updateData.specificationMin = specificationMin ? parseFloat(specificationMin) : null
-    if (specificationMax !== undefined) updateData.specificationMax = specificationMax ? parseFloat(specificationMax) : null
-    if (passFail !== undefined) updateData.passFail = passFail
-
-    const updatedTestResult = await prisma.testResult.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        testType: true,
-        testRequestNumber: true,
-        lotId: true,
-        lot: {
-          select: {
-            id: true,
-            lotNumber: true,
-          }
-        },
-        passFail: true,
-        status: true,
         updatedAt: true,
       },
-    })
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+    }),
+    prisma.testResult.count({ where: whereClause }),
+  ])
 
-    // Audit log for test result update
-    await createAuditLog({
+  res.json({
+    testResults,
+    pagination: getPaginationMeta(total, pagination.page, pagination.limit),
+  })
+}))
+
+// GET /api/test-results/:id - Get a single test result
+testResultsRouter.get('/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
+
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+    include: {
+      lot: {
+        select: {
+          id: true,
+          lotNumber: true,
+          description: true,
+        }
+      },
+      enteredBy: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        }
+      },
+      verifiedBy: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        }
+      },
+    },
+  })
+
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
+
+  // Verify user has access to the project
+  const projectAccess = await prisma.projectUser.findFirst({
+    where: {
       projectId: testResult.projectId,
       userId: user.id,
-      entityType: 'test_result',
-      entityId: id,
-      action: AuditAction.TEST_RESULT_UPDATED,
-      changes: updateData,
-      req
+      status: 'active',
+    },
+  })
+
+  const projectCompanyAccess = await prisma.project.findFirst({
+    where: {
+      id: testResult.projectId,
+      companyId: user.companyId || undefined,
+    },
+  })
+
+  if (!projectAccess && !projectCompanyAccess) {
+    throw AppError.forbidden('You do not have access to this test result')
+  }
+
+  res.json({ testResult })
+}))
+
+// POST /api/test-results - Create a new test result
+testResultsRouter.post('/', asyncHandler(async (req, res) => {
+  const user = req.user!
+  const {
+    projectId,
+    lotId,
+    testType,
+    testRequestNumber,
+    laboratoryName,
+    laboratoryReportNumber,
+    sampleDate,
+    sampleLocation,
+    testDate,
+    resultDate,
+    resultValue,
+    resultUnit,
+    specificationMin,
+    specificationMax,
+    passFail,
+  } = req.body
+
+  if (!projectId || !testType) {
+    throw AppError.badRequest('projectId and testType are required')
+  }
+
+  // Verify user has access and permission
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
+      projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
+
+  const userProjectRole = projectUser?.role || user.roleInCompany
+
+  if (!TEST_CREATORS.includes(userProjectRole)) {
+    throw AppError.forbidden('You do not have permission to create test results')
+  }
+
+  // If lotId is provided, verify lot exists and belongs to project
+  if (lotId) {
+    const lot = await prisma.lot.findFirst({
+      where: {
+        id: lotId,
+        projectId,
+      },
     })
 
-    res.json({ testResult: updatedTestResult })
-  } catch (error) {
-    console.error('Update test result error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+    if (!lot) {
+      throw AppError.badRequest('Lot not found or does not belong to this project')
+    }
   }
-})
+
+  const testResult = await prisma.testResult.create({
+    data: {
+      projectId,
+      lotId: lotId || null,
+      testType,
+      testRequestNumber,
+      laboratoryName,
+      laboratoryReportNumber,
+      sampleDate: sampleDate ? new Date(sampleDate) : null,
+      sampleLocation,
+      testDate: testDate ? new Date(testDate) : null,
+      resultDate: resultDate ? new Date(resultDate) : null,
+      resultValue: resultValue ? parseFloat(resultValue) : null,
+      resultUnit,
+      specificationMin: specificationMin ? parseFloat(specificationMin) : null,
+      specificationMax: specificationMax ? parseFloat(specificationMax) : null,
+      passFail: passFail || 'pending',
+      status: 'requested', // Feature #196: Start in 'requested' status
+    },
+    select: {
+      id: true,
+      testType: true,
+      testRequestNumber: true,
+      lotId: true,
+      lot: {
+        select: {
+          id: true,
+          lotNumber: true,
+        }
+      },
+      passFail: true,
+      status: true,
+      createdAt: true,
+    },
+  })
+
+  // Audit log for test result creation
+  await createAuditLog({
+    projectId,
+    userId: user.id,
+    entityType: 'test_result',
+    entityId: testResult.id,
+    action: AuditAction.TEST_RESULT_CREATED,
+    changes: { testType, lotId, passFail },
+    req
+  })
+
+  res.status(201).json({ testResult })
+}))
+
+// PATCH /api/test-results/:id - Update a test result
+testResultsRouter.patch('/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
+
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+  })
+
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
+
+  // Verify user has access and permission
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
+      projectId: testResult.projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
+
+  const userProjectRole = projectUser?.role || user.roleInCompany
+
+  if (!TEST_CREATORS.includes(userProjectRole)) {
+    throw AppError.forbidden('You do not have permission to edit test results')
+  }
+
+  const {
+    lotId,
+    testType,
+    testRequestNumber,
+    laboratoryName,
+    laboratoryReportNumber,
+    sampleDate,
+    sampleLocation,
+    testDate,
+    resultDate,
+    resultValue,
+    resultUnit,
+    specificationMin,
+    specificationMax,
+    passFail,
+  } = req.body
+
+  // Build update data
+  const updateData: any = {}
+  if (lotId !== undefined) updateData.lotId = lotId || null
+  if (testType !== undefined) updateData.testType = testType
+  if (testRequestNumber !== undefined) updateData.testRequestNumber = testRequestNumber
+  if (laboratoryName !== undefined) updateData.laboratoryName = laboratoryName
+  if (laboratoryReportNumber !== undefined) updateData.laboratoryReportNumber = laboratoryReportNumber
+  if (sampleDate !== undefined) updateData.sampleDate = sampleDate ? new Date(sampleDate) : null
+  if (sampleLocation !== undefined) updateData.sampleLocation = sampleLocation
+  if (testDate !== undefined) updateData.testDate = testDate ? new Date(testDate) : null
+  if (resultDate !== undefined) updateData.resultDate = resultDate ? new Date(resultDate) : null
+  if (resultValue !== undefined) updateData.resultValue = resultValue ? parseFloat(resultValue) : null
+  if (resultUnit !== undefined) updateData.resultUnit = resultUnit
+  if (specificationMin !== undefined) updateData.specificationMin = specificationMin ? parseFloat(specificationMin) : null
+  if (specificationMax !== undefined) updateData.specificationMax = specificationMax ? parseFloat(specificationMax) : null
+  if (passFail !== undefined) updateData.passFail = passFail
+
+  const updatedTestResult = await prisma.testResult.update({
+    where: { id },
+    data: updateData,
+    select: {
+      id: true,
+      testType: true,
+      testRequestNumber: true,
+      lotId: true,
+      lot: {
+        select: {
+          id: true,
+          lotNumber: true,
+        }
+      },
+      passFail: true,
+      status: true,
+      updatedAt: true,
+    },
+  })
+
+  // Audit log for test result update
+  await createAuditLog({
+    projectId: testResult.projectId,
+    userId: user.id,
+    entityType: 'test_result',
+    entityId: id,
+    action: AuditAction.TEST_RESULT_UPDATED,
+    changes: updateData,
+    req
+  })
+
+  res.json({ testResult: updatedTestResult })
+}))
 
 // DELETE /api/test-results/:id - Delete a test result
-testResultsRouter.delete('/:id', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+testResultsRouter.delete('/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-    })
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+  })
 
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
 
-    // Verify user has access and permission (only higher roles can delete)
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const userProjectRole = projectUser?.role || user.roleInCompany
-
-    if (!['owner', 'admin', 'project_manager', 'quality_manager'].includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to delete test results'
-      })
-    }
-
-    // Audit log for test result deletion (before deleting the record)
-    await createAuditLog({
+  // Verify user has access and permission (only higher roles can delete)
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
       projectId: testResult.projectId,
       userId: user.id,
-      entityType: 'test_result',
-      entityId: id,
-      action: AuditAction.TEST_RESULT_DELETED,
-      changes: { testType: testResult.testType, lotId: testResult.lotId },
-      req
-    })
+      status: 'active',
+    },
+  })
 
-    await prisma.testResult.delete({
-      where: { id },
-    })
+  const userProjectRole = projectUser?.role || user.roleInCompany
 
-    res.json({ message: 'Test result deleted successfully' })
-  } catch (error) {
-    console.error('Delete test result error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+  if (!['owner', 'admin', 'project_manager', 'quality_manager'].includes(userProjectRole)) {
+    throw AppError.forbidden('You do not have permission to delete test results')
   }
-})
+
+  // Audit log for test result deletion (before deleting the record)
+  await createAuditLog({
+    projectId: testResult.projectId,
+    userId: user.id,
+    entityType: 'test_result',
+    entityId: id,
+    action: AuditAction.TEST_RESULT_DELETED,
+    changes: { testType: testResult.testType, lotId: testResult.lotId },
+    req
+  })
+
+  await prisma.testResult.delete({
+    where: { id },
+  })
+
+  res.json({ message: 'Test result deleted successfully' })
+}))
 
 // GET /api/test-results/:id/request-form - Generate printable test request form for lab
-testResultsRouter.get('/:id/request-form', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+testResultsRouter.get('/:id/request-form', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-            projectNumber: true,
-            clientName: true,
-            company: {
-              select: {
-                name: true,
-                abn: true,
-                address: true,
-                logoUrl: true,
-              }
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+    include: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          projectNumber: true,
+          clientName: true,
+          company: {
+            select: {
+              name: true,
+              abn: true,
+              address: true,
+              logoUrl: true,
             }
           }
-        },
-        lot: {
-          select: {
-            id: true,
-            lotNumber: true,
-            description: true,
-            chainageStart: true,
-            chainageEnd: true,
-            layer: true,
-            activityType: true,
-          }
-        },
-        enteredBy: {
-          select: {
-            fullName: true,
-            email: true,
-            phone: true,
-          }
-        },
+        }
       },
-    })
-
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
-
-    // Verify user has access to the project
-    const projectAccess = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
+      lot: {
+        select: {
+          id: true,
+          lotNumber: true,
+          description: true,
+          chainageStart: true,
+          chainageEnd: true,
+          layer: true,
+          activityType: true,
+        }
       },
-    })
-
-    const projectCompanyAccess = await prisma.project.findFirst({
-      where: {
-        id: testResult.projectId,
-        companyId: user.companyId || undefined,
+      enteredBy: {
+        select: {
+          fullName: true,
+          email: true,
+          phone: true,
+        }
       },
+    },
+  })
+
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
+
+  // Verify user has access to the project
+  const projectAccess = await prisma.projectUser.findFirst({
+    where: {
+      projectId: testResult.projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
+
+  const projectCompanyAccess = await prisma.project.findFirst({
+    where: {
+      id: testResult.projectId,
+      companyId: user.companyId || undefined,
+    },
+  })
+
+  if (!projectAccess && !projectCompanyAccess) {
+    throw AppError.forbidden('You do not have access to this test result')
+  }
+
+  // Format dates for display
+  const formatDate = (date: Date | null) => {
+    if (!date) return 'N/A'
+    return new Date(date).toLocaleDateString('en-AU', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
     })
+  }
 
-    if (!projectAccess && !projectCompanyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this test result'
-      })
-    }
-
-    // Format dates for display
-    const formatDate = (date: Date | null) => {
-      if (!date) return 'N/A'
-      return new Date(date).toLocaleDateString('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      })
-    }
-
-    // Generate HTML for printable form
-    const formHtml = `
+  // Generate HTML for printable form
+  const formHtml = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1101,473 +1033,435 @@ testResultsRouter.get('/:id/request-form', async (req, res) => {
 </html>
 `
 
-    // Return the HTML form or JSON metadata
-    const format = req.query.format || 'html'
+  // Return the HTML form or JSON metadata
+  const format = req.query.format || 'html'
 
-    if (format === 'json') {
-      // Return JSON metadata for the request form
-      res.json({
-        testRequestForm: {
-          requestNumber: testResult.testRequestNumber || 'TRF-' + testResult.id.substring(0, 8).toUpperCase(),
-          project: {
-            name: testResult.project.name,
-            number: testResult.project.projectNumber,
-            client: testResult.project.clientName,
-            company: testResult.project.company?.name
-          },
-          lot: testResult.lot ? {
-            number: testResult.lot.lotNumber,
-            description: testResult.lot.description,
-            activityType: testResult.lot.activityType,
-            chainageStart: testResult.lot.chainageStart,
-            chainageEnd: testResult.lot.chainageEnd,
-            layer: testResult.lot.layer
-          } : null,
-          testDetails: {
-            type: testResult.testType,
-            laboratory: testResult.laboratoryName,
-            sampleDate: testResult.sampleDate,
-            sampleLocation: testResult.sampleLocation
-          },
-          specifications: {
-            min: testResult.specificationMin,
-            max: testResult.specificationMax,
-            unit: testResult.resultUnit
-          },
-          requestedBy: testResult.enteredBy,
-          createdAt: testResult.createdAt
-        }
-      })
-    } else {
-      // Return HTML for printing
-      res.setHeader('Content-Type', 'text/html')
-      res.send(formHtml)
-    }
-  } catch (error) {
-    console.error('Generate test request form error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
-// GET /api/test-results/:id/verification-view - Get side-by-side verification view data
-testResultsRouter.get('/:id/verification-view', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
-
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-            projectNumber: true,
-            specificationSet: true,
-          }
-        },
-        lot: {
-          select: {
-            id: true,
-            lotNumber: true,
-            description: true,
-            activityType: true,
-            chainageStart: true,
-            chainageEnd: true,
-            layer: true,
-          }
-        },
-        enteredBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          }
-        },
-        verifiedBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          }
-        },
-        certificateDoc: {
-          select: {
-            id: true,
-            filename: true,
-            fileUrl: true,
-            mimeType: true,
-            uploadedAt: true,
-          }
-        },
-      },
-    })
-
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
-
-    // Verify user has access to the project
-    const projectAccess = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const projectCompanyAccess = await prisma.project.findFirst({
-      where: {
-        id: testResult.projectId,
-        companyId: user.companyId || undefined,
-      },
-    })
-
-    if (!projectAccess && !projectCompanyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this test result'
-      })
-    }
-
-    // Determine if result passes or fails specification
-    let specificationStatus = 'unknown'
-    if (testResult.resultValue !== null) {
-      const value = Number(testResult.resultValue)
-      const min = testResult.specificationMin !== null ? Number(testResult.specificationMin) : null
-      const max = testResult.specificationMax !== null ? Number(testResult.specificationMax) : null
-
-      if (min !== null && max !== null) {
-        specificationStatus = value >= min && value <= max ? 'pass' : 'fail'
-      } else if (min !== null) {
-        specificationStatus = value >= min ? 'pass' : 'fail'
-      } else if (max !== null) {
-        specificationStatus = value <= max ? 'pass' : 'fail'
-      }
-    }
-
-    // Get specification reference for this test type if available
-    const normalizedType = testResult.testType.toLowerCase().replace(/\s+/g, '_')
-    const standardSpec = testTypeSpecifications[normalizedType]
-
-    // Format the response for side-by-side view
+  if (format === 'json') {
+    // Return JSON metadata for the request form
     res.json({
-      verificationView: {
-        // Left side: Document/Certificate info
-        document: testResult.certificateDoc ? {
-          id: testResult.certificateDoc.id,
-          filename: testResult.certificateDoc.filename,
-          fileUrl: testResult.certificateDoc.fileUrl,
-          mimeType: testResult.certificateDoc.mimeType,
-          uploadedAt: testResult.certificateDoc.uploadedAt,
-          isPdf: testResult.certificateDoc.mimeType === 'application/pdf',
-        } : null,
-
-        // Right side: Extracted/Entered data
-        extractedData: {
-          testType: testResult.testType,
-          testRequestNumber: testResult.testRequestNumber,
-          laboratoryName: testResult.laboratoryName,
-          laboratoryReportNumber: testResult.laboratoryReportNumber,
-          sampleDate: testResult.sampleDate,
-          sampleLocation: testResult.sampleLocation,
-          testDate: testResult.testDate,
-          resultDate: testResult.resultDate,
-          resultValue: testResult.resultValue,
-          resultUnit: testResult.resultUnit,
-          aiExtracted: testResult.aiExtracted,
-          aiConfidence: testResult.aiConfidence ? JSON.parse(testResult.aiConfidence as string) : null,
+      testRequestForm: {
+        requestNumber: testResult.testRequestNumber || 'TRF-' + testResult.id.substring(0, 8).toUpperCase(),
+        project: {
+          name: testResult.project.name,
+          number: testResult.project.projectNumber,
+          client: testResult.project.clientName,
+          company: testResult.project.company?.name
         },
-
-        // Confidence highlighting for AI-extracted fields
-        confidenceHighlights: (() => {
-          if (!testResult.aiExtracted || !testResult.aiConfidence) {
-            return { hasLowConfidence: false, lowConfidenceFields: [], fieldStatus: {} }
-          }
-
-          const confidence = JSON.parse(testResult.aiConfidence as string)
-          const LOW_CONFIDENCE_THRESHOLD = 0.80 // Fields below 80% get highlighted
-          const MEDIUM_CONFIDENCE_THRESHOLD = 0.90 // Fields below 90% get warning
-
-          const fieldStatus: Record<string, { confidence: number; status: 'high' | 'medium' | 'low'; needsReview: boolean }> = {}
-          const lowConfidenceFields: string[] = []
-
-          for (const [field, conf] of Object.entries(confidence)) {
-            const confValue = conf as number
-            let status: 'high' | 'medium' | 'low' = 'high'
-            let needsReview = false
-
-            if (confValue < LOW_CONFIDENCE_THRESHOLD) {
-              status = 'low'
-              needsReview = true
-              lowConfidenceFields.push(field)
-            } else if (confValue < MEDIUM_CONFIDENCE_THRESHOLD) {
-              status = 'medium'
-              needsReview = false
-            }
-
-            fieldStatus[field] = { confidence: confValue, status, needsReview }
-          }
-
-          return {
-            hasLowConfidence: lowConfidenceFields.length > 0,
-            lowConfidenceFields,
-            fieldStatus,
-            thresholds: {
-              low: LOW_CONFIDENCE_THRESHOLD,
-              medium: MEDIUM_CONFIDENCE_THRESHOLD
-            },
-            reviewMessage: lowConfidenceFields.length > 0
-              ? `${lowConfidenceFields.length} field(s) have low AI confidence and require manual verification: ${lowConfidenceFields.join(', ')}`
-              : 'All AI-extracted fields have acceptable confidence levels'
-          }
-        })(),
-
-        // Specification comparison
-        specification: {
+        lot: testResult.lot ? {
+          number: testResult.lot.lotNumber,
+          description: testResult.lot.description,
+          activityType: testResult.lot.activityType,
+          chainageStart: testResult.lot.chainageStart,
+          chainageEnd: testResult.lot.chainageEnd,
+          layer: testResult.lot.layer
+        } : null,
+        testDetails: {
+          type: testResult.testType,
+          laboratory: testResult.laboratoryName,
+          sampleDate: testResult.sampleDate,
+          sampleLocation: testResult.sampleLocation
+        },
+        specifications: {
           min: testResult.specificationMin,
           max: testResult.specificationMax,
-          unit: testResult.resultUnit,
-          currentStatus: testResult.passFail,
-          calculatedStatus: specificationStatus,
-          standardReference: standardSpec?.specReference || null,
+          unit: testResult.resultUnit
         },
-
-        // Metadata
-        metadata: {
-          id: testResult.id,
-          status: testResult.status,
-          project: testResult.project,
-          lot: testResult.lot,
-          enteredBy: testResult.enteredBy,
-          enteredAt: testResult.enteredAt,
-          verifiedBy: testResult.verifiedBy,
-          verifiedAt: testResult.verifiedAt,
-          createdAt: testResult.createdAt,
-          updatedAt: testResult.updatedAt,
-        },
-
-        // User permissions
-        canVerify: TEST_VERIFIERS.includes(projectAccess?.role || user.roleInCompany),
-        needsVerification: testResult.status !== 'verified',
+        requestedBy: testResult.enteredBy,
+        createdAt: testResult.createdAt
       }
     })
-  } catch (error) {
-    console.error('Get verification view error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+  } else {
+    // Return HTML for printing
+    res.setHeader('Content-Type', 'text/html')
+    res.send(formHtml)
   }
-})
+}))
+
+// GET /api/test-results/:id/verification-view - Get side-by-side verification view data
+testResultsRouter.get('/:id/verification-view', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
+
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+    include: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          projectNumber: true,
+          specificationSet: true,
+        }
+      },
+      lot: {
+        select: {
+          id: true,
+          lotNumber: true,
+          description: true,
+          activityType: true,
+          chainageStart: true,
+          chainageEnd: true,
+          layer: true,
+        }
+      },
+      enteredBy: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        }
+      },
+      verifiedBy: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        }
+      },
+      certificateDoc: {
+        select: {
+          id: true,
+          filename: true,
+          fileUrl: true,
+          mimeType: true,
+          uploadedAt: true,
+        }
+      },
+    },
+  })
+
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
+
+  // Verify user has access to the project
+  const projectAccess = await prisma.projectUser.findFirst({
+    where: {
+      projectId: testResult.projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
+
+  const projectCompanyAccess = await prisma.project.findFirst({
+    where: {
+      id: testResult.projectId,
+      companyId: user.companyId || undefined,
+    },
+  })
+
+  if (!projectAccess && !projectCompanyAccess) {
+    throw AppError.forbidden('You do not have access to this test result')
+  }
+
+  // Determine if result passes or fails specification
+  let specificationStatus = 'unknown'
+  if (testResult.resultValue !== null) {
+    const value = Number(testResult.resultValue)
+    const min = testResult.specificationMin !== null ? Number(testResult.specificationMin) : null
+    const max = testResult.specificationMax !== null ? Number(testResult.specificationMax) : null
+
+    if (min !== null && max !== null) {
+      specificationStatus = value >= min && value <= max ? 'pass' : 'fail'
+    } else if (min !== null) {
+      specificationStatus = value >= min ? 'pass' : 'fail'
+    } else if (max !== null) {
+      specificationStatus = value <= max ? 'pass' : 'fail'
+    }
+  }
+
+  // Get specification reference for this test type if available
+  const normalizedType = testResult.testType.toLowerCase().replace(/\s+/g, '_')
+  const standardSpec = testTypeSpecifications[normalizedType]
+
+  // Format the response for side-by-side view
+  res.json({
+    verificationView: {
+      // Left side: Document/Certificate info
+      document: testResult.certificateDoc ? {
+        id: testResult.certificateDoc.id,
+        filename: testResult.certificateDoc.filename,
+        fileUrl: testResult.certificateDoc.fileUrl,
+        mimeType: testResult.certificateDoc.mimeType,
+        uploadedAt: testResult.certificateDoc.uploadedAt,
+        isPdf: testResult.certificateDoc.mimeType === 'application/pdf',
+      } : null,
+
+      // Right side: Extracted/Entered data
+      extractedData: {
+        testType: testResult.testType,
+        testRequestNumber: testResult.testRequestNumber,
+        laboratoryName: testResult.laboratoryName,
+        laboratoryReportNumber: testResult.laboratoryReportNumber,
+        sampleDate: testResult.sampleDate,
+        sampleLocation: testResult.sampleLocation,
+        testDate: testResult.testDate,
+        resultDate: testResult.resultDate,
+        resultValue: testResult.resultValue,
+        resultUnit: testResult.resultUnit,
+        aiExtracted: testResult.aiExtracted,
+        aiConfidence: testResult.aiConfidence ? JSON.parse(testResult.aiConfidence as string) : null,
+      },
+
+      // Confidence highlighting for AI-extracted fields
+      confidenceHighlights: (() => {
+        if (!testResult.aiExtracted || !testResult.aiConfidence) {
+          return { hasLowConfidence: false, lowConfidenceFields: [], fieldStatus: {} }
+        }
+
+        const confidence = JSON.parse(testResult.aiConfidence as string)
+        const LOW_CONFIDENCE_THRESHOLD = 0.80 // Fields below 80% get highlighted
+        const MEDIUM_CONFIDENCE_THRESHOLD = 0.90 // Fields below 90% get warning
+
+        const fieldStatus: Record<string, { confidence: number; status: 'high' | 'medium' | 'low'; needsReview: boolean }> = {}
+        const lowConfidenceFields: string[] = []
+
+        for (const [field, conf] of Object.entries(confidence)) {
+          const confValue = conf as number
+          let status: 'high' | 'medium' | 'low' = 'high'
+          let needsReview = false
+
+          if (confValue < LOW_CONFIDENCE_THRESHOLD) {
+            status = 'low'
+            needsReview = true
+            lowConfidenceFields.push(field)
+          } else if (confValue < MEDIUM_CONFIDENCE_THRESHOLD) {
+            status = 'medium'
+            needsReview = false
+          }
+
+          fieldStatus[field] = { confidence: confValue, status, needsReview }
+        }
+
+        return {
+          hasLowConfidence: lowConfidenceFields.length > 0,
+          lowConfidenceFields,
+          fieldStatus,
+          thresholds: {
+            low: LOW_CONFIDENCE_THRESHOLD,
+            medium: MEDIUM_CONFIDENCE_THRESHOLD
+          },
+          reviewMessage: lowConfidenceFields.length > 0
+            ? `${lowConfidenceFields.length} field(s) have low AI confidence and require manual verification: ${lowConfidenceFields.join(', ')}`
+            : 'All AI-extracted fields have acceptable confidence levels'
+        }
+      })(),
+
+      // Specification comparison
+      specification: {
+        min: testResult.specificationMin,
+        max: testResult.specificationMax,
+        unit: testResult.resultUnit,
+        currentStatus: testResult.passFail,
+        calculatedStatus: specificationStatus,
+        standardReference: standardSpec?.specReference || null,
+      },
+
+      // Metadata
+      metadata: {
+        id: testResult.id,
+        status: testResult.status,
+        project: testResult.project,
+        lot: testResult.lot,
+        enteredBy: testResult.enteredBy,
+        enteredAt: testResult.enteredAt,
+        verifiedBy: testResult.verifiedBy,
+        verifiedAt: testResult.verifiedAt,
+        createdAt: testResult.createdAt,
+        updatedAt: testResult.updatedAt,
+      },
+
+      // User permissions
+      canVerify: TEST_VERIFIERS.includes(projectAccess?.role || user.roleInCompany),
+      needsVerification: testResult.status !== 'verified',
+    }
+  })
+}))
 
 // POST /api/test-results/:id/reject - Reject a test result verification (Feature #204)
-testResultsRouter.post('/:id/reject', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
-    const { reason } = req.body
+testResultsRouter.post('/:id/reject', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
+  const { reason } = req.body
 
-    if (!reason || reason.trim().length === 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Rejection reason is required'
-      })
-    }
+  if (!reason || reason.trim().length === 0) {
+    throw AppError.badRequest('Rejection reason is required')
+  }
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-      include: {
-        enteredBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          }
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+    include: {
+      enteredBy: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
         }
       }
-    })
-
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
     }
+  })
 
-    // Verify user has permission to reject (same as verify)
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
 
-    const userProjectRole = projectUser?.role || user.roleInCompany
-
-    if (!TEST_VERIFIERS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to reject test results'
-      })
-    }
-
-    // Can only reject tests that are in 'entered' status (pending verification)
-    if (testResult.status !== 'entered') {
-      return res.status(400).json({
-        error: 'Invalid Status',
-        message: `Cannot reject a test result with status '${testResult.status}'. Only tests in 'Entered' status can be rejected.`
-      })
-    }
-
-    // Reset status back to 'results_received' so engineer can re-enter
-    const updatedTestResult = await prisma.testResult.update({
-      where: { id },
-      data: {
-        status: 'results_received',
-        rejectedById: user.id,
-        rejectedAt: new Date(),
-        rejectionReason: reason.trim(),
-        // Clear verification fields
-        verifiedById: null,
-        verifiedAt: null,
-        // Clear entered fields so engineer can re-enter
-        enteredById: null,
-        enteredAt: null,
-      },
-      select: {
-        id: true,
-        testType: true,
-        status: true,
-        rejectedAt: true,
-        rejectionReason: true,
-        rejectedBy: {
-          select: {
-            fullName: true,
-            email: true,
-          }
-        },
-        enteredBy: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          }
-        },
-      },
-    })
-
-    // In a real app, we would send a notification to the engineer here
-    // For now, we'll just include the engineer info in the response
-    const engineerNotified = testResult.enteredBy ? {
-      userId: testResult.enteredBy.id,
-      name: testResult.enteredBy.fullName,
-      email: testResult.enteredBy.email,
-      message: `Your test result "${testResult.testType}" was rejected. Reason: ${reason.trim()}`
-    } : null
-
-    // Audit log for test result rejection
-    await createAuditLog({
+  // Verify user has permission to reject (same as verify)
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
       projectId: testResult.projectId,
       userId: user.id,
-      entityType: 'test_result',
-      entityId: id,
-      action: AuditAction.TEST_RESULT_REJECTED,
-      changes: { reason: reason.trim(), previousStatus: testResult.status },
-      req
-    })
+      status: 'active',
+    },
+  })
 
-    res.json({
-      message: 'Test result rejected',
-      testResult: updatedTestResult,
-      notification: {
-        sent: engineerNotified !== null,
-        recipient: engineerNotified
-      }
-    })
-  } catch (error) {
-    console.error('Reject test result error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+  const userProjectRole = projectUser?.role || user.roleInCompany
+
+  if (!TEST_VERIFIERS.includes(userProjectRole)) {
+    throw AppError.forbidden('You do not have permission to reject test results')
   }
-})
+
+  // Can only reject tests that are in 'entered' status (pending verification)
+  if (testResult.status !== 'entered') {
+    throw AppError.badRequest(`Cannot reject a test result with status '${testResult.status}'. Only tests in 'Entered' status can be rejected.`)
+  }
+
+  // Reset status back to 'results_received' so engineer can re-enter
+  const updatedTestResult = await prisma.testResult.update({
+    where: { id },
+    data: {
+      status: 'results_received',
+      rejectedById: user.id,
+      rejectedAt: new Date(),
+      rejectionReason: reason.trim(),
+      // Clear verification fields
+      verifiedById: null,
+      verifiedAt: null,
+      // Clear entered fields so engineer can re-enter
+      enteredById: null,
+      enteredAt: null,
+    },
+    select: {
+      id: true,
+      testType: true,
+      status: true,
+      rejectedAt: true,
+      rejectionReason: true,
+      rejectedBy: {
+        select: {
+          fullName: true,
+          email: true,
+        }
+      },
+      enteredBy: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        }
+      },
+    },
+  })
+
+  // In a real app, we would send a notification to the engineer here
+  // For now, we'll just include the engineer info in the response
+  const engineerNotified = testResult.enteredBy ? {
+    userId: testResult.enteredBy.id,
+    name: testResult.enteredBy.fullName,
+    email: testResult.enteredBy.email,
+    message: `Your test result "${testResult.testType}" was rejected. Reason: ${reason.trim()}`
+  } : null
+
+  // Audit log for test result rejection
+  await createAuditLog({
+    projectId: testResult.projectId,
+    userId: user.id,
+    entityType: 'test_result',
+    entityId: id,
+    action: AuditAction.TEST_RESULT_REJECTED,
+    changes: { reason: reason.trim(), previousStatus: testResult.status },
+    req
+  })
+
+  res.json({
+    message: 'Test result rejected',
+    testResult: updatedTestResult,
+    notification: {
+      sent: engineerNotified !== null,
+      recipient: engineerNotified
+    }
+  })
+}))
 
 // POST /api/test-results/:id/verify - Verify a test result (quality management)
-testResultsRouter.post('/:id/verify', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+testResultsRouter.post('/:id/verify', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-    })
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+  })
 
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
 
-    // Verify user has permission to verify
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const userProjectRole = projectUser?.role || user.roleInCompany
-
-    if (!TEST_VERIFIERS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to verify test results'
-      })
-    }
-
-    // Feature #883: Require certificate before verification
-    if (!testResult.certificateDocId) {
-      return res.status(400).json({
-        error: 'Certificate required',
-        message: 'A test certificate must be uploaded before the test result can be verified.',
-        code: 'CERTIFICATE_REQUIRED'
-      })
-    }
-
-    const updatedTestResult = await prisma.testResult.update({
-      where: { id },
-      data: {
-        status: 'verified',
-        verifiedById: user.id,
-        verifiedAt: new Date(),
-      },
-      select: {
-        id: true,
-        testType: true,
-        status: true,
-        verifiedAt: true,
-        verifiedBy: {
-          select: {
-            fullName: true,
-            email: true,
-          }
-        },
-      },
-    })
-
-    // Audit log for test result verification
-    await createAuditLog({
+  // Verify user has permission to verify
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
       projectId: testResult.projectId,
       userId: user.id,
-      entityType: 'test_result',
-      entityId: id,
-      action: AuditAction.TEST_RESULT_VERIFIED,
-      changes: { status: 'verified' },
-      req
-    })
+      status: 'active',
+    },
+  })
 
-    res.json({
-      message: 'Test result verified successfully',
-      testResult: updatedTestResult
-    })
-  } catch (error) {
-    console.error('Verify test result error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+  const userProjectRole = projectUser?.role || user.roleInCompany
+
+  if (!TEST_VERIFIERS.includes(userProjectRole)) {
+    throw AppError.forbidden('You do not have permission to verify test results')
   }
-})
+
+  // Feature #883: Require certificate before verification
+  if (!testResult.certificateDocId) {
+    throw new AppError(400, 'A test certificate must be uploaded before the test result can be verified.', 'CERTIFICATE_REQUIRED')
+  }
+
+  const updatedTestResult = await prisma.testResult.update({
+    where: { id },
+    data: {
+      status: 'verified',
+      verifiedById: user.id,
+      verifiedAt: new Date(),
+    },
+    select: {
+      id: true,
+      testType: true,
+      status: true,
+      verifiedAt: true,
+      verifiedBy: {
+        select: {
+          fullName: true,
+          email: true,
+        }
+      },
+    },
+  })
+
+  // Audit log for test result verification
+  await createAuditLog({
+    projectId: testResult.projectId,
+    userId: user.id,
+    entityType: 'test_result',
+    entityId: id,
+    action: AuditAction.TEST_RESULT_VERIFIED,
+    changes: { status: 'verified' },
+    req
+  })
+
+  res.json({
+    message: 'Test result verified successfully',
+    testResult: updatedTestResult
+  })
+}))
 
 // Valid status workflow transitions (Feature #196)
 // requested -> at_lab -> results_received -> entered -> verified
@@ -1589,322 +1483,296 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 // POST /api/test-results/:id/status - Update test result status (Feature #196)
-testResultsRouter.post('/:id/status', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
-    const { status } = req.body
+testResultsRouter.post('/:id/status', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
+  const { status } = req.body
 
-    if (!status) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'status is required'
-      })
-    }
+  if (!status) {
+    throw AppError.badRequest('status is required')
+  }
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-    })
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+  })
 
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
 
-    // Verify user has access and permission
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const userProjectRole = projectUser?.role || user.roleInCompany
-
-    // Verification requires higher permission
-    if (status === 'verified' && !TEST_VERIFIERS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to verify test results'
-      })
-    }
-
-    // Other status changes require creator permission
-    if (status !== 'verified' && !TEST_CREATORS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to update test result status'
-      })
-    }
-
-    // Validate the status transition
-    const currentStatus = testResult.status
-    const allowedTransitions = VALID_STATUS_TRANSITIONS[currentStatus] || []
-
-    if (!allowedTransitions.includes(status)) {
-      return res.status(400).json({
-        error: 'Invalid Status Transition',
-        message: `Cannot transition from '${STATUS_LABELS[currentStatus] || currentStatus}' to '${STATUS_LABELS[status] || status}'`,
-        currentStatus: currentStatus,
-        allowedTransitions: allowedTransitions.map(s => ({ status: s, label: STATUS_LABELS[s] || s }))
-      })
-    }
-
-    // Feature #883: Require certificate before verification
-    if (status === 'verified' && !testResult.certificateDocId) {
-      return res.status(400).json({
-        error: 'Certificate required',
-        message: 'A test certificate must be uploaded before the test result can be verified.',
-        code: 'CERTIFICATE_REQUIRED'
-      })
-    }
-
-    // Build update data based on the new status
-    const updateData: any = { status }
-
-    // If entering 'entered' status, record who entered and when
-    if (status === 'entered') {
-      updateData.enteredById = user.id
-      updateData.enteredAt = new Date()
-    }
-
-    // If entering 'verified' status, record who verified and when
-    if (status === 'verified') {
-      updateData.verifiedById = user.id
-      updateData.verifiedAt = new Date()
-    }
-
-    const updatedTestResult = await prisma.testResult.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        testType: true,
-        status: true,
-        enteredAt: true,
-        verifiedAt: true,
-        enteredBy: {
-          select: {
-            fullName: true,
-            email: true,
-          }
-        },
-        verifiedBy: {
-          select: {
-            fullName: true,
-            email: true,
-          }
-        },
-      },
-    })
-
-    // Feature #933 - Notify engineers when test results are received (pending verification)
-    if (status === 'results_received' && currentStatus !== 'results_received') {
-      try {
-        // Get project info
-        const project = await prisma.project.findUnique({
-          where: { id: testResult.projectId },
-          select: { id: true, name: true }
-        })
-
-        // Get site engineers with active or accepted status
-        const siteEngineers = await prisma.projectUser.findMany({
-          where: {
-            projectId: testResult.projectId,
-            role: 'site_engineer',
-            status: { in: ['active', 'accepted'] }
-          }
-        })
-
-        // Get user details for engineers
-        const engineerUserIds = siteEngineers.map(se => se.userId)
-        const engineerUsers = engineerUserIds.length > 0
-          ? await prisma.user.findMany({
-              where: { id: { in: engineerUserIds } },
-              select: { id: true, email: true, fullName: true }
-            })
-          : []
-
-        // Get laboratory name for more context
-        const testWithLab = await prisma.testResult.findUnique({
-          where: { id },
-          select: { laboratoryName: true, testRequestNumber: true }
-        })
-        const labName = testWithLab?.laboratoryName || 'laboratory'
-        const requestNum = testWithLab?.testRequestNumber || id.substring(0, 8).toUpperCase()
-
-        // Create in-app notifications for site engineers
-        const notificationsToCreate = engineerUsers.map(eng => ({
-          userId: eng.id,
-          projectId: testResult.projectId,
-          type: 'test_result_received',
-          title: 'Test Result Received',
-          message: `Test result for ${testResult.testType} (${requestNum}) has been received from ${labName}. Pending verification.`,
-          linkUrl: `/projects/${testResult.projectId}/test-results`
-        }))
-
-        if (notificationsToCreate.length > 0) {
-          await prisma.notification.createMany({
-            data: notificationsToCreate
-          })
-        }
-
-        // Send email notifications
-        for (const eng of engineerUsers) {
-          await sendNotificationIfEnabled(
-            eng.id,
-            'enabled',
-            {
-              title: 'Test Result Received',
-              message: `Test result for ${testResult.testType} (${requestNum}) from ${labName} is pending verification.`,
-              linkUrl: `/projects/${testResult.projectId}/test-results`,
-              projectName: project?.name
-            }
-          )
-        }
-
-      } catch (notifError) {
-        console.error('[Test Result Received] Failed to send notifications:', notifError)
-        // Don't fail the main request if notifications fail
-      }
-    }
-
-    // Audit log for test result status change
-    await createAuditLog({
+  // Verify user has access and permission
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
       projectId: testResult.projectId,
       userId: user.id,
-      entityType: 'test_result',
-      entityId: id,
-      action: AuditAction.TEST_RESULT_STATUS_CHANGED,
-      changes: { previousStatus: currentStatus, newStatus: status },
-      req
-    })
+      status: 'active',
+    },
+  })
 
-    res.json({
-      message: `Test result status updated to '${STATUS_LABELS[status] || status}'`,
-      testResult: updatedTestResult,
-      nextTransitions: (VALID_STATUS_TRANSITIONS[status] || []).map(s => ({
-        status: s,
-        label: STATUS_LABELS[s] || s
-      }))
-    })
-  } catch (error) {
-    console.error('Update test result status error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+  const userProjectRole = projectUser?.role || user.roleInCompany
+
+  // Verification requires higher permission
+  if (status === 'verified' && !TEST_VERIFIERS.includes(userProjectRole)) {
+    throw AppError.forbidden('You do not have permission to verify test results')
   }
-})
+
+  // Other status changes require creator permission
+  if (status !== 'verified' && !TEST_CREATORS.includes(userProjectRole)) {
+    throw AppError.forbidden('You do not have permission to update test result status')
+  }
+
+  // Validate the status transition
+  const currentStatus = testResult.status
+  const allowedTransitions = VALID_STATUS_TRANSITIONS[currentStatus] || []
+
+  if (!allowedTransitions.includes(status)) {
+    throw AppError.badRequest(
+      `Cannot transition from '${STATUS_LABELS[currentStatus] || currentStatus}' to '${STATUS_LABELS[status] || status}'`,
+      {
+        currentStatus: currentStatus,
+        allowedTransitions: allowedTransitions.map(s => ({ status: s, label: STATUS_LABELS[s] || s }))
+      }
+    )
+  }
+
+  // Feature #883: Require certificate before verification
+  if (status === 'verified' && !testResult.certificateDocId) {
+    throw new AppError(400, 'A test certificate must be uploaded before the test result can be verified.', 'CERTIFICATE_REQUIRED')
+  }
+
+  // Build update data based on the new status
+  const updateData: any = { status }
+
+  // If entering 'entered' status, record who entered and when
+  if (status === 'entered') {
+    updateData.enteredById = user.id
+    updateData.enteredAt = new Date()
+  }
+
+  // If entering 'verified' status, record who verified and when
+  if (status === 'verified') {
+    updateData.verifiedById = user.id
+    updateData.verifiedAt = new Date()
+  }
+
+  const updatedTestResult = await prisma.testResult.update({
+    where: { id },
+    data: updateData,
+    select: {
+      id: true,
+      testType: true,
+      status: true,
+      enteredAt: true,
+      verifiedAt: true,
+      enteredBy: {
+        select: {
+          fullName: true,
+          email: true,
+        }
+      },
+      verifiedBy: {
+        select: {
+          fullName: true,
+          email: true,
+        }
+      },
+    },
+  })
+
+  // Feature #933 - Notify engineers when test results are received (pending verification)
+  if (status === 'results_received' && currentStatus !== 'results_received') {
+    try {
+      // Get project info
+      const project = await prisma.project.findUnique({
+        where: { id: testResult.projectId },
+        select: { id: true, name: true }
+      })
+
+      // Get site engineers with active or accepted status
+      const siteEngineers = await prisma.projectUser.findMany({
+        where: {
+          projectId: testResult.projectId,
+          role: 'site_engineer',
+          status: { in: ['active', 'accepted'] }
+        }
+      })
+
+      // Get user details for engineers
+      const engineerUserIds = siteEngineers.map(se => se.userId)
+      const engineerUsers = engineerUserIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: engineerUserIds } },
+            select: { id: true, email: true, fullName: true }
+          })
+        : []
+
+      // Get laboratory name for more context
+      const testWithLab = await prisma.testResult.findUnique({
+        where: { id },
+        select: { laboratoryName: true, testRequestNumber: true }
+      })
+      const labName = testWithLab?.laboratoryName || 'laboratory'
+      const requestNum = testWithLab?.testRequestNumber || id.substring(0, 8).toUpperCase()
+
+      // Create in-app notifications for site engineers
+      const notificationsToCreate = engineerUsers.map(eng => ({
+        userId: eng.id,
+        projectId: testResult.projectId,
+        type: 'test_result_received',
+        title: 'Test Result Received',
+        message: `Test result for ${testResult.testType} (${requestNum}) has been received from ${labName}. Pending verification.`,
+        linkUrl: `/projects/${testResult.projectId}/test-results`
+      }))
+
+      if (notificationsToCreate.length > 0) {
+        await prisma.notification.createMany({
+          data: notificationsToCreate
+        })
+      }
+
+      // Send email notifications
+      for (const eng of engineerUsers) {
+        await sendNotificationIfEnabled(
+          eng.id,
+          'enabled',
+          {
+            title: 'Test Result Received',
+            message: `Test result for ${testResult.testType} (${requestNum}) from ${labName} is pending verification.`,
+            linkUrl: `/projects/${testResult.projectId}/test-results`,
+            projectName: project?.name
+          }
+        )
+      }
+
+    } catch {
+      // Don't fail the main request if notifications fail
+    }
+  }
+
+  // Audit log for test result status change
+  await createAuditLog({
+    projectId: testResult.projectId,
+    userId: user.id,
+    entityType: 'test_result',
+    entityId: id,
+    action: AuditAction.TEST_RESULT_STATUS_CHANGED,
+    changes: { previousStatus: currentStatus, newStatus: status },
+    req
+  })
+
+  res.json({
+    message: `Test result status updated to '${STATUS_LABELS[status] || status}'`,
+    testResult: updatedTestResult,
+    nextTransitions: (VALID_STATUS_TRANSITIONS[status] || []).map(s => ({
+      status: s,
+      label: STATUS_LABELS[s] || s
+    }))
+  })
+}))
 
 // GET /api/test-results/:id/workflow - Get workflow status info (Feature #196)
-testResultsRouter.get('/:id/workflow', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+testResultsRouter.get('/:id/workflow', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        status: true,
-        projectId: true,
-        enteredAt: true,
-        verifiedAt: true,
-        createdAt: true,
-        enteredBy: {
-          select: { fullName: true }
-        },
-        verifiedBy: {
-          select: { fullName: true }
-        },
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      projectId: true,
+      enteredAt: true,
+      verifiedAt: true,
+      createdAt: true,
+      enteredBy: {
+        select: { fullName: true }
       },
-    })
+      verifiedBy: {
+        select: { fullName: true }
+      },
+    },
+  })
 
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
-
-    // Verify user has access to the project
-    const projectAccess = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const projectCompanyAccess = await prisma.project.findFirst({
-      where: {
-        id: testResult.projectId,
-        companyId: user.companyId || undefined,
-      },
-    })
-
-    if (!projectAccess && !projectCompanyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this test result'
-      })
-    }
-
-    const userProjectRole = projectAccess?.role || user.roleInCompany
-
-    // Build workflow steps with status
-    const workflowSteps = [
-      {
-        status: 'requested',
-        label: 'Requested',
-        completed: true, // Always completed (initial state)
-        completedAt: testResult.createdAt,
-        completedBy: null,
-      },
-      {
-        status: 'at_lab',
-        label: 'At Lab',
-        completed: ['at_lab', 'results_received', 'entered', 'verified'].includes(testResult.status),
-        completedAt: null,
-        completedBy: null,
-      },
-      {
-        status: 'results_received',
-        label: 'Results Received',
-        completed: ['results_received', 'entered', 'verified'].includes(testResult.status),
-        completedAt: null,
-        completedBy: null,
-      },
-      {
-        status: 'entered',
-        label: 'Entered',
-        completed: ['entered', 'verified'].includes(testResult.status),
-        completedAt: testResult.enteredAt,
-        completedBy: testResult.enteredBy?.fullName || null,
-      },
-      {
-        status: 'verified',
-        label: 'Verified',
-        completed: testResult.status === 'verified',
-        completedAt: testResult.verifiedAt,
-        completedBy: testResult.verifiedBy?.fullName || null,
-      },
-    ]
-
-    res.json({
-      workflow: {
-        currentStatus: testResult.status,
-        currentStatusLabel: STATUS_LABELS[testResult.status] || testResult.status,
-        steps: workflowSteps,
-        nextTransitions: (VALID_STATUS_TRANSITIONS[testResult.status] || []).map(s => ({
-          status: s,
-          label: STATUS_LABELS[s] || s,
-          canPerform: s === 'verified' ? TEST_VERIFIERS.includes(userProjectRole) : TEST_CREATORS.includes(userProjectRole)
-        })),
-        canAdvance: (VALID_STATUS_TRANSITIONS[testResult.status] || []).length > 0,
-        isComplete: testResult.status === 'verified',
-      }
-    })
-  } catch (error) {
-    console.error('Get workflow status error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+  if (!testResult) {
+    throw AppError.notFound('Test result')
   }
-})
+
+  // Verify user has access to the project
+  const projectAccess = await prisma.projectUser.findFirst({
+    where: {
+      projectId: testResult.projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
+
+  const projectCompanyAccess = await prisma.project.findFirst({
+    where: {
+      id: testResult.projectId,
+      companyId: user.companyId || undefined,
+    },
+  })
+
+  if (!projectAccess && !projectCompanyAccess) {
+    throw AppError.forbidden('You do not have access to this test result')
+  }
+
+  const userProjectRole = projectAccess?.role || user.roleInCompany
+
+  // Build workflow steps with status
+  const workflowSteps = [
+    {
+      status: 'requested',
+      label: 'Requested',
+      completed: true, // Always completed (initial state)
+      completedAt: testResult.createdAt,
+      completedBy: null,
+    },
+    {
+      status: 'at_lab',
+      label: 'At Lab',
+      completed: ['at_lab', 'results_received', 'entered', 'verified'].includes(testResult.status),
+      completedAt: null,
+      completedBy: null,
+    },
+    {
+      status: 'results_received',
+      label: 'Results Received',
+      completed: ['results_received', 'entered', 'verified'].includes(testResult.status),
+      completedAt: null,
+      completedBy: null,
+    },
+    {
+      status: 'entered',
+      label: 'Entered',
+      completed: ['entered', 'verified'].includes(testResult.status),
+      completedAt: testResult.enteredAt,
+      completedBy: testResult.enteredBy?.fullName || null,
+    },
+    {
+      status: 'verified',
+      label: 'Verified',
+      completed: testResult.status === 'verified',
+      completedAt: testResult.verifiedAt,
+      completedBy: testResult.verifiedBy?.fullName || null,
+    },
+  ]
+
+  res.json({
+    workflow: {
+      currentStatus: testResult.status,
+      currentStatusLabel: STATUS_LABELS[testResult.status] || testResult.status,
+      steps: workflowSteps,
+      nextTransitions: (VALID_STATUS_TRANSITIONS[testResult.status] || []).map(s => ({
+        status: s,
+        label: STATUS_LABELS[s] || s,
+        canPerform: s === 'verified' ? TEST_VERIFIERS.includes(userProjectRole) : TEST_CREATORS.includes(userProjectRole)
+      })),
+      canAdvance: (VALID_STATUS_TRANSITIONS[testResult.status] || []).length > 0,
+      isComplete: testResult.status === 'verified',
+    }
+  })
+}))
 
 // ============================================================================
 // Feature #200: AI Test Certificate Extraction
@@ -2051,619 +1919,565 @@ async function suggestLotsFromLocation(projectId: string, locationString: string
 }
 
 // POST /api/test-results/upload-certificate - Upload a test certificate PDF for AI extraction
-testResultsRouter.post('/upload-certificate', upload.single('certificate'), async (req, res) => {
-  try {
-    const user = req.user!
-    const file = req.file
-    const { projectId } = req.body
+testResultsRouter.post('/upload-certificate', upload.single('certificate'), asyncHandler(async (req, res) => {
+  const user = req.user!
+  const file = req.file
+  const { projectId } = req.body
 
-    if (!file) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'No file uploaded'
-      })
+  if (!file) {
+    throw AppError.badRequest('No file uploaded')
+  }
+
+  if (!projectId) {
+    throw AppError.badRequest('projectId is required')
+  }
+
+  // Verify user has access and permission
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
+      projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
+
+  const userProjectRole = projectUser?.role || user.roleInCompany
+
+  if (!TEST_CREATORS.includes(userProjectRole)) {
+    // Delete uploaded file if permission denied
+    fs.unlinkSync(file.path)
+    throw AppError.forbidden('You do not have permission to upload test certificates')
+  }
+
+  // Create document record for the certificate
+  const document = await prisma.document.create({
+    data: {
+      projectId,
+      documentType: 'test_certificate',
+      category: 'test_results',
+      filename: file.originalname,
+      fileUrl: `/uploads/certificates/${file.filename}`,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+      uploadedById: user.id,
     }
+  })
 
-    if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId is required'
-      })
-    }
+  // Simulate AI extraction (immediate for demo, would be async in production)
+  const extractedData = simulateAIExtraction(file.originalname)
 
-    // Verify user has access and permission
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
+  // Build confidence object for storage
+  const confidenceObj: Record<string, number> = {}
+  for (const [key, data] of Object.entries(extractedData)) {
+    confidenceObj[key] = data.confidence
+  }
 
-    const userProjectRole = projectUser?.role || user.roleInCompany
-
-    if (!TEST_CREATORS.includes(userProjectRole)) {
-      // Delete uploaded file if permission denied
-      fs.unlinkSync(file.path)
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to upload test certificates'
-      })
-    }
-
-    // Create document record for the certificate
-    const document = await prisma.document.create({
-      data: {
-        projectId,
-        documentType: 'test_certificate',
-        category: 'test_results',
-        filename: file.originalname,
-        fileUrl: `/uploads/certificates/${file.filename}`,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-        uploadedById: user.id,
-      }
-    })
-
-    // Simulate AI extraction (immediate for demo, would be async in production)
-    const extractedData = simulateAIExtraction(file.originalname)
-
-    // Build confidence object for storage
-    const confidenceObj: Record<string, number> = {}
-    for (const [key, data] of Object.entries(extractedData)) {
-      confidenceObj[key] = data.confidence
-    }
-
-    // Create a new test result with extracted data
-    const testResult = await prisma.testResult.create({
-      data: {
-        projectId,
-        testType: extractedData.testType.value,
-        laboratoryName: extractedData.laboratoryName.value,
-        laboratoryReportNumber: extractedData.laboratoryReportNumber.value,
-        sampleDate: new Date(extractedData.sampleDate.value),
-        testDate: new Date(extractedData.testDate.value),
-        sampleLocation: extractedData.sampleLocation.value,
-        resultValue: parseFloat(extractedData.resultValue.value),
-        resultUnit: extractedData.resultUnit.value,
-        specificationMin: parseFloat(extractedData.specificationMin.value),
-        specificationMax: parseFloat(extractedData.specificationMax.value),
-        passFail: parseFloat(extractedData.resultValue.value) >= 95 ? 'pass' : 'fail',
-        certificateDocId: document.id,
-        aiExtracted: true,
-        aiConfidence: JSON.stringify(confidenceObj),
-        status: 'results_received',  // Skip to results_received since we have the cert
-      },
-      include: {
-        certificateDoc: {
-          select: {
-            id: true,
-            filename: true,
-            fileUrl: true,
-            mimeType: true,
-          }
+  // Create a new test result with extracted data
+  const testResult = await prisma.testResult.create({
+    data: {
+      projectId,
+      testType: extractedData.testType.value,
+      laboratoryName: extractedData.laboratoryName.value,
+      laboratoryReportNumber: extractedData.laboratoryReportNumber.value,
+      sampleDate: new Date(extractedData.sampleDate.value),
+      testDate: new Date(extractedData.testDate.value),
+      sampleLocation: extractedData.sampleLocation.value,
+      resultValue: parseFloat(extractedData.resultValue.value),
+      resultUnit: extractedData.resultUnit.value,
+      specificationMin: parseFloat(extractedData.specificationMin.value),
+      specificationMax: parseFloat(extractedData.specificationMax.value),
+      passFail: parseFloat(extractedData.resultValue.value) >= 95 ? 'pass' : 'fail',
+      certificateDocId: document.id,
+      aiExtracted: true,
+      aiConfidence: JSON.stringify(confidenceObj),
+      status: 'results_received',  // Skip to results_received since we have the cert
+    },
+    include: {
+      certificateDoc: {
+        select: {
+          id: true,
+          filename: true,
+          fileUrl: true,
+          mimeType: true,
         }
       }
-    })
+    }
+  })
 
-    // Identify low confidence fields that need review
-    const lowConfidenceThreshold = 0.80
-    const lowConfidenceFields = Object.entries(confidenceObj)
-      .filter(([_, conf]) => conf < lowConfidenceThreshold)
-      .map(([field, conf]) => ({ field, confidence: conf }))
+  // Identify low confidence fields that need review
+  const lowConfidenceThreshold = 0.80
+  const lowConfidenceFields = Object.entries(confidenceObj)
+    .filter(([_, conf]) => conf < lowConfidenceThreshold)
+    .map(([field, conf]) => ({ field, confidence: conf }))
 
-    // Feature #727: Suggest lots based on extracted location
-    const locationSuggestion = await suggestLotsFromLocation(projectId, extractedData.sampleLocation.value)
+  // Feature #727: Suggest lots based on extracted location
+  const locationSuggestion = await suggestLotsFromLocation(projectId, extractedData.sampleLocation.value)
 
-    res.status(201).json({
-      message: 'Certificate uploaded and processed successfully',
-      testResult: {
-        id: testResult.id,
-        testType: testResult.testType,
-        status: testResult.status,
-        aiExtracted: testResult.aiExtracted,
-        certificateDoc: testResult.certificateDoc,
-      },
-      extraction: {
-        success: true,
-        extractedFields: extractedData,
-        confidence: confidenceObj,
-        lowConfidenceFields,
-        needsReview: lowConfidenceFields.length > 0,
-        reviewMessage: lowConfidenceFields.length > 0
-          ? `${lowConfidenceFields.length} field(s) need manual verification due to low AI confidence`
-          : 'All fields extracted with high confidence'
-      },
-      // Feature #727: Lot suggestion based on extracted location
-      lotSuggestion: {
-        extractedLocation: extractedData.sampleLocation.value,
-        extractedChainage: locationSuggestion.extractedChainage,
-        suggestedLots: locationSuggestion.suggestedLots,
-        hasSuggestion: locationSuggestion.suggestedLots.length > 0,
-        message: locationSuggestion.suggestedLots.length > 0
-          ? `Found ${locationSuggestion.suggestedLots.length} lot(s) matching the extracted location`
-          : 'No matching lots found for the extracted location'
-      }
-    })
-  } catch (error) {
-    console.error('Upload certificate error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+  res.status(201).json({
+    message: 'Certificate uploaded and processed successfully',
+    testResult: {
+      id: testResult.id,
+      testType: testResult.testType,
+      status: testResult.status,
+      aiExtracted: testResult.aiExtracted,
+      certificateDoc: testResult.certificateDoc,
+    },
+    extraction: {
+      success: true,
+      extractedFields: extractedData,
+      confidence: confidenceObj,
+      lowConfidenceFields,
+      needsReview: lowConfidenceFields.length > 0,
+      reviewMessage: lowConfidenceFields.length > 0
+        ? `${lowConfidenceFields.length} field(s) need manual verification due to low AI confidence`
+        : 'All fields extracted with high confidence'
+    },
+    // Feature #727: Lot suggestion based on extracted location
+    lotSuggestion: {
+      extractedLocation: extractedData.sampleLocation.value,
+      extractedChainage: locationSuggestion.extractedChainage,
+      suggestedLots: locationSuggestion.suggestedLots,
+      hasSuggestion: locationSuggestion.suggestedLots.length > 0,
+      message: locationSuggestion.suggestedLots.length > 0
+        ? `Found ${locationSuggestion.suggestedLots.length} lot(s) matching the extracted location`
+        : 'No matching lots found for the extracted location'
+    }
+  })
+}))
 
 // GET /api/test-results/:id/extraction - Get AI extraction details for a test result
-testResultsRouter.get('/:id/extraction', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
+testResultsRouter.get('/:id/extraction', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-      include: {
-        certificateDoc: {
-          select: {
-            id: true,
-            filename: true,
-            fileUrl: true,
-            mimeType: true,
-            uploadedAt: true,
-          }
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+    include: {
+      certificateDoc: {
+        select: {
+          id: true,
+          filename: true,
+          fileUrl: true,
+          mimeType: true,
+          uploadedAt: true,
         }
       }
-    })
-
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
     }
+  })
 
-    // Verify user has access
-    const projectAccess = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
-
-    const projectCompanyAccess = await prisma.project.findFirst({
-      where: {
-        id: testResult.projectId,
-        companyId: user.companyId || undefined,
-      },
-    })
-
-    if (!projectAccess && !projectCompanyAccess) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this test result'
-      })
-    }
-
-    if (!testResult.aiExtracted) {
-      return res.json({
-        extraction: {
-          aiExtracted: false,
-          message: 'This test result was not AI-extracted'
-        }
-      })
-    }
-
-    const confidence = testResult.aiConfidence ? JSON.parse(testResult.aiConfidence) : {}
-    const lowConfidenceThreshold = 0.80
-    const mediumConfidenceThreshold = 0.90
-
-    // Build field status with confidence indicators
-    const fieldStatus: Record<string, { value: any; confidence: number; status: string }> = {}
-
-    const fields = [
-      { key: 'testType', value: testResult.testType },
-      { key: 'laboratoryName', value: testResult.laboratoryName },
-      { key: 'laboratoryReportNumber', value: testResult.laboratoryReportNumber },
-      { key: 'sampleDate', value: testResult.sampleDate },
-      { key: 'testDate', value: testResult.testDate },
-      { key: 'sampleLocation', value: testResult.sampleLocation },
-      { key: 'resultValue', value: testResult.resultValue },
-      { key: 'resultUnit', value: testResult.resultUnit },
-      { key: 'specificationMin', value: testResult.specificationMin },
-      { key: 'specificationMax', value: testResult.specificationMax },
-    ]
-
-    for (const { key, value } of fields) {
-      const conf = confidence[key] || 1.0
-      let status = 'high'
-      if (conf < lowConfidenceThreshold) status = 'low'
-      else if (conf < mediumConfidenceThreshold) status = 'medium'
-
-      fieldStatus[key] = { value, confidence: conf, status }
-    }
-
-    const lowConfidenceFields = Object.entries(fieldStatus)
-      .filter(([_, f]) => f.status === 'low')
-      .map(([key, f]) => ({ field: key, confidence: f.confidence }))
-
-    res.json({
-      extraction: {
-        aiExtracted: true,
-        certificateDoc: testResult.certificateDoc,
-        fields: fieldStatus,
-        lowConfidenceFields,
-        needsReview: lowConfidenceFields.length > 0,
-        thresholds: {
-          low: lowConfidenceThreshold,
-          medium: mediumConfidenceThreshold
-        }
-      }
-    })
-  } catch (error) {
-    console.error('Get extraction details error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+  if (!testResult) {
+    throw AppError.notFound('Test result')
   }
-})
+
+  // Verify user has access
+  const projectAccess = await prisma.projectUser.findFirst({
+    where: {
+      projectId: testResult.projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
+
+  const projectCompanyAccess = await prisma.project.findFirst({
+    where: {
+      id: testResult.projectId,
+      companyId: user.companyId || undefined,
+    },
+  })
+
+  if (!projectAccess && !projectCompanyAccess) {
+    throw AppError.forbidden('You do not have access to this test result')
+  }
+
+  if (!testResult.aiExtracted) {
+    return res.json({
+      extraction: {
+        aiExtracted: false,
+        message: 'This test result was not AI-extracted'
+      }
+    })
+  }
+
+  const confidence = testResult.aiConfidence ? JSON.parse(testResult.aiConfidence) : {}
+  const lowConfidenceThreshold = 0.80
+  const mediumConfidenceThreshold = 0.90
+
+  // Build field status with confidence indicators
+  const fieldStatus: Record<string, { value: any; confidence: number; status: string }> = {}
+
+  const fields = [
+    { key: 'testType', value: testResult.testType },
+    { key: 'laboratoryName', value: testResult.laboratoryName },
+    { key: 'laboratoryReportNumber', value: testResult.laboratoryReportNumber },
+    { key: 'sampleDate', value: testResult.sampleDate },
+    { key: 'testDate', value: testResult.testDate },
+    { key: 'sampleLocation', value: testResult.sampleLocation },
+    { key: 'resultValue', value: testResult.resultValue },
+    { key: 'resultUnit', value: testResult.resultUnit },
+    { key: 'specificationMin', value: testResult.specificationMin },
+    { key: 'specificationMax', value: testResult.specificationMax },
+  ]
+
+  for (const { key, value } of fields) {
+    const conf = confidence[key] || 1.0
+    let status = 'high'
+    if (conf < lowConfidenceThreshold) status = 'low'
+    else if (conf < mediumConfidenceThreshold) status = 'medium'
+
+    fieldStatus[key] = { value, confidence: conf, status }
+  }
+
+  const lowConfidenceFields = Object.entries(fieldStatus)
+    .filter(([_, f]) => f.status === 'low')
+    .map(([key, f]) => ({ field: key, confidence: f.confidence }))
+
+  res.json({
+    extraction: {
+      aiExtracted: true,
+      certificateDoc: testResult.certificateDoc,
+      fields: fieldStatus,
+      lowConfidenceFields,
+      needsReview: lowConfidenceFields.length > 0,
+      thresholds: {
+        low: lowConfidenceThreshold,
+        medium: mediumConfidenceThreshold
+      }
+    }
+  })
+}))
 
 // PATCH /api/test-results/:id/confirm-extraction - Confirm or correct AI-extracted fields
-testResultsRouter.patch('/:id/confirm-extraction', async (req, res) => {
-  try {
-    const { id } = req.params
-    const user = req.user!
-    const { corrections } = req.body
+testResultsRouter.patch('/:id/confirm-extraction', asyncHandler(async (req, res) => {
+  const { id } = req.params
+  const user = req.user!
+  const { corrections } = req.body
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-    })
+  const testResult = await prisma.testResult.findUnique({
+    where: { id },
+  })
 
-    if (!testResult) {
-      return res.status(404).json({ error: 'Test result not found' })
-    }
+  if (!testResult) {
+    throw AppError.notFound('Test result')
+  }
 
-    // Verify user has permission
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId: testResult.projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
+  // Verify user has permission
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
+      projectId: testResult.projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
 
-    const userProjectRole = projectUser?.role || user.roleInCompany
+  const userProjectRole = projectUser?.role || user.roleInCompany
 
-    if (!TEST_CREATORS.includes(userProjectRole)) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to confirm test results'
-      })
-    }
+  if (!TEST_CREATORS.includes(userProjectRole)) {
+    throw AppError.forbidden('You do not have permission to confirm test results')
+  }
 
-    // Build update data from corrections
-    const updateData: any = {}
+  // Build update data from corrections
+  const updateData: any = {}
 
-    if (corrections) {
-      if (corrections.testType !== undefined) updateData.testType = corrections.testType
-      if (corrections.laboratoryName !== undefined) updateData.laboratoryName = corrections.laboratoryName
-      if (corrections.laboratoryReportNumber !== undefined) updateData.laboratoryReportNumber = corrections.laboratoryReportNumber
-      if (corrections.sampleDate !== undefined) updateData.sampleDate = corrections.sampleDate ? new Date(corrections.sampleDate) : null
-      if (corrections.testDate !== undefined) updateData.testDate = corrections.testDate ? new Date(corrections.testDate) : null
-      if (corrections.sampleLocation !== undefined) updateData.sampleLocation = corrections.sampleLocation
-      if (corrections.resultValue !== undefined) updateData.resultValue = corrections.resultValue ? parseFloat(corrections.resultValue) : null
-      if (corrections.resultUnit !== undefined) updateData.resultUnit = corrections.resultUnit
-      if (corrections.specificationMin !== undefined) updateData.specificationMin = corrections.specificationMin ? parseFloat(corrections.specificationMin) : null
-      if (corrections.specificationMax !== undefined) updateData.specificationMax = corrections.specificationMax ? parseFloat(corrections.specificationMax) : null
-      if (corrections.passFail !== undefined) updateData.passFail = corrections.passFail
-    }
+  if (corrections) {
+    if (corrections.testType !== undefined) updateData.testType = corrections.testType
+    if (corrections.laboratoryName !== undefined) updateData.laboratoryName = corrections.laboratoryName
+    if (corrections.laboratoryReportNumber !== undefined) updateData.laboratoryReportNumber = corrections.laboratoryReportNumber
+    if (corrections.sampleDate !== undefined) updateData.sampleDate = corrections.sampleDate ? new Date(corrections.sampleDate) : null
+    if (corrections.testDate !== undefined) updateData.testDate = corrections.testDate ? new Date(corrections.testDate) : null
+    if (corrections.sampleLocation !== undefined) updateData.sampleLocation = corrections.sampleLocation
+    if (corrections.resultValue !== undefined) updateData.resultValue = corrections.resultValue ? parseFloat(corrections.resultValue) : null
+    if (corrections.resultUnit !== undefined) updateData.resultUnit = corrections.resultUnit
+    if (corrections.specificationMin !== undefined) updateData.specificationMin = corrections.specificationMin ? parseFloat(corrections.specificationMin) : null
+    if (corrections.specificationMax !== undefined) updateData.specificationMax = corrections.specificationMax ? parseFloat(corrections.specificationMax) : null
+    if (corrections.passFail !== undefined) updateData.passFail = corrections.passFail
+  }
 
-    // Move to 'entered' status after confirmation
-    updateData.status = 'entered'
-    updateData.enteredById = user.id
-    updateData.enteredAt = new Date()
+  // Move to 'entered' status after confirmation
+  updateData.status = 'entered'
+  updateData.enteredById = user.id
+  updateData.enteredAt = new Date()
 
-    const updatedTestResult = await prisma.testResult.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        testType: true,
-        laboratoryName: true,
-        laboratoryReportNumber: true,
-        sampleDate: true,
-        testDate: true,
-        sampleLocation: true,
-        resultValue: true,
-        resultUnit: true,
-        specificationMin: true,
-        specificationMax: true,
-        passFail: true,
-        status: true,
-        aiExtracted: true,
-        enteredAt: true,
-        enteredBy: {
-          select: {
-            fullName: true,
-          }
+  const updatedTestResult = await prisma.testResult.update({
+    where: { id },
+    data: updateData,
+    select: {
+      id: true,
+      testType: true,
+      laboratoryName: true,
+      laboratoryReportNumber: true,
+      sampleDate: true,
+      testDate: true,
+      sampleLocation: true,
+      resultValue: true,
+      resultUnit: true,
+      specificationMin: true,
+      specificationMax: true,
+      passFail: true,
+      status: true,
+      aiExtracted: true,
+      enteredAt: true,
+      enteredBy: {
+        select: {
+          fullName: true,
         }
       }
-    })
+    }
+  })
 
-    res.json({
-      message: 'Extraction confirmed and test result saved',
-      testResult: updatedTestResult,
-      nextStep: {
-        status: 'entered',
-        message: 'Test result is now entered and ready for verification'
-      }
-    })
-  } catch (error) {
-    console.error('Confirm extraction error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
+  res.json({
+    message: 'Extraction confirmed and test result saved',
+    testResult: updatedTestResult,
+    nextStep: {
+      status: 'entered',
+      message: 'Test result is now entered and ready for verification'
+    }
+  })
+}))
 
 // POST /api/test-results/batch-upload - Batch upload multiple test certificates (Feature #202)
-testResultsRouter.post('/batch-upload', upload.array('certificates', 10), async (req, res) => {
-  try {
-    const user = req.user!
-    const files = req.files as Express.Multer.File[]
-    const { projectId } = req.body
+testResultsRouter.post('/batch-upload', upload.array('certificates', 10), asyncHandler(async (req, res) => {
+  const user = req.user!
+  const files = req.files as Express.Multer.File[]
+  const { projectId } = req.body
 
-    if (!files || files.length === 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'No files uploaded'
-      })
-    }
+  if (!files || files.length === 0) {
+    throw AppError.badRequest('No files uploaded')
+  }
 
-    if (!projectId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'projectId is required'
-      })
-    }
+  if (!projectId) {
+    throw AppError.badRequest('projectId is required')
+  }
 
-    // Verify user has access and permission
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId,
-        userId: user.id,
-        status: 'active',
-      },
-    })
+  // Verify user has access and permission
+  const projectUser = await prisma.projectUser.findFirst({
+    where: {
+      projectId,
+      userId: user.id,
+      status: 'active',
+    },
+  })
 
-    const userProjectRole = projectUser?.role || user.roleInCompany
+  const userProjectRole = projectUser?.role || user.roleInCompany
 
-    if (!TEST_CREATORS.includes(userProjectRole)) {
-      // Delete uploaded files if permission denied
-      for (const file of files) {
-        fs.unlinkSync(file.path)
-      }
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have permission to upload test certificates'
-      })
-    }
-
-    // Process each file
-    const results: any[] = []
-
+  if (!TEST_CREATORS.includes(userProjectRole)) {
+    // Delete uploaded files if permission denied
     for (const file of files) {
-      try {
-        // Create document record for the certificate
-        const document = await prisma.document.create({
-          data: {
-            projectId,
-            documentType: 'test_certificate',
-            category: 'test_results',
-            filename: file.originalname,
-            fileUrl: `/uploads/certificates/${file.filename}`,
-            fileSize: file.size,
-            mimeType: file.mimetype,
-            uploadedById: user.id,
-          }
-        })
+      fs.unlinkSync(file.path)
+    }
+    throw AppError.forbidden('You do not have permission to upload test certificates')
+  }
 
-        // Simulate AI extraction
-        const extractedData = simulateAIExtraction(file.originalname)
+  // Process each file
+  const results: any[] = []
 
-        // Build confidence object for storage
-        const confidenceObj: Record<string, number> = {}
-        for (const [key, data] of Object.entries(extractedData)) {
-          confidenceObj[key] = data.confidence
+  for (const file of files) {
+    try {
+      // Create document record for the certificate
+      const document = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename: file.originalname,
+          fileUrl: `/uploads/certificates/${file.filename}`,
+          fileSize: file.size,
+          mimeType: file.mimetype,
+          uploadedById: user.id,
         }
+      })
 
-        // Create a new test result with extracted data
-        const testResult = await prisma.testResult.create({
-          data: {
-            projectId,
-            testType: extractedData.testType.value,
-            laboratoryName: extractedData.laboratoryName.value,
-            laboratoryReportNumber: extractedData.laboratoryReportNumber.value,
-            sampleDate: new Date(extractedData.sampleDate.value),
-            testDate: new Date(extractedData.testDate.value),
-            sampleLocation: extractedData.sampleLocation.value,
-            resultValue: parseFloat(extractedData.resultValue.value),
-            resultUnit: extractedData.resultUnit.value,
-            specificationMin: parseFloat(extractedData.specificationMin.value),
-            specificationMax: parseFloat(extractedData.specificationMax.value),
-            passFail: parseFloat(extractedData.resultValue.value) >= 95 ? 'pass' : 'fail',
-            certificateDocId: document.id,
-            aiExtracted: true,
-            aiConfidence: JSON.stringify(confidenceObj),
-            status: 'results_received',
-          },
-          include: {
-            certificateDoc: {
-              select: {
-                id: true,
-                filename: true,
-                fileUrl: true,
-                mimeType: true,
-              }
+      // Simulate AI extraction
+      const extractedData = simulateAIExtraction(file.originalname)
+
+      // Build confidence object for storage
+      const confidenceObj: Record<string, number> = {}
+      for (const [key, data] of Object.entries(extractedData)) {
+        confidenceObj[key] = data.confidence
+      }
+
+      // Create a new test result with extracted data
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          testType: extractedData.testType.value,
+          laboratoryName: extractedData.laboratoryName.value,
+          laboratoryReportNumber: extractedData.laboratoryReportNumber.value,
+          sampleDate: new Date(extractedData.sampleDate.value),
+          testDate: new Date(extractedData.testDate.value),
+          sampleLocation: extractedData.sampleLocation.value,
+          resultValue: parseFloat(extractedData.resultValue.value),
+          resultUnit: extractedData.resultUnit.value,
+          specificationMin: parseFloat(extractedData.specificationMin.value),
+          specificationMax: parseFloat(extractedData.specificationMax.value),
+          passFail: parseFloat(extractedData.resultValue.value) >= 95 ? 'pass' : 'fail',
+          certificateDocId: document.id,
+          aiExtracted: true,
+          aiConfidence: JSON.stringify(confidenceObj),
+          status: 'results_received',
+        },
+        include: {
+          certificateDoc: {
+            select: {
+              id: true,
+              filename: true,
+              fileUrl: true,
+              mimeType: true,
             }
           }
-        })
+        }
+      })
 
-        // Identify low confidence fields
-        const lowConfidenceThreshold = 0.80
-        const lowConfidenceFields = Object.entries(confidenceObj)
-          .filter(([_, conf]) => conf < lowConfidenceThreshold)
-          .map(([field, conf]) => ({ field, confidence: conf }))
+      // Identify low confidence fields
+      const lowConfidenceThreshold = 0.80
+      const lowConfidenceFields = Object.entries(confidenceObj)
+        .filter(([_, conf]) => conf < lowConfidenceThreshold)
+        .map(([field, conf]) => ({ field, confidence: conf }))
 
-        results.push({
-          success: true,
-          filename: file.originalname,
-          testResult: {
-            id: testResult.id,
-            testType: testResult.testType,
-            status: testResult.status,
-            aiExtracted: testResult.aiExtracted,
-            certificateDoc: testResult.certificateDoc,
-          },
-          extraction: {
-            extractedFields: extractedData,
-            confidence: confidenceObj,
-            lowConfidenceFields,
-            needsReview: lowConfidenceFields.length > 0,
-          }
-        })
-      } catch (fileError) {
-        console.error(`Error processing file ${file.originalname}:`, fileError)
-        results.push({
-          success: false,
-          filename: file.originalname,
-          error: 'Failed to process file'
-        })
-      }
-    }
-
-    const successCount = results.filter(r => r.success).length
-    const failCount = results.filter(r => !r.success).length
-    const needsReviewCount = results.filter(r => r.success && r.extraction?.needsReview).length
-
-    res.status(201).json({
-      message: `Processed ${successCount} of ${files.length} certificates`,
-      summary: {
-        total: files.length,
-        success: successCount,
-        failed: failCount,
-        needsReview: needsReviewCount,
-      },
-      results
-    })
-  } catch (error) {
-    console.error('Batch upload error:', error)
-    res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
-// POST /api/test-results/batch-confirm - Batch confirm multiple extractions (Feature #202)
-testResultsRouter.post('/batch-confirm', async (req, res) => {
-  try {
-    const user = req.user!
-    const { confirmations } = req.body
-
-    if (!confirmations || !Array.isArray(confirmations) || confirmations.length === 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'confirmations array is required'
+      results.push({
+        success: true,
+        filename: file.originalname,
+        testResult: {
+          id: testResult.id,
+          testType: testResult.testType,
+          status: testResult.status,
+          aiExtracted: testResult.aiExtracted,
+          certificateDoc: testResult.certificateDoc,
+        },
+        extraction: {
+          extractedFields: extractedData,
+          confidence: confidenceObj,
+          lowConfidenceFields,
+          needsReview: lowConfidenceFields.length > 0,
+        }
+      })
+    } catch {
+      results.push({
+        success: false,
+        filename: file.originalname,
+        error: 'Failed to process file'
       })
     }
+  }
 
-    const results: any[] = []
+  const successCount = results.filter(r => r.success).length
+  const failCount = results.filter(r => !r.success).length
+  const needsReviewCount = results.filter(r => r.success && r.extraction?.needsReview).length
 
-    for (const confirmation of confirmations) {
-      const { testResultId, corrections } = confirmation
+  res.status(201).json({
+    message: `Processed ${successCount} of ${files.length} certificates`,
+    summary: {
+      total: files.length,
+      success: successCount,
+      failed: failCount,
+      needsReview: needsReviewCount,
+    },
+    results
+  })
+}))
 
-      try {
-        const testResult = await prisma.testResult.findUnique({
-          where: { id: testResultId },
-        })
+// POST /api/test-results/batch-confirm - Batch confirm multiple extractions (Feature #202)
+testResultsRouter.post('/batch-confirm', asyncHandler(async (req, res) => {
+  const user = req.user!
+  const { confirmations } = req.body
 
-        if (!testResult) {
-          results.push({
-            success: false,
-            testResultId,
-            error: 'Test result not found'
-          })
-          continue
-        }
+  if (!confirmations || !Array.isArray(confirmations) || confirmations.length === 0) {
+    throw AppError.badRequest('confirmations array is required')
+  }
 
-        // Verify user has permission
-        const projectUser = await prisma.projectUser.findFirst({
-          where: {
-            projectId: testResult.projectId,
-            userId: user.id,
-            status: 'active',
-          },
-        })
+  const results: any[] = []
 
-        const userProjectRole = projectUser?.role || user.roleInCompany
+  for (const confirmation of confirmations) {
+    const { testResultId, corrections } = confirmation
 
-        if (!TEST_CREATORS.includes(userProjectRole)) {
-          results.push({
-            success: false,
-            testResultId,
-            error: 'No permission'
-          })
-          continue
-        }
+    try {
+      const testResult = await prisma.testResult.findUnique({
+        where: { id: testResultId },
+      })
 
-        // Build update data from corrections
-        const updateData: any = {}
-
-        if (corrections) {
-          if (corrections.testType !== undefined) updateData.testType = corrections.testType
-          if (corrections.laboratoryName !== undefined) updateData.laboratoryName = corrections.laboratoryName
-          if (corrections.laboratoryReportNumber !== undefined) updateData.laboratoryReportNumber = corrections.laboratoryReportNumber
-          if (corrections.sampleDate !== undefined) updateData.sampleDate = corrections.sampleDate ? new Date(corrections.sampleDate) : null
-          if (corrections.testDate !== undefined) updateData.testDate = corrections.testDate ? new Date(corrections.testDate) : null
-          if (corrections.sampleLocation !== undefined) updateData.sampleLocation = corrections.sampleLocation
-          if (corrections.resultValue !== undefined) updateData.resultValue = corrections.resultValue ? parseFloat(corrections.resultValue) : null
-          if (corrections.resultUnit !== undefined) updateData.resultUnit = corrections.resultUnit
-          if (corrections.specificationMin !== undefined) updateData.specificationMin = corrections.specificationMin ? parseFloat(corrections.specificationMin) : null
-          if (corrections.specificationMax !== undefined) updateData.specificationMax = corrections.specificationMax ? parseFloat(corrections.specificationMax) : null
-          if (corrections.passFail !== undefined) updateData.passFail = corrections.passFail
-        }
-
-        // Move to 'entered' status after confirmation
-        updateData.status = 'entered'
-        updateData.enteredById = user.id
-        updateData.enteredAt = new Date()
-
-        const updatedTestResult = await prisma.testResult.update({
-          where: { id: testResultId },
-          data: updateData,
-          select: {
-            id: true,
-            testType: true,
-            status: true,
-          }
-        })
-
-        results.push({
-          success: true,
-          testResultId,
-          testResult: updatedTestResult
-        })
-      } catch (confirmError) {
-        console.error(`Error confirming test result ${testResultId}:`, confirmError)
+      if (!testResult) {
         results.push({
           success: false,
           testResultId,
-          error: 'Failed to confirm'
+          error: 'Test result not found'
         })
+        continue
       }
+
+      // Verify user has permission
+      const projectUser = await prisma.projectUser.findFirst({
+        where: {
+          projectId: testResult.projectId,
+          userId: user.id,
+          status: 'active',
+        },
+      })
+
+      const userProjectRole = projectUser?.role || user.roleInCompany
+
+      if (!TEST_CREATORS.includes(userProjectRole)) {
+        results.push({
+          success: false,
+          testResultId,
+          error: 'No permission'
+        })
+        continue
+      }
+
+      // Build update data from corrections
+      const updateData: any = {}
+
+      if (corrections) {
+        if (corrections.testType !== undefined) updateData.testType = corrections.testType
+        if (corrections.laboratoryName !== undefined) updateData.laboratoryName = corrections.laboratoryName
+        if (corrections.laboratoryReportNumber !== undefined) updateData.laboratoryReportNumber = corrections.laboratoryReportNumber
+        if (corrections.sampleDate !== undefined) updateData.sampleDate = corrections.sampleDate ? new Date(corrections.sampleDate) : null
+        if (corrections.testDate !== undefined) updateData.testDate = corrections.testDate ? new Date(corrections.testDate) : null
+        if (corrections.sampleLocation !== undefined) updateData.sampleLocation = corrections.sampleLocation
+        if (corrections.resultValue !== undefined) updateData.resultValue = corrections.resultValue ? parseFloat(corrections.resultValue) : null
+        if (corrections.resultUnit !== undefined) updateData.resultUnit = corrections.resultUnit
+        if (corrections.specificationMin !== undefined) updateData.specificationMin = corrections.specificationMin ? parseFloat(corrections.specificationMin) : null
+        if (corrections.specificationMax !== undefined) updateData.specificationMax = corrections.specificationMax ? parseFloat(corrections.specificationMax) : null
+        if (corrections.passFail !== undefined) updateData.passFail = corrections.passFail
+      }
+
+      // Move to 'entered' status after confirmation
+      updateData.status = 'entered'
+      updateData.enteredById = user.id
+      updateData.enteredAt = new Date()
+
+      const updatedTestResult = await prisma.testResult.update({
+        where: { id: testResultId },
+        data: updateData,
+        select: {
+          id: true,
+          testType: true,
+          status: true,
+        }
+      })
+
+      results.push({
+        success: true,
+        testResultId,
+        testResult: updatedTestResult
+      })
+    } catch {
+      results.push({
+        success: false,
+        testResultId,
+        error: 'Failed to confirm'
+      })
     }
-
-    const successCount = results.filter(r => r.success).length
-
-    res.json({
-      message: `Confirmed ${successCount} of ${confirmations.length} test results`,
-      summary: {
-        total: confirmations.length,
-        success: successCount,
-        failed: confirmations.length - successCount,
-      },
-      results
-    })
-  } catch (error) {
-    console.error('Batch confirm error:', error)
-    res.status(500).json({ error: 'Internal server error' })
   }
-})
+
+  const successCount = results.filter(r => r.success).length
+
+  res.json({
+    message: `Confirmed ${successCount} of ${confirmations.length} test results`,
+    summary: {
+      total: confirmations.length,
+      success: successCount,
+      failed: confirmations.length - successCount,
+    },
+    results
+  })
+}))

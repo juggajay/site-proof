@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 import type { Lot } from '../lotsPageTypes'
 
 interface DeleteLotModalProps {
@@ -26,7 +27,7 @@ export function DeleteLotModal({ isOpen, lot, onClose, onDeleted, onError }: Del
 
       onDeleted(lot.id)
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Failed to delete lot')
+      onError(extractErrorMessage(err, 'Failed to delete lot'))
     } finally {
       setDeleting(false)
     }

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
-import { apiFetch, ApiError } from '@/lib/api'
+import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { extractErrorMessage, extractErrorDetails } from '@/lib/errorHandling'
 import type { NCR } from '../types'
 
 interface UseNCRActionsOptions {
@@ -73,7 +74,7 @@ export function useNCRActions({ projectId, fetchNcrs, setError, closeModal }: Us
       showSuccess('NCR created successfully')
       fetchNcrs()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create NCR')
+      setError(extractErrorMessage(err, 'Failed to create NCR'))
     } finally {
       setActionLoading(false)
     }
@@ -90,7 +91,7 @@ export function useNCRActions({ projectId, fetchNcrs, setError, closeModal }: Us
       showSuccess('NCR response submitted - status changed to Investigating')
       fetchNcrs()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit response')
+      setError(extractErrorMessage(err, 'Failed to submit response'))
     } finally {
       setActionLoading(false)
     }
@@ -103,7 +104,7 @@ export function useNCRActions({ projectId, fetchNcrs, setError, closeModal }: Us
       showSuccess(data.message || 'QM approval granted')
       fetchNcrs()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve NCR')
+      setError(extractErrorMessage(err, 'Failed to approve NCR'))
     } finally {
       setActionLoading(false)
     }
@@ -120,19 +121,11 @@ export function useNCRActions({ projectId, fetchNcrs, setError, closeModal }: Us
       showSuccess(responseData.message || 'NCR closed successfully')
       fetchNcrs()
     } catch (err) {
-      if (err instanceof ApiError) {
-        try {
-          const data = JSON.parse(err.body)
-          if (data.requiresQmApproval) {
-            setError('Major NCRs require Quality Manager approval before closure. Please request QM approval first.')
-          } else {
-            setError(data.message || 'Failed to close NCR')
-          }
-        } catch {
-          setError('Failed to close NCR')
-        }
+      const details = extractErrorDetails(err)
+      if (details?.requiresQmApproval) {
+        setError('Major NCRs require Quality Manager approval before closure. Please request QM approval first.')
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to close NCR')
+        setError(extractErrorMessage(err, 'Failed to close NCR'))
       }
     } finally {
       setActionLoading(false)
@@ -159,19 +152,11 @@ export function useNCRActions({ projectId, fetchNcrs, setError, closeModal }: Us
       showSuccess('NCR closed with concession successfully')
       fetchNcrs()
     } catch (err) {
-      if (err instanceof ApiError) {
-        try {
-          const respData = JSON.parse(err.body)
-          if (respData.requiresQmApproval) {
-            setError('Major NCRs require Quality Manager approval before closure with concession.')
-          } else {
-            setError(respData.message || 'Failed to close NCR with concession')
-          }
-        } catch {
-          setError('Failed to close NCR with concession')
-        }
+      const details = extractErrorDetails(err)
+      if (details?.requiresQmApproval) {
+        setError('Major NCRs require Quality Manager approval before closure with concession.')
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to close NCR with concession')
+        setError(extractErrorMessage(err, 'Failed to close NCR with concession'))
       }
     } finally {
       setActionLoading(false)

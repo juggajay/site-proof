@@ -1,4 +1,6 @@
 // Push notification utilities for Web Push API
+import { extractErrorMessage } from '@/lib/errorHandling'
+
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4008'
 
 // Check if push notifications are supported
@@ -120,7 +122,7 @@ export async function subscribeToPush(token: string): Promise<{ success: boolean
     return { success: true }
   } catch (error) {
     console.error('[Push] Subscription error:', error)
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    return { success: false, error: extractErrorMessage(error, 'Unknown error') }
   }
 }
 
@@ -157,7 +159,7 @@ export async function unsubscribeFromPush(token: string): Promise<{ success: boo
     return { success: true }
   } catch (error) {
     console.error('[Push] Unsubscribe error:', error)
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    return { success: false, error: extractErrorMessage(error, 'Unknown error') }
   }
 }
 
@@ -207,7 +209,7 @@ export async function sendTestPush(token: string): Promise<{ success: boolean; m
     return { success: true, message: data.message }
   } catch (error) {
     console.error('[Push] Test push error:', error)
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    return { success: false, error: extractErrorMessage(error, 'Unknown error') }
   }
 }
 

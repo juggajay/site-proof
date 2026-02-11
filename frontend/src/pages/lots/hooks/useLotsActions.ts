@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { handleApiError } from '@/lib/errorHandling'
 import type { Lot } from '../lotsPageTypes'
 
 interface UseLotsActionsParams {
@@ -134,7 +135,7 @@ export function useLotsActions({
       setLots(prev => [...prev, data.lot])
       toast({ title: 'Lot Cloned', description: `${lot.lotNumber} cloned as ${data.lot.lotNumber}`, variant: 'success' })
     } catch (err) {
-      toast({ title: 'Clone Failed', description: err instanceof Error ? err.message : 'Failed to clone lot', variant: 'error' })
+      handleApiError(err, 'Failed to clone lot')
     }
   }, [setLots])
 
@@ -156,7 +157,7 @@ export function useLotsActions({
       setBulkDeleteModalOpen(false)
       toast({ title: 'Lots Deleted', description: data.message, variant: 'success' })
     } catch (err) {
-      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete lots', variant: 'error' })
+      handleApiError(err, 'Failed to delete lots')
     }
   }, [selectedLots, setLots])
 
@@ -171,7 +172,7 @@ export function useLotsActions({
       setBulkStatusModalOpen(false)
       toast({ title: 'Status Updated', description: data.message, variant: 'success' })
     } catch (err) {
-      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update lot status', variant: 'error' })
+      handleApiError(err, 'Failed to update lot status')
     }
   }, [selectedLots, setLots])
 
@@ -196,7 +197,7 @@ export function useLotsActions({
       setBulkAssignModalOpen(false)
       toast({ title: 'Subcontractor Assigned', description: data.message, variant: 'success' })
     } catch (err) {
-      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to assign subcontractor', variant: 'error' })
+      handleApiError(err, 'Failed to assign subcontractor')
     }
   }, [selectedLots, subcontractors, setLots])
 

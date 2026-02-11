@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Users, UserPlus, X } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 import type { TeamMember } from '../types'
 import { ROLE_OPTIONS } from '../types'
 
@@ -77,7 +78,7 @@ export function TeamTab({ projectId }: TeamTabProps) {
         setInviteSuccess('')
       }, 2000)
     } catch (error) {
-      setInviteError(error instanceof Error ? error.message : 'Failed to invite team member')
+      setInviteError(extractErrorMessage(error, 'Failed to invite team member'))
     } finally {
       setInviting(false)
     }

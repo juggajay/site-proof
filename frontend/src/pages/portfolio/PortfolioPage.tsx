@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 import { FolderKanban, TrendingUp, AlertTriangle, CheckCircle2, Clock, DollarSign, AlertCircle, ExternalLink } from 'lucide-react'
 
 interface Project {
@@ -106,7 +107,7 @@ export function PortfolioPage() {
           setProjectsAtRisk(risksResult.value.projectsAtRisk || [])
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load projects')
+        setError(extractErrorMessage(err, 'Failed to load projects'))
       } finally {
         setLoading(false)
       }

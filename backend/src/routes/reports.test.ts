@@ -4,11 +4,13 @@ import express from 'express'
 import { authRouter } from './auth.js'
 import { reportsRouter } from './reports.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/reports', reportsRouter)
+app.use(errorHandler)
 
 describe('Reports API - Lot Status Report', () => {
   let authToken: string
@@ -107,7 +109,7 @@ describe('Reports API - Lot Status Report', () => {
       .set('Authorization', `Bearer ${authToken}`)
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('projectId')
+    expect(res.body.error.message).toContain('projectId')
   })
 
   it('should generate lot status report', async () => {
@@ -283,7 +285,7 @@ describe('Reports API - NCR Report', () => {
       .set('Authorization', `Bearer ${authToken}`)
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('projectId')
+    expect(res.body.error.message).toContain('projectId')
   })
 
   it('should generate NCR report', async () => {
@@ -481,7 +483,7 @@ describe('Reports API - Test Results Report', () => {
       .set('Authorization', `Bearer ${authToken}`)
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('projectId')
+    expect(res.body.error.message).toContain('projectId')
   })
 
   it('should generate test results report', async () => {
@@ -666,7 +668,7 @@ describe('Reports API - Diary Report', () => {
       .set('Authorization', `Bearer ${authToken}`)
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('projectId')
+    expect(res.body.error.message).toContain('projectId')
   })
 
   it('should generate diary report with default sections', async () => {
@@ -835,7 +837,7 @@ describe('Reports API - Summary Report', () => {
       .set('Authorization', `Bearer ${authToken}`)
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('projectId')
+    expect(res.body.error.message).toContain('projectId')
   })
 
   it('should generate summary report', async () => {
@@ -988,7 +990,7 @@ describe('Reports API - Claims Report', () => {
       .set('Authorization', `Bearer ${authToken}`)
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('projectId')
+    expect(res.body.error.message).toContain('projectId')
   })
 
   it('should generate claims report', async () => {
@@ -1141,7 +1143,7 @@ describe('Reports API - Scheduled Reports', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('projectId')
+      expect(res.body.error.message).toContain('projectId')
     })
 
     it('should list scheduled reports', async () => {
@@ -1190,7 +1192,7 @@ describe('Reports API - Scheduled Reports', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('frequency')
+      expect(res.body.error.message).toContain('frequency')
     })
 
     it('should reject invalid report type', async () => {
@@ -1205,7 +1207,7 @@ describe('Reports API - Scheduled Reports', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('reportType')
+      expect(res.body.error.message).toContain('reportType')
     })
 
     it('should require recipients', async () => {

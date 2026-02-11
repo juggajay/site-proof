@@ -20,17 +20,25 @@ export function apiUrl(path: string): string {
 }
 
 /**
- * Custom error class for API errors
+ * Custom error class for API errors.
+ * `body` is the raw response text (preserved for backward compatibility).
+ * `data` is the parsed JSON body (null if response was not JSON).
  */
 export class ApiError extends Error {
   status: number
   body: string
+  data: any
 
   constructor(status: number, body: string) {
     super(`API Error ${status}: ${body}`)
     this.name = 'ApiError'
     this.status = status
     this.body = body
+    try {
+      this.data = JSON.parse(body)
+    } catch {
+      this.data = null
+    }
   }
 }
 

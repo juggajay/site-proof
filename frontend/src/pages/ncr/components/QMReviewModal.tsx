@@ -2,6 +2,7 @@ import { useState, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { handleApiError } from '@/lib/errorHandling'
 import type { NCR } from '../types'
 
 interface QMReviewModalProps {
@@ -40,11 +41,7 @@ function QMReviewModalInner({
       handleClose()
       onSuccess()
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to submit review',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to submit review')
     } finally {
       setSubmittingReview(false)
     }

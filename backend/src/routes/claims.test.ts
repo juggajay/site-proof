@@ -3,6 +3,7 @@ import request from 'supertest'
 import express from 'express'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 // Import claims router
 import claimsRouter from './claims.js'
@@ -11,6 +12,7 @@ const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/projects', claimsRouter)
+app.use(errorHandler)
 
 describe('Progress Claims API', () => {
   let authToken: string
@@ -206,7 +208,7 @@ describe('Progress Claims API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.code).toBe('RATE_REQUIRED')
+      expect(res.body.error.code).toBe('VALIDATION_ERROR')
 
       // Cleanup
       await prisma.lot.delete({ where: { id: lotNoBudget.id } })
@@ -584,6 +586,6 @@ describe('Claim Lots Association', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.error).toContain('No valid conformed lots')
+    expect(res.body.error.message).toContain('No valid conformed lots')
   })
 })

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Calendar, Clock, Mail, AlertCircle } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 
 interface ScheduledReport {
   id: string
@@ -72,8 +73,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
       )
       setSchedules(data.schedules || [])
     } catch (err) {
-      console.error('Error fetching schedules:', err)
-      setError('Failed to load scheduled reports')
+      setError(extractErrorMessage(err, 'Failed to load scheduled reports'))
     } finally {
       setLoading(false)
     }
@@ -102,9 +102,9 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
       await fetchSchedules()
       setShowForm(false)
       resetForm()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating schedule:', err)
-      setError(err.message || 'Failed to create scheduled report')
+      setError(extractErrorMessage(err, 'Failed to create scheduled report'))
     } finally {
       setSaving(false)
     }
@@ -122,8 +122,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
       // Refresh the list
       await fetchSchedules()
     } catch (err) {
-      console.error('Error updating schedule:', err)
-      setError('Failed to update schedule')
+      setError(extractErrorMessage(err, 'Failed to update schedule'))
     }
   }
 
@@ -140,8 +139,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
       // Refresh the list
       await fetchSchedules()
     } catch (err) {
-      console.error('Error deleting schedule:', err)
-      setError('Failed to delete schedule')
+      setError(extractErrorMessage(err, 'Failed to delete schedule'))
     }
   }
 

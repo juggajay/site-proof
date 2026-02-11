@@ -4,11 +4,13 @@ import express from 'express'
 import { companyRouter } from './company.js'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/company', companyRouter)
+app.use(errorHandler)
 
 describe('Company API', () => {
   let authToken: string
@@ -103,7 +105,7 @@ describe('Company API', () => {
         .set('Authorization', `Bearer ${regRes.body.token}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.message).toContain('No company associated')
+      expect(res.body.error.message).toContain('not found')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: regRes.body.user.id } })
@@ -186,7 +188,7 @@ describe('Company API', () => {
         .send({ name: '   ' })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should trim company name', async () => {
@@ -246,7 +248,7 @@ describe('Company API', () => {
         .send({ name: 'Should Fail' })
 
       expect(res.status).toBe(403)
-      expect(res.body.message).toContain('owners and admins')
+      expect(res.body.error.message).toContain('owners and admins')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: memberRes.body.user.id } })
@@ -301,7 +303,7 @@ describe('Company API', () => {
         .send({ name: 'Should Fail' })
 
       expect(res.status).toBe(404)
-      expect(res.body.message).toContain('No company associated')
+      expect(res.body.error.message).toContain('not found')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: regRes.body.user.id } })
@@ -394,7 +396,7 @@ describe('Company API', () => {
         .set('Authorization', `Bearer ${adminRes.body.token}`)
 
       expect(res.status).toBe(403)
-      expect(res.body.message).toContain('Only company owners')
+      expect(res.body.error.message).toContain('Only company owners')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: adminRes.body.user.id } })
@@ -431,7 +433,7 @@ describe('Company API', () => {
         .set('Authorization', `Bearer ${regRes.body.token}`)
 
       expect(res.status).toBe(404)
-      expect(res.body.message).toContain('No company associated')
+      expect(res.body.error.message).toContain('not found')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: regRes.body.user.id } })
@@ -534,7 +536,7 @@ describe('Company API', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('New owner ID is required')
+      expect(res.body.error.message).toContain('New owner ID is required')
     })
 
     it('should reject transfer to self', async () => {
@@ -544,7 +546,7 @@ describe('Company API', () => {
         .send({ newOwnerId: userId })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('Cannot transfer ownership to yourself')
+      expect(res.body.error.message).toContain('Cannot transfer ownership to yourself')
     })
 
     it('should reject transfer to non-member', async () => {
@@ -565,7 +567,7 @@ describe('Company API', () => {
         .send({ newOwnerId: otherRes.body.user.id })
 
       expect(res.status).toBe(404)
-      expect(res.body.message).toContain('not found in your company')
+      expect(res.body.error.message).toContain('not found')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: otherRes.body.user.id } })
@@ -595,7 +597,7 @@ describe('Company API', () => {
         .send({ newOwnerId: userId })
 
       expect(res.status).toBe(403)
-      expect(res.body.message).toContain('Only the company owner')
+      expect(res.body.error.message).toContain('Only the company owner')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: adminRes.body.user.id } })
@@ -733,8 +735,8 @@ describe('Company API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(403)
-      expect(res.body.message).toContain('owners cannot leave')
-      expect(res.body.message).toContain('transfer ownership')
+      expect(res.body.error.message).toContain('owners cannot leave')
+      expect(res.body.error.message).toContain('transfer ownership')
     })
 
     it('should reject if user has no company', async () => {
@@ -754,7 +756,7 @@ describe('Company API', () => {
         .set('Authorization', `Bearer ${regRes.body.token}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('not a member of any company')
+      expect(res.body.error.message).toContain('not a member of any company')
 
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: regRes.body.user.id } })

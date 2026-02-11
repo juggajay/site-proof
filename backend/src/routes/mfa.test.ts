@@ -6,6 +6,7 @@ import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
 import * as _otplib from 'otplib'
 import { encrypt, decrypt } from '../lib/encryption.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 // Mock otplib to control secret and verification
 vi.mock('otplib', async () => {
@@ -27,6 +28,7 @@ const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/mfa', mfaRouter)
+app.use(errorHandler)
 
 describe('MFA API', () => {
   let authToken: string
@@ -122,7 +124,7 @@ describe('MFA API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('already enabled')
+      expect(res.body.error.message).toContain('already enabled')
 
       // Cleanup - disable MFA for next tests
       await request(app)
@@ -210,7 +212,7 @@ describe('MFA API', () => {
         .send({ code: '000000' })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('Invalid verification code')
+      expect(res.body.error.message).toContain('Invalid verification code')
     })
 
     it('should reject verification without code', async () => {
@@ -220,7 +222,7 @@ describe('MFA API', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject verification when MFA is already enabled', async () => {
@@ -240,7 +242,7 @@ describe('MFA API', () => {
         .send({ code: '123456' })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('already enabled')
+      expect(res.body.error.message).toContain('already enabled')
     })
 
     it('should reject verification without prior setup', async () => {
@@ -259,7 +261,7 @@ describe('MFA API', () => {
         .send({ code: '123456' })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('No MFA setup in progress')
+      expect(res.body.error.message).toContain('No MFA setup in progress')
     })
 
     it('should require authentication', async () => {
@@ -343,7 +345,7 @@ describe('MFA API', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject disable with invalid password', async () => {
@@ -353,7 +355,7 @@ describe('MFA API', () => {
         .send({ password: 'WrongPassword!' })
 
       expect(res.status).toBe(401)
-      expect(res.body.message).toContain('Invalid')
+      expect(res.body.error.message).toContain('Invalid')
     })
 
     it('should reject disable with invalid MFA code', async () => {
@@ -363,7 +365,7 @@ describe('MFA API', () => {
         .send({ code: '000000' })
 
       expect(res.status).toBe(401)
-      expect(res.body.message).toContain('Invalid')
+      expect(res.body.error.message).toContain('Invalid')
     })
 
     it('should reject disable when MFA is not enabled', async () => {
@@ -382,7 +384,7 @@ describe('MFA API', () => {
         .send({ password: testPassword })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('not enabled')
+      expect(res.body.error.message).toContain('not enabled')
     })
 
     it('should require authentication', async () => {
@@ -432,7 +434,7 @@ describe('MFA API', () => {
         })
 
       expect(res.status).toBe(401)
-      expect(res.body.message).toContain('Invalid verification code')
+      expect(res.body.error.message).toContain('Invalid verification code')
     })
 
     it('should reject verification without userId', async () => {
@@ -443,7 +445,7 @@ describe('MFA API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject verification without code', async () => {
@@ -454,7 +456,7 @@ describe('MFA API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should reject verification for non-existent user', async () => {
@@ -466,7 +468,7 @@ describe('MFA API', () => {
         })
 
       expect(res.status).toBe(404)
-      expect(res.body.message).toContain('not found')
+      expect(res.body.error.message).toContain('not found')
     })
 
     it('should reject verification when MFA is not enabled', async () => {
@@ -487,7 +489,7 @@ describe('MFA API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('not enabled')
+      expect(res.body.error.message).toContain('not enabled')
     })
 
     it('should not require authentication (for login flow)', async () => {
@@ -623,7 +625,7 @@ describe('MFA API', () => {
         .send({ code: '123456' })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('already enabled')
+      expect(res.body.error.message).toContain('already enabled')
 
       // Cleanup
       await request(app)

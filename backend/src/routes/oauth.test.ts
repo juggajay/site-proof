@@ -4,10 +4,12 @@ import express from 'express'
 import { oauthRouter } from './oauth.js'
 import { prisma } from '../lib/prisma.js'
 import crypto from 'crypto'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', oauthRouter)
+app.use(errorHandler)
 
 // Store original env vars to restore later
 const originalEnv = { ...process.env }
@@ -212,7 +214,7 @@ describe('OAuth Routes', () => {
         .send({})
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('credential is required')
+      expect(res.body.error.message).toContain('credential is required')
     })
 
     it('should reject invalid credential format', async () => {
@@ -221,7 +223,7 @@ describe('OAuth Routes', () => {
         .send({ credential: 'invalid-format' })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('Invalid credential format')
+      expect(res.body.error.message).toContain('Invalid credential format')
     })
 
     it('should create user and return token for valid Google credential', async () => {
@@ -309,7 +311,7 @@ describe('OAuth Routes', () => {
         .send({ credential })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('Invalid client ID')
+      expect(res.body.error.message).toContain('Invalid client ID')
 
       process.env.NODE_ENV = 'test'
     })
@@ -361,7 +363,7 @@ describe('OAuth Routes', () => {
         .send({ email: mockEmail })
 
       expect(res.status).toBe(404)
-      expect(res.body.message).toContain('Not found')
+      expect(res.body.error.message).toContain('not found')
 
       process.env.NODE_ENV = 'test'
     })
@@ -372,7 +374,7 @@ describe('OAuth Routes', () => {
         .send({ provider: 'google' })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('Email is required')
+      expect(res.body.error.message).toContain('Email is required')
     })
 
     it('should create mock user and return token', async () => {

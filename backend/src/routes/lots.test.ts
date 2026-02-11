@@ -4,11 +4,13 @@ import express from 'express'
 import { lotsRouter } from './lots.js'
 import { authRouter } from './auth.js'
 import { prisma } from '../lib/prisma.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 
 const app = express()
 app.use(express.json())
 app.use('/api/auth', authRouter)
 app.use('/api/lots', lotsRouter)
+app.use(errorHandler)
 
 describe('Lots API', () => {
   let authToken: string
@@ -110,7 +112,7 @@ describe('Lots API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.code).toBe('VALIDATION_ERROR')
     })
 
     it('should reject lot without lotNumber', async () => {
@@ -122,7 +124,7 @@ describe('Lots API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.code).toBe('VALIDATION_ERROR')
     })
 
     it('should reject duplicate lot number in same project', async () => {
@@ -135,7 +137,7 @@ describe('Lots API', () => {
         })
 
       expect(res.status).toBe(409)
-      expect(res.body.code).toBe('DUPLICATE_LOT_NUMBER')
+      expect(res.body.error.code).toBe('CONFLICT')
     })
 
     it('should require area zone for area lot type', async () => {
@@ -149,7 +151,7 @@ describe('Lots API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.code).toBe('AREA_ZONE_REQUIRED')
+      expect(res.body.error.details.code).toBe('AREA_ZONE_REQUIRED')
     })
 
     it('should require structure ID for structure lot type', async () => {
@@ -163,7 +165,7 @@ describe('Lots API', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.code).toBe('STRUCTURE_ID_REQUIRED')
+      expect(res.body.error.details.code).toBe('STRUCTURE_ID_REQUIRED')
     })
 
     it('should reject unauthenticated requests', async () => {
@@ -219,7 +221,7 @@ describe('Lots API', () => {
         .set('Authorization', `Bearer ${authToken}`)
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toContain('required')
+      expect(res.body.error.message).toContain('required')
     })
 
     it('should filter by status', async () => {
@@ -517,7 +519,7 @@ describe('Lot Bulk Operations', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('required')
+    expect(res.body.error.code).toBe('VALIDATION_ERROR')
   })
 
   it('should reject bulk create with empty lots array', async () => {
@@ -530,6 +532,6 @@ describe('Lot Bulk Operations', () => {
       })
 
     expect(res.status).toBe(400)
-    expect(res.body.message).toContain('required')
+    expect(res.body.error.code).toBe('VALIDATION_ERROR')
   })
 })

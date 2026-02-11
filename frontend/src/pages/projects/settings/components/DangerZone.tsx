@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Archive, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage, isUnauthorized } from '@/lib/errorHandling'
 import type { Project } from '../types'
 
 interface DangerZoneProps {
@@ -59,11 +60,11 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
 
       // Success - navigate to projects list
       navigate('/projects', { replace: true })
-    } catch (error: any) {
-      if (error?.status === 401) {
+    } catch (error) {
+      if (isUnauthorized(error)) {
         setDeleteError('Incorrect password')
       } else {
-        setDeleteError('Failed to delete project. Please try again.')
+        setDeleteError(extractErrorMessage(error, 'Failed to delete project. Please try again.'))
       }
     } finally {
       setDeleting(false)
@@ -96,7 +97,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
       onProjectUpdate({ ...project, status: newStatus })
       setShowArchiveDialog(false)
     } catch (error) {
-      setArchiveError('Failed to update project status')
+      setArchiveError(extractErrorMessage(error, 'Failed to update project status'))
     } finally {
       setArchiving(false)
     }
@@ -128,7 +129,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
       onProjectUpdate({ ...project, status: newStatus })
       setShowCompleteDialog(false)
     } catch (error) {
-      setCompleteError('Failed to update project status')
+      setCompleteError(extractErrorMessage(error, 'Failed to update project status'))
     } finally {
       setCompleting(false)
     }

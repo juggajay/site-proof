@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { generateToken } from '../lib/auth.js'
 import crypto from 'crypto'
+import { AppError } from '../lib/AppError.js'
+import { asyncHandler } from '../lib/asyncHandler.js'
 
 export const oauthRouter = Router()
 
@@ -109,11 +111,10 @@ setInterval(() => {
 }, 5 * 60 * 1000)
 
 // GET /api/auth/google - Initiate Google OAuth flow
-oauthRouter.get('/google', async (_req, res) => {
+oauthRouter.get('/google', asyncHandler(async (_req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4007/api/auth/google/callback'
 
-  try {
     if (!clientId || clientId === 'mock-google-client-id.apps.googleusercontent.com') {
       // Development mode: Redirect to a mock OAuth flow
       // Generate a state token for security (using database storage)
@@ -138,15 +139,10 @@ oauthRouter.get('/google', async (_req, res) => {
     })
 
     res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`)
-  } catch (error) {
-    console.error('[OAuth] Failed to initiate OAuth flow:', error)
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
-    res.redirect(`${frontendUrl}/login?error=oauth_init_failed`)
-  }
-})
+}))
 
 // GET /api/auth/google/callback - Handle Google OAuth callback
-oauthRouter.get('/google/callback', async (req, res) => {
+oauthRouter.get('/google/callback', asyncHandler(async (req, res) => {
   const { code, state, error } = req.query
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174'
 
@@ -173,7 +169,6 @@ oauthRouter.get('/google/callback', async (req, res) => {
     return res.redirect(`${frontendUrl}/login?error=no_code`)
   }
 
-  try {
     const clientId = process.env.GOOGLE_CLIENT_ID
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4007/api/auth/google/callback'
@@ -229,26 +224,20 @@ oauthRouter.get('/google/callback', async (req, res) => {
 
     // Redirect to frontend with token
     res.redirect(`${frontendUrl}/auth/oauth-callback?token=${token}&provider=google`)
-
-  } catch (error) {
-    console.error('[OAuth] Google OAuth callback error:', error)
-    res.redirect(`${frontendUrl}/login?error=oauth_callback_failed`)
-  }
-})
+}))
 
 // POST /api/auth/google/token - Exchange Google ID token for app token (for frontend SDK)
-oauthRouter.post('/google/token', async (req, res) => {
-  try {
+oauthRouter.post('/google/token', asyncHandler(async (req, res) => {
     const { credential, clientId } = req.body
 
     if (!credential) {
-      return res.status(400).json({ message: 'Google credential is required' })
+      throw AppError.badRequest('Google credential is required')
     }
 
     // Decode the JWT (in production, verify with Google's public keys)
     const parts = credential.split('.')
     if (parts.length !== 3) {
-      return res.status(400).json({ message: 'Invalid credential format' })
+      throw AppError.badRequest('Invalid credential format')
     }
 
     const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString())
@@ -259,7 +248,7 @@ oauthRouter.post('/google/token', async (req, res) => {
       console.warn('[OAuth] Client ID mismatch:', payload.aud, 'vs', expectedClientId)
       // In development, allow mismatched client IDs
       if (process.env.NODE_ENV === 'production') {
-        return res.status(400).json({ message: 'Invalid client ID' })
+        throw AppError.badRequest('Invalid client ID')
       }
     }
 
@@ -294,24 +283,18 @@ oauthRouter.post('/google/token', async (req, res) => {
       },
       token
     })
-
-  } catch (error) {
-    console.error('[OAuth] Google token exchange error:', error)
-    res.status(500).json({ message: 'Failed to authenticate with Google' })
-  }
-})
+}))
 
 // POST /api/auth/oauth/mock - Development mock OAuth (simulates successful OAuth)
-oauthRouter.post('/oauth/mock', async (req, res) => {
+oauthRouter.post('/oauth/mock', asyncHandler(async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
-    return res.status(404).json({ message: 'Not found' })
+    throw AppError.notFound('Resource')
   }
 
-  try {
     const { provider, email, name } = req.body
 
     if (!email) {
-      return res.status(400).json({ message: 'Email is required for mock OAuth' })
+      throw AppError.badRequest('Email is required for mock OAuth')
     }
 
     // Create a mock user
@@ -336,12 +319,7 @@ oauthRouter.post('/oauth/mock', async (req, res) => {
       },
       token
     })
-
-  } catch (error) {
-    console.error('[OAuth] Mock flow error:', error)
-    res.status(500).json({ message: 'Mock OAuth failed' })
-  }
-})
+}))
 
 // Helper function to find or create an OAuth user
 async function findOrCreateOAuthUser(params: {

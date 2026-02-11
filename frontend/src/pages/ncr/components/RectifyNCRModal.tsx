@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { getAuthToken } from '@/lib/auth'
 import { apiFetch, apiUrl } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { handleApiError } from '@/lib/errorHandling'
 import type { NCR } from '../types'
 
 interface RectifyNCRModalProps {
@@ -68,11 +69,7 @@ function RectifyNCRModalInner({
 
       setEvidenceFiles(prev => [...prev, file])
     } catch (err) {
-      toast({
-        title: 'Upload Failed',
-        description: err instanceof Error ? err.message : 'Failed to upload evidence',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to upload evidence')
     } finally {
       setUploadingEvidence(false)
     }
@@ -95,11 +92,7 @@ function RectifyNCRModalInner({
       handleClose()
       onSuccess()
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to submit rectification',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to submit rectification')
     } finally {
       setSubmittingRectification(false)
     }

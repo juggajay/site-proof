@@ -2,6 +2,7 @@ import { useState, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
+import { handleApiError } from '@/lib/errorHandling'
 import type { NCR } from '../types'
 
 interface RejectRectificationModalProps {
@@ -44,11 +45,7 @@ function RejectRectificationModalInner({
       handleClose()
       onSuccess()
     } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to reject rectification',
-        variant: 'error',
-      })
+      handleApiError(err, 'Failed to reject rectification')
     } finally {
       setRejectingRectification(false)
     }
