@@ -3,6 +3,7 @@ export function ComplianceStandards() {
     { name: "TfNSW", desc: "Transport for NSW", detail: "Q6 Quality Systems, R-series specs" },
     { name: "TMR", desc: "Queensland Main Roads", detail: "MRTS technical specs" },
     { name: "VicRoads", desc: "Victoria", detail: "Section specs (204, 304, 407, 610)" },
+    { name: "DIT", desc: "South Australia", detail: "Master Specification (RD/ST series)" },
     { name: "Austroads", desc: "National", detail: "Guide to Pavement Technology" },
     { name: "AS", desc: "Australian Standards", detail: "AS 1289, AS 1012, AS 1141" },
   ]

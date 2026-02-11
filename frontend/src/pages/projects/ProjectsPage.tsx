@@ -31,6 +31,7 @@ const SPEC_SET_OPTIONS = [
   { value: 'TfNSW', label: 'TfNSW (NSW)' },
   { value: 'MRTS', label: 'MRTS (QLD)' },
   { value: 'VicRoads', label: 'VicRoads (VIC)' },
+  { value: 'DIT', label: 'DIT (SA)' },
   { value: 'MRWA', label: 'Main Roads WA' },
   { value: 'custom', label: 'Custom' },
 ]

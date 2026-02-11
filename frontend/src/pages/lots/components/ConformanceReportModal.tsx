@@ -28,6 +28,11 @@ const FORMAT_OPTIONS: FormatOption[] = [
     label: 'VicRoads (Victoria)',
     description: 'Department of Transport Victoria Section Specification format',
   },
+  {
+    value: 'dit',
+    label: 'DIT (South Australia)',
+    description: 'Department for Infrastructure and Transport Master Specification format',
+  },
 ]
 
 interface ConformanceReportModalProps {

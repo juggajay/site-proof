@@ -21,7 +21,7 @@ function getJsPDFSync(): typeof import('jspdf').jsPDF {
 getJsPDF().catch(() => {})
 
 // Conformance package format types for Australian road authorities
-export type ConformanceFormat = 'standard' | 'tmr' | 'tfnsw' | 'vicroads'
+export type ConformanceFormat = 'standard' | 'tmr' | 'tfnsw' | 'vicroads' | 'dit'
 
 export interface ConformanceFormatOptions {
   format: ConformanceFormat
@@ -84,6 +84,14 @@ const FORMAT_CONFIGS: Record<ConformanceFormat, {
     requiresSignature: true,
     includesSpecReference: true,
     specPrefix: 'Section',
+  },
+  dit: {
+    title: 'LOT CONFORMANCE CERTIFICATE',
+    subtitle: 'Department for Infrastructure and Transport SA - Master Specification Compliance',
+    headerColor: [0, 63, 114], // DIT SA Blue
+    requiresSignature: true,
+    includesSpecReference: true,
+    specPrefix: 'RD/ST',
   },
 }
 
