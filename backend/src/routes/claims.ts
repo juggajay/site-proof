@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { sendNotificationIfEnabled } from './notifications.js'
+import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 
 // Validation schemas
 const createClaimSchema = z.object({
@@ -258,6 +259,17 @@ router.post('/:projectId/claims', async (req, res) => {
       lotCount: claim._count.claimedLots
     }
 
+    // Audit log for claim creation
+    await createAuditLog({
+      projectId,
+      userId,
+      entityType: 'progress_claim',
+      entityId: claim.id,
+      action: AuditAction.CLAIM_CREATED,
+      changes: { claimNumber: nextClaimNumber, totalClaimedAmount, lotCount: lots.length },
+      req
+    })
+
     res.status(201).json({ claim: transformedClaim })
   } catch (error) {
     console.error('Error creating claim:', error)
@@ -463,6 +475,19 @@ router.put('/:projectId/claims/:claimId', async (req, res) => {
         console.error('[Claim Payment] Failed to send notifications:', notifError)
         // Don't fail the main request if notifications fail
       }
+    }
+
+    // Audit log for claim status change
+    if (status) {
+      await createAuditLog({
+        projectId,
+        userId,
+        entityType: 'progress_claim',
+        entityId: claimId,
+        action: AuditAction.CLAIM_STATUS_CHANGED,
+        changes: { previousStatus, newStatus: status, certifiedAmount, paidAmount },
+        req
+      })
     }
 
     res.json({ claim: updatedClaim })
@@ -1248,6 +1273,17 @@ router.post('/:projectId/claims/:claimId/certify', async (req, res) => {
       message: 'Claim certified successfully'
     }
 
+    // Audit log for claim certification
+    await createAuditLog({
+      projectId,
+      userId,
+      entityType: 'progress_claim',
+      entityId: claimId,
+      action: AuditAction.CLAIM_CERTIFIED,
+      changes: { previousStatus, certifiedAmount, variationNotes },
+      req
+    })
+
     res.json(response)
   } catch (error) {
     console.error('Error certifying claim:', error)
@@ -1448,6 +1484,17 @@ router.post('/:projectId/claims/:claimId/payment', async (req, res) => {
       paymentHistory,
       message: outstanding <= 0 ? 'Claim fully paid' : `Partial payment recorded. Outstanding: $${outstanding.toFixed(2)}`
     }
+
+    // Audit log for claim payment
+    await createAuditLog({
+      projectId,
+      userId,
+      entityType: 'progress_claim',
+      entityId: claimId,
+      action: AuditAction.CLAIM_PAYMENT_RECORDED,
+      changes: { previousStatus, newStatus, paidAmount, paymentReference, totalPaid, outstanding },
+      req
+    })
 
     res.json(response)
   } catch (error) {

@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { type AuthUser } from '../lib/auth.js'
+import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 
 // Type for checklist items from snapshot or template
 interface ChecklistItem {
@@ -1636,6 +1637,21 @@ itpRouter.post('/completions', requireAuth, async (req: Request, res: Response) 
       }
     }
 
+    // Audit log for ITP completion
+    const itpInstanceForAudit = await prisma.iTPInstance.findUnique({
+      where: { id: itpInstanceId },
+      select: { lot: { select: { projectId: true } } }
+    })
+    await createAuditLog({
+      projectId: itpInstanceForAudit?.lot?.projectId,
+      userId: user.userId,
+      entityType: 'itp_completion',
+      entityId: completion.id,
+      action: AuditAction.ITP_ITEM_COMPLETED,
+      changes: { status: newStatus, checklistItemId, notes, verificationStatus },
+      req
+    })
+
     // Transform to frontend-friendly format
     const transformedCompletion = {
       ...completion,
@@ -1711,6 +1727,17 @@ itpRouter.post('/completions/:id/verify', requireAuth, async (req: Request, res:
       }
     }
 
+    // Audit log for ITP verification
+    await createAuditLog({
+      projectId: completion.itpInstance?.lot?.projectId,
+      userId: user.userId,
+      entityType: 'itp_completion',
+      entityId: id,
+      action: AuditAction.ITP_ITEM_VERIFIED,
+      changes: { verificationStatus: 'verified' },
+      req
+    })
+
     // Transform to frontend-friendly format
     const transformedCompletion = {
       ...completion,
@@ -1781,6 +1808,17 @@ itpRouter.post('/completions/:id/reject', requireAuth, async (req: Request, res:
         console.error('Failed to create rejection notification:', notifError)
       }
     }
+
+    // Audit log for ITP rejection
+    await createAuditLog({
+      projectId: completion.itpInstance?.lot?.projectId,
+      userId: user.userId,
+      entityType: 'itp_completion',
+      entityId: id,
+      action: AuditAction.ITP_ITEM_REJECTED,
+      changes: { verificationStatus: 'rejected', reason: reason.trim() },
+      req
+    })
 
     // Transform to frontend-friendly format
     const transformedCompletion = {

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { sendNotificationIfEnabled } from './notifications.js'
 import { sendHPReleaseRequestEmail, sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../lib/email.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 import { parsePagination, getPaginationMeta } from '../lib/pagination.js'
 
 // Type for hold point list item
@@ -636,6 +637,17 @@ holdpointsRouter.post('/request-release', requireAuth, async (req: Request, res:
       // Don't fail the main request
     }
 
+    // Audit log for HP release request
+    await createAuditLog({
+      projectId: lot.project.id,
+      userId: req.user!.userId,
+      entityType: 'hold_point',
+      entityId: holdPoint.id,
+      action: AuditAction.HP_RELEASE_REQUESTED,
+      changes: { lotId, itpChecklistItemId, scheduledDate, scheduledTime, noticePeriodOverride },
+      req
+    })
+
     res.json({
       success: true,
       message: 'Hold point release requested successfully',
@@ -852,6 +864,17 @@ holdpointsRouter.post('/:id/release', requireAuth, async (req: Request, res: Res
       // Don't fail the main request
     }
 
+    // Audit log for HP release
+    await createAuditLog({
+      projectId: existingHP.lot.projectId,
+      userId: req.user!.userId,
+      entityType: 'hold_point',
+      entityId: id,
+      action: AuditAction.HP_RELEASED,
+      changes: { releasedByName, releasedByOrg, releaseMethod, releaseNotes },
+      req
+    })
+
     res.json({
       success: true,
       message: 'Hold point released successfully',
@@ -960,6 +983,17 @@ holdpointsRouter.post('/:id/chase', requireAuth, async (req: Request, res: Respo
       // Don't fail the main request
     }
 
+    // Audit log for HP chase
+    await createAuditLog({
+      projectId: existingHP.lot.project.id,
+      userId: req.user!.userId,
+      entityType: 'hold_point',
+      entityId: id,
+      action: AuditAction.HP_CHASED,
+      changes: { chaseCount: holdPoint.chaseCount },
+      req
+    })
+
     res.json({
       success: true,
       message: 'Chase notification sent',
@@ -1047,6 +1081,17 @@ holdpointsRouter.post('/:id/escalate', requireAuth, async (req: Request, res: Re
       })
     }
 
+    // Audit log for HP escalation
+    await createAuditLog({
+      projectId: existingHP.lot.projectId,
+      userId,
+      entityType: 'hold_point',
+      entityId: id,
+      action: AuditAction.HP_ESCALATED,
+      changes: { escalatedTo, escalationReason },
+      req
+    })
+
     res.json({
       success: true,
       message: 'Hold point escalated successfully',
@@ -1073,7 +1118,19 @@ holdpointsRouter.post('/:id/resolve-escalation', requireAuth, async (req: Reques
       data: {
         escalationResolved: true,
         escalationResolvedAt: new Date()
-      }
+      },
+      include: { lot: { select: { projectId: true } } }
+    })
+
+    // Audit log for HP escalation resolved
+    await createAuditLog({
+      projectId: holdPoint.lot.projectId,
+      userId: req.user!.userId,
+      entityType: 'hold_point',
+      entityId: id,
+      action: AuditAction.HP_ESCALATION_RESOLVED,
+      changes: { escalationResolved: true },
+      req
     })
 
     res.json({
@@ -1961,6 +2018,16 @@ holdpointsRouter.post('/public/:token/release', async (req: Request, res: Respon
       console.error('[HP Secure Release] Failed to send confirmation emails:', emailError)
       // Don't fail the main request
     }
+
+    // Audit log for public HP release (no userId - public endpoint)
+    await createAuditLog({
+      projectId: releaseToken.holdPoint.lot.projectId,
+      entityType: 'hold_point',
+      entityId: holdPoint.id,
+      action: AuditAction.HP_PUBLIC_RELEASED,
+      changes: { releasedByName, releasedByOrg, releaseMethod: 'secure_link', tokenRecipient: releaseToken.recipientEmail },
+      req
+    })
 
     res.json({
       success: true,

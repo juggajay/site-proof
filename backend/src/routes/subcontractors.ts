@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { sendSubcontractorInvitationEmail } from '../lib/email.js'
+import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 
 // Feature #483: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
@@ -419,6 +420,17 @@ subcontractorsRouter.post('/invitation/:id/accept', async (req, res) => {
       })
     }
 
+    // Audit log for subcontractor invitation acceptance
+    await createAuditLog({
+      projectId: subcontractor.project.id,
+      userId: user.id,
+      entityType: 'subcontractor',
+      entityId: id,
+      action: AuditAction.SUBCONTRACTOR_INVITATION_ACCEPTED,
+      changes: { companyName: subcontractor.companyName },
+      req
+    })
+
     res.json({
       message: 'Invitation accepted successfully',
       subcontractor: {
@@ -779,6 +791,17 @@ subcontractorsRouter.patch('/:id/status', async (req, res) => {
       }
     })
 
+    // Audit log for subcontractor status change
+    await createAuditLog({
+      projectId: subcontractor.projectId,
+      userId: user.id,
+      entityType: 'subcontractor',
+      entityId: id,
+      action: AuditAction.SUBCONTRACTOR_STATUS_CHANGED,
+      changes: { previousStatus: subcontractor.status, newStatus: status, companyName: subcontractor.companyName },
+      req
+    })
+
     res.json({
       message: `Subcontractor status updated to ${status}`,
       subcontractor: updatedSubcontractor
@@ -970,6 +993,17 @@ subcontractorsRouter.patch('/:id/portal-access', async (req, res) => {
         companyName: true,
         portalAccess: true,
       }
+    })
+
+    // Audit log for portal access update
+    await createAuditLog({
+      projectId: subcontractor.projectId,
+      userId: user.id,
+      entityType: 'subcontractor',
+      entityId: id,
+      action: AuditAction.SUBCONTRACTOR_PORTAL_ACCESS_UPDATED,
+      changes: { portalAccess: mergedAccess, companyName: subcontractor.companyName },
+      req
     })
 
     res.json({
@@ -1263,6 +1297,21 @@ subcontractorsRouter.patch('/:id/employees/:empId/status', async (req, res) => {
       }
     }
 
+    // Audit log for employee rate status change
+    const subForAudit = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      select: { projectId: true, companyName: true }
+    })
+    await createAuditLog({
+      projectId: subForAudit?.projectId,
+      userId,
+      entityType: 'subcontractor_employee',
+      entityId: empId,
+      action: AuditAction.SUBCONTRACTOR_EMPLOYEE_RATE_APPROVED,
+      changes: { status, employeeName: updated.name, hourlyRate: Number(updated.hourlyRate), counterRate },
+      req
+    })
+
     res.json({
       employee: {
         id: updated.id,
@@ -1469,6 +1518,21 @@ subcontractorsRouter.patch('/:id/plant/:plantId/status', async (req, res) => {
         // Don't fail the main request
       }
     }
+
+    // Audit log for plant rate status change
+    const subForPlantAudit = await prisma.subcontractorCompany.findUnique({
+      where: { id },
+      select: { projectId: true, companyName: true }
+    })
+    await createAuditLog({
+      projectId: subForPlantAudit?.projectId,
+      userId,
+      entityType: 'subcontractor_plant',
+      entityId: plantId,
+      action: AuditAction.SUBCONTRACTOR_PLANT_RATE_APPROVED,
+      changes: { status, plantType: updated.type, dryRate: Number(updated.dryRate), wetRate: Number(updated.wetRate), counterDryRate, counterWetRate },
+      req
+    })
 
     res.json({
       plant: {

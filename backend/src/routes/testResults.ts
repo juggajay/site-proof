@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
 import { sendNotificationIfEnabled } from './notifications.js'
+import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 
 export const testResultsRouter = Router()
 
@@ -571,6 +572,17 @@ testResultsRouter.post('/', async (req, res) => {
       },
     })
 
+    // Audit log for test result creation
+    await createAuditLog({
+      projectId,
+      userId: user.id,
+      entityType: 'test_result',
+      entityId: testResult.id,
+      action: AuditAction.TEST_RESULT_CREATED,
+      changes: { testType, lotId, passFail },
+      req
+    })
+
     res.status(201).json({ testResult })
   } catch (error) {
     console.error('Create test result error:', error)
@@ -664,6 +676,17 @@ testResultsRouter.patch('/:id', async (req, res) => {
       },
     })
 
+    // Audit log for test result update
+    await createAuditLog({
+      projectId: testResult.projectId,
+      userId: user.id,
+      entityType: 'test_result',
+      entityId: id,
+      action: AuditAction.TEST_RESULT_UPDATED,
+      changes: updateData,
+      req
+    })
+
     res.json({ testResult: updatedTestResult })
   } catch (error) {
     console.error('Update test result error:', error)
@@ -702,6 +725,17 @@ testResultsRouter.delete('/:id', async (req, res) => {
         message: 'You do not have permission to delete test results'
       })
     }
+
+    // Audit log for test result deletion (before deleting the record)
+    await createAuditLog({
+      projectId: testResult.projectId,
+      userId: user.id,
+      entityType: 'test_result',
+      entityId: id,
+      action: AuditAction.TEST_RESULT_DELETED,
+      changes: { testType: testResult.testType, lotId: testResult.lotId },
+      req
+    })
 
     await prisma.testResult.delete({
       where: { id },
@@ -1427,6 +1461,17 @@ testResultsRouter.post('/:id/reject', async (req, res) => {
       message: `Your test result "${testResult.testType}" was rejected. Reason: ${reason.trim()}`
     } : null
 
+    // Audit log for test result rejection
+    await createAuditLog({
+      projectId: testResult.projectId,
+      userId: user.id,
+      entityType: 'test_result',
+      entityId: id,
+      action: AuditAction.TEST_RESULT_REJECTED,
+      changes: { reason: reason.trim(), previousStatus: testResult.status },
+      req
+    })
+
     res.json({
       message: 'Test result rejected',
       testResult: updatedTestResult,
@@ -1501,6 +1546,17 @@ testResultsRouter.post('/:id/verify', async (req, res) => {
           }
         },
       },
+    })
+
+    // Audit log for test result verification
+    await createAuditLog({
+      projectId: testResult.projectId,
+      userId: user.id,
+      entityType: 'test_result',
+      entityId: id,
+      action: AuditAction.TEST_RESULT_VERIFIED,
+      changes: { status: 'verified' },
+      req
     })
 
     res.json({
@@ -1712,6 +1768,17 @@ testResultsRouter.post('/:id/status', async (req, res) => {
         // Don't fail the main request if notifications fail
       }
     }
+
+    // Audit log for test result status change
+    await createAuditLog({
+      projectId: testResult.projectId,
+      userId: user.id,
+      entityType: 'test_result',
+      entityId: id,
+      action: AuditAction.TEST_RESULT_STATUS_CHANGED,
+      changes: { previousStatus: currentStatus, newStatus: status },
+      req
+    })
 
     res.json({
       message: `Test result status updated to '${STATUS_LABELS[status] || status}'`,

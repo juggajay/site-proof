@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/authMiddleware.js'
 import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js'
 import { supabase, isSupabaseConfigured, getSupabasePublicUrl, DOCUMENTS_BUCKET } from '../lib/supabase.js'
 import { checkProjectAccess } from '../lib/projectAccess.js'
+import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -782,6 +783,17 @@ router.delete('/:documentId', async (req: Request, res: Response) => {
         fs.unlinkSync(filePath)
       }
     }
+
+    // Audit log for document deletion
+    await createAuditLog({
+      projectId: document.projectId,
+      userId,
+      entityType: 'document',
+      entityId: documentId,
+      action: AuditAction.DOCUMENT_DELETED,
+      changes: { filename: document.filename, fileUrl: document.fileUrl },
+      req
+    })
 
     // Delete database record
     await prisma.document.delete({ where: { id: documentId } })

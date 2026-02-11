@@ -3,7 +3,7 @@ import { Request } from 'express'
 
 interface AuditLogParams {
   projectId?: string
-  userId: string
+  userId?: string
   entityType: string
   entityId: string
   action: string
@@ -66,7 +66,38 @@ export const AuditAction = {
   NCR_STATUS_CHANGED: 'ncr_status_changed',
   DOCKET_SUBMITTED: 'docket_submitted',
   DOCKET_APPROVED: 'docket_approved',
-  DOCKET_REJECTED: 'docket_rejected'
+  DOCKET_REJECTED: 'docket_rejected',
+  // ITP
+  ITP_ITEM_COMPLETED: 'itp_item_completed',
+  ITP_ITEM_VERIFIED: 'itp_item_verified',
+  ITP_ITEM_REJECTED: 'itp_item_rejected',
+  // Hold Points
+  HP_RELEASE_REQUESTED: 'hp_release_requested',
+  HP_RELEASED: 'hp_released',
+  HP_CHASED: 'hp_chased',
+  HP_ESCALATED: 'hp_escalated',
+  HP_ESCALATION_RESOLVED: 'hp_escalation_resolved',
+  HP_PUBLIC_RELEASED: 'hp_public_released',
+  // Documents
+  DOCUMENT_DELETED: 'document_deleted',
+  // Test Results
+  TEST_RESULT_CREATED: 'test_result_created',
+  TEST_RESULT_UPDATED: 'test_result_updated',
+  TEST_RESULT_STATUS_CHANGED: 'test_result_status_changed',
+  TEST_RESULT_DELETED: 'test_result_deleted',
+  TEST_RESULT_VERIFIED: 'test_result_verified',
+  TEST_RESULT_REJECTED: 'test_result_rejected',
+  // Claims
+  CLAIM_CREATED: 'claim_created',
+  CLAIM_STATUS_CHANGED: 'claim_status_changed',
+  CLAIM_CERTIFIED: 'claim_certified',
+  CLAIM_PAYMENT_RECORDED: 'claim_payment_recorded',
+  // Subcontractors
+  SUBCONTRACTOR_INVITATION_ACCEPTED: 'subcontractor_invitation_accepted',
+  SUBCONTRACTOR_STATUS_CHANGED: 'subcontractor_status_changed',
+  SUBCONTRACTOR_EMPLOYEE_RATE_APPROVED: 'subcontractor_employee_rate_approved',
+  SUBCONTRACTOR_PLANT_RATE_APPROVED: 'subcontractor_plant_rate_approved',
+  SUBCONTRACTOR_PORTAL_ACCESS_UPDATED: 'subcontractor_portal_access_updated'
 } as const
 
 export type AuditActionType = typeof AuditAction[keyof typeof AuditAction]
