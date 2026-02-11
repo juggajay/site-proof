@@ -61,7 +61,7 @@ describe('Projects API', () => {
           name: 'Test Project',
           projectNumber: `PROJ-${Date.now()}`,
           state: 'NSW',
-          specificationSet: 'rms',
+          specificationSet: 'TfNSW',
         })
 
       expect(res.status).toBe(201)
@@ -89,7 +89,7 @@ describe('Projects API', () => {
         .send({
           name: 'Auto Number Project',
           state: 'NSW',
-          specificationSet: 'rms',
+          specificationSet: 'TfNSW',
         })
 
       expect(res.status).toBe(201)
@@ -242,7 +242,7 @@ describe('Project Team Management', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id

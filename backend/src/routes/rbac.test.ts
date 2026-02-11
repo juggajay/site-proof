@@ -39,7 +39,7 @@ describe('Role-Based Access Control', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -313,7 +313,7 @@ describe('Role-Based Access Control', () => {
           companyId: otherCompanyId,
           status: 'active',
           state: 'NSW',
-          specificationSet: 'rms',
+          specificationSet: 'TfNSW',
         }
       })
       otherProjectId = otherProject.id

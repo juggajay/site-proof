@@ -53,7 +53,7 @@ describe('NCR API', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -263,7 +263,7 @@ describe('NCR Workflow', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -414,7 +414,7 @@ describe('NCR QM Review - Request Revision', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -543,7 +543,7 @@ describe('Major NCR QM Approval', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id

@@ -52,7 +52,7 @@ describe('Comments API', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id

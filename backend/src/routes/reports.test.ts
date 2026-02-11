@@ -49,7 +49,7 @@ describe('Reports API - Lot Status Report', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -226,7 +226,7 @@ describe('Reports API - NCR Report', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -413,7 +413,7 @@ describe('Reports API - Test Results Report', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -614,7 +614,7 @@ describe('Reports API - Diary Report', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -785,7 +785,7 @@ describe('Reports API - Summary Report', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -925,7 +925,7 @@ describe('Reports API - Claims Report', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id
@@ -1115,7 +1115,7 @@ describe('Reports API - Scheduled Reports', () => {
         companyId,
         status: 'active',
         state: 'NSW',
-        specificationSet: 'rms',
+        specificationSet: 'TfNSW',
       }
     })
     projectId = project.id

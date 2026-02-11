@@ -666,7 +666,7 @@ describe('Company API', () => {
           companyId: leaveCompanyId,
           status: 'active',
           state: 'NSW',
-          specificationSet: 'rms',
+          specificationSet: 'TfNSW',
         }
       })
       projectId = project.id
