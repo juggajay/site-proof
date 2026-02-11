@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { createAuditLog, AuditAction } from '../lib/auditLog.js'
 import { sendNotificationIfEnabled } from './notifications.js'
+import { TIER_PROJECT_LIMITS, TIER_USER_LIMITS } from '../lib/tierLimits.js'
 
 export const projectsRouter = Router()
 
@@ -680,14 +681,6 @@ projectsRouter.get('/:id/costs', async (req, res) => {
   }
 })
 
-// Subscription tier project limits
-const TIER_PROJECT_LIMITS: Record<string, number> = {
-  basic: 3,
-  professional: 10,
-  enterprise: 50,
-  unlimited: Infinity,
-}
-
 // POST /api/projects - Create a new project
 projectsRouter.post('/', async (req, res) => {
   try {
@@ -1110,13 +1103,6 @@ projectsRouter.post('/:id/users', async (req, res) => {
       })
 
       if (company) {
-        const TIER_USER_LIMITS: Record<string, number> = {
-          basic: 5,
-          professional: 25,
-          enterprise: 100,
-          unlimited: Infinity,
-        }
-
         const tier = company.subscriptionTier || 'basic'
         const userLimit = TIER_USER_LIMITS[tier] || TIER_USER_LIMITS.basic
 

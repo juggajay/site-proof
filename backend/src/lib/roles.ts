@@ -68,6 +68,27 @@ export function canApproveItems(role: string): boolean {
 }
 
 /**
+ * Role groups for permission checking.
+ * Use these to check if a user belongs to a category of roles.
+ */
+export const ROLE_GROUPS = {
+  COMMERCIAL: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
+  ADMIN: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
+  MANAGEMENT: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER] as const,
+  QUALITY: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.QUALITY_MANAGER] as const,
+  SUBCONTRACTOR: [ROLES.SUBCONTRACTOR, ROLES.SUBCONTRACTOR_ADMIN] as const,
+  FIELD: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER, ROLES.SITE_ENGINEER, ROLES.FOREMAN] as const,
+  VIEWER: [ROLES.VIEWER] as const,
+}
+
+/**
+ * Check if a role is in a specific role group
+ */
+export function hasRoleInGroup(role: string, group: readonly string[]): boolean {
+  return group.includes(role)
+}
+
+/**
  * Get the display name for a role
  */
 export function getRoleDisplayName(role: string): string {

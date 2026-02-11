@@ -1,22 +1,11 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import type { ReactNode } from 'react'
-
-// Role hierarchy - higher roles include lower role permissions (reserved for future use)
-export const ROLE_HIERARCHY: Record<string, number> = {
-  owner: 100,
-  admin: 90,
-  project_manager: 80,
-  quality_manager: 70,
-  site_engineer: 60,
-  foreman: 50,
-  viewer: 10,
-  member: 5,
-}
+import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles'
 
 interface RoleProtectedRouteProps {
   children: ReactNode
-  allowedRoles: string[]
+  allowedRoles: readonly string[]
   redirectTo?: string
 }
 
@@ -68,10 +57,10 @@ export function RoleProtectedRoute({
 
 // Helper to check if a role has admin privileges
 export function isAdminRole(role: string): boolean {
-  return ['owner', 'admin', 'project_manager'].includes(role)
+  return hasRoleInGroup(role, ROLE_GROUPS.ADMIN)
 }
 
 // Helper to check if a role can view commercial data
 export function canViewCommercialData(role: string): boolean {
-  return ['owner', 'admin', 'project_manager'].includes(role)
+  return hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL)
 }

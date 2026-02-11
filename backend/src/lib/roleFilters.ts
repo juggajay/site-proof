@@ -4,6 +4,7 @@
  */
 
 import { prisma } from './prisma.js'
+import { ROLE_GROUPS, hasRoleInGroup } from './roles.js'
 
 interface AuthUser {
   id: string
@@ -44,39 +45,35 @@ export async function getSubcontractorCompanyId(user: AuthUser): Promise<string 
  * Check if a user has a subcontractor role.
  */
 export function isSubcontractor(user: AuthUser): boolean {
-  return user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin'
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.SUBCONTRACTOR)
 }
 
 /**
  * Check if a user has commercial access (can view budgets, rates, claims).
  */
 export function hasCommercialAccess(user: AuthUser): boolean {
-  const commercialRoles = ['owner', 'admin', 'project_manager']
-  return commercialRoles.includes(user.roleInCompany)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.COMMERCIAL)
 }
 
 /**
  * Check if a user has admin access.
  */
 export function hasAdminAccess(user: AuthUser): boolean {
-  const adminRoles = ['owner', 'admin', 'project_manager']
-  return adminRoles.includes(user.roleInCompany)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.ADMIN)
 }
 
 /**
  * Check if a user has quality management access.
  */
 export function hasQualityAccess(user: AuthUser): boolean {
-  const qualityRoles = ['owner', 'admin', 'project_manager', 'quality_manager']
-  return qualityRoles.includes(user.roleInCompany)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.QUALITY)
 }
 
 /**
  * Check if a user has management access (can manage subcontractors, site operations).
  */
 export function hasManagementAccess(user: AuthUser): boolean {
-  const managementRoles = ['owner', 'admin', 'project_manager', 'site_manager']
-  return managementRoles.includes(user.roleInCompany)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.MANAGEMENT)
 }
 
 /**

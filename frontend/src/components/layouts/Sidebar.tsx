@@ -27,16 +27,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
 import { useUIStore } from '@/stores/uiStore'  // Feature #442: Zustand client state
-
-// Role-based access definitions
-const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
-const ADMIN_ROLES = ['owner', 'admin']
-const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
-export const FIELD_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'site_engineer', 'foreman']
-const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
-
-// Roles that can only view (read-only access)
-export const VIEW_ONLY_ROLES = ['viewer']
+import { ROLE_GROUPS, hasRoleInGroup, isAdminRole, isSubcontractorRole, hasCommercialAccess } from '@/lib/roles'
 
 // Foreman simplified menu - only sees essential field items
 const FOREMAN_MENU_ITEMS = ['Lots', 'ITPs', 'Hold Points', 'Test Results', 'NCRs', 'Daily Diary', 'Docket Approvals']
@@ -49,14 +40,14 @@ interface NavigationItem {
   requiresCommercialAccess?: boolean
   requiresAdmin?: boolean
   requiresManagement?: boolean
-  allowedRoles?: string[]
-  excludeRoles?: string[]
+  allowedRoles?: readonly string[]
+  excludeRoles?: readonly string[]
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
   { name: 'Portfolio', href: '/portfolio', icon: PieChart, requiresProject: false, requiresAdmin: true },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
 ]
 
 const projectNavigation: NavigationItem[] = [
@@ -77,7 +68,7 @@ const projectNavigation: NavigationItem[] = [
 
 // Settings navigation items
 const settingsNavigation: NavigationItem[] = [
-  { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
   { name: 'Help & Support', href: '/support', icon: HelpCircle },
   { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
   { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAdmin: true },
@@ -85,8 +76,8 @@ const settingsNavigation: NavigationItem[] = [
 
 // Subcontractor-specific navigation
 const subcontractorNavigation: NavigationItem[] = [
-  { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase, allowedRoles: SUBCONTRACTOR_ROLES },
-  { name: 'My Company', href: '/my-company', icon: Building2, allowedRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase, allowedRoles: ROLE_GROUPS.SUBCONTRACTOR },
+  { name: 'My Company', href: '/my-company', icon: Building2, allowedRoles: ROLE_GROUPS.SUBCONTRACTOR },
 ]
 
 // Module to navigation mapping (Feature #700)
@@ -157,24 +148,24 @@ export function Sidebar() {
   const userRole = user?.role || ''
 
   // Role-based access checks
-  const hasCommercialAccess = COMMERCIAL_ROLES.includes(userRole)
-  const hasAdminAccess = ADMIN_ROLES.includes(userRole)
-  const hasManagementAccess = MANAGEMENT_ROLES.includes(userRole)
+  const hasCommercial = hasCommercialAccess(userRole)
+  const hasAdmin = isAdminRole(userRole)
+  const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT)
   const isForeman = userRole === 'foreman'
-  const isSubcontractor = SUBCONTRACTOR_ROLES.includes(userRole)
+  const isSubcontractor = isSubcontractorRole(userRole)
 
   // Helper function to check if a menu item should be visible
   const shouldShowItem = (item: NavigationItem): boolean => {
     // Check commercial access requirement
-    if (item.requiresCommercialAccess && !hasCommercialAccess) {
+    if (item.requiresCommercialAccess && !hasCommercial) {
       return false
     }
     // Check admin access requirement
-    if (item.requiresAdmin && !hasAdminAccess) {
+    if (item.requiresAdmin && !hasAdmin) {
       return false
     }
     // Check management access requirement
-    if (item.requiresManagement && !hasManagementAccess) {
+    if (item.requiresManagement && !hasManagement) {
       return false
     }
     // Check allowed roles

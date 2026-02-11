@@ -1,27 +1,12 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
+import { TIER_PROJECT_LIMITS, TIER_USER_LIMITS } from '../lib/tierLimits.js'
 
 export const companyRouter = Router()
 
 // Apply authentication middleware to all routes
 companyRouter.use(requireAuth)
-
-// Subscription tier project limits
-const TIER_PROJECT_LIMITS: Record<string, number> = {
-  basic: 3,
-  professional: 10,
-  enterprise: 50,
-  unlimited: Infinity,
-}
-
-// Subscription tier user limits
-const TIER_USER_LIMITS: Record<string, number> = {
-  basic: 5,
-  professional: 25,
-  enterprise: 100,
-  unlimited: Infinity,
-}
 
 // GET /api/company - Get the current user's company
 companyRouter.get('/', async (req, res) => {

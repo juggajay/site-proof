@@ -24,13 +24,9 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { ForemanBottomNavV2 } from '@/components/foreman'
 import { useForemanMobileStore } from '@/stores/foremanMobileStore'
+import { ROLE_GROUPS, hasRoleInGroup, isAdminRole, isSubcontractorRole, hasCommercialAccess } from '@/lib/roles'
 
-// Role-based access definitions
-const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager']
-const ADMIN_ROLES = ['owner', 'admin']
-const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager']
 const FOREMAN_MENU_ITEMS = ['Lots', 'ITPs', 'Hold Points', 'Test Results', 'NCRs', 'Daily Diary', 'Docket Approvals']
-export const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin']
 
 // Subcontractor-specific navigation
 const subcontractorNavigation = [
@@ -46,13 +42,13 @@ interface NavigationItem {
   requiresCommercialAccess?: boolean
   requiresAdmin?: boolean
   requiresManagement?: boolean
-  allowedRoles?: string[]
-  excludeRoles?: string[]
+  allowedRoles?: readonly string[]
+  excludeRoles?: readonly string[]
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false, excludeRoles: SUBCONTRACTOR_ROLES },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
+  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
 ]
 
 const projectNavigation: NavigationItem[] = [
@@ -73,10 +69,10 @@ const projectNavigation: NavigationItem[] = [
 
 // Bottom nav - most important items for quick access
 const bottomNavItems: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, excludeRoles: SUBCONTRACTOR_ROLES },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, excludeRoles: SUBCONTRACTOR_ROLES },
-  { name: 'Lots', href: 'lots', icon: MapPin, requiresProject: true, excludeRoles: SUBCONTRACTOR_ROLES },
-  { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: SUBCONTRACTOR_ROLES },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
+  { name: 'Projects', href: '/projects', icon: FolderKanban, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
+  { name: 'Lots', href: 'lots', icon: MapPin, requiresProject: true, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
+  { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
 ]
 
 // Subcontractor bottom nav items
@@ -92,17 +88,17 @@ export function MobileNav() {
 
   // Use roleInCompany first (from backend), fallback to role
   const userRole = (user as any)?.roleInCompany || user?.role || ''
-  const hasCommercialAccess = COMMERCIAL_ROLES.includes(userRole)
-  const hasAdminAccess = ADMIN_ROLES.includes(userRole)
-  const hasManagementAccess = MANAGEMENT_ROLES.includes(userRole)
+  const hasCommercial = hasCommercialAccess(userRole)
+  const hasAdmin = isAdminRole(userRole)
+  const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT)
   const isForeman = userRole === 'foreman'
-  const isSubcontractor = SUBCONTRACTOR_ROLES.includes(userRole)
+  const isSubcontractor = isSubcontractorRole(userRole)
   const { setIsCameraOpen } = useForemanMobileStore()
 
   const shouldShowItem = (item: NavigationItem): boolean => {
-    if (item.requiresCommercialAccess && !hasCommercialAccess) return false
-    if (item.requiresAdmin && !hasAdminAccess) return false
-    if (item.requiresManagement && !hasManagementAccess) return false
+    if (item.requiresCommercialAccess && !hasCommercial) return false
+    if (item.requiresAdmin && !hasAdmin) return false
+    if (item.requiresManagement && !hasManagement) return false
     if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return false
     if (item.excludeRoles && item.excludeRoles.includes(userRole)) return false
     return true
