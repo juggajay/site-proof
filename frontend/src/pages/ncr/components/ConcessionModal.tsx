@@ -1,6 +1,23 @@
-import { useState, memo } from 'react'
-import { createPortal } from 'react-dom'
+import { memo } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import type { NCR } from '../types'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+
+const concessionSchema = z.object({
+  justification: z.string().min(1, 'Concession justification is required'),
+  riskAssessment: z.string().min(1, 'Risk assessment is required'),
+  verificationNotes: z.string().optional().default(''),
+  clientApprovalConfirmed: z.boolean().default(false),
+  clientApprovalReference: z.string().optional().default(''),
+})
+
+type ConcessionFormData = z.infer<typeof concessionSchema>
 
 interface ConcessionModalProps {
   isOpen: boolean
@@ -22,35 +39,46 @@ function ConcessionModalInner({
   onSubmit,
   loading,
 }: ConcessionModalProps) {
-  const [justification, setJustification] = useState('')
-  const [riskAssessment, setRiskAssessment] = useState('')
-  const [verificationNotes, setVerificationNotes] = useState('')
-  const [clientApprovalConfirmed, setClientApprovalConfirmed] = useState(false)
-  const [clientApprovalReference, setClientApprovalReference] = useState('')
-
   const isMajor = ncr?.severity === 'major'
   const requiresClientApproval = isMajor
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<ConcessionFormData>({
+    resolver: zodResolver(concessionSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      justification: '',
+      riskAssessment: '',
+      verificationNotes: '',
+      clientApprovalConfirmed: false,
+      clientApprovalReference: '',
+    },
+  })
+
+  const clientApprovalConfirmed = watch('clientApprovalConfirmed')
+  const justification = watch('justification')
+  const riskAssessment = watch('riskAssessment')
+
+  const onFormSubmit = (data: ConcessionFormData) => {
     if (!ncr) return
-    if (requiresClientApproval && !clientApprovalConfirmed) {
+    if (requiresClientApproval && !data.clientApprovalConfirmed) {
       return
     }
     onSubmit(ncr.id, {
-      concessionJustification: justification,
-      concessionRiskAssessment: riskAssessment,
-      verificationNotes: verificationNotes || undefined,
-      clientApprovalDocId: clientApprovalReference || undefined,
+      concessionJustification: data.justification,
+      concessionRiskAssessment: data.riskAssessment,
+      verificationNotes: data.verificationNotes || undefined,
+      clientApprovalDocId: data.clientApprovalReference || undefined,
     })
   }
 
   const handleClose = () => {
-    setJustification('')
-    setRiskAssessment('')
-    setVerificationNotes('')
-    setClientApprovalConfirmed(false)
-    setClientApprovalReference('')
+    reset()
     onClose()
   }
 
@@ -58,22 +86,10 @@ function ConcessionModalInner({
 
   if (!isOpen || !ncr) return null
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-bold">Close NCR with Concession</h2>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Close modal"
-          >
-            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+  return (
+    <Modal onClose={handleClose} className="max-w-lg">
+      <ModalHeader>Close NCR with Concession</ModalHeader>
+      <ModalBody>
         <p className="text-sm text-muted-foreground mb-4">
           Use this when full rectification is not possible and a concession is required.
         </p>
@@ -104,61 +120,56 @@ function ConcessionModalInner({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="concession-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           {/* Justification */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Concession Justification *
-            </label>
+            <Label>Concession Justification *</Label>
             <p className="text-xs text-muted-foreground mb-1">
               Explain why full rectification is not possible
             </p>
-            <textarea
-              value={justification}
-              onChange={(e) => setJustification(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+            <Textarea
+              {...register('justification')}
+              className={errors.justification ? 'border-destructive' : ''}
               rows={3}
               placeholder="Describe why the non-conformance cannot be fully rectified..."
-              required
             />
+            {errors.justification && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.justification.message}</p>
+            )}
           </div>
 
           {/* Risk Assessment */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Risk Assessment *
-            </label>
+            <Label>Risk Assessment *</Label>
             <p className="text-xs text-muted-foreground mb-1">
               Assess the risk of accepting this concession
             </p>
-            <textarea
-              value={riskAssessment}
-              onChange={(e) => setRiskAssessment(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+            <Textarea
+              {...register('riskAssessment')}
+              className={errors.riskAssessment ? 'border-destructive' : ''}
               rows={3}
               placeholder="Describe the risk implications, mitigation measures, and impact on quality/safety..."
-              required
             />
+            {errors.riskAssessment && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.riskAssessment.message}</p>
+            )}
           </div>
 
           {/* Client Approval Section for Major NCRs */}
           {requiresClientApproval && (
             <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
-              <label className="block text-sm font-medium mb-2 text-amber-900">
-                Client Approval *
-              </label>
+              <Label className="text-amber-900">Client Approval *</Label>
 
-              <div className="space-y-3">
+              <div className="space-y-3 mt-2">
                 {/* Approval Reference/Document ID */}
                 <div>
                   <label className="block text-xs text-amber-800 mb-1">
                     Approval Document Reference
                   </label>
-                  <input
+                  <Input
                     type="text"
-                    value={clientApprovalReference}
-                    onChange={(e) => setClientApprovalReference(e.target.value)}
-                    className="w-full px-3 py-2 border border-amber-300 rounded-lg bg-white"
+                    {...register('clientApprovalReference')}
+                    className="border-amber-300 bg-white"
                     placeholder="e.g., Email ref, Letter ID, Document number..."
                   />
                 </div>
@@ -167,8 +178,7 @@ function ConcessionModalInner({
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={clientApprovalConfirmed}
-                    onChange={(e) => setClientApprovalConfirmed(e.target.checked)}
+                    {...register('clientApprovalConfirmed')}
                     className="mt-1 rounded border-amber-400"
                   />
                   <span className="text-sm text-amber-900">
@@ -181,13 +191,10 @@ function ConcessionModalInner({
 
           {/* Verification Notes (Optional) */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Verification Notes
-            </label>
-            <textarea
-              value={verificationNotes}
-              onChange={(e) => setVerificationNotes(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+            <Label>Verification Notes</Label>
+            <Textarea
+              {...register('verificationNotes')}
+              className={errors.verificationNotes ? 'border-destructive mt-1' : 'mt-1'}
               rows={2}
               placeholder="Any additional verification notes..."
             />
@@ -198,28 +205,25 @@ function ConcessionModalInner({
             <span className="text-muted-foreground">NCR will be closed with status: </span>
             <span className="font-medium text-green-700">CLOSED_CONCESSION</span>
           </div>
-
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 text-sm border rounded-lg hover:bg-muted"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !isFormValid}
-              className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
-            >
-              {loading ? 'Closing...' : 'Close with Concession'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleClose}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="concession-form"
+          disabled={loading || !isFormValid}
+        >
+          {loading ? 'Closing...' : 'Close with Concession'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 

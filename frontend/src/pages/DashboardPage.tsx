@@ -1,12 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { apiFetch } from '@/lib/api'
 import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard'
 import { ForemanMobileDashboard } from '@/components/foreman'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard'
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard'
+import { Button } from '@/components/ui/button'
 import {
   FolderKanban,
   AlertTriangle,
@@ -181,11 +184,10 @@ interface DashboardStats {
 export function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [_projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
 
-  // Call useIsMobile before any early returns (React hook rules)
+  // Call hooks before any early returns (React hook rules)
   const isMobile = useIsMobile()
+  const queryClient = useQueryClient()
 
   // Feature #292, #293, #294: Check user role for role-specific dashboards
   const userRole = (user as any)?.roleInCompany || (user as any)?.role
@@ -235,7 +237,7 @@ export function DashboardPage() {
     }
   }, [dateRangePreset])
 
-  const [stats, setStats] = useState<DashboardStats>({
+  const defaultStats: DashboardStats = {
     totalProjects: 0,
     activeProjects: 0,
     totalLots: 0,
@@ -247,7 +249,7 @@ export function DashboardPage() {
       total: 0
     },
     recentActivities: [],
-  })
+  }
 
   // Widget visibility state with localStorage persistence
   const [visibleWidgets, setVisibleWidgets] = useState<WidgetId[]>(() => {
@@ -264,76 +266,57 @@ export function DashboardPage() {
 
   const [showWidgetSettings, setShowWidgetSettings] = useState(false)
 
-  // Refresh trigger - increment to force data refresh
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Primary dashboard stats query
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: queryKeys.dashboardStats(currentDateRange.startDate, currentDateRange.endDate),
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        startDate: currentDateRange.startDate,
+        endDate: currentDateRange.endDate,
+      })
+      try {
+        const result = await apiFetch<DashboardStats>(`/api/dashboard/stats?${params}`)
+        return {
+          totalProjects: result.totalProjects || 0,
+          activeProjects: result.activeProjects || 0,
+          totalLots: result.totalLots || 0,
+          openHoldPoints: result.openHoldPoints || 0,
+          openNCRs: result.openNCRs || 0,
+          attentionItems: result.attentionItems || { overdueNCRs: [], staleHoldPoints: [], total: 0 },
+          recentActivities: result.recentActivities || [],
+        } as DashboardStats
+      } catch {
+        // Fallback to projects endpoint if dashboard stats fails
+        const data = await apiFetch<{ projects: Project[] }>('/api/projects')
+        const projectList = data.projects || []
+        return {
+          totalProjects: projectList.length,
+          activeProjects: projectList.filter((p: Project) => p.status === 'active').length,
+          totalLots: 0,
+          openHoldPoints: 0,
+          openNCRs: 0,
+          attentionItems: { overdueNCRs: [], staleHoldPoints: [], total: 0 },
+          recentActivities: [
+            { id: '1', type: 'lot', description: 'Lot LOT-001 status changed to completed', timestamp: new Date().toISOString() },
+            { id: '2', type: 'ncr', description: 'New NCR raised: NCR-2024-001', timestamp: new Date(Date.now() - 3600000).toISOString() },
+            { id: '3', type: 'holdpoint', description: 'Hold point released for concrete pour', timestamp: new Date(Date.now() - 7200000).toISOString() },
+          ],
+        } as DashboardStats
+      }
+    },
+  })
+
+  const stats = statsData ?? defaultStats
+  const loading = statsLoading
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true)
-    setRefreshTrigger(prev => prev + 1)
-  }, [])
-
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        // Build URL with date range parameters
-        const params = new URLSearchParams({
-          startDate: currentDateRange.startDate,
-          endDate: currentDateRange.endDate,
-        })
-
-        try {
-          // Fetch dashboard stats from new endpoint with date range
-          const statsData = await apiFetch<DashboardStats>(`/api/dashboard/stats?${params}`)
-          setStats({
-            totalProjects: statsData.totalProjects || 0,
-            activeProjects: statsData.activeProjects || 0,
-            totalLots: statsData.totalLots || 0,
-            openHoldPoints: statsData.openHoldPoints || 0,
-            openNCRs: statsData.openNCRs || 0,
-            attentionItems: statsData.attentionItems || {
-              overdueNCRs: [],
-              staleHoldPoints: [],
-              total: 0
-            },
-            recentActivities: statsData.recentActivities || [],
-          })
-        } catch {
-          // Fallback to projects endpoint if dashboard stats fails
-          try {
-            const data = await apiFetch<{ projects: Project[] }>('/api/projects')
-            const projectList = data.projects || []
-            setProjects(projectList)
-
-            setStats({
-              totalProjects: projectList.length,
-              activeProjects: projectList.filter((p: Project) => p.status === 'active').length,
-              totalLots: 0,
-              openHoldPoints: 0,
-              openNCRs: 0,
-              attentionItems: {
-                overdueNCRs: [],
-                staleHoldPoints: [],
-                total: 0
-              },
-              recentActivities: [
-                { id: '1', type: 'lot', description: 'Lot LOT-001 status changed to completed', timestamp: new Date().toISOString() },
-                { id: '2', type: 'ncr', description: 'New NCR raised: NCR-2024-001', timestamp: new Date(Date.now() - 3600000).toISOString() },
-                { id: '3', type: 'holdpoint', description: 'Hold point released for concrete pour', timestamp: new Date(Date.now() - 7200000).toISOString() },
-              ],
-            })
-          } catch { /* ignore fallback failure */ }
-        }
-      } catch (err) {
-        console.error('Failed to fetch dashboard data:', err)
-      } finally {
-        setLoading(false)
-        setIsRefreshing(false)
-      }
-    }
-
-    fetchDashboardData()
-  }, [currentDateRange, refreshTrigger])
+    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }).then(() => {
+      setIsRefreshing(false)
+    })
+  }, [queryClient])
 
   const isWidgetVisible = (widgetId: WidgetId) => visibleWidgets.includes(widgetId)
 
@@ -426,15 +409,15 @@ export function DashboardPage() {
         <div className="flex items-center gap-2 no-print">
           {/* Date Range Filter */}
           <div className="relative">
-            <button
+            <Button
+              variant="outline"
               onClick={() => setShowDateRangeDropdown(!showDateRangeDropdown)}
-              className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
               title="Filter by date range"
             >
               <Calendar className="h-4 w-4" />
               <span>{currentDateRange.label}</span>
               <ChevronDown className="h-4 w-4" />
-            </button>
+            </Button>
 
             {showDateRangeDropdown && (
               <>
@@ -469,36 +452,36 @@ export function DashboardPage() {
           </div>
 
           {/* Refresh Button */}
-          <button
+          <Button
+            variant="outline"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
             title="Refresh dashboard data"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+          </Button>
 
           {/* Export PDF Button */}
-          <button
+          <Button
+            variant="outline"
             onClick={handleExportPDF}
-            className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
             title="Export to PDF"
           >
             <Download className="h-4 w-4" />
             Export PDF
-          </button>
+          </Button>
 
           {/* Widget Settings Dropdown */}
           <div className="relative">
-            <button
+            <Button
+              variant="outline"
               onClick={() => setShowWidgetSettings(!showWidgetSettings)}
-              className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
               title="Customize widgets"
             >
               <Settings2 className="h-4 w-4" />
               Customize
-            </button>
+            </Button>
 
           {showWidgetSettings && (
             <>

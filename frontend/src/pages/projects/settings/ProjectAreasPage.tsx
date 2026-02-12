@@ -2,7 +2,11 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { toast } from '@/components/ui/toaster'
 import { apiFetch } from '@/lib/api'
-import { MapPin, Plus, Trash2, Edit2, X, Palette } from 'lucide-react'
+import { MapPin, Plus, Trash2, Edit2, Palette } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 
 interface ProjectArea {
   id: string
@@ -174,13 +178,10 @@ export function ProjectAreasPage() {
           <h1 className="text-2xl font-bold">Project Areas</h1>
           <p className="text-muted-foreground">Define areas or zones within the project chainage</p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-        >
+        <Button onClick={openAddModal}>
           <Plus className="h-4 w-4" />
           Add Area
-        </button>
+        </Button>
       </div>
 
       {loading ? (
@@ -194,12 +195,9 @@ export function ProjectAreasPage() {
           <p className="mt-2 text-muted-foreground">
             Create areas to organize your project by chainage ranges.
           </p>
-          <button
-            onClick={openAddModal}
-            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-          >
+          <Button onClick={openAddModal} className="mt-4">
             Add First Area
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
@@ -232,21 +230,25 @@ export function ProjectAreasPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => openEditModal(area)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                        className="text-blue-600 hover:bg-blue-50"
                         title="Edit"
                       >
                         <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => handleDelete(area)}
                         disabled={deletingId === area.id}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                        className="text-red-600 hover:bg-red-50"
                         title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -258,59 +260,48 @@ export function ProjectAreasPage() {
 
       {/* Add/Edit Area Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md bg-background rounded-lg shadow-xl">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">
-                {editingArea ? 'Edit Area' : 'Add Area'}
-              </h2>
-              <button onClick={closeModal} className="p-1 hover:bg-muted rounded">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4">
+        <Modal onClose={closeModal}>
+          <ModalHeader>{editingArea ? 'Edit Area' : 'Add Area'}</ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Area Name *</label>
-                <input
+                <Label className="mb-1">Area Name *</Label>
+                <Input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="e.g., Section A, Zone 1"
-                  className="w-full rounded border px-3 py-2 text-sm"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Chainage Start (m)</label>
-                  <input
+                  <Label className="mb-1">Chainage Start (m)</Label>
+                  <Input
                     type="number"
                     value={formChainageStart}
                     onChange={(e) => setFormChainageStart(e.target.value)}
                     placeholder="0"
-                    className="w-full rounded border px-3 py-2 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Chainage End (m)</label>
-                  <input
+                  <Label className="mb-1">Chainage End (m)</Label>
+                  <Input
                     type="number"
                     value={formChainageEnd}
                     onChange={(e) => setFormChainageEnd(e.target.value)}
                     placeholder="1000"
-                    className="w-full rounded border px-3 py-2 text-sm"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <Label className="mb-1">
                   <div className="flex items-center gap-1.5">
                     <Palette className="h-4 w-4" />
                     Colour
                   </div>
-                </label>
+                </Label>
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {COLOUR_OPTIONS.map((colour) => (
                     <button
@@ -360,24 +351,19 @@ export function ProjectAreasPage() {
                 </div>
               </div>
             </div>
-
-            <div className="flex justify-end gap-2 p-4 border-t">
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-sm border rounded hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formName.trim()}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : editingArea ? 'Update Area' : 'Add Area'}
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="outline" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={saving || !formName.trim()}
+            >
+              {saving ? 'Saving...' : editingArea ? 'Update Area' : 'Add Area'}
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
     </div>
   )

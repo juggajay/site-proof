@@ -1,9 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/toaster'
 import { Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 
 interface SubcontractorCompany {
   id: string
@@ -21,6 +27,14 @@ interface LotSubcontractorAssignment {
     companyName: string
   }
 }
+
+const assignSubcontractorSchema = z.object({
+  selectedSubcontractor: z.string(),
+  canCompleteITP: z.boolean(),
+  itpRequiresVerification: z.boolean(),
+})
+
+type AssignSubcontractorFormData = z.infer<typeof assignSubcontractorSchema>
 
 interface AssignSubcontractorModalProps {
   lotId: string
@@ -42,28 +56,40 @@ export function AssignSubcontractorModal({
   const queryClient = useQueryClient()
   const isEditing = !!existingAssignment
 
-  const [selectedSubcontractor, setSelectedSubcontractor] = useState(
-    existingAssignment?.subcontractorCompanyId || ''
-  )
-  const [canCompleteITP, setCanCompleteITP] = useState(
-    existingAssignment?.canCompleteITP || false
-  )
-  const [itpRequiresVerification, setItpRequiresVerification] = useState(
-    existingAssignment?.itpRequiresVerification ?? true
-  )
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+  } = useForm<AssignSubcontractorFormData>({
+    resolver: zodResolver(assignSubcontractorSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      selectedSubcontractor: existingAssignment?.subcontractorCompanyId || '',
+      canCompleteITP: existingAssignment?.canCompleteITP || false,
+      itpRequiresVerification: existingAssignment?.itpRequiresVerification ?? true,
+    },
+  })
+
+  const selectedSubcontractor = watch('selectedSubcontractor')
+  const canCompleteITP = watch('canCompleteITP')
 
   // Reset form when existingAssignment changes
   useEffect(() => {
     if (existingAssignment) {
-      setSelectedSubcontractor(existingAssignment.subcontractorCompanyId)
-      setCanCompleteITP(existingAssignment.canCompleteITP)
-      setItpRequiresVerification(existingAssignment.itpRequiresVerification)
+      reset({
+        selectedSubcontractor: existingAssignment.subcontractorCompanyId,
+        canCompleteITP: existingAssignment.canCompleteITP,
+        itpRequiresVerification: existingAssignment.itpRequiresVerification,
+      })
     } else {
-      setSelectedSubcontractor('')
-      setCanCompleteITP(false)
-      setItpRequiresVerification(true)
+      reset({
+        selectedSubcontractor: '',
+        canCompleteITP: false,
+        itpRequiresVerification: true,
+      })
     }
-  }, [existingAssignment])
+  }, [existingAssignment, reset])
 
   // Fetch subcontractors for this project (exclude only rejected/removed)
   const { data: subcontractors = [], isLoading: loadingSubcontractors, error: subError } = useQuery({
@@ -120,19 +146,19 @@ export function AssignSubcontractorModal({
   console.log('[AssignSubModal] Final available subcontractors:', availableSubcontractors)
 
   const assignMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (data: AssignSubcontractorFormData) => {
       if (isEditing && existingAssignment) {
         return apiFetch(`/api/lots/${lotId}/subcontractors/${existingAssignment.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ canCompleteITP, itpRequiresVerification })
+          body: JSON.stringify({ canCompleteITP: data.canCompleteITP, itpRequiresVerification: data.itpRequiresVerification })
         })
       }
       return apiFetch(`/api/lots/${lotId}/subcontractors`, {
         method: 'POST',
         body: JSON.stringify({
-          subcontractorCompanyId: selectedSubcontractor,
-          canCompleteITP,
-          itpRequiresVerification
+          subcontractorCompanyId: data.selectedSubcontractor,
+          canCompleteITP: data.canCompleteITP,
+          itpRequiresVerification: data.itpRequiresVerification
         })
       })
     },
@@ -159,8 +185,8 @@ export function AssignSubcontractorModal({
     }
   })
 
-  const handleSubmit = () => {
-    if (!isEditing && !selectedSubcontractor) {
+  const onFormSubmit = (data: AssignSubcontractorFormData) => {
+    if (!isEditing && !data.selectedSubcontractor) {
       toast({
         title: 'Error',
         description: 'Please select a subcontractor',
@@ -168,7 +194,7 @@ export function AssignSubcontractorModal({
       })
       return
     }
-    assignMutation.mutate()
+    assignMutation.mutate(data)
   }
 
   const isLoading = loadingSubcontractors || loadingAssignments
@@ -183,9 +209,9 @@ export function AssignSubcontractorModal({
         <div className="space-y-4">
           {!isEditing && (
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <Label>
                 Subcontractor Company
-              </label>
+              </Label>
               {!projectId ? (
                 <p className="text-sm text-red-500">
                   Error: Project ID is missing. Please reload the page.
@@ -201,10 +227,8 @@ export function AssignSubcontractorModal({
                 </div>
               ) : (
                 <>
-                  <select
-                    value={selectedSubcontractor}
-                    onChange={(e) => setSelectedSubcontractor(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  <NativeSelect
+                    {...register('selectedSubcontractor')}
                   >
                     <option value="">Select subcontractor...</option>
                     {availableSubcontractors.map(sub => (
@@ -212,7 +236,7 @@ export function AssignSubcontractorModal({
                         {sub.companyName}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                   {availableSubcontractors.length === 0 && (
                     <p className="text-sm text-gray-500">
                       {subcontractors.length === 0
@@ -232,25 +256,24 @@ export function AssignSubcontractorModal({
           )}
 
           <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
+            <Label>
               ITP Permissions
-            </label>
+            </Label>
 
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"
                 id="canCompleteITP"
-                checked={canCompleteITP}
-                onChange={(e) => setCanCompleteITP(e.target.checked)}
+                {...register('canCompleteITP')}
                 className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <div>
-                <label
+                <Label
                   htmlFor="canCompleteITP"
-                  className="text-sm font-medium text-gray-900 cursor-pointer"
+                  className="cursor-pointer"
                 >
                   Allow ITP completion
-                </label>
+                </Label>
                 <p className="text-sm text-gray-500">
                   Subcontractor can complete checklist items
                 </p>
@@ -261,18 +284,17 @@ export function AssignSubcontractorModal({
               <input
                 type="checkbox"
                 id="itpRequiresVerification"
-                checked={itpRequiresVerification}
-                onChange={(e) => setItpRequiresVerification(e.target.checked)}
+                {...register('itpRequiresVerification')}
                 disabled={!canCompleteITP}
                 className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <div className={!canCompleteITP ? 'opacity-50' : ''}>
-                <label
+                <Label
                   htmlFor="itpRequiresVerification"
-                  className={`text-sm font-medium text-gray-900 ${canCompleteITP ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                  className={canCompleteITP ? 'cursor-pointer' : 'cursor-not-allowed'}
                 >
                   Require verification (recommended)
-                </label>
+                </Label>
                 <p className="text-sm text-gray-500">
                   Completions need head contractor approval
                 </p>
@@ -283,16 +305,17 @@ export function AssignSubcontractorModal({
       </ModalBody>
 
       <ModalFooter>
-        <button
+        <Button
+          type="button"
+          variant="outline"
           onClick={onClose}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
           Cancel
-        </button>
-        <button
-          onClick={handleSubmit}
+        </Button>
+        <Button
+          type="button"
+          onClick={handleSubmit(onFormSubmit)}
           disabled={assignMutation.isPending || (!isEditing && !selectedSubcontractor)}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {assignMutation.isPending ? (
             <span className="flex items-center gap-2">
@@ -300,7 +323,7 @@ export function AssignSubcontractorModal({
               Saving...
             </span>
           ) : isEditing ? 'Save' : 'Assign'}
-        </button>
+        </Button>
       </ModalFooter>
     </Modal>
   )

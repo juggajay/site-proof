@@ -1,7 +1,25 @@
 import { useState, useEffect, memo } from 'react'
-import { createPortal } from 'react-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { getAuthToken } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Label } from '@/components/ui/label'
+
+const createNCRSchema = z.object({
+  description: z.string().min(1, 'Description is required'),
+  category: z.string().min(1, 'Category is required'),
+  severity: z.string().min(1, 'Severity is required'),
+  specificationReference: z.string().optional().default(''),
+  dueDate: z.string().optional().default(''),
+})
+
+type CreateNCRFormData = z.infer<typeof createNCRSchema>
 
 interface CreateNCRModalProps {
   isOpen: boolean
@@ -25,15 +43,29 @@ function CreateNCRModalInner({
   loading,
   projectId,
 }: CreateNCRModalProps) {
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState('')
-  const [severity, setSeverity] = useState('minor')
-  const [specificationReference, setSpecificationReference] = useState('')
-  const [dueDate, setDueDate] = useState('')
   const [selectedLotIds, setSelectedLotIds] = useState<string[]>([])
   const [lots, setLots] = useState<Array<{ id: string; lotNumber: string; description: string }>>([])
   const [lotsLoading, setLotsLoading] = useState(true)
   const token = getAuthToken()
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<CreateNCRFormData>({
+    resolver: zodResolver(createNCRSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      description: '',
+      category: '',
+      severity: 'minor',
+      specificationReference: '',
+      dueDate: '',
+    },
+  })
+
+  const severity = watch('severity')
 
   // Fetch lots for this project
   useEffect(() => {
@@ -62,56 +94,42 @@ function CreateNCRModalInner({
     )
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const onFormSubmit = (data: CreateNCRFormData) => {
     onSubmit({
-      description,
-      category,
-      severity,
-      specificationReference,
+      description: data.description,
+      category: data.category,
+      severity: data.severity,
+      specificationReference: data.specificationReference || undefined,
       lotIds: selectedLotIds.length > 0 ? selectedLotIds : undefined,
-      dueDate: dueDate || undefined,
+      dueDate: data.dueDate || undefined,
     })
   }
 
   if (!isOpen) return null
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Raise Non-Conformance Report</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Close modal"
-          >
-            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+  return (
+    <Modal onClose={onClose} className="max-w-lg">
+      <ModalHeader>Raise Non-Conformance Report</ModalHeader>
+      <ModalBody>
+        <form id="create-ncr-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           <div>
-            <label htmlFor="ncr-description" className="block text-sm font-medium mb-1">Description *</label>
-            <textarea
+            <Label htmlFor="ncr-description">Description *</Label>
+            <Textarea
               id="ncr-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+              {...register('description')}
+              className={errors.description ? 'border-destructive mt-1' : 'mt-1'}
               rows={3}
-              required
             />
+            {errors.description && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.description.message}</p>
+            )}
           </div>
           <div>
-            <label htmlFor="ncr-category" className="block text-sm font-medium mb-1">Category *</label>
-            <select
+            <Label htmlFor="ncr-category">Category *</Label>
+            <NativeSelect
               id="ncr-category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
-              required
+              {...register('category')}
+              className={errors.category ? 'border-destructive mt-1' : 'mt-1'}
             >
               <option value="">Select category</option>
               <option value="materials">Materials</option>
@@ -120,16 +138,19 @@ function CreateNCRModalInner({
               <option value="process">Process</option>
               <option value="design">Design</option>
               <option value="other">Other</option>
-            </select>
+            </NativeSelect>
+            {errors.category && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.category.message}</p>
+            )}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Affected Lots</label>
+            <Label>Affected Lots</Label>
             {lotsLoading ? (
               <p className="text-sm text-muted-foreground">Loading lots...</p>
             ) : lots.length === 0 ? (
               <p className="text-sm text-muted-foreground">No lots available</p>
             ) : (
-              <div className="border rounded-lg max-h-40 overflow-y-auto p-2 space-y-1">
+              <div className="border rounded-lg max-h-40 overflow-y-auto p-2 space-y-1 mt-1">
                 {lots.map((lot) => (
                   <label key={lot.id} className="flex items-center gap-2 p-1 hover:bg-muted/50 rounded cursor-pointer">
                     <input
@@ -153,29 +174,28 @@ function CreateNCRModalInner({
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Severity *</label>
-            <div className="flex gap-4">
+            <Label>Severity *</Label>
+            <div className="flex gap-4 mt-1">
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  name="severity"
                   value="minor"
-                  checked={severity === 'minor'}
-                  onChange={(e) => setSeverity(e.target.value)}
+                  {...register('severity')}
                 />
                 <span>Minor</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
-                  name="severity"
                   value="major"
-                  checked={severity === 'major'}
-                  onChange={(e) => setSeverity(e.target.value)}
+                  {...register('severity')}
                 />
                 <span className="text-red-600 font-medium">Major</span>
               </label>
             </div>
+            {errors.severity && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.severity.message}</p>
+            )}
             {severity === 'major' && (
               <p className="text-amber-600 text-sm mt-1">
                 Major NCRs require Quality Manager approval before closure.
@@ -183,46 +203,44 @@ function CreateNCRModalInner({
             )}
           </div>
           <div>
-            <label htmlFor="ncr-spec-reference" className="block text-sm font-medium mb-1">Specification Reference</label>
-            <input
+            <Label htmlFor="ncr-spec-reference">Specification Reference</Label>
+            <Input
               id="ncr-spec-reference"
               type="text"
-              value={specificationReference}
-              onChange={(e) => setSpecificationReference(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+              {...register('specificationReference')}
+              className={errors.specificationReference ? 'border-destructive mt-1' : 'mt-1'}
               placeholder="e.g., MRTS05, Q6-2021"
             />
           </div>
           <div>
-            <label htmlFor="ncr-due-date" className="block text-sm font-medium mb-1">Due Date</label>
-            <input
+            <Label htmlFor="ncr-due-date">Due Date</Label>
+            <Input
               id="ncr-due-date"
               type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+              {...register('dueDate')}
+              className={errors.dueDate ? 'border-destructive mt-1' : 'mt-1'}
             />
           </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm border rounded-lg hover:bg-muted"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !description || !category}
-              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-            >
-              {loading ? 'Creating...' : 'Raise NCR'}
-            </button>
-          </div>
         </form>
-      </div>
-    </div>,
-    document.body
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onClose}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="create-ncr-form"
+          variant="destructive"
+          disabled={loading}
+        >
+          {loading ? 'Creating...' : 'Raise NCR'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 

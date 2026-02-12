@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { HelpCircle, X } from 'lucide-react'
+import { HelpCircle } from 'lucide-react'
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
 
 interface ContextHelpProps {
   title: string
@@ -300,35 +302,27 @@ export function ContextHelp({ title, content, className = '' }: ContextHelpProps
 
   return (
     <>
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={() => setIsOpen(true)}
-        className={`p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${className}`}
+        className={className}
         aria-label={`Help for ${title}`}
         title="Get help"
       >
         <HelpCircle className="h-4 w-4" />
-      </button>
+      </Button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="mx-4 w-full max-w-lg rounded-lg border bg-card shadow-xl">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b px-6 py-4">
-              <div className="flex items-center gap-3">
-                <HelpCircle className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold">{title}</h2>
-              </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-2 rounded hover:bg-muted"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
+        <Modal onClose={() => setIsOpen(false)} className="max-w-lg">
+          <ModalHeader>
+            <div className="flex items-center gap-3">
+              <HelpCircle className="h-5 w-5 text-primary" />
+              {title}
             </div>
-
-            {/* Content */}
-            <div className="max-h-[60vh] overflow-auto p-6">
+          </ModalHeader>
+          <ModalBody>
+            <div className="max-h-[60vh] overflow-auto">
               {typeof content === 'string' ? (
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   {content.split('\n\n').map((paragraph, i) => (
@@ -342,12 +336,11 @@ export function ContextHelp({ title, content, className = '' }: ContextHelpProps
               )}
             </div>
 
-            {/* Footer */}
-            <div className="border-t px-6 py-3 text-center text-xs text-muted-foreground">
+            <div className="mt-6 pt-3 border-t text-center text-xs text-muted-foreground">
               Press <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono text-xs">?</kbd> for keyboard shortcuts
             </div>
-          </div>
-        </div>
+          </ModalBody>
+        </Modal>
       )}
     </>
   )

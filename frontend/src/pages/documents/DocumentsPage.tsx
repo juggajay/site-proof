@@ -1,10 +1,19 @@
 // Feature #248: Documents & Photos management page
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getAuthToken } from '../../lib/auth'
 import { AlertTriangle } from 'lucide-react'
 import { LazyPDFViewer } from '../../components/ui/LazyPDFViewer'  // Feature #446: React-PDF viewer (lazy loaded)
 import { API_URL, apiFetch } from '../../lib/api'
+import { queryKeys } from '@/lib/queryKeys'
+import { createMutationErrorHandler } from '@/lib/errorHandling'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 
 // Helper to construct document URLs - handles both relative paths and full Supabase URLs
 const getDocumentUrl = (fileUrl: string | null | undefined): string => {
@@ -61,11 +70,7 @@ const CATEGORIES = [
 
 export function DocumentsPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const [documents, setDocuments] = useState<Document[]>([])
-  const [lots, setLots] = useState<Lot[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [categories, setCategories] = useState<Record<string, number>>({})
+  const queryClient = useQueryClient()
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -88,6 +93,7 @@ export function DocumentsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [committedSearch, setCommittedSearch] = useState('')
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false)
 
   // Viewer modal state
@@ -106,46 +112,39 @@ export function DocumentsPage() {
   const MIN_IMAGE_WIDTH = 100
   const MIN_IMAGE_HEIGHT = 100
 
-  useEffect(() => {
-    if (projectId) {
-      fetchDocuments()
-      fetchLots()
-    }
-  }, [projectId, filterType, filterCategory, filterLot, dateFrom, dateTo])
+  const triggerSearch = () => setCommittedSearch(searchQuery.trim())
 
-  const fetchDocuments = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      let path = `/api/documents/${projectId}`
-      const params = new URLSearchParams()
-      if (filterType) params.append('documentType', filterType)
-      if (filterCategory) params.append('category', filterCategory)
-      if (filterLot) params.append('lotId', filterLot)
-      if (dateFrom) params.append('dateFrom', dateFrom)
-      if (dateTo) params.append('dateTo', dateTo)
-      if (searchQuery.trim()) params.append('search', searchQuery.trim())
-      if (params.toString()) path += `?${params.toString()}`
+  // Build documents query path
+  const docsQueryPath = (() => {
+    let path = `/api/documents/${projectId}`
+    const params = new URLSearchParams()
+    if (filterType) params.append('documentType', filterType)
+    if (filterCategory) params.append('category', filterCategory)
+    if (filterLot) params.append('lotId', filterLot)
+    if (dateFrom) params.append('dateFrom', dateFrom)
+    if (dateTo) params.append('dateTo', dateTo)
+    if (committedSearch) params.append('search', committedSearch)
+    if (params.toString()) path += `?${params.toString()}`
+    return path
+  })()
 
-      const data = await apiFetch<any>(path)
-      setDocuments(data.documents)
-      setCategories(data.categories)
-    } catch (err) {
-      console.error('Error fetching documents:', err)
-      setError('Failed to load documents')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data: docsData, isLoading: loading, error: docsError } = useQuery({
+    queryKey: [...queryKeys.documents(projectId!), filterType, filterCategory, filterLot, dateFrom, dateTo, committedSearch] as const,
+    queryFn: () => apiFetch<any>(docsQueryPath),
+    enabled: !!projectId,
+  })
 
-  const fetchLots = async () => {
-    try {
-      const data = await apiFetch<any>(`/api/lots?projectId=${projectId}`)
-      setLots(data.lots || [])
-    } catch (err) {
-      console.error('Error fetching lots:', err)
-    }
-  }
+  const documents: Document[] = docsData?.documents || []
+  const categories: Record<string, number> = docsData?.categories || {}
+  const error = docsError ? 'Failed to load documents' : null
+
+  const { data: lotsData } = useQuery({
+    queryKey: queryKeys.lots(projectId!),
+    queryFn: () => apiFetch<any>(`/api/lots?projectId=${projectId}`),
+    enabled: !!projectId,
+  })
+
+  const lots: Lot[] = lotsData?.lots || []
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -187,101 +186,111 @@ export function DocumentsPage() {
     }
   }
 
-  const handleUpload = async () => {
+  // Upload mutation - keeps existing multi-file progress tracking logic
+  const uploadDocsMutation = useMutation({
+    mutationFn: async ({ files, form }: { files: File[]; form: typeof uploadForm }) => {
+      const token = getAuthToken()
+      const uploadedDocs: Document[] = []
+      const failedFiles: string[] = []
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('projectId', projectId || '')
+          formData.append('documentType', form.documentType)
+          if (form.category) formData.append('category', form.category)
+          if (form.caption && files.length === 1) {
+            formData.append('caption', form.caption)
+          }
+          if (form.lotId) formData.append('lotId', form.lotId)
+
+          const res = await fetch(`${API_URL}/api/documents/upload`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+          })
+
+          if (res.ok) {
+            const newDoc = await res.json()
+            uploadedDocs.push(newDoc)
+          } else {
+            failedFiles.push(file.name)
+          }
+        } catch (err) {
+          console.error(`Error uploading ${file.name}:`, err)
+          failedFiles.push(file.name)
+        }
+
+        setUploadedCount(i + 1)
+        setUploadProgress(Math.round(((i + 1) / files.length) * 100))
+      }
+
+      if (failedFiles.length > 0) {
+        alert(`Uploaded ${uploadedDocs.length} of ${files.length} files.\nFailed: ${failedFiles.join(', ')}`)
+      }
+
+      return uploadedDocs
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents(projectId!) })
+      setShowUploadModal(false)
+      setSelectedFiles([])
+      setUploadForm({ documentType: '', category: '', caption: '', lotId: '' })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      setUploading(false)
+      setUploadProgress(0)
+      setUploadedCount(0)
+    },
+    onError: () => {
+      setUploading(false)
+      setUploadProgress(0)
+      setUploadedCount(0)
+    },
+  })
+
+  const handleUpload = () => {
     if (selectedFiles.length === 0 || !uploadForm.documentType) {
       alert('Please select file(s) and document type')
       return
     }
-
     setUploading(true)
     setUploadProgress(0)
     setUploadedCount(0)
-
-    const token = getAuthToken()
-    const uploadedDocs: Document[] = []
-    const failedFiles: string[] = []
-
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i]
-
-      try {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('projectId', projectId || '')
-        formData.append('documentType', uploadForm.documentType)
-        if (uploadForm.category) formData.append('category', uploadForm.category)
-        if (uploadForm.caption && selectedFiles.length === 1) {
-          formData.append('caption', uploadForm.caption)
-        }
-        if (uploadForm.lotId) formData.append('lotId', uploadForm.lotId)
-
-        const res = await fetch(`${API_URL}/api/documents/upload`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        })
-
-        if (res.ok) {
-          const newDoc = await res.json()
-          uploadedDocs.push(newDoc)
-        } else {
-          failedFiles.push(file.name)
-        }
-      } catch (err) {
-        console.error(`Error uploading ${file.name}:`, err)
-        failedFiles.push(file.name)
-      }
-
-      // Update progress
-      setUploadedCount(i + 1)
-      setUploadProgress(Math.round(((i + 1) / selectedFiles.length) * 100))
-    }
-
-    // Add all uploaded docs to the list
-    if (uploadedDocs.length > 0) {
-      setDocuments(prev => [...uploadedDocs, ...prev])
-    }
-
-    // Show results
-    if (failedFiles.length > 0) {
-      alert(`Uploaded ${uploadedDocs.length} of ${selectedFiles.length} files.\nFailed: ${failedFiles.join(', ')}`)
-    }
-
-    // Reset state
-    setShowUploadModal(false)
-    setSelectedFiles([])
-    setUploadForm({ documentType: '', category: '', caption: '', lotId: '' })
-    if (fileInputRef.current) fileInputRef.current.value = ''
-    setUploading(false)
-    setUploadProgress(0)
-    setUploadedCount(0)
+    uploadDocsMutation.mutate({ files: selectedFiles, form: uploadForm })
   }
 
-  const handleDelete = async (documentId: string) => {
+  // Delete mutation
+  const deleteDocMutation = useMutation({
+    mutationFn: (documentId: string) =>
+      apiFetch(`/api/documents/${documentId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents(projectId!) })
+    },
+    onError: createMutationErrorHandler('Failed to delete document'),
+  })
+
+  const handleDelete = (documentId: string) => {
     if (!confirm('Are you sure you want to delete this document?')) return
-
-    try {
-      await apiFetch(`/api/documents/${documentId}`, { method: 'DELETE' })
-      setDocuments(prev => prev.filter(d => d.id !== documentId))
-    } catch (err) {
-      console.error('Error deleting document:', err)
-      alert('Failed to delete document')
-    }
+    deleteDocMutation.mutate(documentId)
   }
 
-  const toggleFavourite = async (doc: Document) => {
-    try {
-      const updated = await apiFetch<Document>(`/api/documents/${doc.id}`, {
+  // Favourite toggle mutation
+  const toggleFavouriteMutation = useMutation({
+    mutationFn: (doc: Document) =>
+      apiFetch<Document>(`/api/documents/${doc.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ isFavourite: !doc.isFavourite }),
-      })
-      setDocuments(prev => prev.map(d => d.id === doc.id ? updated : d))
-    } catch (err) {
-      console.error('Error toggling favourite:', err)
-      alert('Failed to update favourite status')
-    }
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents(projectId!) })
+    },
+    onError: createMutationErrorHandler('Failed to update favourite status'),
+  })
+
+  const toggleFavourite = (doc: Document) => {
+    toggleFavouriteMutation.mutate(doc)
   }
 
   const formatFileSize = (bytes: number | null) => {
@@ -445,110 +454,97 @@ export function DocumentsPage() {
             Upload and manage project documents and photos
           </p>
         </div>
-        <button
-          onClick={() => setShowUploadModal(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-        >
+        <Button onClick={() => setShowUploadModal(true)}>
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           Upload Document
-        </button>
+        </Button>
       </div>
 
       {/* Filters */}
       <div className="rounded-lg border bg-card p-4">
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Document Type</label>
-            <select
+            <Label className="mb-1">Document Type</Label>
+            <NativeSelect
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="">All Types</option>
               {DOCUMENT_TYPES.map(type => (
                 <option key={type.id} value={type.id}>{type.label}</option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Category</label>
-            <select
+            <Label className="mb-1">Category</Label>
+            <NativeSelect
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="">All Categories</option>
               {CATEGORIES.map(cat => (
                 <option key={cat.id} value={cat.id}>{cat.label}</option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Lot</label>
-            <select
+            <Label className="mb-1">Lot</Label>
+            <NativeSelect
               value={filterLot}
               onChange={(e) => setFilterLot(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="">All Lots</option>
               {lots.map(lot => (
                 <option key={lot.id} value={lot.id}>{lot.lotNumber}</option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Date From</label>
-            <input
+            <Label className="mb-1">Date From</Label>
+            <Input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Date To</label>
-            <input
+            <Label className="mb-1">Date To</Label>
+            <Input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-sm font-medium mb-1">Search</label>
-            <input
+            <Label className="mb-1">Search</Label>
+            <Input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchDocuments()}
+              onKeyDown={(e) => e.key === 'Enter' && triggerSearch()}
               placeholder="Search by filename, caption..."
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
-          <button
-            onClick={fetchDocuments}
-            className="rounded-md bg-muted px-4 py-2 text-sm hover:bg-muted/80"
-          >
+          <Button variant="secondary" onClick={triggerSearch}>
             Search
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={showFavouritesOnly ? 'outline' : 'secondary'}
             onClick={() => setShowFavouritesOnly(!showFavouritesOnly)}
-            className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm ${
-              showFavouritesOnly
-                ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                : 'bg-muted hover:bg-muted/80'
-            }`}
+            className={showFavouritesOnly ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : ''}
             title={showFavouritesOnly ? 'Show All' : 'Show Favourites Only'}
           >
             <svg className={`h-4 w-4 ${showFavouritesOnly ? 'fill-yellow-500' : ''}`} fill={showFavouritesOnly ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
             </svg>
             Favourites
-          </button>
+          </Button>
           {(filterType || filterCategory || filterLot || dateFrom || dateTo || searchQuery || showFavouritesOnly) && (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => {
                 setFilterType('')
                 setFilterCategory('')
@@ -558,10 +554,9 @@ export function DocumentsPage() {
                 setSearchQuery('')
                 setShowFavouritesOnly(false)
               }}
-              className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600 hover:bg-red-100"
             >
               Clear All
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -674,26 +669,30 @@ export function DocumentsPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => toggleFavourite(doc)}
-                    className={`rounded-md p-2 hover:bg-yellow-100 ${doc.isFavourite ? 'text-yellow-500' : 'text-gray-400'}`}
+                    className={doc.isFavourite ? 'text-yellow-500 hover:bg-yellow-100' : 'text-gray-400 hover:bg-yellow-100'}
                     title={doc.isFavourite ? 'Remove from Favourites' : 'Add to Favourites'}
                   >
                     <svg className="h-5 w-5" fill={doc.isFavourite ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                     </svg>
-                  </button>
+                  </Button>
                   {canPreview(doc.mimeType) && (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => openViewer(doc)}
-                      className="rounded-md p-2 hover:bg-blue-100 text-blue-600"
+                      className="text-blue-600 hover:bg-blue-100"
                       title="View"
                     >
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
-                    </button>
+                    </Button>
                   )}
                   <a
                     href={getDocumentUrl(doc.fileUrl)}
@@ -706,15 +705,17 @@ export function DocumentsPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                   </a>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => handleDelete(doc.id)}
-                    className="rounded-md p-2 hover:bg-red-100 text-red-600"
+                    className="text-red-600 hover:bg-red-100"
                     title="Delete"
                   >
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -724,14 +725,13 @@ export function DocumentsPage() {
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="text-xl font-bold mb-4">Upload Document</h2>
-
+        <Modal onClose={() => { setShowUploadModal(false); setSelectedFiles([]); setUploadForm({ documentType: '', category: '', caption: '', lotId: '' }) }} className="max-w-lg">
+          <ModalHeader>Upload Document</ModalHeader>
+          <ModalBody>
             <div className="space-y-4">
               {/* File Input with Drag-Drop Zone */}
               <div>
-                <label className="block text-sm font-medium mb-2">Select Files</label>
+                <Label className="mb-2">Select Files</Label>
                 <div
                   className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                     selectedFiles.length > 0
@@ -820,58 +820,54 @@ export function DocumentsPage() {
 
               {/* Document Type */}
               <div>
-                <label className="block text-sm font-medium mb-2">Document Type *</label>
-                <select
+                <Label className="mb-2">Document Type *</Label>
+                <NativeSelect
                   value={uploadForm.documentType}
                   onChange={(e) => setUploadForm(prev => ({ ...prev, documentType: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="">Select type...</option>
                   {DOCUMENT_TYPES.map(type => (
                     <option key={type.id} value={type.id}>{type.label}</option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
 
               {/* Category */}
               <div>
-                <label className="block text-sm font-medium mb-2">Category</label>
-                <select
+                <Label className="mb-2">Category</Label>
+                <NativeSelect
                   value={uploadForm.category}
                   onChange={(e) => setUploadForm(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="">Select category...</option>
                   {CATEGORIES.map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.label}</option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
 
               {/* Link to Lot */}
               <div>
-                <label className="block text-sm font-medium mb-2">Link to Lot (optional)</label>
-                <select
+                <Label className="mb-2">Link to Lot (optional)</Label>
+                <NativeSelect
                   value={uploadForm.lotId}
                   onChange={(e) => setUploadForm(prev => ({ ...prev, lotId: e.target.value }))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="">No lot selected</option>
                   {lots.map(lot => (
                     <option key={lot.id} value={lot.id}>{lot.lotNumber} - {lot.description}</option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
 
               {/* Description/Caption */}
               <div>
-                <label className="block text-sm font-medium mb-2">Description</label>
-                <textarea
+                <Label className="mb-2">Description</Label>
+                <Textarea
                   value={uploadForm.caption}
                   onChange={(e) => setUploadForm(prev => ({ ...prev, caption: e.target.value }))}
                   placeholder="Add a description..."
                   rows={3}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>
 
@@ -891,29 +887,27 @@ export function DocumentsPage() {
               )}
             </div>
 
-            {/* Actions */}
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowUploadModal(false)
-                  setSelectedFiles([])
-                  setUploadForm({ documentType: '', category: '', caption: '', lotId: '' })
-                }}
-                disabled={uploading}
-                className="rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={selectedFiles.length === 0 || !uploadForm.documentType || uploading}
-                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {uploading ? 'Uploading...' : selectedFiles.length > 1 ? `Upload ${selectedFiles.length} Files` : 'Upload'}
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowUploadModal(false)
+                setSelectedFiles([])
+                setUploadForm({ documentType: '', category: '', caption: '', lotId: '' })
+              }}
+              disabled={uploading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpload}
+              disabled={selectedFiles.length === 0 || !uploadForm.documentType || uploading}
+            >
+              {uploading ? 'Uploading...' : selectedFiles.length > 1 ? `Upload ${selectedFiles.length} Files` : 'Upload'}
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
 
       {/* Document Viewer Modal */}
@@ -929,31 +923,37 @@ export function DocumentsPage() {
             </div>
             <div className="flex items-center gap-2">
               {/* Zoom Controls */}
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={zoomOut}
                 disabled={viewerZoom <= 50}
-                className="rounded-md p-2 hover:bg-white/20 disabled:opacity-50"
+                className="hover:bg-white/20 text-white"
                 title="Zoom Out"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
                 </svg>
-              </button>
+              </Button>
               <span className="text-sm w-12 text-center">{viewerZoom}%</span>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={zoomIn}
                 disabled={viewerZoom >= 200}
-                className="rounded-md p-2 hover:bg-white/20 disabled:opacity-50"
+                className="hover:bg-white/20 text-white"
                 title="Zoom In"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                 </svg>
-              </button>
+              </Button>
               {/* Fullscreen Toggle */}
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={toggleFullscreen}
-                className="rounded-md p-2 hover:bg-white/20"
+                className="hover:bg-white/20 text-white"
                 title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                 data-testid="fullscreen-toggle"
               >
@@ -966,7 +966,7 @@ export function DocumentsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
                   </svg>
                 )}
-              </button>
+              </Button>
               {/* Download */}
               <a
                 href={getDocumentUrl(viewerDoc.fileUrl)}
@@ -980,15 +980,17 @@ export function DocumentsPage() {
                 </svg>
               </a>
               {/* Close */}
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={closeViewer}
-                className="rounded-md p-2 hover:bg-white/20 ml-2"
+                className="hover:bg-white/20 text-white ml-2"
                 title="Close"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
+              </Button>
             </div>
           </div>
 

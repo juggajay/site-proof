@@ -1,7 +1,9 @@
 // ProjectDashboard - Landing page when entering a project
 // Shows project health at a glance: attention items, progress, stats ribbon, activity
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { apiFetch, ApiError } from '@/lib/api'
 import {
   MapPin,
@@ -22,6 +24,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
 interface AttentionItem {
   id: string
@@ -78,41 +81,26 @@ interface ProjectDashboardData {
 
 export function ProjectDashboard() {
   const { projectId } = useParams()
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [data, setData] = useState<ProjectDashboardData | null>(null)
 
-  const fetchDashboardData = async () => {
-    if (!projectId) {
-      setLoading(false)
-      return
-    }
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: queryKeys.dashboard(projectId),
+    queryFn: () => apiFetch<ProjectDashboardData>(`/api/projects/${projectId}/dashboard`),
+    enabled: !!projectId,
+  })
 
-    try {
-      const result = await apiFetch<ProjectDashboardData>(`/api/projects/${projectId}/dashboard`)
-      setData(result)
-      setError(null)
-    } catch (err) {
-      console.error('Error fetching project dashboard:', err)
-      if (err instanceof ApiError && err.status === 404) {
-        setError('Project not found')
-      } else {
-        setError('Failed to load project dashboard')
-      }
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [projectId])
+  const error = queryError
+    ? queryError instanceof ApiError && queryError.status === 404
+      ? 'Project not found'
+      : 'Failed to load project dashboard'
+    : null
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchDashboardData()
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(projectId) }).then(() => {
+      setRefreshing(false)
+    })
   }
 
   if (loading) {
@@ -183,14 +171,15 @@ export function ProjectDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
           >
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
             Refresh
-          </button>
+          </Button>
           <Link
             to={`/projects/${projectId}/settings`}
             className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"

@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { Save } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { extractErrorMessage } from '@/lib/errorHandling'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import type { Project, GeneralFormData } from '../types'
 import { DEFAULT_FORM_DATA } from '../types'
 
@@ -146,24 +149,22 @@ export function GeneralSettingsTab({
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium mb-1">Project Name</label>
-            <input
+            <Label className="mb-1">Project Name</Label>
+            <Input
               type="text"
               name="name"
               value={formData.name}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               placeholder="Project name"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Project Code</label>
-            <input
+            <Label className="mb-1">Project Code</Label>
+            <Input
               type="text"
               name="code"
               value={formData.code}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               placeholder="PRJ-001"
             />
           </div>
@@ -172,7 +173,7 @@ export function GeneralSettingsTab({
           <div className="mt-4 pt-4 border-t grid gap-4 sm:grid-cols-2">
             {project?.startDate && (
               <div>
-                <label className="block text-sm font-medium mb-1">Start Date</label>
+                <Label className="mb-1">Start Date</Label>
                 <div className="text-sm text-muted-foreground">
                   {new Date(project.startDate).toLocaleDateString('en-AU', {
                     day: 'numeric',
@@ -184,7 +185,7 @@ export function GeneralSettingsTab({
             )}
             {project?.targetCompletion && (
               <div>
-                <label className="block text-sm font-medium mb-1">Target Completion</label>
+                <Label className="mb-1">Target Completion</Label>
                 <div className="text-sm text-muted-foreground">
                   {new Date(project.targetCompletion).toLocaleDateString('en-AU', {
                     day: 'numeric',
@@ -198,7 +199,7 @@ export function GeneralSettingsTab({
         )}
         {canViewContractValue && project?.contractValue && (
           <div className="mt-4 pt-4 border-t">
-            <label className="block text-sm font-medium mb-1">Contract Value</label>
+            <Label className="mb-1">Contract Value</Label>
             <div className="text-sm text-muted-foreground">
               ${Number(project.contractValue).toLocaleString('en-AU', {
                 minimumFractionDigits: 2,
@@ -215,24 +216,22 @@ export function GeneralSettingsTab({
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium mb-1">Lot Prefix</label>
-            <input
+            <Label className="mb-1">Lot Prefix</Label>
+            <Input
               type="text"
               name="lotPrefix"
               value={formData.lotPrefix}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               placeholder="LOT-"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Starting Number</label>
-            <input
+            <Label className="mb-1">Starting Number</Label>
+            <Input
               type="number"
               name="lotStartingNumber"
               value={formData.lotStartingNumber}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               placeholder="1"
             />
           </div>
@@ -245,24 +244,22 @@ export function GeneralSettingsTab({
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium mb-1">NCR Prefix</label>
-            <input
+            <Label className="mb-1">NCR Prefix</Label>
+            <Input
               type="text"
               name="ncrPrefix"
               value={formData.ncrPrefix}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               placeholder="NCR-"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Starting Number</label>
-            <input
+            <Label className="mb-1">Starting Number</Label>
+            <Input
               type="number"
               name="ncrStartingNumber"
               value={formData.ncrStartingNumber}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               placeholder="1"
             />
           </div>
@@ -275,25 +272,23 @@ export function GeneralSettingsTab({
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium mb-1">Chainage Start (m)</label>
-            <input
+            <Label className="mb-1">Chainage Start (m)</Label>
+            <Input
               type="number"
               name="chainageStart"
               value={formData.chainageStart}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               placeholder="0"
               min="0"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Chainage End (m)</label>
-            <input
+            <Label className="mb-1">Chainage End (m)</Label>
+            <Input
               type="number"
               name="chainageEnd"
               value={formData.chainageEnd}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               placeholder="10000"
               min="0"
             />
@@ -307,23 +302,21 @@ export function GeneralSettingsTab({
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium mb-1">Start Time</label>
-            <input
+            <Label className="mb-1">Start Time</Label>
+            <Input
               type="time"
               name="workingHoursStart"
               value={formData.workingHoursStart}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">End Time</label>
-            <input
+            <Label className="mb-1">End Time</Label>
+            <Input
               type="time"
               name="workingHoursEnd"
               value={formData.workingHoursEnd}
               onChange={handleInputChange}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
             />
           </div>
         </div>
@@ -331,14 +324,13 @@ export function GeneralSettingsTab({
 
       {/* Save Button */}
       <div className="flex justify-end">
-        <button
+        <Button
           onClick={handleSaveSettings}
           disabled={saving}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           <Save className="h-4 w-4" />
           {saving ? 'Saving...' : 'Save Settings'}
-        </button>
+        </Button>
       </div>
     </>
   )

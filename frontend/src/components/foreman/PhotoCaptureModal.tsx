@@ -8,6 +8,8 @@ import { capturePhotoOffline } from '@/lib/offlineDb'
 import { useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 interface PhotoCaptureModalProps {
   projectId: string
@@ -121,16 +123,19 @@ export function PhotoCaptureModal({
 
   if (!isCameraOpen) return null
 
+  // This is a full-screen camera capture modal - not a standard dialog
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-black/80">
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={handleClose}
-          className="p-2 text-white touch-manipulation min-h-[48px] min-w-[48px] flex items-center justify-center"
+          className="text-white hover:bg-white/20 min-h-[48px] min-w-[48px]"
         >
           <X className="w-6 h-6" />
-        </button>
+        </Button>
         <h2 className="text-white font-medium">Capture Photo</h2>
         <div className="w-12" /> {/* Spacer for centering */}
       </div>
@@ -167,7 +172,7 @@ export function PhotoCaptureModal({
                 {latitude ? (
                   <span className="text-white">
                     GPS: {latitude.toFixed(6)}, {longitude?.toFixed(6)}
-                    {accuracy && <span className="text-gray-400 ml-2">±{accuracy.toFixed(0)}m</span>}
+                    {accuracy && <span className="text-gray-400 ml-2">+/-{accuracy.toFixed(0)}m</span>}
                   </span>
                 ) : gpsError ? (
                   <span className="text-yellow-500">{gpsError}</span>
@@ -190,11 +195,11 @@ export function PhotoCaptureModal({
             {/* Caption input */}
             <div className="p-4 bg-white dark:bg-gray-900">
               <div className="flex items-start gap-2">
-                <textarea
+                <Textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="Add caption (optional)"
-                  className="flex-1 p-3 border rounded-lg resize-none min-h-[80px] dark:bg-gray-800 dark:border-gray-700"
+                  className="flex-1 min-h-[80px]"
                   rows={2}
                 />
                 <VoiceInputButton onTranscript={handleVoiceCaption} />
@@ -210,21 +215,18 @@ export function PhotoCaptureModal({
 
               {/* Action buttons */}
               <div className="flex gap-3 mt-4">
-                <button
+                <Button
+                  variant="outline"
                   onClick={handleRetake}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 border rounded-lg font-medium touch-manipulation min-h-[48px] dark:border-gray-700"
+                  className="flex-1 min-h-[48px]"
                 >
                   <RotateCcw className="w-5 h-5" />
                   Retake
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleSave}
                   disabled={saving}
-                  className={cn(
-                    'flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-medium',
-                    'bg-primary text-primary-foreground touch-manipulation min-h-[48px]',
-                    saving && 'opacity-50'
-                  )}
+                  className="flex-1 min-h-[48px]"
                 >
                   {saving ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -232,7 +234,7 @@ export function PhotoCaptureModal({
                     <Check className="w-5 h-5" />
                   )}
                   {saving ? 'Saving...' : 'Save'}
-                </button>
+                </Button>
               </div>
             </div>
           </>

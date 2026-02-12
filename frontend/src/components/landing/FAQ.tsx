@@ -1,4 +1,4 @@
-import { Accordion, AccordionItem } from '@/components/ui/Accordion'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/Accordion'
 
 export function FAQ() {
   const faqs = [
@@ -36,11 +36,14 @@ export function FAQ() {
             Common Questions
           </h2>
         </div>
-        
-        <Accordion className="space-y-4">
+
+        <Accordion type="single" collapsible className="space-y-4">
           {faqs.map((faq, index) => (
-            <AccordionItem key={index} title={faq.q} className="bg-white border-gray-200">
-               <p className="text-gray-600">{faq.a}</p>
+            <AccordionItem key={index} value={`faq-${index}`} className="bg-white border-gray-200">
+              <AccordionTrigger>{faq.q}</AccordionTrigger>
+              <AccordionContent>
+                <p className="text-gray-600">{faq.a}</p>
+              </AccordionContent>
             </AccordionItem>
           ))}
         </Accordion>

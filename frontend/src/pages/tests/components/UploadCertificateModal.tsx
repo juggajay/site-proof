@@ -3,6 +3,10 @@ import { getAuthToken } from '@/lib/auth'
 import { apiFetch, apiUrl } from '@/lib/api'
 import type { TestResult, ExtractionResult } from '../types'
 import { getConfidenceIndicator } from '../constants'
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface UploadCertificateModalProps {
   isOpen: boolean
@@ -132,20 +136,11 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-xl font-bold">
-            {extractionResult ? '\uD83D\uDCCA Review AI Extracted Data' : '\uD83D\uDCC4 Upload Test Certificate'}
-          </h2>
-          <button
-            onClick={handleClose}
-            className="text-muted-foreground hover:text-foreground text-2xl"
-          >
-            {'\u00D7'}
-          </button>
-        </div>
-
+    <Modal onClose={handleClose} className="max-w-5xl">
+      <ModalHeader>
+        {extractionResult ? '\uD83D\uDCCA Review AI Extracted Data' : '\uD83D\uDCC4 Upload Test Certificate'}
+      </ModalHeader>
+      <ModalBody className="p-0">
         {/* Before extraction - File upload */}
         {!extractionResult ? (
           <div className="p-6">
@@ -178,19 +173,18 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
               )}
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => {
                   setUploadedFile(null)
                   onClose()
                 }}
-                className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleUploadCertificate}
                 disabled={!uploadedFile || uploading}
-                className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {uploading ? (
                   <span className="flex items-center gap-2">
@@ -200,12 +194,12 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                 ) : (
                   '\uD83E\uDD16 Extract with AI'
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           /* After extraction - Side-by-side view */
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex overflow-hidden" style={{ height: '70vh' }}>
             {/* Left side - PDF Preview */}
             <div className="w-1/2 border-r flex flex-col">
               <div className="p-3 bg-muted/50 border-b">
@@ -255,110 +249,110 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                 {/* Editable Fields */}
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Test Type</label>
-                    <input
+                    <Label>Test Type</Label>
+                    <Input
                       type="text"
                       value={reviewFormData.testType || ''}
                       onChange={(e) => setReviewFormData({ ...reviewFormData, testType: e.target.value })}
-                      className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('testType').color}`}
+                      className={confidenceForField('testType').color}
                     />
                     <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('testType').text}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Laboratory Name</label>
-                    <input
+                    <Label>Laboratory Name</Label>
+                    <Input
                       type="text"
                       value={reviewFormData.laboratoryName || ''}
                       onChange={(e) => setReviewFormData({ ...reviewFormData, laboratoryName: e.target.value })}
-                      className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('laboratoryName').color}`}
+                      className={confidenceForField('laboratoryName').color}
                     />
                     <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('laboratoryName').text}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Lab Report Number</label>
-                    <input
+                    <Label>Lab Report Number</Label>
+                    <Input
                       type="text"
                       value={reviewFormData.laboratoryReportNumber || ''}
                       onChange={(e) => setReviewFormData({ ...reviewFormData, laboratoryReportNumber: e.target.value })}
-                      className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('laboratoryReportNumber').color}`}
+                      className={confidenceForField('laboratoryReportNumber').color}
                     />
                     <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('laboratoryReportNumber').text}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Sample Date</label>
-                      <input
+                      <Label>Sample Date</Label>
+                      <Input
                         type="date"
                         value={reviewFormData.sampleDate || ''}
                         onChange={(e) => setReviewFormData({ ...reviewFormData, sampleDate: e.target.value })}
-                        className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('sampleDate').color}`}
+                        className={confidenceForField('sampleDate').color}
                       />
                       <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('sampleDate').text}</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Test Date</label>
-                      <input
+                      <Label>Test Date</Label>
+                      <Input
                         type="date"
                         value={reviewFormData.testDate || ''}
                         onChange={(e) => setReviewFormData({ ...reviewFormData, testDate: e.target.value })}
-                        className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('testDate').color}`}
+                        className={confidenceForField('testDate').color}
                       />
                       <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('testDate').text}</p>
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Sample Location</label>
-                    <input
+                    <Label>Sample Location</Label>
+                    <Input
                       type="text"
                       value={reviewFormData.sampleLocation || ''}
                       onChange={(e) => setReviewFormData({ ...reviewFormData, sampleLocation: e.target.value })}
-                      className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('sampleLocation').color}`}
+                      className={confidenceForField('sampleLocation').color}
                     />
                     <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('sampleLocation').text}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Result Value</label>
-                      <input
+                      <Label>Result Value</Label>
+                      <Input
                         type="number"
                         step="any"
                         value={reviewFormData.resultValue || ''}
                         onChange={(e) => setReviewFormData({ ...reviewFormData, resultValue: e.target.value })}
-                        className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('resultValue').color}`}
+                        className={confidenceForField('resultValue').color}
                       />
                       <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('resultValue').text}</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Unit</label>
-                      <input
+                      <Label>Unit</Label>
+                      <Input
                         type="text"
                         value={reviewFormData.resultUnit || ''}
                         onChange={(e) => setReviewFormData({ ...reviewFormData, resultUnit: e.target.value })}
-                        className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('resultUnit').color}`}
+                        className={confidenceForField('resultUnit').color}
                       />
                       <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('resultUnit').text}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Spec Min</label>
-                      <input
+                      <Label>Spec Min</Label>
+                      <Input
                         type="number"
                         step="any"
                         value={reviewFormData.specificationMin || ''}
                         onChange={(e) => setReviewFormData({ ...reviewFormData, specificationMin: e.target.value })}
-                        className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('specificationMin').color}`}
+                        className={confidenceForField('specificationMin').color}
                       />
                       <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('specificationMin').text}</p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Spec Max</label>
-                      <input
+                      <Label>Spec Max</Label>
+                      <Input
                         type="number"
                         step="any"
                         value={reviewFormData.specificationMax || ''}
                         onChange={(e) => setReviewFormData({ ...reviewFormData, specificationMax: e.target.value })}
-                        className={`w-full rounded-lg border px-3 py-2 ${confidenceForField('specificationMax').color}`}
+                        className={confidenceForField('specificationMax').color}
                       />
                       <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('specificationMax').text}</p>
                     </div>
@@ -368,24 +362,20 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
 
               {/* Footer actions */}
               <div className="p-4 border-t flex justify-end gap-3">
-                <button
-                  onClick={handleClose}
-                  className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
-                >
+                <Button variant="outline" onClick={handleClose}>
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleConfirmExtraction}
                   disabled={confirmingExtraction}
-                  className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {confirmingExtraction ? 'Saving...' : '\u2713 Confirm & Save'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </ModalBody>
+    </Modal>
   )
 })

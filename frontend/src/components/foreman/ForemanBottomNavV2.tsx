@@ -2,12 +2,13 @@
 // 5 primary actions: Today, Approve, [Capture], Diary, Lots
 // Camera button centered between 4 nav tabs
 // Reference: docs/Foreman persona document (AU civil).md
-import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Camera, ListChecks, CheckSquare, BookOpen, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { apiFetch } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 
 type NavTab = 'capture' | 'today' | 'approve' | 'diary' | 'lots'
 
@@ -63,28 +64,20 @@ export function ForemanBottomNavV2({ onCapturePress, todayBadgeCount: externalBa
   const location = useLocation()
   const navigate = useNavigate()
   const { isOnline, pendingSyncCount } = useOnlineStatus()
-  const [internalBadgeCount, setInternalBadgeCount] = useState(0)
 
   // Self-manage badge count when no external count provided
-  const fetchBadgeCount = useCallback(async () => {
-    if (externalBadgeCount !== undefined || !projectId) return
+  const { data: badgeData } = useQuery({
+    queryKey: queryKeys.foremanBadges(projectId!),
+    queryFn: () => apiFetch<{ blocking?: unknown[]; dueToday?: unknown[] }>(
+      `/api/dashboard/projects/${projectId}/foreman/today`
+    ),
+    enabled: externalBadgeCount === undefined && !!projectId,
+    refetchInterval: 300_000, // 5 minutes
+  })
 
-    try {
-      const data = await apiFetch<{ blocking?: unknown[]; dueToday?: unknown[] }>(
-        `/api/dashboard/projects/${projectId}/foreman/today`
-      )
-      const count = (data.blocking?.length || 0) + (data.dueToday?.length || 0)
-      setInternalBadgeCount(count)
-    } catch {
-      // Silently fail - badge is non-critical
-    }
-  }, [projectId, externalBadgeCount])
-
-  useEffect(() => {
-    fetchBadgeCount()
-    const interval = setInterval(fetchBadgeCount, 5 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [fetchBadgeCount])
+  const internalBadgeCount = badgeData
+    ? (badgeData.blocking?.length || 0) + (badgeData.dueToday?.length || 0)
+    : 0
 
   const todayBadgeCount = externalBadgeCount ?? internalBadgeCount
 

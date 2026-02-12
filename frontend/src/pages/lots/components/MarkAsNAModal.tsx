@@ -1,4 +1,17 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+
+const markAsNASchema = z.object({
+  reason: z.string().min(1, 'Reason is required'),
+})
+
+type MarkAsNAFormData = z.infer<typeof markAsNASchema>
 
 interface MarkAsNAModalProps {
   isOpen: boolean
@@ -15,71 +28,86 @@ export function MarkAsNAModal({
   onSubmit,
   isSubmitting
 }: MarkAsNAModalProps) {
-  const [naReason, setNaReason] = useState('')
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<MarkAsNAFormData>({
+    resolver: zodResolver(markAsNASchema),
+    mode: 'onBlur',
+    defaultValues: { reason: '' },
+  })
 
-  const handleSubmit = async () => {
-    await onSubmit(naReason)
-    setNaReason('')
+  useEffect(() => { if (isOpen) reset() }, [isOpen, reset])
+
+  const onFormSubmit = (data: MarkAsNAFormData) => {
+    onSubmit(data.reason)
   }
 
   const handleClose = () => {
-    setNaReason('')
+    reset()
     onClose()
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
-        <div className="flex items-center gap-3 mb-4">
+    <Modal onClose={handleClose}>
+      <ModalHeader>
+        <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-            <span className="text-xl font-bold">—</span>
+            <span className="text-xl font-bold">&mdash;</span>
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Mark as Not Applicable</h2>
-            <p className="text-sm text-muted-foreground">This item will be skipped</p>
+            <div className="text-lg font-semibold">Mark as Not Applicable</div>
+            <p className="text-sm text-muted-foreground font-normal">This item will be skipped</p>
           </div>
         </div>
-
+      </ModalHeader>
+      <ModalBody>
         <div className="mb-4 p-3 bg-muted/50 rounded-lg">
           <p className="text-sm font-medium">{itemDescription}</p>
         </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-2">
-            Reason for N/A <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            value={naReason}
-            onChange={(e) => setNaReason(e.target.value)}
-            placeholder="Enter reason why this item is not applicable..."
-            className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent resize-none"
-            rows={3}
-            autoFocus
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            A reason is required to mark an item as N/A
-          </p>
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 border rounded-lg hover:bg-muted"
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !naReason.trim()}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? 'Saving...' : 'Mark as N/A'}
-          </button>
-        </div>
-      </div>
-    </div>
+        <form id="mark-na-form" onSubmit={handleSubmit(onFormSubmit)}>
+          <div className="mb-4">
+            <Label>
+              Reason for N/A <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              {...register('reason')}
+              placeholder="Enter reason why this item is not applicable..."
+              className={errors.reason ? 'border-destructive mt-1' : 'mt-1'}
+              rows={3}
+              autoFocus
+            />
+            {errors.reason && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.reason.message}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              A reason is required to mark an item as N/A
+            </p>
+          </div>
+        </form>
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleClose}
+          disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="mark-na-form"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Saving...' : 'Mark as N/A'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

@@ -1,7 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search, X, FileText, AlertTriangle, TestTube, Loader2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
+import { Button } from '@/components/ui/button'
 
 interface SearchResult {
   id: string
@@ -20,8 +23,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   const navigate = useNavigate()
   const { projectId } = useParams()
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
-  const [loading, setLoading] = useState(false)
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -31,7 +33,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100)
       setQuery('')
-      setResults([])
+      setDebouncedQuery('')
       setSelectedIndex(0)
     }
   }, [isOpen])
@@ -49,96 +51,98 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isOpen, onClose])
 
-  // Search function
-  const performSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
-      setResults([])
-      return
-    }
-
-    setLoading(true)
-    const searchResults: SearchResult[] = []
-
-    try {
-      // Search lots
-      if (projectId) {
-        try {
-          const data = await apiFetch<{ lots: any[] }>(`/api/projects/${projectId}/lots`)
-          const lots = data.lots || []
-          const matchedLots = lots.filter((lot: any) =>
-            lot.lotNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            lot.description?.toLowerCase().includes(searchQuery.toLowerCase())
-          ).slice(0, 5)
-
-          matchedLots.forEach((lot: any) => {
-            searchResults.push({
-              id: lot.id,
-              type: 'lot',
-              title: lot.lotNumber,
-              subtitle: lot.description || lot.status || 'No description',
-              projectId: projectId,
-            })
-          })
-        } catch { /* ignore individual search failures */ }
-
-        // Search NCRs
-        try {
-          const data = await apiFetch<{ ncrs: any[] }>(`/api/projects/${projectId}/ncrs`)
-          const ncrs = data.ncrs || []
-          const matchedNcrs = ncrs.filter((ncr: any) =>
-            ncr.ncrNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            ncr.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            ncr.description?.toLowerCase().includes(searchQuery.toLowerCase())
-          ).slice(0, 5)
-
-          matchedNcrs.forEach((ncr: any) => {
-            searchResults.push({
-              id: ncr.id,
-              type: 'ncr',
-              title: ncr.ncrNumber || `NCR-${ncr.id.slice(0, 8)}`,
-              subtitle: ncr.title || ncr.description || `Status: ${ncr.status}`,
-              projectId: projectId,
-            })
-          })
-        } catch { /* ignore individual search failures */ }
-
-        // Search test results
-        try {
-          const data = await apiFetch<{ tests: any[] }>(`/api/projects/${projectId}/tests`)
-          const tests = data.tests || []
-          const matchedTests = tests.filter((test: any) =>
-            test.testNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            test.testType?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            test.description?.toLowerCase().includes(searchQuery.toLowerCase())
-          ).slice(0, 5)
-
-          matchedTests.forEach((test: any) => {
-            searchResults.push({
-              id: test.id,
-              type: 'test',
-              title: test.testNumber || `Test-${test.id.slice(0, 8)}`,
-              subtitle: test.testType || test.description || `Result: ${test.result}`,
-              projectId: projectId,
-            })
-          })
-        } catch { /* ignore individual search failures */ }
-      }
-    } catch (err) {
-      console.error('Search error:', err)
-    }
-
-    setResults(searchResults)
-    setLoading(false)
-    setSelectedIndex(0)
-  }, [projectId])
-
-  // Debounced search
+  // Debounce the search query
   useEffect(() => {
     const timer = setTimeout(() => {
-      performSearch(query)
+      setDebouncedQuery(query)
     }, 300)
     return () => clearTimeout(timer)
-  }, [query, performSearch])
+  }, [query])
+
+  const searchEnabled = !!projectId && !!debouncedQuery.trim()
+
+  // Fetch lots, NCRs, and tests in parallel via TanStack Query
+  const { data: lotsData, isLoading: lotsLoading } = useQuery({
+    queryKey: [...queryKeys.lots(projectId!), 'search', debouncedQuery],
+    queryFn: () => apiFetch<{ lots: any[] }>(`/api/projects/${projectId}/lots`),
+    enabled: searchEnabled,
+  })
+
+  const { data: ncrsData, isLoading: ncrsLoading } = useQuery({
+    queryKey: [...queryKeys.ncrs(projectId!), 'search', debouncedQuery],
+    queryFn: () => apiFetch<{ ncrs: any[] }>(`/api/projects/${projectId}/ncrs`),
+    enabled: searchEnabled,
+  })
+
+  const { data: testsData, isLoading: testsLoading } = useQuery({
+    queryKey: [...queryKeys.testResults(projectId!), 'search', debouncedQuery],
+    queryFn: () => apiFetch<{ tests: any[] }>(`/api/projects/${projectId}/tests`),
+    enabled: searchEnabled,
+  })
+
+  const loading = searchEnabled && (lotsLoading || ncrsLoading || testsLoading)
+
+  // Derive search results from query data + client-side filtering
+  const results = useMemo<SearchResult[]>(() => {
+    if (!debouncedQuery.trim() || !projectId) return []
+
+    const searchResults: SearchResult[] = []
+    const q = debouncedQuery.toLowerCase()
+
+    // Filter lots
+    const lots = lotsData?.lots || []
+    lots.filter((lot: any) =>
+      lot.lotNumber?.toLowerCase().includes(q) ||
+      lot.description?.toLowerCase().includes(q)
+    ).slice(0, 5).forEach((lot: any) => {
+      searchResults.push({
+        id: lot.id,
+        type: 'lot',
+        title: lot.lotNumber,
+        subtitle: lot.description || lot.status || 'No description',
+        projectId: projectId,
+      })
+    })
+
+    // Filter NCRs
+    const ncrs = ncrsData?.ncrs || []
+    ncrs.filter((ncr: any) =>
+      ncr.ncrNumber?.toLowerCase().includes(q) ||
+      ncr.title?.toLowerCase().includes(q) ||
+      ncr.description?.toLowerCase().includes(q)
+    ).slice(0, 5).forEach((ncr: any) => {
+      searchResults.push({
+        id: ncr.id,
+        type: 'ncr',
+        title: ncr.ncrNumber || `NCR-${ncr.id.slice(0, 8)}`,
+        subtitle: ncr.title || ncr.description || `Status: ${ncr.status}`,
+        projectId: projectId,
+      })
+    })
+
+    // Filter tests
+    const tests = testsData?.tests || []
+    tests.filter((test: any) =>
+      test.testNumber?.toLowerCase().includes(q) ||
+      test.testType?.toLowerCase().includes(q) ||
+      test.description?.toLowerCase().includes(q)
+    ).slice(0, 5).forEach((test: any) => {
+      searchResults.push({
+        id: test.id,
+        type: 'test',
+        title: test.testNumber || `Test-${test.id.slice(0, 8)}`,
+        subtitle: test.testType || test.description || `Result: ${test.result}`,
+        projectId: projectId,
+      })
+    })
+
+    return searchResults
+  }, [debouncedQuery, projectId, lotsData, ncrsData, testsData])
+
+  // Reset selected index when results change
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [results])
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -220,13 +224,15 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             aria-label="Search"
           />
           {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="p-1 rounded hover:bg-muted"
+            className="h-7 w-7"
             aria-label="Close search"
           >
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         {/* Results */}

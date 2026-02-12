@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Users, UserPlus, X } from 'lucide-react'
+import { Users, UserPlus } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { extractErrorMessage } from '@/lib/errorHandling'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import type { TeamMember } from '../types'
 import { ROLE_OPTIONS } from '../types'
 
@@ -131,13 +136,10 @@ export function TeamTab({ projectId }: TeamTabProps) {
               )}
             </div>
           )}
-          <button
-            onClick={handleOpenInviteModal}
-            className="mt-4 flex items-center gap-2 rounded-lg border px-4 py-2 text-sm hover:bg-muted"
-          >
+          <Button variant="outline" onClick={handleOpenInviteModal} className="mt-4">
             <UserPlus className="h-4 w-4" />
             Invite Team Member
-          </button>
+          </Button>
         </div>
         <div className="rounded-lg border p-4">
           <h2 className="text-lg font-semibold mb-2">Role Permissions</h2>
@@ -149,19 +151,9 @@ export function TeamTab({ projectId }: TeamTabProps) {
 
       {/* Invite Team Member Modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold">Invite Team Member</h3>
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="p-1 hover:bg-muted rounded"
-                aria-label="Close modal"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+        <Modal onClose={() => setShowInviteModal(false)}>
+          <ModalHeader>Invite Team Member</ModalHeader>
+          <ModalBody>
             {inviteError && (
               <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4">
                 {inviteError}
@@ -176,23 +168,21 @@ export function TeamTab({ projectId }: TeamTabProps) {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Email Address</label>
-                <input
+                <Label className="mb-1">Email Address</Label>
+                <Input
                   type="email"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="team.member@example.com"
-                  className="w-full rounded-lg border bg-background px-3 py-2"
                   disabled={inviting}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Role</label>
-                <select
+                <Label className="mb-1">Role</Label>
+                <NativeSelect
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full rounded-lg border bg-background px-3 py-2"
                   disabled={inviting}
                 >
                   {ROLE_OPTIONS.map((role) => (
@@ -200,28 +190,22 @@ export function TeamTab({ projectId }: TeamTabProps) {
                       {role.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             </div>
-
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => setShowInviteModal(false)}
-                disabled={inviting}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleInviteTeamMember}
-                disabled={inviting || !inviteEmail.trim()}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {inviting ? 'Sending...' : 'Send Invitation'}
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="outline" onClick={() => setShowInviteModal(false)} disabled={inviting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleInviteTeamMember}
+              disabled={inviting || !inviteEmail.trim()}
+            >
+              {inviting ? 'Sending...' : 'Send Invitation'}
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
     </>
   )

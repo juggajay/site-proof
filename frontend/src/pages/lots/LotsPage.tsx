@@ -12,6 +12,7 @@ import { LotQuickView } from '@/components/lots/LotQuickView'
 import { PrintLabelsModal } from '@/components/lots/PrintLabelsModal'
 import { LinearMapView } from '@/components/lots/LinearMapView'
 import { Printer, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { ContextFAB } from '@/components/mobile/ContextFAB'
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp'
 
@@ -146,43 +147,43 @@ export function LotsPage() {
         <div className="flex items-center gap-3">
           {!isMobile && (
             <>
-              <button onClick={() => actions.setExportModalOpen(true)} className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10">Export CSV</button>
-              <button onClick={() => window.print()} className="rounded-lg border border-gray-500 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 print:hidden">
+              <Button variant="outline" onClick={() => actions.setExportModalOpen(true)}>Export CSV</Button>
+              <Button variant="outline" onClick={() => window.print()} className="print:hidden">
                 <Printer className="h-4 w-4" /> Print Register
-              </button>
+              </Button>
             </>
           )}
           {canCreate && actions.selectedLots.size > 0 && (
             <>
-              <button onClick={() => actions.setBulkStatusModalOpen(true)} className="rounded-lg border border-blue-500 px-4 py-2 text-sm text-blue-500 hover:bg-blue-50">
+              <Button variant="outline" onClick={() => actions.setBulkStatusModalOpen(true)}>
                 Update Status ({actions.selectedLots.size})
-              </button>
+              </Button>
               {!isSubcontractor && (
-                <button onClick={actions.handleOpenBulkAssignModal} className="rounded-lg border border-purple-500 px-4 py-2 text-sm text-purple-500 hover:bg-purple-50">
+                <Button variant="outline" onClick={actions.handleOpenBulkAssignModal}>
                   Assign Subcontractor ({actions.selectedLots.size})
-                </button>
+                </Button>
               )}
             </>
           )}
           {canDelete && actions.selectedLots.size > 0 && (
-            <button onClick={() => actions.setBulkDeleteModalOpen(true)} className="rounded-lg border border-red-500 px-4 py-2 text-sm text-red-500 hover:bg-red-50">
+            <Button variant="outline" className="text-red-600 border-red-600 hover:bg-red-50" onClick={() => actions.setBulkDeleteModalOpen(true)}>
               Delete Selected ({actions.selectedLots.size})
-            </button>
+            </Button>
           )}
           {actions.selectedLots.size > 0 && (
-            <button onClick={() => actions.setPrintLabelsModalOpen(true)} className="rounded-lg border border-green-500 px-4 py-2 text-sm text-green-500 hover:bg-green-50">
+            <Button variant="outline" className="text-green-600 border-green-600 hover:bg-green-50" onClick={() => actions.setPrintLabelsModalOpen(true)}>
               Print Labels ({actions.selectedLots.size})
-            </button>
+            </Button>
           )}
           {!isSubcontractor && canCreate && (
             <>
               {!isMobile && (
                 <>
-                  <button onClick={() => actions.setImportModalOpen(true)} className="rounded-lg border px-4 py-2 text-sm hover:bg-muted">Import CSV</button>
-                  <button onClick={() => actions.setBulkWizardOpen(true)} className="rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10">Bulk Create Lots</button>
+                  <Button variant="outline" onClick={() => actions.setImportModalOpen(true)}>Import CSV</Button>
+                  <Button variant="outline" onClick={() => actions.setBulkWizardOpen(true)}>Bulk Create Lots</Button>
                 </>
               )}
-              <button onClick={() => actions.setCreateModalOpen(true)} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">Create Lot</button>
+              <Button onClick={() => actions.setCreateModalOpen(true)}>Create Lot</Button>
             </>
           )}
         </div>

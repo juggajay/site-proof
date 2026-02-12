@@ -1,6 +1,8 @@
 import { useRef } from 'react'
 import DOMPurify from 'dompurify'
-import { X, Printer, QrCode, Download } from 'lucide-react'
+import { Printer, QrCode, Download } from 'lucide-react'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
 
 interface Lot {
   id: string
@@ -218,29 +220,18 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="w-full max-w-4xl max-h-[90vh] bg-white rounded-lg shadow-xl overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-          <div className="flex items-center gap-2">
-            <QrCode className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Print Lot Labels</h2>
-            <span className="text-sm text-muted-foreground">({lots.length} labels)</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-200 rounded"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Modal onClose={onClose} className="max-w-4xl">
+      <ModalHeader>
+        <span className="flex items-center gap-2">
+          <QrCode className="h-5 w-5 text-primary" />
+          Print Lot Labels
+          <span className="text-sm font-normal text-muted-foreground">({lots.length} labels)</span>
+        </span>
+      </ModalHeader>
 
+      <ModalBody className="p-0">
         {/* Preview */}
-        <div className="flex-1 overflow-auto p-4 bg-gray-100">
+        <div className="overflow-auto p-4 bg-gray-100 rounded">
           <div
             ref={printRef}
             className="labels-grid"
@@ -306,30 +297,21 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
             })}
           </div>
         </div>
+      </ModalBody>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between p-4 border-t bg-gray-50">
-          <p className="text-sm text-muted-foreground">
-            Labels include QR codes that link to lot details
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={handleDownloadSVGs}
-              className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm"
-            >
-              <Download className="h-4 w-4" />
-              Download
-            </button>
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
-            >
-              <Printer className="h-4 w-4" />
-              Print Labels
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+      <ModalFooter>
+        <p className="text-sm text-muted-foreground mr-auto">
+          Labels include QR codes that link to lot details
+        </p>
+        <Button variant="outline" onClick={handleDownloadSVGs}>
+          <Download className="h-4 w-4" />
+          Download
+        </Button>
+        <Button onClick={handlePrint}>
+          <Printer className="h-4 w-4" />
+          Print Labels
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

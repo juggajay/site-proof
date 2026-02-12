@@ -1,4 +1,20 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Label } from '@/components/ui/label'
+
+const markAsFailedSchema = z.object({
+  description: z.string().min(1, 'NCR Description is required'),
+  category: z.string().min(1, 'Category is required'),
+  severity: z.string().min(1, 'Severity is required'),
+})
+
+type MarkAsFailedFormData = z.infer<typeof markAsFailedSchema>
 
 interface MarkAsFailedModalProps {
   isOpen: boolean
@@ -15,110 +31,116 @@ export function MarkAsFailedModal({
   onSubmit,
   isSubmitting
 }: MarkAsFailedModalProps) {
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState('workmanship')
-  const [severity, setSeverity] = useState('minor')
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<MarkAsFailedFormData>({
+    resolver: zodResolver(markAsFailedSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      description: '',
+      category: 'workmanship',
+      severity: 'minor',
+    },
+  })
 
-  const handleSubmit = async () => {
-    if (!description.trim()) return
-    await onSubmit(description.trim(), category, severity)
-    // Reset state after successful submission
-    setDescription('')
-    setCategory('workmanship')
-    setSeverity('minor')
+  useEffect(() => { if (isOpen) reset() }, [isOpen, reset])
+
+  const onFormSubmit = (data: MarkAsFailedFormData) => {
+    onSubmit(data.description.trim(), data.category, data.severity)
   }
 
   const handleClose = () => {
-    setDescription('')
-    setCategory('workmanship')
-    setSeverity('minor')
+    reset()
     onClose()
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
-        <div className="flex items-center gap-3 mb-4">
+    <Modal onClose={handleClose}>
+      <ModalHeader>
+        <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400">
             <span className="text-xl font-bold">&#10007;</span>
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Mark as Failed</h2>
-            <p className="text-sm text-muted-foreground">This will raise an NCR</p>
+            <div className="text-lg font-semibold">Mark as Failed</div>
+            <p className="text-sm text-muted-foreground font-normal">This will raise an NCR</p>
           </div>
         </div>
-
+      </ModalHeader>
+      <ModalBody>
         <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
           <p className="text-sm font-medium">{itemDescription}</p>
         </div>
 
-        <div className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              NCR Description <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the non-conformance..."
-              className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent resize-none"
-              rows={3}
-              autoFocus
-            />
-          </div>
+        <form id="mark-failed-form" onSubmit={handleSubmit(onFormSubmit)}>
+          <div className="space-y-4">
+            <div>
+              <Label>
+                NCR Description <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                {...register('description')}
+                placeholder="Describe the non-conformance..."
+                className={errors.description ? 'border-destructive mt-1' : 'mt-1'}
+                rows={3}
+                autoFocus
+              />
+              {errors.description && (
+                <p className="text-sm text-destructive mt-1" role="alert">{errors.description.message}</p>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Category
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
-            >
-              <option value="workmanship">Workmanship</option>
-              <option value="material">Material</option>
-              <option value="design">Design</option>
-              <option value="documentation">Documentation</option>
-              <option value="process">Process</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+            <div>
+              <Label>Category</Label>
+              <NativeSelect
+                {...register('category')}
+                className="mt-1"
+              >
+                <option value="workmanship">Workmanship</option>
+                <option value="material">Material</option>
+                <option value="design">Design</option>
+                <option value="documentation">Documentation</option>
+                <option value="process">Process</option>
+                <option value="other">Other</option>
+              </NativeSelect>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Severity
-            </label>
-            <select
-              value={severity}
-              onChange={(e) => setSeverity(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm bg-transparent"
-            >
-              <option value="minor">Minor</option>
-              <option value="major">Major (requires QM approval to close)</option>
-            </select>
+            <div>
+              <Label>Severity</Label>
+              <NativeSelect
+                {...register('severity')}
+                className="mt-1"
+              >
+                <option value="minor">Minor</option>
+                <option value="major">Major (requires QM approval to close)</option>
+              </NativeSelect>
+            </div>
           </div>
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 border rounded-lg hover:bg-muted"
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !description.trim()}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? 'Creating NCR...' : 'Mark as Failed & Raise NCR'}
-          </button>
-        </div>
-      </div>
-    </div>
+        </form>
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleClose}
+          disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="mark-failed-form"
+          variant="destructive"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? 'Creating NCR...' : 'Mark as Failed & Raise NCR'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

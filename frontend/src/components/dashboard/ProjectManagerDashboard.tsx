@@ -1,7 +1,9 @@
 // Feature #294: Project Manager Dashboard
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { apiFetch } from '@/lib/api'
 import {
   AlertTriangle,
@@ -15,6 +17,7 @@ import {
   BarChart3,
   Layers
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface PMDashboardData {
   // Lot progress summary
@@ -101,40 +104,32 @@ interface PMDashboardData {
   } | null
 }
 
+const defaultPMData: PMDashboardData = {
+  lotProgress: { total: 0, notStarted: 0, inProgress: 0, onHold: 0, completed: 0, progressPercentage: 0 },
+  openNCRs: { total: 0, major: 0, minor: 0, overdue: 0, items: [] },
+  holdPointPipeline: { pending: 0, scheduled: 0, requested: 0, released: 0, thisWeek: 0, items: [] },
+  claimStatus: { totalClaimed: 0, totalCertified: 0, totalPaid: 0, outstanding: 0, pendingClaims: 0, recentClaims: [] },
+  costTracking: { budgetTotal: 0, actualSpend: 0, variance: 0, variancePercentage: 0, labourCost: 0, plantCost: 0, trend: 'on_track' },
+  attentionItems: [],
+  project: null
+}
+
 export function ProjectManagerDashboard() {
   useAuth() // Auth check
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
-  const [data, setData] = useState<PMDashboardData>({
-    lotProgress: { total: 0, notStarted: 0, inProgress: 0, onHold: 0, completed: 0, progressPercentage: 0 },
-    openNCRs: { total: 0, major: 0, minor: 0, overdue: 0, items: [] },
-    holdPointPipeline: { pending: 0, scheduled: 0, requested: 0, released: 0, thisWeek: 0, items: [] },
-    claimStatus: { totalClaimed: 0, totalCertified: 0, totalPaid: 0, outstanding: 0, pendingClaims: 0, recentClaims: [] },
-    costTracking: { budgetTotal: 0, actualSpend: 0, variance: 0, variancePercentage: 0, labourCost: 0, plantCost: 0, trend: 'on_track' },
-    attentionItems: [],
-    project: null
+
+  const { data = defaultPMData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.pmDashboard,
+    queryFn: () => apiFetch<PMDashboardData>('/api/dashboard/project-manager'),
   })
-
-  const fetchDashboardData = async () => {
-    try {
-      const result = await apiFetch<PMDashboardData>('/api/dashboard/project-manager')
-      setData(result)
-    } catch (err) {
-      console.error('Error fetching PM dashboard:', err)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchDashboardData()
+    queryClient.invalidateQueries({ queryKey: queryKeys.pmDashboard }).then(() => {
+      setRefreshing(false)
+    })
   }
 
   const formatCurrency = (amount: number) => {
@@ -164,14 +159,15 @@ export function ProjectManagerDashboard() {
             Project overview and key metrics
           </p>
         </div>
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handleRefresh}
           disabled={refreshing}
-          className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
-        </button>
+        </Button>
       </div>
 
       {/* Project Context */}

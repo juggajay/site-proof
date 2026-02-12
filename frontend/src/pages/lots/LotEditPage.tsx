@@ -10,6 +10,8 @@ import { useOfflineStatus } from '@/lib/useOfflineStatus'
 import { cacheLotForOfflineEdit, saveLotEditOffline, getOfflineLot } from '@/lib/offlineDb'
 import { SyncStatusBadge } from '@/components/OfflineIndicator'
 import { toast } from '@/components/ui/toaster'
+import { Modal, AlertModalHeader, AlertModalDescription, ModalBody, AlertModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
 
 interface Lot {
   id: string
@@ -510,67 +512,55 @@ export function LotEditPage() {
 
       {/* Unsaved Changes Dialog */}
       {showUnsavedDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold mb-2">Unsaved Changes</h3>
-            <p className="text-muted-foreground mb-6">
-              You have unsaved changes. Are you sure you want to leave this page? Your changes will be lost.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={handleCancelLeave}
-                className="px-4 py-2 rounded-lg border hover:bg-muted"
-              >
-                Stay on Page
-              </button>
-              <button
-                onClick={handleConfirmLeave}
-                className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Leave Page
-              </button>
-            </div>
-          </div>
-        </div>
+        <Modal alert onClose={handleCancelLeave} className="max-w-md">
+          <AlertModalHeader>Unsaved Changes</AlertModalHeader>
+          <AlertModalDescription>
+            You have unsaved changes. Are you sure you want to leave this page? Your changes will be lost.
+          </AlertModalDescription>
+          <AlertModalFooter>
+            <Button variant="outline" onClick={handleCancelLeave}>
+              Stay on Page
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmLeave}>
+              Leave Page
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
 
       {/* Feature #871: Concurrent Edit Warning Dialog */}
       {showConcurrentEditWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+        <Modal alert onClose={() => setShowConcurrentEditWarning(false)} className="max-w-md">
+          <AlertModalHeader>
+            <span className="flex items-center gap-3">
+              <span className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
                 <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
-              </div>
-              <h3 className="text-lg font-semibold">Concurrent Edit Detected</h3>
-            </div>
-            <p className="text-muted-foreground mb-2">
-              This lot has been modified by another user while you were editing.
-            </p>
-            <p className="text-sm text-muted-foreground mb-6">
+              </span>
+              Concurrent Edit Detected
+            </span>
+          </AlertModalHeader>
+          <AlertModalDescription>
+            This lot has been modified by another user while you were editing.
+          </AlertModalDescription>
+          <ModalBody>
+            <p className="text-sm text-muted-foreground mb-4">
               Last modified: {concurrentEditInfo?.serverUpdatedAt ? new Date(concurrentEditInfo.serverUpdatedAt).toLocaleString() : 'Unknown'}
             </p>
-            <p className="text-sm mb-6">
+            <p className="text-sm">
               Your changes could not be saved. Please refresh the page to see the latest version, then re-apply your changes.
             </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowConcurrentEditWarning(false)}
-                className="px-4 py-2 rounded-lg border hover:bg-muted"
-              >
-                Continue Editing
-              </button>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Refresh Page
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <AlertModalFooter>
+            <Button variant="outline" onClick={() => setShowConcurrentEditWarning(false)}>
+              Continue Editing
+            </Button>
+            <Button onClick={() => window.location.reload()}>
+              Refresh Page
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
 
       {/* Edit Form */}

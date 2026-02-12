@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -6,8 +5,11 @@ import {
   AlertCircle,
   Clock,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 import { cn } from '@/lib/utils'
 
 interface Lot {
@@ -39,33 +41,27 @@ function getStatusBadge(status: string) {
 }
 
 export function AssignedWorkPage() {
-  const [lots, setLots] = useState<Lot[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [projectName, setProjectName] = useState('')
+  const { data: company, isLoading: companyLoading } = useQuery({
+    queryKey: queryKeys.portalCompanies,
+    queryFn: async () => {
+      const res = await apiFetch<{ company: { projectName: string; projectId: string } }>('/api/subcontractors/my-company')
+      return res.company
+    },
+  })
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Get company info
-        const companyData = await apiFetch<{ company: { projectName: string; projectId: string } }>(`/api/subcontractors/my-company`)
-        setProjectName(companyData.company.projectName)
+  const { data: lots = [], isLoading: lotsLoading, error } = useQuery({
+    queryKey: queryKeys.portalAssignedWork,
+    queryFn: async () => {
+      const res = await apiFetch<{ lots: Lot[] }>(
+        `/api/lots?projectId=${company!.projectId}`
+      )
+      return res.lots || []
+    },
+    enabled: !!company?.projectId,
+  })
 
-        // Fetch assigned lots
-        const lotsData = await apiFetch<{ lots: Lot[] }>(
-          `/api/lots?projectId=${companyData.company.projectId}`
-        )
-        setLots(lotsData.lots || [])
-      } catch (err) {
-        console.error('Error fetching data:', err)
-        setError('Failed to load assigned work')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
+  const loading = companyLoading || lotsLoading
+  const projectName = company?.projectName || ''
 
   // Group lots by status
   const inProgress = lots.filter(l => l.status === 'in_progress')
@@ -92,7 +88,7 @@ export function AssignedWorkPage() {
       <div className="container max-w-2xl mx-auto p-4">
         <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-          <p>{error}</p>
+          <p>{extractErrorMessage(error, 'Failed to load assigned work')}</p>
         </div>
         <Link
           to="/subcontractor-portal"

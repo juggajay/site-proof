@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import {
   MapPin,
   Layers,
@@ -12,6 +13,7 @@ import {
   ExternalLink,
   Clock
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface LotQuickViewProps {
   lotId: string
@@ -51,38 +53,15 @@ const statusColors: Record<string, string> = {
 
 export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickViewProps) {
   const navigate = useNavigate()
-  const [lot, setLot] = useState<LotDetails | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  const { data: lotData, isLoading: loading, error: queryError } = useQuery({
+    queryKey: queryKeys.lot(lotId),
+    queryFn: () => apiFetch<{ lot: LotDetails }>(`/api/lots/${lotId}`),
+    enabled: !!lotId,
+  })
 
-    async function fetchLotDetails() {
-      try {
-        const data = await apiFetch<{ lot: LotDetails }>(`/api/lots/${lotId}`)
-
-        if (cancelled) return
-
-        setLot(data.lot)
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Error fetching lot details:', err)
-          setError('Failed to load lot details')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    fetchLotDetails()
-
-    return () => {
-      cancelled = true
-    }
-  }, [lotId])
+  const lot = lotData?.lot ?? null
+  const error = queryError ? 'Failed to load lot details' : null
 
   const handleViewDetails = () => {
     navigate(`/projects/${projectId}/lots/${lotId}`)
@@ -219,13 +198,14 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
 
           {/* Footer */}
           <div className="p-2 border-t bg-muted/20">
-            <button
+            <Button
+              variant="ghost"
               onClick={handleViewDetails}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm text-primary hover:bg-primary/10 rounded transition-colors"
+              className="w-full text-primary hover:bg-primary/10"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               View Full Details
-            </button>
+            </Button>
           </div>
         </>
       ) : null}

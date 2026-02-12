@@ -2,6 +2,10 @@ import React, { useState, useCallback } from 'react'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { generateDailyDiaryPDF, DailyDiaryPDFData } from '@/lib/pdfGenerator'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import type { DailyDiary, Addendum } from '../types'
 
 interface DiarySubmitSectionProps {
@@ -178,35 +182,30 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
       {/* Submit & Print Buttons */}
       <div className="flex justify-end gap-4">
         {/* Print Button */}
-        <button
-          onClick={handlePrint}
-          className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-4 py-2 text-sm hover:bg-muted"
-          title="Print daily diary"
-        >
+        <Button variant="outline" onClick={handlePrint} title="Print daily diary">
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
           </svg>
           Print
-        </button>
+        </Button>
 
         {/* Submit Button - Only for draft */}
         {diary.status === 'draft' && (
-          <button
+          <Button
+            variant="success"
             onClick={handleSubmitClick}
             disabled={saving}
-            className="rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
           >
             {saving ? 'Submitting...' : 'Submit Diary'}
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Submit Confirmation Modal */}
       {showSubmitConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold mb-4">Submit Daily Diary?</h3>
-
+        <Modal onClose={() => setShowSubmitConfirm(false)}>
+          <ModalHeader>Submit Daily Diary?</ModalHeader>
+          <ModalBody>
             {submitWarnings.length > 0 && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="font-medium text-yellow-800 mb-2">Warnings:</p>
@@ -218,28 +217,21 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
               </div>
             )}
 
-            <p className="text-muted-foreground mb-4">
+            <p className="text-muted-foreground">
               {submitWarnings.length > 0
                 ? 'Do you want to submit the diary with the above warnings?'
                 : 'Once submitted, this diary entry cannot be edited.'}
             </p>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowSubmitConfirm(false)}
-                className="px-4 py-2 rounded-lg border hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmSubmitDiary}
-                className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700"
-              >
-                Confirm Submit
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="outline" onClick={() => setShowSubmitConfirm(false)}>
+              Cancel
+            </Button>
+            <Button variant="success" onClick={confirmSubmitDiary}>
+              Confirm Submit
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
 
       {/* Submitted Info */}
@@ -282,20 +274,19 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
 
           {/* Add Addendum Form */}
           <div className="space-y-3">
-            <label className="block text-sm font-medium">Add Addendum</label>
-            <textarea
+            <Label>Add Addendum</Label>
+            <Textarea
               value={addendumContent}
               onChange={(e) => setAddendumContent(e.target.value)}
               placeholder="Enter addendum notes..."
-              className="w-full rounded-lg border bg-background px-4 py-2 text-sm min-h-[100px]"
+              className="min-h-[100px]"
             />
-            <button
+            <Button
               onClick={addAddendum}
               disabled={!addendumContent.trim() || addingAddendum}
-              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {addingAddendum ? 'Adding...' : 'Add Addendum'}
-            </button>
+            </Button>
           </div>
         </div>
       )}

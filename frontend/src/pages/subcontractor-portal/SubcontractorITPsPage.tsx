@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -8,8 +7,11 @@ import {
   Clock,
   ChevronRight,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 
 interface LotAssignment {
   id: string
@@ -70,37 +72,28 @@ function getITPStatusBadge(status: string, percentage?: number) {
 }
 
 export function SubcontractorITPsPage() {
-  const [lots, setLots] = useState<Lot[]>([])
-  const [company, setCompany] = useState<SubcontractorCompany | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: company, isLoading: companyLoading } = useQuery({
+    queryKey: queryKeys.portalCompanies,
+    queryFn: async () => {
+      const res = await apiFetch<{ company: SubcontractorCompany }>('/api/subcontractors/my-company')
+      return res.company
+    },
+  })
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Get company info
-        const companyData = await apiFetch<{ company: SubcontractorCompany }>(`/api/subcontractors/my-company`)
-        setCompany(companyData.company)
+  const { data: lots = [], isLoading: lotsLoading, error } = useQuery({
+    queryKey: queryKeys.portalITPs,
+    queryFn: async () => {
+      const res = await apiFetch<{ lots: Lot[] }>(
+        `/api/lots?projectId=${company!.projectId}&includeITP=true`
+      )
+      return (res.lots || []).filter((lot: Lot) => {
+        return lot.itpInstances && lot.itpInstances.length > 0
+      })
+    },
+    enabled: !!company?.projectId,
+  })
 
-        // Fetch lots with ITP data - the backend filters to assigned lots
-        const lotsData = await apiFetch<{ lots: Lot[] }>(
-          `/api/lots?projectId=${companyData.company.projectId}&includeITP=true`
-        )
-        // Show all assigned lots with ITPs (backend already filters to assigned lots)
-        const assignedLots = (lotsData.lots || []).filter((lot: Lot) => {
-          return lot.itpInstances && lot.itpInstances.length > 0
-        })
-        setLots(assignedLots)
-      } catch (err) {
-        console.error('Error fetching data:', err)
-        setError('Failed to load ITPs')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
+  const loading = companyLoading || lotsLoading
 
   // Group by ITP status
   const inProgress = lots.filter(l =>
@@ -132,7 +125,7 @@ export function SubcontractorITPsPage() {
       <div className="container max-w-2xl mx-auto p-4">
         <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-          <p>{error}</p>
+          <p>{extractErrorMessage(error, 'Failed to load ITPs')}</p>
         </div>
         <Link
           to="/subcontractor-portal"

@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { X, Printer } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { generateDocketDetailPDF, DocketDetailPDFData } from '@/lib/pdfGenerator'
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton'
 import { useIsMobile } from '@/hooks/useMediaQuery'
@@ -415,37 +416,27 @@ export function DocketApprovalsPage() {
           </div>
           <div className="flex gap-2">
             {dockets.length > 0 && (
-              <button
-                onClick={handleExportCSV}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              >
+              <Button variant="outline" onClick={handleExportCSV}>
                 Export CSV
-              </button>
+              </Button>
             )}
             {isSubcontractor && (
-              <button
-                onClick={() => setCreateModalOpen(true)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-              >
+              <Button onClick={() => setCreateModalOpen(true)}>
                 Create Docket
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              variant={statusFilter === 'all' ? 'secondary' : 'outline'}
               onClick={() => handleFilterChange('all')}
-              className={`rounded-lg border px-4 py-2 text-sm ${statusFilter === 'all' ? 'bg-muted' : 'hover:bg-muted'}`}
             >
               All Dockets
-            </button>
-            <button
+            </Button>
+            <Button
+              variant={statusFilter === 'pending_approval' ? 'default' : 'outline'}
               onClick={() => handleFilterChange('pending_approval')}
-              className={`rounded-lg px-4 py-2 text-sm ${
-                statusFilter === 'pending_approval'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border hover:bg-muted'
-              }`}
             >
               Pending ({pendingCount})
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -519,7 +510,9 @@ export function DocketApprovalsPage() {
                     <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-2">
                         {/* Print button - always visible */}
-                        <button
+                        <Button
+                          variant="outline"
+                          size="icon"
                           onClick={async () => {
                             try {
                               // Fetch project info
@@ -563,35 +556,25 @@ export function DocketApprovalsPage() {
                               toast({ title: 'Failed to generate PDF', variant: 'error' })
                             }
                           }}
-                          className="rounded border p-1.5 hover:bg-muted"
                           title="Print docket"
                         >
                           <Printer className="h-4 w-4" />
-                        </button>
+                        </Button>
                         {/* Submit button for draft dockets (subcontractor only) */}
                         {docket.status === 'draft' && isSubcontractor && (
-                          <button
-                            onClick={() => handleSubmitDocket(docket)}
-                            className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
-                          >
+                          <Button size="sm" onClick={() => handleSubmitDocket(docket)}>
                             Submit
-                          </button>
+                          </Button>
                         )}
                         {/* Approve/Reject buttons for pending dockets (approvers only) */}
                         {docket.status === 'pending_approval' && canApprove && (
                           <>
-                            <button
-                              onClick={() => openActionModal(docket, 'approve')}
-                              className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
-                            >
+                            <Button variant="success" size="sm" onClick={() => openActionModal(docket, 'approve')}>
                               Approve
-                            </button>
-                            <button
-                              onClick={() => openActionModal(docket, 'reject')}
-                              className="rounded border border-red-600 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                            >
+                            </Button>
+                            <Button variant="outline" size="sm" className="text-red-600 border-red-600 hover:bg-red-50" onClick={() => openActionModal(docket, 'reject')}>
                               Reject
-                            </button>
+                            </Button>
                           </>
                         )}
                       </div>
@@ -630,12 +613,9 @@ export function DocketApprovalsPage() {
           <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="text-xl font-semibold">Create Docket</h2>
-              <button
-                onClick={() => setCreateModalOpen(false)}
-                className="p-2 hover:bg-muted rounded-lg"
-              >
+              <Button variant="ghost" size="icon" onClick={() => setCreateModalOpen(false)}>
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
 
             <div className="p-6 space-y-4">
@@ -712,19 +692,15 @@ export function DocketApprovalsPage() {
             </div>
 
             <div className="flex justify-end gap-2 p-4 border-t">
-              <button
-                onClick={() => setCreateModalOpen(false)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
+              <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleCreateDocket}
                 disabled={creating || !newDocketDate}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
                 {creating ? 'Creating...' : 'Create Docket'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -738,12 +714,9 @@ export function DocketApprovalsPage() {
               <h2 className="text-xl font-semibold">
                 {actionType === 'approve' ? 'Approve Docket' : actionType === 'reject' ? 'Reject Docket' : 'Docket Details'}
               </h2>
-              <button
-                onClick={() => setActionModalOpen(false)}
-                className="p-2 hover:bg-muted rounded-lg"
-              >
+              <Button variant="ghost" size="icon" onClick={() => setActionModalOpen(false)}>
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
 
             <div className="p-6 space-y-4">
@@ -894,18 +867,12 @@ export function DocketApprovalsPage() {
               {/* View mode: show approve/reject buttons if docket is pending */}
               {actionType === 'view' && selectedDocket.status === 'pending_approval' && canApprove && (
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setActionType('approve')}
-                    className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
-                  >
+                  <Button variant="success" className="flex-1" onClick={() => setActionType('approve')}>
                     Approve
-                  </button>
-                  <button
-                    onClick={() => setActionType('reject')}
-                    className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
-                  >
+                  </Button>
+                  <Button variant="destructive" className="flex-1" onClick={() => setActionType('reject')}>
                     Reject
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -1007,21 +974,14 @@ export function DocketApprovalsPage() {
             </div>
 
             <div className="flex justify-end gap-2 p-4 border-t">
-              <button
-                onClick={() => setActionModalOpen(false)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
+              <Button variant="outline" onClick={() => setActionModalOpen(false)}>
                 {actionType === 'view' ? 'Close' : 'Cancel'}
-              </button>
+              </Button>
               {actionType !== 'view' && (
-                <button
+                <Button
+                  variant={actionType === 'approve' ? 'success' : 'destructive'}
                   onClick={handleAction}
                   disabled={actionInProgress || (actionType === 'reject' && !actionNotes.trim())}
-                  className={`px-4 py-2 rounded-lg disabled:opacity-50 ${
-                    actionType === 'approve'
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-red-600 text-white hover:bg-red-700'
-                  }`}
                 >
                   {actionInProgress
                     ? actionType === 'approve'
@@ -1030,7 +990,7 @@ export function DocketApprovalsPage() {
                     : actionType === 'approve'
                       ? 'Approve'
                       : 'Reject'}
-                </button>
+                </Button>
               )}
             </div>
           </div>

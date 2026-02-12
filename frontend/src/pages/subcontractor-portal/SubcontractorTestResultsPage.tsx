@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -8,8 +7,11 @@ import {
   XCircle,
   Clock,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 
 interface TestResult {
   id: string
@@ -57,33 +59,26 @@ function getResultBadge(result: string) {
 }
 
 export function SubcontractorTestResultsPage() {
-  const [testResults, setTestResults] = useState<TestResult[]>([])
-  const [company, setCompany] = useState<SubcontractorCompany | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: company, isLoading: companyLoading } = useQuery({
+    queryKey: queryKeys.portalCompanies,
+    queryFn: async () => {
+      const res = await apiFetch<{ company: SubcontractorCompany }>('/api/subcontractors/my-company')
+      return res.company
+    },
+  })
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Get company info
-        const companyData = await apiFetch<{ company: SubcontractorCompany }>(`/api/subcontractors/my-company`)
-        setCompany(companyData.company)
+  const { data: testResults = [], isLoading: testsLoading, error } = useQuery({
+    queryKey: queryKeys.portalTestResults,
+    queryFn: async () => {
+      const res = await apiFetch<{ testResults?: TestResult[]; tests?: TestResult[] }>(
+        `/api/tests?projectId=${company!.projectId}&subcontractorView=true`
+      )
+      return res.testResults || res.tests || []
+    },
+    enabled: !!company?.projectId,
+  })
 
-        // Fetch test results for assigned lots
-        const testsData = await apiFetch<{ testResults?: TestResult[]; tests?: TestResult[] }>(
-          `/api/tests?projectId=${companyData.company.projectId}&subcontractorView=true`
-        )
-        setTestResults(testsData.testResults || testsData.tests || [])
-      } catch (err) {
-        console.error('Error fetching data:', err)
-        setError('Failed to load test results')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
+  const loading = companyLoading || testsLoading
 
   const passed = testResults.filter(t => t.result === 'pass')
   const failed = testResults.filter(t => t.result === 'fail')
@@ -107,7 +102,7 @@ export function SubcontractorTestResultsPage() {
       <div className="container max-w-2xl mx-auto p-4">
         <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-          <p>{error}</p>
+          <p>{extractErrorMessage(error, 'Failed to load test results')}</p>
         </div>
         <Link
           to="/subcontractor-portal"

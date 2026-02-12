@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Link } from 'react-router-dom'
 import {
   HelpCircle,
@@ -16,18 +19,46 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Textarea } from '@/components/ui/textarea'
+
+const supportSchema = z.object({
+  subject: z.string().min(1, 'Subject is required'),
+  message: z.string().min(1, 'Message is required'),
+  category: z.string().min(1, 'Category is required'),
+})
+
+type SupportFormData = z.infer<typeof supportSchema>
 
 export function SupportPage() {
   const { user } = useAuth()
-  const [subject, setSubject] = useState('')
-  const [message, setMessage] = useState('')
-  const [category, setCategory] = useState('general')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const handleSubmitRequest = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<SupportFormData>({
+    resolver: zodResolver(supportSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      subject: '',
+      message: '',
+      category: 'general',
+    },
+  })
+
+  const subject = watch('subject')
+  const message = watch('message')
+
+  const onSubmit = async (data: SupportFormData) => {
     setIsSubmitting(true)
     setSubmitError(null)
     setSubmitSuccess(false)
@@ -36,18 +67,16 @@ export function SupportPage() {
       await apiFetch('/api/support/request', {
         method: 'POST',
         body: JSON.stringify({
-          subject,
-          message,
-          category,
+          subject: data.subject,
+          message: data.message,
+          category: data.category,
           userEmail: user?.email,
           userName: user?.name,
         }),
       })
 
       setSubmitSuccess(true)
-      setSubject('')
-      setMessage('')
-      setCategory('general')
+      reset()
 
       // Clear success message after 5 seconds
       setTimeout(() => setSubmitSuccess(false), 5000)
@@ -238,44 +267,48 @@ export function SupportPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmitRequest} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Category</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2"
+              <Label className="mb-1">Category</Label>
+              <NativeSelect
+                {...register('category')}
+                className={errors.category ? 'border-destructive' : ''}
               >
                 {supportCategories.map((cat) => (
                   <option key={cat.value} value={cat.value}>
                     {cat.label}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
+              {errors.category && (
+                <p className="mt-1 text-sm text-destructive" role="alert">{errors.category.message}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Subject</label>
-              <input
+              <Label className="mb-1">Subject</Label>
+              <Input
                 type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                {...register('subject')}
                 placeholder="Brief description of your issue"
-                required
-                className="w-full rounded-md border bg-background px-3 py-2"
+                className={errors.subject ? 'border-destructive' : ''}
               />
+              {errors.subject && (
+                <p className="mt-1 text-sm text-destructive" role="alert">{errors.subject.message}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Message</label>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
+              <Label className="mb-1">Message</Label>
+              <Textarea
+                {...register('message')}
                 placeholder="Please describe your issue or question in detail..."
-                required
                 rows={5}
-                className="w-full rounded-md border bg-background px-3 py-2 resize-none"
+                className={`resize-none ${errors.message ? 'border-destructive' : ''}`}
               />
+              {errors.message && (
+                <p className="mt-1 text-sm text-destructive" role="alert">{errors.message.message}</p>
+              )}
             </div>
 
             {user && (
@@ -284,10 +317,10 @@ export function SupportPage() {
               </div>
             )}
 
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting || !subject || !message}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full"
             >
               {isSubmitting ? (
                 <>
@@ -300,7 +333,7 @@ export function SupportPage() {
                   Submit Request
                 </>
               )}
-            </button>
+            </Button>
           </form>
         </div>
       </div>

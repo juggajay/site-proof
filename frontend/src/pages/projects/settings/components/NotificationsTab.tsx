@@ -1,5 +1,10 @@
 import { useState } from 'react'
 import { apiFetch } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import type { HpRecipient } from '../types'
 
 interface NotificationsTabProps {
@@ -81,29 +86,27 @@ export function NotificationsTab({
               <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-gray-300" />
             </label>
             <div className="p-3 rounded-lg bg-muted/30">
-              <label className="block text-sm font-medium mb-2">Notification Trigger</label>
+              <Label className="mb-2">Notification Trigger</Label>
               <p className="text-xs text-muted-foreground mb-2">When to notify the client about an upcoming witness point</p>
-              <select className="w-full rounded-lg border bg-background px-3 py-2 text-sm">
+              <NativeSelect>
                 <option value="previous_item">When previous checklist item is completed</option>
                 <option value="2_items_before">When 2 items before witness point is completed</option>
                 <option value="same_day">Same day notification (at start of working day)</option>
-              </select>
+              </NativeSelect>
             </div>
             <div className="p-3 rounded-lg bg-muted/30">
-              <label className="block text-sm font-medium mb-2">Client Contact Email</label>
+              <Label className="mb-2">Client Contact Email</Label>
               <p className="text-xs text-muted-foreground mb-2">Email address for witness point notifications</p>
-              <input
+              <Input
                 type="email"
                 placeholder="superintendent@client.com"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               />
             </div>
             <div className="p-3 rounded-lg bg-muted/30">
-              <label className="block text-sm font-medium mb-2">Client Contact Name</label>
-              <input
+              <Label className="mb-2">Client Contact Name</Label>
+              <Input
                 type="text"
                 placeholder="John Smith"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
               />
             </div>
           </div>
@@ -115,17 +118,17 @@ export function NotificationsTab({
           </p>
           <div className="space-y-4">
             <div className="p-3 rounded-lg bg-muted/30">
-              <label className="block text-sm font-medium mb-2">Minimum Notice (Working Days)</label>
+              <Label className="mb-2">Minimum Notice (Working Days)</Label>
               <p className="text-xs text-muted-foreground mb-2">
                 If a user schedules an inspection with less than this notice, they'll receive a warning and must provide a reason to override.
               </p>
-              <select className="w-full rounded-lg border bg-background px-3 py-2 text-sm">
+              <NativeSelect>
                 <option value="0">No minimum notice</option>
                 <option value="1" selected>1 working day (default)</option>
                 <option value="2">2 working days</option>
                 <option value="3">3 working days</option>
                 <option value="5">5 working days</option>
-              </select>
+              </NativeSelect>
             </div>
           </div>
         </div>
@@ -136,12 +139,11 @@ export function NotificationsTab({
           </p>
           <div className="space-y-4">
             <div className="p-3 rounded-lg bg-muted/30">
-              <label className="block text-sm font-medium mb-2">Release Authorization</label>
+              <Label className="mb-2">Release Authorization</Label>
               <p className="text-xs text-muted-foreground mb-2">
                 Specify who is authorized to release hold points. This affects the Record Release functionality.
               </p>
-              <select
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+              <NativeSelect
                 value={hpApprovalRequirement}
                 onChange={async (e) => {
                   const newValue = e.target.value as 'any' | 'superintendent'
@@ -160,7 +162,7 @@ export function NotificationsTab({
               >
                 <option value="any">Any Team Member</option>
                 <option value="superintendent">Superintendent Only</option>
-              </select>
+              </NativeSelect>
             </div>
           </div>
         </div>
@@ -179,7 +181,10 @@ export function NotificationsTab({
                     <span className="font-medium">{recipient.role}:</span>
                     <span className="text-muted-foreground ml-2">{recipient.email}</span>
                   </div>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700 text-xs h-auto p-1"
                     onClick={async () => {
                       const newRecipients = hpRecipients.filter((_, i) => i !== index)
                       setHpRecipients(newRecipients)
@@ -194,20 +199,20 @@ export function NotificationsTab({
                         console.error('Failed to save recipients:', e)
                       }
                     }}
-                    className="text-red-500 hover:text-red-700 text-xs"
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
               ))
             )}
           </div>
-          <button
+          <Button
+            variant="outline"
             onClick={() => setShowAddRecipientModal(true)}
-            className="mt-4 rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+            className="mt-4"
           >
             + Add Recipient
-          </button>
+          </Button>
         </div>
         <div className="rounded-lg border p-4">
           <h2 className="text-lg font-semibold mb-2">Subcontractor ITP Verification</h2>
@@ -253,82 +258,78 @@ export function NotificationsTab({
 
       {/* Add HP Recipient Modal (Feature #697) */}
       {showAddRecipientModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
-            <h3 className="text-xl font-bold mb-4">Add HP Recipient</h3>
+        <Modal onClose={() => { setShowAddRecipientModal(false); setNewRecipientRole(''); setNewRecipientEmail('') }}>
+          <ModalHeader>Add HP Recipient</ModalHeader>
+          <ModalBody>
             <p className="text-sm text-muted-foreground mb-4">
               Add a default recipient for hold point release notifications.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Role/Title</label>
-                <input
+                <Label className="mb-1">Role/Title</Label>
+                <Input
                   type="text"
                   value={newRecipientRole}
                   onChange={(e) => setNewRecipientRole(e.target.value)}
                   placeholder="e.g., Superintendent, Quality Manager"
-                  className="w-full rounded-lg border bg-background px-3 py-2"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Email Address</label>
-                <input
+                <Label className="mb-1">Email Address</Label>
+                <Input
                   type="email"
                   value={newRecipientEmail}
                   onChange={(e) => setNewRecipientEmail(e.target.value)}
                   placeholder="email@example.com"
-                  className="w-full rounded-lg border bg-background px-3 py-2"
                 />
               </div>
             </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAddRecipientModal(false)
+                setNewRecipientRole('')
+                setNewRecipientEmail('')
+              }}
+              disabled={savingRecipients}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!newRecipientRole.trim() || !newRecipientEmail.trim()) return
+                setSavingRecipients(true)
+                const newRecipient = { role: newRecipientRole, email: newRecipientEmail }
+                const newRecipients = [...hpRecipients, newRecipient]
 
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => {
+                if (!projectId) {
+                  setSavingRecipients(false)
+                  return
+                }
+                try {
+                  await apiFetch(`/api/projects/${projectId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ settings: { hpRecipients: newRecipients } }),
+                  })
+                  setHpRecipients(newRecipients)
                   setShowAddRecipientModal(false)
                   setNewRecipientRole('')
                   setNewRecipientEmail('')
-                }}
-                disabled={savingRecipients}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  if (!newRecipientRole.trim() || !newRecipientEmail.trim()) return
-                  setSavingRecipients(true)
-                  const newRecipient = { role: newRecipientRole, email: newRecipientEmail }
-                  const newRecipients = [...hpRecipients, newRecipient]
-
-                  if (!projectId) {
-                    setSavingRecipients(false)
-                    return
-                  }
-                  try {
-                    await apiFetch(`/api/projects/${projectId}`, {
-                      method: 'PATCH',
-                      body: JSON.stringify({ settings: { hpRecipients: newRecipients } }),
-                    })
-                    setHpRecipients(newRecipients)
-                    setShowAddRecipientModal(false)
-                    setNewRecipientRole('')
-                    setNewRecipientEmail('')
-                  } catch (e) {
-                    console.error('Failed to save recipient:', e)
-                  } finally {
-                    setSavingRecipients(false)
-                  }
-                }}
-                disabled={savingRecipients || !newRecipientRole.trim() || !newRecipientEmail.trim()}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {savingRecipients ? 'Adding...' : 'Add Recipient'}
-              </button>
-            </div>
-          </div>
-        </div>
+                } catch (e) {
+                  console.error('Failed to save recipient:', e)
+                } finally {
+                  setSavingRecipients(false)
+                }
+              }}
+              disabled={savingRecipients || !newRecipientRole.trim() || !newRecipientEmail.trim()}
+            >
+              {savingRecipients ? 'Adding...' : 'Add Recipient'}
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
     </>
   )

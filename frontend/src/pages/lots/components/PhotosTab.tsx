@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, FileText, Plus, CheckCircle } from 'lucide-react'
 import { toast } from '@/components/ui/toaster'
 import { getAuthToken } from '@/lib/auth'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import type {
   ITPAttachment,
   ITPChecklistItem,
@@ -262,12 +265,13 @@ export function PhotosTab({
           <p className="text-muted-foreground">
             No photos have been uploaded for this lot yet. Add photos to ITP checklist items to document work progress.
           </p>
-          <button
+          <Button
+            variant="outline"
             onClick={() => onTabChange('itp')}
-            className="mt-4 rounded-lg border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+            className="mt-4"
           >
             Go to ITP Checklist
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -299,20 +303,21 @@ export function PhotosTab({
             {/* Bulk Caption button - only show when photos selected */}
             {selectedPhotos.size > 0 && (
               <>
-                <button
+                <Button
+                  size="sm"
                   onClick={() => setShowBatchCaptionModal(true)}
-                  className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 flex items-center gap-1"
                 >
                   <FileText className="h-4 w-4" />
                   Bulk Caption ({selectedPhotos.size})
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="success"
+                  size="sm"
                   onClick={() => setShowAddToEvidenceModal(true)}
-                  className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 flex items-center gap-1"
                 >
                   <Plus className="h-4 w-4" />
                   Add to Evidence ({selectedPhotos.size})
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -376,58 +381,57 @@ export function PhotosTab({
 
         {/* Batch Caption Modal */}
         {showBatchCaptionModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-background rounded-lg shadow-lg w-full max-w-md p-6">
-              <h3 className="text-lg font-semibold mb-4">Bulk Caption Photos</h3>
+          <Modal onClose={() => { setShowBatchCaptionModal(false); setBatchCaption('') }} className="max-w-md">
+            <ModalHeader>Bulk Caption Photos</ModalHeader>
+            <ModalBody>
               <p className="text-sm text-muted-foreground mb-4">
                 Apply caption to {selectedPhotos.size} selected photo{selectedPhotos.size !== 1 ? 's' : ''}
               </p>
-              <textarea
+              <Textarea
                 value={batchCaption}
                 onChange={(e) => setBatchCaption(e.target.value)}
                 placeholder="Enter caption for all selected photos..."
-                className="w-full h-24 rounded-lg border p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                className="h-24 resize-none"
                 autoFocus
               />
-              <div className="flex justify-end gap-2 mt-4">
-                <button
-                  onClick={() => {
-                    setShowBatchCaptionModal(false)
-                    setBatchCaption('')
-                  }}
-                  className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
-                  disabled={applyingBatchCaption}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={applyBatchCaptionToPhotos}
-                  disabled={!batchCaption.trim() || applyingBatchCaption}
-                  className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {applyingBatchCaption ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Applying...
-                    </>
-                  ) : (
-                    'Apply Caption'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowBatchCaptionModal(false)
+                  setBatchCaption('')
+                }}
+                disabled={applyingBatchCaption}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={applyBatchCaptionToPhotos}
+                disabled={!batchCaption.trim() || applyingBatchCaption}
+              >
+                {applyingBatchCaption ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Applying...
+                  </>
+                ) : (
+                  'Apply Caption'
+                )}
+              </Button>
+            </ModalFooter>
+          </Modal>
         )}
 
         {/* Add to Evidence Modal */}
         {showAddToEvidenceModal && itpInstance?.template?.checklistItems && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-background rounded-lg shadow-lg w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
-              <h3 className="text-lg font-semibold mb-4">Add Photos to Evidence</h3>
+          <Modal onClose={() => { setShowAddToEvidenceModal(false); setSelectedEvidenceItem(null) }} className="max-w-lg">
+            <ModalHeader>Add Photos to Evidence</ModalHeader>
+            <ModalBody className="max-h-[60vh] overflow-y-auto">
               <p className="text-sm text-muted-foreground mb-4">
                 Select an ITP checklist item to attach {selectedPhotos.size} photo{selectedPhotos.size !== 1 ? 's' : ''} as evidence
               </p>
-              <div className="space-y-2 mb-4">
+              <div className="space-y-2">
                 {itpInstance.template.checklistItems.map((item: ITPChecklistItem) => {
                   const completion = itpInstance.completions?.find(c => c.checklistItemId === item.id)
                   const isSelected = selectedEvidenceItem === item.id
@@ -459,34 +463,34 @@ export function PhotosTab({
                   )
                 })}
               </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setShowAddToEvidenceModal(false)
-                    setSelectedEvidenceItem(null)
-                  }}
-                  className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
-                  disabled={addingToEvidence}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={addPhotosToEvidence}
-                  disabled={!selectedEvidenceItem || addingToEvidence}
-                  className="px-4 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {addingToEvidence ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Adding...
-                    </>
-                  ) : (
-                    'Add to Evidence'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+            </ModalBody>
+            <ModalFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAddToEvidenceModal(false)
+                  setSelectedEvidenceItem(null)
+                }}
+                disabled={addingToEvidence}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="success"
+                onClick={addPhotosToEvidence}
+                disabled={!selectedEvidenceItem || addingToEvidence}
+              >
+                {addingToEvidence ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add to Evidence'
+                )}
+              </Button>
+            </ModalFooter>
+          </Modal>
         )}
       </div>
 
@@ -586,26 +590,30 @@ function PhotoViewerModal({
     >
       {/* Previous Button */}
       {hasPrev && (
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={(e) => { e.stopPropagation(); goToPrev() }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full p-3 text-white transition-colors z-10"
+          className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full text-white z-10"
           title="Previous photo"
           data-testid="photo-lightbox-prev"
         >
           <ChevronLeft className="h-6 w-6" />
-        </button>
+        </Button>
       )}
 
       {/* Next Button */}
       {hasNext && (
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={(e) => { e.stopPropagation(); goToNext() }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full p-3 text-white transition-colors z-10"
+          className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full text-white z-10"
           title="Next photo"
           data-testid="photo-lightbox-next"
         >
           <ChevronRight className="h-6 w-6" />
-        </button>
+        </Button>
       )}
 
       {/* Zoom Controls */}
@@ -613,47 +621,55 @@ function PhotoViewerModal({
         className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 rounded-lg p-2 z-10"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={handleZoomOut}
-          className="bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-white/20 hover:bg-white/40 rounded-full text-white"
           title="Zoom out"
           disabled={photoZoom <= 0.5}
           data-testid="photo-lightbox-zoom-out"
         >
           <ZoomOut className="h-5 w-5" />
-        </button>
+        </Button>
         <span className="text-white text-sm min-w-[60px] text-center" data-testid="photo-lightbox-zoom-level">
           {Math.round(photoZoom * 100)}%
         </span>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={handleZoomIn}
-          className="bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-white/20 hover:bg-white/40 rounded-full text-white"
           title="Zoom in"
           disabled={photoZoom >= 4}
           data-testid="photo-lightbox-zoom-in"
         >
           <ZoomIn className="h-5 w-5" />
-        </button>
+        </Button>
         {photoZoom !== 1 && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleResetZoom}
-            className="bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors ml-1"
+            className="bg-white/20 hover:bg-white/40 rounded-full text-white ml-1"
             title="Reset zoom"
             data-testid="photo-lightbox-zoom-reset"
           >
             <RotateCcw className="h-5 w-5" />
-          </button>
+          </Button>
         )}
       </div>
 
       <div className="relative max-w-4xl max-h-[90vh] p-4 overflow-auto" onClick={(e) => e.stopPropagation()}>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onClose}
-          className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors z-10"
+          className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 rounded-full text-white z-10"
           data-testid="photo-lightbox-close"
         >
           ✕
-        </button>
+        </Button>
         <div className="flex items-center justify-center min-h-[60vh]">
           <img
             src={selectedPhoto.document.fileUrl}

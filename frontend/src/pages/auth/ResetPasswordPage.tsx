@@ -1,21 +1,49 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { passwordSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Check, X } from 'lucide-react'
+import { resetPasswordSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation'
 import { apiFetch } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const token = searchParams.get('token')
 
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   const [validating, setValidating] = useState(true)
   const [tokenValid, setTokenValid] = useState(false)
   const [tokenError, setTokenError] = useState('')
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setError,
+    formState: { errors },
+  } = useForm<ResetPasswordFormData>({
+    resolver: zodResolver(resetPasswordSchema),
+    mode: 'onBlur',
+    defaultValues: { password: '', confirmPassword: '' },
+  })
+
+  // Watch password for real-time validation feedback
+  const password = watch('password', '')
+
+  const passwordValidation = useMemo(() => ({
+    minLength: password.length >= MIN_PASSWORD_LENGTH,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+  }), [password])
 
   // Validate token on mount
   useEffect(() => {
@@ -44,29 +72,13 @@ export function ResetPasswordPage() {
     validateToken()
   }, [token])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    // Validate password strength using shared schema
-    const result = passwordSchema.safeParse(password)
-    if (!result.success) {
-      setError(result.error.issues[0].message)
-      return
-    }
-
+  const onSubmit = async (data: ResetPasswordFormData) => {
     setLoading(true)
 
     try {
       await apiFetch('/api/auth/reset-password', {
         method: 'POST',
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ token, password: data.password }),
       })
 
       setSuccess(true)
@@ -76,7 +88,7 @@ export function ResetPasswordPage() {
         navigate('/login')
       }, 3000)
     } catch (err) {
-      setError('Failed to reset password. Please try again.')
+      setError('root', { message: 'Failed to reset password. Please try again.' })
     } finally {
       setLoading(false)
     }
@@ -137,57 +149,85 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <h2 className="text-2xl font-bold">Create New Password</h2>
       <p className="text-sm text-muted-foreground">
         Enter your new password below. Password must be at least {MIN_PASSWORD_LENGTH} characters with uppercase, lowercase, and a number.
       </p>
 
-      {error && (
+      {errors.root?.message && (
         <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
+          {errors.root.message}
         </div>
       )}
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium">
+        <Label htmlFor="password">
           New Password
-        </label>
-        <input
+        </Label>
+        <Input
           id="password"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
+          {...register('password')}
+          className={`mt-1 ${
+            errors.password ? 'border-destructive' : ''
+          }`}
           placeholder="Enter new password"
-          minLength={MIN_PASSWORD_LENGTH}
-          required
         />
+        {password && (
+          <div className="mt-2 space-y-1 text-xs">
+            <div className={`flex items-center gap-1 ${passwordValidation.minLength ? 'text-green-600' : 'text-muted-foreground'}`}>
+              {passwordValidation.minLength ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              At least {MIN_PASSWORD_LENGTH} characters
+            </div>
+            <div className={`flex items-center gap-1 ${passwordValidation.hasUppercase ? 'text-green-600' : 'text-muted-foreground'}`}>
+              {passwordValidation.hasUppercase ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              One uppercase letter
+            </div>
+            <div className={`flex items-center gap-1 ${passwordValidation.hasLowercase ? 'text-green-600' : 'text-muted-foreground'}`}>
+              {passwordValidation.hasLowercase ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              One lowercase letter
+            </div>
+            <div className={`flex items-center gap-1 ${passwordValidation.hasNumber ? 'text-green-600' : 'text-muted-foreground'}`}>
+              {passwordValidation.hasNumber ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              One number
+            </div>
+          </div>
+        )}
+        {errors.password && (
+          <p className="mt-1 text-sm text-destructive" role="alert">
+            {errors.password.message}
+          </p>
+        )}
       </div>
 
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium">
+        <Label htmlFor="confirmPassword">
           Confirm Password
-        </label>
-        <input
+        </Label>
+        <Input
           id="confirmPassword"
           type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
+          {...register('confirmPassword')}
+          className={`mt-1 ${
+            errors.confirmPassword ? 'border-destructive' : ''
+          }`}
           placeholder="Confirm new password"
-          minLength={MIN_PASSWORD_LENGTH}
-          required
         />
+        {errors.confirmPassword && (
+          <p className="mt-1 text-sm text-destructive" role="alert">
+            {errors.confirmPassword.message}
+          </p>
+        )}
       </div>
 
-      <button
+      <Button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        className="w-full"
       >
         {loading ? 'Resetting Password...' : 'Reset Password'}
-      </button>
+      </Button>
 
       <Link
         to="/login"

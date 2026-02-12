@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { X, Keyboard } from 'lucide-react'
+import { Keyboard } from 'lucide-react'
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
 
 interface KeyboardShortcutsHelpProps {
   isOpen: boolean
@@ -52,64 +53,51 @@ export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelp
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-2xl rounded-lg border bg-card shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div className="flex items-center gap-3">
-            <Keyboard className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold">Keyboard Shortcuts</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded hover:bg-muted"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+    <Modal onClose={onClose} className="max-w-2xl">
+      <ModalHeader>
+        <div className="flex items-center gap-3">
+          <Keyboard className="h-5 w-5 text-muted-foreground" />
+          Keyboard Shortcuts
+        </div>
+      </ModalHeader>
+      <ModalBody>
+        <div className="grid gap-8 sm:grid-cols-2">
+          {SHORTCUT_CATEGORIES.map((category) => (
+            <div key={category.title}>
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                {category.title}
+              </h3>
+              <ul className="space-y-2">
+                {category.shortcuts.map((shortcut, index) => (
+                  <li
+                    key={index}
+                    className="flex items-center justify-between gap-4 py-1"
+                  >
+                    <span className="text-sm">{shortcut.description}</span>
+                    <div className="flex items-center gap-1">
+                      {shortcut.keys.map((key, keyIndex) => (
+                        <span key={keyIndex}>
+                          <kbd className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded border bg-muted font-mono text-xs">
+                            {key}
+                          </kbd>
+                          {keyIndex < shortcut.keys.length - 1 && (
+                            <span className="mx-0.5 text-muted-foreground">+</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        {/* Content */}
-        <div className="max-h-[70vh] overflow-auto p-6">
-          <div className="grid gap-8 sm:grid-cols-2">
-            {SHORTCUT_CATEGORIES.map((category) => (
-              <div key={category.title}>
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  {category.title}
-                </h3>
-                <ul className="space-y-2">
-                  {category.shortcuts.map((shortcut, index) => (
-                    <li
-                      key={index}
-                      className="flex items-center justify-between gap-4 py-1"
-                    >
-                      <span className="text-sm">{shortcut.description}</span>
-                      <div className="flex items-center gap-1">
-                        {shortcut.keys.map((key, keyIndex) => (
-                          <span key={keyIndex}>
-                            <kbd className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded border bg-muted font-mono text-xs">
-                              {key}
-                            </kbd>
-                            {keyIndex < shortcut.keys.length - 1 && (
-                              <span className="mx-0.5 text-muted-foreground">+</span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="border-t px-6 py-3 text-center text-xs text-muted-foreground">
+        <div className="mt-6 pt-3 border-t text-center text-xs text-muted-foreground">
           Press <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono text-xs">?</kbd> anytime to show this help
         </div>
-      </div>
-    </div>
+      </ModalBody>
+    </Modal>
   )
 }
 

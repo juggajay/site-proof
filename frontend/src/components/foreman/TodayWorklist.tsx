@@ -1,6 +1,6 @@
 // TodayWorklist - Unified "Today" view showing everything foreman needs to action
 // Research-backed: Foremen need to see "what needs attention NOW" in one place
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   AlertCircle,
@@ -16,6 +16,9 @@ import {
 import { cn } from '@/lib/utils'
 import { apiFetch } from '@/lib/api'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
+import { Button } from '@/components/ui/button'
 
 type WorklistItemType = 'hold_point' | 'itp_item' | 'inspection' | 'task'
 type UrgencyLevel = 'blocking' | 'due_today' | 'upcoming'
@@ -89,45 +92,30 @@ export function TodayWorklist() {
   const navigate = useNavigate()
   const { isOnline } = useOnlineStatus()
 
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [data, setData] = useState<TodayWorklistData>({
+
+  const defaultData: TodayWorklistData = {
     blocking: [],
     dueToday: [],
     upcoming: [],
     summary: { totalBlocking: 0, totalDueToday: 0, totalUpcoming: 0 }
+  }
+
+  const { data = defaultData, isLoading: loading, error: queryError } = useQuery({
+    queryKey: queryKeys.foremanWorklist(projectId!),
+    queryFn: () => apiFetch<TodayWorklistData>(
+      `/api/dashboard/projects/${projectId}/foreman/today`
+    ),
+    enabled: !!projectId,
   })
 
-  const fetchWorklist = useCallback(async () => {
-    if (!projectId) {
-      setLoading(false)
-      return
-    }
+  const error = queryError ? 'Unable to connect. Check your connection.' : null
 
-    setError(null)
-
-    try {
-      const result = await apiFetch<TodayWorklistData>(
-        `/api/dashboard/projects/${projectId}/foreman/today`
-      )
-      setData(result)
-    } catch (err) {
-      console.error('Error fetching today worklist:', err)
-      setError('Unable to connect. Check your connection.')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [projectId])
-
-  useEffect(() => {
-    fetchWorklist()
-  }, [fetchWorklist])
-
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true)
-    fetchWorklist()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.foremanWorklist(projectId!) })
+    setRefreshing(false)
   }
 
   const handleItemClick = (item: WorklistItem) => {
@@ -165,16 +153,15 @@ export function TodayWorklist() {
               {today}
             </p>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             onClick={handleRefresh}
             disabled={refreshing}
-            className={cn(
-              'p-2 rounded-lg border touch-manipulation min-h-[44px] min-w-[44px]',
-              'flex items-center justify-center active:bg-muted'
-            )}
+            className="touch-manipulation min-h-[44px] min-w-[44px]"
           >
             <RefreshCw className={cn('h-5 w-5', refreshing && 'animate-spin')} />
-          </button>
+          </Button>
         </div>
 
         {/* Summary badges */}
@@ -224,12 +211,13 @@ export function TodayWorklist() {
                     You appear to be offline
                   </p>
                 )}
-                <button
+                <Button
+                  variant="link"
                   onClick={handleRefresh}
-                  className="mt-2 text-sm text-red-700 dark:text-red-400 underline"
+                  className="mt-2 text-sm text-red-700 dark:text-red-400 p-0 h-auto"
                 >
                   Try again
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -246,16 +234,13 @@ export function TodayWorklist() {
           <p className="text-sm text-muted-foreground text-center max-w-xs">
             No hold points, inspections, or ITP items need your attention right now.
           </p>
-          <button
+          <Button
+            variant="outline"
             onClick={handleRefresh}
-            className={cn(
-              'mt-6 px-4 py-2 rounded-lg border',
-              'text-sm font-medium',
-              'active:bg-muted touch-manipulation'
-            )}
+            className="mt-6 touch-manipulation"
           >
             Check again
-          </button>
+          </Button>
         </div>
       )}
 

@@ -1,6 +1,15 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import type { FailedTestForNcr, NcrFormData } from '../types'
 import { INITIAL_NCR_FORM_DATA } from '../constants'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Label } from '@/components/ui/label'
 
 // Feature #210: NCR Prompt Modal for Failed Test
 interface NcrPromptModalProps {
@@ -19,46 +28,49 @@ export const NcrPromptModal = React.memo(function NcrPromptModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-red-600">Test Failed</h2>
-              <p className="text-sm text-muted-foreground">
-                {failedTestForNcr?.testType} result: {failedTestForNcr?.resultValue}
-              </p>
-            </div>
+    <Modal onClose={onClose} className="max-w-md">
+      <ModalHeader>
+        <span className="text-red-600">Test Failed</span>
+      </ModalHeader>
+      <ModalBody>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
           </div>
-          <p className="text-sm mb-4">
-            This test result has failed. Would you like to raise a Non-Conformance Report (NCR) to document and track this issue?
-          </p>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
-            >
-              No, Skip NCR
-            </button>
-            <button
-              onClick={onRaiseNcr}
-              className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700"
-            >
-              Yes, Raise NCR
-            </button>
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {failedTestForNcr?.testType} result: {failedTestForNcr?.resultValue}
+            </p>
           </div>
         </div>
-      </div>
-    </div>
+        <p className="text-sm mb-4">
+          This test result has failed. Would you like to raise a Non-Conformance Report (NCR) to document and track this issue?
+        </p>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="outline" onClick={onClose}>
+          No, Skip NCR
+        </Button>
+        <Button variant="destructive" onClick={onRaiseNcr}>
+          Yes, Raise NCR
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 })
 
 // Feature #210: NCR Creation Modal
+const ncrCreateSchema = z.object({
+  description: z.string().min(1, 'NCR description is required'),
+  category: z.string().min(1, 'Category is required'),
+  severity: z.string().min(1, 'Severity is required'),
+  specificationReference: z.string(),
+})
+
+type NcrCreateFormData = z.infer<typeof ncrCreateSchema>
+
 interface NcrCreateModalProps {
   isOpen: boolean
   onClose: () => void
@@ -74,104 +86,123 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
   failedTestForNcr,
   initialDescription,
 }: NcrCreateModalProps) {
-  const [ncrFormData, setNcrFormData] = useState<NcrFormData>({
-    ...INITIAL_NCR_FORM_DATA,
-    description: initialDescription,
-  })
   const [creatingNcr, setCreatingNcr] = useState(false)
 
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<NcrCreateFormData>({
+    resolver: zodResolver(ncrCreateSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      description: initialDescription,
+      category: INITIAL_NCR_FORM_DATA.category,
+      severity: INITIAL_NCR_FORM_DATA.severity,
+      specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
+    },
+  })
+
+  const severity = watch('severity')
+
   // Sync the initial description when it changes (new failed test)
-  React.useEffect(() => {
-    setNcrFormData(prev => ({ ...prev, description: initialDescription }))
-  }, [initialDescription])
+  useEffect(() => {
+    reset({
+      description: initialDescription,
+      category: INITIAL_NCR_FORM_DATA.category,
+      severity: INITIAL_NCR_FORM_DATA.severity,
+      specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
+    })
+  }, [initialDescription, reset])
 
   const handleClose = useCallback(() => {
-    setNcrFormData({ ...INITIAL_NCR_FORM_DATA })
+    reset({
+      description: '',
+      category: INITIAL_NCR_FORM_DATA.category,
+      severity: INITIAL_NCR_FORM_DATA.severity,
+      specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
+    })
     onClose()
-  }, [onClose])
+  }, [onClose, reset])
 
-  const handleSubmit = useCallback(async () => {
-    if (!ncrFormData.description.trim()) {
-      alert('NCR description is required')
-      return
-    }
-
+  const onFormSubmit = useCallback(async (data: NcrCreateFormData) => {
     setCreatingNcr(true)
 
     try {
-      await onSubmit(ncrFormData)
-      setNcrFormData({ ...INITIAL_NCR_FORM_DATA })
+      await onSubmit(data as NcrFormData)
+      reset({
+        description: '',
+        category: INITIAL_NCR_FORM_DATA.category,
+        severity: INITIAL_NCR_FORM_DATA.severity,
+        specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
+      })
     } catch {
       // Error handled by parent
     } finally {
       setCreatingNcr(false)
     }
-  }, [ncrFormData, onSubmit])
+  }, [onSubmit, reset])
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-xl font-bold mb-2">Raise NCR from Test Failure</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Create a Non-Conformance Report for the failed test result.
-          </p>
+    <Modal onClose={handleClose} className="max-w-lg">
+      <ModalHeader>Raise NCR from Test Failure</ModalHeader>
+      <ModalBody>
+        <p className="text-sm text-muted-foreground mb-4">
+          Create a Non-Conformance Report for the failed test result.
+        </p>
 
+        <form id="ncr-create-form" onSubmit={handleSubmit(onFormSubmit)}>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Description *</label>
-              <textarea
-                value={ncrFormData.description}
-                onChange={(e) => setNcrFormData(prev => ({ ...prev, description: e.target.value }))}
+              <Label>Description *</Label>
+              <Textarea
+                {...register('description')}
                 placeholder="Describe the non-conformance..."
                 rows={4}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
+                className={errors.description ? 'border-destructive' : ''}
               />
+              {errors.description && (
+                <p className="text-sm text-destructive mt-1" role="alert">{errors.description.message}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Category *</label>
-              <select
-                value={ncrFormData.category}
-                onChange={(e) => setNcrFormData(prev => ({ ...prev, category: e.target.value }))}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              >
+              <Label>Category *</Label>
+              <NativeSelect {...register('category')}>
                 <option value="materials">Materials</option>
                 <option value="workmanship">Workmanship</option>
                 <option value="documentation">Documentation</option>
                 <option value="process">Process</option>
                 <option value="design">Design</option>
                 <option value="other">Other</option>
-              </select>
+              </NativeSelect>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Severity *</label>
+              <Label>Severity *</Label>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2">
                   <input
                     type="radio"
-                    name="severity"
                     value="minor"
-                    checked={ncrFormData.severity === 'minor'}
-                    onChange={(e) => setNcrFormData(prev => ({ ...prev, severity: e.target.value }))}
+                    {...register('severity')}
                   />
                   <span>Minor</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
                     type="radio"
-                    name="severity"
                     value="major"
-                    checked={ncrFormData.severity === 'major'}
-                    onChange={(e) => setNcrFormData(prev => ({ ...prev, severity: e.target.value }))}
+                    {...register('severity')}
                   />
                   <span className="text-red-600 font-medium">Major</span>
                 </label>
               </div>
-              {ncrFormData.severity === 'major' && (
+              {severity === 'major' && (
                 <p className="text-amber-600 text-xs mt-1">
                   Major NCRs require Quality Manager approval before closure.
                 </p>
@@ -179,13 +210,11 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Specification Reference</label>
-              <input
+              <Label>Specification Reference</Label>
+              <Input
                 type="text"
-                value={ncrFormData.specificationReference}
-                onChange={(e) => setNcrFormData(prev => ({ ...prev, specificationReference: e.target.value }))}
+                {...register('specificationReference')}
                 placeholder="e.g., MRTS05, AS 1289"
-                className="w-full rounded-lg border px-3 py-2 text-sm"
               />
             </div>
 
@@ -197,25 +226,21 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
               </div>
             )}
           </div>
-
-          <div className="flex justify-end gap-3 mt-6">
-            <button
-              onClick={handleClose}
-              className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
-              disabled={creatingNcr}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={creatingNcr || !ncrFormData.description.trim()}
-              className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {creatingNcr ? 'Creating NCR...' : 'Raise NCR'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+        </form>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="outline" onClick={handleClose} disabled={creatingNcr}>
+          Cancel
+        </Button>
+        <Button
+          variant="destructive"
+          type="submit"
+          form="ncr-create-form"
+          disabled={creatingNcr}
+        >
+          {creatingNcr ? 'Creating NCR...' : 'Raise NCR'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 })

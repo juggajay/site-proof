@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Archive, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { extractErrorMessage, isUnauthorized } from '@/lib/errorHandling'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Modal, AlertModalHeader, AlertModalDescription, ModalBody, AlertModalFooter } from '@/components/ui/Modal'
 import type { Project } from '../types'
 
 interface DangerZoneProps {
@@ -155,16 +158,16 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
             This project has been marked as completed
           </div>
         )}
-        <button
+        <Button
           onClick={handleCompleteClick}
-          className={`rounded-lg px-4 py-2 text-sm ${
+          className={
             project?.status === 'completed'
               ? 'bg-blue-600 text-white hover:bg-blue-700'
               : 'bg-green-600 text-white hover:bg-green-700'
-          }`}
+          }
         >
           {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
-        </button>
+        </Button>
       </div>
 
       {/* Archive Project */}
@@ -185,16 +188,16 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
             This project is currently archived (read-only)
           </div>
         )}
-        <button
+        <Button
           onClick={handleArchiveClick}
-          className={`rounded-lg px-4 py-2 text-sm ${
+          className={
             project?.status === 'archived'
               ? 'bg-green-600 text-white hover:bg-green-700'
               : 'bg-amber-600 text-white hover:bg-amber-700'
-          }`}
+          }
         >
           {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
-        </button>
+        </Button>
       </div>
 
       {/* Danger Zone */}
@@ -206,23 +209,20 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
         <p className="text-sm text-muted-foreground mb-4">
           Once you delete a project, there is no going back. Please be certain.
         </p>
-        <button
-          onClick={handleDeleteClick}
-          className="rounded-lg bg-destructive px-4 py-2 text-sm text-destructive-foreground hover:bg-destructive/90"
-        >
+        <Button variant="destructive" onClick={handleDeleteClick}>
           Delete Project
-        </button>
+        </Button>
       </div>
 
       {/* Delete Confirmation Dialog */}
       {showDeleteDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
-            <h3 className="text-xl font-bold mb-4 text-destructive">Delete Project</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              This action cannot be undone. This will permanently delete the project
-              <strong className="text-foreground"> {project?.name || projectId}</strong> and all associated data.
-            </p>
+        <Modal onClose={handleCancelDelete} alert>
+          <AlertModalHeader>Delete Project</AlertModalHeader>
+          <AlertModalDescription>
+            This action cannot be undone. This will permanently delete the project
+            <strong className="text-foreground"> {project?.name || projectId}</strong> and all associated data.
+          </AlertModalDescription>
+          <ModalBody>
             <p className="text-sm text-muted-foreground mb-4">
               Please enter your password to confirm deletion:
             </p>
@@ -233,123 +233,105 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
               </div>
             )}
 
-            <input
+            <Input
               type="password"
               value={deletePassword}
               onChange={(e) => setDeletePassword(e.target.value)}
               placeholder="Enter your password"
-              className="w-full rounded-lg border bg-background px-3 py-2 mb-4"
               autoFocus
             />
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={handleCancelDelete}
-                disabled={deleting}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                disabled={deleting || !deletePassword}
-                className="rounded-lg bg-destructive px-4 py-2 text-sm text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
-              >
-                {deleting ? 'Deleting...' : 'Delete Project'}
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <AlertModalFooter>
+            <Button variant="outline" onClick={handleCancelDelete} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleting || !deletePassword}
+            >
+              {deleting ? 'Deleting...' : 'Delete Project'}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
 
       {/* Archive Confirmation Dialog */}
       {showArchiveDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
-            <h3 className="text-xl font-bold mb-4 text-amber-600">
-              {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {project?.status === 'archived'
-                ? <>Are you sure you want to restore <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become active and editable again.</>
-                : <>Are you sure you want to archive <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become read-only but can be restored later.</>}
-            </p>
-
+        <Modal onClose={handleCancelArchive} alert>
+          <AlertModalHeader>
+            {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
+          </AlertModalHeader>
+          <AlertModalDescription>
+            {project?.status === 'archived'
+              ? <>Are you sure you want to restore <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become active and editable again.</>
+              : <>Are you sure you want to archive <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become read-only but can be restored later.</>}
+          </AlertModalDescription>
+          <ModalBody>
             {archiveError && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4">
+              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                 {archiveError}
               </div>
             )}
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={handleCancelArchive}
-                disabled={archiving}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmArchive}
-                disabled={archiving}
-                className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${
-                  project?.status === 'archived'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-amber-600 hover:bg-amber-700'
-                }`}
-              >
-                {archiving
-                  ? (project?.status === 'archived' ? 'Restoring...' : 'Archiving...')
-                  : (project?.status === 'archived' ? 'Restore Project' : 'Archive Project')}
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <AlertModalFooter>
+            <Button variant="outline" onClick={handleCancelArchive} disabled={archiving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmArchive}
+              disabled={archiving}
+              className={
+                project?.status === 'archived'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-amber-600 text-white hover:bg-amber-700'
+              }
+            >
+              {archiving
+                ? (project?.status === 'archived' ? 'Restoring...' : 'Archiving...')
+                : (project?.status === 'archived' ? 'Restore Project' : 'Archive Project')}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
 
       {/* Complete Confirmation Dialog */}
       {showCompleteDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-lg">
-            <h3 className="text-xl font-bold mb-4 text-green-600">
-              {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {project?.status === 'completed'
-                ? <>Are you sure you want to reactivate <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become active and editable again.</>
-                : <>Are you sure you want to mark <strong className="text-foreground">{project?.name || projectId}</strong> as completed? Completed projects remain accessible but indicate all work is finished.</>}
-            </p>
-
+        <Modal onClose={handleCancelComplete} alert>
+          <AlertModalHeader>
+            {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
+          </AlertModalHeader>
+          <AlertModalDescription>
+            {project?.status === 'completed'
+              ? <>Are you sure you want to reactivate <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become active and editable again.</>
+              : <>Are you sure you want to mark <strong className="text-foreground">{project?.name || projectId}</strong> as completed? Completed projects remain accessible but indicate all work is finished.</>}
+          </AlertModalDescription>
+          <ModalBody>
             {completeError && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4">
+              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                 {completeError}
               </div>
             )}
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={handleCancelComplete}
-                disabled={completing}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmComplete}
-                disabled={completing}
-                className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${
-                  project?.status === 'completed'
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
-              >
-                {completing
-                  ? (project?.status === 'completed' ? 'Reactivating...' : 'Completing...')
-                  : (project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed')}
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <AlertModalFooter>
+            <Button variant="outline" onClick={handleCancelComplete} disabled={completing}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmComplete}
+              disabled={completing}
+              className={
+                project?.status === 'completed'
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }
+            >
+              {completing
+                ? (project?.status === 'completed' ? 'Reactivating...' : 'Completing...')
+                : (project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed')}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
     </>
   )

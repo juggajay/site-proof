@@ -1,19 +1,30 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useAuth, MfaRequiredError } from '@/lib/auth'
 import { apiFetch, API_URL } from '@/lib/api'
+import { loginSchema, emailSchema } from '@/lib/validation'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+type LoginFormData = z.infer<typeof loginSchema>
+
+const magicLinkSchema = z.object({ email: emailSchema })
+type MagicLinkFormData = z.infer<typeof magicLinkSchema>
+
+const mfaSchema = z.object({ mfaCode: z.string().min(1, 'MFA code is required') })
+type MfaFormData = z.infer<typeof mfaSchema>
 
 export function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(true) // Default to checked
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [magicLinkMode, setMagicLinkMode] = useState(false) // Feature #415: Magic link mode
   const [magicLinkSent, setMagicLinkSent] = useState(false)
+  const [magicLinkEmail, setMagicLinkEmail] = useState('')
   // MFA state (Feature #22, #421)
   const [mfaRequired, setMfaRequired] = useState(false)
-  const [mfaCode, setMfaCode] = useState('')
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -21,13 +32,33 @@ export function LoginPage() {
   // Check if session expired
   const sessionExpired = location.state?.sessionExpired === true
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
+  // Main login form
+  const loginForm = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    mode: 'onBlur',
+    defaultValues: { email: '', password: '', rememberMe: true },
+  })
+
+  // Magic link form
+  const magicLinkForm = useForm<MagicLinkFormData>({
+    resolver: zodResolver(magicLinkSchema),
+    mode: 'onBlur',
+    defaultValues: { email: '' },
+  })
+
+  // MFA form
+  const mfaForm = useForm<MfaFormData>({
+    resolver: zodResolver(mfaSchema),
+    mode: 'onBlur',
+    defaultValues: { mfaCode: '' },
+  })
+
+  const onLoginSubmit = async (data: LoginFormData) => {
     setLoading(true)
 
     try {
-      await signIn(email, password, rememberMe, mfaRequired ? mfaCode : undefined)
+      const mfaCode = mfaRequired ? mfaForm.getValues('mfaCode') : undefined
+      await signIn(data.email, data.password, data.rememberMe, mfaCode)
       // Navigate to the original destination or dashboard
       const from = location.state?.from?.pathname || '/dashboard'
       navigate(from, { replace: true })
@@ -35,11 +66,30 @@ export function LoginPage() {
       // Check for MFA challenge (Feature #22, #421)
       if (err instanceof MfaRequiredError) {
         setMfaRequired(true)
-        setError('')
+        loginForm.clearErrors('root')
       } else if (err instanceof Error) {
-        setError(err.message || 'Invalid email or password')
+        loginForm.setError('root', { message: err.message || 'Invalid email or password' })
       } else {
-        setError('Invalid email or password')
+        loginForm.setError('root', { message: 'Invalid email or password' })
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onMfaSubmit = async (data: MfaFormData) => {
+    setLoading(true)
+    const loginData = loginForm.getValues()
+
+    try {
+      await signIn(loginData.email, loginData.password, loginData.rememberMe, data.mfaCode)
+      const from = location.state?.from?.pathname || '/dashboard'
+      navigate(from, { replace: true })
+    } catch (err) {
+      if (err instanceof Error) {
+        mfaForm.setError('root', { message: err.message || 'Invalid email or password' })
+      } else {
+        mfaForm.setError('root', { message: 'Invalid email or password' })
       }
     } finally {
       setLoading(false)
@@ -47,24 +97,19 @@ export function LoginPage() {
   }
 
   // Feature #415: Magic link login handler
-  const handleMagicLinkRequest = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email) {
-      setError('Please enter your email address')
-      return
-    }
-    setError('')
+  const onMagicLinkSubmit = async (data: MagicLinkFormData) => {
     setLoading(true)
 
     try {
       await apiFetch('/api/auth/magic-link/request', {
         method: 'POST',
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: data.email })
       })
 
+      setMagicLinkEmail(data.email)
       setMagicLinkSent(true)
     } catch (err) {
-      setError('Failed to send magic link. Please try again.')
+      magicLinkForm.setError('root', { message: 'Failed to send magic link. Please try again.' })
     } finally {
       setLoading(false)
     }
@@ -81,20 +126,20 @@ export function LoginPage() {
         </div>
         <h2 className="text-2xl font-bold">Check Your Email</h2>
         <p className="text-muted-foreground">
-          We've sent a magic link to <strong>{email}</strong>. Click the link in the email to sign in.
+          We've sent a magic link to <strong>{magicLinkEmail}</strong>. Click the link in the email to sign in.
         </p>
         <p className="text-sm text-muted-foreground">
           The link will expire in 15 minutes.
         </p>
-        <button
+        <Button
+          variant="link"
           onClick={() => {
             setMagicLinkSent(false)
             setMagicLinkMode(false)
           }}
-          className="text-primary hover:underline text-sm"
         >
           Back to sign in
-        </button>
+        </Button>
       </div>
     )
   }
@@ -102,47 +147,53 @@ export function LoginPage() {
   // Feature #415: Magic link mode
   if (magicLinkMode) {
     return (
-      <form onSubmit={handleMagicLinkRequest} className="space-y-4">
+      <form onSubmit={magicLinkForm.handleSubmit(onMagicLinkSubmit)} className="space-y-4">
         <h2 className="text-2xl font-bold">Sign In with Magic Link</h2>
         <p className="text-sm text-muted-foreground">
           Enter your email and we'll send you a link to sign in instantly.
         </p>
 
-        {error && (
+        {magicLinkForm.formState.errors.root?.message && (
           <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert" aria-live="assertive">
-            {error}
+            {magicLinkForm.formState.errors.root.message}
           </div>
         )}
 
         <div>
-          <label htmlFor="email" className="block text-sm font-medium">
+          <Label htmlFor="magicLinkEmail">
             Email
-          </label>
-          <input
-            id="email"
+          </Label>
+          <Input
+            id="magicLinkEmail"
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
-            required
+            {...magicLinkForm.register('email')}
+            className={`mt-1 ${
+              magicLinkForm.formState.errors.email ? 'border-destructive' : ''
+            }`}
           />
+          {magicLinkForm.formState.errors.email && (
+            <p className="mt-1 text-sm text-destructive" role="alert">
+              {magicLinkForm.formState.errors.email.message}
+            </p>
+          )}
         </div>
 
-        <button
+        <Button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          className="w-full"
         >
           {loading ? 'Sending link...' : 'Send Magic Link'}
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
+          variant="link"
           onClick={() => setMagicLinkMode(false)}
-          className="w-full text-center text-sm text-primary hover:underline"
+          className="w-full"
         >
           Sign in with password instead
-        </button>
+        </Button>
       </form>
     )
   }
@@ -150,7 +201,7 @@ export function LoginPage() {
   // Feature #22, #421: MFA verification mode
   if (mfaRequired) {
     return (
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={mfaForm.handleSubmit(onMfaSubmit)} className="space-y-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-full bg-primary/10">
             <svg className="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -164,55 +215,66 @@ export function LoginPage() {
           Enter the 6-digit code from your authenticator app to continue.
         </p>
 
-        {error && (
+        {mfaForm.formState.errors.root?.message && (
           <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert" aria-live="assertive">
-            {error}
+            {mfaForm.formState.errors.root.message}
           </div>
         )}
 
         <div>
-          <label htmlFor="mfaCode" className="block text-sm font-medium mb-2">
+          <Label htmlFor="mfaCode" className="mb-2">
             Verification Code
-          </label>
-          <input
+          </Label>
+          <Input
             id="mfaCode"
             type="text"
-            value={mfaCode}
-            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            {...mfaForm.register('mfaCode', {
+              onChange: (e) => {
+                const filtered = e.target.value.replace(/\D/g, '').slice(0, 6)
+                mfaForm.setValue('mfaCode', filtered)
+              }
+            })}
             placeholder="000000"
-            className="w-full rounded-lg border bg-background px-3 py-3 text-center text-2xl font-mono tracking-widest"
+            className={`py-3 text-center text-2xl font-mono tracking-widest ${
+              mfaForm.formState.errors.mfaCode ? 'border-destructive' : ''
+            }`}
             maxLength={6}
             autoComplete="one-time-code"
             autoFocus
-            required
           />
+          {mfaForm.formState.errors.mfaCode && (
+            <p className="mt-1 text-sm text-destructive" role="alert">
+              {mfaForm.formState.errors.mfaCode.message}
+            </p>
+          )}
         </div>
 
-        <button
+        <Button
           type="submit"
-          disabled={loading || mfaCode.length !== 6}
-          className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          disabled={loading || mfaForm.watch('mfaCode').length !== 6}
+          className="w-full"
         >
           {loading ? 'Verifying...' : 'Verify'}
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
+          variant="link"
           onClick={() => {
             setMfaRequired(false)
-            setMfaCode('')
-            setError('')
+            mfaForm.reset()
+            loginForm.clearErrors('root')
           }}
-          className="w-full text-center text-sm text-primary hover:underline"
+          className="w-full"
         >
           Back to sign in
-        </button>
+        </Button>
       </form>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
       <h2 className="text-2xl font-bold">Sign In</h2>
 
       {sessionExpired && (
@@ -221,60 +283,69 @@ export function LoginPage() {
         </div>
       )}
 
-      {error && (
+      {loginForm.formState.errors.root?.message && (
         <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive" role="alert" aria-live="assertive">
-          {error}
+          {loginForm.formState.errors.root.message}
         </div>
       )}
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium">
+        <Label htmlFor="email">
           Email
-        </label>
-        <input
+        </Label>
+        <Input
           id="email"
           type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
-          required
+          {...loginForm.register('email')}
+          className={`mt-1 ${
+            loginForm.formState.errors.email ? 'border-destructive' : ''
+          }`}
         />
+        {loginForm.formState.errors.email && (
+          <p className="mt-1 text-sm text-destructive" role="alert">
+            {loginForm.formState.errors.email.message}
+          </p>
+        )}
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-sm font-medium">
+        <Label htmlFor="password">
           Password
-        </label>
-        <input
+        </Label>
+        <Input
           id="password"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
-          required
+          {...loginForm.register('password')}
+          className={`mt-1 ${
+            loginForm.formState.errors.password ? 'border-destructive' : ''
+          }`}
         />
+        {loginForm.formState.errors.password && (
+          <p className="mt-1 text-sm text-destructive" role="alert">
+            {loginForm.formState.errors.password.message}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
         <input
           id="rememberMe"
           type="checkbox"
-          checked={rememberMe}
-          onChange={(e) => setRememberMe(e.target.checked)}
+          {...loginForm.register('rememberMe')}
           className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
         />
-        <label htmlFor="rememberMe" className="text-sm text-muted-foreground">
+        <Label htmlFor="rememberMe" className="text-sm text-muted-foreground font-normal">
           Remember me
-        </label>
+        </Label>
       </div>
 
-      <button
+      <Button
         type="submit"
         disabled={loading}
-        className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        className="w-full"
       >
         {loading ? 'Signing in...' : 'Sign In'}
-      </button>
+      </Button>
 
       {/* Feature #415: Magic link option */}
       <div className="relative">
@@ -286,13 +357,14 @@ export function LoginPage() {
         </div>
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="outline"
         onClick={() => setMagicLinkMode(true)}
-        className="w-full rounded-lg border border-primary py-2 text-primary hover:bg-primary/5"
+        className="w-full"
       >
         Sign in with Magic Link
-      </button>
+      </Button>
 
       {/* Feature #414, #1004: Google OAuth Sign In */}
       <a

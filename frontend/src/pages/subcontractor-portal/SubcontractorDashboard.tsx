@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   MapPin,
@@ -18,6 +18,9 @@ import {
   FolderOpen,
   Hand,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useAuth } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
@@ -148,72 +151,62 @@ function getDocketStatusBadge(status: string) {
 
 export function SubcontractorDashboard() {
   const { user } = useAuth()
-  const [company, setCompany] = useState<Company | null>(null)
-  const [todaysDocket, setTodaysDocket] = useState<Docket | null>(null)
-  const [recentDockets, setRecentDockets] = useState<Docket[]>([])
-  const [assignedLots, setAssignedLots] = useState<Lot[]>([])
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
 
-  const fetchData = async (showRefresh = false) => {
-    if (showRefresh) setRefreshing(true)
+  const { data: company, isLoading: companyLoading } = useQuery({
+    queryKey: queryKeys.portalCompanies,
+    queryFn: async () => {
+      const res = await apiFetch<{ company: Company }>('/api/subcontractors/my-company')
+      return res.company
+    },
+  })
 
-    try {
-      // Fetch company info
-      const companyData = await apiFetch<{ company: Company }>(`/api/subcontractors/my-company`)
-      setCompany(companyData.company)
+  const { data: docketsData } = useQuery({
+    queryKey: queryKeys.portalDockets,
+    queryFn: async () => {
+      const res = await apiFetch<{ dockets: Docket[] }>(
+        `/api/dockets?projectId=${company!.projectId}`
+      )
+      return res.dockets || []
+    },
+    enabled: !!company?.projectId,
+  })
 
-      // Fetch dockets for this project
-      try {
-        const docketsData = await apiFetch<{ dockets: Docket[] }>(
-          `/api/dockets?projectId=${companyData.company.projectId}`
-        )
-        const today = getToday()
+  const today = getToday()
+  const todaysDocket = docketsData?.find((d: Docket) => d.date === today) ?? null
+  const recentDockets = docketsData?.filter((d: Docket) => d.date !== today).slice(0, 5) ?? []
 
-        // Find today's docket
-        const todayDocket = docketsData.dockets.find((d: Docket) => d.date === today)
-        setTodaysDocket(todayDocket || null)
+  const { data: assignedLots = [] } = useQuery({
+    queryKey: queryKeys.portalAssignedWork,
+    queryFn: async () => {
+      const res = await apiFetch<{ lots: Lot[] }>(
+        `/api/lots?projectId=${company!.projectId}`
+      )
+      return res.lots.slice(0, 5)
+    },
+    enabled: !!company?.projectId,
+  })
 
-        // Get recent dockets (excluding today)
-        const recent = docketsData.dockets
-          .filter((d: Docket) => d.date !== today)
-          .slice(0, 5)
-        setRecentDockets(recent)
-      } catch {
-        // Dockets fetch failed, continue
-      }
+  const { data: notifData } = useQuery({
+    queryKey: queryKeys.portalDashboard,
+    queryFn: () => apiFetch<{ notifications: Notification[]; unreadCount: number }>('/api/notifications?limit=10'),
+    enabled: !!company,
+  })
 
-      // Fetch assigned lots
-      try {
-        const lotsData = await apiFetch<{ lots: Lot[] }>(
-          `/api/lots?projectId=${companyData.company.projectId}`
-        )
-        setAssignedLots(lotsData.lots.slice(0, 5))
-      } catch {
-        // Lots fetch failed, continue
-      }
+  const notifications = notifData?.notifications || []
+  const unreadCount = notifData?.unreadCount || 0
 
-      // Fetch notifications
-      try {
-        const notifData = await apiFetch<{ notifications: Notification[]; unreadCount: number }>(`/api/notifications?limit=10`)
-        setNotifications(notifData.notifications || [])
-        setUnreadCount(notifData.unreadCount || 0)
-      } catch {
-        // Notifications fetch failed, continue
-      }
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
+  const loading = companyLoading
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalCompanies })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDockets })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalAssignedWork })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDashboard })
+    setRefreshing(false)
   }
-
-  useEffect(() => {
-    fetchData()
-  }, [])
 
   // Get items needing attention
   const needsAttention = [
@@ -287,13 +280,14 @@ export function SubcontractorDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => fetchData(true)}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleRefresh}
             disabled={refreshing}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
           >
             <RefreshCw className={cn('h-5 w-5 text-gray-500', refreshing && 'animate-spin')} />
-          </button>
+          </Button>
           <Link to="/settings" className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
             <Bell className="h-5 w-5 text-gray-500" />
             {unreadCount > 0 && (

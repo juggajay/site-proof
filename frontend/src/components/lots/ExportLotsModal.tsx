@@ -1,5 +1,9 @@
 import { useState, useMemo } from 'react'
-import { Download, X, Check, Calendar } from 'lucide-react'
+import { Download, Check, Calendar } from 'lucide-react'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface ExportColumn {
   key: string
@@ -188,19 +192,15 @@ export function ExportLotsModal({
   const totalCount = availableColumns.length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Download className="h-5 w-5" />
-            Export Lots to CSV
-          </h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Modal onClose={onClose} className="max-w-md">
+      <ModalHeader>
+        <span className="flex items-center gap-2">
+          <Download className="h-5 w-5" />
+          Export Lots to CSV
+        </span>
+      </ModalHeader>
 
+      <ModalBody>
         {/* Column Selection */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
@@ -259,21 +259,21 @@ export function ExportLotsModal({
           </p>
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="text-xs text-muted-foreground">From</label>
-              <input
+              <Label className="text-xs text-muted-foreground">From</Label>
+              <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full mt-1 px-3 py-2 border rounded-md bg-background text-sm"
+                className="mt-1"
               />
             </div>
             <div className="flex-1">
-              <label className="text-xs text-muted-foreground">To</label>
-              <input
+              <Label className="text-xs text-muted-foreground">To</Label>
+              <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full mt-1 px-3 py-2 border rounded-md bg-background text-sm"
+                className="mt-1"
               />
             </div>
           </div>
@@ -291,32 +291,27 @@ export function ExportLotsModal({
         </div>
 
         {/* Summary */}
-        <p className="text-sm text-muted-foreground mb-4">
+        <p className="text-sm text-muted-foreground">
           Exporting {filteredLots.length} lot{filteredLots.length !== 1 ? 's' : ''}{' '}
           {filteredLots.length !== lots.length && (
             <span className="text-amber-600">(filtered from {lots.length})</span>
           )}{' '}
           with {selectedCount} of {totalCount} columns
         </p>
+      </ModalBody>
 
-        {/* Actions */}
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded-md hover:bg-muted"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={selectedCount === 0 || filteredLots.length === 0}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </button>
-        </div>
-      </div>
-    </div>
+      <ModalFooter>
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          onClick={handleExport}
+          disabled={selectedCount === 0 || filteredLots.length === 0}
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

@@ -1,6 +1,7 @@
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { ChevronRight, Home } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { apiFetch } from '@/lib/api'
 
 interface BreadcrumbItem {
@@ -16,44 +17,26 @@ interface LocationState {
 export function Breadcrumbs() {
   const location = useLocation()
   const { projectId, lotId } = useParams()
-  const [lotNumber, setLotNumber] = useState<string | null>(null)
-  const [_projectName, setProjectName] = useState<string | null>(null)
 
   // Get return filters from navigation state (passed from LotsPage)
   const locationState = location.state as LocationState | null
   const returnFilters = locationState?.returnFilters || ''
 
   // Fetch lot number if we're on a lot detail page
-  useEffect(() => {
-    async function fetchLotInfo() {
-      if (!lotId) return
+  const { data: lotData } = useQuery({
+    queryKey: queryKeys.lot(lotId!),
+    queryFn: () => apiFetch<{ lot?: { lotNumber?: string } }>(`/api/lots/${lotId}`),
+    enabled: !!lotId,
+  })
+  const lotNumber = lotData?.lot?.lotNumber || null
 
-      try {
-        const data = await apiFetch<{ lot?: { lotNumber?: string } }>(`/api/lots/${lotId}`)
-        setLotNumber(data.lot?.lotNumber || null)
-      } catch (err) {
-        console.error('Failed to fetch lot info for breadcrumb:', err)
-      }
-    }
-
-    fetchLotInfo()
-  }, [lotId])
-
-  // Fetch project name if we have a projectId
-  useEffect(() => {
-    async function fetchProjectInfo() {
-      if (!projectId) return
-
-      try {
-        const data = await apiFetch<{ project?: { name?: string } }>(`/api/projects/${projectId}`)
-        setProjectName(data.project?.name || null)
-      } catch (err) {
-        console.error('Failed to fetch project info for breadcrumb:', err)
-      }
-    }
-
-    fetchProjectInfo()
-  }, [projectId])
+  // Fetch project name if we have a projectId (shares cache with Sidebar)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { data: _projectData } = useQuery({
+    queryKey: queryKeys.project(projectId!),
+    queryFn: () => apiFetch<{ project?: { name?: string } }>(`/api/projects/${projectId}`),
+    enabled: !!projectId,
+  })
 
   const pathSegments = location.pathname.split('/').filter(Boolean)
 

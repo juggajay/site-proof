@@ -1,7 +1,9 @@
 // Feature #293: Quality Manager Dashboard
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { apiFetch } from '@/lib/api'
 import {
   CheckCircle2,
@@ -17,6 +19,7 @@ import {
   BarChart3,
   AlertCircle
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface QMDashboardData {
   // Lot conformance
@@ -82,42 +85,34 @@ interface QMDashboardData {
   } | null
 }
 
+const defaultQMData: QMDashboardData = {
+  lotConformance: { totalLots: 0, conformingLots: 0, nonConformingLots: 0, rate: 0 },
+  ncrsByCategory: { major: 0, minor: 0, observation: 0, total: 0 },
+  openNCRs: [],
+  pendingVerifications: { count: 0, items: [] },
+  holdPointMetrics: { totalReleased: 0, totalPending: 0, releaseRate: 0, avgTimeToRelease: 0 },
+  itpTrends: { completedThisWeek: 0, completedLastWeek: 0, trend: 'stable', completionRate: 0 },
+  auditReadiness: { score: 0, status: 'not_ready', issues: [] },
+  project: null
+}
+
 export function QualityManagerDashboard() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { user: _user } = useAuth()
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
-  const [data, setData] = useState<QMDashboardData>({
-    lotConformance: { totalLots: 0, conformingLots: 0, nonConformingLots: 0, rate: 0 },
-    ncrsByCategory: { major: 0, minor: 0, observation: 0, total: 0 },
-    openNCRs: [],
-    pendingVerifications: { count: 0, items: [] },
-    holdPointMetrics: { totalReleased: 0, totalPending: 0, releaseRate: 0, avgTimeToRelease: 0 },
-    itpTrends: { completedThisWeek: 0, completedLastWeek: 0, trend: 'stable', completionRate: 0 },
-    auditReadiness: { score: 0, status: 'not_ready', issues: [] },
-    project: null
+
+  const { data = defaultQMData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.qmDashboard,
+    queryFn: () => apiFetch<QMDashboardData>('/api/dashboard/quality-manager'),
   })
-
-  const fetchDashboardData = async () => {
-    try {
-      const result = await apiFetch<QMDashboardData>('/api/dashboard/quality-manager')
-      setData(result)
-    } catch (err) {
-      console.error('Error fetching QM dashboard:', err)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchDashboardData()
+    queryClient.invalidateQueries({ queryKey: queryKeys.qmDashboard }).then(() => {
+      setRefreshing(false)
+    })
   }
 
   if (loading) {
@@ -154,14 +149,15 @@ export function QualityManagerDashboard() {
             Quality metrics and conformance overview
           </p>
         </div>
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handleRefresh}
           disabled={refreshing}
-          className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
-        </button>
+        </Button>
       </div>
 
       {/* Project Context */}

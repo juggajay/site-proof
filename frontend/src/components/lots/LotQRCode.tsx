@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import DOMPurify from 'dompurify'
-import { QrCode, X, Download, Printer } from 'lucide-react'
+import { QrCode, Download, Printer } from 'lucide-react'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
 
 interface LotQRCodeProps {
   lotId: string
@@ -165,24 +167,15 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
 
       {/* QR Code Modal */}
       {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={(e) => e.target === e.currentTarget && setShowModal(false)}
-        >
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <QrCode className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Lot QR Code</h3>
-              </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+        <Modal onClose={() => setShowModal(false)} className="max-w-sm">
+          <ModalHeader>
+            <span className="flex items-center gap-2">
+              <QrCode className="h-5 w-5 text-primary" />
+              Lot QR Code
+            </span>
+          </ModalHeader>
 
+          <ModalBody>
             <div className="flex flex-col items-center">
               <div
                 className="p-4 border rounded-lg bg-white"
@@ -193,29 +186,23 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
                 {qrUrl}
               </p>
             </div>
+          </ModalBody>
 
-            <div className="flex gap-2 mt-6">
-              <button
-                onClick={handleDownload}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm"
-              >
-                <Download className="h-4 w-4" />
-                Download
-              </button>
-              <button
-                onClick={handlePrint}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 text-sm"
-              >
-                <Printer className="h-4 w-4" />
-                Print
-              </button>
-            </div>
+          <ModalFooter>
+            <Button variant="outline" onClick={handleDownload} className="flex-1">
+              <Download className="h-4 w-4" />
+              Download
+            </Button>
+            <Button onClick={handlePrint} className="flex-1">
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+          </ModalFooter>
 
-            <p className="mt-4 text-xs text-center text-muted-foreground">
-              Scan this QR code to quickly access lot details
-            </p>
-          </div>
-        </div>
+          <p className="mt-2 text-xs text-center text-muted-foreground pb-2">
+            Scan this QR code to quickly access lot details
+          </p>
+        </Modal>
       )}
     </>
   )

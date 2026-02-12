@@ -1,10 +1,15 @@
-import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
 import { extractErrorMessage } from '@/lib/errorHandling'
-import { X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
 
 interface Project {
   id: string
@@ -79,13 +84,19 @@ const DEFAULT_STATUS_CONFIG = {
 
 export function ProjectsPage() {
   const { user } = useAuth()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  const { data: projectsData, isLoading: loading, error: queryError } = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => apiFetch<{ projects: Project[] }>('/api/projects'),
+    enabled: !!user,
+  })
+
+  const projects = projectsData?.projects || []
+  const error = queryError ? extractErrorMessage(queryError, 'Failed to load projects') : null
 
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     name: '',
@@ -98,54 +109,39 @@ export function ProjectsPage() {
     contractValue: '',
   })
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const data = await apiFetch<{ projects: Project[] }>('/api/projects')
-        setProjects(data.projects)
-      } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load projects'))
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (user) {
-      fetchProjects()
-    }
-  }, [user])
+  const createProjectMutation = useMutation({
+    mutationFn: (projectData: typeof formData) =>
+      apiFetch<{ project: Project }>('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: projectData.name,
+          projectNumber: projectData.projectNumber || null,
+          clientName: projectData.client || null,
+          state: projectData.state || null,
+          specificationSet: projectData.specSet || null,
+          startDate: projectData.startDate || null,
+          targetCompletion: projectData.targetCompletion || null,
+          contractValue: projectData.contractValue || null,
+        }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects })
+      setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '', startDate: '', targetCompletion: '', contractValue: '' })
+      setShowCreateModal(false)
+      setCreateError(null)
+    },
+    onError: (err) => {
+      setCreateError(extractErrorMessage(err, 'Failed to create project'))
+    },
+  })
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    setCreating(true)
     setCreateError(null)
-
-    try {
-      const data = await apiFetch<{ project: Project }>('/api/projects', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: formData.name,
-          projectNumber: formData.projectNumber || null,
-          clientName: formData.client || null,
-          state: formData.state || null,
-          specificationSet: formData.specSet || null,
-          startDate: formData.startDate || null,
-          targetCompletion: formData.targetCompletion || null,
-          contractValue: formData.contractValue || null,
-        }),
-      })
-
-      // Add new project to list
-      setProjects((prev) => [...prev, data.project])
-      // Reset form and close modal
-      setFormData({ name: '', projectNumber: '', client: '', state: '', specSet: '', startDate: '', targetCompletion: '', contractValue: '' })
-      setShowCreateModal(false)
-    } catch (err) {
-      setCreateError(extractErrorMessage(err, 'Failed to create project'))
-    } finally {
-      setCreating(false)
-    }
+    createProjectMutation.mutate(formData)
   }
+
+  const creating = createProjectMutation.isPending
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -188,32 +184,19 @@ export function ProjectsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Projects</h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-        >
+        <Button onClick={() => setShowCreateModal(true)}>
           New Project
-        </button>
+        </Button>
       </div>
       <p className="text-muted-foreground">
         Manage your civil construction projects.
       </p>
 
       {/* Create Project Modal */}
-      {showCreateModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Create New Project</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-1 hover:bg-muted rounded"
-                aria-label="Close modal"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+      {showCreateModal && (
+        <Modal onClose={() => setShowCreateModal(false)} className="max-w-lg">
+          <ModalHeader>Create New Project</ModalHeader>
+          <ModalBody>
             {createError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
                 {createError}
@@ -222,10 +205,8 @@ export function ProjectsPage() {
 
             <form onSubmit={handleCreateProject} className="space-y-4">
               <div>
-                <label htmlFor="name" className="block text-sm font-medium mb-1">
-                  Project Name *
-                </label>
-                <input
+                <Label htmlFor="name" className="mb-1">Project Name *</Label>
+                <Input
                   type="text"
                   id="name"
                   name="name"
@@ -233,15 +214,12 @@ export function ProjectsPage() {
                   onChange={handleInputChange}
                   required
                   placeholder="e.g., Highway Upgrade Project"
-                  className="w-full rounded-lg border px-3 py-2"
                 />
               </div>
 
               <div>
-                <label htmlFor="projectNumber" className="block text-sm font-medium mb-1">
-                  Project Number *
-                </label>
-                <input
+                <Label htmlFor="projectNumber" className="mb-1">Project Number *</Label>
+                <Input
                   type="text"
                   id="projectNumber"
                   name="projectNumber"
@@ -249,80 +227,64 @@ export function ProjectsPage() {
                   onChange={handleInputChange}
                   required
                   placeholder="e.g., PRJ-2024-001"
-                  className="w-full rounded-lg border px-3 py-2"
                 />
               </div>
 
               <div>
-                <label htmlFor="client" className="block text-sm font-medium mb-1">
-                  Client
-                </label>
-                <input
+                <Label htmlFor="client" className="mb-1">Client</Label>
+                <Input
                   type="text"
                   id="client"
                   name="client"
                   value={formData.client}
                   onChange={handleInputChange}
                   placeholder="e.g., Department of Transport"
-                  className="w-full rounded-lg border px-3 py-2"
                 />
               </div>
 
               <div>
-                <label htmlFor="contractValue" className="block text-sm font-medium mb-1">
-                  Contract Value ($)
-                </label>
-                <input
+                <Label htmlFor="contractValue" className="mb-1">Contract Value ($)</Label>
+                <Input
                   type="number"
                   id="contractValue"
                   name="contractValue"
                   value={formData.contractValue}
                   onChange={handleInputChange}
                   placeholder="e.g., 5000000"
-                  className="w-full rounded-lg border px-3 py-2"
                   min="0"
                   step="0.01"
                 />
               </div>
 
               <div>
-                <label htmlFor="startDate" className="block text-sm font-medium mb-1">
-                  Start Date
-                </label>
-                <input
+                <Label htmlFor="startDate" className="mb-1">Start Date</Label>
+                <Input
                   type="date"
                   id="startDate"
                   name="startDate"
                   value={formData.startDate}
                   onChange={handleInputChange}
-                  className="w-full rounded-lg border px-3 py-2"
                 />
               </div>
 
               <div>
-                <label htmlFor="targetCompletion" className="block text-sm font-medium mb-1">
-                  Target Completion
-                </label>
-                <input
+                <Label htmlFor="targetCompletion" className="mb-1">Target Completion</Label>
+                <Input
                   type="date"
                   id="targetCompletion"
                   name="targetCompletion"
                   value={formData.targetCompletion}
                   onChange={handleInputChange}
-                  className="w-full rounded-lg border px-3 py-2"
                 />
               </div>
 
               <div>
-                <label htmlFor="state" className="block text-sm font-medium mb-1">
-                  State
-                </label>
-                <select
+                <Label htmlFor="state" className="mb-1">State</Label>
+                <NativeSelect
                   id="state"
                   name="state"
                   value={formData.state}
                   onChange={handleInputChange}
-                  className="w-full rounded-lg border px-3 py-2"
                 >
                   <option value="">Select state</option>
                   {STATE_OPTIONS.map((opt) => (
@@ -330,19 +292,16 @@ export function ProjectsPage() {
                       {opt.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
 
               <div>
-                <label htmlFor="specSet" className="block text-sm font-medium mb-1">
-                  Specification Set
-                </label>
-                <select
+                <Label htmlFor="specSet" className="mb-1">Specification Set</Label>
+                <NativeSelect
                   id="specSet"
                   name="specSet"
                   value={formData.specSet}
                   onChange={handleInputChange}
-                  className="w-full rounded-lg border px-3 py-2"
                 >
                   <option value="">Select specification set</option>
                   {SPEC_SET_OPTIONS.map((opt) => (
@@ -350,29 +309,23 @@ export function ProjectsPage() {
                       {opt.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-lg border hover:bg-muted"
-                >
+                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
                   disabled={creating || !formData.name || !formData.projectNumber}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {creating ? 'Creating...' : 'Create Project'}
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>,
-        document.body
+          </ModalBody>
+        </Modal>
       )}
 
       {error && (

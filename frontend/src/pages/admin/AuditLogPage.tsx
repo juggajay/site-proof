@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { ClipboardList, Search, Filter, Calendar, User, ChevronLeft, ChevronRight, X, Download } from 'lucide-react'
 import { useDateFormat } from '@/lib/dateFormat'
 import { apiFetch } from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 
 interface AuditLog {
   id: string
@@ -40,14 +47,8 @@ export function AuditLogPage() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { formatDate: _formatDate } = useDateFormat()
 
-  const [logs, setLogs] = useState<AuditLog[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
   // Pagination
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [total, setTotal] = useState(0)
   const limit = 50
 
   // Filter state
@@ -63,66 +64,53 @@ export function AuditLogPage() {
 
   const [showFilters, setShowFilters] = useState(false)
 
-  // Filter options from API
-  const [entityTypes, setEntityTypes] = useState<string[]>([])
-  const [actions, setActions] = useState<string[]>([])
-  const [users, setUsers] = useState<{ id: string; email: string; fullName: string | null }[]>([])
-
   // Selected log for detail view
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null)
 
-  useEffect(() => {
-    fetchFilterOptions()
-  }, [])
+  // Filter options from API
+  const { data: actionsData } = useQuery({
+    queryKey: ['audit-logs', 'actions'] as const,
+    queryFn: () => apiFetch<{ actions: string[] }>('/api/audit-logs/actions'),
+  })
 
-  useEffect(() => {
-    fetchLogs()
-  }, [page, filters])
+  const { data: entityTypesData } = useQuery({
+    queryKey: ['audit-logs', 'entity-types'] as const,
+    queryFn: () => apiFetch<{ entityTypes: string[] }>('/api/audit-logs/entity-types'),
+  })
 
-  const fetchFilterOptions = async () => {
-    try {
-      const [actionsData, entityTypesData, usersData] = await Promise.all([
-        apiFetch<{ actions: string[] }>('/api/audit-logs/actions'),
-        apiFetch<{ entityTypes: string[] }>('/api/audit-logs/entity-types'),
-        apiFetch<{ users: { id: string; email: string; fullName: string | null }[] }>('/api/audit-logs/users'),
-      ])
+  const { data: usersData } = useQuery({
+    queryKey: ['audit-logs', 'users'] as const,
+    queryFn: () => apiFetch<{ users: { id: string; email: string; fullName: string | null }[] }>('/api/audit-logs/users'),
+  })
 
-      setActions(actionsData.actions || [])
-      setEntityTypes(entityTypesData.entityTypes || [])
-      setUsers(usersData.users || [])
-    } catch (err) {
-      console.error('Error fetching filter options:', err)
-    }
-  }
+  const actions = actionsData?.actions || []
+  const entityTypes = entityTypesData?.entityTypes || []
+  const users = usersData?.users || []
 
-  const fetchLogs = async () => {
-    setLoading(true)
-    setError(null)
+  // Build query params for logs
+  const logsParams = (() => {
+    const params = new URLSearchParams()
+    params.append('page', page.toString())
+    params.append('limit', limit.toString())
+    if (filters.projectId) params.append('projectId', filters.projectId)
+    if (filters.entityType) params.append('entityType', filters.entityType)
+    if (filters.action) params.append('action', filters.action)
+    if (filters.userId) params.append('userId', filters.userId)
+    if (filters.search) params.append('search', filters.search)
+    if (filters.startDate) params.append('startDate', filters.startDate)
+    if (filters.endDate) params.append('endDate', filters.endDate)
+    return params.toString()
+  })()
 
-    try {
-      const params = new URLSearchParams()
-      params.append('page', page.toString())
-      params.append('limit', limit.toString())
+  const { data: logsData, isLoading: loading, error: logsError } = useQuery({
+    queryKey: queryKeys.auditLogs(JSON.stringify({ page, ...filters })),
+    queryFn: () => apiFetch<{ logs: AuditLog[]; pagination?: { totalPages: number; total: number } }>(`/api/audit-logs?${logsParams}`),
+  })
 
-      if (filters.projectId) params.append('projectId', filters.projectId)
-      if (filters.entityType) params.append('entityType', filters.entityType)
-      if (filters.action) params.append('action', filters.action)
-      if (filters.userId) params.append('userId', filters.userId)
-      if (filters.search) params.append('search', filters.search)
-      if (filters.startDate) params.append('startDate', filters.startDate)
-      if (filters.endDate) params.append('endDate', filters.endDate)
-
-      const data = await apiFetch<{ logs: AuditLog[]; pagination?: { totalPages: number; total: number } }>(`/api/audit-logs?${params.toString()}`)
-      setLogs(data.logs || [])
-      setTotalPages(data.pagination?.totalPages || 1)
-      setTotal(data.pagination?.total || 0)
-    } catch (err) {
-      console.error('Error fetching audit logs:', err)
-      setError('Failed to load audit logs')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const logs = logsData?.logs || []
+  const totalPages = logsData?.pagination?.totalPages || 1
+  const total = logsData?.pagination?.total || 0
+  const error = logsError ? 'Failed to load audit logs' : null
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -209,13 +197,10 @@ export function AuditLogPage() {
             View system activity and changes across all projects
           </p>
         </div>
-        <button
-          onClick={exportToCSV}
-          className="inline-flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-muted"
-        >
+        <Button variant="outline" onClick={exportToCSV}>
           <Download className="h-4 w-4" />
           Export CSV
-        </button>
+        </Button>
       </div>
 
       {/* Search and Filters */}
@@ -224,21 +209,20 @@ export function AuditLogPage() {
           {/* Search */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
+            <Input
               type="text"
               value={filters.search}
               onChange={(e) => handleFilterChange('search', e.target.value)}
               placeholder="Search actions, entities..."
-              className="w-full pl-10 pr-4 py-2 border rounded-lg bg-background"
+              className="pl-10"
             />
           </div>
 
           {/* Filter Toggle */}
-          <button
+          <Button
+            variant="outline"
             onClick={() => setShowFilters(!showFilters)}
-            className={`inline-flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors ${
-              hasActiveFilters ? 'border-primary text-primary bg-primary/5' : 'hover:bg-muted'
-            }`}
+            className={hasActiveFilters ? 'border-primary text-primary bg-primary/5' : ''}
           >
             <Filter className="h-4 w-4" />
             Filters
@@ -247,7 +231,7 @@ export function AuditLogPage() {
                 {Object.values(filters).filter((v) => v !== '').length}
               </span>
             )}
-          </button>
+          </Button>
         </div>
 
         {/* Expanded Filters */}
@@ -255,11 +239,10 @@ export function AuditLogPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t">
             {/* Entity Type */}
             <div>
-              <label className="block text-sm font-medium mb-1">Entity Type</label>
-              <select
+              <Label className="mb-1">Entity Type</Label>
+              <NativeSelect
                 value={filters.entityType}
                 onChange={(e) => handleFilterChange('entityType', e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg bg-background"
               >
                 <option value="">All Types</option>
                 {entityTypes.map((type) => (
@@ -267,16 +250,15 @@ export function AuditLogPage() {
                     {type}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
 
             {/* Action */}
             <div>
-              <label className="block text-sm font-medium mb-1">Action</label>
-              <select
+              <Label className="mb-1">Action</Label>
+              <NativeSelect
                 value={filters.action}
                 onChange={(e) => handleFilterChange('action', e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg bg-background"
               >
                 <option value="">All Actions</option>
                 {actions.map((action) => (
@@ -284,16 +266,15 @@ export function AuditLogPage() {
                     {action}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
 
             {/* User Filter */}
             <div>
-              <label className="block text-sm font-medium mb-1">User</label>
-              <select
+              <Label className="mb-1">User</Label>
+              <NativeSelect
                 value={filters.userId}
                 onChange={(e) => handleFilterChange('userId', e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg bg-background"
               >
                 <option value="">All Users</option>
                 {users.map((user) => (
@@ -301,32 +282,32 @@ export function AuditLogPage() {
                     {user.fullName || user.email}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
 
             {/* Date Range */}
             <div>
-              <label className="block text-sm font-medium mb-1">From Date</label>
+              <Label className="mb-1">From Date</Label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
+                <Input
                   type="date"
                   value={filters.startDate}
                   onChange={(e) => handleFilterChange('startDate', e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 border rounded-lg bg-background"
+                  className="pl-10"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">To Date</label>
+              <Label className="mb-1">To Date</Label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
+                <Input
                   type="date"
                   value={filters.endDate}
                   onChange={(e) => handleFilterChange('endDate', e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 border rounded-lg bg-background"
+                  className="pl-10"
                 />
               </div>
             </div>
@@ -334,13 +315,10 @@ export function AuditLogPage() {
             {/* Clear Filters */}
             {hasActiveFilters && (
               <div className="sm:col-span-2 lg:col-span-4">
-                <button
-                  onClick={clearFilters}
-                  className="text-sm text-primary hover:underline flex items-center gap-1"
-                >
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
                   <X className="h-3 w-3" />
                   Clear all filters
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -427,12 +405,9 @@ export function AuditLogPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => setSelectedLog(log)}
-                        className="text-xs text-primary hover:underline"
-                      >
+                      <Button variant="link" size="sm" onClick={() => setSelectedLog(log)} className="text-xs p-0 h-auto">
                         Details
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -447,22 +422,24 @@ export function AuditLogPage() {
                 Page {page} of {totalPages}
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Previous
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted"
                 >
                   Next
                   <ChevronRight className="h-4 w-4" />
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -471,26 +448,17 @@ export function AuditLogPage() {
 
       {/* Detail Modal */}
       {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 max-h-[80vh] overflow-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Audit Log Details</h2>
-              <button
-                onClick={() => setSelectedLog(null)}
-                className="p-1 hover:bg-muted rounded"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
+        <Modal onClose={() => setSelectedLog(null)} className="max-w-2xl">
+          <ModalHeader>Audit Log Details</ModalHeader>
+          <ModalBody>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground">Date/Time</label>
+                  <Label className="text-muted-foreground">Date/Time</Label>
                   <p>{formatDateTime(selectedLog.createdAt)}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground">Action</label>
+                  <Label className="text-muted-foreground">Action</Label>
                   <span
                     className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getActionColor(
                       selectedLog.action
@@ -500,50 +468,46 @@ export function AuditLogPage() {
                   </span>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground">Entity Type</label>
+                  <Label className="text-muted-foreground">Entity Type</Label>
                   <p>{selectedLog.entityType}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground">Entity ID</label>
+                  <Label className="text-muted-foreground">Entity ID</Label>
                   <p className="font-mono text-sm">{selectedLog.entityId}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground">User</label>
+                  <Label className="text-muted-foreground">User</Label>
                   <p>{selectedLog.user?.fullName || selectedLog.user?.email || 'System'}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground">Project</label>
+                  <Label className="text-muted-foreground">Project</Label>
                   <p>{selectedLog.project?.name || '-'}</p>
                 </div>
               </div>
 
               {selectedLog.ipAddress && (
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground">IP Address</label>
+                  <Label className="text-muted-foreground">IP Address</Label>
                   <p className="font-mono text-sm">{selectedLog.ipAddress}</p>
                 </div>
               )}
 
               {selectedLog.changes && (
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">Changes</label>
+                  <Label className="text-muted-foreground mb-2">Changes</Label>
                   <pre className="p-4 bg-muted rounded-lg text-sm overflow-auto max-h-64">
                     {JSON.stringify(selectedLog.changes, null, 2)}
                   </pre>
                 </div>
               )}
             </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setSelectedLog(null)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="outline" onClick={() => setSelectedLog(null)}>
+              Close
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
     </div>
   )

@@ -1,5 +1,9 @@
 import React, { useState } from 'react'
-import { X, AlertCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 
 interface DisputeModalProps {
   claimId: string
@@ -30,16 +34,12 @@ export const DisputeModal = React.memo(function DisputeModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-semibold text-red-600">Mark Claim as Disputed</h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
+    <Modal onClose={onClose} alert className="max-w-md">
+      <ModalHeader>
+        <span className="text-red-600">Mark Claim as Disputed</span>
+      </ModalHeader>
+      <ModalBody>
+        <div className="space-y-4">
           <div className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
             <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-red-800">
@@ -49,32 +49,28 @@ export const DisputeModal = React.memo(function DisputeModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Dispute Notes <span className="text-red-500">*</span></label>
-            <textarea
+            <Label>Dispute Notes <span className="text-red-500">*</span></Label>
+            <Textarea
               value={disputeNotes}
               onChange={(e) => setDisputeNotes(e.target.value)}
               placeholder="Describe the reason for the dispute, including any specific items or amounts in question..."
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[120px] resize-none"
+              className="min-h-[120px] resize-none"
             />
           </div>
         </div>
-
-        <div className="flex justify-end gap-2 p-4 border-t">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded-lg hover:bg-muted"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleDispute}
-            disabled={disputing || !disputeNotes.trim()}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-          >
-            {disputing ? 'Marking...' : 'Mark as Disputed'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={handleDispute}
+          disabled={disputing || !disputeNotes.trim()}
+        >
+          {disputing ? 'Marking...' : 'Mark as Disputed'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 })

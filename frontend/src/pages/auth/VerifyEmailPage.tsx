@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { emailSchema } from '@/lib/validation'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+const resendSchema = z.object({ email: emailSchema })
+type ResendFormData = z.infer<typeof resendSchema>
 
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams()
@@ -9,12 +19,22 @@ export function VerifyEmailPage() {
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'no-token'>('loading')
   const [message, setMessage] = useState('')
-  const [email, setEmail] = useState('')
 
   // For resend functionality
-  const [resendEmail, setResendEmail] = useState('')
   const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [resendMessage, setResendMessage] = useState('')
+
+  // RHF for the resend form (used in both no-token and error states)
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<ResendFormData>({
+    resolver: zodResolver(resendSchema),
+    mode: 'onBlur',
+    defaultValues: { email: '' },
+  })
 
   useEffect(() => {
     if (!token) {
@@ -42,7 +62,9 @@ export function VerifyEmailPage() {
         return
       }
 
-      setEmail(statusData.email || '')
+      if (statusData.email) {
+        setValue('email', statusData.email)
+      }
 
       // Now verify the email
       const data = await apiFetch<{ verified?: boolean; message?: string }>('/api/auth/verify-email', {
@@ -63,19 +85,16 @@ export function VerifyEmailPage() {
     }
   }
 
-  const handleResend = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!resendEmail) return
-
+  const onResend = async (data: ResendFormData) => {
     setResendStatus('loading')
     try {
-      const data = await apiFetch<{ message: string }>('/api/auth/resend-verification', {
+      const result = await apiFetch<{ message: string }>('/api/auth/resend-verification', {
         method: 'POST',
-        body: JSON.stringify({ email: resendEmail }),
+        body: JSON.stringify({ email: data.email }),
       })
 
       setResendStatus('success')
-      setResendMessage(data.message)
+      setResendMessage(result.message)
     } catch (error) {
       setResendStatus('error')
       setResendMessage('Failed to resend verification email. Please try again.')
@@ -94,20 +113,25 @@ export function VerifyEmailPage() {
           </p>
         </div>
 
-        <form onSubmit={handleResend} className="space-y-4">
+        <form onSubmit={handleSubmit(onResend)} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium">
+            <Label htmlFor="email">
               Email Address
-            </label>
-            <input
+            </Label>
+            <Input
               id="email"
               type="email"
-              value={resendEmail}
-              onChange={(e) => setResendEmail(e.target.value)}
-              className="mt-1 w-full rounded-lg border bg-background px-3 py-2"
-              required
+              {...register('email')}
+              className={`mt-1 ${
+                errors.email ? 'border-destructive' : ''
+              }`}
               placeholder="you@example.com"
             />
+            {errors.email && (
+              <p className="mt-1 text-sm text-destructive" role="alert">
+                {errors.email.message}
+              </p>
+            )}
           </div>
 
           {resendStatus === 'success' && (
@@ -122,10 +146,10 @@ export function VerifyEmailPage() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
-            disabled={resendStatus === 'loading' || !resendEmail}
-            className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            disabled={resendStatus === 'loading'}
+            className="w-full"
           >
             {resendStatus === 'loading' ? (
               <span className="flex items-center justify-center gap-2">
@@ -135,7 +159,7 @@ export function VerifyEmailPage() {
             ) : (
               'Send Verification Link'
             )}
-          </button>
+          </Button>
         </form>
 
         <p className="text-center text-sm">
@@ -189,15 +213,18 @@ export function VerifyEmailPage() {
           Enter your email below to receive a new verification link.
         </p>
 
-        <form onSubmit={handleResend} className="mt-4 space-y-3">
-          <input
+        <form onSubmit={handleSubmit(onResend)} className="mt-4 space-y-3">
+          <Input
             type="email"
-            value={resendEmail || email}
-            onChange={(e) => setResendEmail(e.target.value)}
-            className="w-full rounded-lg border bg-background px-3 py-2"
-            required
+            {...register('email')}
+            className={errors.email ? 'border-destructive' : ''}
             placeholder="you@example.com"
           />
+          {errors.email && (
+            <p className="mt-1 text-sm text-destructive" role="alert">
+              {errors.email.message}
+            </p>
+          )}
 
           {resendStatus === 'success' && (
             <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
@@ -211,10 +238,10 @@ export function VerifyEmailPage() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={resendStatus === 'loading'}
-            className="w-full rounded-lg bg-primary py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="w-full"
           >
             {resendStatus === 'loading' ? (
               <span className="flex items-center justify-center gap-2">
@@ -224,7 +251,7 @@ export function VerifyEmailPage() {
             ) : (
               'Resend Verification Link'
             )}
-          </button>
+          </Button>
         </form>
       </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   getConflictedLots,
   resolveConflictWithLocal,
@@ -314,48 +315,42 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
               <div className="flex gap-3">
                 {showMergeView ? (
                   <>
-                    <button
-                      onClick={() => setShowMergeView(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                    >
+                    <Button variant="outline" onClick={() => setShowMergeView(false)}>
                       Back to Compare
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      className="bg-purple-600 hover:bg-purple-700"
                       onClick={handleResolveWithMerge}
                       disabled={resolving}
-                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50"
                     >
                       {resolving ? 'Saving...' : 'Save Merged Version'}
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <>
-                    <button
-                      onClick={onClose}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                    >
+                    <Button variant="outline" onClick={onClose}>
                       Decide Later
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="success"
                       onClick={handleResolveWithServer}
                       disabled={resolving}
-                      className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
                     >
                       {resolving ? 'Applying...' : 'Use Server Version'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={handleResolveWithLocal}
                       disabled={resolving}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
                     >
                       {resolving ? 'Applying...' : 'Keep My Changes'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="text-purple-700 bg-purple-100 hover:bg-purple-200 border-purple-200"
                       onClick={() => setShowMergeView(true)}
-                      className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-100 rounded-md hover:bg-purple-200"
                     >
                       Merge Manually
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>

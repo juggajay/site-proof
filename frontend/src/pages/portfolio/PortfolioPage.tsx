@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import { extractErrorMessage } from '@/lib/errorHandling'
+import { queryKeys } from '@/lib/queryKeys'
 import { FolderKanban, TrendingUp, AlertTriangle, CheckCircle2, Clock, DollarSign, AlertCircle, ExternalLink } from 'lucide-react'
 
 interface Project {
@@ -66,55 +66,38 @@ interface ProjectAtRisk {
 
 export function PortfolioPage() {
   const navigate = useNavigate()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [cashFlow, setCashFlow] = useState<CashFlowSummary>({
+
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => apiFetch<{ projects: Project[] }>('/api/projects'),
+  })
+
+  const cashFlowQuery = useQuery({
+    queryKey: [...queryKeys.portfolio, 'cashflow'] as const,
+    queryFn: () => apiFetch<CashFlowSummary>('/api/dashboard/portfolio-cashflow'),
+  })
+
+  const ncrsQuery = useQuery({
+    queryKey: [...queryKeys.portfolio, 'ncrs'] as const,
+    queryFn: () => apiFetch<{ ncrs: CriticalNCR[] }>('/api/dashboard/portfolio-ncrs'),
+  })
+
+  const risksQuery = useQuery({
+    queryKey: [...queryKeys.portfolio, 'risks'] as const,
+    queryFn: () => apiFetch<{ projectsAtRisk: ProjectAtRisk[] }>('/api/dashboard/portfolio-risks'),
+  })
+
+  const projects = projectsQuery.data?.projects || []
+  const cashFlow: CashFlowSummary = cashFlowQuery.data || {
     totalClaimed: 0,
     totalCertified: 0,
     totalPaid: 0,
-    outstanding: 0
-  })
-  const [criticalNCRs, setCriticalNCRs] = useState<CriticalNCR[]>([])
-  const [projectsAtRisk, setProjectsAtRisk] = useState<ProjectAtRisk[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch projects (required) and supplementary data in parallel
-        const [projectsResult, cashFlowResult, ncrsResult, risksResult] = await Promise.allSettled([
-          apiFetch<{ projects: Project[] }>('/api/projects'),
-          apiFetch<CashFlowSummary>('/api/dashboard/portfolio-cashflow'),
-          apiFetch<{ ncrs: CriticalNCR[] }>('/api/dashboard/portfolio-ncrs'),
-          apiFetch<{ projectsAtRisk: ProjectAtRisk[] }>('/api/dashboard/portfolio-risks'),
-        ])
-
-        if (projectsResult.status === 'rejected') {
-          throw new Error('Failed to fetch projects')
-        }
-
-        setProjects(projectsResult.value.projects || [])
-
-        if (cashFlowResult.status === 'fulfilled') {
-          setCashFlow(cashFlowResult.value)
-        }
-
-        if (ncrsResult.status === 'fulfilled') {
-          setCriticalNCRs(ncrsResult.value.ncrs || [])
-        }
-
-        if (risksResult.status === 'fulfilled') {
-          setProjectsAtRisk(risksResult.value.projectsAtRisk || [])
-        }
-      } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load projects'))
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
+    outstanding: 0,
+  }
+  const criticalNCRs = ncrsQuery.data?.ncrs || []
+  const projectsAtRisk = risksQuery.data?.projectsAtRisk || []
+  const loading = projectsQuery.isLoading || cashFlowQuery.isLoading || ncrsQuery.isLoading || risksQuery.isLoading
+  const error = projectsQuery.error ? 'Failed to load projects' : null
 
   // Calculate aggregate metrics
   const stats: PortfolioStats = {

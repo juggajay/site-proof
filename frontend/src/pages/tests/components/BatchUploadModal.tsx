@@ -3,6 +3,10 @@ import { getAuthToken } from '@/lib/auth'
 import { apiFetch, apiUrl } from '@/lib/api'
 import type { TestResult } from '../types'
 import { getBatchConfidenceIndicator } from '../constants'
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface BatchUploadModalProps {
   isOpen: boolean
@@ -141,20 +145,11 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-4 border-b flex justify-between items-center">
-          <h2 className="text-xl font-bold">
-            {'\uD83D\uDCC1'} Batch Upload Test Certificates
-          </h2>
-          <button
-            onClick={handleClose}
-            className="text-muted-foreground hover:text-foreground text-2xl"
-          >
-            {'\u00D7'}
-          </button>
-        </div>
-
+    <Modal onClose={handleClose} className="max-w-6xl">
+      <ModalHeader>
+        {'\uD83D\uDCC1'} Batch Upload Test Certificates
+      </ModalHeader>
+      <ModalBody className="p-0">
         {/* Before processing - File selection */}
         {batchResults.length === 0 ? (
           <div className="p-6">
@@ -212,19 +207,19 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
             )}
 
             <div className="flex justify-end gap-3 mt-6">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => {
                   setBatchFiles([])
                   onClose()
                 }}
-                className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleBatchUpload}
                 disabled={batchFiles.length === 0 || batchUploading}
-                className="px-4 py-2 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                className="bg-purple-600 hover:bg-purple-700"
               >
                 {batchUploading ? (
                   <span className="flex items-center gap-2">
@@ -234,12 +229,12 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                 ) : (
                   `\uD83E\uDD16 Process ${batchFiles.length} File${batchFiles.length !== 1 ? 's' : ''}`
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           /* After processing - Review queue */
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex overflow-hidden" style={{ height: '70vh' }}>
             {/* Left side - Results list */}
             <div className="w-1/3 border-r flex flex-col">
               <div className="p-3 bg-muted/50 border-b">
@@ -308,102 +303,102 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                         <>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-medium mb-1">Test Type</label>
-                              <input
+                              <Label className="text-xs">Test Type</Label>
+                              <Input
                                 type="text"
                                 value={formData.testType || ''}
                                 onChange={(e) => updateField('testType', e.target.value)}
-                                className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'testType').color}`}
+                                className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'testType').color}`}
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium mb-1">Laboratory</label>
-                              <input
+                              <Label className="text-xs">Laboratory</Label>
+                              <Input
                                 type="text"
                                 value={formData.laboratoryName || ''}
                                 onChange={(e) => updateField('laboratoryName', e.target.value)}
-                                className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'laboratoryName').color}`}
+                                className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'laboratoryName').color}`}
                               />
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium mb-1">Lab Report #</label>
-                            <input
+                            <Label className="text-xs">Lab Report #</Label>
+                            <Input
                               type="text"
                               value={formData.laboratoryReportNumber || ''}
                               onChange={(e) => updateField('laboratoryReportNumber', e.target.value)}
-                              className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'laboratoryReportNumber').color}`}
+                              className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'laboratoryReportNumber').color}`}
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-medium mb-1">Sample Date</label>
-                              <input
+                              <Label className="text-xs">Sample Date</Label>
+                              <Input
                                 type="date"
                                 value={formData.sampleDate || ''}
                                 onChange={(e) => updateField('sampleDate', e.target.value)}
-                                className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'sampleDate').color}`}
+                                className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'sampleDate').color}`}
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium mb-1">Test Date</label>
-                              <input
+                              <Label className="text-xs">Test Date</Label>
+                              <Input
                                 type="date"
                                 value={formData.testDate || ''}
                                 onChange={(e) => updateField('testDate', e.target.value)}
-                                className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'testDate').color}`}
+                                className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'testDate').color}`}
                               />
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium mb-1">Sample Location</label>
-                            <input
+                            <Label className="text-xs">Sample Location</Label>
+                            <Input
                               type="text"
                               value={formData.sampleLocation || ''}
                               onChange={(e) => updateField('sampleLocation', e.target.value)}
-                              className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'sampleLocation').color}`}
+                              className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'sampleLocation').color}`}
                             />
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-medium mb-1">Result Value</label>
-                              <input
+                              <Label className="text-xs">Result Value</Label>
+                              <Input
                                 type="number"
                                 step="any"
                                 value={formData.resultValue || ''}
                                 onChange={(e) => updateField('resultValue', e.target.value)}
-                                className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'resultValue').color}`}
+                                className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'resultValue').color}`}
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium mb-1">Unit</label>
-                              <input
+                              <Label className="text-xs">Unit</Label>
+                              <Input
                                 type="text"
                                 value={formData.resultUnit || ''}
                                 onChange={(e) => updateField('resultUnit', e.target.value)}
-                                className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'resultUnit').color}`}
+                                className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'resultUnit').color}`}
                               />
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-medium mb-1">Spec Min</label>
-                              <input
+                              <Label className="text-xs">Spec Min</Label>
+                              <Input
                                 type="number"
                                 step="any"
                                 value={formData.specificationMin || ''}
                                 onChange={(e) => updateField('specificationMin', e.target.value)}
-                                className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'specificationMin').color}`}
+                                className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'specificationMin').color}`}
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium mb-1">Spec Max</label>
-                              <input
+                              <Label className="text-xs">Spec Max</Label>
+                              <Input
                                 type="number"
                                 step="any"
                                 value={formData.specificationMax || ''}
                                 onChange={(e) => updateField('specificationMax', e.target.value)}
-                                className={`w-full rounded border px-2 py-1 text-sm ${getBatchConfidenceIndicator(result, 'specificationMax').color}`}
+                                className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'specificationMax').color}`}
                               />
                             </div>
                           </div>
@@ -420,24 +415,21 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
 
               {/* Footer actions */}
               <div className="p-4 border-t flex justify-between">
-                <button
-                  onClick={handleClose}
-                  className="px-4 py-2 text-sm rounded-lg border hover:bg-muted"
-                >
+                <Button variant="outline" onClick={handleClose}>
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleBatchConfirmAll}
                   disabled={batchConfirming}
-                  className="px-4 py-2 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                  className="bg-purple-600 hover:bg-purple-700"
                 >
                   {batchConfirming ? 'Saving...' : `\u2713 Confirm All (${batchResults.filter(r => r.success).length})`}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </ModalBody>
+    </Modal>
   )
 })

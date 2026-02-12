@@ -1,7 +1,9 @@
 // Feature #292: Foreman Dashboard - Simplified view for foreman role
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { apiFetch } from '@/lib/api'
 import {
   Sun,
@@ -19,6 +21,7 @@ import {
   ChevronRight,
   Plus
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface ForemanDashboardData {
   // Today's diary
@@ -71,38 +74,30 @@ const getWeatherIcon = (conditions: string | null) => {
   return <Sun className="h-8 w-8 text-yellow-500" />
 }
 
+const defaultForemanData: ForemanDashboardData = {
+  todayDiary: { exists: false, status: null, id: null },
+  pendingDockets: { count: 0, totalLabourHours: 0, totalPlantHours: 0 },
+  inspectionsDueToday: { count: 0, items: [] },
+  weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
+  project: null
+}
+
 export function ForemanDashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
-  const [data, setData] = useState<ForemanDashboardData>({
-    todayDiary: { exists: false, status: null, id: null },
-    pendingDockets: { count: 0, totalLabourHours: 0, totalPlantHours: 0 },
-    inspectionsDueToday: { count: 0, items: [] },
-    weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
-    project: null
+
+  const { data = defaultForemanData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.foremanDashboard('current'),
+    queryFn: () => apiFetch<ForemanDashboardData>('/api/dashboard/foreman'),
   })
-
-  const fetchDashboardData = async () => {
-    try {
-      const result = await apiFetch<ForemanDashboardData>('/api/dashboard/foreman')
-      setData(result)
-    } catch (err) {
-      console.error('Error fetching foreman dashboard:', err)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
 
   const handleRefresh = () => {
     setRefreshing(true)
-    fetchDashboardData()
+    queryClient.invalidateQueries({ queryKey: queryKeys.foremanDashboard('current') }).then(() => {
+      setRefreshing(false)
+    })
   }
 
   const today = new Date().toLocaleDateString('en-AU', {
@@ -170,14 +165,15 @@ export function ForemanDashboard() {
             {today}
           </p>
         </div>
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handleRefresh}
           disabled={refreshing}
-          className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
-        </button>
+        </Button>
       </div>
 
       {/* Project Context */}

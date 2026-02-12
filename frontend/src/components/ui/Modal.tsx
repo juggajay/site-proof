@@ -1,142 +1,108 @@
-import { ReactNode, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { ReactNode } from 'react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from './dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogFooter,
+  AlertDialogDescription,
+} from './alert-dialog'
+import { cn } from '@/lib/utils'
 
 interface ModalProps {
   children: ReactNode
   onClose?: () => void
   className?: string
+  /** Use AlertDialog (no backdrop-click dismiss, no Escape dismiss) for destructive confirmations */
+  alert?: boolean
 }
 
 /**
- * Modal component with proper overlay styling
- * - Uses React Portal to render at document body level
- * - Semi-transparent backdrop overlay (bg-black/50)
- * - Centered modal with shadow effect
- * - Prevents body scroll when open
- * - Closes on backdrop click (optional)
- * - Closes on Escape key (optional)
+ * Modal component — backward-compatible wrapper around shadcn Dialog / AlertDialog.
+ * - Regular modals: close on backdrop click + Escape + X button
+ * - Alert modals: only close via explicit Cancel/action buttons
  */
-export function Modal({ children, onClose, className = '' }: ModalProps) {
-  const [isVisible, setIsVisible] = useState(false)
-  const [isClosing, setIsClosing] = useState(false)
-
-  // Trigger entrance animation on mount
-  useEffect(() => {
-    // Small delay to ensure CSS transition works
-    requestAnimationFrame(() => {
-      setIsVisible(true)
-    })
-  }, [])
-
-  // Handle close with animation
-  const handleClose = () => {
-    if (onClose) {
-      setIsClosing(true)
-      // Wait for animation to complete before calling onClose
-      setTimeout(() => {
-        onClose()
-      }, 200) // Match transition duration
-    }
+export function Modal({ children, onClose, className, alert = false }: ModalProps) {
+  if (alert) {
+    return (
+      <AlertDialog open onOpenChange={(open) => { if (!open) onClose?.() }}>
+        <AlertDialogContent className={cn('max-h-[90vh] overflow-y-auto', className)}>
+          {children}
+        </AlertDialogContent>
+      </AlertDialog>
+    )
   }
-
-  // Prevent body scroll when modal is open
-  useEffect(() => {
-    const originalOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = originalOverflow
-    }
-  }, [])
-
-  // Handle escape key
-  useEffect(() => {
-    const handleEscapeKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onClose) {
-        handleClose()
-      }
-    }
-    document.addEventListener('keydown', handleEscapeKey)
-    return () => document.removeEventListener('keydown', handleEscapeKey)
-  }, [onClose])
-
-  // Handle backdrop click
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && onClose) {
-      handleClose()
-    }
-  }
-
-  // Determine animation state
-  const shouldShow = isVisible && !isClosing
-
-  const modalContent = (
-    <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-200 ${
-        shouldShow ? 'bg-black/50' : 'bg-black/0'
-      }`}
-      onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        className={`bg-white rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto transition-all duration-200 ${
-          shouldShow
-            ? 'opacity-100 scale-100 translate-y-0'
-            : 'opacity-0 scale-95 -translate-y-4'
-        } ${className}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
-  )
-
-  // Use portal to render at document body level
-  return createPortal(modalContent, document.body)
-}
-
-/**
- * ModalHeader component for consistent modal headers
- */
-export function ModalHeader({
-  children,
-  onClose
-}: {
-  children: ReactNode
-  onClose?: () => void
-}) {
   return (
-    <div className="flex items-center justify-between p-6 pb-0">
-      <h2 className="text-xl font-bold">{children}</h2>
-      {onClose && (
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
-          aria-label="Close modal"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      )}
-    </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose?.() }}>
+      <DialogContent className={cn('max-h-[90vh] overflow-y-auto', className)}>
+        {children}
+      </DialogContent>
+    </Dialog>
   )
 }
 
 /**
- * ModalBody component for consistent modal content area
+ * ModalHeader — wraps DialogHeader/AlertDialogHeader + DialogTitle/AlertDialogTitle.
+ * The onClose prop is vestigial (Dialog's built-in X handles close).
  */
-export function ModalBody({ children }: { children: ReactNode }) {
-  return <div className="p-6">{children}</div>
+export function ModalHeader({ children, onClose: _onClose }: { children: ReactNode; onClose?: () => void }) {
+  return (
+    <DialogHeader>
+      <DialogTitle>{children}</DialogTitle>
+    </DialogHeader>
+  )
 }
 
 /**
- * ModalFooter component for consistent modal footer with actions
+ * ModalDescription — optional description beneath the title.
+ */
+export function ModalDescription({ children }: { children: ReactNode }) {
+  return <DialogDescription>{children}</DialogDescription>
+}
+
+/**
+ * AlertModalHeader — use inside alert modals for proper AlertDialog semantics.
+ */
+export function AlertModalHeader({ children }: { children: ReactNode; onClose?: () => void }) {
+  return (
+    <AlertDialogHeader>
+      <AlertDialogTitle>{children}</AlertDialogTitle>
+    </AlertDialogHeader>
+  )
+}
+
+/**
+ * AlertModalDescription — description for alert modals.
+ */
+export function AlertModalDescription({ children }: { children: ReactNode }) {
+  return <AlertDialogDescription>{children}</AlertDialogDescription>
+}
+
+/**
+ * ModalBody — consistent content area.
+ */
+export function ModalBody({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn('py-4', className)}>{children}</div>
+}
+
+/**
+ * ModalFooter — wraps DialogFooter/AlertDialogFooter.
  */
 export function ModalFooter({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex justify-end gap-3 p-6 pt-0">
-      {children}
-    </div>
-  )
+  return <DialogFooter>{children}</DialogFooter>
+}
+
+/**
+ * AlertModalFooter — use inside alert modals.
+ */
+export function AlertModalFooter({ children }: { children: ReactNode }) {
+  return <AlertDialogFooter>{children}</AlertDialogFooter>
 }

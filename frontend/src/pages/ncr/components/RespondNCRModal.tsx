@@ -1,6 +1,21 @@
-import { useState, memo } from 'react'
-import { createPortal } from 'react-dom'
+import { memo } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import type { NCR } from '../types'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Label } from '@/components/ui/label'
+
+const respondNCRSchema = z.object({
+  rootCauseCategory: z.string().min(1, 'Root cause category is required'),
+  rootCauseDescription: z.string().min(1, 'Root cause description is required'),
+  proposedCorrectiveAction: z.string().min(1, 'Proposed corrective action is required'),
+})
+
+type RespondNCRFormData = z.infer<typeof respondNCRSchema>
 
 interface RespondNCRModalProps {
   isOpen: boolean
@@ -21,55 +36,48 @@ function RespondNCRModalInner({
   onSubmit,
   loading,
 }: RespondNCRModalProps) {
-  const [rootCauseCategory, setRootCauseCategory] = useState('')
-  const [rootCauseDescription, setRootCauseDescription] = useState('')
-  const [proposedCorrectiveAction, setProposedCorrectiveAction] = useState('')
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<RespondNCRFormData>({
+    resolver: zodResolver(respondNCRSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      rootCauseCategory: '',
+      rootCauseDescription: '',
+      proposedCorrectiveAction: '',
+    },
+  })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const onFormSubmit = (data: RespondNCRFormData) => {
     if (!ncr) return
-    onSubmit(ncr.id, { rootCauseCategory, rootCauseDescription, proposedCorrectiveAction })
+    onSubmit(ncr.id, data)
   }
 
   const handleClose = () => {
-    setRootCauseCategory('')
-    setRootCauseDescription('')
-    setProposedCorrectiveAction('')
+    reset()
     onClose()
   }
 
   if (!isOpen || !ncr) return null
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Respond to NCR {ncr.ncrNumber}</h2>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Close modal"
-          >
-            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
+  return (
+    <Modal onClose={handleClose} className="max-w-lg">
+      <ModalHeader>Respond to NCR {ncr.ncrNumber}</ModalHeader>
+      <ModalBody>
         <div className="mb-4 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm">
           <span className="font-medium">Issue:</span> {ncr.description}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="respond-ncr-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           <div>
-            <label htmlFor="root-cause-category" className="block text-sm font-medium mb-1">Root Cause Category *</label>
-            <select
+            <Label htmlFor="root-cause-category">Root Cause Category *</Label>
+            <NativeSelect
               id="root-cause-category"
-              value={rootCauseCategory}
-              onChange={(e) => setRootCauseCategory(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
-              required
+              {...register('rootCauseCategory')}
+              className={errors.rootCauseCategory ? 'border-destructive mt-1' : 'mt-1'}
             >
               <option value="">Select root cause category</option>
               <option value="human_error">Human Error</option>
@@ -78,52 +86,56 @@ function RespondNCRModalInner({
               <option value="process">Process</option>
               <option value="training">Training</option>
               <option value="other">Other</option>
-            </select>
+            </NativeSelect>
+            {errors.rootCauseCategory && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.rootCauseCategory.message}</p>
+            )}
           </div>
           <div>
-            <label htmlFor="root-cause-description" className="block text-sm font-medium mb-1">Root Cause Description *</label>
-            <textarea
+            <Label htmlFor="root-cause-description">Root Cause Description *</Label>
+            <Textarea
               id="root-cause-description"
-              value={rootCauseDescription}
-              onChange={(e) => setRootCauseDescription(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+              {...register('rootCauseDescription')}
+              className={errors.rootCauseDescription ? 'border-destructive mt-1' : 'mt-1'}
               rows={3}
               placeholder="Describe the root cause of this non-conformance..."
-              required
             />
+            {errors.rootCauseDescription && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.rootCauseDescription.message}</p>
+            )}
           </div>
           <div>
-            <label htmlFor="proposed-corrective-action" className="block text-sm font-medium mb-1">Proposed Corrective Action *</label>
-            <textarea
+            <Label htmlFor="proposed-corrective-action">Proposed Corrective Action *</Label>
+            <Textarea
               id="proposed-corrective-action"
-              value={proposedCorrectiveAction}
-              onChange={(e) => setProposedCorrectiveAction(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+              {...register('proposedCorrectiveAction')}
+              className={errors.proposedCorrectiveAction ? 'border-destructive mt-1' : 'mt-1'}
               rows={3}
               placeholder="Describe the proposed corrective action to address this issue..."
-              required
             />
-          </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 text-sm border rounded-lg hover:bg-muted"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !rootCauseCategory || !rootCauseDescription || !proposedCorrectiveAction}
-              className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
-            >
-              {loading ? 'Submitting...' : 'Submit Response'}
-            </button>
+            {errors.proposedCorrectiveAction && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.proposedCorrectiveAction.message}</p>
+            )}
           </div>
         </form>
-      </div>
-    </div>,
-    document.body
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleClose}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="respond-ncr-form"
+          disabled={loading}
+        >
+          {loading ? 'Submitting...' : 'Submit Response'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 

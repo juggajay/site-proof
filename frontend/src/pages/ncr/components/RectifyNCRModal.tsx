@@ -1,10 +1,22 @@
 import { useState, memo } from 'react'
-import { createPortal } from 'react-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { getAuthToken } from '@/lib/auth'
 import { apiFetch, apiUrl } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { handleApiError } from '@/lib/errorHandling'
 import type { NCR } from '../types'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+
+const rectifyNCRSchema = z.object({
+  rectificationNotes: z.string().optional().default(''),
+})
+
+type RectifyNCRFormData = z.infer<typeof rectifyNCRSchema>
 
 interface RectifyNCRModalProps {
   isOpen: boolean
@@ -22,10 +34,22 @@ function RectifyNCRModalInner({
   onSuccess,
 }: RectifyNCRModalProps) {
   const token = getAuthToken()
-  const [rectificationNotes, setRectificationNotes] = useState('')
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([])
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [submittingRectification, setSubmittingRectification] = useState(false)
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<RectifyNCRFormData>({
+    resolver: zodResolver(rectifyNCRSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      rectificationNotes: '',
+    },
+  })
 
   const handleEvidenceUpload = async (file: File, evidenceType: string) => {
     if (!ncr) return
@@ -75,14 +99,14 @@ function RectifyNCRModalInner({
     }
   }
 
-  const handleSubmitRectification = async () => {
+  const handleSubmitRectification = async (data: RectifyNCRFormData) => {
     if (!ncr) return
 
     setSubmittingRectification(true)
     try {
       await apiFetch(`/api/ncrs/${ncr.id}/submit-for-verification`, {
         method: 'POST',
-        body: JSON.stringify({ rectificationNotes }),
+        body: JSON.stringify({ rectificationNotes: data.rectificationNotes }),
       })
 
       toast({
@@ -99,29 +123,17 @@ function RectifyNCRModalInner({
   }
 
   const handleClose = () => {
-    setRectificationNotes('')
+    reset()
     setEvidenceFiles([])
     onClose()
   }
 
   if (!isOpen || !ncr) return null
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Submit Rectification Evidence</h2>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
+  return (
+    <Modal onClose={handleClose} className="max-w-lg">
+      <ModalHeader>Submit Rectification Evidence</ModalHeader>
+      <ModalBody>
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm font-medium text-blue-800">{ncr.ncrNumber}</p>
           <p className="text-sm text-blue-700 mt-1">{ncr.description}</p>
@@ -133,7 +145,7 @@ function RectifyNCRModalInner({
 
           {/* Photo Evidence */}
           <div className="mb-3">
-            <label className="block text-sm text-gray-600 mb-1">Photos (Rectification Evidence)</label>
+            <Label>Photos (Rectification Evidence)</Label>
             <input
               type="file"
               accept="image/*"
@@ -145,13 +157,13 @@ function RectifyNCRModalInner({
                 }
               }}
               disabled={uploadingEvidence}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
             />
           </div>
 
           {/* Re-test Certificate */}
           <div className="mb-3">
-            <label className="block text-sm text-gray-600 mb-1">Re-test Certificates (PDF)</label>
+            <Label>Re-test Certificates (PDF)</Label>
             <input
               type="file"
               accept=".pdf"
@@ -163,7 +175,7 @@ function RectifyNCRModalInner({
                 }
               }}
               disabled={uploadingEvidence}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
             />
           </div>
 
@@ -176,51 +188,53 @@ function RectifyNCRModalInner({
             <div className="mt-2 space-y-1">
               <p className="text-xs font-medium text-gray-500">Uploaded Evidence:</p>
               {evidenceFiles.map((file, index) => (
-                <p key={index} className="text-xs text-green-600">✓ {file.name}</p>
+                <p key={index} className="text-xs text-green-600">&#10003; {file.name}</p>
               ))}
             </div>
           )}
         </div>
 
         {/* Notes Section */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1">Rectification Notes</label>
-          <textarea
-            value={rectificationNotes}
-            onChange={(e) => setRectificationNotes(e.target.value)}
-            placeholder="Describe the corrective actions taken..."
-            rows={4}
-            className="w-full border rounded-lg px-3 py-2"
-          />
-        </div>
+        <form id="rectify-ncr-form" onSubmit={handleSubmit(handleSubmitRectification)}>
+          <div className="mb-4">
+            <Label>Rectification Notes</Label>
+            <Textarea
+              {...register('rectificationNotes')}
+              placeholder="Describe the corrective actions taken..."
+              rows={4}
+              className={errors.rectificationNotes ? 'border-destructive mt-1' : 'mt-1'}
+            />
+            {errors.rectificationNotes && (
+              <p className="text-sm text-destructive mt-1" role="alert">{errors.rectificationNotes.message}</p>
+            )}
+          </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-          <p className="text-sm text-amber-800">
-            <strong>Note:</strong> Please upload at least one piece of evidence (photo or re-test certificate) before submitting for verification.
-          </p>
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-            disabled={submittingRectification}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmitRectification}
-            disabled={submittingRectification || evidenceFiles.length === 0}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            title={evidenceFiles.length === 0 ? 'Please upload at least one piece of evidence' : 'Submit for verification'}
-          >
-            {submittingRectification ? 'Submitting...' : 'Submit for Verification'}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-sm text-amber-800">
+              <strong>Note:</strong> Please upload at least one piece of evidence (photo or re-test certificate) before submitting for verification.
+            </p>
+          </div>
+        </form>
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleClose}
+          disabled={submittingRectification}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="rectify-ncr-form"
+          disabled={submittingRectification || evidenceFiles.length === 0}
+          title={evidenceFiles.length === 0 ? 'Please upload at least one piece of evidence' : 'Submit for verification'}
+        >
+          {submittingRectification ? 'Submitting...' : 'Submit for Verification'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 

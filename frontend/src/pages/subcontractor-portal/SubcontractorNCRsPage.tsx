@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -8,8 +7,11 @@ import {
   Clock,
   XCircle,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { apiFetch } from '@/lib/api'
+import { extractErrorMessage } from '@/lib/errorHandling'
 
 interface NCR {
   id: string
@@ -88,33 +90,26 @@ function getSeverityBadge(severity: string) {
 }
 
 export function SubcontractorNCRsPage() {
-  const [ncrs, setNCRs] = useState<NCR[]>([])
-  const [company, setCompany] = useState<SubcontractorCompany | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: company, isLoading: companyLoading } = useQuery({
+    queryKey: queryKeys.portalCompanies,
+    queryFn: async () => {
+      const res = await apiFetch<{ company: SubcontractorCompany }>('/api/subcontractors/my-company')
+      return res.company
+    },
+  })
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Get company info
-        const companyData = await apiFetch<{ company: SubcontractorCompany }>(`/api/subcontractors/my-company`)
-        setCompany(companyData.company)
+  const { data: ncrs = [], isLoading: ncrsLoading, error } = useQuery({
+    queryKey: queryKeys.portalNCRs,
+    queryFn: async () => {
+      const res = await apiFetch<{ ncrs: NCR[] }>(
+        `/api/ncrs?projectId=${company!.projectId}&subcontractorView=true`
+      )
+      return res.ncrs || []
+    },
+    enabled: !!company?.projectId,
+  })
 
-        // Fetch NCRs for assigned lots
-        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(
-          `/api/ncrs?projectId=${companyData.company.projectId}&subcontractorView=true`
-        )
-        setNCRs(ncrsData.ncrs || [])
-      } catch (err) {
-        console.error('Error fetching data:', err)
-        setError('Failed to load NCRs')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
+  const loading = companyLoading || ncrsLoading
 
   const open = ncrs.filter(n => n.status === 'open')
   const inProgress = ncrs.filter(n => n.status === 'in_progress')
@@ -138,7 +133,7 @@ export function SubcontractorNCRsPage() {
       <div className="container max-w-2xl mx-auto p-4">
         <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-          <p>{error}</p>
+          <p>{extractErrorMessage(error, 'Failed to load NCRs')}</p>
         </div>
         <Link
           to="/subcontractor-portal"

@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { X } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import type { Claim, ConformedLot, NewClaimFormData } from '../types'
 import { DEMO_CONFORMED_LOTS } from '../constants'
 import { formatCurrency, calculateLotClaimAmount } from '../utils'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface CreateClaimModalProps {
   projectId: string
@@ -134,42 +137,34 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
   const hasPartialProgress = selectedLots.some(l => l.percentComplete < 100)
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-semibold">Create New Progress Claim</h2>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
+    <Modal onClose={onClose} className="max-w-2xl">
+      <ModalHeader>Create New Progress Claim</ModalHeader>
+      <ModalBody>
+        <div className="space-y-6">
           {/* Period Selection */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Period Start</label>
-              <input
+              <Label>Period Start</Label>
+              <Input
                 type="date"
                 value={newClaim.periodStart}
                 onChange={(e) => setNewClaim(prev => ({ ...prev, periodStart: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Period End</label>
-              <input
+              <Label>Period End</Label>
+              <Input
                 type="date"
                 value={newClaim.periodEnd}
                 onChange={(e) => setNewClaim(prev => ({ ...prev, periodEnd: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
           </div>
 
           {/* Lot Selection */}
           <div>
-            <label className="block text-sm font-medium mb-2">Select Conformed Lots to Include</label>
-            <div className="border rounded-lg divide-y max-h-80 overflow-auto">
+            <Label>Select Conformed Lots to Include</Label>
+            <div className="border rounded-lg divide-y max-h-80 overflow-auto mt-1">
               {conformedLots.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
                   No conformed lots available for claiming
@@ -193,13 +188,13 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                     {lot.selected && (
                       <div className="mt-2 ml-7 flex items-center gap-3">
                         <label className="text-sm text-muted-foreground">% Complete:</label>
-                        <input
+                        <Input
                           type="number"
-                          min="0"
-                          max="100"
+                          min={0}
+                          max={100}
                           value={lot.percentComplete}
                           onChange={(e) => updateLotPercentage(lot.id, Number(e.target.value))}
-                          className="w-20 px-2 py-1 border rounded text-sm text-center"
+                          className="w-20 h-8 text-sm text-center"
                         />
                         <span className="text-sm">%</span>
                         <span className="ml-auto font-semibold text-primary">
@@ -229,23 +224,18 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
             </p>
           </div>
         </div>
-
-        <div className="flex justify-end gap-2 p-4 border-t">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded-lg hover:bg-muted"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={createClaim}
-            disabled={creating || selectedLots.length === 0}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-          >
-            {creating ? 'Creating...' : 'Create Claim'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          onClick={createClaim}
+          disabled={creating || selectedLots.length === 0}
+        >
+          {creating ? 'Creating...' : 'Create Claim'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 })

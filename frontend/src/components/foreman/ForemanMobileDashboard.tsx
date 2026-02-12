@@ -1,8 +1,10 @@
 // ForemanMobileDashboard - Mobile-optimized dashboard for foreman role
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import {
   RefreshCw,
   Calendar,
@@ -16,6 +18,7 @@ import {
   Truck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { DashboardCard, DashboardStat } from './DashboardCard'
 import { WeatherWidget } from './WeatherWidget'
 import { QuickCaptureButton } from './QuickCaptureButton'
@@ -75,35 +78,28 @@ export function ForemanMobileDashboard() {
   const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore()
   useOnlineStatus() // Initialize online status tracking
 
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
-  const [data, setData] = useState<DashboardData>({
+
+  const defaultData: DashboardData = {
     todayDiary: { exists: false, status: null, id: null },
     pendingDockets: { count: 0, totalLabourHours: 0, totalPlantHours: 0 },
     inspectionsDueToday: { count: 0, items: [] },
     weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
     project: null,
+  }
+
+  const queryKeyId = projectId || 'default'
+
+  const { data = defaultData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.foremanDashboard(queryKeyId),
+    queryFn: () => apiFetch<DashboardData>('/api/dashboard/foreman'),
   })
 
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      const result = await apiFetch<DashboardData>('/api/dashboard/foreman')
-      setData(result)
-    } catch (err) {
-      console.error('Error fetching foreman dashboard:', err)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [fetchDashboardData])
-
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true)
-    fetchDashboardData()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.foremanDashboard(queryKeyId) })
+    setRefreshing(false)
   }
 
   const today = new Date().toLocaleDateString('en-AU', {
@@ -158,17 +154,13 @@ export function ForemanMobileDashboard() {
             <p className="text-muted-foreground mb-4">
               You need to be assigned to a project before you can access the foreman dashboard features.
             </p>
-            <button
+            <Button
               onClick={() => navigate('/projects')}
-              className={cn(
-                'inline-flex items-center justify-center gap-2 px-4 py-2',
-                'bg-primary text-primary-foreground rounded-lg',
-                'font-medium touch-manipulation min-h-[44px]'
-              )}
+              className="touch-manipulation min-h-[44px]"
             >
               View Projects
               <ChevronRight className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -189,17 +181,15 @@ export function ForemanMobileDashboard() {
               {today}
             </p>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             onClick={handleRefresh}
             disabled={refreshing}
-            className={cn(
-              'p-2 rounded-lg border touch-manipulation min-h-[44px] min-w-[44px]',
-              'flex items-center justify-center',
-              'active:bg-muted'
-            )}
+            className="touch-manipulation min-h-[44px] min-w-[44px]"
           >
             <RefreshCw className={cn('h-5 w-5', refreshing && 'animate-spin')} />
-          </button>
+          </Button>
         </div>
 
         {/* Project context */}

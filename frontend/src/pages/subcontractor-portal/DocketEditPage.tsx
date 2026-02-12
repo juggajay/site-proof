@@ -17,6 +17,11 @@ import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 
 interface Employee {
   id: string
@@ -575,21 +580,21 @@ export function DocketEditPage() {
             </div>
           </div>
           <div className="px-4 pb-4 space-y-3">
-            <textarea
+            <Textarea
               value={queryResponse}
               onChange={(e) => setQueryResponse(e.target.value)}
               placeholder="Type your response to the query..."
               rows={3}
-              className="w-full px-3 py-2 border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              className="border-amber-300 dark:border-amber-700 focus-visible:ring-amber-500"
             />
-            <button
+            <Button
               onClick={respondToQuery}
               disabled={!queryResponse.trim() || respondingToQuery}
               className={cn(
-                'w-full flex items-center justify-center gap-2 py-2.5 px-4 font-medium rounded-lg transition-colors',
+                'w-full',
                 queryResponse.trim() && !respondingToQuery
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                  : ''
               )}
             >
               {respondingToQuery ? (
@@ -603,7 +608,7 @@ export function DocketEditPage() {
                   Respond &amp; Resubmit
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -748,12 +753,14 @@ export function DocketEditPage() {
                         )}
                       </div>
                       {canEdit && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => deleteLabourEntry(entry.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -824,12 +831,14 @@ export function DocketEditPage() {
                         </p>
                       </div>
                       {canEdit && (
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => deletePlantEntry(entry.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
                           <Trash2 className="h-4 w-4" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -870,16 +879,16 @@ export function DocketEditPage() {
 
                 {canEdit && (
                   <div className="pt-4">
-                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <Label htmlFor="notes">
                       Notes (optional)
-                    </label>
-                    <textarea
+                    </Label>
+                    <Textarea
                       id="notes"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       placeholder="Add any notes for this docket..."
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="mt-1"
                     />
                   </div>
                 )}
@@ -897,14 +906,14 @@ export function DocketEditPage() {
             <p className="text-xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalCost)}</p>
           </div>
           {canEdit && (
-            <button
+            <Button
               onClick={submitDocket}
               disabled={!canSubmit || submitting}
               className={cn(
-                'flex items-center gap-2 px-6 py-3 font-medium rounded-lg transition-colors',
+                'px-6 py-3 h-auto',
                 canSubmit && !submitting
                   ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                  : ''
               )}
             >
               {submitting ? (
@@ -918,7 +927,7 @@ export function DocketEditPage() {
                   {docket?.status === 'rejected' ? 'Resubmit for Approval' : 'Submit for Approval'}
                 </>
               )}
-            </button>
+            </Button>
           )}
           {!canEdit && docket?.status === 'pending_approval' && (
             <span className="px-4 py-2 text-base bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
@@ -954,12 +963,13 @@ export function DocketEditPage() {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   {sheetType === 'labour' ? 'Add Labour Hours' : 'Add Plant Hours'}
                 </h3>
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setSheetOpen(false)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   <X className="h-5 w-5 text-gray-500" />
-                </button>
+                </Button>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 {sheetType === 'labour' && selectedEmployee && (
@@ -977,27 +987,27 @@ export function DocketEditPage() {
                   {/* Time inputs */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="startTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <Label htmlFor="startTime">
                         Start Time
-                      </label>
-                      <input
+                      </Label>
+                      <Input
                         id="startTime"
                         type="time"
                         value={startTime}
                         onChange={(e) => setStartTime(e.target.value)}
-                        className="w-full h-12 px-3 text-lg border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="mt-1 h-12 text-lg"
                       />
                     </div>
                     <div>
-                      <label htmlFor="finishTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <Label htmlFor="finishTime">
                         Finish Time
-                      </label>
-                      <input
+                      </Label>
+                      <Input
                         id="finishTime"
                         type="time"
                         value={finishTime}
                         onChange={(e) => setFinishTime(e.target.value)}
-                        className="w-full h-12 px-3 text-lg border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="mt-1 h-12 text-lg"
                       />
                     </div>
                   </div>
@@ -1007,37 +1017,38 @@ export function DocketEditPage() {
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Quick presets</p>
                     <div className="flex flex-wrap gap-2">
                       {TIME_PRESETS.map((preset) => (
-                        <button
+                        <Button
                           key={preset.label}
                           type="button"
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
                             setStartTime(preset.start)
                             setFinishTime(preset.finish)
                           }}
-                          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
                         >
                           {preset.label}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   </div>
 
                   {/* Lot selection */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <Label>
                       Allocate to Lot
-                    </label>
+                    </Label>
                     {assignedLots.length === 1 ? (
-                      <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg mt-1">
                         <MapPin className="h-4 w-4 text-gray-400" />
                         <span className="text-gray-900 dark:text-white">{assignedLots[0].lotNumber}</span>
                         <Check className="h-4 w-4 text-green-500 ml-auto" />
                       </div>
                     ) : (
-                      <select
+                      <NativeSelect
                         value={selectedLotId}
                         onChange={(e) => setSelectedLotId(e.target.value)}
-                        className="w-full h-12 px-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="mt-1 h-12"
                       >
                         <option value="">Select a lot</option>
                         {assignedLots.map((lot) => (
@@ -1045,7 +1056,7 @@ export function DocketEditPage() {
                             {lot.lotNumber} {lot.activity && `- ${lot.activity}`}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     )}
                   </div>
                 </>
@@ -1055,10 +1066,10 @@ export function DocketEditPage() {
                 <>
                   {/* Hours input */}
                   <div>
-                    <label htmlFor="hours" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <Label htmlFor="hours">
                       Hours Operated
-                    </label>
-                    <input
+                    </Label>
+                    <Input
                       id="hours"
                       type="number"
                       step="0.5"
@@ -1066,17 +1077,17 @@ export function DocketEditPage() {
                       max="24"
                       value={hoursOperated}
                       onChange={(e) => setHoursOperated(e.target.value)}
-                      className="w-full h-12 px-3 text-lg border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-1 h-12 text-lg"
                     />
                   </div>
 
                   {/* Wet/Dry toggle */}
                   {selectedPlant && selectedPlant.wetRate > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <Label>
                         Condition
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
+                      </Label>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
                         <button
                           type="button"
                           className={cn(
@@ -1126,13 +1137,13 @@ export function DocketEditPage() {
 
             {/* Footer */}
             <div className="px-4 pb-8 pt-2">
-              <button
+              <Button
                 onClick={sheetType === 'labour' ? addLabourEntry : addPlantEntry}
                 disabled={saving || (sheetType === 'labour' && !selectedLotId)}
                 className={cn(
-                  'w-full h-12 flex items-center justify-center gap-2 font-medium rounded-lg transition-colors',
+                  'w-full h-12',
                   saving || (sheetType === 'labour' && !selectedLotId)
-                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                    ? ''
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
                 )}
               >
@@ -1144,7 +1155,7 @@ export function DocketEditPage() {
                 ) : (
                   'Add to Docket'
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

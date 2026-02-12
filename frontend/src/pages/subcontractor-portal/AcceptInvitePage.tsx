@@ -1,10 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Building2, ClipboardCheck, User, AlertCircle, Loader2, Check, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
 import { extractErrorMessage, isNotFound } from '@/lib/errorHandling'
+import { acceptInviteSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>
 
 interface Invitation {
   id: string
@@ -26,24 +35,39 @@ export function AcceptInvitePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [accepting, setAccepting] = useState(false)
-
-  // Registration form state
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [tosAccepted, setTosAccepted] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  // Password requirements (must match backend: 12+ chars, uppercase, lowercase, number, special)
-  const [passwordChecks, setPasswordChecks] = useState({
-    minLength: false,
-    hasUppercase: false,
-    hasLowercase: false,
-    hasNumber: false,
-    hasSpecial: false,
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<AcceptInviteFormData>({
+    resolver: zodResolver(acceptInviteSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      fullName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      tosAccepted: false,
+    },
   })
+
+  // Watch password for real-time validation feedback
+  const password = watch('password', '')
+  const confirmPassword = watch('confirmPassword', '')
+
+  // Password requirements (must match backend: 12+ chars, uppercase, lowercase, number, special)
+  const passwordChecks = useMemo(() => ({
+    minLength: password.length >= MIN_PASSWORD_LENGTH,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /\d/.test(password),
+    hasSpecial: /[^A-Za-z0-9]/.test(password),
+  }), [password])
 
   // Fetch invitation details
   useEffect(() => {
@@ -60,10 +84,10 @@ export function AcceptInvitePage() {
 
         // Pre-fill email from invitation
         if (data.invitation.primaryContactEmail) {
-          setEmail(data.invitation.primaryContactEmail)
+          setValue('email', data.invitation.primaryContactEmail)
         }
         if (data.invitation.primaryContactName) {
-          setFullName(data.invitation.primaryContactName)
+          setValue('fullName', data.invitation.primaryContactName)
         }
       } catch (err) {
         if (isNotFound(err)) {
@@ -77,18 +101,7 @@ export function AcceptInvitePage() {
     }
 
     fetchInvitation()
-  }, [invitationId])
-
-  // Update password checks
-  useEffect(() => {
-    setPasswordChecks({
-      minLength: password.length >= 12,
-      hasUppercase: /[A-Z]/.test(password),
-      hasLowercase: /[a-z]/.test(password),
-      hasNumber: /\d/.test(password),
-      hasSpecial: /[^A-Za-z0-9]/.test(password),
-    })
-  }, [password])
+  }, [invitationId, setValue])
 
   // Handle accepting invitation for logged-in users
   const handleAcceptAsLoggedIn = async () => {
@@ -115,64 +128,30 @@ export function AcceptInvitePage() {
   }
 
   // Handle registration and accepting invitation
-  const handleRegisterAndAccept = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const onRegisterSubmit = async (data: AcceptInviteFormData) => {
     setFormError(null)
-
-    // Validation
-    if (!fullName.trim()) {
-      setFormError('Please enter your full name')
-      return
-    }
-
-    if (!email.trim()) {
-      setFormError('Please enter your email')
-      return
-    }
-
-    if (!password) {
-      setFormError('Please enter a password')
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setFormError('Passwords do not match')
-      return
-    }
-
-    const allPasswordChecks = Object.values(passwordChecks).every(Boolean)
-    if (!allPasswordChecks) {
-      setFormError('Password does not meet all requirements')
-      return
-    }
-
-    if (!tosAccepted) {
-      setFormError('You must accept the Terms of Service')
-      return
-    }
-
     setAccepting(true)
 
     try {
-      const data = await apiFetch<{ user: any; token: string; company: { companyName: string } }>('/api/auth/register-and-accept-invitation', {
+      const result = await apiFetch<{ user: any; token: string; company: { companyName: string } }>('/api/auth/register-and-accept-invitation', {
         method: 'POST',
         body: JSON.stringify({
-          email,
-          password,
-          fullName,
+          email: data.email,
+          password: data.password,
+          fullName: data.fullName,
           invitationId,
-          tosAccepted,
+          tosAccepted: data.tosAccepted,
         }),
       })
 
       // Store auth token in localStorage
       localStorage.setItem('siteproof_auth', JSON.stringify({
-        user: data.user,
-        token: data.token,
+        user: result.user,
+        token: result.token,
       }))
       localStorage.setItem('siteproof_remember_me', 'true')
 
-      toast({ title: 'Account Created!', description: `You've joined ${data.company.companyName}.`, variant: 'success' })
+      toast({ title: 'Account Created!', description: `You've joined ${result.company.companyName}.`, variant: 'success' })
 
       // Force page reload to update auth state
       window.location.href = '/subcontractor-portal'
@@ -304,10 +283,10 @@ export function AcceptInvitePage() {
                   <p className="text-sm text-red-600">{formError}</p>
                 </div>
               )}
-              <button
+              <Button
                 onClick={handleAcceptAsLoggedIn}
                 disabled={accepting}
-                className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-3"
               >
                 {accepting ? (
                   <>
@@ -317,7 +296,7 @@ export function AcceptInvitePage() {
                 ) : (
                   'Accept Invitation'
                 )}
-              </button>
+              </Button>
               <p className="text-center text-sm text-gray-500 mt-4">
                 Not you?{' '}
                 <Link to="/auth/login" className="text-blue-600 hover:underline">
@@ -327,7 +306,7 @@ export function AcceptInvitePage() {
             </div>
           ) : (
             // Not logged in - show registration form
-            <form onSubmit={handleRegisterAndAccept}>
+            <form onSubmit={handleSubmit(onRegisterSubmit)}>
               <h3 className="text-lg font-semibold dark:text-white mb-1">Create Account</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Create your account to accept this invitation
@@ -342,33 +321,40 @@ export function AcceptInvitePage() {
 
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <Label htmlFor="fullName" className="mb-1">
                     Full Name
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     id="fullName"
                     type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    {...register('fullName')}
                     placeholder="John Smith"
                     autoComplete="name"
-                    className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`py-3 ${
+                      errors.fullName ? 'border-destructive' : ''
+                    }`}
                   />
+                  {errors.fullName && (
+                    <p className="mt-1 text-sm text-destructive" role="alert">
+                      {errors.fullName.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <Label htmlFor="email" className="mb-1">
                     Email
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     id="email"
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    {...register('email')}
                     placeholder="john@company.com"
                     autoComplete="email"
                     disabled={!!invitation.primaryContactEmail}
-                    className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-600"
+                    className={`py-3 ${
+                      errors.email ? 'border-destructive' : ''
+                    }`}
                   />
                   {invitation.primaryContactEmail && (
                     <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
@@ -376,35 +362,43 @@ export function AcceptInvitePage() {
                       Email pre-filled from invitation
                     </p>
                   )}
+                  {errors.email && (
+                    <p className="mt-1 text-sm text-destructive" role="alert">
+                      {errors.email.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <Label htmlFor="password" className="mb-1">
                     Password
-                  </label>
+                  </Label>
                   <div className="relative">
-                    <input
+                    <Input
                       id="password"
                       type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      {...register('password')}
                       placeholder="Create a secure password"
                       autoComplete="new-password"
-                      className="w-full px-3 py-3 pr-10 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={`py-3 pr-10 ${
+                        errors.password ? 'border-destructive' : ''
+                      }`}
                     />
-                    <button
+                    <Button
                       type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-gray-400 hover:text-gray-600"
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                    </Button>
                   </div>
                   {/* Password requirements */}
                   {password && (
                     <div className="text-xs space-y-1 mt-2">
                       <p className={passwordChecks.minLength ? 'text-green-600' : 'text-gray-500'}>
-                        {passwordChecks.minLength ? '✓' : '○'} At least 12 characters
+                        {passwordChecks.minLength ? '✓' : '○'} At least {MIN_PASSWORD_LENGTH} characters
                       </p>
                       <p className={passwordChecks.hasUppercase ? 'text-green-600' : 'text-gray-500'}>
                         {passwordChecks.hasUppercase ? '✓' : '○'} One uppercase letter
@@ -420,23 +414,34 @@ export function AcceptInvitePage() {
                       </p>
                     </div>
                   )}
+                  {errors.password && (
+                    <p className="mt-1 text-sm text-destructive" role="alert">
+                      {errors.password.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <Label htmlFor="confirmPassword" className="mb-1">
                     Confirm Password
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     id="confirmPassword"
                     type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    {...register('confirmPassword')}
                     placeholder="Confirm your password"
                     autoComplete="new-password"
-                    className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`py-3 ${
+                      errors.confirmPassword ? 'border-destructive' : ''
+                    }`}
                   />
-                  {confirmPassword && password !== confirmPassword && (
+                  {confirmPassword && password !== confirmPassword && !errors.confirmPassword && (
                     <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
+                  )}
+                  {errors.confirmPassword && (
+                    <p className="mt-1 text-sm text-destructive" role="alert">
+                      {errors.confirmPassword.message}
+                    </p>
                   )}
                 </div>
 
@@ -444,11 +449,10 @@ export function AcceptInvitePage() {
                   <input
                     id="tos"
                     type="checkbox"
-                    checked={tosAccepted}
-                    onChange={(e) => setTosAccepted(e.target.checked)}
+                    {...register('tosAccepted')}
                     className="mt-1"
                   />
-                  <label htmlFor="tos" className="text-sm text-gray-600 dark:text-gray-400">
+                  <Label htmlFor="tos" className="text-sm text-gray-600 dark:text-gray-400 font-normal">
                     I agree to the{' '}
                     <Link to="/terms-of-service" target="_blank" className="text-blue-600 hover:underline">
                       Terms of Service
@@ -457,13 +461,18 @@ export function AcceptInvitePage() {
                     <Link to="/privacy-policy" target="_blank" className="text-blue-600 hover:underline">
                       Privacy Policy
                     </Link>
-                  </label>
+                  </Label>
                 </div>
+                {errors.tosAccepted && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {errors.tosAccepted.message}
+                  </p>
+                )}
 
-                <button
+                <Button
                   type="submit"
                   disabled={accepting}
-                  className="w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full py-3"
                 >
                   {accepting ? (
                     <>
@@ -473,7 +482,7 @@ export function AcceptInvitePage() {
                   ) : (
                     'Create Account & Accept'
                   )}
-                </button>
+                </Button>
 
                 <p className="text-center text-sm text-gray-500">
                   Already have an account?{' '}

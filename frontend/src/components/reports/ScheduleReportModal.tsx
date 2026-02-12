@@ -1,7 +1,26 @@
 import { useState, useEffect } from 'react'
-import { X, Calendar, Clock, Mail, AlertCircle } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Calendar, Clock, Mail, AlertCircle } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { extractErrorMessage } from '@/lib/errorHandling'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+
+const scheduleFormSchema = z.object({
+  reportType: z.string().min(1, 'Report type is required'),
+  frequency: z.string().min(1, 'Frequency is required'),
+  dayOfWeek: z.number(),
+  dayOfMonth: z.number(),
+  timeOfDay: z.string().min(1, 'Time is required'),
+  recipients: z.string().min(1, 'At least one recipient is required'),
+})
+
+type ScheduleFormData = z.infer<typeof scheduleFormSchema>
 
 interface ScheduledReport {
   id: string
@@ -49,15 +68,29 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Form state for creating new schedule
   const [showForm, setShowForm] = useState(false)
-  const [reportType, setReportType] = useState('lot-status')
-  const [frequency, setFrequency] = useState('weekly')
-  const [dayOfWeek, setDayOfWeek] = useState(1) // Monday
-  const [dayOfMonth, setDayOfMonth] = useState(1)
-  const [timeOfDay, setTimeOfDay] = useState('09:00')
-  const [recipients, setRecipients] = useState('')
+
+  const {
+    register,
+    handleSubmit: rhfHandleSubmit,
+    watch,
+    reset: resetForm,
+    formState: { errors: formErrors },
+  } = useForm<ScheduleFormData>({
+    resolver: zodResolver(scheduleFormSchema),
+    mode: 'onBlur',
+    defaultValues: {
+      reportType: 'lot-status',
+      frequency: 'weekly',
+      dayOfWeek: 1,
+      dayOfMonth: 1,
+      timeOfDay: '09:00',
+      recipients: '',
+    },
+  })
+
+  const frequency = watch('frequency')
+  const recipients = watch('recipients')
 
   useEffect(() => {
     fetchSchedules()
@@ -79,8 +112,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
     }
   }
 
-  const handleCreateSchedule = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleCreateSchedule = async (data: ScheduleFormData) => {
     setSaving(true)
     setError(null)
 
@@ -89,12 +121,12 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
         method: 'POST',
         body: JSON.stringify({
           projectId,
-          reportType,
-          frequency,
-          dayOfWeek: frequency === 'weekly' ? dayOfWeek : null,
-          dayOfMonth: frequency === 'monthly' ? dayOfMonth : null,
-          timeOfDay,
-          recipients: recipients.split(',').map((e) => e.trim()).filter(Boolean),
+          reportType: data.reportType,
+          frequency: data.frequency,
+          dayOfWeek: data.frequency === 'weekly' ? data.dayOfWeek : null,
+          dayOfMonth: data.frequency === 'monthly' ? data.dayOfMonth : null,
+          timeOfDay: data.timeOfDay,
+          recipients: data.recipients.split(',').map((e) => e.trim()).filter(Boolean),
         }),
       })
 
@@ -143,15 +175,6 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
     }
   }
 
-  const resetForm = () => {
-    setReportType('lot-status')
-    setFrequency('weekly')
-    setDayOfWeek(1)
-    setDayOfMonth(1)
-    setTimeOfDay('09:00')
-    setRecipients('')
-  }
-
   const formatNextRun = (dateStr: string | null) => {
     if (!dateStr) return 'Not scheduled'
     const date = new Date(dateStr)
@@ -179,19 +202,15 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-card border rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Schedule Email Reports
-          </h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Modal onClose={onClose} className="max-w-2xl">
+      <ModalHeader>
+        <span className="flex items-center gap-2">
+          <Calendar className="h-5 w-5" />
+          Schedule Email Reports
+        </span>
+      </ModalHeader>
 
+      <ModalBody>
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
@@ -204,12 +223,9 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-medium">Scheduled Reports</h3>
             {!showForm && (
-              <button
-                onClick={() => setShowForm(true)}
-                className="text-sm px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-              >
+              <Button size="sm" onClick={() => setShowForm(true)}>
                 + New Schedule
-              </button>
+              </Button>
             )}
           </div>
 
@@ -262,22 +278,25 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <button
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleToggleActive(schedule)}
-                        className={`text-xs px-2 py-1 rounded ${
+                        className={
                           schedule.isActive
-                            ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                            : 'bg-green-100 text-green-700 hover:bg-green-200'
-                        }`}
+                            ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200'
+                            : 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200'
+                        }
                       >
                         {schedule.isActive ? 'Pause' : 'Activate'}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
                         onClick={() => handleDeleteSchedule(schedule.id)}
-                        className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
                       >
                         Delete
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -288,140 +307,134 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
 
         {/* Create New Schedule Form */}
         {showForm && (
-          <form onSubmit={handleCreateSchedule} className="border-t pt-6">
+          <form onSubmit={rhfHandleSubmit(handleCreateSchedule)} className="border-t pt-6">
             <h3 className="font-medium mb-4">Create New Schedule</h3>
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               {/* Report Type */}
               <div>
-                <label className="block text-sm font-medium mb-1">Report Type</label>
-                <select
-                  value={reportType}
-                  onChange={(e) => setReportType(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md bg-background"
+                <Label className="mb-1">Report Type</Label>
+                <NativeSelect
+                  {...register('reportType')}
+                  className={formErrors.reportType ? 'border-destructive' : ''}
                 >
                   {REPORT_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>
                       {type.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
+                {formErrors.reportType && (
+                  <p className="mt-1 text-sm text-destructive" role="alert">{formErrors.reportType.message}</p>
+                )}
               </div>
 
               {/* Frequency */}
               <div>
-                <label className="block text-sm font-medium mb-1">Frequency</label>
-                <select
-                  value={frequency}
-                  onChange={(e) => setFrequency(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md bg-background"
+                <Label className="mb-1">Frequency</Label>
+                <NativeSelect
+                  {...register('frequency')}
+                  className={formErrors.frequency ? 'border-destructive' : ''}
                 >
                   {FREQUENCIES.map((freq) => (
                     <option key={freq.value} value={freq.value}>
                       {freq.label}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
+                {formErrors.frequency && (
+                  <p className="mt-1 text-sm text-destructive" role="alert">{formErrors.frequency.message}</p>
+                )}
               </div>
 
               {/* Day of Week (for weekly) */}
               {frequency === 'weekly' && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">Day of Week</label>
-                  <select
-                    value={dayOfWeek}
-                    onChange={(e) => setDayOfWeek(Number(e.target.value))}
-                    className="w-full px-3 py-2 border rounded-md bg-background"
-                  >
+                  <Label className="mb-1">Day of Week</Label>
+                  <NativeSelect {...register('dayOfWeek', { valueAsNumber: true })}>
                     {DAYS_OF_WEEK.map((day) => (
                       <option key={day.value} value={day.value}>
                         {day.label}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               )}
 
               {/* Day of Month (for monthly) */}
               {frequency === 'monthly' && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">Day of Month</label>
-                  <select
-                    value={dayOfMonth}
-                    onChange={(e) => setDayOfMonth(Number(e.target.value))}
-                    className="w-full px-3 py-2 border rounded-md bg-background"
-                  >
+                  <Label className="mb-1">Day of Month</Label>
+                  <NativeSelect {...register('dayOfMonth', { valueAsNumber: true })}>
                     {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
                       <option key={day} value={day}>
                         {day}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               )}
 
               {/* Time of Day */}
               <div>
-                <label className="block text-sm font-medium mb-1">Time</label>
-                <input
+                <Label className="mb-1">Time</Label>
+                <Input
                   type="time"
-                  value={timeOfDay}
-                  onChange={(e) => setTimeOfDay(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  {...register('timeOfDay')}
+                  className={formErrors.timeOfDay ? 'border-destructive' : ''}
                 />
+                {formErrors.timeOfDay && (
+                  <p className="mt-1 text-sm text-destructive" role="alert">{formErrors.timeOfDay.message}</p>
+                )}
               </div>
             </div>
 
             {/* Recipients */}
             <div className="mb-4">
-              <label className="block text-sm font-medium mb-1">
+              <Label className="mb-1">
                 Recipients (comma-separated emails)
-              </label>
-              <input
-                type="text"
-                value={recipients}
-                onChange={(e) => setRecipients(e.target.value)}
+              </Label>
+              <Input
+                {...register('recipients')}
                 placeholder="email1@example.com, email2@example.com"
-                className="w-full px-3 py-2 border rounded-md bg-background"
-                required
+                className={formErrors.recipients ? 'border-destructive' : ''}
               />
+              {formErrors.recipients && (
+                <p className="mt-1 text-sm text-destructive" role="alert">{formErrors.recipients.message}</p>
+              )}
             </div>
 
             {/* Form Actions */}
             <div className="flex gap-3 justify-end">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => {
                   setShowForm(false)
                   resetForm()
                 }}
-                className="px-4 py-2 border rounded-md hover:bg-muted"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                disabled={saving || !recipients.trim()}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                disabled={saving || !recipients?.trim()}
               >
                 {saving ? 'Creating...' : 'Create Schedule'}
-              </button>
+              </Button>
             </div>
           </form>
         )}
+      </ModalBody>
 
-        {/* Close Button */}
-        {!showForm && (
-          <div className="flex justify-end pt-4 border-t">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border rounded-md hover:bg-muted"
-            >
-              Close
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+      {/* Close Button */}
+      {!showForm && (
+        <ModalFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </ModalFooter>
+      )}
+    </Modal>
   )
 }

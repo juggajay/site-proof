@@ -1,6 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2, LayoutGrid, LayoutList, MapPin } from 'lucide-react'
 import { FilterBottomSheet, FilterTriggerButton, type FilterConfig, type FilterValues } from '@/components/mobile/FilterBottomSheet'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 
 // Column configuration
 export const COLUMN_CONFIG = [
@@ -280,13 +285,13 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
       <>
         <div className="flex items-center gap-3">
           <div className="flex-1">
-            <input
+            <Input
               id="search-input-mobile"
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               placeholder="Search lots..."
-              className="w-full rounded-lg border bg-background px-4 py-3 text-base"
+              className="py-3 text-base"
             />
           </div>
           <FilterTriggerButton
@@ -379,22 +384,24 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="search-input" className="text-sm font-medium">
+          <Label htmlFor="search-input">
             Search:
-          </label>
+          </Label>
           <div className="flex items-center">
-            <input
+            <Input
               id="search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               placeholder="Lot # or description..."
-              className="rounded-lg border bg-background px-3 py-1.5 text-sm w-48"
+              className="h-8 w-48"
             />
             {searchQuery && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => handleSearch('')}
-                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                 title="Clear search"
                 aria-label="Clear search"
               >
@@ -402,14 +409,14 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
-              </button>
+              </Button>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium">
+          <Label>
             Status:
-          </label>
+          </Label>
           <div className="relative" ref={statusDropdownRef}>
             <button
               onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
@@ -446,23 +453,27 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 </div>
                 {statusFilters.length > 0 && (
                   <div className="border-t p-2">
-                    <button
+                    <Button
+                      variant="link"
+                      size="sm"
                       onClick={() => {
                         clearStatusFilters()
                         setStatusDropdownOpen(false)
                       }}
-                      className="w-full text-sm text-primary hover:underline text-center py-1"
+                      className="w-full"
                     >
                       Clear all
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
             )}
             {statusFilters.length > 0 && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={clearStatusFilters}
-                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                 title="Clear status filter"
                 aria-label="Clear status filter"
               >
@@ -470,20 +481,20 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
-              </button>
+              </Button>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="activity-filter" className="text-sm font-medium">
+          <Label htmlFor="activity-filter">
             Activity:
-          </label>
+          </Label>
           <div className="flex items-center">
-            <select
+            <NativeSelect
               id="activity-filter"
               value={activityFilter}
               onChange={(e) => handleActivityFilter(e.target.value)}
-              className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+              className="h-8"
             >
               <option value="">All Activities</option>
               {activityTypes.map((type) => (
@@ -491,11 +502,13 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                   {(type as string).charAt(0).toUpperCase() + (type as string).slice(1)}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             {activityFilter && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => handleActivityFilter('')}
-                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                 title="Clear activity filter"
                 aria-label="Clear activity filter"
               >
@@ -503,37 +516,39 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
-              </button>
+              </Button>
             )}
           </div>
         </div>
         {/* Chainage Range Filter */}
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium">
+          <Label>
             Chainage:
-          </label>
+          </Label>
           <div className="flex items-center gap-1">
-            <input
+            <Input
               type="number"
               value={chainageMinFilter}
               onChange={(e) => onUpdateFilters({ chMin: e.target.value })}
               placeholder="Min"
-              className="rounded-lg border bg-background px-2 py-1.5 text-sm w-20"
+              className="h-8 w-20"
               aria-label="Minimum chainage"
             />
             <span className="text-muted-foreground">-</span>
-            <input
+            <Input
               type="number"
               value={chainageMaxFilter}
               onChange={(e) => onUpdateFilters({ chMax: e.target.value })}
               placeholder="Max"
-              className="rounded-lg border bg-background px-2 py-1.5 text-sm w-20"
+              className="h-8 w-20"
               aria-label="Maximum chainage"
             />
             {(chainageMinFilter || chainageMaxFilter) && (
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => onUpdateFilters({ chMin: '', chMax: '' })}
-                className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                 title="Clear chainage filter"
                 aria-label="Clear chainage filter"
               >
@@ -541,22 +556,22 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
-              </button>
+              </Button>
             )}
           </div>
         </div>
         {/* Subcontractor Filter */}
         {!isSubcontractor && subcontractors.length > 0 && (
           <div className="flex items-center gap-2">
-            <label htmlFor="subcontractor-filter" className="text-sm font-medium">
+            <Label htmlFor="subcontractor-filter">
               Subcontractor:
-            </label>
+            </Label>
             <div className="flex items-center">
-              <select
+              <NativeSelect
                 id="subcontractor-filter"
                 value={subcontractorFilter}
                 onChange={(e) => handleSubcontractorFilter(e.target.value)}
-                className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+                className="h-8"
               >
                 <option value="">All Subcontractors</option>
                 <option value="unassigned">Unassigned</option>
@@ -565,11 +580,13 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                     {sub.companyName}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               {subcontractorFilter && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => handleSubcontractorFilter('')}
-                  className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                  className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                   title="Clear subcontractor filter"
                   aria-label="Clear subcontractor filter"
                 >
@@ -577,7 +594,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -585,15 +602,15 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
         {/* Area/Zone Filter */}
         {areaZones.length > 0 && (
           <div className="flex items-center gap-2">
-            <label htmlFor="area-zone-filter" className="text-sm font-medium">
+            <Label htmlFor="area-zone-filter">
               Area/Zone:
-            </label>
+            </Label>
             <div className="flex items-center">
-              <select
+              <NativeSelect
                 id="area-zone-filter"
                 value={areaZoneFilter}
                 onChange={(e) => handleAreaZoneFilter(e.target.value)}
-                className="rounded-lg border bg-background px-3 py-1.5 text-sm"
+                className="h-8"
               >
                 <option value="">All Areas</option>
                 <option value="unassigned">Unassigned</option>
@@ -602,11 +619,13 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                     {zone}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               {areaZoneFilter && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => handleAreaZoneFilter('')}
-                  className="ml-1 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
+                  className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                   title="Clear area/zone filter"
                   aria-label="Clear area/zone filter"
                 >
@@ -614,43 +633,47 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
-                </button>
+                </Button>
               )}
             </div>
           </div>
         )}
         {(statusFilters.length > 0 || activityFilter || searchQuery || chainageMinFilter || chainageMaxFilter || subcontractorFilter || areaZoneFilter) && (
           <>
-            <button
+            <Button
+              variant="link"
+              size="sm"
               onClick={() => {
                 onUpdateFilters({ status: '', activity: '', search: '', chMin: '', chMax: '', subcontractor: '', areaZone: '' })
               }}
-              className="text-sm text-primary hover:underline"
             >
               Clear All Filters
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setShowSaveFilterModal(true)}
-              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground"
               title="Save current filter"
             >
               <Save className="h-3.5 w-3.5" />
               Save Filter
-            </button>
+            </Button>
           </>
         )}
 
         {/* Saved Filters Dropdown */}
         {savedFilters.length > 0 && (
           <div className="relative">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setSavedFiltersDropdownOpen(!savedFiltersDropdownOpen)}
-              className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm hover:bg-muted"
               title="Load saved filter"
             >
               <Bookmark className="h-4 w-4" />
               Saved ({savedFilters.length})
-            </button>
+            </Button>
             {savedFiltersDropdownOpen && (
               <>
                 <div
@@ -674,16 +697,18 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                         >
                           {filter.name}
                         </button>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={(e) => {
                             e.stopPropagation()
                             deleteSavedFilter(filter.id)
                           }}
-                          className="p-1 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-6 w-6 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
                           title="Delete filter"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -728,14 +753,15 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
 
         {/* Column Settings */}
         <div className="relative">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setColumnSettingsOpen(!columnSettingsOpen)}
-            className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-sm hover:bg-muted"
             title="Customize columns"
           >
             <Settings2 className="h-4 w-4" />
             Columns
-          </button>
+          </Button>
           {columnSettingsOpen && (
             <>
               <div
@@ -821,20 +847,19 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
 
       {/* Save Filter Modal */}
       {showSaveFilterModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="mx-4 w-full max-w-md rounded-lg bg-white dark:bg-card p-6 shadow-xl">
-            <h2 className="text-lg font-semibold">Save Current Filter</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
+        <Modal onClose={() => { setShowSaveFilterModal(false); setNewFilterName('') }} className="max-w-md">
+          <ModalHeader>Save Current Filter</ModalHeader>
+          <ModalBody>
+            <p className="text-sm text-muted-foreground mb-4">
               Save the current filter settings for quick access later.
             </p>
-            <div className="mt-4">
-              <label className="block text-sm font-medium mb-1">Filter Name</label>
-              <input
+            <div>
+              <Label className="mb-1">Filter Name</Label>
+              <Input
                 type="text"
                 value={newFilterName}
                 onChange={(e) => setNewFilterName(e.target.value)}
                 placeholder="e.g., Completed Earthworks"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') saveCurrentFilter()
@@ -851,26 +876,25 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 {searchQuery && <li>Search: &quot;{searchQuery}&quot;</li>}
               </ul>
             </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowSaveFilterModal(false)
-                  setNewFilterName('')
-                }}
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveCurrentFilter}
-                disabled={!newFilterName.trim()}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                Save Filter
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSaveFilterModal(false)
+                setNewFilterName('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={saveCurrentFilter}
+              disabled={!newFilterName.trim()}
+            >
+              Save Filter
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
     </>
   )

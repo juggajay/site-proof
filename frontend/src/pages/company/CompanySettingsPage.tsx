@@ -3,6 +3,12 @@ import { useAuth } from '@/lib/auth'
 import { Building2, Save, AlertTriangle, Upload, Crown, UserCog, Loader2, X, DollarSign } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { extractErrorMessage, isNotFound } from '@/lib/errorHandling'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 
 interface CompanyMember {
   id: string
@@ -250,33 +256,31 @@ export function CompanySettingsPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium mb-1">Company Name *</label>
-            <input
+            <Label className="mb-1">Company Name *</Label>
+            <Input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full rounded-md border bg-background px-3 py-2"
               placeholder="Enter company name"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">ABN</label>
-            <input
+            <Label className="mb-1">ABN</Label>
+            <Input
               type="text"
               value={formData.abn}
               onChange={(e) => setFormData(prev => ({ ...prev, abn: e.target.value }))}
-              className="w-full rounded-md border bg-background px-3 py-2"
               placeholder="XX XXX XXX XXX"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Subscription Tier</label>
-            <input
+            <Label className="mb-1">Subscription Tier</Label>
+            <Input
               type="text"
               value={(company?.subscriptionTier || 'basic').charAt(0).toUpperCase() + (company?.subscriptionTier || 'basic').slice(1)}
-              className="w-full rounded-md border bg-background px-3 py-2 bg-muted capitalize"
+              className="bg-muted capitalize"
               disabled
             />
             <p className="text-xs text-muted-foreground mt-1">Contact support to upgrade</p>
@@ -285,7 +289,7 @@ export function CompanySettingsPage() {
           <div className="sm:col-span-2 p-4 rounded-lg bg-muted/50 border">
             <div className="flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium">Project Usage</label>
+                <Label>Project Usage</Label>
                 <p className="text-sm text-muted-foreground">
                   {company?.projectCount || 0} of {company?.projectLimit === Infinity ? 'Unlimited' : company?.projectLimit || 3} projects used
                 </p>
@@ -317,7 +321,7 @@ export function CompanySettingsPage() {
           <div className="sm:col-span-2 p-4 rounded-lg bg-muted/50 border">
             <div className="flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium">User Usage</label>
+                <Label>User Usage</Label>
                 <p className="text-sm text-muted-foreground">
                   {company?.userCount || 0} of {company?.userLimit === Infinity ? 'Unlimited' : company?.userLimit || 5} users in company
                 </p>
@@ -347,11 +351,11 @@ export function CompanySettingsPage() {
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium mb-1">Address</label>
-            <textarea
+            <Label className="mb-1">Address</Label>
+            <Textarea
               value={formData.address}
               onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-              className="w-full rounded-md border bg-background px-3 py-2 min-h-[80px]"
+              className="min-h-[80px]"
               placeholder="Enter company address"
             />
           </div>
@@ -359,7 +363,7 @@ export function CompanySettingsPage() {
 
         {/* Logo Upload */}
         <div>
-          <label className="block text-sm font-medium mb-2">Company Logo</label>
+          <Label className="mb-2">Company Logo</Label>
           {/* Hidden file input */}
           <input
             ref={logoInputRef}
@@ -377,14 +381,15 @@ export function CompanySettingsPage() {
                   className="h-full w-full object-contain"
                 />
                 {/* Remove button overlay */}
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setFormData(prev => ({ ...prev, logoUrl: '' }))}
-                  className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
                   title="Remove logo"
                 >
                   <X className="h-6 w-6 text-white" />
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="flex h-20 w-20 items-center justify-center rounded-lg border bg-muted">
@@ -392,11 +397,11 @@ export function CompanySettingsPage() {
               </div>
             )}
             <div className="flex flex-col gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={handleLogoUpload}
                 disabled={logoUploading}
-                className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50"
               >
                 {logoUploading ? (
                   <>
@@ -409,15 +414,17 @@ export function CompanySettingsPage() {
                     {formData.logoUrl ? 'Change Logo' : 'Upload Logo'}
                   </>
                 )}
-              </button>
+              </Button>
               {formData.logoUrl && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setFormData(prev => ({ ...prev, logoUrl: '' }))}
-                  className="text-sm text-red-600 hover:text-red-700"
+                  className="text-red-600 hover:text-red-700"
                 >
                   Remove
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -440,14 +447,13 @@ export function CompanySettingsPage() {
         )}
 
         {/* Save Button */}
-        <button
+        <Button
           onClick={handleSaveSettings}
           disabled={saving}
-          className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         >
           <Save className="h-4 w-4" />
           {saving ? 'Saving...' : 'Save Settings'}
-        </button>
+        </Button>
       </div>
 
       {/* Account Info */}
@@ -490,7 +496,7 @@ export function CompanySettingsPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="p-4 rounded-lg bg-muted/50 border">
-              <label className="block text-sm font-medium">Current Plan</label>
+              <Label>Current Plan</Label>
               <p className="text-2xl font-bold capitalize mt-1">
                 {company?.subscriptionTier || 'Basic'}
               </p>
@@ -502,7 +508,7 @@ export function CompanySettingsPage() {
             </div>
 
             <div className="p-4 rounded-lg bg-muted/50 border">
-              <label className="block text-sm font-medium">Billing Cycle</label>
+              <Label>Billing Cycle</Label>
               <p className="text-lg font-semibold mt-1">Monthly</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Next billing date: {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}
@@ -510,7 +516,7 @@ export function CompanySettingsPage() {
             </div>
 
             <div className="sm:col-span-2 p-4 rounded-lg bg-muted/50 border">
-              <label className="block text-sm font-medium mb-2">Plan Limits</label>
+              <Label className="mb-2">Plan Limits</Label>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Projects</span>
@@ -533,20 +539,19 @@ export function CompanySettingsPage() {
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button
+            <Button
               type="button"
-              className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
               onClick={() => alert('Contact sales@siteproof.com to upgrade your plan')}
             >
               Upgrade Plan
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="flex items-center gap-2 rounded-md border px-4 py-2 hover:bg-muted"
+              variant="outline"
               onClick={() => alert('Contact billing@siteproof.com for billing inquiries')}
             >
               Manage Payment Method
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -575,27 +580,33 @@ export function CompanySettingsPage() {
             </ul>
           </div>
 
-          <button
+          <Button
+            variant="outline"
             onClick={handleOpenTransferModal}
-            className="flex items-center gap-2 rounded-md border border-amber-400 bg-amber-100 px-4 py-2 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
+            className="border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
           >
             <UserCog className="h-4 w-4" />
             Transfer Ownership
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Transfer Ownership Modal */}
       {showTransferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
+        <Modal onClose={() => {
+          setShowTransferModal(false)
+          setTransferError('')
+          setSelectedNewOwner('')
+        }} className="max-w-md">
+          <ModalHeader>
+            <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
                 <Crown className="h-6 w-6 text-amber-600" />
               </div>
-              <h2 className="text-xl font-semibold">Transfer Ownership</h2>
+              Transfer Ownership
             </div>
-
+          </ModalHeader>
+          <ModalBody>
             {loadingMembers ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -612,13 +623,12 @@ export function CompanySettingsPage() {
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <Label className="mb-2">
                     Select New Owner
-                  </label>
-                  <select
+                  </Label>
+                  <NativeSelect
                     value={selectedNewOwner}
                     onChange={(e) => setSelectedNewOwner(e.target.value)}
-                    className="w-full rounded-md border bg-background px-3 py-2"
                   >
                     <option value="">Choose a team member...</option>
                     {members.map((member) => (
@@ -626,7 +636,7 @@ export function CompanySettingsPage() {
                         {member.fullName || member.email} ({member.roleInCompany})
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
 
                 {selectedNewOwner && (
@@ -649,38 +659,37 @@ export function CompanySettingsPage() {
                 )}
               </div>
             )}
-
-            <div className="flex gap-3 pt-4 mt-4 border-t">
-              <button
-                onClick={() => {
-                  setShowTransferModal(false)
-                  setTransferError('')
-                  setSelectedNewOwner('')
-                }}
-                disabled={transferring}
-                className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTransferModal(false)
+                setTransferError('')
+                setSelectedNewOwner('')
+              }}
+              disabled={transferring}
+            >
+              Cancel
+            </Button>
+            {members.length > 0 && (
+              <Button
+                onClick={handleTransferOwnership}
+                disabled={transferring || !selectedNewOwner}
+                className="bg-amber-600 text-white hover:bg-amber-700"
               >
-                Cancel
-              </button>
-              {members.length > 0 && (
-                <button
-                  onClick={handleTransferOwnership}
-                  disabled={transferring || !selectedNewOwner}
-                  className="flex-1 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-                >
-                  {transferring ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Transferring...
-                    </>
-                  ) : (
-                    'Transfer Ownership'
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+                {transferring ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Transferring...
+                  </>
+                ) : (
+                  'Transfer Ownership'
+                )}
+              </Button>
+            )}
+          </ModalFooter>
+        </Modal>
       )}
     </div>
   )

@@ -1,7 +1,9 @@
 import { useState, useRef } from 'react'
 import { apiFetch } from '@/lib/api'
 import { toast } from '@/components/ui/toaster'
-import { Upload, FileText, AlertCircle, AlertTriangle, CheckCircle2, X, Loader2, Download } from 'lucide-react'
+import { Upload, FileText, AlertCircle, AlertTriangle, CheckCircle2, Loader2, Download } from 'lucide-react'
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
 
 interface ImportLotsModalProps {
   projectId: string
@@ -353,19 +355,15 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-card border rounded-lg shadow-xl w-full max-w-2xl p-6 m-4 max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Import Lots from CSV
-          </h2>
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Modal onClose={onClose} className="max-w-2xl">
+      <ModalHeader>
+        <span className="flex items-center gap-2">
+          <Upload className="h-5 w-5" />
+          Import Lots from CSV
+        </span>
+      </ModalHeader>
 
+      <ModalBody className="max-h-[70vh] overflow-hidden flex flex-col">
         {/* Step 1: Upload */}
         {step === 'upload' && (
           <div className="space-y-4">
@@ -383,19 +381,13 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                 className="hidden"
               />
               <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-                >
+                <Button onClick={() => fileInputRef.current?.click()}>
                   Select CSV File
-                </button>
-                <button
-                  onClick={handleDownloadTemplate}
-                  className="px-4 py-2 border rounded-md hover:bg-muted flex items-center gap-2"
-                >
+                </Button>
+                <Button variant="outline" onClick={handleDownloadTemplate}>
                   <Download className="h-4 w-4" />
                   Download Template
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -506,33 +498,32 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                 </label>
                 <span className="text-sm text-muted-foreground">
                   {strictMode
-                    ? '— If any lot fails, no lots will be created'
-                    : '— Partial imports allowed (some may fail)'}
+                    ? '-- If any lot fails, no lots will be created'
+                    : '-- Partial imports allowed (some may fail)'}
                 </span>
               </div>
 
               {/* Actions */}
               <div className="flex gap-3">
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => {
                     setValidationResult(null)
                     setStep('upload')
                   }}
-                  className="px-4 py-2 border rounded-md hover:bg-muted"
                 >
                   Upload Different File
-                </button>
+                </Button>
                 <div className="flex-1" />
-                <button onClick={onClose} className="px-4 py-2 border rounded-md hover:bg-muted">
+                <Button variant="outline" onClick={onClose}>
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleImport}
                   disabled={!validationResult.isValid}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Import {validationResult.lots.length} Lots
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -552,7 +543,7 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
             <p className="text-sm text-muted-foreground">{importProgress}% complete</p>
           </div>
         )}
-      </div>
-    </div>
+      </ModalBody>
+    </Modal>
   )
 }

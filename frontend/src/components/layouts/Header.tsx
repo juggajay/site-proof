@@ -3,9 +3,14 @@ import { apiFetch } from '@/lib/api'
 import { Bell, LogOut, User, ChevronDown, FolderKanban, AlertCircle, CheckCircle, Clock, Settings, UserCircle, Search, Sun, Moon } from 'lucide-react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
+import { createMutationErrorHandler } from '@/lib/errorHandling'
 import { Breadcrumbs } from './Breadcrumbs'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { useTheme } from '@/lib/theme'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface Project {
   id: string
@@ -34,17 +39,16 @@ export function Header() {
   const location = useLocation()
   const { projectId } = useParams()
   const { setTheme, resolvedTheme } = useTheme()
-  const [projects, setProjects] = useState<Project[]>([])
+  const queryClient = useQueryClient()
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false)
   const [projectSearchTerm, setProjectSearchTerm] = useState('')
   const projectSelectorRef = useRef<HTMLDivElement>(null)
   const projectSearchInputRef = useRef<HTMLInputElement>(null)
 
-  // Notification state
-  const [notifications, setNotifications] = useState<Notification[]>([])
-  const [unreadCount, setUnreadCount] = useState(0)
+  // Notification UI state
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const [notificationFilter, setNotificationFilter] = useState<'all' | 'mention' | 'info' | 'warning'>('all')
+  const [hideOldNotifications, setHideOldNotifications] = useState(false)
   const notificationRef = useRef<HTMLDivElement>(null)
 
   // User menu state
@@ -53,6 +57,22 @@ export function Header() {
 
   // Global search state
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+
+  // Fetch user's projects via TanStack Query
+  const { data: projectsData } = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => apiFetch<{ projects: Project[] }>('/api/projects'),
+  })
+  const projects = projectsData?.projects || []
+
+  // Fetch notifications with polling (every 60 seconds)
+  const { data: notificationsData } = useQuery({
+    queryKey: queryKeys.notifications,
+    queryFn: () => apiFetch<{ notifications: Notification[]; unreadCount: number }>('/api/notifications'),
+    refetchInterval: 60000,
+  })
+  const notifications = notificationsData?.notifications || []
+  const unreadCount = notificationsData?.unreadCount || 0
 
   // Find the current project from the list
   const currentProject = projects.find(p => p.id === projectId)
@@ -63,17 +83,6 @@ export function Header() {
     p.projectNumber.toLowerCase().includes(projectSearchTerm.toLowerCase())
   )
 
-  // Fetch notifications from API
-  const fetchNotifications = async () => {
-    try {
-      const data = await apiFetch<{ notifications: Notification[]; unreadCount: number }>('/api/notifications')
-      setNotifications(data.notifications || [])
-      setUnreadCount(data.unreadCount || 0)
-    } catch (err) {
-      console.error('Failed to fetch notifications:', err)
-    }
-  }
-
   // Focus search input when project selector opens and reset search when closing
   useEffect(() => {
     if (isProjectSelectorOpen) {
@@ -83,31 +92,30 @@ export function Header() {
     }
   }, [isProjectSelectorOpen])
 
-  // Fetch user's projects
-  useEffect(() => {
-    async function fetchProjects() {
-      try {
-        const data = await apiFetch<{ projects: Project[] }>('/api/projects')
-        setProjects(data.projects || [])
-      } catch (err) {
-        console.error('Failed to fetch projects:', err)
-      }
-    }
-    fetchProjects()
-  }, [])
+  // Check if notification is old (more than 7 days)
+  const isOldNotification = (createdAt: string) => {
+    const now = new Date()
+    const date = new Date(createdAt)
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = diffMs / 86400000
+    return diffDays > 7
+  }
 
-  // Fetch notifications on mount and periodically
-  useEffect(() => {
-    fetchNotifications()
-    // Poll for new notifications every 60 seconds
-    const interval = setInterval(fetchNotifications, 60000)
-    return () => clearInterval(interval)
-  }, [])
+  // Count old notifications
+  const oldNotificationCount = notifications.filter(n => isOldNotification(n.createdAt)).length
 
-  // Filter notifications by type
+  // Clear old notifications (client-side hide)
+  const clearOldNotifications = () => {
+    setHideOldNotifications(true)
+  }
+
+  // Filter notifications by type and old-notification hide state
+  const visibleNotifications = hideOldNotifications
+    ? notifications.filter(n => !isOldNotification(n.createdAt))
+    : notifications
   const filteredNotifications = notificationFilter === 'all'
-    ? notifications
-    : notifications.filter(n => n.type.toLowerCase() === notificationFilter)
+    ? visibleNotifications
+    : visibleNotifications.filter(n => n.type.toLowerCase() === notificationFilter)
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -172,8 +180,15 @@ export function Header() {
     navigate(targetPath)
   }
 
-  // Mark notification as read
-  const markAsRead = async (notification: Notification) => {
+  // Mark notification as read mutation
+  const markReadMutation = useMutation({
+    mutationFn: (notificationId: string) =>
+      apiFetch(`/api/notifications/${notificationId}/read`, { method: 'PUT' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications }),
+    onError: createMutationErrorHandler('Failed to mark notification as read'),
+  })
+
+  const markAsRead = (notification: Notification) => {
     if (notification.isRead) {
       // If already read, just navigate
       if (notification.linkUrl) {
@@ -183,53 +198,26 @@ export function Header() {
       return
     }
 
-    try {
-      await apiFetch(`/api/notifications/${notification.id}/read`, {
-        method: 'PUT',
-      })
-      setNotifications(prev =>
-        prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
-      )
-      setUnreadCount(prev => Math.max(0, prev - 1))
-
-      // Navigate if there's a link
-      if (notification.linkUrl) {
-        navigate(notification.linkUrl)
-        setIsNotificationOpen(false)
-      }
-    } catch (err) {
-      console.error('Failed to mark notification as read:', err)
-    }
+    markReadMutation.mutate(notification.id, {
+      onSuccess: () => {
+        // Navigate if there's a link
+        if (notification.linkUrl) {
+          navigate(notification.linkUrl)
+          setIsNotificationOpen(false)
+        }
+      },
+    })
   }
 
-  // Mark all as read
-  const markAllAsRead = async () => {
-    try {
-      await apiFetch('/api/notifications/read-all', {
-        method: 'PUT',
-      })
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
-      setUnreadCount(0)
-    } catch (err) {
-      console.error('Failed to mark all as read:', err)
-    }
-  }
+  // Mark all as read mutation
+  const markAllReadMutation = useMutation({
+    mutationFn: () => apiFetch('/api/notifications/read-all', { method: 'PUT' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications }),
+    onError: createMutationErrorHandler('Failed to mark all notifications as read'),
+  })
 
-  // Check if notification is old (more than 7 days)
-  const isOldNotification = (createdAt: string) => {
-    const now = new Date()
-    const date = new Date(createdAt)
-    const diffMs = now.getTime() - date.getTime()
-    const diffDays = diffMs / 86400000
-    return diffDays > 7
-  }
-
-  // Count old notifications
-  const oldNotificationCount = notifications.filter(n => isOldNotification(n.createdAt)).length
-
-  // Clear old notifications
-  const clearOldNotifications = () => {
-    setNotifications(prev => prev.filter(n => !isOldNotification(n.createdAt)))
+  const markAllAsRead = () => {
+    markAllReadMutation.mutate()
   }
 
   // Format relative time
@@ -268,9 +256,11 @@ export function Header() {
       </div>
       <div className="flex items-center gap-4">
         {/* Theme Toggle Button */}
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-          className="p-2 rounded-lg hover:bg-muted touch-manipulation"
+          className="touch-manipulation"
           aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
         >
           {resolvedTheme === 'dark' ? (
@@ -278,7 +268,7 @@ export function Header() {
           ) : (
             <Moon className="h-5 w-5" />
           )}
-        </button>
+        </Button>
 
         {/* Quick Search Button */}
         <button
@@ -324,13 +314,13 @@ export function Header() {
                   {/* Search input */}
                   <div className="relative mb-2">
                     <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
+                    <Input
                       ref={projectSearchInputRef}
                       type="text"
                       placeholder="Search projects..."
                       value={projectSearchTerm}
                       onChange={(e) => setProjectSearchTerm(e.target.value)}
-                      className="w-full rounded border bg-background pl-8 pr-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="pl-8"
                       aria-label="Search projects"
                     />
                   </div>

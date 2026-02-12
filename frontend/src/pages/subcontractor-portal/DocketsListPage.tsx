@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -9,6 +9,8 @@ import {
   MessageSquare,
   ChevronRight,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { apiFetch } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -83,30 +85,26 @@ function getDocketStatusBadge(status: string) {
 
 export function DocketsListPage() {
   const isMobile = useIsMobile()
-  const [dockets, setDockets] = useState<Docket[]>([])
-  const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
-  useEffect(() => {
-    async function fetchDockets() {
-      try {
-        // First get company to get projectId
-        const companyData = await apiFetch<{ company: { projectId: string } }>(`/api/subcontractors/my-company`)
+  const { data: company } = useQuery({
+    queryKey: queryKeys.portalCompanies,
+    queryFn: async () => {
+      const res = await apiFetch<{ company: { projectId: string } }>('/api/subcontractors/my-company')
+      return res.company
+    },
+  })
 
-        // Then fetch dockets
-        const data = await apiFetch<{ dockets: Docket[] }>(
-          `/api/dockets?projectId=${companyData.company.projectId}`
-        )
-        setDockets(data.dockets || [])
-      } catch (err) {
-        console.error('Error fetching dockets:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchDockets()
-  }, [])
+  const { data: dockets = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.portalDockets,
+    queryFn: async () => {
+      const res = await apiFetch<{ dockets: Docket[] }>(
+        `/api/dockets?projectId=${company!.projectId}`
+      )
+      return res.dockets || []
+    },
+    enabled: !!company?.projectId,
+  })
 
   // Filter dockets
   const filteredDockets = statusFilter === 'all'

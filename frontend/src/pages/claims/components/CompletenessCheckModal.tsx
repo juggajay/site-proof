@@ -1,7 +1,9 @@
 import React from 'react'
-import { X, Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react'
+import { Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react'
 import type { CompletenessData, CompletenessLot, CompletenessIssue } from '../types'
 import { formatCurrency } from '../utils'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
 
 interface CompletenessCheckModalProps {
   loading: boolean
@@ -123,18 +125,14 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
   onExcludeLots,
 }: CompletenessCheckModalProps) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-auto">
-        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
-          <div className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-purple-600" />
-            <h2 className="text-xl font-semibold">AI Completeness Analysis</h2>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg">
-            <X className="h-4 w-4" />
-          </button>
+    <Modal onClose={onClose} className="max-w-4xl">
+      <ModalHeader>
+        <div className="flex items-center gap-2">
+          <Brain className="h-5 w-5 text-purple-600" />
+          <span>AI Completeness Analysis</span>
         </div>
-
+      </ModalHeader>
+      <ModalBody>
         {loading ? (
           <div className="flex flex-col items-center justify-center p-12">
             <Loader2 className="h-12 w-12 animate-spin text-purple-600 mb-4" />
@@ -142,7 +140,7 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
             <p className="text-sm text-muted-foreground mt-1">Checking ITP completion, hold points, test results, NCRs, and evidence</p>
           </div>
         ) : data ? (
-          <div className="p-6 space-y-6">
+          <div className="space-y-6">
             {/* Summary Section */}
             <div className="grid gap-4 md:grid-cols-4">
               <div className="rounded-lg border bg-card p-4 text-center">
@@ -207,25 +205,21 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
             </div>
           </div>
         ) : null}
-
-        <div className="flex justify-end gap-2 p-4 border-t sticky bottom-0 bg-background">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded-lg hover:bg-muted"
+      </ModalBody>
+      <ModalFooter>
+        <Button variant="outline" onClick={onClose}>
+          Close
+        </Button>
+        {data && data.summary.excludeCount > 0 && (
+          <Button
+            onClick={onExcludeLots}
+            className="bg-amber-600 hover:bg-amber-700"
           >
-            Close
-          </button>
-          {data && data.summary.excludeCount > 0 && (
-            <button
-              onClick={onExcludeLots}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
-            >
-              <XCircle className="h-4 w-4" />
-              Exclude Problem Lots
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+            <XCircle className="h-4 w-4" />
+            Exclude Problem Lots
+          </Button>
+        )}
+      </ModalFooter>
+    </Modal>
   )
 })

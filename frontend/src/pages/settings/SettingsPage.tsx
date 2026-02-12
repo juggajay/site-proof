@@ -8,6 +8,11 @@ import { apiFetch, apiUrl } from '@/lib/api'
 import { extractErrorMessage } from '@/lib/errorHandling'
 import { Sun, Moon, Monitor, Check, Calendar, Globe, Download, Shield, Loader2, Trash2, AlertTriangle, Info, Building2, LogOut, Mail, Bell, Send, Lock, Smartphone, Key, Eye, EyeOff, Copy, CheckCircle2 } from 'lucide-react'
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Modal, ModalHeader, ModalBody, ModalFooter, AlertModalHeader, AlertModalFooter } from '@/components/ui/Modal'
 
 // App version info
 const APP_VERSION = '1.3.0'
@@ -379,7 +384,7 @@ export function SettingsPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-3">Theme</label>
+          <Label className="block mb-3">Theme</Label>
           <div className="grid gap-3 sm:grid-cols-3">
             {themeOptions.map((option) => {
               const Icon = option.icon
@@ -434,7 +439,7 @@ export function SettingsPage() {
 
         {/* Date Format */}
         <div>
-          <label className="block text-sm font-medium mb-3">Date Format</label>
+          <Label className="block mb-3">Date Format</Label>
           <div className="grid gap-3 sm:grid-cols-3">
             {dateFormatOptions.map((option) => {
               const isSelected = dateFormat === option.value
@@ -477,23 +482,23 @@ export function SettingsPage() {
 
         {/* Timezone */}
         <div>
-          <label className="block text-sm font-medium mb-3">
+          <Label className="block mb-3">
             <div className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
               Timezone
             </div>
-          </label>
-          <select
+          </Label>
+          <NativeSelect
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
-            className="w-full max-w-md rounded-md border bg-background px-3 py-2"
+            className="w-full max-w-md"
           >
             {TIMEZONES.map((tz) => (
               <option key={tz.value} value={tz.value}>
                 {tz.label} (UTC{tz.offset})
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <p className="text-xs text-muted-foreground mt-3">
             Current time in selected timezone: <span className="font-mono font-medium">{formatTime(new Date())}</span>
           </p>
@@ -512,10 +517,9 @@ export function SettingsPage() {
               Configure which email notifications you receive.
             </p>
           </div>
-          <button
+          <Button
             onClick={sendTestEmail}
             disabled={isSendingTestEmail || !emailPreferences.enabled}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSendingTestEmail ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -523,7 +527,7 @@ export function SettingsPage() {
               <Send className="h-4 w-4" />
             )}
             Send Test Email
-          </button>
+          </Button>
         </div>
 
         {/* Status Message */}
@@ -597,7 +601,7 @@ export function SettingsPage() {
                     <div className="flex items-center gap-3">
                       {/* Timing selector for supported notifications */}
                       {pref.supportsTiming && emailPreferences[pref.key] && pref.timingKey && (
-                        <select
+                        <NativeSelect
                           value={emailPreferences[pref.timingKey] || 'immediate'}
                           onChange={(e) => {
                             const previousPreferences = { ...emailPreferences }
@@ -606,12 +610,12 @@ export function SettingsPage() {
                             saveEmailPreferences(newPreferences, previousPreferences)
                           }}
                           disabled={isSavingEmailPrefs}
-                          className="text-xs px-2 py-1 rounded border bg-background min-w-[90px]"
+                          className="text-xs px-2 py-1 h-auto min-w-[90px]"
                           data-testid={`timing-${pref.key}`}
                         >
                           <option value="immediate">Immediate</option>
                           <option value="digest">Digest</option>
-                        </select>
+                        </NativeSelect>
                       )}
                       {/* Enable/disable toggle */}
                       <button
@@ -727,19 +731,19 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setShowDisableMfa(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
               >
                 <Lock className="h-4 w-4" />
                 Disable 2FA
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
+            <Button
               onClick={handleMfaSetup}
               disabled={isMfaLoading}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isMfaLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -747,22 +751,28 @@ export function SettingsPage() {
                 <Key className="h-4 w-4" />
               )}
               Enable Two-Factor Authentication
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
       {/* MFA Setup Modal */}
       {showMfaSetup && mfaSetupData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center gap-3 mb-4">
+        <Modal onClose={() => {
+          setShowMfaSetup(false)
+          setMfaSetupData(null)
+          setMfaVerifyCode('')
+          setMfaMessage(null)
+        }}>
+          <ModalHeader>
+            <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-primary/10">
                 <Smartphone className="h-6 w-6 text-primary" />
               </div>
-              <h2 className="text-xl font-semibold">Set Up Two-Factor Authentication</h2>
+              Set Up Two-Factor Authentication
             </div>
-
+          </ModalHeader>
+          <ModalBody>
             <div className="space-y-4">
               <div className="text-sm text-muted-foreground">
                 <p className="mb-2">1. Install an authenticator app like Google Authenticator, Authy, or Microsoft Authenticator.</p>
@@ -781,34 +791,36 @@ export function SettingsPage() {
                   <code className="flex-1 font-mono text-sm bg-background px-2 py-1 rounded break-all">
                     {showSecret ? mfaSetupData.secret : '••••••••••••••••••••••••••••••••'}
                   </code>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setShowSecret(!showSecret)}
-                    className="p-1 hover:bg-background rounded"
                     title={showSecret ? 'Hide secret' : 'Show secret'}
                   >
                     {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     onClick={copySecret}
-                    className="p-1 hover:bg-background rounded"
                     title="Copy to clipboard"
                   >
                     {copiedSecret ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
               {/* Verification Code Input */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <Label className="block mb-2">
                   3. Enter the 6-digit code from your authenticator:
-                </label>
-                <input
+                </Label>
+                <Input
                   type="text"
                   value={mfaVerifyCode}
                   onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="000000"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-center text-2xl font-mono tracking-widest"
+                  className="text-center text-2xl font-mono tracking-widest"
                   maxLength={6}
                   autoComplete="one-time-code"
                 />
@@ -820,51 +832,53 @@ export function SettingsPage() {
                   {mfaMessage.text}
                 </div>
               )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowMfaSetup(false)
-                    setMfaSetupData(null)
-                    setMfaVerifyCode('')
-                    setMfaMessage(null)
-                  }}
-                  disabled={isMfaLoading}
-                  className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleMfaVerify}
-                  disabled={isMfaLoading || mfaVerifyCode.length !== 6}
-                  className="flex-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-                >
-                  {isMfaLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    'Verify & Enable'
-                  )}
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMfaSetup(false)
+                setMfaSetupData(null)
+                setMfaVerifyCode('')
+                setMfaMessage(null)
+              }}
+              disabled={isMfaLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMfaVerify}
+              disabled={isMfaLoading || mfaVerifyCode.length !== 6}
+            >
+              {isMfaLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                'Verify & Enable'
+              )}
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
 
       {/* Backup Codes Modal */}
       {showBackupCodes && backupCodes.length > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
+        <Modal alert onClose={() => {
+          setShowBackupCodes(false)
+          setBackupCodes([])
+        }}>
+          <AlertModalHeader>
+            <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-green-100 dark:bg-green-900">
                 <CheckCircle2 className="h-6 w-6 text-green-600" />
               </div>
-              <h2 className="text-xl font-semibold">2FA Enabled Successfully!</h2>
+              2FA Enabled Successfully!
             </div>
-
+          </AlertModalHeader>
+          <ModalBody>
             <div className="space-y-4">
               <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-2">
@@ -883,41 +897,48 @@ export function SettingsPage() {
                 ))}
               </div>
 
-              <button
+              <Button
+                variant="outline"
+                className="w-full"
                 onClick={() => {
                   navigator.clipboard.writeText(backupCodes.join('\n'))
                 }}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border hover:bg-muted"
               >
                 <Copy className="h-4 w-4" />
                 Copy All Codes
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowBackupCodes(false)
-                  setBackupCodes([])
-                }}
-                className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                I've Saved My Codes
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          </ModalBody>
+          <AlertModalFooter>
+            <Button
+              className="w-full"
+              onClick={() => {
+                setShowBackupCodes(false)
+                setBackupCodes([])
+              }}
+            >
+              I've Saved My Codes
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
 
       {/* Disable MFA Modal */}
       {showDisableMfa && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
+        <Modal alert onClose={() => {
+          setShowDisableMfa(false)
+          setDisableMfaPassword('')
+          setMfaMessage(null)
+        }}>
+          <AlertModalHeader>
+            <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
                 <AlertTriangle className="h-6 w-6 text-red-600" />
               </div>
-              <h2 className="text-xl font-semibold">Disable Two-Factor Authentication</h2>
+              Disable Two-Factor Authentication
             </div>
-
+          </AlertModalHeader>
+          <ModalBody>
             <div className="space-y-4">
               <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="text-sm text-red-800 dark:text-red-200">
@@ -926,15 +947,14 @@ export function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <Label className="block mb-1">
                   Enter your password to confirm:
-                </label>
-                <input
+                </Label>
+                <Input
                   type="password"
                   value={disableMfaPassword}
                   onChange={(e) => setDisableMfaPassword(e.target.value)}
                   placeholder="Your password"
-                  className="w-full rounded-md border bg-background px-3 py-2"
                 />
               </div>
 
@@ -943,37 +963,36 @@ export function SettingsPage() {
                   {mfaMessage.text}
                 </div>
               )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowDisableMfa(false)
-                    setDisableMfaPassword('')
-                    setMfaMessage(null)
-                  }}
-                  disabled={isMfaLoading}
-                  className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleMfaDisable}
-                  disabled={isMfaLoading || !disableMfaPassword}
-                  className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-                >
-                  {isMfaLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Disabling...
-                    </>
-                  ) : (
-                    'Disable 2FA'
-                  )}
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+          </ModalBody>
+          <AlertModalFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDisableMfa(false)
+                setDisableMfaPassword('')
+                setMfaMessage(null)
+              }}
+              disabled={isMfaLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleMfaDisable}
+              disabled={isMfaLoading || !disableMfaPassword}
+            >
+              {isMfaLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Disabling...
+                </>
+              ) : (
+                'Disable 2FA'
+              )}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
 
       <div className="rounded-lg border bg-card p-6 space-y-4">
@@ -1014,10 +1033,10 @@ export function SettingsPage() {
           </p>
 
           <div className="flex flex-col gap-3">
-            <button
+            <Button
               onClick={handleExportData}
               disabled={isExporting}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed w-fit"
+              className="w-fit"
             >
               {isExporting ? (
                 <>
@@ -1030,7 +1049,7 @@ export function SettingsPage() {
                   Export My Data
                 </>
               )}
-            </button>
+            </Button>
 
             {exportSuccess && (
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
@@ -1064,13 +1083,13 @@ export function SettingsPage() {
             Before deleting, we recommend exporting your data above.
           </p>
 
-          <button
+          <Button
+            variant="destructive"
             onClick={() => setShowDeleteModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 w-fit"
           >
             <Trash2 className="h-4 w-4" />
             Delete My Account
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1109,13 +1128,14 @@ export function SettingsPage() {
               This action cannot be undone.
             </p>
 
-            <button
+            <Button
+              variant="outline"
               onClick={() => setShowLeaveCompanyModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20 w-fit"
+              className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
             >
               <LogOut className="h-4 w-4" />
               Leave Company
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1155,15 +1175,21 @@ export function SettingsPage() {
 
       {/* Delete Account Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
+        <Modal alert onClose={() => {
+          setShowDeleteModal(false)
+          setDeleteConfirmEmail('')
+          setDeletePassword('')
+          setDeleteError(null)
+        }}>
+          <AlertModalHeader>
+            <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
                 <AlertTriangle className="h-6 w-6 text-red-600" />
               </div>
-              <h2 className="text-xl font-semibold">Delete Account</h2>
+              Delete Account
             </div>
-
+          </AlertModalHeader>
+          <ModalBody>
             <div className="space-y-4">
               <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="text-sm text-red-800 dark:text-red-200">
@@ -1178,28 +1204,26 @@ export function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <Label className="block mb-1">
                   Type your email to confirm: <span className="text-muted-foreground">{user?.email}</span>
-                </label>
-                <input
+                </Label>
+                <Input
                   type="email"
                   value={deleteConfirmEmail}
                   onChange={(e) => setDeleteConfirmEmail(e.target.value)}
                   placeholder="Enter your email"
-                  className="w-full rounded-md border bg-background px-3 py-2"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <Label className="block mb-1">
                   Enter your password (optional)
-                </label>
-                <input
+                </Label>
+                <Input
                   type="password"
                   value={deletePassword}
                   onChange={(e) => setDeletePassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full rounded-md border bg-background px-3 py-2"
                 />
               </div>
 
@@ -1208,51 +1232,54 @@ export function SettingsPage() {
                   {deleteError}
                 </div>
               )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false)
-                    setDeleteConfirmEmail('')
-                    setDeletePassword('')
-                    setDeleteError(null)
-                  }}
-                  disabled={isDeleting}
-                  className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteAccount}
-                  disabled={isDeleting || !deleteConfirmEmail}
-                  className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    'Permanently Delete'
-                  )}
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+          </ModalBody>
+          <AlertModalFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteModal(false)
+                setDeleteConfirmEmail('')
+                setDeletePassword('')
+                setDeleteError(null)
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={isDeleting || !deleteConfirmEmail}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Permanently Delete'
+              )}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
 
       {/* Leave Company Confirmation Modal */}
       {showLeaveCompanyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card border rounded-lg shadow-xl w-full max-w-md p-6 m-4">
-            <div className="flex items-center gap-3 mb-4">
+        <Modal alert onClose={() => {
+          setShowLeaveCompanyModal(false)
+          setLeaveCompanyError(null)
+        }}>
+          <AlertModalHeader>
+            <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
                 <AlertTriangle className="h-6 w-6 text-amber-600" />
               </div>
-              <h2 className="text-xl font-semibold">Leave Company</h2>
+              Leave Company
             </div>
-
+          </AlertModalHeader>
+          <ModalBody>
             <div className="space-y-4">
               <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
@@ -1274,36 +1301,35 @@ export function SettingsPage() {
                   {leaveCompanyError}
                 </div>
               )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowLeaveCompanyModal(false)
-                    setLeaveCompanyError(null)
-                  }}
-                  disabled={isLeavingCompany}
-                  className="flex-1 px-4 py-2 rounded-lg border hover:bg-muted disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleLeaveCompany}
-                  disabled={isLeavingCompany}
-                  className="flex-1 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-                >
-                  {isLeavingCompany ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Leaving...
-                    </>
-                  ) : (
-                    'Leave Company'
-                  )}
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+          </ModalBody>
+          <AlertModalFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowLeaveCompanyModal(false)
+                setLeaveCompanyError(null)
+              }}
+              disabled={isLeavingCompany}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLeaveCompany}
+              disabled={isLeavingCompany}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              {isLeavingCompany ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Leaving...
+                </>
+              ) : (
+                'Leave Company'
+              )}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
       )}
     </div>
   )

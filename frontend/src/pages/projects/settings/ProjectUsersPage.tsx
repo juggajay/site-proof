@@ -4,6 +4,11 @@ import { useAuth } from '@/lib/auth'
 import { toast } from '@/components/ui/toaster'
 import { apiFetch } from '@/lib/api'
 import { UserPlus, Trash2, Edit2, X, Check, Mail, Shield } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 
 interface ProjectUser {
   id: string
@@ -169,13 +174,10 @@ export function ProjectUsersPage() {
           <h1 className="text-2xl font-bold">Project Team</h1>
           <p className="text-muted-foreground">Manage team members and their roles</p>
         </div>
-        <button
-          onClick={() => setShowInviteModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-        >
+        <Button onClick={() => setShowInviteModal(true)}>
           <UserPlus className="h-4 w-4" />
           Invite User
-        </button>
+        </Button>
       </div>
 
       {loading ? (
@@ -189,12 +191,9 @@ export function ProjectUsersPage() {
           <p className="mt-2 text-muted-foreground">
             Invite users to collaborate on this project.
           </p>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-          >
+          <Button onClick={() => setShowInviteModal(true)} className="mt-4">
             Invite First User
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
@@ -224,17 +223,17 @@ export function ProjectUsersPage() {
                   </td>
                   <td className="px-4 py-3">
                     {editingUser?.id === user.id ? (
-                      <select
+                      <NativeSelect
                         value={editRole}
                         onChange={(e) => setEditRole(e.target.value)}
-                        className="rounded border px-2 py-1 text-sm"
+                        className="w-auto"
                       >
                         {ROLES.map((role) => (
                           <option key={role.value} value={role.value}>
                             {role.label}
                           </option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     ) : (
                       <span className="capitalize">
                         {ROLES.find(r => r.value === user.role)?.label || user.role.replace('_', ' ')}
@@ -254,39 +253,47 @@ export function ProjectUsersPage() {
                       <div className="flex items-center gap-2">
                         {editingUser?.id === user.id ? (
                           <>
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={handleUpdateRole}
                               disabled={saving}
-                              className="p-1.5 text-green-600 hover:bg-green-50 rounded"
+                              className="text-green-600 hover:bg-green-50"
                               title="Save"
                             >
                               <Check className="h-4 w-4" />
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={cancelEditing}
-                              className="p-1.5 text-gray-600 hover:bg-gray-50 rounded"
+                              className="text-gray-600 hover:bg-gray-50"
                               title="Cancel"
                             >
                               <X className="h-4 w-4" />
-                            </button>
+                            </Button>
                           </>
                         ) : (
                           <>
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => startEditing(user)}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                              className="text-blue-600 hover:bg-blue-50"
                               title="Change role"
                             >
                               <Edit2 className="h-4 w-4" />
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleRemoveUser(user)}
                               disabled={removingUserId === user.id}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                              className="text-red-600 hover:bg-red-50"
                               title="Remove from project"
                             >
                               <Trash2 className="h-4 w-4" />
-                            </button>
+                            </Button>
                           </>
                         )}
                       </div>
@@ -301,63 +308,51 @@ export function ProjectUsersPage() {
 
       {/* Invite User Modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md bg-background rounded-lg shadow-xl">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Invite User</h2>
-              <button onClick={() => setShowInviteModal(false)} className="p-1 hover:bg-muted rounded">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4">
+        <Modal onClose={() => setShowInviteModal(false)}>
+          <ModalHeader>Invite User</ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Email Address</label>
+                <Label className="mb-1">Email Address</Label>
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <input
+                  <Input
                     type="email"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="user@example.com"
-                    className="flex-1 rounded border px-3 py-2 text-sm"
+                    className="flex-1"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Role</label>
-                <select
+                <Label className="mb-1">Role</Label>
+                <NativeSelect
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full rounded border px-3 py-2 text-sm"
                 >
                   {ROLES.map((role) => (
                     <option key={role.value} value={role.value}>
                       {role.label} - {role.description}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             </div>
-
-            <div className="flex justify-end gap-2 p-4 border-t">
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="px-4 py-2 text-sm border rounded hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleInvite}
-                disabled={inviting || !inviteEmail.trim()}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-              >
-                {inviting ? 'Inviting...' : 'Send Invite'}
-              </button>
-            </div>
-          </div>
-        </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="outline" onClick={() => setShowInviteModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleInvite}
+              disabled={inviting || !inviteEmail.trim()}
+            >
+              {inviting ? 'Inviting...' : 'Send Invite'}
+            </Button>
+          </ModalFooter>
+        </Modal>
       )}
     </div>
   )

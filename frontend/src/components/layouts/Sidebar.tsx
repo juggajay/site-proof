@@ -1,5 +1,5 @@
 import { NavLink, useParams } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import {
   LayoutDashboard,
   FolderKanban,
@@ -26,6 +26,9 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth'
 import { apiFetch } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { Button } from '@/components/ui/button'
+import { queryKeys } from '@/lib/queryKeys'
 import { useUIStore } from '@/stores/uiStore'  // Feature #442: Zustand client state
 import { ROLE_GROUPS, hasRoleInGroup, isAdminRole, isSubcontractorRole, hasCommercialAccess } from '@/lib/roles'
 
@@ -97,45 +100,35 @@ export function Sidebar() {
   const { sidebar, toggleSidebar: zustandToggleSidebar, setCurrentProject } = useUIStore()
   const isCollapsed = sidebar.isCollapsed
 
-  // Feature #700 - Enabled modules state
-  const [enabledModules, setEnabledModules] = useState<Record<string, boolean>>({
+  // Feature #700 - Enabled modules via TanStack Query
+  const defaultModules: Record<string, boolean> = {
     costTracking: true,
     progressClaims: true,
     subcontractors: true,
     dockets: true,
     dailyDiary: true,
+  }
+
+  const { data: projectData } = useQuery({
+    queryKey: queryKeys.projectModules(projectId!),
+    queryFn: () => apiFetch<{ project?: { name?: string; settings?: any } }>(`/api/projects/${projectId}`),
+    enabled: !!projectId,
   })
 
-  // Fetch project's enabled modules when projectId changes
-  useEffect(() => {
-    async function fetchProjectModules() {
-      if (!projectId) return
-
-      try {
-        const data = await apiFetch<{ project?: { name?: string; settings?: any } }>(`/api/projects/${projectId}`)
-        console.log('[Sidebar] Project data received:', data.project?.name)
-        if (data.project?.settings) {
-          try {
-            const settings = typeof data.project.settings === 'string'
-              ? JSON.parse(data.project.settings)
-              : data.project.settings
-            console.log('[Sidebar] Parsed settings.enabledModules:', settings.enabledModules)
-            if (settings.enabledModules) {
-              console.log('[Sidebar] Setting enabledModules state:', settings.enabledModules)
-              setEnabledModules(prev => ({ ...prev, ...settings.enabledModules }))
-            }
-          } catch (e) {
-            console.error('[Sidebar] Failed to parse settings:', e)
-            // Invalid JSON, use defaults
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch project modules:', error)
+  const enabledModules = (() => {
+    if (!projectData?.project?.settings) return defaultModules
+    try {
+      const settings = typeof projectData.project.settings === 'string'
+        ? JSON.parse(projectData.project.settings)
+        : projectData.project.settings
+      if (settings.enabledModules) {
+        return { ...defaultModules, ...settings.enabledModules }
       }
+    } catch {
+      // Invalid JSON, use defaults
     }
-
-    fetchProjectModules()
-  }, [projectId])
+    return defaultModules
+  })()
 
   // Feature #442: Update current project in Zustand store when projectId changes
   useEffect(() => {
@@ -347,11 +340,12 @@ export function Sidebar() {
         ))}
 
         {/* Collapse/Expand Toggle Button */}
-        <button
+        <Button
+          variant="ghost"
           onClick={toggleSidebar}
           className={cn(
-            'flex items-center rounded-lg py-2 text-sm transition-all duration-200 w-full text-muted-foreground hover:bg-muted hover:text-foreground',
-            isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+            'w-full text-muted-foreground hover:text-foreground',
+            isCollapsed ? 'justify-center px-2' : 'justify-start gap-3 px-3'
           )}
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           data-testid="sidebar-toggle"
@@ -364,7 +358,7 @@ export function Sidebar() {
               <span className="transition-opacity duration-200">Collapse</span>
             </>
           )}
-        </button>
+        </Button>
       </div>
     </aside>
   )

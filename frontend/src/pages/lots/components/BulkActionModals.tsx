@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import { Modal, ModalHeader, ModalBody, ModalFooter, AlertModalHeader, AlertModalFooter } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/button'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Label } from '@/components/ui/label'
 
 // =====================
 // Bulk Delete Modal
@@ -27,34 +31,34 @@ export function BulkDeleteModal({ isOpen, selectedCount, onClose, onConfirm }: B
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">Confirm Bulk Deletion</h2>
-        <p className="mt-2 text-sm text-gray-600">
+    <Modal alert onClose={onClose}>
+      <AlertModalHeader>Confirm Bulk Deletion</AlertModalHeader>
+      <ModalBody>
+        <p className="text-sm text-gray-600">
           Are you sure you want to delete{' '}
           <span className="font-semibold text-gray-900">{selectedCount} lot(s)</span>?
         </p>
         <p className="mt-3 text-sm text-red-600">
           This action cannot be undone. All associated data will be permanently deleted.
         </p>
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={deleting}
-            className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleting ? 'Deleting...' : `Delete ${selectedCount} Lot(s)`}
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalBody>
+      <AlertModalFooter>
+        <Button
+          variant="outline"
+          onClick={onClose}
+          disabled={deleting}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={handleDelete}
+          disabled={deleting}
+        >
+          {deleting ? 'Deleting...' : `Delete ${selectedCount} Lot(s)`}
+        </Button>
+      </AlertModalFooter>
+    </Modal>
   )
 }
 
@@ -86,22 +90,20 @@ export function BulkStatusModal({ isOpen, selectedCount, onClose, onConfirm }: B
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900">Update Lot Status</h2>
-        <p className="mt-2 text-sm text-gray-600">
+    <Modal onClose={onClose}>
+      <ModalHeader>Update Lot Status</ModalHeader>
+      <ModalBody>
+        <p className="text-sm text-gray-600">
           Update status for{' '}
           <span className="font-semibold text-gray-900">{selectedCount} lot(s)</span>
         </p>
         <div className="mt-4">
-          <label htmlFor="bulk-status-select" className="block text-sm font-medium text-gray-700 mb-1">
-            New Status
-          </label>
-          <select
+          <Label htmlFor="bulk-status-select">New Status</Label>
+          <NativeSelect
             id="bulk-status-select"
             value={newStatus}
             onChange={(e) => setNewStatus(e.target.value)}
-            className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="mt-1"
           >
             <option value="not_started">Not Started</option>
             <option value="in_progress">In Progress</option>
@@ -109,26 +111,25 @@ export function BulkStatusModal({ isOpen, selectedCount, onClose, onConfirm }: B
             <option value="hold_point">Hold Point</option>
             <option value="ncr_raised">NCR Raised</option>
             <option value="completed">Completed</option>
-          </select>
+          </NativeSelect>
         </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={updating}
-            className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleUpdate}
-            disabled={updating}
-            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {updating ? 'Updating...' : 'Update Status'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          variant="outline"
+          onClick={onClose}
+          disabled={updating}
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleUpdate}
+          disabled={updating}
+        >
+          {updating ? 'Updating...' : 'Update Status'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
@@ -161,28 +162,19 @@ export function BulkAssignModal({ isOpen, selectedCount, subcontractors, onClose
   if (!isOpen) return null
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose()
-        }
-      }}
-    >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Assign Subcontractor</h2>
+    <Modal onClose={onClose}>
+      <ModalHeader>Assign Subcontractor</ModalHeader>
+      <ModalBody>
         <p className="text-sm text-gray-600 mb-4">
           Assign {selectedCount} selected lot(s) to a subcontractor.
         </p>
-        <div className="mb-4">
-          <label htmlFor="bulk-subcontractor" className="block text-sm font-medium text-gray-700 mb-1">
-            Subcontractor
-          </label>
-          <select
+        <div>
+          <Label htmlFor="bulk-subcontractor">Subcontractor</Label>
+          <NativeSelect
             id="bulk-subcontractor"
             value={selectedSubcontractorId}
             onChange={(e) => setSelectedSubcontractorId(e.target.value)}
-            className="w-full rounded-lg border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="mt-1"
           >
             <option value="">-- Unassign --</option>
             {subcontractors.map((sub) => (
@@ -190,25 +182,24 @@ export function BulkAssignModal({ isOpen, selectedCount, subcontractors, onClose
                 {sub.companyName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={assigning}
-            className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleAssign}
-            disabled={assigning}
-            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {assigning ? 'Assigning...' : 'Assign'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalBody>
+      <ModalFooter>
+        <Button
+          variant="outline"
+          onClick={onClose}
+          disabled={assigning}
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleAssign}
+          disabled={assigning}
+        >
+          {assigning ? 'Assigning...' : 'Assign'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

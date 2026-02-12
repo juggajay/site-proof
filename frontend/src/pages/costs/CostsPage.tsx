@@ -1,9 +1,12 @@
 import { useParams } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
+import { queryKeys } from '@/lib/queryKeys'
 import { DollarSign, TrendingUp, Users, Truck, Download, Filter, FolderOpen } from 'lucide-react'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { MobileDataCard } from '@/components/ui/MobileDataCard'
+import { Button } from '@/components/ui/button'
 
 interface CostSummary {
   totalLabourCost: number
@@ -36,43 +39,25 @@ interface LotCost {
 export function CostsPage() {
   const { projectId } = useParams()
   const isMobile = useIsMobile()
-  const [loading, setLoading] = useState(true)
-  const [summary, setSummary] = useState<CostSummary | null>(null)
-  const [subcontractorCosts, setSubcontractorCosts] = useState<SubcontractorCost[]>([])
-  const [lotCosts, setLotCosts] = useState<LotCost[]>([])
   const [activeTab, setActiveTab] = useState<'summary' | 'subcontractors' | 'lots'>('summary')
 
-  useEffect(() => {
-    fetchCostData()
-  }, [projectId])
+  const { data: costData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.costs(projectId!),
+    queryFn: () => apiFetch<any>(`/api/projects/${projectId}/costs`),
+    enabled: !!projectId,
+  })
 
-  const fetchCostData = async () => {
-    if (!projectId) return
-    setLoading(true)
-
-    try {
-      const data = await apiFetch<any>(`/api/projects/${projectId}/costs`)
-      setSummary(data.summary)
-      setSubcontractorCosts(data.subcontractorCosts || [])
-      setLotCosts(data.lotCosts || [])
-    } catch (error) {
-      console.error('Error fetching cost data:', error)
-      // Show empty state on error
-      setSummary({
-        totalLabourCost: 0,
-        totalPlantCost: 0,
-        totalCost: 0,
-        budgetTotal: 0,
-        budgetVariance: 0,
-        approvedDockets: 0,
-        pendingDockets: 0
-      })
-      setSubcontractorCosts([])
-      setLotCosts([])
-    } finally {
-      setLoading(false)
-    }
+  const summary: CostSummary | null = costData?.summary ?? {
+    totalLabourCost: 0,
+    totalPlantCost: 0,
+    totalCost: 0,
+    budgetTotal: 0,
+    budgetVariance: 0,
+    approvedDockets: 0,
+    pendingDockets: 0,
   }
+  const subcontractorCosts: SubcontractorCost[] = costData?.subcontractorCosts || []
+  const lotCosts: LotCost[] = costData?.lotCosts || []
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-AU', {
@@ -169,17 +154,14 @@ export function CostsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 rounded-lg border px-4 py-2 hover:bg-muted">
+          <Button variant="outline">
             <Filter className="h-4 w-4" />
             Filter
-          </button>
-          <button
-            onClick={exportToExcel}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
+          </Button>
+          <Button onClick={exportToExcel}>
             <Download className="h-4 w-4" />
             Export Report
-          </button>
+          </Button>
         </div>
       </div>
 
