@@ -125,18 +125,18 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-card rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-amber-50">
+        <div className="px-6 py-4 border-b border-border bg-amber-50 dark:bg-amber-950/30">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-              <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+              <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Sync Conflicts Detected</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-lg font-semibold text-foreground">Sync Conflicts Detected</h2>
+              <p className="text-sm text-muted-foreground">
                 {conflicts.length} lot(s) have changes that conflict with server data
               </p>
             </div>
@@ -146,9 +146,9 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
         <div className="flex-1 overflow-hidden flex">
           {/* Conflict List Sidebar */}
           {conflicts.length > 1 && (
-            <div className="w-64 border-r border-gray-200 overflow-y-auto bg-gray-50">
+            <div className="w-64 border-r border-border overflow-y-auto bg-muted/50">
               <div className="p-3">
-                <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Conflicting Lots</h3>
+                <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Conflicting Lots</h3>
                 <div className="space-y-1">
                   {conflicts.map(conflict => (
                     <button
@@ -156,12 +156,12 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                       onClick={() => handleSelectConflict(conflict)}
                       className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                         selectedConflict?.id === conflict.id
-                          ? 'bg-blue-100 text-blue-800 font-medium'
-                          : 'hover:bg-gray-100 text-gray-700'
+                          ? 'bg-primary/10 text-primary font-medium'
+                          : 'hover:bg-muted text-foreground'
                       }`}
                     >
                       <div className="font-medium">{conflict.lotNumber}</div>
-                      <div className="text-xs text-gray-500 truncate">
+                      <div className="text-xs text-muted-foreground truncate">
                         {conflict.description || 'No description'}
                       </div>
                     </button>
@@ -176,10 +176,10 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
             {selectedConflict ? (
               <>
                 <div className="mb-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-1">
+                  <h3 className="text-lg font-medium text-foreground mb-1">
                     {selectedConflict.lotNumber}
                   </h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     This lot was edited while you were offline, and someone else also made changes.
                   </p>
                 </div>
@@ -187,9 +187,9 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                 {showMergeView ? (
                   /* Merge View */
                   <div className="space-y-4">
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
-                      <h4 className="font-medium text-purple-800 mb-2">Manual Merge</h4>
-                      <p className="text-sm text-purple-700">
+                    <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
+                      <h4 className="font-medium text-purple-800 dark:text-purple-200 mb-2">Manual Merge</h4>
+                      <p className="text-sm text-purple-700 dark:text-purple-300">
                         Choose the value you want for each field, or enter a custom value.
                       </p>
                     </div>
@@ -200,39 +200,39 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                       const isDifferent = localVal !== serverVal;
 
                       return (
-                        <div key={key} className={`border rounded-lg p-4 ${isDifferent ? 'border-amber-300 bg-amber-50' : 'border-gray-200'}`}>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <div key={key} className={`border rounded-lg p-4 ${isDifferent ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20' : 'border-border'}`}>
+                          <label className="block text-sm font-medium text-foreground mb-2">
                             {label}
-                            {isDifferent && <span className="ml-2 text-amber-600 text-xs">(differs)</span>}
+                            {isDifferent && <span className="ml-2 text-amber-600 dark:text-amber-400 text-xs">(differs)</span>}
                           </label>
                           <div className="grid grid-cols-3 gap-2 mb-2 text-sm">
                             <div>
-                              <span className="text-xs text-gray-500">Your version:</span>
+                              <span className="text-xs text-muted-foreground">Your version:</span>
                               <button
                                 type="button"
                                 onClick={() => handleMergedFieldChange(key, localVal)}
-                                className="w-full text-left px-2 py-1 rounded border hover:bg-blue-50 hover:border-blue-300 truncate"
+                                className="w-full text-left px-2 py-1 rounded border hover:bg-primary/5 hover:border-primary truncate"
                               >
                                 {String(localVal || '—')}
                               </button>
                             </div>
                             <div>
-                              <span className="text-xs text-gray-500">Server version:</span>
+                              <span className="text-xs text-muted-foreground">Server version:</span>
                               <button
                                 type="button"
                                 onClick={() => handleMergedFieldChange(key, serverVal)}
-                                className="w-full text-left px-2 py-1 rounded border hover:bg-green-50 hover:border-green-300 truncate"
+                                className="w-full text-left px-2 py-1 rounded border hover:bg-green-50 dark:hover:bg-green-950/30 hover:border-green-300 dark:hover:border-green-700 truncate"
                               >
                                 {String(serverVal || '—')}
                               </button>
                             </div>
                             <div>
-                              <span className="text-xs text-gray-500">Merged value:</span>
+                              <span className="text-xs text-muted-foreground">Merged value:</span>
                               <input
                                 type="text"
                                 value={String(mergedData[key] || '')}
                                 onChange={(e) => handleMergedFieldChange(key, e.target.value)}
-                                className="w-full px-2 py-1 rounded border border-purple-300 bg-white text-sm"
+                                className="w-full px-2 py-1 rounded border border-purple-300 dark:border-purple-700 bg-background text-foreground text-sm"
                               />
                             </div>
                           </div>
@@ -242,35 +242,35 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                   </div>
                 ) : (
                   /* Comparison View */
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="border border-border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-muted/50">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-blue-600 uppercase">Your Changes</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-green-600 uppercase">Server Version</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Field</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-primary uppercase">Your Changes</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-green-600 dark:text-green-400 uppercase">Server Version</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-border">
                         {compareFields.map(({ key, label }) => {
                           const localVal = localVersion?.[key];
                           const serverVal = serverVersion?.[key];
                           const isDifferent = localVal !== serverVal;
 
                           return (
-                            <tr key={key} className={isDifferent ? 'bg-amber-50' : ''}>
-                              <td className="px-4 py-2 font-medium text-gray-700">
+                            <tr key={key} className={isDifferent ? 'bg-amber-50 dark:bg-amber-950/20' : ''}>
+                              <td className="px-4 py-2 font-medium text-foreground">
                                 {label}
                                 {isDifferent && (
-                                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">
                                     Changed
                                   </span>
                                 )}
                               </td>
-                              <td className="px-4 py-2 text-blue-800">
+                              <td className="px-4 py-2 text-primary">
                                 {String(localVal || '—')}
                               </td>
-                              <td className="px-4 py-2 text-green-800">
+                              <td className="px-4 py-2 text-green-800 dark:text-green-300">
                                 {String(serverVal || '—')}
                               </td>
                             </tr>
@@ -282,7 +282,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                 )}
 
                 {/* Timestamps */}
-                <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-gray-500">
+                <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
                   <div>
                     <span className="font-medium">Your edit:</span>{' '}
                     {new Date(localVersion?.localUpdatedAt || '').toLocaleString()}
@@ -296,7 +296,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                 </div>
               </>
             ) : (
-              <div className="text-center py-12 text-gray-500">
+              <div className="text-center py-12 text-muted-foreground">
                 {conflicts.length === 0
                   ? 'No conflicts to resolve!'
                   : 'Select a conflict from the list to review'}
@@ -307,9 +307,9 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
 
         {/* Footer Actions */}
         {selectedConflict && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="px-6 py-4 border-t border-border bg-muted/50">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 How do you want to resolve this conflict?
               </div>
               <div className="flex gap-3">
@@ -319,7 +319,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                       Back to Compare
                     </Button>
                     <Button
-                      className="bg-purple-600 hover:bg-purple-700"
+                      className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600 text-white"
                       onClick={handleResolveWithMerge}
                       disabled={resolving}
                     >
@@ -346,7 +346,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                     </Button>
                     <Button
                       variant="outline"
-                      className="text-purple-700 bg-purple-100 hover:bg-purple-200 border-purple-200"
+                      className="text-purple-700 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 border-purple-200 dark:border-purple-800"
                       onClick={() => setShowMergeView(true)}
                     >
                       Merge Manually

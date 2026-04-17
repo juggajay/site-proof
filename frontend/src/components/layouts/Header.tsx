@@ -101,9 +101,6 @@ export function Header() {
     return diffDays > 7
   }
 
-  // Count old notifications
-  const oldNotificationCount = notifications.filter(n => isOldNotification(n.createdAt)).length
-
   // Clear old notifications (client-side hide)
   const clearOldNotifications = () => {
     setHideOldNotifications(true)
@@ -113,6 +110,9 @@ export function Header() {
   const visibleNotifications = hideOldNotifications
     ? notifications.filter(n => !isOldNotification(n.createdAt))
     : notifications
+
+  // Count old notifications currently visible (drives the "Clear old" button visibility)
+  const oldNotificationCount = visibleNotifications.filter(n => isOldNotification(n.createdAt)).length
   const filteredNotifications = notificationFilter === 'all'
     ? visibleNotifications
     : visibleNotifications.filter(n => n.type.toLowerCase() === notificationFilter)
@@ -245,7 +245,7 @@ export function Header() {
       case 'mention':
         return <User className="h-4 w-4 text-primary" />
       default:
-        return <Clock className="h-4 w-4 text-blue-500" />
+        return <Clock className="h-4 w-4 text-primary" />
     }
   }
 

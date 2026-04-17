@@ -63,19 +63,19 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
 
   // Fetch lots, NCRs, and tests in parallel via TanStack Query
   const { data: lotsData, isLoading: lotsLoading } = useQuery({
-    queryKey: [...queryKeys.lots(projectId!), 'search', debouncedQuery],
+    queryKey: queryKeys.lots(projectId!),
     queryFn: () => apiFetch<{ lots: any[] }>(`/api/projects/${projectId}/lots`),
     enabled: searchEnabled,
   })
 
   const { data: ncrsData, isLoading: ncrsLoading } = useQuery({
-    queryKey: [...queryKeys.ncrs(projectId!), 'search', debouncedQuery],
+    queryKey: queryKeys.ncrs(projectId!),
     queryFn: () => apiFetch<{ ncrs: any[] }>(`/api/projects/${projectId}/ncrs`),
     enabled: searchEnabled,
   })
 
   const { data: testsData, isLoading: testsLoading } = useQuery({
-    queryKey: [...queryKeys.testResults(projectId!), 'search', debouncedQuery],
+    queryKey: queryKeys.testResults(projectId!),
     queryFn: () => apiFetch<{ tests: any[] }>(`/api/projects/${projectId}/tests`),
     enabled: searchEnabled,
   })
@@ -182,7 +182,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   const getTypeIcon = (type: SearchResult['type']) => {
     switch (type) {
       case 'lot':
-        return <FileText className="h-4 w-4 text-blue-500" />
+        return <FileText className="h-4 w-4 text-primary" />
       case 'ncr':
         return <AlertTriangle className="h-4 w-4 text-amber-500" />
       case 'test':
