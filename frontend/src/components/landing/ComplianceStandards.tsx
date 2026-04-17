@@ -9,23 +9,23 @@ export function ComplianceStandards() {
   ]
 
   return (
-    <section className="py-16 bg-white border-b">
+    <section className="py-16 bg-card border-b">
       <div className="container mx-auto px-4 md:px-6">
         <div className="text-center mb-10">
-          <h2 className="text-2xl font-bold tracking-tight text-[#111827] sm:text-3xl">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             Built for Australian civil standards
           </h2>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-muted-foreground">
             SiteProof understands the specs you build to.
           </p>
         </div>
 
         <div className="flex flex-wrap justify-center gap-6">
           {standards.map((std, index) => (
-            <div key={index} className="flex flex-col items-center p-4 bg-gray-50 rounded-lg border text-center w-full sm:w-[200px] hover:border-[#1e3a5f]/30 transition-colors">
-              <div className="text-2xl font-bold text-[#1e3a5f] mb-1">{std.name}</div>
-              <div className="text-sm font-semibold text-gray-900">{std.desc}</div>
-              <div className="text-xs text-gray-500 mt-1">{std.detail}</div>
+            <div key={index} className="flex flex-col items-center p-4 bg-muted/50 rounded-lg border text-center w-full sm:w-[200px] hover:border-primary/30 transition-colors">
+              <div className="text-2xl font-bold text-primary mb-1">{std.name}</div>
+              <div className="text-sm font-semibold text-foreground">{std.desc}</div>
+              <div className="text-xs text-muted-foreground mt-1">{std.detail}</div>
             </div>
           ))}
         </div>

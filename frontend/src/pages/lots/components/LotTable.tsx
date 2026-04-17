@@ -20,11 +20,11 @@ const COLUMN_WIDTH_STORAGE_KEY = 'siteproof_lot_column_widths'
 
 // Feature #438: Okabe-Ito color-blind safe palette
 const statusColors: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-800',
-  in_progress: 'bg-sky-100 text-sky-800',
-  completed: 'bg-emerald-100 text-emerald-800',
-  on_hold: 'bg-orange-100 text-orange-800',
-  not_started: 'bg-gray-100 text-gray-700',
+  pending: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
+  in_progress: 'bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200',
+  completed: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
+  on_hold: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200',
+  not_started: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
 }
 
 // Helper function to highlight search terms in text
@@ -258,7 +258,7 @@ export const LotTable = React.memo(function LotTable({
                   type="checkbox"
                   checked={allDeletableSelected}
                   onChange={onSelectAll}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-border"
                   title="Select all"
                 />
               </th>
@@ -305,7 +305,7 @@ export const LotTable = React.memo(function LotTable({
                   <div className="flex flex-col items-center gap-4">
                     <div className="text-5xl">📋</div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">
+                      <h3 className="text-lg font-semibold text-foreground">
                         {isSubcontractor ? 'No lots assigned yet' : 'No lots yet'}
                       </h3>
                       <p className="mt-1 text-sm text-muted-foreground">
@@ -375,7 +375,7 @@ export const LotTable = React.memo(function LotTable({
                                 type="checkbox"
                                 checked={selectedLots.has(lot.id)}
                                 onChange={() => onSelectLot(lot.id)}
-                                className="h-4 w-4 rounded border-gray-300"
+                                className="h-4 w-4 rounded border-border"
                               />
                             )}
                           </div>
@@ -407,7 +407,7 @@ export const LotTable = React.memo(function LotTable({
                           case 'status':
                             return (
                               <td key={columnId} className="p-3">
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}>
                                   {lot.status.replace('_', ' ')}
                                 </span>
                               </td>
@@ -440,7 +440,7 @@ export const LotTable = React.memo(function LotTable({
                           )}
                           {canCreate && (
                             <button
-                              className="text-sm text-blue-600 hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
+                              className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
                               onClick={() => onCloneLot(lot)}
                               title="Clone lot with adjacent chainage"
                             >

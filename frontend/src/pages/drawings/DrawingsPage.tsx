@@ -53,7 +53,7 @@ const getDocumentUrl = (fileUrl: string | null | undefined): string => {
 
 const DRAWING_STATUSES = [
   { id: 'preliminary', label: 'Preliminary', color: 'bg-yellow-100 text-yellow-800' },
-  { id: 'for_construction', label: 'For Construction', color: 'bg-blue-100 text-blue-800' },
+  { id: 'for_construction', label: 'For Construction', color: 'bg-primary/10 text-primary' },
   { id: 'as_built', label: 'As-Built', color: 'bg-green-100 text-green-800' },
 ]
 
@@ -299,7 +299,7 @@ export function DrawingsPage() {
   }
 
   const getStatusInfo = (status: string) => {
-    return DRAWING_STATUSES.find(s => s.id === status) || { id: status, label: status, color: 'bg-gray-100 text-gray-800' }
+    return DRAWING_STATUSES.find(s => s.id === status) || { id: status, label: status, color: 'bg-muted text-foreground' }
   }
 
   return (
@@ -345,7 +345,7 @@ export function DrawingsPage() {
             <div className="text-sm text-muted-foreground">Preliminary</div>
           </div>
           <div className="rounded-lg border bg-card p-4">
-            <div className="text-2xl font-bold text-blue-600">{stats.forConstruction}</div>
+            <div className="text-2xl font-bold text-primary">{stats.forConstruction}</div>
             <div className="text-sm text-muted-foreground">For Construction</div>
           </div>
           <div className="rounded-lg border bg-card p-4">
@@ -473,7 +473,7 @@ export function DrawingsPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => openRevisionModal(drawing)}
-                              className="text-blue-600 hover:bg-blue-100 h-8 w-8"
+                              className="text-primary hover:bg-primary/10 h-8 w-8"
                               title="Upload New Revision"
                             >
                               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

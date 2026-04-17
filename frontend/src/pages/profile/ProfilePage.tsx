@@ -393,16 +393,16 @@ export function ProfilePage() {
                     <img
                       src={avatarPreview}
                       alt="Avatar preview"
-                      className="h-20 w-20 rounded-full object-cover border-2 border-gray-200"
+                      className="h-20 w-20 rounded-full object-cover border-2 border-border"
                     />
                   ) : user?.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
                       alt="Current avatar"
-                      className="h-20 w-20 rounded-full object-cover border-2 border-gray-200"
+                      className="h-20 w-20 rounded-full object-cover border-2 border-border"
                     />
                   ) : (
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground border-2 border-gray-200">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground border-2 border-border">
                       <span className="text-2xl font-bold">
                         {(user?.fullName || user?.name || user?.email || 'U').charAt(0).toUpperCase()}
                       </span>

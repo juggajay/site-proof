@@ -84,7 +84,7 @@ export function DiaryDocketSummary({
           )}
           {summary && summary.totals.machines > 0 && (
             <span className="flex items-center gap-1">
-              <Wrench className="h-4 w-4 text-gray-600" />
+              <Wrench className="h-4 w-4 text-muted-foreground" />
               <strong>{summary.totals.machines}</strong> machines
             </span>
           )}

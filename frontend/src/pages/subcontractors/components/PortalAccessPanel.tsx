@@ -118,8 +118,8 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
           </div>
 
           {/* Access Explanation */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 p-3">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+            <p className="text-sm text-primary">
               <strong>Portal Access Settings</strong><br />
               Control what project information this subcontractor can view in their portal.
               They will always have access to their dockets, assigned work, and company management.
@@ -142,7 +142,7 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
                   className={`rounded-lg border p-3 transition-colors ${
                     isEnabled
                       ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
-                      : 'border-gray-200 dark:border-gray-700'
+                      : 'border-border'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -150,12 +150,12 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
                       <div className={`p-2 rounded-lg ${
                         isEnabled
                           ? 'bg-green-100 dark:bg-green-800'
-                          : 'bg-gray-100 dark:bg-gray-800'
+                          : 'bg-muted'
                       }`}>
                         <Icon className={`h-4 w-4 ${
                           isEnabled
                             ? 'text-green-600 dark:text-green-400'
-                            : 'text-gray-500 dark:text-gray-400'
+                            : 'text-muted-foreground'
                         }`} />
                       </div>
                       <div>
@@ -167,7 +167,7 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
                       onClick={() => toggleAccessModule(module.key as keyof PortalAccess)}
                       disabled={savingAccess}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        isEnabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                        isEnabled ? 'bg-green-500' : 'bg-muted-foreground/30'
                       } ${savingAccess ? 'opacity-50' : ''}`}
                     >
                       <span

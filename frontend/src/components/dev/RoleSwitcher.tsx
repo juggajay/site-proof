@@ -65,7 +65,7 @@ export function RoleSwitcher() {
           'touch-manipulation',
           currentOverride
             ? 'bg-amber-500 text-white hover:bg-amber-600'
-            : 'bg-gray-800 text-white hover:bg-gray-700'
+            : 'bg-card text-foreground hover:bg-muted'
         )}
       >
         <UserCog className="h-4 w-4" />

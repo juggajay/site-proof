@@ -27,7 +27,7 @@ export function SubcontractorAssignmentsSection({
         {canManageLot && (
           <button
             onClick={onAddSubcontractor}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary hover:text-primary hover:bg-primary/5 rounded-md transition-colors"
           >
             <Plus className="h-4 w-4" />
             Add
@@ -66,7 +66,7 @@ export function SubcontractorAssignmentsSection({
                       )}
                     </>
                   ) : (
-                    <span className="text-gray-500">View only</span>
+                    <span className="text-muted-foreground">View only</span>
                   )}
                 </div>
               </div>
@@ -74,7 +74,7 @@ export function SubcontractorAssignmentsSection({
                 <div className="flex gap-2">
                   <button
                     onClick={() => onEditAssignment(assignment)}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 border rounded-md transition-colors"
+                    className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted border rounded-md transition-colors"
                   >
                     Edit
                   </button>

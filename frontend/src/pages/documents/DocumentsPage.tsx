@@ -435,13 +435,13 @@ export function DocumentsPage() {
     >
       {/* Drag overlay */}
       {isDragging && (
-        <div className="fixed inset-0 z-50 bg-blue-500/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <div className="rounded-xl border-4 border-dashed border-blue-500 bg-white/90 p-12 text-center shadow-2xl">
-            <svg className="mx-auto h-16 w-16 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="fixed inset-0 z-50 bg-primary/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+          <div className="rounded-xl border-4 border-dashed border-primary bg-card/90 p-12 text-center shadow-2xl">
+            <svg className="mx-auto h-16 w-16 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
-            <h3 className="mt-4 text-xl font-bold text-blue-700">Drop file here to upload</h3>
-            <p className="mt-2 text-blue-600">Release to start uploading your document</p>
+            <h3 className="mt-4 text-xl font-bold text-primary">Drop file here to upload</h3>
+            <p className="mt-2 text-primary/80">Release to start uploading your document</p>
           </div>
         </div>
       )}
@@ -587,7 +587,7 @@ export function DocumentsPage() {
         {loading ? (
           <div className="p-8 text-center text-muted-foreground">Loading documents...</div>
         ) : documents.length === 0 ? (
-          <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 transition-colors">
+          <div className="p-12 text-center border-2 border-dashed border-border rounded-lg hover:border-primary transition-colors">
             <svg className="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
@@ -617,7 +617,7 @@ export function DocumentsPage() {
                     />
                   ) : null}
                   {isImage(doc.mimeType) ? (
-                    <svg className="h-6 w-6 text-blue-500 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" data-testid="image-icon">
+                    <svg className="h-6 w-6 text-primary hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" data-testid="image-icon">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   ) : isPdf(doc.mimeType) ? (
@@ -635,7 +635,7 @@ export function DocumentsPage() {
                       <text x="8" y="11" fontSize="5" fill="currentColor" fontWeight="bold">W</text>
                     </svg>
                   ) : (
-                    <svg className="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" data-testid="generic-icon">
+                    <svg className="h-6 w-6 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" data-testid="generic-icon">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   )}
@@ -649,7 +649,7 @@ export function DocumentsPage() {
                       {getTypeLabel(doc.documentType)}
                     </span>
                     {doc.category && (
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                         {doc.category}
                       </span>
                     )}
@@ -659,7 +659,7 @@ export function DocumentsPage() {
                     <span>{formatDate(doc.uploadedAt)}</span>
                     {doc.uploadedBy && <span>by {doc.uploadedBy.fullName}</span>}
                     {doc.lot && (
-                      <span className="text-blue-600">Lot {doc.lot.lotNumber}</span>
+                      <span className="text-primary">Lot {doc.lot.lotNumber}</span>
                     )}
                   </div>
                   {doc.caption && (
@@ -673,7 +673,7 @@ export function DocumentsPage() {
                     variant="ghost"
                     size="icon"
                     onClick={() => toggleFavourite(doc)}
-                    className={doc.isFavourite ? 'text-yellow-500 hover:bg-yellow-100' : 'text-gray-400 hover:bg-yellow-100'}
+                    className={doc.isFavourite ? 'text-yellow-500 hover:bg-yellow-100' : 'text-muted-foreground hover:bg-yellow-100'}
                     title={doc.isFavourite ? 'Remove from Favourites' : 'Add to Favourites'}
                   >
                     <svg className="h-5 w-5" fill={doc.isFavourite ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
@@ -685,7 +685,7 @@ export function DocumentsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => openViewer(doc)}
-                      className="text-blue-600 hover:bg-blue-100"
+                      className="text-primary hover:bg-primary/10"
                       title="View"
                     >
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -736,7 +736,7 @@ export function DocumentsPage() {
                   className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                     selectedFiles.length > 0
                       ? 'border-green-400 bg-green-50'
-                      : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/50'
+                      : 'border-border hover:border-primary hover:bg-primary/5'
                   }`}
                   onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                   onDrop={(e) => {
@@ -789,13 +789,13 @@ export function DocumentsPage() {
                     </div>
                   ) : (
                     <>
-                      <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="mx-auto h-10 w-10 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
-                      <p className="mt-2 text-sm text-gray-600">
-                        <span className="font-medium text-blue-600">Click to browse</span> or drag and drop
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        <span className="font-medium text-primary">Click to browse</span> or drag and drop
                       </p>
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         PDF, DOC, XLS, JPG, PNG up to 50MB (select multiple files)
                       </p>
                     </>
@@ -804,7 +804,7 @@ export function DocumentsPage() {
 
                 {/* Image dimension info and warning (for single image) */}
                 {imageDimensions && selectedFiles.length === 1 && (
-                  <p className="mt-2 text-sm text-gray-500">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     Image dimensions: {imageDimensions.width} x {imageDimensions.height} pixels
                   </p>
                 )}
@@ -874,9 +874,9 @@ export function DocumentsPage() {
               {/* Upload Progress */}
               {uploading && (
                 <div className="space-y-2">
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-blue-600 transition-all duration-300"
+                      className="h-full bg-primary transition-all duration-300"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
@@ -917,7 +917,7 @@ export function DocumentsPage() {
           <div className="flex items-center justify-between px-4 py-3 bg-black/50 text-white">
             <div className="flex items-center gap-4">
               <h3 className="font-medium truncate max-w-md">{viewerDoc.filename}</h3>
-              <span className="text-sm text-gray-300">
+              <span className="text-sm text-muted-foreground">
                 {formatFileSize(viewerDoc.fileSize)}
               </span>
             </div>

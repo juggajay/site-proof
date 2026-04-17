@@ -134,7 +134,7 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
       </ModalHeader>
 
       <ModalBody>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="text-sm text-muted-foreground mb-6">
           Your session is about to expire due to inactivity.
         </p>
 
@@ -143,14 +143,14 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
             <Clock className="h-10 w-10 text-amber-600" />
           </div>
           <div className="text-center">
-            <p className="text-lg font-medium text-gray-900">
+            <p className="text-lg font-medium text-foreground">
               You will be logged out in
             </p>
             <p className="text-4xl font-bold text-amber-600 mt-2" data-testid="session-countdown">
               {countdown} seconds
             </p>
           </div>
-          <p className="text-sm text-gray-500 text-center">
+          <p className="text-sm text-muted-foreground text-center">
             Click "Stay Logged In" to continue your session, or you will be automatically logged out.
           </p>
         </div>
@@ -159,7 +159,7 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
       <ModalFooter>
         <button
           onClick={handleLogout}
-          className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+          className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-muted/50 transition-colors"
           data-testid="logout-now-button"
         >
           Logout Now

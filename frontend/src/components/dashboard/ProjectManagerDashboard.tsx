@@ -175,7 +175,7 @@ export function ProjectManagerDashboard() {
         <div className="text-sm text-muted-foreground border-l-4 border-primary pl-3">
           <strong>{data.project.name}</strong>
           {data.project.projectNumber && ` (${data.project.projectNumber})`}
-          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${data.project.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${data.project.status === 'active' ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200' : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}>
             {data.project.status}
           </span>
         </div>
@@ -232,7 +232,7 @@ export function ProjectManagerDashboard() {
             </div>
           </div>
           <div className="mt-3">
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-muted rounded-full h-2">
               <div
                 className="bg-blue-600 h-2 rounded-full"
                 style={{ width: `${data.lotProgress.progressPercentage}%` }}
@@ -367,19 +367,19 @@ export function ProjectManagerDashboard() {
           </div>
           <div className="p-4">
             <div className="grid grid-cols-4 gap-2 text-center mb-4">
-              <div className="bg-gray-50 rounded p-2">
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-2">
                 <p className="text-lg font-bold">{data.holdPointPipeline.pending}</p>
                 <p className="text-xs text-muted-foreground">Pending</p>
               </div>
-              <div className="bg-blue-50 rounded p-2">
+              <div className="bg-blue-50 dark:bg-blue-950/30 rounded p-2">
                 <p className="text-lg font-bold">{data.holdPointPipeline.scheduled}</p>
                 <p className="text-xs text-muted-foreground">Scheduled</p>
               </div>
-              <div className="bg-yellow-50 rounded p-2">
+              <div className="bg-yellow-50 dark:bg-yellow-950/30 rounded p-2">
                 <p className="text-lg font-bold">{data.holdPointPipeline.requested}</p>
                 <p className="text-xs text-muted-foreground">Requested</p>
               </div>
-              <div className="bg-green-50 rounded p-2">
+              <div className="bg-green-50 dark:bg-green-950/30 rounded p-2">
                 <p className="text-lg font-bold">{data.holdPointPipeline.released}</p>
                 <p className="text-xs text-muted-foreground">Released</p>
               </div>
@@ -397,10 +397,10 @@ export function ProjectManagerDashboard() {
                       <p className="text-xs text-muted-foreground">Lot {hp.lotNumber}</p>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded ${
-                      hp.status === 'pending' ? 'bg-gray-100' :
-                      hp.status === 'scheduled' ? 'bg-blue-100' :
-                      hp.status === 'requested' ? 'bg-yellow-100' :
-                      'bg-green-100'
+                      hp.status === 'pending' ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200' :
+                      hp.status === 'scheduled' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200' :
+                      hp.status === 'requested' ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-200' :
+                      'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200'
                     }`}>
                       {hp.status}
                     </span>
@@ -427,8 +427,8 @@ export function ProjectManagerDashboard() {
                   <span>Budget</span>
                   <span className="font-medium">{formatCurrency(data.costTracking.budgetTotal)}</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-gray-400 h-2 rounded-full" style={{ width: '100%' }} />
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div className="bg-muted-foreground/40 h-2 rounded-full" style={{ width: '100%' }} />
                 </div>
               </div>
               <div>
@@ -436,7 +436,7 @@ export function ProjectManagerDashboard() {
                   <span>Actual Spend</span>
                   <span className="font-medium">{formatCurrency(data.costTracking.actualSpend)}</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-muted rounded-full h-2">
                   <div
                     className={`h-2 rounded-full ${data.costTracking.trend === 'over' ? 'bg-red-500' : 'bg-green-500'}`}
                     style={{ width: `${Math.min(100, data.costTracking.budgetTotal > 0 ? (data.costTracking.actualSpend / data.costTracking.budgetTotal) * 100 : 0)}%` }}
@@ -497,9 +497,9 @@ export function ProjectManagerDashboard() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm">{formatCurrency(claim.amount)}</span>
                       <span className={`text-xs px-2 py-0.5 rounded ${
-                        claim.status === 'paid' ? 'bg-green-100 text-green-700' :
-                        claim.status === 'certified' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-700'
+                        claim.status === 'paid' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200' :
+                        claim.status === 'certified' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200' :
+                        'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
                       }`}>
                         {claim.status}
                       </span>

@@ -15,7 +15,7 @@ export function isOverdue(hp: HoldPoint): boolean {
 
 export function getStatusBadge(status: string): string {
   const styles: Record<string, string> = {
-    pending: 'bg-gray-100 text-gray-800',
+    pending: 'bg-muted text-foreground',
     notified: 'bg-amber-100 text-amber-800',
     released: 'bg-green-100 text-green-800',
   }
@@ -289,12 +289,12 @@ function HoldPointRow({
                 <button
                   onClick={() => onGenerateEvidence(hp)}
                   disabled={generatingPdf === hp.id}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-primary/5 text-primary border border-primary/20 rounded hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Generate Evidence Package PDF"
                 >
                   {generatingPdf === hp.id ? (
                     <>
-                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                       <span>Generating...</span>
                     </>
                   ) : (

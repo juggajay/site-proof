@@ -234,7 +234,7 @@ export function ProjectAreasPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => openEditModal(area)}
-                        className="text-blue-600 hover:bg-blue-50"
+                        className="text-primary hover:bg-primary/5"
                         title="Edit"
                       >
                         <Edit2 className="h-4 w-4" />
@@ -310,7 +310,7 @@ export function ProjectAreasPage() {
                       onClick={() => setFormColour(colour.value)}
                       className={`h-8 w-8 rounded-full border-2 transition-transform ${
                         formColour === colour.value
-                          ? 'border-gray-900 dark:border-white scale-110'
+                          ? 'border-foreground scale-110'
                           : 'border-transparent hover:scale-105'
                       }`}
                       style={{ backgroundColor: colour.value }}
@@ -331,7 +331,7 @@ export function ProjectAreasPage() {
                     <div
                       className={`h-8 w-8 rounded-full border-2 flex items-center justify-center bg-gradient-to-br from-red-500 via-green-500 to-blue-500 ${
                         !COLOUR_OPTIONS.some(c => c.value === formColour)
-                          ? 'border-gray-900 dark:border-white scale-110'
+                          ? 'border-foreground scale-110'
                           : 'border-transparent hover:scale-105'
                       }`}
                       title="Custom colour"

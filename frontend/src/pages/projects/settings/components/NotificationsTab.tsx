@@ -47,28 +47,28 @@ export function NotificationsTab({
                 <p className="font-medium">Hold Point Releases</p>
                 <p className="text-sm text-muted-foreground">Notify when a hold point is released</p>
               </div>
-              <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-gray-300" />
+              <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-border" />
             </label>
             <label className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 cursor-pointer">
               <div>
                 <p className="font-medium">NCR Assignments</p>
                 <p className="text-sm text-muted-foreground">Notify when an NCR is assigned to you</p>
               </div>
-              <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-gray-300" />
+              <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-border" />
             </label>
             <label className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 cursor-pointer">
               <div>
                 <p className="font-medium">Test Results</p>
                 <p className="text-sm text-muted-foreground">Notify when test results are uploaded</p>
               </div>
-              <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-gray-300" />
+              <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-border" />
             </label>
             <label className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 cursor-pointer">
               <div>
                 <p className="font-medium">Daily Diary Reminders</p>
                 <p className="text-sm text-muted-foreground">Remind to complete daily diary</p>
               </div>
-              <input type="checkbox" className="h-5 w-5 rounded border-gray-300" />
+              <input type="checkbox" className="h-5 w-5 rounded border-border" />
             </label>
           </div>
         </div>
@@ -83,7 +83,7 @@ export function NotificationsTab({
                 <p className="font-medium">Enable Witness Point Notifications</p>
                 <p className="text-sm text-muted-foreground">Send notification when approaching a witness point</p>
               </div>
-              <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-gray-300" />
+              <input type="checkbox" defaultChecked className="h-5 w-5 rounded border-border" />
             </label>
             <div className="p-3 rounded-lg bg-muted/30">
               <Label className="mb-2">Notification Trigger</Label>

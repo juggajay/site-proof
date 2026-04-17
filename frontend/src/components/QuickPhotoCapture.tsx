@@ -181,7 +181,7 @@ export function QuickPhotoCapture({
       {!isCapturing && (
         <button
           onClick={openCamera}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
         >
           <Camera className="h-5 w-5" />
           <span>Quick Photo</span>
@@ -194,7 +194,7 @@ export function QuickPhotoCapture({
       {/* Preview and edit modal */}
       {isCapturing && previewUrl && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-auto">
+          <div className="bg-card rounded-lg max-w-lg w-full max-h-[90vh] overflow-auto">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="font-semibold text-lg flex items-center gap-2">
@@ -203,7 +203,7 @@ export function QuickPhotoCapture({
               </h3>
               <button
                 onClick={cancelCapture}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1 hover:bg-muted rounded"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -214,11 +214,11 @@ export function QuickPhotoCapture({
               <img
                 src={previewUrl}
                 alt="Preview"
-                className="w-full h-auto max-h-64 object-contain rounded-lg bg-gray-100"
+                className="w-full h-auto max-h-64 object-contain rounded-lg bg-muted"
               />
 
               {/* Sync status indicator */}
-              <div className="mt-2 text-sm text-gray-500">
+              <div className="mt-2 text-sm text-muted-foreground">
                 {!isOnline ? (
                   <span className="flex items-center gap-1 text-amber-600">
                     <MapPin className="h-4 w-4" />
@@ -231,7 +231,7 @@ export function QuickPhotoCapture({
 
               {/* Image dimensions info */}
               {imageDimensions && (
-                <div className="mt-2 text-sm text-gray-500">
+                <div className="mt-2 text-sm text-muted-foreground">
                   Dimensions: {imageDimensions.width} x {imageDimensions.height} pixels
                 </div>
               )}
@@ -251,7 +251,7 @@ export function QuickPhotoCapture({
             <div className="px-4 pb-4 space-y-4">
               {/* Caption */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Caption (optional)
                 </label>
                 <input
@@ -259,13 +259,13 @@ export function QuickPhotoCapture({
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="Describe this photo..."
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-ring focus:border-ring"
                 />
               </div>
 
               {/* Tags */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   <Tag className="h-4 w-4 inline mr-1" />
                   Tags (comma-separated)
                 </label>
@@ -274,7 +274,7 @@ export function QuickPhotoCapture({
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
                   placeholder="e.g., excavation, concrete, inspection"
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-ring focus:border-ring"
                 />
               </div>
 
@@ -288,7 +288,7 @@ export function QuickPhotoCapture({
                 </div>
               )}
               {gpsEnabled && !gpsPosition && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <MapPin className="h-4 w-4 animate-pulse" />
                   <span>Getting location...</span>
                 </div>
@@ -296,17 +296,17 @@ export function QuickPhotoCapture({
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 p-4 border-t bg-gray-50">
+            <div className="flex gap-3 p-4 border-t bg-muted/50">
               <button
                 onClick={cancelCapture}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                className="flex-1 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={savePhoto}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSaving ? (
                   <>
@@ -377,10 +377,10 @@ export function QuickPhotoCaptureButton({
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-muted rounded-lg transition-colors"
           title="Take quick photo"
         >
-          <Camera className="h-5 w-5 text-gray-600" />
+          <Camera className="h-5 w-5 text-muted-foreground" />
         </button>
       </>
     );
@@ -399,7 +399,7 @@ export function QuickPhotoCaptureButton({
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-1 px-2 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-sm bg-muted hover:bg-muted/80 rounded transition-colors"
         >
           <Camera className="h-4 w-4" />
           Photo

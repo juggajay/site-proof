@@ -67,12 +67,12 @@ export function TestsTabContent({ projectId, testResults, loading }: TestsTabCon
                   : '—'}
               </td>
               <td className="px-4 py-3 text-sm">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${testPassFailColors[test.passFail] || 'bg-gray-100'}`}>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${testPassFailColors[test.passFail] || 'bg-muted text-muted-foreground'}`}>
                   {test.passFail}
                 </span>
               </td>
               <td className="px-4 py-3 text-sm">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-gray-100'}`}>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-muted text-muted-foreground'}`}>
                   {test.status}
                 </span>
               </td>

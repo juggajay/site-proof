@@ -85,12 +85,12 @@ function NCRMobileListInner({
                 onSwipeRight={() => onSelectNcr(ncr)}
                 rightAction={{
                   label: 'View',
-                  color: 'bg-blue-500',
+                  color: 'bg-primary',
                   icon: <ChevronRight className="h-6 w-6" />,
                 }}
                 leftAction={{
                   label: 'Copy Link',
-                  color: 'bg-slate-500',
+                  color: 'bg-muted-foreground',
                   icon: <Link2 className="h-6 w-6" />,
                 }}
                 onSwipeLeft={() => onCopyLink(ncr.id, ncr.ncrNumber)}

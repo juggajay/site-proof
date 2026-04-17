@@ -241,14 +241,14 @@ Pages like lots, diary, ITP, hold-points, tests, NCR, documents, drawings, and r
 
 ---
 
-#### [S14] Only 1 Form Uses React Hook Form + Zod — DEFERRED
+#### [S14] Only 1 Form Uses React Hook Form + Zod — RESOLVED
 **Severity:** MEDIUM
 
-Despite having `react-hook-form`, `@hookform/resolvers`, and `zod` as dependencies, only `RegisterPage.tsx` uses the `useForm` + `zodResolver` pattern. All other forms (login, reset, lot creation, NCR, dockets, diary, etc.) use manual `useState` with ad-hoc or no validation.
+~~Despite having `react-hook-form`, `@hookform/resolvers`, and `zod` as dependencies, only `RegisterPage.tsx` uses the `useForm` + `zodResolver` pattern. All other forms (login, reset, lot creation, NCR, dockets, diary, etc.) use manual `useState` with ad-hoc or no validation.~~
 
-**Fix:** Progressively migrate forms, prioritizing: login, password reset, subcontractor invite, financial data entry.
+**Resolution:** Migrated 26 priority forms to React Hook Form + Zod validation. Now 27 files use `useForm` + `zodResolver` with `mode: 'onBlur'`, consistent error display (`border-destructive` + `text-destructive`), and `setError('root', ...)` for server errors. Shared schemas (emailSchema, loginSchema, resetPasswordSchema, acceptInviteSchema) added to `validation.ts`. Remaining unmigrated forms are deferred (complex pages like LotDetailPage, settings pages, inline forms like CommentsSection).
 
-**Status:** Deferred — large scope migration with risk of UI regressions. Each form needs individual attention and testing.
+**Status:** RESOLVED
 
 ---
 
@@ -477,12 +477,23 @@ Called on every diary route (20+ routes), makes 1-2 sequential queries per call.
 
 ---
 
-#### [P13] Most Data Fetching Bypasses TanStack Query — DEFERRED
+#### [P13] Most Data Fetching Bypasses TanStack Query — PARTIAL
 **Severity:** MEDIUM
 
 Most pages use raw `apiFetch` + `useEffect` + `useState` instead of `useQuery` hooks, losing TanStack Query benefits: caching, deduplication, background refresh, prefetching. No `gcTime` configured (defaults to 5 min).
 
-**Status:** Deferred — large-scale migration. Best done incrementally when touching individual pages. Now that apiFetch is universally adopted (Q3), migration to useQuery hooks is simpler.
+**Resolution (partial):** Migrated ~28 files from manual `useEffect`+`useState` fetching to TanStack Query (`useQuery`/`useMutation`). 30 files now use TanStack Query (up from 3). Created centralized `queryKeys.ts` factory for type-safe cache key management.
+
+**Files migrated:**
+- 8 subcontractor portal pages (read-only, 2 queries each)
+- 4 layout/nav components (Sidebar, Header with polling+mutations, Breadcrumbs, GlobalSearch)
+- 5 dashboard components (ProjectDashboard, ForemanDashboard, PMDashboard, QMDashboard, DashboardPage)
+- 7 standalone pages (AuditLogPage, PortfolioPage, ProfilePage with 5 mutations, ProjectsPage, DrawingsPage with FormData uploads, DocumentsPage, CostsPage)
+- 4 foreman components (TodayWorklist, ForemanMobileDashboard, ForemanBottomNavV2 with refetchInterval polling, LotQuickView)
+
+**Key improvements:** Cache deduplication (Sidebar+Header+Breadcrumbs share project query), automatic background refetch, polling via `refetchInterval` replacing manual `setInterval`, mutations with `invalidateQueries` replacing manual `fetchData()` callbacks.
+
+**Remaining:** ~40 files still use manual fetching — complex pages (SettingsPage, HoldPointsPage, ClaimsPage, NCRPage, ITPPage, diary components, etc.) deferred for future batches.
 
 ---
 
@@ -672,7 +683,7 @@ This means no request deduplication, no caching, no background refetch, no optim
 
 **Fix:** Migrating to TanStack Query hooks would reduce page component code by ~30-40% while improving UX.
 
-**Resolution (partial):** Zustand now implemented with 2 active stores (`uiStore.ts`, `foremanMobileStore.ts`) consumed by 10+ components. TanStack Query adoption still minimal (3 files). TanStack Query migration (P13) best done page-by-page.
+**Resolution (partial):** Zustand now implemented with 2 active stores (`uiStore.ts`, `foremanMobileStore.ts`) consumed by 10+ components. TanStack Query now used in 30 files (up from 3) after P13 Phase 1 migration. Centralized `queryKeys.ts` factory for type-safe cache management.
 
 ---
 
@@ -1162,9 +1173,9 @@ Only used in `LinearMapView.tsx`. `html-to-image` is ~10KB and could replace it.
 ### Remaining — Deferred Items (sorted by value/risk)
 
 **Worth Doing Eventually (safe, good value):**
-- **[S14]** Migrate priority forms to React Hook Form + Zod
+- ~~**[S14]** Migrate priority forms to React Hook Form + Zod~~ DONE
 - ~~**[Q2]** Adopt centralized error handler (`next(error)` pattern)~~ DONE
-- **[P13]** Migrate data fetching to TanStack Query hooks
+- ~~**[P13]** Migrate data fetching to TanStack Query hooks~~ PARTIAL (30 files migrated, ~40 deferred)
 - **[O8]** Upgrade TanStack React Query v4 -> v5
 
 **Larger Efforts (plan carefully):**

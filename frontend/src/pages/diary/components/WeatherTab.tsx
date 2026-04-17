@@ -137,7 +137,7 @@ export const WeatherTab = React.memo(function WeatherTab({
           {/* Auto-save status */}
           {autoSaving && (
             <span className="flex items-center gap-1 text-sm text-muted-foreground">
-              <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+              <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               Auto-saving...
             </span>
           )}

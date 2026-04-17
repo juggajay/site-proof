@@ -184,8 +184,8 @@ export interface DiaryReport {
 }
 
 export const STATUS_COLORS: Record<string, string> = {
-  not_started: 'bg-gray-200 text-gray-700',
-  in_progress: 'bg-blue-100 text-blue-700',
+  not_started: 'bg-muted text-foreground',
+  in_progress: 'bg-primary/10 text-primary',
   awaiting_test: 'bg-amber-100 text-amber-700',
   hold_point: 'bg-amber-200 text-amber-800',
   ncr_raised: 'bg-red-100 text-red-700',

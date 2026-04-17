@@ -56,7 +56,7 @@ export function MarkAsNAModal({
     <Modal onClose={handleClose}>
       <ModalHeader>
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-muted text-muted-foreground">
             <span className="text-xl font-bold">&mdash;</span>
           </div>
           <div>

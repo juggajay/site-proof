@@ -10,9 +10,9 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <div className="bg-white border rounded-lg p-4">
-          <div className="text-3xl font-bold text-gray-800">{report.totalNCRs}</div>
-          <div className="text-sm text-gray-500">Total NCRs</div>
+        <div className="bg-card border rounded-lg p-4">
+          <div className="text-3xl font-bold text-foreground">{report.totalNCRs}</div>
+          <div className="text-sm text-muted-foreground">Total NCRs</div>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="text-3xl font-bold text-red-600">
@@ -24,11 +24,11 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
           <div className="text-3xl font-bold text-green-600">{report.closedThisMonth}</div>
           <div className="text-sm text-green-500">Closed This Month</div>
         </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="text-3xl font-bold text-blue-600">
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+          <div className="text-3xl font-bold text-primary">
             {report.averageClosureTime > 0 ? `${report.averageClosureTime}d` : 'N/A'}
           </div>
-          <div className="text-sm text-blue-500">Avg Closure Time</div>
+          <div className="text-sm text-primary/70">Avg Closure Time</div>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <div className="text-3xl font-bold text-amber-600">{report.overdueCount}</div>
@@ -49,7 +49,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
       {/* Charts Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* NCRs by Category Chart */}
-        <div className="bg-white border rounded-lg p-6">
+        <div className="bg-card border rounded-lg p-6">
           <h3 className="text-lg font-medium mb-4">NCRs by Category</h3>
           <div className="space-y-3">
             {Object.entries(report.categoryCounts).map(([category, count]) => {
@@ -60,7 +60,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                     <span className="capitalize">{category.replace(/_/g, ' ')}</span>
                     <span className="font-medium">{count} ({percentage}%)</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className={`h-2 rounded-full ${
                         category === 'workmanship' ? 'bg-amber-500' :
@@ -77,13 +77,13 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
               )
             })}
             {Object.keys(report.categoryCounts).length === 0 && (
-              <p className="text-sm text-gray-500">No data available</p>
+              <p className="text-sm text-muted-foreground">No data available</p>
             )}
           </div>
         </div>
 
         {/* NCRs by Root Cause Chart */}
-        <div className="bg-white border rounded-lg p-6">
+        <div className="bg-card border rounded-lg p-6">
           <h3 className="text-lg font-medium mb-4">NCRs by Root Cause</h3>
           <div className="space-y-3">
             {Object.entries(report.rootCauseCounts).map(([rootCause, count]) => {
@@ -94,7 +94,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                     <span className="capitalize">{rootCause.replace(/_/g, ' ')}</span>
                     <span className="font-medium">{count} ({percentage}%)</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className={`h-2 rounded-full ${
                         rootCause === 'human_error' ? 'bg-red-500' :
@@ -111,13 +111,13 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
               )
             })}
             {Object.keys(report.rootCauseCounts).length === 0 && (
-              <p className="text-sm text-gray-500">No data available</p>
+              <p className="text-sm text-muted-foreground">No data available</p>
             )}
           </div>
         </div>
 
         {/* NCRs by Responsible Party */}
-        <div className="bg-white border rounded-lg p-6">
+        <div className="bg-card border rounded-lg p-6">
           <h3 className="text-lg font-medium mb-4">NCRs by Responsible Party</h3>
           <div className="space-y-3">
             {Object.entries(report.responsiblePartyCounts).map(([party, count]) => {
@@ -128,7 +128,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                     <span className="truncate max-w-[150px]">{party}</span>
                     <span className="font-medium">{count} ({percentage}%)</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className="h-2 rounded-full bg-indigo-500"
                       style={{ width: `${percentage}%` }}
@@ -138,14 +138,14 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
               )
             })}
             {Object.keys(report.responsiblePartyCounts).length === 0 && (
-              <p className="text-sm text-gray-500">No data available</p>
+              <p className="text-sm text-muted-foreground">No data available</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Severity Breakdown */}
-      <div className="bg-white border rounded-lg p-6">
+      <div className="bg-card border rounded-lg p-6">
         <h3 className="text-lg font-medium mb-3">By Severity</h3>
         <div className="flex gap-4">
           <span className="px-4 py-2 bg-amber-100 rounded-lg">
@@ -158,29 +158,29 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
       </div>
 
       {/* NCRs Table */}
-      <div className="bg-white border rounded-lg p-6">
+      <div className="bg-card border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium">NCR Details</h3>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-muted-foreground">
             Generated: {new Date(report.generatedAt).toLocaleString()}
           </span>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">NCR #</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Raised</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">NCR #</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Description</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Category</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Raised</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border">
               {report.ncrs.map((ncr) => (
                 <tr key={ncr.id}>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{ncr.ncrNumber}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{ncr.description}</td>
+                  <td className="px-4 py-3 text-sm font-medium text-foreground">{ncr.ncrNumber}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{ncr.description}</td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`px-2 py-1 rounded-full text-xs ${
                       ncr.category === 'major' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
@@ -188,8 +188,8 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                       {ncr.category}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{ncr.status}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{ncr.status}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
                     {new Date(ncr.raisedAt).toLocaleDateString()}
                   </td>
                 </tr>
@@ -197,7 +197,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
             </tbody>
           </table>
           {report.ncrs.length === 0 && (
-            <div className="text-center py-8 text-gray-500">No NCRs found for this project.</div>
+            <div className="text-center py-8 text-muted-foreground">No NCRs found for this project.</div>
           )}
         </div>
       </div>

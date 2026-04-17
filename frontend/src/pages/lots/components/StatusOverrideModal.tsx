@@ -87,7 +87,7 @@ export function StatusOverrideModal({
           <div className="space-y-4">
             <div>
               <Label>Current Status</Label>
-              <div className={`mt-1 px-3 py-2 rounded border ${lotStatusColors[currentStatus] || 'bg-gray-100'}`}>
+              <div className={`mt-1 px-3 py-2 rounded border ${lotStatusColors[currentStatus] || 'bg-muted text-muted-foreground'}`}>
                 {currentStatus.replace('_', ' ')}
               </div>
             </div>

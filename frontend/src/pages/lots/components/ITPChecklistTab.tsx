@@ -50,7 +50,7 @@ function ITPChecklistItemRow({
   const notes = completion?.notes || ''
 
   return (
-    <div className={`p-4 ${isNotApplicable ? 'bg-gray-50 dark:bg-gray-900/30' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''}`}>
+    <div className={`p-4 ${isNotApplicable ? 'bg-muted/50' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''}`}>
       <div className="flex items-start gap-3">
         <button
           onClick={() => !isNotApplicable && !isFailed && onToggleCompletion(item.id, isCompleted, notes)}
@@ -60,10 +60,10 @@ function ITPChecklistItemRow({
             isFailed
               ? 'bg-red-500 border-red-500 text-white cursor-not-allowed'
               : isNotApplicable
-              ? 'bg-gray-400 border-gray-400 text-white cursor-not-allowed'
+              ? 'bg-gray-400 dark:bg-gray-600 border-gray-400 dark:border-gray-600 text-white cursor-not-allowed'
               : isCompleted
               ? 'bg-green-500 border-green-500 text-white'
-              : 'border-gray-300 hover:border-primary'
+              : 'border-border hover:border-primary'
           } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
         >
           {isFailed ? <span className="text-[10px] font-bold" aria-hidden="true">X</span> : isNotApplicable ? <span className="text-[10px] font-bold" aria-hidden="true">-</span> : isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
@@ -85,7 +85,7 @@ function ITPChecklistItemRow({
             </span>
             {/* N/A Badge */}
             {isNotApplicable && (
-              <span className="text-xs bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded font-medium">N/A</span>
+              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded font-medium">N/A</span>
             )}
             {item.isHoldPoint && (
               <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Hold Point</span>
@@ -124,7 +124,7 @@ function ITPChecklistItemRow({
               </span>
             )}
             {item.evidenceRequired === 'document' && (
-              <span className="inline-flex items-center text-blue-600 dark:text-blue-400" title="Document required">
+              <span className="inline-flex items-center text-primary" title="Document required">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                 </svg>
@@ -133,9 +133,9 @@ function ITPChecklistItemRow({
           </div>
           {/* Acceptance Criteria (Feature #632) */}
           {item.acceptanceCriteria && (
-            <div className="mt-2 text-sm bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-md p-2">
-              <span className="font-medium text-blue-700 dark:text-blue-300">Acceptance Criteria:</span>
-              <span className="ml-1 text-blue-600 dark:text-blue-400">{item.acceptanceCriteria}</span>
+            <div className="mt-2 text-sm bg-primary/5 border border-primary/20 rounded-md p-2">
+              <span className="font-medium text-primary">Acceptance Criteria:</span>
+              <span className="ml-1 text-primary/80">{item.acceptanceCriteria}</span>
             </div>
           )}
           <div className="mt-2">
@@ -199,7 +199,7 @@ function ITPChecklistItemRow({
           )}
 
           {/* Photo Attachments Section */}
-          <div className="mt-3 pt-2 border-t border-gray-100">
+          <div className="mt-3 pt-2 border-t border-border">
             {/* Display existing attachments */}
             {completion?.attachments && completion.attachments.length > 0 && (
               <div className="mb-2">
@@ -250,7 +250,7 @@ function ITPChecklistItemRow({
               <div className="flex items-center gap-2 ml-3">
                 <button
                   onClick={() => onMarkAsNA(item.id, item.description)}
-                  className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                   title="Mark this item as Not Applicable"
                 >
                   <span>-</span>
@@ -269,7 +269,7 @@ function ITPChecklistItemRow({
 
             {/* Show N/A reason */}
             {isNotApplicable && notes && (
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 <span className="font-medium">Reason:</span> {notes}
               </p>
             )}
@@ -479,7 +479,7 @@ function PhotoLightbox({
                 href={`https://www.google.com/maps/search/?api=1&query=${selectedPhoto.document.gpsLatitude},${selectedPhoto.document.gpsLongitude}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"
+                className="text-xs text-primary/70 hover:text-primary mt-1 inline-block"
                 onClick={(e) => e.stopPropagation()}
               >
                 Open in Google Maps
@@ -687,12 +687,12 @@ export function ITPChecklistTab({
               </button>
             </div>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div className="w-full bg-muted rounded-full h-2.5">
             <div className="bg-primary h-2.5 rounded-full transition-all" style={{ width: `${percentage}%` }}></div>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
             {finishedItems} of {totalItems} checklist items completed ({percentage}%)
-            {naItems > 0 && <span className="text-gray-500"> - {naItems} N/A</span>}
+            {naItems > 0 && <span className="text-muted-foreground"> - {naItems} N/A</span>}
           </p>
         </div>
 
@@ -720,7 +720,7 @@ export function ITPChecklistTab({
               type="checkbox"
               checked={showIncompleteOnly}
               onChange={(e) => setShowIncompleteOnly(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-border"
             />
             <span>Show incomplete only</span>
           </label>

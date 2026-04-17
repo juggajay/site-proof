@@ -19,7 +19,7 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+          className="rounded-lg border border-border px-3 py-2 text-sm bg-card"
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
@@ -28,7 +28,7 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
         </select>
         <button
           onClick={onExportCSV}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+          className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
         >
           Export CSV
         </button>
@@ -52,7 +52,7 @@ export const HoldPointSummaryCards = React.memo(function HoldPointSummaryCards({
       </div>
       <div className="rounded-lg border bg-card p-4">
         <div className="text-sm text-muted-foreground">Pending</div>
-        <div className="text-2xl font-bold mt-1 text-gray-600">{stats.pending}</div>
+        <div className="text-2xl font-bold mt-1 text-muted-foreground">{stats.pending}</div>
       </div>
       <div className="rounded-lg border bg-card p-4">
         <div className="text-sm text-muted-foreground">Awaiting Release</div>

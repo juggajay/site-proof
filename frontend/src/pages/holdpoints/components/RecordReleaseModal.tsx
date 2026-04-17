@@ -230,7 +230,7 @@ export function RecordReleaseModal({
           ) : releaseMethod === 'email' ? (
             <div className="space-y-2">
               <Label>Email Evidence</Label>
-              <div className="p-4 border border-dashed rounded-lg bg-blue-50/50">
+              <div className="p-4 border border-dashed rounded-lg bg-primary/5">
                 <input
                   type="file"
                   accept=".pdf,.eml,.msg,.png,.jpg,.jpeg"

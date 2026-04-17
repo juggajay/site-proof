@@ -121,7 +121,7 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
                   </p>
                 )}
               </div>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}>
                 {lot.status.replace('_', ' ')}
               </span>
             </div>
@@ -167,7 +167,7 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
                 {lot._count && (
                   <>
                     <div className="flex items-center gap-1 text-xs bg-muted/50 px-2 py-1 rounded">
-                      <FileText className="h-3 w-3 text-blue-600" />
+                      <FileText className="h-3 w-3 text-primary" />
                       <span>{lot._count.testResults} Tests</span>
                     </div>
                     <div className="flex items-center gap-1 text-xs bg-muted/50 px-2 py-1 rounded">

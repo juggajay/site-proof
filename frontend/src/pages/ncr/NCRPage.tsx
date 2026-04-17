@@ -118,7 +118,7 @@ export function NCRPage() {
 
       {/* User Role Info */}
       {userRole && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-sm">
+        <div className="bg-primary/5 border border-primary/20 text-primary px-4 py-3 rounded-lg text-sm">
           Your role: <span className="font-medium">{userRole.role}</span>
           {userRole.isQualityManager && (
             <span className="ml-2 text-green-600">(Can approve major NCR closures)</span>

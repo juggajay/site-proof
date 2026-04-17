@@ -332,7 +332,7 @@ export function LoginPage() {
           id="rememberMe"
           type="checkbox"
           {...loginForm.register('rememberMe')}
-          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+          className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
         />
         <Label htmlFor="rememberMe" className="text-sm text-muted-foreground font-normal">
           Remember me
@@ -350,7 +350,7 @@ export function LoginPage() {
       {/* Feature #415: Magic link option */}
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300"></div>
+          <div className="w-full border-t border-border"></div>
         </div>
         <div className="relative flex justify-center text-sm">
           <span className="bg-background px-2 text-muted-foreground">or</span>
@@ -369,7 +369,7 @@ export function LoginPage() {
       {/* Feature #414, #1004: Google OAuth Sign In */}
       <a
         href={`${API_URL}/api/auth/google`}
-        className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white py-2 text-gray-700 hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card py-2 text-foreground hover:bg-muted/50 transition-colors"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

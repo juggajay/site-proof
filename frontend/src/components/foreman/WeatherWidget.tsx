@@ -26,10 +26,10 @@ function getWeatherIcon(conditions: string | null) {
     return <CloudSnow className="h-10 w-10 text-blue-200" />
   }
   if (lower.includes('wind')) {
-    return <Wind className="h-10 w-10 text-gray-500" />
+    return <Wind className="h-10 w-10 text-muted-foreground" />
   }
   if (lower.includes('cloud') || lower.includes('overcast')) {
-    return <Cloud className="h-10 w-10 text-gray-400" />
+    return <Cloud className="h-10 w-10 text-muted-foreground" />
   }
   return <Sun className="h-10 w-10 text-yellow-500" />
 }
@@ -52,10 +52,10 @@ export function WeatherWidget({ weather, loading, className }: WeatherWidgetProp
     return (
       <div className={cn('rounded-lg border p-6 animate-pulse', className)}>
         <div className="flex items-center gap-4">
-          <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-full" />
+          <div className="h-10 w-10 bg-muted rounded-full" />
           <div className="space-y-2">
-            <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
-            <div className="h-3 w-32 bg-gray-200 dark:bg-gray-700 rounded" />
+            <div className="h-4 w-24 bg-muted rounded" />
+            <div className="h-3 w-32 bg-muted rounded" />
           </div>
         </div>
       </div>

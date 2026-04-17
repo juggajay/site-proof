@@ -11,17 +11,17 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Summary Cards with Percentage */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <div className="bg-gray-100 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-gray-700">{report.summary.notStarted}</div>
-          <div className="text-sm text-gray-500">Not Started</div>
-          <div className="text-xs text-gray-400 mt-1">
+        <div className="bg-muted rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-foreground">{report.summary.notStarted}</div>
+          <div className="text-sm text-muted-foreground">Not Started</div>
+          <div className="text-xs text-muted-foreground mt-1">
             {report.totalLots > 0 ? ((report.summary.notStarted / report.totalLots) * 100).toFixed(1) : 0}%
           </div>
         </div>
-        <div className="bg-blue-100 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-700">{report.summary.inProgress}</div>
-          <div className="text-sm text-blue-600">In Progress</div>
-          <div className="text-xs text-blue-400 mt-1">
+        <div className="bg-primary/10 rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-primary">{report.summary.inProgress}</div>
+          <div className="text-sm text-primary">In Progress</div>
+          <div className="text-xs text-primary/70 mt-1">
             {report.totalLots > 0 ? ((report.summary.inProgress / report.totalLots) * 100).toFixed(1) : 0}%
           </div>
         </div>
@@ -64,7 +64,7 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
 
       {/* Period Comparison */}
       {report.periodComparison && (
-        <div className="bg-white border rounded-lg p-6">
+        <div className="bg-card border rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-4">Period Comparison</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -78,14 +78,14 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
                 {report.periodComparison.currentPeriodLabel}
               </div>
             </div>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <div className="text-3xl font-bold text-gray-600">
+            <div className="bg-muted/50 border border-border rounded-lg p-4">
+              <div className="text-3xl font-bold text-muted-foreground">
                 {report.periodComparison.conformedLastPeriod}
               </div>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 Conformed Last Period
               </div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 {report.periodComparison.previousPeriodLabel}
               </div>
             </div>
@@ -94,14 +94,14 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
                 ? 'bg-green-50 border-green-200'
                 : report.periodComparison.periodChange < 0
                 ? 'bg-red-50 border-red-200'
-                : 'bg-gray-50 border-gray-200'
+                : 'bg-muted/50 border-border'
             }`}>
               <div className={`text-3xl font-bold ${
                 report.periodComparison.periodChange > 0
                   ? 'text-green-600'
                   : report.periodComparison.periodChange < 0
                   ? 'text-red-600'
-                  : 'text-gray-600'
+                  : 'text-muted-foreground'
               }`}>
                 {report.periodComparison.periodChange > 0 ? '+' : ''}
                 {report.periodComparison.periodChange}
@@ -111,7 +111,7 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
                   ? 'text-green-600'
                   : report.periodComparison.periodChange < 0
                   ? 'text-red-600'
-                  : 'text-gray-600'
+                  : 'text-muted-foreground'
               }`}>
                 Change from Previous
               </div>
@@ -120,7 +120,7 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
                   ? 'text-green-500'
                   : report.periodComparison.periodChange < 0
                   ? 'text-red-500'
-                  : 'text-gray-500'
+                  : 'text-muted-foreground'
               }`}>
                 {report.periodComparison.periodChange > 0 ? '+' : ''}
                 {report.periodComparison.periodChangePercent}%
@@ -131,10 +131,10 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
       )}
 
       {/* Total Count */}
-      <div className="bg-white border rounded-lg p-6">
+      <div className="bg-card border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Total Lots: {report.totalLots}</h2>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-muted-foreground">
             Generated: {new Date(report.generatedAt).toLocaleString()}
           </span>
         </div>
@@ -144,7 +144,7 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
           <h3 className="text-lg font-medium mb-3">By Activity Type</h3>
           <div className="flex flex-wrap gap-2">
             {Object.entries(report.activityCounts).map(([activity, count]) => (
-              <span key={activity} className="px-3 py-1 bg-gray-100 rounded-full text-sm">
+              <span key={activity} className="px-3 py-1 bg-muted rounded-full text-sm">
                 {activity}: <strong>{count}</strong>
               </span>
             ))}
@@ -154,29 +154,29 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
         {/* Lots Table */}
         <h3 className="text-lg font-medium mb-3">Lot Details</h3>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lot Number</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Chainage</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Lot Number</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Description</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Activity</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Chainage</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border">
               {report.lots.map((lot) => (
                 <tr key={lot.id}>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{lot.lotNumber}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{lot.description || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{lot.activityType}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
+                  <td className="px-4 py-3 text-sm font-medium text-foreground">{lot.lotNumber}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{lot.description || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{lot.activityType}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
                     {lot.chainageStart != null && lot.chainageEnd != null
                       ? `${lot.chainageStart} - ${lot.chainageEnd}`
                       : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs ${STATUS_COLORS[lot.status] || 'bg-gray-100'}`}>
+                    <span className={`px-2 py-1 rounded-full text-xs ${STATUS_COLORS[lot.status] || 'bg-muted'}`}>
                       {STATUS_LABELS[lot.status] || lot.status}
                     </span>
                   </td>

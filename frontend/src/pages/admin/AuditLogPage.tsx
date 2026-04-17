@@ -156,8 +156,8 @@ export function AuditLogPage() {
   const getActionColor = (action: string) => {
     if (action.includes('create') || action.includes('add')) return 'text-green-600 bg-green-50'
     if (action.includes('delete') || action.includes('remove')) return 'text-red-600 bg-red-50'
-    if (action.includes('update') || action.includes('edit')) return 'text-blue-600 bg-blue-50'
-    return 'text-gray-600 bg-gray-50'
+    if (action.includes('update') || action.includes('edit')) return 'text-primary bg-primary/5'
+    return 'text-muted-foreground bg-muted/50'
   }
 
   const exportToCSV = () => {

@@ -266,7 +266,7 @@ export function SubcontractorLotITPPage() {
         </div>
         <Link
           to="/subcontractor-portal/itps"
-          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
+          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-muted-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to ITPs
@@ -281,17 +281,17 @@ export function SubcontractorLotITPPage() {
         <div className="flex items-center gap-3 mb-6">
           <Link
             to="/subcontractor-portal/itps"
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
           >
-            <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{lot.lotNumber}</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">ITP Checklist</p>
+            <h1 className="text-lg font-semibold text-foreground">{lot.lotNumber}</h1>
+            <p className="text-sm text-muted-foreground">ITP Checklist</p>
           </div>
         </div>
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-8 text-center">
-          <p className="text-gray-500 dark:text-gray-400">No ITP assigned to this lot</p>
+        <div className="border border-border rounded-lg bg-card p-8 text-center">
+          <p className="text-muted-foreground">No ITP assigned to this lot</p>
         </div>
       </div>
     )
@@ -303,13 +303,13 @@ export function SubcontractorLotITPPage() {
       <div className="flex items-center gap-3 mb-6">
         <Link
           to="/subcontractor-portal/itps"
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">{lot.lotNumber}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{itpInstance.template.name}</p>
+          <h1 className="text-lg font-semibold text-foreground">{lot.lotNumber}</h1>
+          <p className="text-sm text-muted-foreground">{itpInstance.template.name}</p>
         </div>
       </div>
 

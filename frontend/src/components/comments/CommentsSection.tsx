@@ -529,7 +529,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
               className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg border hover:bg-muted transition-colors max-w-[200px]"
             >
               {isImage ? (
-                <Image className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                <Image className="h-4 w-4 text-primary flex-shrink-0" />
               ) : (
                 <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               )}

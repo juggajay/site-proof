@@ -123,31 +123,31 @@ export function PushNotificationSettings() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-card rounded-lg shadow-sm border p-6">
         <div className="flex items-center gap-2 mb-4">
-          <Smartphone className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <Smartphone className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">
             Push Notifications
           </h3>
         </div>
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-          <span className="ml-2 text-gray-500">Loading...</span>
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <span className="ml-2 text-muted-foreground">Loading...</span>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-card rounded-lg shadow-sm border p-6">
       <div className="flex items-center gap-2 mb-4">
-        <Smartphone className="h-5 w-5 text-blue-600" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <Smartphone className="h-5 w-5 text-primary" />
+        <h3 className="text-lg font-semibold text-foreground">
           Push Notifications
         </h3>
       </div>
 
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+      <p className="text-sm text-muted-foreground mb-6">
         Receive instant notifications on your device when important events occur,
         such as hold point releases, NCR assignments, and mentions.
       </p>
@@ -217,18 +217,18 @@ export function PushNotificationSettings() {
       {status.supported && (
         <div className="space-y-4">
           {/* Subscription Status */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-3">
               {status.subscribed ? (
                 <Bell className="h-5 w-5 text-green-600" />
               ) : (
-                <BellOff className="h-5 w-5 text-gray-400" />
+                <BellOff className="h-5 w-5 text-muted-foreground" />
               )}
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <p className="text-sm font-medium text-foreground">
                   {status.subscribed ? 'Push Notifications Enabled' : 'Push Notifications Disabled'}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   {status.subscribed
                     ? 'You will receive push notifications on this device'
                     : 'Enable to receive notifications when the app is closed'
@@ -242,8 +242,8 @@ export function PushNotificationSettings() {
               disabled={subscribing || status.permission === 'denied'}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 status.subscribed
-                  ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-muted text-foreground hover:bg-muted/80'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
               }`}
             >
               {subscribing ? (
@@ -258,12 +258,12 @@ export function PushNotificationSettings() {
 
           {/* Test Notification Button */}
           {status.subscribed && (
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <p className="text-sm font-medium text-foreground">
                   Test Push Notification
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   Send a test notification to verify everything is working
                 </p>
               </div>
@@ -271,7 +271,7 @@ export function PushNotificationSettings() {
               <button
                 onClick={handleSendTest}
                 disabled={sendingTest}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-muted text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {sendingTest ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -285,11 +285,11 @@ export function PushNotificationSettings() {
       )}
 
       {/* Mobile Instructions */}
-      <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+      <div className="mt-6 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+        <p className="text-sm font-medium text-primary mb-2">
           Mobile Device Setup
         </p>
-        <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">
+        <ul className="text-sm text-primary/80 space-y-1 list-disc list-inside">
           <li>For best results, add SiteProof to your home screen</li>
           <li>On iOS 16.4+: Safari → Share → Add to Home Screen</li>
           <li>On Android: Chrome → Menu → Add to Home Screen</li>

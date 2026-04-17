@@ -58,14 +58,14 @@ function getITPStatusBadge(status: string, percentage?: number) {
   }
   if (status === 'in_progress' || (percentage && percentage > 0)) {
     return (
-      <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+      <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
         <Clock className="h-3 w-3" />
         {percentage ? `${percentage}%` : 'In Progress'}
       </span>
     )
   }
   return (
-    <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+    <span className="px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
       Not Started
     </span>
   )
@@ -129,7 +129,7 @@ export function SubcontractorITPsPage() {
         </div>
         <Link
           to="/subcontractor-portal"
-          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
+          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Portal
@@ -144,38 +144,38 @@ export function SubcontractorITPsPage() {
       <div className="flex items-center gap-3">
         <Link
           to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">ITPs</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{company?.projectName}</p>
+          <h1 className="text-lg font-semibold text-foreground">ITPs</h1>
+          <p className="text-sm text-muted-foreground">{company?.projectName}</p>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{lots.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Total ITPs</p>
+        <div className="border border-border rounded-lg bg-card p-3">
+          <p className="text-2xl font-bold text-foreground">{lots.length}</p>
+          <p className="text-xs text-muted-foreground">Total ITPs</p>
         </div>
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{inProgress.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">In Progress</p>
+        <div className="border border-border rounded-lg bg-card p-3">
+          <p className="text-2xl font-bold text-primary">{inProgress.length}</p>
+          <p className="text-xs text-muted-foreground">In Progress</p>
         </div>
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
+        <div className="border border-border rounded-lg bg-card p-3">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">{completed.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Completed</p>
+          <p className="text-xs text-muted-foreground">Completed</p>
         </div>
       </div>
 
       {lots.length === 0 ? (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <div className="border border-border rounded-lg bg-card">
           <div className="p-8 text-center">
-            <ClipboardList className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400 mb-2">No ITPs assigned yet</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground mb-2">No ITPs assigned yet</p>
+            <p className="text-sm text-muted-foreground">
               ITPs will appear here when you're assigned to lots with ITP completion permission
             </p>
           </div>
@@ -185,7 +185,7 @@ export function SubcontractorITPsPage() {
           {/* In Progress */}
           {inProgress.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 In Progress ({inProgress.length})
               </h2>
               <div className="space-y-2">
@@ -199,7 +199,7 @@ export function SubcontractorITPsPage() {
           {/* Not Started */}
           {notStarted.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 Not Started ({notStarted.length})
               </h2>
               <div className="space-y-2">
@@ -213,7 +213,7 @@ export function SubcontractorITPsPage() {
           {/* Completed */}
           {completed.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 Completed ({completed.length})
               </h2>
               <div className="space-y-2">
@@ -236,18 +236,18 @@ function ITPLotCard({ lot }: { lot: Lot }) {
   return (
     <Link
       to={`/subcontractor-portal/lots/${lot.id}/itp`}
-      className="block border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors"
+      className="block border border-border rounded-lg bg-card hover:border-primary transition-colors"
     >
       <div className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-lg ${canComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-700'}`}>
-              <ClipboardList className={`h-4 w-4 ${canComplete ? 'text-green-600 dark:text-green-300' : 'text-gray-500 dark:text-gray-400'}`} />
+            <div className={`p-2 rounded-lg ${canComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-muted'}`}>
+              <ClipboardList className={`h-4 w-4 ${canComplete ? 'text-green-600 dark:text-green-300' : 'text-muted-foreground'}`} />
             </div>
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">{lot.lotNumber}</p>
+              <p className="font-medium text-foreground">{lot.lotNumber}</p>
               {itp && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">{itp.template.name}</p>
+                <p className="text-sm text-muted-foreground">{itp.template.name}</p>
               )}
               {!canComplete && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">View only - contact PM for completion access</p>
@@ -256,7 +256,7 @@ function ITPLotCard({ lot }: { lot: Lot }) {
           </div>
           <div className="flex items-center gap-2">
             {itp && getITPStatusBadge(itp.status, itp.completionPercentage)}
-            <ChevronRight className="h-5 w-5 text-gray-400" />
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </div>
         </div>
       </div>

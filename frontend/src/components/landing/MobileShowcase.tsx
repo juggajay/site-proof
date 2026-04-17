@@ -3,7 +3,7 @@ import { FadeIn, StaggerContainer } from './animations/FadeIn'
 
 export function MobileShowcase() {
   return (
-    <section className="overflow-hidden bg-[#1e3a5f] py-24 text-white">
+    <section className="overflow-hidden bg-primary py-24 text-white">
       <div className="container mx-auto px-4 md:px-6">
         <div className="grid gap-12 lg:grid-cols-2 items-center">
           <StaggerContainer className="order-2 lg:order-1">
@@ -11,7 +11,7 @@ export function MobileShowcase() {
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl mb-6">
                 Designed for dirt, not desks
               </h2>
-              <p className="text-lg text-blue-100 mb-8 max-w-lg">
+              <p className="text-lg text-primary-foreground/80 mb-8 max-w-lg">
                 Your foremen work in dust, rain, and poor signal. SiteProof's mobile app is built for that reality. Big buttons for gloved hands. Offline mode for the paddock. Camera launches in one tap.
               </p>
             </FadeIn>
@@ -24,7 +24,7 @@ export function MobileShowcase() {
                   </div>
                   <div className="ml-4">
                     <h3 className="text-xl font-semibold mb-1">Works Offline</h3>
-                    <p className="text-blue-200">Syncs automatically when you return to signal range.</p>
+                    <p className="text-primary-foreground/70">Syncs automatically when you return to signal range.</p>
                   </div>
                 </div>
               </FadeIn>
@@ -36,7 +36,7 @@ export function MobileShowcase() {
                   </div>
                   <div className="ml-4">
                     <h3 className="text-xl font-semibold mb-1">Photo-First Interface</h3>
-                    <p className="text-blue-200">Capture evidence instantly with GPS and timestamps.</p>
+                    <p className="text-primary-foreground/70">Capture evidence instantly with GPS and timestamps.</p>
                   </div>
                 </div>
               </FadeIn>
@@ -48,7 +48,7 @@ export function MobileShowcase() {
                   </div>
                   <div className="ml-4">
                     <h3 className="text-xl font-semibold mb-1">Fast Data Entry</h3>
-                    <p className="text-blue-200">Weather auto-filled. Copy yesterday's diary. Done in 10 mins.</p>
+                    <p className="text-primary-foreground/70">Weather auto-filled. Copy yesterday's diary. Done in 10 mins.</p>
                   </div>
                 </div>
               </FadeIn>

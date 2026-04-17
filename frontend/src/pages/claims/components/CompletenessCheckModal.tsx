@@ -16,19 +16,19 @@ function LotIssueItem({ issue }: { issue: CompletenessIssue }) {
   return (
     <div className={`flex items-start gap-2 p-2 rounded text-sm ${
       issue.severity === 'critical' ? 'bg-red-100' :
-      issue.severity === 'warning' ? 'bg-amber-100' : 'bg-blue-100'
+      issue.severity === 'warning' ? 'bg-amber-100' : 'bg-primary/10'
     }`}>
       {issue.severity === 'critical' && <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />}
       {issue.severity === 'warning' && <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />}
-      {issue.severity === 'info' && <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />}
+      {issue.severity === 'info' && <Info className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />}
       <div>
         <div className={`font-medium ${
           issue.severity === 'critical' ? 'text-red-800' :
-          issue.severity === 'warning' ? 'text-amber-800' : 'text-blue-800'
+          issue.severity === 'warning' ? 'text-amber-800' : 'text-primary'
         }`}>{issue.message}</div>
         <div className={`text-xs mt-0.5 ${
           issue.severity === 'critical' ? 'text-red-700' :
-          issue.severity === 'warning' ? 'text-amber-700' : 'text-blue-700'
+          issue.severity === 'warning' ? 'text-amber-700' : 'text-primary/80'
         }`}>{issue.suggestion}</div>
       </div>
     </div>

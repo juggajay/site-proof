@@ -40,8 +40,8 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
             disabled={submitting}
             className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
           >
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Mail className="h-5 w-5 text-blue-600" />
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Mail className="h-5 w-5 text-primary" />
             </div>
             <div>
               <div className="font-medium">Email</div>

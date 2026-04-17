@@ -248,7 +248,7 @@ export function AddManualLabourPlantSheet({
             disabled={!plantDescription.trim() || savingPlant}
             className={cn(
               'w-full py-3 rounded-lg font-semibold text-white',
-              'bg-gray-600 active:bg-gray-700',
+              'bg-gray-600 dark:bg-gray-700 active:bg-gray-700 dark:active:bg-gray-600',
               'touch-manipulation min-h-[48px]',
               'flex items-center justify-center gap-2',
               (!plantDescription.trim() || savingPlant) && 'opacity-50'

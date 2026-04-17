@@ -392,7 +392,7 @@ export function ForemanDashboard() {
 function DiaryStatusBadge({ status, exists }: { status: string | null; exists: boolean }) {
   if (!exists) {
     return (
-      <span className="bg-gray-100 text-gray-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+      <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-medium px-2.5 py-0.5 rounded-full">
         Not Started
       </span>
     )

@@ -104,7 +104,7 @@ export function LotHeader({
           {canEdit && lot.status !== 'claimed' && (
             <button
               onClick={onAssignSubcontractorLegacy}
-              className="flex items-center gap-1.5 rounded-lg border border-blue-500 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
+              className="flex items-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-sm text-primary hover:bg-primary/5"
               title={lot.assignedSubcontractor ? `Assigned to ${lot.assignedSubcontractor.companyName}` : 'Assign to subcontractor'}
             >
               <Users className="h-4 w-4" />
@@ -122,7 +122,7 @@ export function LotHeader({
               <span>Override Status</span>
             </button>
           )}
-          <span className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-gray-100'}`}>
+          <span className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}>
             {lot.status.replace('_', ' ')}
           </span>
         </div>

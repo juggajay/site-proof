@@ -38,7 +38,7 @@ function CumulativeTooltip({ active, payload, label, formatCurrency }: any) {
   if (active && payload && payload.length) {
     const data = payload[0].payload
     return (
-      <div className="bg-white dark:bg-gray-800 p-3 border rounded-lg shadow-lg">
+      <div className="bg-card p-3 border rounded-lg shadow-lg">
         <p className="font-semibold mb-2">Claim {data.claimNumber} ({label})</p>
         <div className="space-y-1 text-sm">
           <p className="text-blue-600">
@@ -65,14 +65,14 @@ function MonthlyTooltip({ active, payload, label, formatCurrency }: any) {
   if (active && payload && payload.length) {
     const data = payload[0].payload
     const statusColors: Record<string, string> = {
-      draft: 'text-gray-600',
+      draft: 'text-muted-foreground',
       submitted: 'text-blue-600',
       certified: 'text-amber-600',
       paid: 'text-green-600',
       disputed: 'text-red-600'
     }
     return (
-      <div className="bg-white dark:bg-gray-800 p-3 border rounded-lg shadow-lg">
+      <div className="bg-card p-3 border rounded-lg shadow-lg">
         <p className="font-semibold mb-2">Claim {data.claimNumber} ({label})</p>
         <div className="space-y-1 text-sm">
           <p className="text-blue-600">
@@ -86,7 +86,7 @@ function MonthlyTooltip({ active, payload, label, formatCurrency }: any) {
           </p>
         </div>
         <div className="border-t mt-2 pt-2 text-xs">
-          <p className={statusColors[data.status] || 'text-gray-600'}>
+          <p className={statusColors[data.status] || 'text-muted-foreground'}>
             Status: {data.status?.charAt(0).toUpperCase() + data.status?.slice(1)}
           </p>
         </div>

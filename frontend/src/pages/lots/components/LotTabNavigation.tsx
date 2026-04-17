@@ -37,7 +37,7 @@ export function LotTabNavigation({
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
                 currentTab === tab.id
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
               aria-selected={currentTab === tab.id}
               role="tab"

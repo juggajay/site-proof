@@ -22,9 +22,9 @@ const getStatusBadge = (status: string) => {
     case 'removed':
       return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><X className="h-3 w-3" /> Removed</span>
     case 'inactive':
-      return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700"><X className="h-3 w-3" /> Inactive</span>
+      return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground"><X className="h-3 w-3" /> Inactive</span>
     default:
-      return <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status}</span>
+      return <span className="px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">{status}</span>
   }
 }
 
@@ -161,7 +161,7 @@ export function SubcontractorsPage() {
           <label className="flex items-center gap-2 cursor-pointer text-sm">
             <button
               onClick={() => setShowRemoved(!showRemoved)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showRemoved ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showRemoved ? 'bg-red-500' : 'bg-muted-foreground/30'}`}
             >
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${showRemoved ? 'translate-x-[18px]' : 'translate-x-[3px]'}`} />
             </button>

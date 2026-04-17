@@ -13,7 +13,7 @@ const chips: Array<{ type: QuickAddType; label: string; icon: typeof Plus; color
   { type: 'activity', label: 'Activity', icon: Plus, color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
   { type: 'delay', label: 'Delay', icon: AlertTriangle, color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
   { type: 'delivery', label: 'Delivery', icon: Truck, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  { type: 'plant', label: 'Plant', icon: Wrench, color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
+  { type: 'plant', label: 'Plant', icon: Wrench, color: 'bg-muted text-foreground' },
   { type: 'event', label: 'Event', icon: CalendarClock, color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
 ]
 

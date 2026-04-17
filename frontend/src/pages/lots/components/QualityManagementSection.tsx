@@ -119,7 +119,7 @@ export function QualityManagementSection({
               className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${
                 conformStatus?.canConform
                   ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-muted-foreground cursor-not-allowed'
               }`}
             >
               {conforming ? 'Conforming...' : 'Conform Lot'}

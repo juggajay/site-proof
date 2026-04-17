@@ -56,35 +56,35 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-          <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
+        <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
+          <div className="max-w-md w-full bg-card rounded-lg shadow-lg p-8 text-center">
             {/* Error Icon */}
             <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-6">
               <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
             </div>
 
             {/* Error Title */}
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            <h1 className="text-2xl font-bold text-foreground mb-2">
               Something went wrong
             </h1>
 
             {/* Error Description */}
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+            <p className="text-muted-foreground mb-6">
               We're sorry, but something unexpected happened. Our team has been notified and is working on fixing the issue.
             </p>
 
             {/* Error Details (Development only) */}
             {import.meta.env.DEV && this.state.error && (
-              <div className="mb-6 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-left">
+              <div className="mb-6 p-4 bg-muted rounded-lg text-left">
                 <p className="text-xs font-mono text-red-600 dark:text-red-400 break-all">
                   {this.state.error.toString()}
                 </p>
                 {this.state.errorInfo && (
                   <details className="mt-2">
-                    <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                    <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                       Show component stack
                     </summary>
-                    <pre className="mt-2 text-xs font-mono text-gray-500 overflow-auto max-h-40">
+                    <pre className="mt-2 text-xs font-mono text-muted-foreground overflow-auto max-h-40">
                       {this.state.errorInfo.componentStack}
                     </pre>
                   </details>
@@ -103,7 +103,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </button>
               <button
                 onClick={this.handleGoHome}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-muted/50 transition-colors"
               >
                 <Home className="h-4 w-4" />
                 Go to Dashboard
@@ -111,7 +111,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {/* Support Link */}
-            <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-6 text-sm text-muted-foreground">
               If this problem persists, please{' '}
               <a
                 href="/support"

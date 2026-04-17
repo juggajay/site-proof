@@ -1689,7 +1689,7 @@ export function LotDetailPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary">
                 <Users className="h-5 w-5" />
               </div>
               <div>
@@ -1759,7 +1759,7 @@ export function LotDetailPage() {
               <button
                 onClick={handleAssignSubcontractor}
                 disabled={assigningSubcontractor}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {assigningSubcontractor ? 'Assigning...' : selectedSubcontractor ? 'Assign Subcontractor' : 'Remove Assignment'}
               </button>

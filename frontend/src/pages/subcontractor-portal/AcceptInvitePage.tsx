@@ -165,8 +165,8 @@ export function AcceptInvitePage() {
   // Loading state
   if (loading || authLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="flex items-center gap-3 text-gray-500">
+      <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
+        <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>Loading invitation...</span>
         </div>
@@ -177,20 +177,20 @@ export function AcceptInvitePage() {
   // Error state
   if (error || !invitation) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
+      <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-card rounded-lg shadow-md p-6">
           <div className="text-center">
             <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
               <AlertCircle className="h-6 w-6 text-red-600" />
             </div>
             <h2 className="text-xl font-semibold mb-2">Invitation Not Found</h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-muted-foreground mb-4">
               {error || 'This invitation link is invalid or has expired.'}
             </p>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               If you believe this is an error, please contact the head contractor who sent you the invitation.
             </p>
-            <Link to="/auth/login" className="inline-block px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+            <Link to="/auth/login" className="inline-block px-4 py-2 border border-border rounded-md text-foreground hover:bg-muted/50">
               Go to Login
             </Link>
           </div>
@@ -202,22 +202,22 @@ export function AcceptInvitePage() {
   // Already accepted
   if (invitation.status === 'approved' || invitation.status === 'active') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
+      <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-card rounded-lg shadow-md p-6">
           <div className="text-center">
             <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
               <Check className="h-6 w-6 text-green-600" />
             </div>
             <h2 className="text-xl font-semibold mb-2">Invitation Already Accepted</h2>
-            <p className="text-gray-600 mb-4">
+            <p className="text-muted-foreground mb-4">
               This invitation has already been accepted.
             </p>
             {user ? (
-              <Link to="/subcontractor-portal" className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+              <Link to="/subcontractor-portal" className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90">
                 Go to Portal
               </Link>
             ) : (
-              <Link to="/auth/login" className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+              <Link to="/auth/login" className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90">
                 Log In
               </Link>
             )}
@@ -228,54 +228,54 @@ export function AcceptInvitePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-muted/50 dark:bg-background flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-6">
         {/* Logo */}
         <div className="text-center">
-          <span className="text-2xl font-bold text-blue-600">SiteProof</span>
+          <span className="text-2xl font-bold text-primary">SiteProof</span>
         </div>
 
         {/* Invitation Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <div className="bg-card dark:bg-card rounded-lg shadow-md p-6">
           <div className="text-center mb-4">
-            <h2 className="text-xl font-semibold dark:text-white">You've been invited!</h2>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">
+            <h2 className="text-xl font-semibold dark:text-foreground">You've been invited!</h2>
+            <p className="text-muted-foreground dark:text-muted-foreground text-sm">
               Join as a subcontractor on the following project
             </p>
           </div>
 
-          <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-3">
+          <div className="bg-muted/50 dark:bg-muted rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-3">
-              <Building2 className="h-5 w-5 text-gray-400 shrink-0" />
+              <Building2 className="h-5 w-5 text-muted-foreground shrink-0" />
               <div>
-                <p className="text-xs text-gray-500">Your Company</p>
-                <p className="font-medium dark:text-white">{invitation.companyName}</p>
+                <p className="text-xs text-muted-foreground">Your Company</p>
+                <p className="font-medium dark:text-foreground">{invitation.companyName}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <ClipboardCheck className="h-5 w-5 text-gray-400 shrink-0" />
+              <ClipboardCheck className="h-5 w-5 text-muted-foreground shrink-0" />
               <div>
-                <p className="text-xs text-gray-500">Project</p>
-                <p className="font-medium dark:text-white">{invitation.projectName}</p>
+                <p className="text-xs text-muted-foreground">Project</p>
+                <p className="font-medium dark:text-foreground">{invitation.projectName}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <User className="h-5 w-5 text-gray-400 shrink-0" />
+              <User className="h-5 w-5 text-muted-foreground shrink-0" />
               <div>
-                <p className="text-xs text-gray-500">Invited by</p>
-                <p className="font-medium dark:text-white">{invitation.headContractorName}</p>
+                <p className="text-xs text-muted-foreground">Invited by</p>
+                <p className="font-medium dark:text-foreground">{invitation.headContractorName}</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Action Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+        <div className="bg-card dark:bg-card rounded-lg shadow-md p-6">
           {user ? (
             // Logged in - just accept
             <div>
-              <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Logged in as <strong className="dark:text-white">{user.email}</strong>
+              <p className="text-center text-sm text-muted-foreground dark:text-muted-foreground mb-4">
+                Logged in as <strong className="dark:text-foreground">{user.email}</strong>
               </p>
               {formError && (
                 <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
@@ -297,9 +297,9 @@ export function AcceptInvitePage() {
                   'Accept Invitation'
                 )}
               </Button>
-              <p className="text-center text-sm text-gray-500 mt-4">
+              <p className="text-center text-sm text-muted-foreground mt-4">
                 Not you?{' '}
-                <Link to="/auth/login" className="text-blue-600 hover:underline">
+                <Link to="/auth/login" className="text-primary hover:underline">
                   Log in with a different account
                 </Link>
               </p>
@@ -307,8 +307,8 @@ export function AcceptInvitePage() {
           ) : (
             // Not logged in - show registration form
             <form onSubmit={handleSubmit(onRegisterSubmit)}>
-              <h3 className="text-lg font-semibold dark:text-white mb-1">Create Account</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <h3 className="text-lg font-semibold dark:text-foreground mb-1">Create Account</h3>
+              <p className="text-sm text-muted-foreground dark:text-muted-foreground mb-4">
                 Create your account to accept this invitation
               </p>
 
@@ -357,7 +357,7 @@ export function AcceptInvitePage() {
                     }`}
                   />
                   {invitation.primaryContactEmail && (
-                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                       <Check className="h-3 w-3 text-green-500" />
                       Email pre-filled from invitation
                     </p>
@@ -388,7 +388,7 @@ export function AcceptInvitePage() {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-gray-400 hover:text-gray-600"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-muted-foreground"
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -397,19 +397,19 @@ export function AcceptInvitePage() {
                   {/* Password requirements */}
                   {password && (
                     <div className="text-xs space-y-1 mt-2">
-                      <p className={passwordChecks.minLength ? 'text-green-600' : 'text-gray-500'}>
+                      <p className={passwordChecks.minLength ? 'text-green-600' : 'text-muted-foreground'}>
                         {passwordChecks.minLength ? '✓' : '○'} At least {MIN_PASSWORD_LENGTH} characters
                       </p>
-                      <p className={passwordChecks.hasUppercase ? 'text-green-600' : 'text-gray-500'}>
+                      <p className={passwordChecks.hasUppercase ? 'text-green-600' : 'text-muted-foreground'}>
                         {passwordChecks.hasUppercase ? '✓' : '○'} One uppercase letter
                       </p>
-                      <p className={passwordChecks.hasLowercase ? 'text-green-600' : 'text-gray-500'}>
+                      <p className={passwordChecks.hasLowercase ? 'text-green-600' : 'text-muted-foreground'}>
                         {passwordChecks.hasLowercase ? '✓' : '○'} One lowercase letter
                       </p>
-                      <p className={passwordChecks.hasNumber ? 'text-green-600' : 'text-gray-500'}>
+                      <p className={passwordChecks.hasNumber ? 'text-green-600' : 'text-muted-foreground'}>
                         {passwordChecks.hasNumber ? '✓' : '○'} One number
                       </p>
-                      <p className={passwordChecks.hasSpecial ? 'text-green-600' : 'text-gray-500'}>
+                      <p className={passwordChecks.hasSpecial ? 'text-green-600' : 'text-muted-foreground'}>
                         {passwordChecks.hasSpecial ? '✓' : '○'} One special character
                       </p>
                     </div>
@@ -452,13 +452,13 @@ export function AcceptInvitePage() {
                     {...register('tosAccepted')}
                     className="mt-1"
                   />
-                  <Label htmlFor="tos" className="text-sm text-gray-600 dark:text-gray-400 font-normal">
+                  <Label htmlFor="tos" className="text-sm text-muted-foreground dark:text-muted-foreground font-normal">
                     I agree to the{' '}
-                    <Link to="/terms-of-service" target="_blank" className="text-blue-600 hover:underline">
+                    <Link to="/terms-of-service" target="_blank" className="text-primary hover:underline">
                       Terms of Service
                     </Link>{' '}
                     and{' '}
-                    <Link to="/privacy-policy" target="_blank" className="text-blue-600 hover:underline">
+                    <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline">
                       Privacy Policy
                     </Link>
                   </Label>
@@ -484,11 +484,11 @@ export function AcceptInvitePage() {
                   )}
                 </Button>
 
-                <p className="text-center text-sm text-gray-500">
+                <p className="text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
                   <Link
                     to={`/auth/login?redirect=${encodeURIComponent(`/subcontractor-portal/accept-invite?id=${invitationId}`)}`}
-                    className="text-blue-600 hover:underline"
+                    className="text-primary hover:underline"
                   >
                     Log in instead
                   </Link>

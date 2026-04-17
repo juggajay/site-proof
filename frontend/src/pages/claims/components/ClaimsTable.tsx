@@ -18,9 +18,9 @@ interface ClaimsTableProps {
 function getStatusBadge(status: string) {
   switch (status) {
     case 'draft':
-      return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700"><Clock className="h-3 w-3" /> Draft</span>
+      return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground"><Clock className="h-3 w-3" /> Draft</span>
     case 'submitted':
-      return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700"><FileText className="h-3 w-3" /> Submitted</span>
+      return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary"><FileText className="h-3 w-3" /> Submitted</span>
     case 'certified':
       return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><CheckCircle className="h-3 w-3" /> Certified</span>
     case 'paid':
@@ -28,7 +28,7 @@ function getStatusBadge(status: string) {
     case 'disputed':
       return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700"><AlertCircle className="h-3 w-3" /> Disputed</span>
     default:
-      return <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">{status}</span>
+      return <span className="px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">{status}</span>
   }
 }
 

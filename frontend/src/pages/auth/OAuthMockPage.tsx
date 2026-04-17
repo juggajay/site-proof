@@ -65,11 +65,11 @@ export function OAuthMockPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md space-y-6 rounded-lg bg-white p-8 shadow-lg">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md space-y-6 rounded-lg bg-card p-8 shadow-lg">
         {/* Mock OAuth Header */}
         <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             {provider === 'google' ? (
               <svg className="h-8 w-8" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -78,13 +78,13 @@ export function OAuthMockPage() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
             ) : (
-              <span className="text-2xl font-bold text-blue-600">OAuth</span>
+              <span className="text-2xl font-bold text-primary">OAuth</span>
             )}
           </div>
-          <h2 className="mt-4 text-xl font-semibold text-gray-900">
+          <h2 className="mt-4 text-xl font-semibold text-foreground">
             Sign in with {provider.charAt(0).toUpperCase() + provider.slice(1)}
           </h2>
-          <p className="mt-2 text-sm text-gray-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Development Mode - Mock OAuth Flow
           </p>
         </div>
@@ -112,7 +112,7 @@ export function OAuthMockPage() {
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="email" className="block text-sm font-medium text-foreground">
               Email Address
             </label>
             <input
@@ -121,13 +121,13 @@ export function OAuthMockPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter any email to test"
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="name" className="block text-sm font-medium text-foreground">
               Display Name (optional)
             </label>
             <input
@@ -136,7 +136,7 @@ export function OAuthMockPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1 w-full rounded-md border border-border px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
 
@@ -144,21 +144,21 @@ export function OAuthMockPage() {
             <button
               type="button"
               onClick={handleCancel}
-              className="flex-1 rounded-md border border-gray-300 bg-white py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="flex-1 rounded-md border border-border bg-card py-2 text-sm font-medium text-foreground hover:bg-muted/50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 rounded-md bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {loading ? 'Signing in...' : 'Continue'}
             </button>
           </div>
         </form>
 
-        <p className="text-center text-xs text-gray-400">
+        <p className="text-center text-xs text-muted-foreground">
           To enable real Google OAuth, configure GOOGLE_CLIENT_ID in your environment.
         </p>
       </div>

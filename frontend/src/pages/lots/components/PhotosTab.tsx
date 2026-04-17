@@ -296,7 +296,7 @@ export function PhotosTab({
                 type="checkbox"
                 checked={selectedPhotos.size === itpPhotos.length && itpPhotos.length > 0}
                 onChange={toggleSelectAll}
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-border"
               />
               Select All
             </label>
@@ -738,7 +738,7 @@ function PhotoViewerModal({
                 href={`https://www.google.com/maps/search/?api=1&query=${selectedPhoto.document.gpsLatitude},${selectedPhoto.document.gpsLongitude}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"
+                className="text-xs text-primary/70 hover:text-primary mt-1 inline-block"
                 onClick={(e) => e.stopPropagation()}
               >
                 Open in Google Maps →

@@ -312,11 +312,11 @@ export function RequestReleaseModal({
                       variant="outline"
                       onClick={handlePreviewPackage}
                       disabled={loadingPreview}
-                      className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                      className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
                     >
                       {loadingPreview ? (
                         <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-700 border-t-transparent" />
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                           <span>Loading...</span>
                         </>
                       ) : (
@@ -414,11 +414,11 @@ function EvidencePreviewModal({
   return (
     <Modal onClose={onClose} className="max-w-4xl">
       {/* Preview Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-blue-50">
+      <div className="flex items-center justify-between p-4 border-b bg-primary/5">
         <div className="flex items-center gap-2">
-          <Eye className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-blue-900">Evidence Package Preview</h3>
-          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">PREVIEW</span>
+          <Eye className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">Evidence Package Preview</h3>
+          <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded">PREVIEW</span>
         </div>
       </div>
 
@@ -474,7 +474,7 @@ function EvidencePreviewModal({
                     <td className="px-3 py-2">
                       {item.pointType === 'hold' && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded">HP</span>}
                       {item.pointType === 'witness' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">WP</span>}
-                      {item.pointType === 'standard' && <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 text-xs rounded">Std</span>}
+                      {item.pointType === 'standard' && <span className="px-1.5 py-0.5 bg-muted text-foreground text-xs rounded">Std</span>}
                     </td>
                     <td className="px-3 py-2">
                       {item.isCompleted ? (
@@ -527,24 +527,24 @@ function EvidencePreviewModal({
         )}
 
         {/* Summary */}
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h4 className="font-medium text-blue-900 mb-2">Evidence Summary</h4>
+        <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+          <h4 className="font-medium text-foreground mb-2">Evidence Summary</h4>
           <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
-              <div className="text-blue-700">Checklist Items</div>
-              <div className="font-semibold text-blue-900">{previewData.summary.completedItems}/{previewData.summary.totalChecklistItems}</div>
+              <div className="text-primary">Checklist Items</div>
+              <div className="font-semibold text-foreground">{previewData.summary.completedItems}/{previewData.summary.totalChecklistItems}</div>
             </div>
             <div>
-              <div className="text-blue-700">Verified Items</div>
-              <div className="font-semibold text-blue-900">{previewData.summary.verifiedItems}</div>
+              <div className="text-primary">Verified Items</div>
+              <div className="font-semibold text-foreground">{previewData.summary.verifiedItems}</div>
             </div>
             <div>
-              <div className="text-blue-700">Test Results</div>
-              <div className="font-semibold text-blue-900">{previewData.summary.passingTests}/{previewData.summary.totalTestResults}</div>
+              <div className="text-primary">Test Results</div>
+              <div className="font-semibold text-foreground">{previewData.summary.passingTests}/{previewData.summary.totalTestResults}</div>
             </div>
             <div>
-              <div className="text-blue-700">Photos/Attachments</div>
-              <div className="font-semibold text-blue-900">{previewData.summary.totalPhotos + previewData.summary.totalAttachments}</div>
+              <div className="text-primary">Photos/Attachments</div>
+              <div className="font-semibold text-foreground">{previewData.summary.totalPhotos + previewData.summary.totalAttachments}</div>
             </div>
           </div>
         </div>
@@ -558,7 +558,7 @@ function EvidencePreviewModal({
         <Button
           variant="outline"
           onClick={onDownload}
-          className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+          className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
         >
           <Download className="h-4 w-4" />
           Download PDF

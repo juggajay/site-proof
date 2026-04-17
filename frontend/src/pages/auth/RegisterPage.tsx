@@ -246,7 +246,7 @@ export function RegisterPage() {
             id="tosAccepted"
             type="checkbox"
             {...register('tosAccepted')}
-            className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
           />
           <label htmlFor="tosAccepted" className="text-sm">
             <span className="flex items-center gap-1">

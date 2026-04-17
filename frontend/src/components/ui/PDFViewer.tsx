@@ -139,15 +139,15 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
   }
 
   return (
-    <div className={`flex flex-col bg-gray-900 ${className}`} data-testid="pdf-viewer">
+    <div className={`flex flex-col bg-background ${className}`} data-testid="pdf-viewer">
       {/* Toolbar */}
-      <div className="flex items-center justify-between bg-gray-800 px-4 py-2 text-white">
+      <div className="flex items-center justify-between bg-card px-4 py-2 text-white">
         <div className="flex items-center gap-2">
           {/* Page Navigation */}
           <button
             onClick={goToPrevPage}
             disabled={pageNumber <= 1}
-            className="rounded p-1.5 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded p-1.5 hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
             title="Previous page"
             aria-label="Previous page"
           >
@@ -161,16 +161,16 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
               onChange={handlePageInputChange}
               min={1}
               max={numPages || 1}
-              className="w-12 rounded bg-gray-700 px-2 py-1 text-center text-white"
+              className="w-12 rounded bg-muted px-2 py-1 text-center text-white"
               aria-label="Current page"
             />
-            <span className="text-gray-400">/ {numPages || '-'}</span>
+            <span className="text-muted-foreground">/ {numPages || '-'}</span>
           </div>
 
           <button
             onClick={goToNextPage}
             disabled={pageNumber >= (numPages || 1)}
-            className="rounded p-1.5 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded p-1.5 hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
             title="Next page"
             aria-label="Next page"
           >
@@ -183,7 +183,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
           <button
             onClick={zoomOut}
             disabled={scale <= 0.5}
-            className="rounded p-1.5 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded p-1.5 hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
             title="Zoom out"
             aria-label="Zoom out"
           >
@@ -197,7 +197,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
           <button
             onClick={zoomIn}
             disabled={scale >= 3.0}
-            className="rounded p-1.5 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded p-1.5 hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
             title="Zoom in"
             aria-label="Zoom in"
           >
@@ -207,7 +207,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
           {/* Fit Width Toggle */}
           <button
             onClick={toggleFitWidth}
-            className={`rounded p-1.5 hover:bg-gray-700 ${isFitWidth ? 'bg-gray-600' : ''}`}
+            className={`rounded p-1.5 hover:bg-muted ${isFitWidth ? 'bg-muted' : ''}`}
             title={isFitWidth ? "Exit fit width" : "Fit to width"}
             aria-label={isFitWidth ? "Exit fit width" : "Fit to width"}
           >
@@ -217,7 +217,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
           {/* Rotate */}
           <button
             onClick={rotate}
-            className="rounded p-1.5 hover:bg-gray-700"
+            className="rounded p-1.5 hover:bg-muted"
             title="Rotate clockwise"
             aria-label="Rotate clockwise"
           >
@@ -228,7 +228,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
           <a
             href={url}
             download={filename || 'document.pdf'}
-            className="rounded p-1.5 hover:bg-gray-700"
+            className="rounded p-1.5 hover:bg-muted"
             title="Download PDF"
             aria-label="Download PDF"
           >
@@ -238,7 +238,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
 
         {/* Filename */}
         {filename && (
-          <div className="hidden md:block truncate max-w-xs text-sm text-gray-300">
+          <div className="hidden md:block truncate max-w-xs text-sm text-muted-foreground">
             {filename}
           </div>
         )}
@@ -247,14 +247,14 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
       {/* PDF Content - with touch gesture support */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto flex items-start justify-center p-4 bg-gray-100 dark:bg-gray-800 touch-pan-x touch-pan-y"
+        className="flex-1 overflow-auto flex items-start justify-center p-4 bg-muted touch-pan-x touch-pan-y"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onClick={handleDoubleTap}
       >
         {loading && (
-          <div className="flex flex-col items-center gap-2 text-gray-600 dark:text-gray-300 mt-20">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground mt-20">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
             <span>Loading PDF...</span>
           </div>
@@ -269,7 +269,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
             </div>
             <div>
               <p className="text-red-600 font-medium">{error}</p>
-              <p className="text-gray-500 text-sm mt-1">Double-tap to retry or download the file</p>
+              <p className="text-muted-foreground text-sm mt-1">Double-tap to retry or download the file</p>
             </div>
             <a
               href={url}
@@ -316,13 +316,13 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
       </div>
 
       {/* Mobile hint - only shown on touch devices */}
-      <div className="md:hidden bg-gray-700 px-3 py-1.5 text-center text-xs text-gray-300">
+      <div className="md:hidden bg-card px-3 py-1.5 text-center text-xs text-muted-foreground">
         Pinch to zoom • Double-tap to reset • Swipe to pan
       </div>
 
       {/* Page Thumbnails (optional - shown at bottom for multi-page PDFs) */}
       {numPages && numPages > 1 && (
-        <div className="bg-gray-800 px-4 py-2 overflow-x-auto">
+        <div className="bg-card px-4 py-2 overflow-x-auto">
           <div className="flex gap-2 justify-center">
             {Array.from({ length: Math.min(numPages, 10) }, (_, i) => i + 1).map((page) => (
               <button
@@ -331,7 +331,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
                 className={`flex-shrink-0 rounded border-2 transition ${
                   page === pageNumber
                     ? 'border-primary'
-                    : 'border-transparent hover:border-gray-500'
+                    : 'border-transparent hover:border-muted-foreground'
                 }`}
               >
                 <Document
@@ -354,7 +354,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
               </button>
             ))}
             {numPages > 10 && (
-              <span className="flex items-center text-gray-400 text-sm">
+              <span className="flex items-center text-muted-foreground text-sm">
                 +{numPages - 10} more pages
               </span>
             )}
@@ -371,7 +371,7 @@ export function PDFViewerInline({ url, className = '' }: { url: string; classNam
   const [error, setError] = useState<string | null>(null)
 
   return (
-    <div className={`bg-gray-100 dark:bg-gray-800 rounded ${className}`}>
+    <div className={`bg-muted rounded ${className}`}>
       {error ? (
         <div className="flex items-center justify-center p-4 text-red-600">
           Failed to load PDF
@@ -396,7 +396,7 @@ export function PDFViewerInline({ url, className = '' }: { url: string; classNam
         </Document>
       )}
       {numPages && numPages > 1 && (
-        <div className="text-center text-xs text-gray-500 py-1">
+        <div className="text-center text-xs text-muted-foreground py-1">
           {numPages} pages
         </div>
       )}

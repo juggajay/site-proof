@@ -173,8 +173,8 @@ export function SupportPage() {
 
           <div className="space-y-4">
             <div className="flex items-start gap-4">
-              <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30">
-                <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="p-2 rounded-full bg-primary/10">
+                <Mail className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <h3 className="font-medium">Email Support</h3>

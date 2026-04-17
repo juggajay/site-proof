@@ -106,7 +106,7 @@ export function SubcontractorHoldPointsPage() {
         </div>
         <Link
           to="/subcontractor-portal"
-          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
+          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Portal
@@ -121,38 +121,38 @@ export function SubcontractorHoldPointsPage() {
       <div className="flex items-center gap-3">
         <Link
           to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Hold Points</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{company?.projectName}</p>
+          <h1 className="text-lg font-semibold text-foreground">Hold Points</h1>
+          <p className="text-sm text-muted-foreground">{company?.projectName}</p>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
+        <div className="border border-border rounded-lg bg-card p-3">
           <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pending.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Pending</p>
+          <p className="text-xs text-muted-foreground">Pending</p>
         </div>
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
+        <div className="border border-border rounded-lg bg-card p-3">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">{released.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Released</p>
+          <p className="text-xs text-muted-foreground">Released</p>
         </div>
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
+        <div className="border border-border rounded-lg bg-card p-3">
           <p className="text-2xl font-bold text-red-600 dark:text-red-400">{rejected.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Rejected</p>
+          <p className="text-xs text-muted-foreground">Rejected</p>
         </div>
       </div>
 
       {holdPoints.length === 0 ? (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <div className="border border-border rounded-lg bg-card">
           <div className="p-8 text-center">
-            <Hand className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400 mb-2">No hold points</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <Hand className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground mb-2">No hold points</p>
+            <p className="text-sm text-muted-foreground">
               Hold points from your assigned lots will appear here
             </p>
           </div>
@@ -162,7 +162,7 @@ export function SubcontractorHoldPointsPage() {
           {/* Pending */}
           {pending.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 Pending Release ({pending.length})
               </h2>
               <div className="space-y-2">
@@ -176,7 +176,7 @@ export function SubcontractorHoldPointsPage() {
           {/* Released */}
           {released.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 Released ({released.length})
               </h2>
               <div className="space-y-2">
@@ -190,7 +190,7 @@ export function SubcontractorHoldPointsPage() {
           {/* Rejected */}
           {rejected.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 Rejected ({rejected.length})
               </h2>
               <div className="space-y-2">
@@ -208,7 +208,7 @@ export function SubcontractorHoldPointsPage() {
 
 function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+    <div className="border border-border rounded-lg bg-card">
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
@@ -216,12 +216,12 @@ function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
               <Hand className="h-4 w-4 text-amber-600 dark:text-amber-300" />
             </div>
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">{holdPoint.lotNumber}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="font-medium text-foreground">{holdPoint.lotNumber}</p>
+              <p className="text-sm text-muted-foreground">
                 {holdPoint.checklistItemDescription || holdPoint.description}
               </p>
               {holdPoint.releasedAt && holdPoint.releasedBy && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Released by {holdPoint.releasedBy.fullName} on{' '}
                   {new Date(holdPoint.releasedAt).toLocaleDateString()}
                 </p>

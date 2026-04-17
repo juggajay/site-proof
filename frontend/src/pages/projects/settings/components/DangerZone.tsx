@@ -162,7 +162,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
           onClick={handleCompleteClick}
           className={
             project?.status === 'completed'
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'bg-green-600 text-white hover:bg-green-700'
           }
         >
@@ -322,7 +322,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
               disabled={completing}
               className={
                 project?.status === 'completed'
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                   : 'bg-green-600 text-white hover:bg-green-700'
               }
             >

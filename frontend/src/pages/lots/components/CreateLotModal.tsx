@@ -246,7 +246,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
           <div>
             <Label htmlFor="lot-number">
               Lot Number <span className="text-red-500">*</span>
-              <span className="text-xs text-gray-500 ml-2">({LOT_NUMBER_MIN_LENGTH}-{LOT_NUMBER_MAX_LENGTH} chars)</span>
+              <span className="text-xs text-muted-foreground ml-2">({LOT_NUMBER_MIN_LENGTH}-{LOT_NUMBER_MAX_LENGTH} chars)</span>
             </Label>
             <Input
               id="lot-number"
@@ -294,8 +294,8 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
 
           {/* ITP Template suggestion */}
           {suggestedTemplate && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-              <p className="text-sm text-blue-800">
+            <div className="rounded-lg border border-primary bg-primary/5 p-3">
+              <p className="text-sm text-primary">
                 <span className="font-medium">Suggested ITP Template:</span>{' '}
                 {suggestedTemplate.name}
               </p>
@@ -305,9 +305,9 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                   id="use-suggested-itp"
                   checked={selectedTemplateId === suggestedTemplate.id}
                   onChange={(e) => setSelectedTemplateId(e.target.checked ? suggestedTemplate.id : '')}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                 />
-                <label htmlFor="use-suggested-itp" className="text-sm text-blue-700">
+                <label htmlFor="use-suggested-itp" className="text-sm text-primary">
                   Assign this ITP template to the lot
                 </label>
               </div>
@@ -392,16 +392,16 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
 
               {/* ITP permissions - only show when subcontractor is selected */}
               {assignedSubcontractorId && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-2">
-                  <p className="text-sm font-medium text-gray-700">ITP Permissions</p>
+                <div className="mt-3 p-3 bg-muted/50 rounded-lg space-y-2">
+                  <p className="text-sm font-medium text-foreground">ITP Permissions</p>
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       id="can-complete-itp"
                       {...register('canCompleteITP')}
-                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                     />
-                    <label htmlFor="can-complete-itp" className="text-sm text-gray-700">
+                    <label htmlFor="can-complete-itp" className="text-sm text-foreground">
                       Allow ITP completion
                     </label>
                   </div>
@@ -411,9 +411,9 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                       id="itp-requires-verification"
                       {...register('itpRequiresVerification')}
                       disabled={!canCompleteITP}
-                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50"
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary disabled:opacity-50"
                     />
-                    <label htmlFor="itp-requires-verification" className={`text-sm ${canCompleteITP ? 'text-gray-700' : 'text-gray-400'}`}>
+                    <label htmlFor="itp-requires-verification" className={`text-sm ${canCompleteITP ? 'text-foreground' : 'text-muted-foreground'}`}>
                       Require verification (recommended)
                     </label>
                   </div>

@@ -296,7 +296,7 @@ export function CompanySettingsPage() {
               </div>
               <div className="text-right">
                 {company?.projectLimit !== Infinity && company?.projectCount !== undefined && company?.projectLimit !== undefined && (
-                  <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${
                         company.projectCount >= company.projectLimit
@@ -328,7 +328,7 @@ export function CompanySettingsPage() {
               </div>
               <div className="text-right">
                 {company?.userLimit !== Infinity && company?.userCount !== undefined && company?.userLimit !== undefined && (
-                  <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${
                         company.userCount >= company.userLimit

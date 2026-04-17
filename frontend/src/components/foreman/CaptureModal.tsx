@@ -211,7 +211,7 @@ export function CaptureModal({
             )}
           </div>
 
-          <div className="bg-white dark:bg-gray-900 rounded-t-2xl p-4 space-y-4 max-h-[45vh] overflow-y-auto">
+          <div className="bg-background rounded-t-2xl p-4 space-y-4 max-h-[45vh] overflow-y-auto">
             <p className="text-sm text-muted-foreground text-center">
               Optional: Add details now or save and categorize later
             </p>
@@ -250,7 +250,7 @@ export function CaptureModal({
             )}
 
             <button
-              className="w-full flex items-center justify-between p-3 border rounded-lg dark:border-gray-700 touch-manipulation min-h-[48px]"
+              className="w-full flex items-center justify-between p-3 border border-border rounded-lg touch-manipulation min-h-[48px]"
               onClick={() => {
                 toast({ description: 'Lot selector coming soon' })
               }}
@@ -300,7 +300,7 @@ function TypeButton({ icon: Icon, label, selected, onClick, accentColor }: TypeB
         'touch-manipulation min-h-[72px]',
         selected
           ? 'border-primary bg-primary/5'
-          : 'border-gray-200 dark:border-gray-700'
+          : 'border-border'
       )}
     >
       <Icon className={cn(

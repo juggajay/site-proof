@@ -117,14 +117,14 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-border">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Bulk Create Lots</h2>
+            <h2 className="text-xl font-semibold text-foreground">Bulk Create Lots</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-muted-foreground hover:text-foreground"
               aria-label="Close modal"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -139,10 +139,10 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                     step === s
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : ['chainage', 'parameters', 'preview', 'confirm'].indexOf(step) > i
                       ? 'bg-green-500 text-white'
-                      : 'bg-gray-200 text-gray-600'
+                      : 'bg-muted text-muted-foreground'
                   }`}
                 >
                   {['chainage', 'parameters', 'preview', 'confirm'].indexOf(step) > i ? (
@@ -153,7 +153,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                     i + 1
                   )}
                 </div>
-                {i < 3 && <div className="w-12 h-0.5 bg-gray-200 mx-1" />}
+                {i < 3 && <div className="w-12 h-0.5 bg-muted mx-1" />}
               </div>
             ))}
           </div>
@@ -164,50 +164,50 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
           {/* Step 1: Chainage Range */}
           {step === 'chainage' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Step 1: Define Chainage Range</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="text-lg font-medium text-foreground">Step 1: Define Chainage Range</h3>
+              <p className="text-sm text-muted-foreground">
                 Enter the chainage range and interval to generate lots automatically.
               </p>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Start Chainage (m)
                   </label>
                   <input
                     type="number"
                     value={chainageStart}
                     onChange={(e) => setChainageStart(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     End Chainage (m)
                   </label>
                   <input
                     type="number"
                     value={chainageEnd}
                     onChange={(e) => setChainageEnd(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                     placeholder="1000"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Lot Interval (m)
                   </label>
                   <input
                     type="number"
                     value={lotInterval}
                     onChange={(e) => setLotInterval(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                     placeholder="100"
                   />
                 </div>
               </div>
               {chainageStart && chainageEnd && lotInterval && (
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   This will create approximately{' '}
                   <span className="font-medium">
                     {Math.ceil((parseInt(chainageEnd) - parseInt(chainageStart)) / parseInt(lotInterval))}
@@ -221,31 +221,31 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
           {/* Step 2: Lot Parameters */}
           {step === 'parameters' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Step 2: Configure Lot Parameters</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="text-lg font-medium text-foreground">Step 2: Configure Lot Parameters</h3>
+              <p className="text-sm text-muted-foreground">
                 Set the common parameters for all lots to be created.
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Lot Number Prefix
                   </label>
                   <input
                     type="text"
                     value={lotPrefix}
                     onChange={(e) => setLotPrefix(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                     placeholder="LOT"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Activity Type
                   </label>
                   <select
                     value={activityType}
                     onChange={(e) => setActivityType(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                   >
                     {ACTIVITY_TYPES.map((type) => (
                       <option key={type} value={type}>
@@ -255,13 +255,13 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Layer (optional)
                   </label>
                   <select
                     value={layer}
                     onChange={(e) => setLayer(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                   >
                     <option value="">Select layer...</option>
                     {LAYERS.map((l) => (
@@ -272,17 +272,17 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Description Template
                   </label>
                   <input
                     type="text"
                     value={descriptionTemplate}
                     onChange={(e) => setDescriptionTemplate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-border rounded-md focus:ring-ring focus:border-ring"
                     placeholder="{prefix} Ch {start}-{end}"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Variables: {'{prefix}'}, {'{start}'}, {'{end}'}, {'{num}'}
                   </p>
                 </div>
@@ -293,50 +293,50 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
           {/* Step 3: Preview */}
           {step === 'preview' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Step 3: Preview Lots</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="text-lg font-medium text-foreground">Step 3: Preview Lots</h3>
+              <p className="text-sm text-muted-foreground">
                 Review the lots that will be created. Go back to make changes if needed.
               </p>
               <div className="border rounded-md overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-muted/50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">
                         Lot Number
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">
                         Chainage
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">
                         Activity
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">
                         Layer
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-card divide-y divide-border">
                     {lotsPreview.slice(0, 10).map((lot, i) => (
                       <tr key={i}>
-                        <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                        <td className="px-4 py-2 text-sm font-medium text-foreground">
                           {lot.lotNumber}
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-500">
+                        <td className="px-4 py-2 text-sm text-muted-foreground">
                           {lot.chainageStart} - {lot.chainageEnd}
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-500">{lot.activityType}</td>
-                        <td className="px-4 py-2 text-sm text-gray-500">{lot.layer || '-'}</td>
+                        <td className="px-4 py-2 text-sm text-muted-foreground">{lot.activityType}</td>
+                        <td className="px-4 py-2 text-sm text-muted-foreground">{lot.layer || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {lotsPreview.length > 10 && (
-                  <div className="px-4 py-2 bg-gray-50 text-sm text-gray-500">
+                  <div className="px-4 py-2 bg-muted/50 text-sm text-muted-foreground">
                     ... and {lotsPreview.length - 10} more lots
                   </div>
                 )}
               </div>
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-foreground">
                 Total: {lotsPreview.length} lots will be created
               </p>
             </div>
@@ -345,19 +345,19 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
           {/* Step 4: Confirm */}
           {step === 'confirm' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Step 4: Confirm Creation</h3>
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                <p className="text-sm text-blue-800">
+              <h3 className="text-lg font-medium text-foreground">Step 4: Confirm Creation</h3>
+              <div className="bg-primary/5 border border-primary rounded-md p-4">
+                <p className="text-sm text-primary">
                   You are about to create <span className="font-bold">{lotsPreview.length} lots</span>.
                 </p>
-                <ul className="mt-2 text-sm text-blue-700 list-disc list-inside">
+                <ul className="mt-2 text-sm text-primary list-disc list-inside">
                   <li>Chainage range: {chainageStart}m - {chainageEnd}m</li>
                   <li>Lot interval: {lotInterval}m</li>
                   <li>Activity type: {activityType}</li>
                   {layer && <li>Layer: {layer}</li>}
                 </ul>
               </div>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 Click "Create Lots" to proceed. This action cannot be undone easily.
               </p>
             </div>
@@ -365,7 +365,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
+        <div className="px-6 py-4 border-t border-border flex justify-between">
           <button
             onClick={() => {
               if (step === 'chainage') {
@@ -378,7 +378,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                 setStep('preview')
               }
             }}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+            className="px-4 py-2 text-sm font-medium text-foreground hover:text-foreground"
           >
             {step === 'chainage' ? 'Cancel' : 'Back'}
           </button>
@@ -399,7 +399,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
               (step === 'parameters' && !canProceedFromParameters) ||
               creating
             }
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {step === 'confirm'
               ? creating

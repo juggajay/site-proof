@@ -28,9 +28,9 @@ const weatherIcons: Record<string, typeof Cloud> = {
 export function DiaryWeatherBar({ weather, weatherSource: _weatherSource, loading, onTapEdit }: DiaryWeatherBarProps) {
   if (loading) {
     return (
-      <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-        <span className="text-sm text-blue-600 dark:text-blue-400">Fetching weather...</span>
+      <div className="flex items-center gap-2 px-4 py-3 bg-primary/5 dark:bg-primary/10 rounded-lg">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span className="text-sm text-primary">Fetching weather...</span>
       </div>
     )
   }
@@ -52,9 +52,9 @@ export function DiaryWeatherBar({ weather, weatherSource: _weatherSource, loadin
   return (
     <button
       onClick={onTapEdit}
-      className="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg touch-manipulation min-h-[44px]"
+      className="w-full flex items-center gap-3 px-4 py-3 bg-primary/5 dark:bg-primary/10 rounded-lg touch-manipulation min-h-[44px]"
     >
-      <Icon className="h-5 w-5 text-blue-500 flex-shrink-0" />
+      <Icon className="h-5 w-5 text-primary flex-shrink-0" />
       <div className="flex-1 text-left">
         <span className="text-sm font-medium">
           {weather.conditions}
@@ -66,7 +66,7 @@ export function DiaryWeatherBar({ weather, weatherSource: _weatherSource, loadin
           )}
         </span>
       </div>
-      <span className="text-xs text-blue-400">Edit</span>
+      <span className="text-xs text-primary/70">Edit</span>
     </button>
   )
 }

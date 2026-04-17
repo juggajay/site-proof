@@ -71,7 +71,7 @@ export function OfflineIndicator() {
           <button
             onClick={syncPendingChanges}
             disabled={isSyncing}
-            className="flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg border border-blue-200 hover:bg-blue-200 transition-colors"
+            className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-lg shadow-lg border border-primary/20 hover:bg-primary/20 transition-colors"
           >
             {isSyncing ? (
               <>
@@ -82,7 +82,7 @@ export function OfflineIndicator() {
               <>
                 <CloudOff className="h-4 w-4" />
                 <span className="text-sm font-medium">{pendingSyncCount} pending changes</span>
-                <span className="text-xs text-blue-600">Click to sync</span>
+                <span className="text-xs text-primary">Click to sync</span>
               </>
             )}
           </button>
@@ -114,7 +114,7 @@ export function OfflineBadge() {
 
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-      !isOnline ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+      !isOnline ? 'bg-amber-100 text-amber-800' : 'bg-primary/10 text-primary'
     }`}>
       {!isOnline ? (
         <>

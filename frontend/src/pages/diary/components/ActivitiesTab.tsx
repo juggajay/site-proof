@@ -89,7 +89,7 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
                     {a.lot ? (
                       <Link
                         to={`/projects/${projectId}/lots/${a.lot.id}`}
-                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                        className="text-primary hover:text-primary/80 hover:underline font-medium"
                       >
                         {a.lot.lotNumber}
                       </Link>

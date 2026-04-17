@@ -205,7 +205,7 @@ export function ITPPage() {
           <p className="text-muted-foreground mt-1">
             Manage ITP templates for quality checkpoints
             {projectSpecificationSet && (
-              <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+              <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
                 {projectSpecificationSet}
               </span>
             )}
@@ -234,7 +234,7 @@ export function ITPPage() {
             type="checkbox"
             checked={includeGlobalTemplates}
             onChange={(e) => setIncludeGlobalTemplates(e.target.checked)}
-            className="rounded border-gray-300"
+            className="rounded border-border"
           />
           <span className="text-sm">
             Include {projectSpecificationSet || 'MRTS'} library templates
@@ -308,7 +308,7 @@ export function ITPPage() {
                   <h3 className="font-semibold">{template.name}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     {template.isGlobalTemplate && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                      <span className="text-xs text-primary bg-primary/5 px-1.5 py-0.5 rounded">
                         {template.stateSpec || 'Library'} Template
                       </span>
                     )}
@@ -360,7 +360,7 @@ export function ITPPage() {
                     className={`text-xs px-2 py-1 rounded ${
                       template.isActive !== false
                         ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                     }`}
                   >
                     {template.isActive !== false ? 'Active' : 'Inactive'}

@@ -38,11 +38,11 @@ const COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order'
 
 // Feature #438: Okabe-Ito color-blind safe palette (shared with LinearMapView)
 const statusColors: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-800',
-  in_progress: 'bg-sky-100 text-sky-800',
-  completed: 'bg-emerald-100 text-emerald-800',
-  on_hold: 'bg-orange-100 text-orange-800',
-  not_started: 'bg-gray-100 text-gray-700',
+  pending: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
+  in_progress: 'bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200',
+  completed: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
+  on_hold: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200',
+  not_started: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
 }
 
 export function LotsPage() {
@@ -126,15 +126,15 @@ export function LotsPage() {
       {/* Print-only Header */}
       <div className="hidden print:block report-header mb-6 text-center">
         <h1 className="text-2xl font-bold mb-2">Lot Register</h1>
-        {projectName && <p className="text-gray-600 mb-1">{projectName}</p>}
-        <div className="text-sm text-gray-500">
+        {projectName && <p className="text-muted-foreground mb-1">{projectName}</p>}
+        <div className="text-sm text-muted-foreground">
           Generated: {new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
         </div>
-        <div className="text-xs text-gray-400 mt-2">SiteProof - Quality Management System</div>
+        <div className="text-xs text-muted-foreground mt-2">SiteProof - Quality Management System</div>
       </div>
 
       {/* Print-only Footer */}
-      <div className="hidden print:block report-footer fixed bottom-0 left-0 right-0 text-center text-xs text-gray-400 py-2 bg-white border-t">
+      <div className="hidden print:block report-footer fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground py-2 bg-card border-t">
         &copy; {new Date().getFullYear()} SiteProof - Confidential
       </div>
 
@@ -228,15 +228,15 @@ export function LotsPage() {
           <div className="bg-muted/50 border-b px-4 py-3">
             <div className="flex gap-4">
               {[16, 96, 128, 80, 80, 96, 80].map((w, i) => (
-                <div key={i} className="h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" style={{ width: w }} />
+                <div key={i} className="h-4 rounded bg-muted animate-pulse" style={{ width: w }} />
               ))}
             </div>
           </div>
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+            <div key={i} className="px-4 py-3 border-b border-border last:border-b-0">
               <div className="flex gap-4 items-center">
                 {[16, 80, 160, 64, 80, 96, 80].map((w, j) => (
-                  <div key={j} className={`h-4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse ${j === 4 ? 'rounded-full h-6' : ''}`} style={{ width: w }} />
+                  <div key={j} className={`h-4 rounded bg-muted animate-pulse ${j === 4 ? 'rounded-full h-6' : ''}`} style={{ width: w }} />
                 ))}
               </div>
             </div>
@@ -307,7 +307,7 @@ export function LotsPage() {
           {filteredLots.filter(l => l.chainageStart !== null || l.chainageEnd !== null).length === 0 ? (
             <div className="p-12 text-center">
               <div className="text-5xl mb-4">&#128506;</div>
-              <h3 className="text-lg font-semibold text-gray-900">No chainage data</h3>
+              <h3 className="text-lg font-semibold text-foreground">No chainage data</h3>
               <p className="mt-1 text-sm text-muted-foreground">Add chainage values to lots to see them on the linear map.</p>
             </div>
           ) : (

@@ -302,7 +302,7 @@ export function TestResultsPage() {
           {testResults.length > 0 && (
             <button
               onClick={handleExportCSV}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
+              className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
             >
               Export CSV
             </button>

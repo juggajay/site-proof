@@ -219,8 +219,8 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
             </div>
 
             {failedTestForNcr?.lotId && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-800">
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                <p className="text-sm text-primary">
                   <span className="font-medium">Linked Lot:</span> This NCR will be automatically linked to the lot associated with this test result.
                 </p>
               </div>

@@ -34,9 +34,9 @@ export function BulkDeleteModal({ isOpen, selectedCount, onClose, onConfirm }: B
     <Modal alert onClose={onClose}>
       <AlertModalHeader>Confirm Bulk Deletion</AlertModalHeader>
       <ModalBody>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Are you sure you want to delete{' '}
-          <span className="font-semibold text-gray-900">{selectedCount} lot(s)</span>?
+          <span className="font-semibold text-foreground">{selectedCount} lot(s)</span>?
         </p>
         <p className="mt-3 text-sm text-red-600">
           This action cannot be undone. All associated data will be permanently deleted.
@@ -93,9 +93,9 @@ export function BulkStatusModal({ isOpen, selectedCount, onClose, onConfirm }: B
     <Modal onClose={onClose}>
       <ModalHeader>Update Lot Status</ModalHeader>
       <ModalBody>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Update status for{' '}
-          <span className="font-semibold text-gray-900">{selectedCount} lot(s)</span>
+          <span className="font-semibold text-foreground">{selectedCount} lot(s)</span>
         </p>
         <div className="mt-4">
           <Label htmlFor="bulk-status-select">New Status</Label>
@@ -165,7 +165,7 @@ export function BulkAssignModal({ isOpen, selectedCount, subcontractors, onClose
     <Modal onClose={onClose}>
       <ModalHeader>Assign Subcontractor</ModalHeader>
       <ModalBody>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           Assign {selectedCount} selected lot(s) to a subcontractor.
         </p>
         <div>

@@ -81,12 +81,12 @@ function RejectRectificationModalInner({
         <span className="text-red-600">Reject Rectification</span>
       </ModalHeader>
       <ModalBody>
-        <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-          <p className="text-sm font-medium text-gray-800">{ncr.ncrNumber}</p>
-          <p className="text-sm text-gray-600 mt-1">{ncr.description}</p>
+        <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg">
+          <p className="text-sm font-medium text-foreground">{ncr.ncrNumber}</p>
+          <p className="text-sm text-muted-foreground mt-1">{ncr.description}</p>
         </div>
 
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           The rectification will be rejected and returned to the responsible party for additional work.
           Please provide feedback explaining what needs to be improved.
         </p>

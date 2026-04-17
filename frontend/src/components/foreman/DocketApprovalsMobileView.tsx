@@ -41,10 +41,10 @@ interface DocketApprovalsMobileViewProps {
 }
 
 const statusColors: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  pending_approval: 'bg-amber-100 text-amber-800',
-  approved: 'bg-emerald-100 text-emerald-800',
-  rejected: 'bg-red-100 text-red-800',
+  draft: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
+  pending_approval: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
+  approved: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
+  rejected: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200',
 }
 
 const statusLabels: Record<string, string> = {
@@ -114,7 +114,7 @@ function DocketCard({
         <span
           className={cn(
             'text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap',
-            statusColors[docket.status] || 'bg-gray-100 text-gray-800'
+            statusColors[docket.status] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
           )}
         >
           {statusLabels[docket.status] || docket.status}

@@ -260,7 +260,7 @@ function NCRTableInner({
                       <button
                         onClick={() => onRectify(ncr)}
                         disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                        className="px-3 py-1 text-xs bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50"
                       >
                         Submit Rectification
                       </button>
@@ -286,7 +286,7 @@ function NCRTableInner({
                         disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}
                         className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
                           ncr.severity === 'major' && !ncr.qmApprovedAt
-                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                            ? 'bg-muted-foreground text-muted cursor-not-allowed'
                             : 'bg-green-600 text-white hover:bg-green-700'
                         }`}
                         title={ncr.severity === 'major' && !ncr.qmApprovedAt ? 'Requires QM approval first' : 'Close NCR'}
@@ -302,7 +302,7 @@ function NCRTableInner({
                         disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}
                         className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
                           ncr.severity === 'major' && !ncr.qmApprovedAt
-                            ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                            ? 'bg-muted-foreground text-muted cursor-not-allowed'
                             : 'bg-amber-600 text-white hover:bg-amber-700'
                         }`}
                         title={ncr.severity === 'major' && !ncr.qmApprovedAt ? 'Requires QM approval first' : 'Close with concession when full rectification is not possible'}

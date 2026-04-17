@@ -53,37 +53,37 @@ export function RoleBasedBenefits() {
   ]
 
   return (
-    <section className="py-20 bg-white">
+    <section className="py-20 bg-card">
       <div className="container mx-auto px-4 md:px-6">
         <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold tracking-tight text-[#111827] sm:text-4xl">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Built for how you actually work
           </h2>
         </div>
 
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {roles.map((role, index) => (
-            <div key={index} className="flex flex-col h-full rounded-2xl bg-gray-50 border border-gray-100 p-6 transition-all hover:border-[#1e3a5f]/20 hover:shadow-lg">
-              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#1e3a5f]/10 text-[#1e3a5f]">
+            <div key={index} className="flex flex-col h-full rounded-2xl bg-muted/50 border border-border p-6 transition-all hover:border-primary/20 hover:shadow-lg">
+              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <role.icon className="h-5 w-5" />
               </div>
-              <h3 className="text-sm font-semibold text-[#1e3a5f] uppercase tracking-wide mb-2">
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-2">
                 {role.title}
               </h3>
-              <h4 className="text-xl font-bold text-[#111827] mb-4">
+              <h4 className="text-xl font-bold text-foreground mb-4">
                 {role.headline}
               </h4>
               <ul className="mb-6 space-y-3 flex-1">
                 {role.benefits.map((benefit, i) => (
-                  <li key={i} className="flex items-start text-sm text-gray-600">
+                  <li key={i} className="flex items-start text-sm text-muted-foreground">
                     <span className="mr-2 mt-1 block h-1.5 w-1.5 rounded-full bg-[#f97316]" />
                     {benefit}
                   </li>
                 ))}
               </ul>
-              <blockquote className="mt-auto border-t border-gray-200 pt-4 text-sm italic text-gray-500">
+              <blockquote className="mt-auto border-t border-border pt-4 text-sm italic text-muted-foreground">
                 "{role.quote}"
-                <footer className="mt-1 font-medium not-italic text-gray-900">— {role.author}</footer>
+                <footer className="mt-1 font-medium not-italic text-foreground">— {role.author}</footer>
               </blockquote>
             </div>
           ))}

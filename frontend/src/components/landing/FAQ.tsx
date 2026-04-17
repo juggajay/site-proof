@@ -29,20 +29,20 @@ export function FAQ() {
   ]
 
   return (
-    <section id="faq" className="py-20 bg-gray-50">
+    <section id="faq" className="py-20 bg-muted/50">
       <div className="container mx-auto px-4 md:px-6 max-w-3xl">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold tracking-tight text-[#111827] sm:text-4xl">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Common Questions
           </h2>
         </div>
 
         <Accordion type="single" collapsible className="space-y-4">
           {faqs.map((faq, index) => (
-            <AccordionItem key={index} value={`faq-${index}`} className="bg-white border-gray-200">
+            <AccordionItem key={index} value={`faq-${index}`} className="bg-card border-border">
               <AccordionTrigger>{faq.q}</AccordionTrigger>
               <AccordionContent>
-                <p className="text-gray-600">{faq.a}</p>
+                <p className="text-muted-foreground">{faq.a}</p>
               </AccordionContent>
             </AccordionItem>
           ))}

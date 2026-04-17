@@ -255,7 +255,7 @@ export function PullToRefreshIndicator({
       <div
         className={cn(
           'flex items-center justify-center w-10 h-10 rounded-full',
-          'bg-white shadow-lg border border-gray-200',
+          'bg-card shadow-lg border border-border',
           'transition-all duration-200 ease-out'
         )}
         style={{
@@ -266,7 +266,7 @@ export function PullToRefreshIndicator({
         {isRefreshing ? (
           // Spinner during refresh
           <svg
-            className="w-5 h-5 text-blue-600 animate-spin"
+            className="w-5 h-5 text-primary animate-spin"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
@@ -290,7 +290,7 @@ export function PullToRefreshIndicator({
           <svg
             className={cn(
               'w-5 h-5 transition-transform duration-150',
-              progress >= 1 ? 'text-blue-600' : 'text-gray-500'
+              progress >= 1 ? 'text-primary' : 'text-muted-foreground'
             )}
             style={{
               transform: `rotate(${rotation}deg)`,
@@ -312,7 +312,7 @@ export function PullToRefreshIndicator({
 
       {/* Release text indicator */}
       {progress >= 1 && !isRefreshing && (
-        <span className="absolute top-12 text-xs text-gray-500 font-medium whitespace-nowrap">
+        <span className="absolute top-12 text-xs text-muted-foreground font-medium whitespace-nowrap">
           Release to refresh
         </span>
       )}

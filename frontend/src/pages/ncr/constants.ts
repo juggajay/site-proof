@@ -14,7 +14,7 @@ export const ncrStatusColors: Record<string, string> = {
 }
 
 // Default fallback status color
-export const DEFAULT_STATUS_COLOR = 'bg-gray-100 text-gray-800'
+export const DEFAULT_STATUS_COLOR = 'bg-muted text-foreground'
 
 // NCR category options for the create form
 export const NCR_CATEGORIES = [

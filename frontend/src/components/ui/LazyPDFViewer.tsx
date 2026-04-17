@@ -27,15 +27,15 @@ export function LazyPDFViewer(props: PDFViewerProps) {
   return (
     <Suspense
       fallback={
-        <div className="flex flex-col bg-gray-900 min-h-[400px]">
-          <div className="flex items-center justify-between bg-gray-800 px-4 py-2">
+        <div className="flex flex-col bg-background min-h-[400px]">
+          <div className="flex items-center justify-between bg-card px-4 py-2">
             <Skeleton className="h-8 w-32" />
             <Skeleton className="h-8 w-48" />
           </div>
-          <div className="flex-1 flex items-center justify-center bg-gray-100 dark:bg-gray-800 p-4">
+          <div className="flex-1 flex items-center justify-center bg-muted p-4">
             <div className="flex flex-col items-center gap-2">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <span className="text-gray-600 dark:text-gray-300">Loading PDF viewer...</span>
+              <span className="text-muted-foreground">Loading PDF viewer...</span>
             </div>
           </div>
         </div>
@@ -50,7 +50,7 @@ export function LazyPDFViewerInline(props: PDFViewerInlineProps) {
   return (
     <Suspense
       fallback={
-        <div className={`bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center p-4 ${props.className || ''}`}>
+        <div className={`bg-muted rounded flex items-center justify-center p-4 ${props.className || ''}`}>
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       }

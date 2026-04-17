@@ -221,7 +221,7 @@ export function AssignSubcontractorModal({
                   Error loading data: {(subError as Error)?.message || (assignError as Error)?.message || 'Authentication failed. Please refresh the page.'}
                 </p>
               ) : isLoading ? (
-                <div className="flex items-center gap-2 text-gray-500">
+                <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Loading subcontractors...</span>
                 </div>
@@ -238,7 +238,7 @@ export function AssignSubcontractorModal({
                     ))}
                   </NativeSelect>
                   {availableSubcontractors.length === 0 && (
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-muted-foreground">
                       {subcontractors.length === 0
                         ? 'No subcontractors found for this project. Invite subcontractors from the Subcontractors page first.'
                         : 'All subcontractors are already assigned to this lot.'}
@@ -250,7 +250,7 @@ export function AssignSubcontractorModal({
           )}
 
           {isEditing && (
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted-foreground">
               Editing permissions for: <strong>{existingAssignment?.subcontractorCompany.companyName}</strong>
             </div>
           )}
@@ -265,7 +265,7 @@ export function AssignSubcontractorModal({
                 type="checkbox"
                 id="canCompleteITP"
                 {...register('canCompleteITP')}
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring"
               />
               <div>
                 <Label
@@ -274,7 +274,7 @@ export function AssignSubcontractorModal({
                 >
                   Allow ITP completion
                 </Label>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   Subcontractor can complete checklist items
                 </p>
               </div>
@@ -286,7 +286,7 @@ export function AssignSubcontractorModal({
                 id="itpRequiresVerification"
                 {...register('itpRequiresVerification')}
                 disabled={!canCompleteITP}
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <div className={!canCompleteITP ? 'opacity-50' : ''}>
                 <Label
@@ -295,7 +295,7 @@ export function AssignSubcontractorModal({
                 >
                   Require verification (recommended)
                 </Label>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   Completions need head contractor approval
                 </p>
               </div>

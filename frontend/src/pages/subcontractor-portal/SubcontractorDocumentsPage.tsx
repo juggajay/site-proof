@@ -41,14 +41,14 @@ function getCategoryIcon(category: string) {
   switch (category.toLowerCase()) {
     case 'drawing':
     case 'drawings':
-      return <FileText className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+      return <FileText className="h-4 w-4 text-primary" />
     case 'specification':
     case 'specifications':
       return <FileText className="h-4 w-4 text-purple-600 dark:text-purple-300" />
     case 'safety':
       return <FileText className="h-4 w-4 text-red-600 dark:text-red-300" />
     default:
-      return <FileText className="h-4 w-4 text-gray-600 dark:text-gray-300" />
+      return <FileText className="h-4 w-4 text-muted-foreground" />
   }
 }
 
@@ -106,7 +106,7 @@ export function SubcontractorDocumentsPage() {
         </div>
         <Link
           to="/subcontractor-portal"
-          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
+          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Portal
@@ -121,34 +121,34 @@ export function SubcontractorDocumentsPage() {
       <div className="flex items-center gap-3">
         <Link
           to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Documents</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{company?.projectName}</p>
+          <h1 className="text-lg font-semibold text-foreground">Documents</h1>
+          <p className="text-sm text-muted-foreground">{company?.projectName}</p>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{documents.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Total Documents</p>
+        <div className="border border-border rounded-lg bg-card p-3">
+          <p className="text-2xl font-bold text-foreground">{documents.length}</p>
+          <p className="text-xs text-muted-foreground">Total Documents</p>
         </div>
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
+        <div className="border border-border rounded-lg bg-card p-3">
           <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{categories.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Categories</p>
+          <p className="text-xs text-muted-foreground">Categories</p>
         </div>
       </div>
 
       {documents.length === 0 ? (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <div className="border border-border rounded-lg bg-card">
           <div className="p-8 text-center">
-            <FolderOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400 mb-2">No documents available</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground mb-2">No documents available</p>
+            <p className="text-sm text-muted-foreground">
               Project documents shared with you will appear here
             </p>
           </div>
@@ -157,7 +157,7 @@ export function SubcontractorDocumentsPage() {
         <>
           {categories.map((category) => (
             <div key={category}>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 {category} ({groupedDocs[category].length})
               </h2>
               <div className="space-y-2">
@@ -175,7 +175,7 @@ export function SubcontractorDocumentsPage() {
 
 function DocumentCard({ document }: { document: Document }) {
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+    <div className="border border-border rounded-lg bg-card">
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
@@ -183,11 +183,11 @@ function DocumentCard({ document }: { document: Document }) {
               {getCategoryIcon(document.category)}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-gray-900 dark:text-white truncate">{document.filename}</p>
+              <p className="font-medium text-foreground truncate">{document.filename}</p>
               {document.description && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1">{document.description}</p>
+                <p className="text-sm text-muted-foreground line-clamp-1">{document.description}</p>
               )}
-              <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                 <span>{new Date(document.uploadedAt).toLocaleDateString()}</span>
                 {document.fileSize && (
                   <>
@@ -202,10 +202,10 @@ function DocumentCard({ document }: { document: Document }) {
             href={document.fileUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="p-2 rounded-lg hover:bg-muted transition-colors"
             title="View document"
           >
-            <ExternalLink className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            <ExternalLink className="h-4 w-4 text-muted-foreground" />
           </a>
         </div>
       </div>

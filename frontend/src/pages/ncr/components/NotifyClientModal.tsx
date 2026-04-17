@@ -106,7 +106,7 @@ function NotifyClientModalInner({
               {errors.recipientEmail && (
                 <p className="text-sm text-destructive mt-1" role="alert">{errors.recipientEmail.message}</p>
               )}
-              <p className="text-xs text-gray-500 mt-1">Leave blank to record notification without sending email</p>
+              <p className="text-xs text-muted-foreground mt-1">Leave blank to record notification without sending email</p>
             </div>
 
             <div>
@@ -123,9 +123,9 @@ function NotifyClientModalInner({
             </div>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-            <p className="text-sm text-blue-800 font-medium">Notification Package will include:</p>
-            <ul className="text-xs text-blue-700 mt-1 list-disc list-inside">
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 mt-4">
+            <p className="text-sm text-primary font-medium">Notification Package will include:</p>
+            <ul className="text-xs text-primary mt-1 list-disc list-inside">
               <li>NCR Number and Description</li>
               <li>Category and Severity</li>
               <li>Affected Lots</li>

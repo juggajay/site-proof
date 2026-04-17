@@ -67,7 +67,7 @@ function RespondNCRModalInner({
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Respond to NCR {ncr.ncrNumber}</ModalHeader>
       <ModalBody>
-        <div className="mb-4 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm">
+        <div className="mb-4 bg-muted/50 border border-border px-3 py-2 rounded-lg text-sm">
           <span className="font-medium">Issue:</span> {ncr.description}
         </div>
 

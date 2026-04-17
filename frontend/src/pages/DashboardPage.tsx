@@ -834,7 +834,7 @@ export function DashboardPage() {
               to="/settings"
               className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
             >
-              <Settings2 className="h-5 w-5 text-gray-600" />
+              <Settings2 className="h-5 w-5 text-muted-foreground" />
               <span className="font-medium">Settings</span>
             </Link>
           </div>

@@ -113,7 +113,7 @@ function getToday() {
 function getDocketStatusIcon(status: string) {
   switch (status) {
     case 'draft':
-      return <Clock className="h-5 w-5 text-gray-400" />
+      return <Clock className="h-5 w-5 text-muted-foreground" />
     case 'pending_approval':
       return <Clock className="h-5 w-5 text-amber-500" />
     case 'approved':
@@ -123,13 +123,13 @@ function getDocketStatusIcon(status: string) {
     case 'queried':
       return <MessageSquare className="h-5 w-5 text-amber-500" />
     default:
-      return <Clock className="h-5 w-5 text-gray-400" />
+      return <Clock className="h-5 w-5 text-muted-foreground" />
   }
 }
 
 function getDocketStatusBadge(status: string) {
   const variants: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+    draft: 'bg-muted text-foreground',
     pending_approval: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
     approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
     rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
@@ -268,14 +268,14 @@ export function SubcontractorDashboard() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+          <h1 className="text-xl font-semibold text-foreground">
             {getGreeting()}, {user?.fullName?.split(' ')[0] || 'there'}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-1">
+          <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
             <Building2 className="h-4 w-4" />
             {company?.companyName || 'Your Company'}
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             {company?.projectName || 'Project'}
           </p>
         </div>
@@ -286,12 +286,12 @@ export function SubcontractorDashboard() {
             onClick={handleRefresh}
             disabled={refreshing}
           >
-            <RefreshCw className={cn('h-5 w-5 text-gray-500', refreshing && 'animate-spin')} />
+            <RefreshCw className={cn('h-5 w-5 text-muted-foreground', refreshing && 'animate-spin')} />
           </Button>
-          <Link to="/settings" className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            <Bell className="h-5 w-5 text-gray-500" />
+          <Link to="/settings" className="relative p-2 rounded-lg hover:bg-muted transition-colors">
+            <Bell className="h-5 w-5 text-muted-foreground" />
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-white text-xs flex items-center justify-center">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -300,43 +300,43 @@ export function SubcontractorDashboard() {
       </div>
 
       {/* Today's Docket Card */}
-      <div className="border-2 border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+      <div className="border-2 border-border rounded-lg bg-card">
         <div className="p-4 pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Today's Docket</h2>
+              <Calendar className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-foreground">Today's Docket</h2>
             </div>
             {todaysDocket && getDocketStatusBadge(todaysDocket.status)}
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{formatDate(getToday())}</p>
+          <p className="text-sm text-muted-foreground mt-1">{formatDate(getToday())}</p>
         </div>
         <div className="p-4 pt-2">
           {todaysDocket ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Labour</p>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <p className="text-sm text-muted-foreground">Labour</p>
+                  <p className="text-lg font-semibold text-foreground">
                     {formatCurrency(todaysDocket.totalLabourSubmitted)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Plant</p>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  <p className="text-sm text-muted-foreground">Plant</p>
+                  <p className="text-lg font-semibold text-foreground">
                     {formatCurrency(todaysDocket.totalPlantSubmitted)}
                   </p>
                 </div>
               </div>
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-white">
+              <div className="pt-2 border-t border-border">
+                <p className="text-sm text-muted-foreground mb-1">Total</p>
+                <p className="text-xl font-bold text-foreground">
                   {formatCurrency(todaysDocket.totalLabourSubmitted + todaysDocket.totalPlantSubmitted)}
                 </p>
               </div>
               <Link
                 to={`/subcontractor-portal/docket/${todaysDocket.id}`}
-                className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-colors"
               >
                 {todaysDocket.status === 'draft' ? 'Continue Docket' : 'View Docket'}
                 <ChevronRight className="h-4 w-4" />
@@ -344,10 +344,10 @@ export function SubcontractorDashboard() {
             </div>
           ) : (
             <div className="text-center py-4">
-              <p className="text-gray-500 dark:text-gray-400 mb-4">No docket started for today</p>
+              <p className="text-muted-foreground mb-4">No docket started for today</p>
               <Link
                 to="/subcontractor-portal/docket/new"
-                className="inline-flex items-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 py-2.5 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Start Today's Docket
@@ -363,7 +363,7 @@ export function SubcontractorDashboard() {
           <div className="p-4 pb-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Needs Attention ({needsAttention.length})</h2>
+              <h2 className="text-lg font-semibold text-foreground">Needs Attention ({needsAttention.length})</h2>
             </div>
           </div>
           <div className="p-4 pt-2 space-y-3">
@@ -371,14 +371,14 @@ export function SubcontractorDashboard() {
               <Link
                 key={item.id}
                 to={item.link}
-                className="block p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 transition-colors"
+                className="block p-3 bg-card rounded-lg border border-border hover:border-primary transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm text-gray-900 dark:text-white">{item.title}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{item.message}</p>
+                    <p className="font-medium text-sm text-foreground">{item.title}</p>
+                    <p className="text-sm text-muted-foreground truncate">{item.message}</p>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-gray-400 shrink-0 ml-2" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 ml-2" />
                 </div>
               </Link>
             ))}
@@ -388,14 +388,14 @@ export function SubcontractorDashboard() {
 
       {/* Assigned Lots - Only show if portal access allows */}
       {company?.portalAccess?.lots !== false && (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <div className="border border-border rounded-lg bg-card">
           <div className="p-4 pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-gray-400" />
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Assigned Lots</h2>
+                <MapPin className="h-5 w-5 text-muted-foreground" />
+                <h2 className="text-lg font-semibold text-foreground">Assigned Lots</h2>
               </div>
-              <span className="px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
+              <span className="px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded-full">
                 {assignedLots.length}
               </span>
             </div>
@@ -406,27 +406,27 @@ export function SubcontractorDashboard() {
                 {assignedLots.map((lot) => (
                   <div
                     key={lot.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                    className="flex items-center justify-between p-2 rounded-lg bg-muted/50"
                   >
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-gray-400" />
-                      <span className="font-medium text-gray-900 dark:text-white">{lot.lotNumber}</span>
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground">{lot.lotNumber}</span>
                       {lot.activity && (
-                        <span className="text-sm text-gray-500 dark:text-gray-400">- {lot.activity}</span>
+                        <span className="text-sm text-muted-foreground">- {lot.activity}</span>
                       )}
                     </div>
                   </div>
                 ))}
                 <Link
                   to="/subcontractor-portal/work"
-                  className="flex items-center justify-center gap-2 w-full py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mt-2"
+                  className="flex items-center justify-center gap-2 w-full py-2 text-sm text-muted-foreground hover:text-primary transition-colors mt-2"
                 >
                   View All Work
                   <ChevronRight className="h-4 w-4" />
                 </Link>
               </div>
             ) : (
-              <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+              <p className="text-center text-muted-foreground py-4">
                 No lots assigned yet. Contact your project manager.
               </p>
             )}
@@ -435,13 +435,13 @@ export function SubcontractorDashboard() {
       )}
 
       {/* Recent Dockets */}
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+      <div className="border border-border rounded-lg bg-card">
         <div className="p-4 pb-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Dockets</h2>
+            <h2 className="text-lg font-semibold text-foreground">Recent Dockets</h2>
             <Link
               to="/subcontractor-portal/dockets"
-              className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               View All
               <ChevronRight className="h-4 w-4" />
@@ -455,13 +455,13 @@ export function SubcontractorDashboard() {
                 <Link
                   key={docket.id}
                   to={`/subcontractor-portal/docket/${docket.id}`}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                  className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     {getDocketStatusIcon(docket.status)}
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{formatDate(docket.date)}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="font-medium text-foreground">{formatDate(docket.date)}</p>
+                      <p className="text-sm text-muted-foreground">
                         {formatCurrency(docket.totalLabourSubmitted + docket.totalPlantSubmitted)}
                       </p>
                     </div>
@@ -471,7 +471,7 @@ export function SubcontractorDashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+            <p className="text-center text-muted-foreground py-4">
               No previous dockets
             </p>
           )}
@@ -482,25 +482,25 @@ export function SubcontractorDashboard() {
       <div className="grid grid-cols-2 gap-3">
         <Link
           to="/my-company"
-          className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+          className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
-            <Building2 className="h-5 w-5 text-gray-400" />
+            <Building2 className="h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">My Company</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Manage roster & plant</p>
+              <p className="font-medium text-foreground">My Company</p>
+              <p className="text-xs text-muted-foreground">Manage roster & plant</p>
             </div>
           </div>
         </Link>
         <Link
           to="/subcontractor-portal/dockets"
-          className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+          className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
-            <Calendar className="h-5 w-5 text-gray-400" />
+            <Calendar className="h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">All Dockets</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">View history</p>
+              <p className="font-medium text-foreground">All Dockets</p>
+              <p className="text-xs text-muted-foreground">View history</p>
             </div>
           </div>
         </Link>
@@ -508,13 +508,13 @@ export function SubcontractorDashboard() {
         {company?.portalAccess?.itps && (
           <Link
             to="/subcontractor-portal/itps"
-            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
               <ClipboardList className="h-5 w-5 text-green-500" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">ITPs</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Inspection & Test Plans</p>
+                <p className="font-medium text-foreground">ITPs</p>
+                <p className="text-xs text-muted-foreground">Inspection & Test Plans</p>
               </div>
             </div>
           </Link>
@@ -523,13 +523,13 @@ export function SubcontractorDashboard() {
         {company?.portalAccess?.holdPoints && (
           <Link
             to="/subcontractor-portal/holdpoints"
-            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
               <Hand className="h-5 w-5 text-amber-500" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">Hold Points</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">View hold points</p>
+                <p className="font-medium text-foreground">Hold Points</p>
+                <p className="text-xs text-muted-foreground">View hold points</p>
               </div>
             </div>
           </Link>
@@ -538,13 +538,13 @@ export function SubcontractorDashboard() {
         {company?.portalAccess?.testResults && (
           <Link
             to="/subcontractor-portal/tests"
-            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
               <FlaskConical className="h-5 w-5 text-blue-500" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">Test Results</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">View test results</p>
+                <p className="font-medium text-foreground">Test Results</p>
+                <p className="text-xs text-muted-foreground">View test results</p>
               </div>
             </div>
           </Link>
@@ -553,13 +553,13 @@ export function SubcontractorDashboard() {
         {company?.portalAccess?.ncrs && (
           <Link
             to="/subcontractor-portal/ncrs"
-            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
               <AlertTriangle className="h-5 w-5 text-red-500" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">NCRs</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Non-conformance reports</p>
+                <p className="font-medium text-foreground">NCRs</p>
+                <p className="text-xs text-muted-foreground">Non-conformance reports</p>
               </div>
             </div>
           </Link>
@@ -568,13 +568,13 @@ export function SubcontractorDashboard() {
         {company?.portalAccess?.documents && (
           <Link
             to="/subcontractor-portal/documents"
-            className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors cursor-pointer"
+            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
           >
             <div className="p-4 flex items-center gap-3">
               <FolderOpen className="h-5 w-5 text-purple-500" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">Documents</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Project documents</p>
+                <p className="font-medium text-foreground">Documents</p>
+                <p className="text-xs text-muted-foreground">Project documents</p>
               </div>
             </div>
           </Link>

@@ -95,7 +95,7 @@ function ConcessionModalInner({
         </p>
 
         {/* NCR Info */}
-        <div className="mb-4 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm">
+        <div className="mb-4 bg-muted/50 border border-border px-3 py-2 rounded-lg text-sm">
           <div className="font-medium">{ncr.ncrNumber}</div>
           <div className="text-muted-foreground">{ncr.description}</div>
           <div className="mt-1">
@@ -201,7 +201,7 @@ function ConcessionModalInner({
           </div>
 
           {/* Status Info */}
-          <div className="bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm">
+          <div className="bg-muted/50 border border-border px-3 py-2 rounded-lg text-sm">
             <span className="text-muted-foreground">NCR will be closed with status: </span>
             <span className="font-medium text-green-700">CLOSED_CONCESSION</span>
           </div>

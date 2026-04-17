@@ -96,14 +96,14 @@ export function FilterTriggerButton({
         // Base styles - industrial, high contrast
         'relative inline-flex items-center justify-center gap-2',
         'min-h-[48px] px-4 py-3 rounded-lg',
-        'bg-slate-800 dark:bg-slate-700 text-white',
+        'bg-card text-white',
         'font-semibold text-sm uppercase tracking-wide',
-        'border-2 border-slate-600 dark:border-slate-500',
+        'border-2 border-border',
         'shadow-md',
         // Touch optimization
         'touch-manipulation select-none',
         // Active/hover states
-        'active:scale-[0.98] active:bg-slate-700 dark:active:bg-slate-600',
+        'active:scale-[0.98] active:bg-muted',
         'transition-all duration-100',
         // Focus state for accessibility
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2',
@@ -121,9 +121,9 @@ export function FilterTriggerButton({
             'absolute -top-2 -right-2',
             'flex items-center justify-center',
             'min-w-[24px] h-6 px-1.5 rounded-full',
-            'bg-amber-500 text-slate-900',
+            'bg-amber-500 text-foreground',
             'text-xs font-bold',
-            'border-2 border-white dark:border-slate-800'
+            'border-2 border-background'
           )}
           aria-hidden="true"
         >
@@ -147,7 +147,7 @@ interface SelectFilterComponentProps {
 function SelectFilterComponent({ filter, value, onChange }: SelectFilterComponentProps) {
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+      <label className="block text-sm font-bold uppercase tracking-wide text-muted-foreground">
         {filter.label}
       </label>
       <div className="relative">
@@ -156,8 +156,8 @@ function SelectFilterComponent({ filter, value, onChange }: SelectFilterComponen
           onChange={(e) => onChange(e.target.value || null)}
           className={cn(
             'w-full min-h-[48px] px-4 py-3 pr-10',
-            'bg-white dark:bg-slate-800',
-            'border-2 border-slate-300 dark:border-slate-600',
+            'bg-card',
+            'border-2 border-border',
             'rounded-lg text-base font-medium',
             'appearance-none cursor-pointer',
             'touch-manipulation',
@@ -174,7 +174,7 @@ function SelectFilterComponent({ filter, value, onChange }: SelectFilterComponen
           ))}
         </select>
         <ChevronDown
-          className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 pointer-events-none"
+          className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none"
           aria-hidden="true"
         />
       </div>
@@ -199,7 +199,7 @@ function MultiselectFilterComponent({ filter, value, onChange }: MultiselectFilt
 
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+      <label className="block text-sm font-bold uppercase tracking-wide text-muted-foreground">
         {filter.label}
       </label>
       <div className="flex flex-wrap gap-2">
@@ -221,8 +221,8 @@ function MultiselectFilterComponent({ filter, value, onChange }: MultiselectFilt
                 'active:scale-[0.97]',
                 // Selected state
                 isSelected
-                  ? 'bg-amber-500 border-amber-600 text-slate-900'
-                  : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300',
+                  ? 'bg-amber-500 border-amber-600 text-foreground'
+                  : 'bg-card border-border text-foreground',
                 // Focus state
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2'
               )}
@@ -235,7 +235,7 @@ function MultiselectFilterComponent({ filter, value, onChange }: MultiselectFilt
                     'text-xs px-1.5 py-0.5 rounded-full',
                     isSelected
                       ? 'bg-amber-600 text-amber-100'
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                      : 'bg-muted text-muted-foreground'
                   )}
                 >
                   {option.count}
@@ -262,10 +262,10 @@ function RangeFilterComponent({ filter, value, onChange }: RangeFilterComponentP
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+        <label className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
           {filter.label}
         </label>
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+        <span className="text-sm font-semibold text-foreground">
           {formatValue(value.min)} - {formatValue(value.max)}
         </span>
       </div>
@@ -273,7 +273,7 @@ function RangeFilterComponent({ filter, value, onChange }: RangeFilterComponentP
       {/* Dual range inputs styled as industrial sliders */}
       <div className="space-y-4">
         <div className="space-y-1">
-          <span className="text-xs text-slate-500 dark:text-slate-400">Min</span>
+          <span className="text-xs text-muted-foreground">Min</span>
           <input
             type="range"
             min={filter.min}
@@ -291,7 +291,7 @@ function RangeFilterComponent({ filter, value, onChange }: RangeFilterComponentP
               'appearance-none bg-transparent',
               // Track styles
               '[&::-webkit-slider-runnable-track]:h-3 [&::-webkit-slider-runnable-track]:rounded-full',
-              '[&::-webkit-slider-runnable-track]:bg-slate-300 dark:[&::-webkit-slider-runnable-track]:bg-slate-600',
+              '[&::-webkit-slider-runnable-track]:bg-muted',
               // Thumb styles - large for glove use
               '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-8 [&::-webkit-slider-thumb]:w-8',
               '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-500',
@@ -299,7 +299,7 @@ function RangeFilterComponent({ filter, value, onChange }: RangeFilterComponentP
               '[&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:-mt-2.5',
               // Firefox styles
               '[&::-moz-range-track]:h-3 [&::-moz-range-track]:rounded-full',
-              '[&::-moz-range-track]:bg-slate-300 dark:[&::-moz-range-track]:bg-slate-600',
+              '[&::-moz-range-track]:bg-muted',
               '[&::-moz-range-thumb]:h-8 [&::-moz-range-thumb]:w-8 [&::-moz-range-thumb]:rounded-full',
               '[&::-moz-range-thumb]:bg-amber-500 [&::-moz-range-thumb]:border-4',
               '[&::-moz-range-thumb]:border-amber-600'
@@ -307,7 +307,7 @@ function RangeFilterComponent({ filter, value, onChange }: RangeFilterComponentP
           />
         </div>
         <div className="space-y-1">
-          <span className="text-xs text-slate-500 dark:text-slate-400">Max</span>
+          <span className="text-xs text-muted-foreground">Max</span>
           <input
             type="range"
             min={filter.min}
@@ -325,7 +325,7 @@ function RangeFilterComponent({ filter, value, onChange }: RangeFilterComponentP
               'appearance-none bg-transparent',
               // Track styles
               '[&::-webkit-slider-runnable-track]:h-3 [&::-webkit-slider-runnable-track]:rounded-full',
-              '[&::-webkit-slider-runnable-track]:bg-slate-300 dark:[&::-webkit-slider-runnable-track]:bg-slate-600',
+              '[&::-webkit-slider-runnable-track]:bg-muted',
               // Thumb styles - large for glove use
               '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-8 [&::-webkit-slider-thumb]:w-8',
               '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-500',
@@ -333,7 +333,7 @@ function RangeFilterComponent({ filter, value, onChange }: RangeFilterComponentP
               '[&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:-mt-2.5',
               // Firefox styles
               '[&::-moz-range-track]:h-3 [&::-moz-range-track]:rounded-full',
-              '[&::-moz-range-track]:bg-slate-300 dark:[&::-moz-range-track]:bg-slate-600',
+              '[&::-moz-range-track]:bg-muted',
               '[&::-moz-range-thumb]:h-8 [&::-moz-range-thumb]:w-8 [&::-moz-range-thumb]:rounded-full',
               '[&::-moz-range-thumb]:bg-amber-500 [&::-moz-range-thumb]:border-4',
               '[&::-moz-range-thumb]:border-amber-600'
@@ -354,12 +354,12 @@ interface DateFilterComponentProps {
 function DateFilterComponent({ filter, value, onChange }: DateFilterComponentProps) {
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+      <label className="block text-sm font-bold uppercase tracking-wide text-muted-foreground">
         {filter.label}
       </label>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
             <Calendar className="h-3 w-3" aria-hidden="true" />
             From
           </span>
@@ -371,8 +371,8 @@ function DateFilterComponent({ filter, value, onChange }: DateFilterComponentPro
             onChange={(e) => onChange({ ...value, start: e.target.value || null })}
             className={cn(
               'w-full min-h-[48px] px-3 py-2',
-              'bg-white dark:bg-slate-800',
-              'border-2 border-slate-300 dark:border-slate-600',
+              'bg-card',
+              'border-2 border-border',
               'rounded-lg text-base font-medium',
               'touch-manipulation',
               'focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20',
@@ -381,7 +381,7 @@ function DateFilterComponent({ filter, value, onChange }: DateFilterComponentPro
           />
         </div>
         <div className="space-y-1">
-          <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
             <Calendar className="h-3 w-3" aria-hidden="true" />
             To
           </span>
@@ -393,8 +393,8 @@ function DateFilterComponent({ filter, value, onChange }: DateFilterComponentPro
             onChange={(e) => onChange({ ...value, end: e.target.value || null })}
             className={cn(
               'w-full min-h-[48px] px-3 py-2',
-              'bg-white dark:bg-slate-800',
-              'border-2 border-slate-300 dark:border-slate-600',
+              'bg-card',
+              'border-2 border-border',
               'rounded-lg text-base font-medium',
               'touch-manipulation',
               'focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20',
@@ -595,7 +595,7 @@ export function FilterBottomSheet({
         ref={sheetRef}
         className={cn(
           'absolute bottom-0 left-0 right-0',
-          'bg-slate-50 dark:bg-slate-900',
+          'bg-muted/50',
           'rounded-t-2xl shadow-2xl',
           'max-h-[85vh] flex flex-col',
           'transition-transform duration-300 ease-out',
@@ -618,14 +618,14 @@ export function FilterBottomSheet({
           aria-label="Drag to dismiss"
           tabIndex={0}
         >
-          <div className="w-12 h-1.5 bg-slate-400 dark:bg-slate-600 rounded-full" />
+          <div className="w-12 h-1.5 bg-muted-foreground rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pb-3 border-b-2 border-slate-200 dark:border-slate-700">
+        <div className="flex items-center justify-between px-4 pb-3 border-b-2 border-border">
           <h2
             id="filter-sheet-title"
-            className="text-xl font-bold text-slate-900 dark:text-white"
+            className="text-xl font-bold text-foreground dark:text-white"
           >
             {title}
           </h2>
@@ -650,9 +650,9 @@ export function FilterBottomSheet({
               className={cn(
                 'flex items-center justify-center',
                 'min-h-[48px] min-w-[48px] rounded-lg',
-                'bg-slate-200 dark:bg-slate-700',
-                'text-slate-600 dark:text-slate-300',
-                'hover:bg-slate-300 dark:hover:bg-slate-600',
+                'bg-muted',
+                'text-muted-foreground',
+                'hover:bg-muted',
                 'active:scale-[0.98]',
                 'touch-manipulation transition-all duration-100',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500'
@@ -712,13 +712,13 @@ export function FilterBottomSheet({
         </div>
 
         {/* Footer with Apply Button */}
-        <div className="p-4 border-t-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pb-safe">
+        <div className="p-4 border-t-2 border-border bg-card pb-safe">
           <button
             onClick={() => onApply(values)}
             className={cn(
               'w-full min-h-[56px] px-6 py-4 rounded-xl',
               'bg-amber-500 hover:bg-amber-600 active:bg-amber-700',
-              'text-slate-900 font-bold text-lg uppercase tracking-wide',
+              'text-foreground font-bold text-lg uppercase tracking-wide',
               'shadow-lg shadow-amber-500/30',
               'active:scale-[0.98]',
               'touch-manipulation transition-all duration-100',
@@ -727,7 +727,7 @@ export function FilterBottomSheet({
           >
             Apply Filters
             {activeCount > 0 && (
-              <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-900/20 text-sm">
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-foreground/20 text-sm">
                 {activeCount}
               </span>
             )}

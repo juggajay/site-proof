@@ -134,14 +134,14 @@ function RectifyNCRModalInner({
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Submit Rectification Evidence</ModalHeader>
       <ModalBody>
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm font-medium text-blue-800">{ncr.ncrNumber}</p>
-          <p className="text-sm text-blue-700 mt-1">{ncr.description}</p>
+        <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+          <p className="text-sm font-medium text-primary">{ncr.ncrNumber}</p>
+          <p className="text-sm text-primary mt-1">{ncr.description}</p>
         </div>
 
         {/* Evidence Upload Section */}
         <div className="mb-4">
-          <p className="text-sm font-medium text-gray-700 mb-2">Upload Evidence</p>
+          <p className="text-sm font-medium text-foreground mb-2">Upload Evidence</p>
 
           {/* Photo Evidence */}
           <div className="mb-3">
@@ -186,7 +186,7 @@ function RectifyNCRModalInner({
           {/* Uploaded files list */}
           {evidenceFiles.length > 0 && (
             <div className="mt-2 space-y-1">
-              <p className="text-xs font-medium text-gray-500">Uploaded Evidence:</p>
+              <p className="text-xs font-medium text-muted-foreground">Uploaded Evidence:</p>
               {evidenceFiles.map((file, index) => (
                 <p key={index} className="text-xs text-green-600">&#10003; {file.name}</p>
               ))}

@@ -35,7 +35,7 @@ export function QuickCaptureButton({
       id: 'photo',
       label: 'Photo',
       icon: Camera,
-      color: 'bg-blue-500',
+      color: 'bg-primary',
       onClick: () => {
         setIsExpanded(false)
         onCapturePhoto()
@@ -132,7 +132,7 @@ export function QuickCaptureButton({
             'w-14 h-14 rounded-full shadow-lg flex items-center justify-center',
             'transform transition-all duration-200 active:scale-95',
             'touch-manipulation',
-            isExpanded ? 'bg-gray-600 rotate-45' : 'bg-primary'
+            isExpanded ? 'bg-muted-foreground rotate-45' : 'bg-primary'
           )}
         >
           {isExpanded ? (

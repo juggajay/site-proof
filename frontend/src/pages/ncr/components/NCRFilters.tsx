@@ -179,7 +179,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 placeholder="Search NCRs..."
                 value={mobileSearchQuery}
                 onChange={(e) => setMobileSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-background text-base focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+                className="w-full pl-10 pr-4 py-3 border-2 border-border rounded-lg bg-background text-base focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
               />
             </div>
             {/* Filter Trigger Button */}

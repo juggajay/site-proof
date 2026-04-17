@@ -110,7 +110,7 @@ export function ChangelogNotification({ forceShow = false, onClose }: ChangelogN
       case 'feature':
         return <Gift className="h-4 w-4 text-green-500" />
       case 'improvement':
-        return <Zap className="h-4 w-4 text-blue-500" />
+        return <Zap className="h-4 w-4 text-primary" />
       case 'security':
         return <Shield className="h-4 w-4 text-amber-500" />
       case 'docs':

@@ -509,7 +509,7 @@ export function DocketEditPage() {
   if (loading) {
     return (
       <div className="container max-w-2xl mx-auto p-4 flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -523,7 +523,7 @@ export function DocketEditPage() {
         </div>
         <Link
           to="/subcontractor-portal"
-          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Portal
@@ -538,15 +538,15 @@ export function DocketEditPage() {
       <div className="flex items-center gap-3 mb-6">
         <Link
           to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h1 className="text-lg font-semibold text-foreground">
             {isNewDocket ? "Today's Docket" : `Docket ${docket?.docketNumber || ''}`}
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             {formatDate(docket?.date || today)}
           </p>
         </div>
@@ -558,7 +558,7 @@ export function DocketEditPage() {
               docket.status === 'pending_approval' && 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
               docket.status === 'queried' && 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
               docket.status === 'rejected' && 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
-              docket.status === 'draft' && 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+              docket.status === 'draft' && 'bg-muted text-foreground'
             )}
           >
             {docket.status === 'draft' ? 'Draft' :
@@ -628,9 +628,9 @@ export function DocketEditPage() {
 
       {/* No lots warning */}
       {assignedLots.length === 0 && (
-        <div className="flex items-start gap-3 p-4 mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-          <p className="text-blue-800 dark:text-blue-200">
+        <div className="flex items-start gap-3 p-4 mb-4 bg-primary/5 border border-primary/30 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <p className="text-primary">
             No lots have been assigned to you yet. Contact your project manager to get lot assignments.
           </p>
         </div>
@@ -638,20 +638,20 @@ export function DocketEditPage() {
 
       {/* Tabs */}
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+        <div className="grid grid-cols-3 gap-1 p-1 bg-muted rounded-lg">
           <button
             onClick={() => setActiveTab('labour')}
             className={cn(
               'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
               activeTab === 'labour'
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                ? 'bg-card text-foreground shadow'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <Users className="h-4 w-4" />
             Labour
             {docket?.labourEntries.length ? (
-              <span className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded">
+              <span className="px-1.5 py-0.5 text-xs bg-muted rounded">
                 {docket.labourEntries.length}
               </span>
             ) : null}
@@ -661,14 +661,14 @@ export function DocketEditPage() {
             className={cn(
               'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
               activeTab === 'plant'
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                ? 'bg-card text-foreground shadow'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <Truck className="h-4 w-4" />
             Plant
             {docket?.plantEntries.length ? (
-              <span className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded">
+              <span className="px-1.5 py-0.5 text-xs bg-muted rounded">
                 {docket.plantEntries.length}
               </span>
             ) : null}
@@ -678,8 +678,8 @@ export function DocketEditPage() {
             className={cn(
               'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
               activeTab === 'summary'
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                ? 'bg-card text-foreground shadow'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <FileText className="h-4 w-4" />
@@ -691,8 +691,8 @@ export function DocketEditPage() {
         {activeTab === 'labour' && (
           <div className="space-y-4">
             {canEdit && approvedEmployees.length > 0 && (
-              <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Tap an employee to add hours</p>
+              <div className="border border-dashed border-border rounded-lg p-4">
+                <p className="text-sm text-muted-foreground mb-3">Tap an employee to add hours</p>
                 <div className="grid grid-cols-2 gap-2">
                   {approvedEmployees.map((emp) => {
                     const alreadyAdded = docket?.labourEntries.some(e => e.employee.id === emp.id)
@@ -703,15 +703,15 @@ export function DocketEditPage() {
                         className={cn(
                           'relative p-3 rounded-lg border text-left transition-colors min-h-[60px]',
                           alreadyAdded
-                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
-                            : 'hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-200 dark:border-gray-700'
+                            ? 'bg-primary/5 border-primary'
+                            : 'hover:border-primary hover:bg-muted/50 border-border'
                         )}
                       >
-                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{emp.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{emp.role}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">${emp.hourlyRate}/hr</p>
+                        <p className="font-medium text-sm text-foreground truncate">{emp.name}</p>
+                        <p className="text-xs text-muted-foreground">{emp.role}</p>
+                        <p className="text-xs text-muted-foreground">${emp.hourlyRate}/hr</p>
                         {alreadyAdded && (
-                          <Check className="h-4 w-4 text-blue-600 absolute top-2 right-2" />
+                          <Check className="h-4 w-4 text-primary absolute top-2 right-2" />
                         )}
                       </button>
                     )
@@ -721,9 +721,9 @@ export function DocketEditPage() {
             )}
 
             {approvedEmployees.length === 0 && (
-              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-                <p className="text-blue-800 dark:text-blue-200">
+              <div className="flex items-start gap-3 p-4 bg-primary/5 border border-primary/30 rounded-lg">
+                <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <p className="text-primary">
                   No approved employees yet. Add employees in{' '}
                   <Link to="/my-company" className="underline">My Company</Link> and wait for rate approval.
                 </p>
@@ -733,20 +733,20 @@ export function DocketEditPage() {
             {/* Labour entries list */}
             {docket?.labourEntries && docket.labourEntries.length > 0 && (
               <div className="space-y-2">
-                <h3 className="font-medium text-sm text-gray-500 dark:text-gray-400">Today's Entries</h3>
+                <h3 className="font-medium text-sm text-muted-foreground">Today's Entries</h3>
                 {docket.labourEntries.map((entry) => (
-                  <div key={entry.id} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-4">
+                  <div key={entry.id} className="border border-border rounded-lg bg-card p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{entry.employee.name}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="font-medium text-foreground">{entry.employee.name}</p>
+                        <p className="text-sm text-muted-foreground">
                           {entry.startTime} - {entry.finishTime}
                         </p>
-                        <p className="text-sm text-gray-900 dark:text-white">
+                        <p className="text-sm text-foreground">
                           {entry.submittedHours}h × ${entry.hourlyRate}/hr = {formatCurrency(entry.submittedCost)}
                         </p>
                         {entry.lotAllocations.length > 0 && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                             <MapPin className="h-3 w-3" />
                             {entry.lotAllocations.map(a => a.lotNumber).join(', ')}
                           </p>
@@ -766,8 +766,8 @@ export function DocketEditPage() {
                   </div>
                 ))}
                 <div className="text-right p-2">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Labour Subtotal</p>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatCurrency(docket.totalLabourSubmitted)}</p>
+                  <p className="text-sm text-muted-foreground">Labour Subtotal</p>
+                  <p className="text-lg font-semibold text-foreground">{formatCurrency(docket.totalLabourSubmitted)}</p>
                 </div>
               </div>
             )}
@@ -778,8 +778,8 @@ export function DocketEditPage() {
         {activeTab === 'plant' && (
           <div className="space-y-4">
             {canEdit && approvedPlant.length > 0 && (
-              <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Tap equipment to add hours</p>
+              <div className="border border-dashed border-border rounded-lg p-4">
+                <p className="text-sm text-muted-foreground mb-3">Tap equipment to add hours</p>
                 <div className="grid grid-cols-2 gap-2">
                   {approvedPlant.map((plant) => {
                     const alreadyAdded = docket?.plantEntries.some(e => e.plant.id === plant.id)
@@ -790,13 +790,13 @@ export function DocketEditPage() {
                         className={cn(
                           'relative p-3 rounded-lg border text-left transition-colors min-h-[60px]',
                           alreadyAdded
-                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
-                            : 'hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-gray-800 border-gray-200 dark:border-gray-700'
+                            ? 'bg-primary/5 border-primary'
+                            : 'hover:border-primary hover:bg-muted/50 border-border'
                         )}
                       >
-                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{plant.type}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{plant.description}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                        <p className="font-medium text-sm text-foreground truncate">{plant.type}</p>
+                        <p className="text-xs text-muted-foreground truncate">{plant.description}</p>
+                        <p className="text-xs text-muted-foreground">
                           ${plant.dryRate}{plant.wetRate > 0 ? `/$${plant.wetRate}` : ''}/hr
                         </p>
                       </button>
@@ -807,9 +807,9 @@ export function DocketEditPage() {
             )}
 
             {approvedPlant.length === 0 && (
-              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-                <p className="text-blue-800 dark:text-blue-200">
+              <div className="flex items-start gap-3 p-4 bg-primary/5 border border-primary/30 rounded-lg">
+                <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                <p className="text-primary">
                   No approved plant yet. Add plant in{' '}
                   <Link to="/my-company" className="underline">My Company</Link> and wait for rate approval.
                 </p>
@@ -819,14 +819,14 @@ export function DocketEditPage() {
             {/* Plant entries list */}
             {docket?.plantEntries && docket.plantEntries.length > 0 && (
               <div className="space-y-2">
-                <h3 className="font-medium text-sm text-gray-500 dark:text-gray-400">Today's Entries</h3>
+                <h3 className="font-medium text-sm text-muted-foreground">Today's Entries</h3>
                 {docket.plantEntries.map((entry) => (
-                  <div key={entry.id} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-4">
+                  <div key={entry.id} className="border border-border rounded-lg bg-card p-4">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{entry.plant.type}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{entry.plant.description}</p>
-                        <p className="text-sm text-gray-900 dark:text-white">
+                        <p className="font-medium text-foreground">{entry.plant.type}</p>
+                        <p className="text-sm text-muted-foreground">{entry.plant.description}</p>
+                        <p className="text-sm text-foreground">
                           {entry.hoursOperated}h × ${entry.hourlyRate}/hr ({entry.wetOrDry}) = {formatCurrency(entry.submittedCost)}
                         </p>
                       </div>
@@ -844,8 +844,8 @@ export function DocketEditPage() {
                   </div>
                 ))}
                 <div className="text-right p-2">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Plant Subtotal</p>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatCurrency(docket.totalPlantSubmitted)}</p>
+                  <p className="text-sm text-muted-foreground">Plant Subtotal</p>
+                  <p className="text-lg font-semibold text-foreground">{formatCurrency(docket.totalPlantSubmitted)}</p>
                 </div>
               </div>
             )}
@@ -855,26 +855,26 @@ export function DocketEditPage() {
         {/* Summary Tab */}
         {activeTab === 'summary' && (
           <div className="space-y-4">
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Docket Summary</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{formatDate(docket?.date || today)}</p>
+            <div className="border border-border rounded-lg bg-card">
+              <div className="p-4 border-b border-border">
+                <h2 className="text-lg font-semibold text-foreground">Docket Summary</h2>
+                <p className="text-sm text-muted-foreground">{formatDate(docket?.date || today)}</p>
               </div>
               <div className="p-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Labour ({docket?.labourEntries.length || 0} entries)</p>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatCurrency(docket?.totalLabourSubmitted || 0)}</p>
+                    <p className="text-sm text-muted-foreground">Labour ({docket?.labourEntries.length || 0} entries)</p>
+                    <p className="text-lg font-semibold text-foreground">{formatCurrency(docket?.totalLabourSubmitted || 0)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Plant ({docket?.plantEntries.length || 0} entries)</p>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatCurrency(docket?.totalPlantSubmitted || 0)}</p>
+                    <p className="text-sm text-muted-foreground">Plant ({docket?.plantEntries.length || 0} entries)</p>
+                    <p className="text-lg font-semibold text-foreground">{formatCurrency(docket?.totalPlantSubmitted || 0)}</p>
                   </div>
                 </div>
 
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalCost)}</p>
+                <div className="border-t border-border pt-4">
+                  <p className="text-sm text-muted-foreground">Total</p>
+                  <p className="text-2xl font-bold text-foreground">{formatCurrency(totalCost)}</p>
                 </div>
 
                 {canEdit && (
@@ -899,11 +899,11 @@ export function DocketEditPage() {
       </div>
 
       {/* Bottom Action Bar - bottom-16 on mobile to sit above MobileNav (h-16, z-30) */}
-      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 md:relative md:border-0 md:bg-transparent md:p-0 md:mt-6 md:z-auto">
+      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 p-4 bg-background border-t border-border md:relative md:border-0 md:bg-transparent md:p-0 md:mt-6 md:z-auto">
         <div className="container max-w-2xl mx-auto flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Total</p>
-            <p className="text-xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalCost)}</p>
+            <p className="text-sm text-muted-foreground">Total</p>
+            <p className="text-xl font-bold text-foreground">{formatCurrency(totalCost)}</p>
           </div>
           {canEdit && (
             <Button
@@ -912,7 +912,7 @@ export function DocketEditPage() {
               className={cn(
                 'px-6 py-3 h-auto',
                 canSubmit && !submitting
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  ? 'bg-primary hover:bg-primary/90 text-white'
                   : ''
               )}
             >
@@ -930,7 +930,7 @@ export function DocketEditPage() {
             </Button>
           )}
           {!canEdit && docket?.status === 'pending_approval' && (
-            <span className="px-4 py-2 text-base bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
+            <span className="px-4 py-2 text-base bg-muted text-muted-foreground rounded-lg">
               Awaiting Approval
             </span>
           )}
@@ -951,16 +951,16 @@ export function DocketEditPage() {
             onClick={() => setSheetOpen(false)}
           />
           {/* Sheet */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-y-auto animate-slide-up">
+          <div className="absolute bottom-0 left-0 right-0 bg-background rounded-t-2xl max-h-[90vh] overflow-y-auto animate-slide-up">
             {/* Handle */}
             <div className="flex justify-center py-3">
-              <div className="w-12 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full" />
+              <div className="w-12 h-1.5 bg-border rounded-full" />
             </div>
 
             {/* Header */}
             <div className="px-4 pb-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-semibold text-foreground">
                   {sheetType === 'labour' ? 'Add Labour Hours' : 'Add Plant Hours'}
                 </h3>
                 <Button
@@ -968,10 +968,10 @@ export function DocketEditPage() {
                   size="icon"
                   onClick={() => setSheetOpen(false)}
                 >
-                  <X className="h-5 w-5 text-gray-500" />
+                  <X className="h-5 w-5 text-muted-foreground" />
                 </Button>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 {sheetType === 'labour' && selectedEmployee && (
                   <span>{selectedEmployee.name} - {selectedEmployee.role} (${selectedEmployee.hourlyRate}/hr)</span>
                 )}
@@ -1014,7 +1014,7 @@ export function DocketEditPage() {
 
                   {/* Quick presets */}
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Quick presets</p>
+                    <p className="text-xs text-muted-foreground mb-1">Quick presets</p>
                     <div className="flex flex-wrap gap-2">
                       {TIME_PRESETS.map((preset) => (
                         <Button
@@ -1039,9 +1039,9 @@ export function DocketEditPage() {
                       Allocate to Lot
                     </Label>
                     {assignedLots.length === 1 ? (
-                      <div className="flex items-center gap-2 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg mt-1">
-                        <MapPin className="h-4 w-4 text-gray-400" />
-                        <span className="text-gray-900 dark:text-white">{assignedLots[0].lotNumber}</span>
+                      <div className="flex items-center gap-2 p-3 bg-muted rounded-lg mt-1">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-foreground">{assignedLots[0].lotNumber}</span>
                         <Check className="h-4 w-4 text-green-500 ml-auto" />
                       </div>
                     ) : (
@@ -1093,26 +1093,26 @@ export function DocketEditPage() {
                           className={cn(
                             'p-3 rounded-lg border text-center transition-colors',
                             wetOrDry === 'dry'
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                              : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-border'
                           )}
                           onClick={() => setWetOrDry('dry')}
                         >
-                          <p className="font-medium text-gray-900 dark:text-white">Dry</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">${selectedPlant.dryRate}/hr</p>
+                          <p className="font-medium text-foreground">Dry</p>
+                          <p className="text-sm text-muted-foreground">${selectedPlant.dryRate}/hr</p>
                         </button>
                         <button
                           type="button"
                           className={cn(
                             'p-3 rounded-lg border text-center transition-colors',
                             wetOrDry === 'wet'
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                              : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-border'
                           )}
                           onClick={() => setWetOrDry('wet')}
                         >
-                          <p className="font-medium text-gray-900 dark:text-white">Wet</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">${selectedPlant.wetRate}/hr</p>
+                          <p className="font-medium text-foreground">Wet</p>
+                          <p className="text-sm text-muted-foreground">${selectedPlant.wetRate}/hr</p>
                         </button>
                       </div>
                     </div>
@@ -1121,15 +1121,15 @@ export function DocketEditPage() {
               )}
 
               {/* Preview */}
-              <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4">
+              <div className="bg-muted rounded-lg p-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Duration</p>
-                    <p className="text-lg font-medium text-gray-900 dark:text-white">{previewHours} hours</p>
+                    <p className="text-sm text-muted-foreground">Duration</p>
+                    <p className="text-lg font-medium text-foreground">{previewHours} hours</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Cost</p>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(previewCost)}</p>
+                    <p className="text-sm text-muted-foreground">Cost</p>
+                    <p className="text-lg font-bold text-foreground">{formatCurrency(previewCost)}</p>
                   </div>
                 </div>
               </div>
@@ -1144,7 +1144,7 @@ export function DocketEditPage() {
                   'w-full h-12',
                   saving || (sheetType === 'labour' && !selectedLotId)
                     ? ''
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-primary hover:bg-primary/90 text-white'
                 )}
               >
                 {saving ? (

@@ -442,7 +442,7 @@ export function CostsPage() {
               </div>
               <div className="h-3 bg-muted rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-blue-500 rounded-full"
+                  className="h-full bg-primary rounded-full"
                   style={{ width: `${(summary?.totalLabourCost || 0) / (summary?.totalCost || 1) * 100}%` }}
                 />
               </div>
@@ -466,7 +466,7 @@ export function CostsPage() {
             <div className="flex items-end gap-4 h-32">
               <div className="flex-1 flex flex-col items-center">
                 <div
-                  className="w-full max-w-24 bg-blue-200 rounded-t"
+                  className="w-full max-w-24 bg-primary/20 rounded-t"
                   style={{ height: `${(summary?.budgetTotal || 0) / (summary?.budgetTotal || 1) * 100}%` }}
                 />
                 <span className="text-xs mt-2">Budget</span>

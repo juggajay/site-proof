@@ -145,13 +145,13 @@ export function PhotoCaptureModal({
         {!capturedImage ? (
           <>
             {/* Camera capture button */}
-            <div className="flex-1 flex items-center justify-center bg-gray-900">
+            <div className="flex-1 flex items-center justify-center bg-neutral-900">
               <div className="text-center p-8">
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="w-24 h-24 rounded-full bg-white flex items-center justify-center touch-manipulation active:scale-95 transition-transform"
                 >
-                  <Camera className="w-12 h-12 text-gray-900" />
+                  <Camera className="w-12 h-12 text-neutral-900" />
                 </button>
                 <p className="text-white mt-4">Tap to take photo</p>
                 <input
@@ -193,7 +193,7 @@ export function PhotoCaptureModal({
             </div>
 
             {/* Caption input */}
-            <div className="p-4 bg-white dark:bg-gray-900">
+            <div className="p-4 bg-background">
               <div className="flex items-start gap-2">
                 <Textarea
                   value={caption}

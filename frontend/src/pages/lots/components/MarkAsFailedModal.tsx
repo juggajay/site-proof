@@ -73,7 +73,7 @@ export function MarkAsFailedModal({
         </div>
       </ModalHeader>
       <ModalBody>
-        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+        <div className="mb-4 p-3 bg-muted/50 rounded-lg">
           <p className="text-sm font-medium">{itemDescription}</p>
         </div>
 

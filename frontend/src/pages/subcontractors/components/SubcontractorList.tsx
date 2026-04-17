@@ -88,7 +88,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                     {getStatusBadge(sub.status)}
                     <button
                       onClick={(e) => { e.stopPropagation(); onOpenPortalAccess(sub); }}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-muted transition-colors"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border hover:bg-muted transition-colors"
                       title="Configure Portal Access"
                     >
                       <Settings2 className="h-3.5 w-3.5" />

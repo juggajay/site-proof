@@ -47,7 +47,7 @@ function formatCurrency(amount: number) {
 function getDocketStatusIcon(status: string) {
   switch (status) {
     case 'draft':
-      return <Clock className="h-5 w-5 text-gray-400" />
+      return <Clock className="h-5 w-5 text-muted-foreground" />
     case 'pending_approval':
       return <Clock className="h-5 w-5 text-amber-500" />
     case 'approved':
@@ -57,13 +57,13 @@ function getDocketStatusIcon(status: string) {
     case 'queried':
       return <MessageSquare className="h-5 w-5 text-amber-500" />
     default:
-      return <Clock className="h-5 w-5 text-gray-400" />
+      return <Clock className="h-5 w-5 text-muted-foreground" />
   }
 }
 
 function getDocketStatusBadge(status: string) {
   const variants: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+    draft: 'bg-muted text-foreground',
     pending_approval: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
     approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
     rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
@@ -155,19 +155,19 @@ export function DocketsListPage() {
       <div className="flex items-center gap-3">
         <Link
           to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Docket History</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{stats.total} dockets</p>
+          <h1 className="text-lg font-semibold text-foreground">Docket History</h1>
+          <p className="text-sm text-muted-foreground dark:text-muted-foreground">{stats.total} dockets</p>
         </div>
       </div>
 
       {/* Filter tabs - wraps on mobile */}
       <div className={cn(
-        "p-1 bg-gray-100 dark:bg-gray-800 rounded-lg",
+        "p-1 bg-muted rounded-lg",
         isMobile ? "grid grid-cols-2 gap-1" : "flex gap-1 overflow-x-auto"
       )}>
         <button
@@ -175,57 +175,57 @@ export function DocketsListPage() {
           className={cn(
             'flex items-center justify-center gap-1 px-3 py-2.5 text-sm font-medium rounded-md transition-colors touch-manipulation',
             statusFilter === 'all'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              ? 'bg-card text-foreground shadow'
+              : 'text-muted-foreground hover:text-foreground'
           )}
         >
           All
-          <span className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded">{stats.total}</span>
+          <span className="px-1.5 py-0.5 text-xs bg-muted rounded">{stats.total}</span>
         </button>
         <button
           onClick={() => setStatusFilter('pending_approval')}
           className={cn(
             'flex items-center justify-center gap-1 px-3 py-2.5 text-sm font-medium rounded-md transition-colors touch-manipulation',
             statusFilter === 'pending_approval'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              ? 'bg-card text-foreground shadow'
+              : 'text-muted-foreground hover:text-foreground'
           )}
         >
           Pending
-          {stats.pending > 0 && <span className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded">{stats.pending}</span>}
+          {stats.pending > 0 && <span className="px-1.5 py-0.5 text-xs bg-muted rounded">{stats.pending}</span>}
         </button>
         <button
           onClick={() => setStatusFilter('approved')}
           className={cn(
             'flex items-center justify-center gap-1 px-3 py-2.5 text-sm font-medium rounded-md transition-colors touch-manipulation',
             statusFilter === 'approved'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              ? 'bg-card text-foreground shadow'
+              : 'text-muted-foreground hover:text-foreground'
           )}
         >
           Approved
-          {stats.approved > 0 && <span className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded">{stats.approved}</span>}
+          {stats.approved > 0 && <span className="px-1.5 py-0.5 text-xs bg-muted rounded">{stats.approved}</span>}
         </button>
         <button
           onClick={() => setStatusFilter('queried')}
           className={cn(
             'flex items-center justify-center gap-1 px-3 py-2.5 text-sm font-medium rounded-md transition-colors touch-manipulation',
             statusFilter === 'queried'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              ? 'bg-card text-foreground shadow'
+              : 'text-muted-foreground hover:text-foreground'
           )}
         >
           Queried
-          {stats.queried > 0 && <span className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-600 rounded">{stats.queried}</span>}
+          {stats.queried > 0 && <span className="px-1.5 py-0.5 text-xs bg-muted rounded">{stats.queried}</span>}
         </button>
       </div>
 
       {/* Docket list */}
       {filteredDockets.length === 0 ? (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <div className="border border-border rounded-lg bg-card">
           <div className="p-8 text-center">
-            <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400">
+            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground dark:text-muted-foreground">
               {statusFilter === 'all' ? 'No dockets yet' : `No ${statusFilter.replace('_', ' ')} dockets`}
             </p>
           </div>
@@ -234,29 +234,29 @@ export function DocketsListPage() {
         <div className="space-y-6">
           {monthGroups.map((group) => (
             <div key={group.label}>
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{group.label}</h3>
+              <h3 className="text-sm font-medium text-muted-foreground dark:text-muted-foreground mb-2">{group.label}</h3>
               <div className="space-y-2">
                 {group.dockets.map((docket) => (
                   <Link key={docket.id} to={`/subcontractor-portal/docket/${docket.id}`}>
-                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 hover:border-blue-500 transition-colors">
+                    <div className="border border-border rounded-lg bg-card hover:border-primary transition-colors">
                       <div className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             {getDocketStatusIcon(docket.status)}
                             <div>
-                              <p className="font-medium text-gray-900 dark:text-white">{formatDate(docket.date)}</p>
-                              <p className="text-sm text-gray-500 dark:text-gray-400">
+                              <p className="font-medium text-foreground">{formatDate(docket.date)}</p>
+                              <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                                 {formatCurrency(docket.totalLabourSubmitted + docket.totalPlantSubmitted)}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             {getDocketStatusBadge(docket.status)}
-                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </div>
                         </div>
                         {(docket.status === 'queried' || docket.status === 'rejected') && docket.foremanNotes && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 pl-8 truncate">
+                          <p className="text-sm text-muted-foreground dark:text-muted-foreground mt-2 pl-8 truncate">
                             {docket.foremanNotes}
                           </p>
                         )}

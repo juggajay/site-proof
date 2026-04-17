@@ -41,12 +41,12 @@ export function DeleteLotModal({ isOpen, lot, onClose, onDeleted, onError }: Del
     <Modal alert onClose={onClose}>
       <ModalHeader>Confirm Deletion</ModalHeader>
       <ModalBody>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           Are you sure you want to delete lot{' '}
-          <span className="font-semibold text-gray-900">{lot.lotNumber}</span>?
+          <span className="font-semibold text-foreground">{lot.lotNumber}</span>?
         </p>
         {lot.description && (
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             &quot;{lot.description}&quot;
           </p>
         )}

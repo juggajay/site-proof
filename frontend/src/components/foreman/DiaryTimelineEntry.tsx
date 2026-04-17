@@ -25,7 +25,7 @@ const typeConfig: Record<string, { icon: typeof Plus; color: string; bgColor: st
   delivery: { icon: Truck, color: 'text-blue-600', bgColor: 'bg-blue-100 dark:bg-blue-900/30', label: 'Delivery' },
   event: { icon: CalendarClock, color: 'text-purple-600', bgColor: 'bg-purple-100 dark:bg-purple-900/30', label: 'Event' },
   personnel: { icon: Users, color: 'text-emerald-600', bgColor: 'bg-emerald-100 dark:bg-emerald-900/30', label: 'Personnel' },
-  plant: { icon: Wrench, color: 'text-gray-600', bgColor: 'bg-gray-100 dark:bg-gray-800', label: 'Plant' },
+  plant: { icon: Wrench, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Plant' },
 }
 
 export function DiaryTimelineEntry({ entry, onEdit, onDelete, isSubmitted }: DiaryTimelineEntryProps) {
@@ -89,7 +89,7 @@ export function DiaryTimelineEntry({ entry, onEdit, onDelete, isSubmitted }: Dia
       }}
       rightAction={{
         label: 'Edit',
-        color: 'bg-blue-500',
+        color: 'bg-primary',
         icon: <Edit2 className="h-5 w-5" />,
       }}
       onSwipeRight={() => onEdit(entry)}

@@ -32,7 +32,7 @@ const ROLES = [
 const statusColors: Record<string, string> = {
   active: 'bg-green-100 text-green-700',
   pending: 'bg-amber-100 text-amber-700',
-  inactive: 'bg-gray-100 text-gray-700',
+  inactive: 'bg-muted text-foreground',
 }
 
 export function ProjectUsersPage() {
@@ -267,7 +267,7 @@ export function ProjectUsersPage() {
                               variant="ghost"
                               size="icon"
                               onClick={cancelEditing}
-                              className="text-gray-600 hover:bg-gray-50"
+                              className="text-muted-foreground hover:bg-muted/50"
                               title="Cancel"
                             >
                               <X className="h-4 w-4" />
@@ -279,7 +279,7 @@ export function ProjectUsersPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => startEditing(user)}
-                              className="text-blue-600 hover:bg-blue-50"
+                              className="text-primary hover:bg-primary/5"
                               title="Change role"
                             >
                               <Edit2 className="h-4 w-4" />

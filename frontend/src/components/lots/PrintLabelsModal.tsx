@@ -231,7 +231,7 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
 
       <ModalBody className="p-0">
         {/* Preview */}
-        <div className="overflow-auto p-4 bg-gray-100 rounded">
+        <div className="overflow-auto p-4 bg-muted rounded">
           <div
             ref={printRef}
             className="labels-grid"

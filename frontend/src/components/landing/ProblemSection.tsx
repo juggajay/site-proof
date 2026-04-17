@@ -35,27 +35,27 @@ export function ProblemSection() {
   ]
 
   return (
-    <section className="py-20 bg-white">
+    <section className="py-20 bg-card">
       <div className="container mx-auto px-4 md:px-6">
         <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold tracking-tight text-[#111827] sm:text-4xl">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Sound familiar?
           </h2>
-          <p className="mt-4 text-lg text-gray-600">
+          <p className="mt-4 text-lg text-muted-foreground">
             The problems civil contractors face every day.
           </p>
         </div>
 
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {problems.map((problem, index) => (
-            <div key={index} className="flex flex-col items-start p-6 rounded-xl border bg-white shadow-sm hover:shadow-md transition-shadow">
-              <div className="p-3 rounded-lg bg-blue-50 text-[#1e3a5f] mb-4">
+            <div key={index} className="flex flex-col items-start p-6 rounded-xl border bg-card shadow-sm hover:shadow-md transition-shadow">
+              <div className="p-3 rounded-lg bg-primary/5 text-primary mb-4">
                 <problem.icon className="h-6 w-6" />
               </div>
-              <h3 className="text-xl font-semibold text-[#111827] mb-2">
+              <h3 className="text-xl font-semibold text-foreground mb-2">
                 {problem.title}
               </h3>
-              <p className="text-gray-600">
+              <p className="text-muted-foreground">
                 {problem.detail}
               </p>
             </div>

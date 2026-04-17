@@ -566,7 +566,7 @@ export function SettingsPage() {
                 onClick={() => toggleEmailPreference('enabled')}
                 disabled={isSavingEmailPrefs}
                 className={`relative w-12 h-6 rounded-full transition-colors ${
-                  emailPreferences.enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                  emailPreferences.enabled ? 'bg-primary' : 'bg-muted-foreground/30'
                 }`}
               >
                 <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -622,7 +622,7 @@ export function SettingsPage() {
                         onClick={() => toggleEmailPreference(pref.key)}
                         disabled={isSavingEmailPrefs}
                         className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
-                          emailPreferences[pref.key] ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+                          emailPreferences[pref.key] ? 'bg-primary' : 'bg-muted-foreground/30'
                         }`}
                       >
                         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -650,7 +650,7 @@ export function SettingsPage() {
                       max="14"
                       value={holdPointReminderDays}
                       onChange={(e) => setHoldPointReminderDays(Number(e.target.value))}
-                      className="flex-1 h-2 rounded-lg appearance-none cursor-pointer bg-gray-200 dark:bg-gray-700 accent-blue-600"
+                      className="flex-1 h-2 rounded-lg appearance-none cursor-pointer bg-muted accent-primary"
                       data-testid="reminder-days-slider"
                     />
                     <span

@@ -305,7 +305,7 @@ export function ProjectDashboard() {
           value={stats.documents.total}
           sub="files"
           icon={<FileText className="h-3.5 w-3.5" />}
-          color="text-gray-600 dark:text-gray-400"
+          color="text-muted-foreground"
         />
         <StatPill
           label="Diary"

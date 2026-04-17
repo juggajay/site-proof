@@ -62,12 +62,12 @@ export function NCRsTabContent({ projectId, ncrs, loading }: NCRsTabContentProps
               <td className="px-4 py-3 text-sm max-w-xs truncate">{ncr.description}</td>
               <td className="px-4 py-3 text-sm capitalize">{ncr.category}</td>
               <td className="px-4 py-3 text-sm">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${severityColors[ncr.severity] || 'bg-gray-100'}`}>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${severityColors[ncr.severity] || 'bg-muted text-muted-foreground'}`}>
                   {ncr.severity.toUpperCase()}
                 </span>
               </td>
               <td className="px-4 py-3 text-sm">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${ncrStatusColors[ncr.status] || 'bg-gray-100'}`}>
+                <span className={`px-2 py-1 rounded text-xs font-medium ${ncrStatusColors[ncr.status] || 'bg-muted text-muted-foreground'}`}>
                   {ncr.status.replace('_', ' ')}
                 </span>
               </td>

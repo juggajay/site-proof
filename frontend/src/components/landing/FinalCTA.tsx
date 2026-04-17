@@ -3,12 +3,12 @@ import { ArrowRight } from 'lucide-react'
 
 export function FinalCTA() {
   return (
-    <section className="bg-[#1e3a5f] py-24 text-center text-white">
+    <section className="bg-primary py-24 text-center text-white">
       <div className="container mx-auto px-4 md:px-6">
         <h2 className="mx-auto mb-6 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl">
           Ready to stop chasing paperwork?
         </h2>
-        <p className="mx-auto mb-10 max-w-2xl text-lg text-blue-100">
+        <p className="mx-auto mb-10 max-w-2xl text-lg text-primary-foreground/80">
           Join 50+ civil contractors who've brought their quality management into one place. Book a demo and see SiteProof on your actual project data.
         </p>
         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -26,7 +26,7 @@ export function FinalCTA() {
             Contact Sales
           </Link>
         </div>
-        <p className="mt-6 text-sm text-blue-200">
+        <p className="mt-6 text-sm text-primary-foreground/70">
           No credit card required • 30-minute demo • See it with your own data
         </p>
       </div>

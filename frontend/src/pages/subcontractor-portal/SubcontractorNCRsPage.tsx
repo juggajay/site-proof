@@ -44,14 +44,14 @@ function getStatusBadge(status: string) {
       )
     case 'in_progress':
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
           <Clock className="h-3 w-3" />
           In Progress
         </span>
       )
     case 'rejected':
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
           <XCircle className="h-3 w-3" />
           Rejected
         </span>
@@ -82,7 +82,7 @@ function getSeverityBadge(severity: string) {
       )
     default:
       return (
-        <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+        <span className="px-2 py-0.5 text-xs font-medium rounded bg-muted text-foreground">
           Minor
         </span>
       )
@@ -137,7 +137,7 @@ export function SubcontractorNCRsPage() {
         </div>
         <Link
           to="/subcontractor-portal"
-          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300"
+          className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Portal
@@ -152,38 +152,38 @@ export function SubcontractorNCRsPage() {
       <div className="flex items-center gap-3">
         <Link
           to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
         >
-          <ArrowLeft className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-white">NCRs</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{company?.projectName}</p>
+          <h1 className="text-lg font-semibold text-foreground">NCRs</h1>
+          <p className="text-sm text-muted-foreground">{company?.projectName}</p>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
+        <div className="border border-border rounded-lg bg-card p-3">
           <p className="text-2xl font-bold text-red-600 dark:text-red-400">{open.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Open</p>
+          <p className="text-xs text-muted-foreground">Open</p>
         </div>
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{inProgress.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">In Progress</p>
+        <div className="border border-border rounded-lg bg-card p-3">
+          <p className="text-2xl font-bold text-primary">{inProgress.length}</p>
+          <p className="text-xs text-muted-foreground">In Progress</p>
         </div>
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 p-3">
+        <div className="border border-border rounded-lg bg-card p-3">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">{closed.length}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Closed</p>
+          <p className="text-xs text-muted-foreground">Closed</p>
         </div>
       </div>
 
       {ncrs.length === 0 ? (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+        <div className="border border-border rounded-lg bg-card">
           <div className="p-8 text-center">
-            <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400 mb-2">No NCRs</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground mb-2">No NCRs</p>
+            <p className="text-sm text-muted-foreground">
               Non-conformance reports related to your work will appear here
             </p>
           </div>
@@ -207,7 +207,7 @@ export function SubcontractorNCRsPage() {
           {/* In Progress */}
           {inProgress.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 In Progress ({inProgress.length})
               </h2>
               <div className="space-y-2">
@@ -221,7 +221,7 @@ export function SubcontractorNCRsPage() {
           {/* Closed */}
           {closed.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              <h2 className="text-sm font-medium text-muted-foreground mb-2">
                 Closed ({closed.length})
               </h2>
               <div className="space-y-2">
@@ -239,7 +239,7 @@ export function SubcontractorNCRsPage() {
 
 function NCRCard({ ncr }: { ncr: NCR }) {
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+    <div className="border border-border rounded-lg bg-card">
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
@@ -248,16 +248,16 @@ function NCRCard({ ncr }: { ncr: NCR }) {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <p className="font-medium text-gray-900 dark:text-white">{ncr.ncrNumber}</p>
+                <p className="font-medium text-foreground">{ncr.ncrNumber}</p>
                 {getSeverityBadge(ncr.severity)}
               </div>
               {ncr.lotNumber && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">Lot: {ncr.lotNumber}</p>
+                <p className="text-sm text-muted-foreground">Lot: {ncr.lotNumber}</p>
               )}
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                 {ncr.description}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Raised {new Date(ncr.raisedAt).toLocaleDateString()}
                 {ncr.raisedBy && ` by ${ncr.raisedBy.fullName}`}
               </p>

@@ -157,12 +157,12 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             : '\u2014'}
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-gray-100'}`}>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-muted'}`}>
                             {test.passFail}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-gray-100'}`}>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-muted'}`}>
                             {testStatusLabels[test.status] || test.status}
                           </span>
                         </td>

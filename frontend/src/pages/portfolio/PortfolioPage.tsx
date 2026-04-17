@@ -144,8 +144,8 @@ export function PortfolioPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <FolderKanban className="h-5 w-5 text-blue-600" />
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <FolderKanban className="h-5 w-5 text-primary" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Projects</p>
@@ -217,7 +217,7 @@ export function PortfolioPage() {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                <div className="w-3 h-3 rounded-full bg-muted-foreground"></div>
                 <span className="text-sm">Archived</span>
               </div>
               <span className="font-medium">{stats.archivedProjects}</span>
@@ -244,7 +244,7 @@ export function PortfolioPage() {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-gray-400" />
+                <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">No Target Date</span>
               </div>
               <span className="font-medium">
@@ -259,9 +259,9 @@ export function PortfolioPage() {
       <div className="bg-card rounded-lg border p-4">
         <h2 className="text-lg font-semibold mb-4">Cash Flow Summary</h2>
         <div className="grid gap-4 md:grid-cols-4">
-          <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="text-center p-3 bg-primary/5 rounded-lg">
             <p className="text-sm text-muted-foreground">Total Claimed</p>
-            <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+            <p className="text-xl font-bold text-primary">
               ${cashFlow.totalClaimed.toLocaleString('en-AU', {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0,
@@ -416,7 +416,7 @@ export function PortfolioPage() {
                   <div className={`w-2 h-10 rounded-full ${
                     project.status === 'active' ? 'bg-green-500' :
                     project.status === 'completed' ? 'bg-purple-500' :
-                    'bg-gray-400'
+                    'bg-muted-foreground'
                   }`}></div>
                   <div>
                     <p className="font-medium">{project.name}</p>
@@ -450,7 +450,7 @@ export function PortfolioPage() {
                   <span className={`px-2 py-1 rounded-full text-xs ${
                     project.status === 'active' ? 'bg-green-100 text-green-800' :
                     project.status === 'completed' ? 'bg-purple-100 text-purple-800' :
-                    'bg-gray-100 text-gray-800'
+                    'bg-muted text-foreground'
                   }`}>
                     {project.status}
                   </span>

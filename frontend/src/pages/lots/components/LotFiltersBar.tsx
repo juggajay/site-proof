@@ -445,7 +445,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                         type="checkbox"
                         checked={statusFilters.includes(option.value)}
                         onChange={() => handleStatusToggle(option.value)}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                       />
                       <span className="text-sm">{option.label}</span>
                     </label>
@@ -680,7 +680,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                   className="fixed inset-0 z-10"
                   onClick={() => setSavedFiltersDropdownOpen(false)}
                 />
-                <div className="absolute left-0 top-full mt-1 z-20 w-64 rounded-lg border bg-white dark:bg-card shadow-lg">
+                <div className="absolute left-0 top-full mt-1 z-20 w-64 rounded-lg border bg-card shadow-lg">
                   <div className="p-2 border-b">
                     <span className="text-xs font-medium text-muted-foreground">Saved Filters</span>
                   </div>
@@ -768,7 +768,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 className="fixed inset-0 z-10"
                 onClick={() => setColumnSettingsOpen(false)}
               />
-              <div className="absolute right-0 top-full mt-1 z-20 w-64 rounded-lg border bg-white shadow-lg">
+              <div className="absolute right-0 top-full mt-1 z-20 w-64 rounded-lg border bg-card shadow-lg">
                 <div className="p-2 border-b">
                   <span className="text-xs font-medium text-muted-foreground">Show/Hide & Reorder Columns</span>
                 </div>
@@ -798,7 +798,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                            isColumnVisible(column.id) ? 'bg-primary border-primary' : 'border-gray-300'
+                            isColumnVisible(column.id) ? 'bg-primary border-primary' : 'border-border'
                           }`}>
                             {isColumnVisible(column.id) && (
                               <Check className="h-3 w-3 text-white" />
@@ -817,7 +817,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                                 moveColumnUp(column.id)
                               }}
                               disabled={isFirst}
-                              className={`p-0.5 rounded hover:bg-gray-200 ${isFirst ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              className={`p-0.5 rounded hover:bg-muted ${isFirst ? 'opacity-30 cursor-not-allowed' : ''}`}
                               title="Move up"
                             >
                               <ChevronUp className="h-4 w-4" />
@@ -828,7 +828,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                                 moveColumnDown(column.id)
                               }}
                               disabled={isLast}
-                              className={`p-0.5 rounded hover:bg-gray-200 ${isLast ? 'opacity-30 cursor-not-allowed' : ''}`}
+                              className={`p-0.5 rounded hover:bg-muted ${isLast ? 'opacity-30 cursor-not-allowed' : ''}`}
                               title="Move down"
                             >
                               <ChevronDown className="h-4 w-4" />

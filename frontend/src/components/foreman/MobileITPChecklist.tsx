@@ -306,9 +306,9 @@ function MobileITPItem({
   const statusColors = {
     pending: 'bg-muted border-muted-foreground/30 text-muted-foreground',
     completed: 'bg-green-500 border-green-500 text-white',
-    na: 'bg-gray-400 border-gray-400 text-white',
+    na: 'bg-gray-400 dark:bg-gray-600 border-gray-400 dark:border-gray-600 text-white',
     failed: 'bg-red-500 border-red-500 text-white',
-    disabled: 'bg-gray-300 border-gray-400 text-gray-500',
+    disabled: 'bg-gray-300 dark:bg-gray-700 border-gray-400 dark:border-gray-600 text-gray-500 dark:text-gray-400',
   }
 
   const statusIcons = {
@@ -370,7 +370,7 @@ function MobileITPItem({
             </span>
           )}
           {hasPhotos && (
-            <span className="flex items-center gap-1 text-blue-600">
+            <span className="flex items-center gap-1 text-primary">
               <Image className="w-3 h-3" />
               <span>{photoCount}</span>
             </span>
@@ -485,7 +485,7 @@ function MobileITPItemSheet({
           </div>
           <p className="text-base font-medium">{item.description}</p>
           {item.acceptanceCriteria && (
-            <p className="text-sm text-muted-foreground mt-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded">
+            <p className="text-sm text-muted-foreground mt-2 p-2 bg-primary/5 dark:bg-primary/10 rounded">
               <span className="font-medium">Criteria:</span> {item.acceptanceCriteria}
             </p>
           )}
@@ -498,7 +498,7 @@ function MobileITPItemSheet({
             disabled={!canComplete}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
               !canComplete
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isCompleted
                 ? 'bg-green-500 text-white ring-2 ring-green-600 ring-offset-2'
                 : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-200'
@@ -518,7 +518,7 @@ function MobileITPItemSheet({
             disabled={!canComplete}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
               !canComplete
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isNA
                 ? 'bg-gray-500 text-white ring-2 ring-gray-600 ring-offset-2'
                 : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200'
@@ -538,7 +538,7 @@ function MobileITPItemSheet({
             disabled={!canComplete}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
               !canComplete
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isFailed
                 ? 'bg-red-500 text-white ring-2 ring-red-600 ring-offset-2'
                 : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200'
@@ -551,7 +551,7 @@ function MobileITPItemSheet({
 
         {/* N/A reason input */}
         {showNAInput && (
-          <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-2">
+          <div className="p-3 bg-muted/50 dark:bg-muted rounded-lg space-y-2">
             <label className="text-sm font-medium">Reason for N/A:</label>
             <textarea
               value={naReason}

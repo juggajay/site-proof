@@ -316,10 +316,10 @@ interface SectionCardProps {
 
 function SectionCard({ icon: Icon, title, status, onEdit, children }: SectionCardProps) {
   const statusConfig = {
-    auto: { color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20', label: 'Auto-filled' },
+    auto: { color: 'text-primary', bg: 'bg-primary/5 dark:bg-primary/10', label: 'Auto-filled' },
     complete: { color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20', label: 'Complete' },
     missing: { color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Missing' },
-    optional: { color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-800', label: 'Optional' },
+    optional: { color: 'text-muted-foreground', bg: 'bg-muted/50 dark:bg-muted', label: 'Optional' },
   }
 
   const config = statusConfig[status]

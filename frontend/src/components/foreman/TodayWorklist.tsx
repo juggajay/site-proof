@@ -352,7 +352,7 @@ function WorklistItemCard({ item, urgency, onClick }: WorklistItemCardProps) {
       {/* Icon */}
       <div className={cn(
         'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0',
-        'bg-white dark:bg-gray-800 shadow-sm'
+        'bg-card shadow-sm'
       )}>
         <TypeIcon className={cn('h-5 w-5', config.textColor)} />
       </div>

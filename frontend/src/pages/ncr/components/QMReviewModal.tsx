@@ -82,14 +82,14 @@ function QMReviewModalInner({
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Review NCR Response</ModalHeader>
       <ModalBody>
-        <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-          <p className="text-sm font-medium text-gray-800">{ncr.ncrNumber}</p>
-          <p className="text-sm text-gray-600 mt-1">{ncr.description}</p>
+        <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg">
+          <p className="text-sm font-medium text-foreground">{ncr.ncrNumber}</p>
+          <p className="text-sm text-muted-foreground mt-1">{ncr.description}</p>
         </div>
 
         {/* Show submitted response details */}
         <div className="mb-4">
-          <p className="text-sm font-medium text-gray-700 mb-2">Submitted Response:</p>
+          <p className="text-sm font-medium text-foreground mb-2">Submitted Response:</p>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
             <p className="text-amber-800">The responsible party has submitted a response. Review the root cause analysis and proposed corrective action.</p>
           </div>

@@ -245,7 +245,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                 <div
                   key={schedule.id}
                   className={`p-4 border rounded-lg ${
-                    schedule.isActive ? 'bg-white' : 'bg-muted/50'
+                    schedule.isActive ? 'bg-card' : 'bg-muted/50'
                   }`}
                 >
                   <div className="flex items-start justify-between">
@@ -259,7 +259,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                           className={`px-2 py-0.5 text-xs rounded-full ${
                             schedule.isActive
                               ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-500'
+                              : 'bg-muted text-muted-foreground'
                           }`}
                         >
                           {schedule.isActive ? 'Active' : 'Paused'}
