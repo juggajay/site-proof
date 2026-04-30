@@ -74,7 +74,6 @@ export default defineConfig({
             '@radix-ui/react-dropdown-menu',
             '@radix-ui/react-select',
             '@radix-ui/react-tabs',
-            '@radix-ui/react-toast',
             '@radix-ui/react-tooltip',
             '@radix-ui/react-popover',
             '@radix-ui/react-accordion',
