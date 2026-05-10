@@ -1,23 +1,24 @@
 // PhotoCaptureModal - Full screen photo capture with GPS
-import { useState, useRef, useCallback, useEffect } from 'react'
-import { X, Camera, RotateCcw, Check, MapPin } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useForemanMobileStore } from '@/stores/foremanMobileStore'
-import { useGeoLocation } from '@/hooks/useGeoLocation'
-import { capturePhotoOffline } from '@/lib/offlineDb'
-import { useAuth } from '@/lib/auth'
-import { toast } from '@/components/ui/toaster'
-import { VoiceInputButton } from '@/components/ui/VoiceInputButton'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { X, Camera, RotateCcw, Check, MapPin } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useForemanMobileStore } from '@/stores/foremanMobileStore';
+import { useGeoLocation } from '@/hooks/useGeoLocation';
+import { capturePhotoOffline } from '@/lib/offlineDb';
+import { useAuth } from '@/lib/auth';
+import { toast } from '@/components/ui/toaster';
+import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { logError } from '@/lib/logger';
 
 interface PhotoCaptureModalProps {
-  projectId: string
-  lotId?: string
-  entityType?: 'lot' | 'ncr' | 'holdpoint' | 'itp' | 'test' | 'general'
-  entityId?: string
-  onCapture?: (photoId: string) => void
-  onClose: () => void
+  projectId: string;
+  lotId?: string;
+  entityType?: 'lot' | 'ncr' | 'holdpoint' | 'itp' | 'test' | 'general';
+  entityId?: string;
+  onCapture?: (photoId: string) => void;
+  onClose: () => void;
 }
 
 export function PhotoCaptureModal({
@@ -28,51 +29,51 @@ export function PhotoCaptureModal({
   onCapture,
   onClose,
 }: PhotoCaptureModalProps) {
-  const { user } = useAuth()
-  const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore()
-  const { latitude, longitude, accuracy, error: gpsError, refresh: refreshGps } = useGeoLocation()
+  const { user } = useAuth();
+  const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore();
+  const { latitude, longitude, accuracy, error: gpsError, refresh: refreshGps } = useGeoLocation();
 
-  const [capturedImage, setCapturedImage] = useState<string | null>(null)
-  const [capturedFile, setCapturedFile] = useState<File | null>(null)
-  const [caption, setCaption] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedFile, setCapturedFile] = useState<File | null>(null);
+  const [caption, setCaption] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Close modal handler
   const handleClose = useCallback(() => {
-    setIsCameraOpen(false)
-    onClose()
-  }, [setIsCameraOpen, onClose])
+    setIsCameraOpen(false);
+    onClose();
+  }, [setIsCameraOpen, onClose]);
 
   // Handle file selection (native camera or gallery)
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    setCapturedFile(file)
-    const reader = new FileReader()
+    setCapturedFile(file);
+    const reader = new FileReader();
     reader.onload = (event) => {
-      setCapturedImage(event.target?.result as string)
-    }
-    reader.readAsDataURL(file)
-  }, [])
+      setCapturedImage(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   // Retake photo
   const handleRetake = useCallback(() => {
-    setCapturedImage(null)
-    setCapturedFile(null)
-    setCaption('')
+    setCapturedImage(null);
+    setCapturedFile(null);
+    setCaption('');
     if (fileInputRef.current) {
-      fileInputRef.current.value = ''
+      fileInputRef.current.value = '';
     }
-  }, [])
+  }, []);
 
   // Save photo
   const handleSave = useCallback(async () => {
-    if (!capturedFile || !user) return
+    if (!capturedFile || !user) return;
 
-    setSaving(true)
+    setSaving(true);
     try {
       const photo = await capturePhotoOffline(projectId, capturedFile, {
         lotId,
@@ -82,16 +83,16 @@ export function PhotoCaptureModal({
         capturedBy: user.id,
         gpsLatitude: latitude ?? undefined,
         gpsLongitude: longitude ?? undefined,
-      })
+      });
 
-      toast({ description: 'Photo saved', variant: 'success' })
-      onCapture?.(photo.id)
-      handleClose()
+      toast({ description: 'Photo saved', variant: 'success' });
+      onCapture?.(photo.id);
+      handleClose();
     } catch (error) {
-      console.error('Failed to save photo:', error)
-      toast({ description: 'Failed to save photo', variant: 'error' })
+      logError('Failed to save photo:', error);
+      toast({ description: 'Failed to save photo', variant: 'error' });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }, [
     capturedFile,
@@ -105,23 +106,23 @@ export function PhotoCaptureModal({
     longitude,
     onCapture,
     handleClose,
-  ])
+  ]);
 
   // Handle voice input for caption
   const handleVoiceCaption = useCallback((text: string) => {
-    setCaption((prev) => (prev ? `${prev} ${text}` : text))
-  }, [])
+    setCaption((prev) => (prev ? `${prev} ${text}` : text));
+  }, []);
 
   // Handle escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose()
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [handleClose])
+      if (e.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [handleClose]);
 
-  if (!isCameraOpen) return null
+  if (!isCameraOpen) return null;
 
   // This is a full-screen camera capture modal - not a standard dialog
   return (
@@ -168,11 +169,15 @@ export function PhotoCaptureModal({
             {/* GPS indicator */}
             <div className="p-4 bg-black/80">
               <div className="flex items-center gap-2 text-sm">
-                <MapPin className={cn('w-4 h-4', latitude ? 'text-green-500' : 'text-yellow-500')} />
+                <MapPin
+                  className={cn('w-4 h-4', latitude ? 'text-green-500' : 'text-yellow-500')}
+                />
                 {latitude ? (
                   <span className="text-white">
                     GPS: {latitude.toFixed(6)}, {longitude?.toFixed(6)}
-                    {accuracy && <span className="text-gray-400 ml-2">+/-{accuracy.toFixed(0)}m</span>}
+                    {accuracy && (
+                      <span className="text-gray-400 ml-2">+/-{accuracy.toFixed(0)}m</span>
+                    )}
                   </span>
                 ) : gpsError ? (
                   <span className="text-yellow-500">{gpsError}</span>
@@ -215,19 +220,11 @@ export function PhotoCaptureModal({
 
               {/* Action buttons */}
               <div className="flex gap-3 mt-4">
-                <Button
-                  variant="outline"
-                  onClick={handleRetake}
-                  className="flex-1 min-h-[48px]"
-                >
+                <Button variant="outline" onClick={handleRetake} className="flex-1 min-h-[48px]">
                   <RotateCcw className="w-5 h-5" />
                   Retake
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex-1 min-h-[48px]"
-                >
+                <Button onClick={handleSave} disabled={saving} className="flex-1 min-h-[48px]">
                   {saving ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
@@ -241,5 +238,5 @@ export function PhotoCaptureModal({
         )}
       </div>
     </div>
-  )
+  );
 }

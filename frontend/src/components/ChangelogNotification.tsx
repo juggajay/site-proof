@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react'
-import { X, Sparkles, ChevronRight, CheckCircle2, Gift, Zap, Shield, FileText } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { X, Sparkles, ChevronRight, CheckCircle2, Gift, Zap, Shield, FileText } from 'lucide-react';
+import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 
 // App version changelog - update this when new features are released
-const APP_VERSION = '1.3.0'
+const APP_VERSION = '1.3.0';
 
 interface ChangelogEntry {
-  version: string
-  date: string
-  title: string
+  version: string;
+  date: string;
+  title: string;
   highlights: {
-    icon: 'feature' | 'improvement' | 'security' | 'docs'
-    text: string
-  }[]
+    icon: 'feature' | 'improvement' | 'security' | 'docs';
+    text: string;
+  }[];
 }
 
 const CHANGELOG: ChangelogEntry[] = [
@@ -49,80 +54,80 @@ const CHANGELOG: ChangelogEntry[] = [
       { icon: 'improvement', text: 'Enhanced ITP photo attachments' },
     ],
   },
-]
+];
 
-const CHANGELOG_STORAGE_KEY = 'siteproof_last_seen_version'
+const CHANGELOG_STORAGE_KEY = 'siteproof_last_seen_version';
 
 interface ChangelogNotificationProps {
-  forceShow?: boolean // For testing
-  onClose?: () => void
+  forceShow?: boolean; // For testing
+  onClose?: () => void;
 }
 
 export function ChangelogNotification({ forceShow = false, onClose }: ChangelogNotificationProps) {
-  const [isVisible, setIsVisible] = useState(false)
-  const [currentEntryIndex, setCurrentEntryIndex] = useState(0)
+  const [isVisible, setIsVisible] = useState(false);
+  const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
 
   // Check if user has seen the latest version
   useEffect(() => {
     if (forceShow) {
-      setIsVisible(true)
-      return
+      setIsVisible(true);
+      return;
     }
 
-    const lastSeenVersion = localStorage.getItem(CHANGELOG_STORAGE_KEY)
+    const lastSeenVersion = readLocalStorageItem(CHANGELOG_STORAGE_KEY);
 
     // If no version stored or version is different from current, show changelog
     if (!lastSeenVersion || lastSeenVersion !== APP_VERSION) {
       // Find index of new entries to show
-      const lastSeenIndex = CHANGELOG.findIndex(entry => entry.version === lastSeenVersion)
-      const newEntriesCount = lastSeenIndex === -1 ? CHANGELOG.length : lastSeenIndex
+      const lastSeenIndex = CHANGELOG.findIndex((entry) => entry.version === lastSeenVersion);
+      const newEntriesCount = lastSeenIndex === -1 ? CHANGELOG.length : lastSeenIndex;
 
       if (newEntriesCount > 0) {
         // Small delay to let the page render first
-        const timer = setTimeout(() => setIsVisible(true), 800)
-        return () => clearTimeout(timer)
+        const timer = setTimeout(() => setIsVisible(true), 800);
+        return () => clearTimeout(timer);
       }
     }
-  }, [forceShow])
+  }, [forceShow]);
 
   const handleDismiss = () => {
-    localStorage.setItem(CHANGELOG_STORAGE_KEY, APP_VERSION)
-    setIsVisible(false)
-    onClose?.()
-  }
+    writeLocalStorageItem(CHANGELOG_STORAGE_KEY, APP_VERSION);
+    setIsVisible(false);
+    onClose?.();
+  };
 
   const handleNext = () => {
     if (currentEntryIndex < CHANGELOG.length - 1) {
-      setCurrentEntryIndex(currentEntryIndex + 1)
+      setCurrentEntryIndex(currentEntryIndex + 1);
     } else {
-      handleDismiss()
+      handleDismiss();
     }
-  }
+  };
 
   const handlePrev = () => {
     if (currentEntryIndex > 0) {
-      setCurrentEntryIndex(currentEntryIndex - 1)
+      setCurrentEntryIndex(currentEntryIndex - 1);
     }
-  }
+  };
 
   const getIcon = (type: 'feature' | 'improvement' | 'security' | 'docs') => {
     switch (type) {
       case 'feature':
-        return <Gift className="h-4 w-4 text-green-500" />
+        return <Gift className="h-4 w-4 text-green-500" />;
       case 'improvement':
-        return <Zap className="h-4 w-4 text-primary" />
+        return <Zap className="h-4 w-4 text-primary" />;
       case 'security':
-        return <Shield className="h-4 w-4 text-amber-500" />
+        return <Shield className="h-4 w-4 text-amber-500" />;
       case 'docs':
-        return <FileText className="h-4 w-4 text-purple-500" />
+        return <FileText className="h-4 w-4 text-purple-500" />;
     }
-  }
+  };
 
-  if (!isVisible) return null
+  if (!isVisible) return null;
 
-  const currentEntry = CHANGELOG[currentEntryIndex]
-  const isFirstEntry = currentEntryIndex === 0
-  const isLastEntry = currentEntryIndex === CHANGELOG.length - 1
+  const currentEntry = CHANGELOG[currentEntryIndex];
+  const isFirstEntry = currentEntryIndex === 0;
+  const isLastEntry = currentEntryIndex === CHANGELOG.length - 1;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
@@ -208,27 +213,27 @@ export function ChangelogNotification({ forceShow = false, onClose }: ChangelogN
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // Hook to manage changelog state
 export function useChangelog() {
-  const [hasNewVersion, setHasNewVersion] = useState(false)
+  const [hasNewVersion, setHasNewVersion] = useState(false);
 
   useEffect(() => {
-    const lastSeenVersion = localStorage.getItem(CHANGELOG_STORAGE_KEY)
-    setHasNewVersion(!lastSeenVersion || lastSeenVersion !== APP_VERSION)
-  }, [])
+    const lastSeenVersion = readLocalStorageItem(CHANGELOG_STORAGE_KEY);
+    setHasNewVersion(!lastSeenVersion || lastSeenVersion !== APP_VERSION);
+  }, []);
 
   const markAsSeen = () => {
-    localStorage.setItem(CHANGELOG_STORAGE_KEY, APP_VERSION)
-    setHasNewVersion(false)
-  }
+    writeLocalStorageItem(CHANGELOG_STORAGE_KEY, APP_VERSION);
+    setHasNewVersion(false);
+  };
 
   const resetChangelog = () => {
-    localStorage.removeItem(CHANGELOG_STORAGE_KEY)
-    setHasNewVersion(true)
-  }
+    removeLocalStorageItem(CHANGELOG_STORAGE_KEY);
+    setHasNewVersion(true);
+  };
 
   return {
     hasNewVersion,
@@ -236,8 +241,8 @@ export function useChangelog() {
     changelog: CHANGELOG,
     markAsSeen,
     resetChangelog,
-  }
+  };
 }
 
 // Export the current version for use in other components
-export const CURRENT_APP_VERSION = APP_VERSION
+export const CURRENT_APP_VERSION = APP_VERSION;

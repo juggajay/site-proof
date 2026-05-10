@@ -1,17 +1,67 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   getConflictedLots,
   resolveConflictWithLocal,
   resolveConflictWithServer,
   resolveConflictWithMerge,
-  OfflineLotEdit
+  OfflineLotEdit,
 } from '@/lib/offlineDb';
+import { logError } from '@/lib/logger';
 
 interface SyncConflictModalProps {
   isOpen: boolean;
   onClose: () => void;
   onResolved?: () => void;
+}
+
+function pickConflictForReview(
+  conflicts: OfflineLotEdit[],
+  preferredConflictId?: string,
+): OfflineLotEdit | null {
+  return (
+    (preferredConflictId
+      ? conflicts.find((conflict) => conflict.id === preferredConflictId)
+      : undefined) ??
+    conflicts[0] ??
+    null
+  );
+}
+
+function getMergeInputValue(value: OfflineLotEdit[keyof OfflineLotEdit] | undefined): string {
+  return value === null || value === undefined ? '' : String(value);
+}
+
+function formatConflictValue(value: OfflineLotEdit[keyof OfflineLotEdit] | undefined): string {
+  const formatted = getMergeInputValue(value);
+  return formatted === '' ? '-' : formatted;
+}
+
+const numericMergeFields = new Set<keyof OfflineLotEdit>([
+  'chainage',
+  'chainageStart',
+  'chainageEnd',
+  'offset',
+  'offsetLeft',
+  'offsetRight',
+  'budget',
+]);
+
+function normalizeMergedFieldValue(
+  field: keyof OfflineLotEdit,
+  value: OfflineLotEdit[keyof OfflineLotEdit] | string | undefined,
+): OfflineLotEdit[keyof OfflineLotEdit] | undefined {
+  if (!numericMergeFields.has(field) || typeof value !== 'string') {
+    return value === '' ? undefined : value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : value;
 }
 
 export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictModalProps) {
@@ -21,22 +71,24 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
   const [showMergeView, setShowMergeView] = useState(false);
   const [mergedData, setMergedData] = useState<Partial<OfflineLotEdit>>({});
 
+  const loadConflicts = useCallback(async () => {
+    const conflictedLots = await getConflictedLots();
+    const nextConflict = pickConflictForReview(conflictedLots, selectedConflict?.id);
+    setConflicts(conflictedLots);
+    setSelectedConflict(nextConflict);
+    setMergedData(nextConflict ?? {});
+    if (!nextConflict) {
+      setShowMergeView(false);
+    }
+    return conflictedLots;
+  }, [selectedConflict?.id]);
+
   // Load conflicts when modal opens
   useEffect(() => {
     if (isOpen) {
       loadConflicts();
     }
-  }, [isOpen]);
-
-  const loadConflicts = async () => {
-    const conflictedLots = await getConflictedLots();
-    setConflicts(conflictedLots);
-    if (conflictedLots.length > 0 && !selectedConflict) {
-      setSelectedConflict(conflictedLots[0]);
-      // Initialize merged data with local values
-      setMergedData(conflictedLots[0]);
-    }
-  };
+  }, [isOpen, loadConflicts]);
 
   const handleSelectConflict = (conflict: OfflineLotEdit) => {
     setSelectedConflict(conflict);
@@ -49,15 +101,13 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
     setResolving(true);
     try {
       await resolveConflictWithLocal(selectedConflict.id);
-      await loadConflicts();
-      if (conflicts.length <= 1) {
+      const remainingConflicts = await loadConflicts();
+      if (remainingConflicts.length === 0) {
         onResolved?.();
         onClose();
-      } else {
-        setSelectedConflict(null);
       }
     } catch (error) {
-      console.error('Failed to resolve conflict with local:', error);
+      logError('Failed to resolve conflict with local:', error);
     } finally {
       setResolving(false);
     }
@@ -68,15 +118,13 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
     setResolving(true);
     try {
       await resolveConflictWithServer(selectedConflict.id);
-      await loadConflicts();
-      if (conflicts.length <= 1) {
+      const remainingConflicts = await loadConflicts();
+      if (remainingConflicts.length === 0) {
         onResolved?.();
         onClose();
-      } else {
-        setSelectedConflict(null);
       }
     } catch (error) {
-      console.error('Failed to resolve conflict with server:', error);
+      logError('Failed to resolve conflict with server:', error);
     } finally {
       setResolving(false);
     }
@@ -87,23 +135,25 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
     setResolving(true);
     try {
       await resolveConflictWithMerge(selectedConflict.id, mergedData);
-      await loadConflicts();
-      if (conflicts.length <= 1) {
+      const remainingConflicts = await loadConflicts();
+      if (remainingConflicts.length === 0) {
         onResolved?.();
         onClose();
       } else {
-        setSelectedConflict(null);
         setShowMergeView(false);
       }
     } catch (error) {
-      console.error('Failed to resolve conflict with merge:', error);
+      logError('Failed to resolve conflict with merge:', error);
     } finally {
       setResolving(false);
     }
   };
 
-  const handleMergedFieldChange = (field: keyof OfflineLotEdit, value: any) => {
-    setMergedData(prev => ({ ...prev, [field]: value }));
+  const handleMergedFieldChange = (
+    field: keyof OfflineLotEdit,
+    value: OfflineLotEdit[keyof OfflineLotEdit] | string | undefined,
+  ) => {
+    setMergedData((prev) => ({ ...prev, [field]: normalizeMergedFieldValue(field, value) }));
   };
 
   if (!isOpen) return null;
@@ -120,7 +170,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
     { key: 'areaZone', label: 'Area/Zone' },
     { key: 'activityType', label: 'Activity Type' },
     { key: 'status', label: 'Status' },
-    { key: 'notes', label: 'Notes' }
+    { key: 'notes', label: 'Notes' },
   ];
 
   return (
@@ -130,8 +180,18 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
         <div className="px-6 py-4 border-b border-border bg-amber-50 dark:bg-amber-950/30">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
-              <svg className="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg
+                className="w-6 h-6 text-amber-600 dark:text-amber-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
             </div>
             <div>
@@ -148,9 +208,11 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
           {conflicts.length > 1 && (
             <div className="w-64 border-r border-border overflow-y-auto bg-muted/50">
               <div className="p-3">
-                <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">Conflicting Lots</h3>
+                <h3 className="text-xs font-medium text-muted-foreground uppercase mb-2">
+                  Conflicting Lots
+                </h3>
                 <div className="space-y-1">
-                  {conflicts.map(conflict => (
+                  {conflicts.map((conflict) => (
                     <button
                       key={conflict.id}
                       onClick={() => handleSelectConflict(conflict)}
@@ -188,7 +250,9 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                   /* Merge View */
                   <div className="space-y-4">
                     <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
-                      <h4 className="font-medium text-purple-800 dark:text-purple-200 mb-2">Manual Merge</h4>
+                      <h4 className="font-medium text-purple-800 dark:text-purple-200 mb-2">
+                        Manual Merge
+                      </h4>
                       <p className="text-sm text-purple-700 dark:text-purple-300">
                         Choose the value you want for each field, or enter a custom value.
                       </p>
@@ -200,10 +264,17 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                       const isDifferent = localVal !== serverVal;
 
                       return (
-                        <div key={key} className={`border rounded-lg p-4 ${isDifferent ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20' : 'border-border'}`}>
+                        <div
+                          key={key}
+                          className={`border rounded-lg p-4 ${isDifferent ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20' : 'border-border'}`}
+                        >
                           <label className="block text-sm font-medium text-foreground mb-2">
                             {label}
-                            {isDifferent && <span className="ml-2 text-amber-600 dark:text-amber-400 text-xs">(differs)</span>}
+                            {isDifferent && (
+                              <span className="ml-2 text-amber-600 dark:text-amber-400 text-xs">
+                                (differs)
+                              </span>
+                            )}
                           </label>
                           <div className="grid grid-cols-3 gap-2 mb-2 text-sm">
                             <div>
@@ -213,7 +284,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                                 onClick={() => handleMergedFieldChange(key, localVal)}
                                 className="w-full text-left px-2 py-1 rounded border hover:bg-primary/5 hover:border-primary truncate"
                               >
-                                {String(localVal || '—')}
+                                {formatConflictValue(localVal)}
                               </button>
                             </div>
                             <div>
@@ -223,14 +294,14 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                                 onClick={() => handleMergedFieldChange(key, serverVal)}
                                 className="w-full text-left px-2 py-1 rounded border hover:bg-green-50 dark:hover:bg-green-950/30 hover:border-green-300 dark:hover:border-green-700 truncate"
                               >
-                                {String(serverVal || '—')}
+                                {formatConflictValue(serverVal)}
                               </button>
                             </div>
                             <div>
                               <span className="text-xs text-muted-foreground">Merged value:</span>
                               <input
                                 type="text"
-                                value={String(mergedData[key] || '')}
+                                value={getMergeInputValue(mergedData[key])}
                                 onChange={(e) => handleMergedFieldChange(key, e.target.value)}
                                 className="w-full px-2 py-1 rounded border border-purple-300 dark:border-purple-700 bg-background text-foreground text-sm"
                               />
@@ -246,9 +317,15 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                     <table className="w-full text-sm">
                       <thead className="bg-muted/50">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Field</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-primary uppercase">Your Changes</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-green-600 dark:text-green-400 uppercase">Server Version</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">
+                            Field
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-primary uppercase">
+                            Your Changes
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-green-600 dark:text-green-400 uppercase">
+                            Server Version
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -258,7 +335,10 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                           const isDifferent = localVal !== serverVal;
 
                           return (
-                            <tr key={key} className={isDifferent ? 'bg-amber-50 dark:bg-amber-950/20' : ''}>
+                            <tr
+                              key={key}
+                              className={isDifferent ? 'bg-amber-50 dark:bg-amber-950/20' : ''}
+                            >
                               <td className="px-4 py-2 font-medium text-foreground">
                                 {label}
                                 {isDifferent && (
@@ -268,10 +348,10 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                                 )}
                               </td>
                               <td className="px-4 py-2 text-primary">
-                                {String(localVal || '—')}
+                                {formatConflictValue(localVal)}
                               </td>
                               <td className="px-4 py-2 text-green-800 dark:text-green-300">
-                                {String(serverVal || '—')}
+                                {formatConflictValue(serverVal)}
                               </td>
                             </tr>
                           );
@@ -338,10 +418,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                     >
                       {resolving ? 'Applying...' : 'Use Server Version'}
                     </Button>
-                    <Button
-                      onClick={handleResolveWithLocal}
-                      disabled={resolving}
-                    >
+                    <Button onClick={handleResolveWithLocal} disabled={resolving}>
                       {resolving ? 'Applying...' : 'Keep My Changes'}
                     </Button>
                     <Button

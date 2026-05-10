@@ -1,25 +1,25 @@
-import { useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
 
 interface BottomSheetProps {
-  isOpen: boolean
-  onClose: () => void
-  title: string
-  children: React.ReactNode
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
 }
 
 export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetProps) {
-  const sheetRef = useRef<HTMLDivElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    if (isOpen) window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end" onClick={onClose}>
@@ -38,9 +38,7 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          {children}
-        </div>
+        <div className="flex-1 overflow-y-auto p-4">{children}</div>
       </div>
       <style>{`
         @keyframes slideUp {
@@ -49,5 +47,5 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
         }
       `}</style>
     </div>
-  )
+  );
 }

@@ -3,18 +3,18 @@
  * Extracted from LotDetailPage.tsx to reduce file size.
  */
 
-import type { LotTab, TabConfig } from '../types'
+import type { LotTab, TabConfig } from '../types';
 
 export interface TabCounts {
-  tests: number | null
-  ncrs: number | null
+  tests: number | null;
+  ncrs: number | null;
 }
 
 export interface LotTabNavigationProps {
-  tabs: TabConfig[]
-  currentTab: LotTab
-  onTabChange: (tabId: LotTab) => void
-  counts?: TabCounts
+  tabs: TabConfig[];
+  currentTab: LotTab;
+  onTabChange: (tabId: LotTab) => void;
+  counts?: TabCounts;
 }
 
 export function LotTabNavigation({
@@ -28,7 +28,7 @@ export function LotTabNavigation({
       <nav className="flex gap-4" aria-label="Lot detail tabs">
         {tabs.map((tab) => {
           // Get count for tabs that have badges
-          const count = tab.id === 'tests' ? counts.tests : tab.id === 'ncrs' ? counts.ncrs : null
+          const count = tab.id === 'tests' ? counts.tests : tab.id === 'ncrs' ? counts.ncrs : null;
 
           return (
             <button
@@ -56,9 +56,9 @@ export function LotTabNavigation({
                 </span>
               )}
             </button>
-          )
+          );
         })}
       </nav>
     </div>
-  )
+  );
 }

@@ -1,11 +1,11 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.PLAYWRIGHT_WORKERS ? Number(process.env.PLAYWRIGHT_WORKERS) : 1,
   reporter: 'html',
   use: {
     baseURL: 'http://localhost:5174',
@@ -19,8 +19,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm run dev',
+    command: 'npm run dev -- --host 127.0.0.1',
     url: 'http://localhost:5174',
     reuseExistingServer: !process.env.CI,
+    timeout: 120000,
   },
-})
+});

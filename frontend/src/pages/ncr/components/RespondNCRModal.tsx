@@ -1,41 +1,50 @@
-import { memo } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import type { NCR } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { NativeSelect } from '@/components/ui/native-select'
-import { Label } from '@/components/ui/label'
+import { memo, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import type { NCR } from '../types';
+import {
+  Modal,
+  ModalHeader,
+  ModalDescription,
+  ModalBody,
+  ModalFooter,
+} from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Label } from '@/components/ui/label';
 
 const respondNCRSchema = z.object({
-  rootCauseCategory: z.string().min(1, 'Root cause category is required'),
-  rootCauseDescription: z.string().min(1, 'Root cause description is required'),
-  proposedCorrectiveAction: z.string().min(1, 'Proposed corrective action is required'),
-})
+  rootCauseCategory: z.string().trim().min(1, 'Root cause category is required'),
+  rootCauseDescription: z.string().trim().min(1, 'Root cause description is required'),
+  proposedCorrectiveAction: z.string().trim().min(1, 'Proposed corrective action is required'),
+});
 
-type RespondNCRFormData = z.infer<typeof respondNCRSchema>
+type RespondNCRFormData = z.infer<typeof respondNCRSchema>;
+
+const DEFAULT_RESPOND_NCR_VALUES: RespondNCRFormData = {
+  rootCauseCategory: '',
+  rootCauseDescription: '',
+  proposedCorrectiveAction: '',
+};
 
 interface RespondNCRModalProps {
-  isOpen: boolean
-  ncr: NCR | null
-  onClose: () => void
-  onSubmit: (ncrId: string, data: {
-    rootCauseCategory: string
-    rootCauseDescription: string
-    proposedCorrectiveAction: string
-  }) => void
-  loading: boolean
+  isOpen: boolean;
+  ncr: NCR | null;
+  onClose: () => void;
+  onSubmit: (
+    ncrId: string,
+    data: {
+      rootCauseCategory: string;
+      rootCauseDescription: string;
+      proposedCorrectiveAction: string;
+    },
+  ) => void;
+  loading: boolean;
 }
 
-function RespondNCRModalInner({
-  isOpen,
-  ncr,
-  onClose,
-  onSubmit,
-  loading,
-}: RespondNCRModalProps) {
+function RespondNCRModalInner({ isOpen, ncr, onClose, onSubmit, loading }: RespondNCRModalProps) {
   const {
     register,
     handleSubmit,
@@ -44,28 +53,37 @@ function RespondNCRModalInner({
   } = useForm<RespondNCRFormData>({
     resolver: zodResolver(respondNCRSchema),
     mode: 'onBlur',
-    defaultValues: {
-      rootCauseCategory: '',
-      rootCauseDescription: '',
-      proposedCorrectiveAction: '',
-    },
-  })
+    defaultValues: DEFAULT_RESPOND_NCR_VALUES,
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      reset(DEFAULT_RESPOND_NCR_VALUES);
+    }
+  }, [isOpen, reset]);
 
   const onFormSubmit = (data: RespondNCRFormData) => {
-    if (!ncr) return
-    onSubmit(ncr.id, data)
-  }
+    if (!ncr) return;
+    onSubmit(ncr.id, {
+      rootCauseCategory: data.rootCauseCategory,
+      rootCauseDescription: data.rootCauseDescription.trim(),
+      proposedCorrectiveAction: data.proposedCorrectiveAction.trim(),
+    });
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset(DEFAULT_RESPOND_NCR_VALUES);
+    onClose();
+  };
 
-  if (!isOpen || !ncr) return null
+  if (!isOpen || !ncr) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Respond to NCR {ncr.ncrNumber}</ModalHeader>
+      <ModalDescription>
+        Capture root cause and proposed corrective action for this non-conformance.
+      </ModalDescription>
       <ModalBody>
         <div className="mb-4 bg-muted/50 border border-border px-3 py-2 rounded-lg text-sm">
           <span className="font-medium">Issue:</span> {ncr.description}
@@ -88,7 +106,9 @@ function RespondNCRModalInner({
               <option value="other">Other</option>
             </NativeSelect>
             {errors.rootCauseCategory && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.rootCauseCategory.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.rootCauseCategory.message}
+              </p>
             )}
           </div>
           <div>
@@ -101,7 +121,9 @@ function RespondNCRModalInner({
               placeholder="Describe the root cause of this non-conformance..."
             />
             {errors.rootCauseDescription && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.rootCauseDescription.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.rootCauseDescription.message}
+              </p>
             )}
           </div>
           <div>
@@ -114,29 +136,23 @@ function RespondNCRModalInner({
               placeholder="Describe the proposed corrective action to address this issue..."
             />
             {errors.proposedCorrectiveAction && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.proposedCorrectiveAction.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.proposedCorrectiveAction.message}
+              </p>
             )}
           </div>
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleClose}
-        >
+        <Button type="button" variant="outline" onClick={handleClose}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="respond-ncr-form"
-          disabled={loading}
-        >
+        <Button type="submit" form="respond-ncr-form" disabled={loading}>
           {loading ? 'Submitting...' : 'Submit Response'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
-export const RespondNCRModal = memo(RespondNCRModalInner)
+export const RespondNCRModal = memo(RespondNCRModalInner);

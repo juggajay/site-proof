@@ -1,21 +1,22 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef } from 'react';
+import { devLog, devWarn } from '@/lib/logger';
 
 // -----------------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------------
 
-export type HapticFeedbackType = 'light' | 'medium' | 'success' | 'error'
+export type HapticFeedbackType = 'light' | 'medium' | 'success' | 'error';
 
 export interface UseHapticsOptions {
   /** Whether haptic feedback is enabled (default: true) */
-  enabled?: boolean
+  enabled?: boolean;
 }
 
 export interface UseHapticsReturn {
   /** Trigger haptic feedback */
-  trigger: (type?: HapticFeedbackType) => void
+  trigger: (type?: HapticFeedbackType) => void;
   /** Whether haptic feedback is supported on this device */
-  isSupported: boolean
+  isSupported: boolean;
 }
 
 // -----------------------------------------------------------------------------
@@ -36,7 +37,7 @@ const HAPTIC_PATTERNS: Record<HapticFeedbackType, number[]> = {
   success: [10, 50, 10],
   /** Error/warning - longer buzz to indicate problem */
   error: [30, 20, 30],
-}
+};
 
 // -----------------------------------------------------------------------------
 // Utility Functions
@@ -49,16 +50,16 @@ const HAPTIC_PATTERNS: Record<HapticFeedbackType, number[]> = {
 function isVibrationSupported(): boolean {
   // SSR safety check
   if (typeof window === 'undefined') {
-    return false
+    return false;
   }
 
   // Check for navigator and vibrate function
   if (typeof navigator === 'undefined') {
-    return false
+    return false;
   }
 
   // The vibrate method may exist but return false if not supported
-  return 'vibrate' in navigator && typeof navigator.vibrate === 'function'
+  return 'vibrate' in navigator && typeof navigator.vibrate === 'function';
 }
 
 /**
@@ -67,16 +68,16 @@ function isVibrationSupported(): boolean {
  */
 function vibrate(pattern: number[]): boolean {
   if (!isVibrationSupported()) {
-    return false
+    return false;
   }
 
   try {
     // navigator.vibrate returns true if successful, false otherwise
-    return navigator.vibrate(pattern)
+    return navigator.vibrate(pattern);
   } catch (error) {
     // Some browsers may throw on vibrate calls in certain contexts
-    console.debug('Haptic feedback failed:', error)
-    return false
+    devLog('Haptic feedback failed:', error);
+    return false;
   }
 }
 
@@ -106,18 +107,18 @@ function vibrate(pattern: number[]): boolean {
  * ```
  */
 export function useHaptics(options: UseHapticsOptions = {}): UseHapticsReturn {
-  const { enabled = true } = options
+  const { enabled = true } = options;
 
   // Cache the support check to avoid repeated API queries
-  const supportedRef = useRef<boolean | null>(null)
+  const supportedRef = useRef<boolean | null>(null);
 
   // Lazily evaluate support status
   const getIsSupported = useCallback((): boolean => {
     if (supportedRef.current === null) {
-      supportedRef.current = isVibrationSupported()
+      supportedRef.current = isVibrationSupported();
     }
-    return supportedRef.current
-  }, [])
+    return supportedRef.current;
+  }, []);
 
   /**
    * Trigger haptic feedback with the specified type.
@@ -127,31 +128,31 @@ export function useHaptics(options: UseHapticsOptions = {}): UseHapticsReturn {
     (type: HapticFeedbackType = 'light'): void => {
       // Early exit if disabled
       if (!enabled) {
-        return
+        return;
       }
 
       // Early exit if not supported
       if (!getIsSupported()) {
-        return
+        return;
       }
 
       // Get pattern for the requested type
-      const pattern = HAPTIC_PATTERNS[type]
+      const pattern = HAPTIC_PATTERNS[type];
       if (!pattern) {
-        console.warn(`Unknown haptic feedback type: ${type}`)
-        return
+        devWarn(`Unknown haptic feedback type: ${type}`);
+        return;
       }
 
       // Trigger vibration
-      vibrate(pattern)
+      vibrate(pattern);
     },
-    [enabled, getIsSupported]
-  )
+    [enabled, getIsSupported],
+  );
 
   return {
     trigger,
     isSupported: getIsSupported(),
-  }
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -172,16 +173,16 @@ export function useHaptics(options: UseHapticsOptions = {}): UseHapticsReturn {
  */
 export function triggerHaptic(type: HapticFeedbackType = 'light'): boolean {
   if (!isVibrationSupported()) {
-    return false
+    return false;
   }
 
-  const pattern = HAPTIC_PATTERNS[type]
+  const pattern = HAPTIC_PATTERNS[type];
   if (!pattern) {
-    console.warn(`Unknown haptic feedback type: ${type}`)
-    return false
+    devWarn(`Unknown haptic feedback type: ${type}`);
+    return false;
   }
 
-  return vibrate(pattern)
+  return vibrate(pattern);
 }
 
 /**
@@ -190,13 +191,13 @@ export function triggerHaptic(type: HapticFeedbackType = 'light'): boolean {
  */
 export function cancelHaptic(): void {
   if (!isVibrationSupported()) {
-    return
+    return;
   }
 
   try {
-    navigator.vibrate(0)
+    navigator.vibrate(0);
   } catch (error) {
-    console.debug('Cancel haptic failed:', error)
+    devLog('Cancel haptic failed:', error);
   }
 }
 
@@ -204,4 +205,4 @@ export function cancelHaptic(): void {
 // Default Export
 // -----------------------------------------------------------------------------
 
-export default useHaptics
+export default useHaptics;

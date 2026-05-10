@@ -1,14 +1,14 @@
 // Feature #288: Voice input button component
-import { useState, useCallback } from 'react'
-import { useSpeechToText } from '../../lib/useSpeechToText'
-import { Mic, Square, AlertCircle } from 'lucide-react'
+import { useState, useCallback } from 'react';
+import { useSpeechToText } from '../../lib/useSpeechToText';
+import { Mic, Square, AlertCircle } from 'lucide-react';
 
 interface VoiceInputButtonProps {
-  onTranscript: (text: string) => void
-  disabled?: boolean
-  className?: string
-  buttonClassName?: string
-  appendMode?: boolean // If true, appends to existing text; if false, replaces
+  onTranscript: (text: string) => void;
+  disabled?: boolean;
+  className?: string;
+  buttonClassName?: string;
+  appendMode?: boolean; // If true, appends to existing text; if false, replaces
 }
 
 export function VoiceInputButton({
@@ -16,12 +16,12 @@ export function VoiceInputButton({
   disabled = false,
   className = '',
   buttonClassName = '',
-  appendMode: _appendMode = true
+  appendMode: _appendMode = true,
 }: VoiceInputButtonProps) {
   // appendMode reserved for future use (append vs replace text behavior)
-  void _appendMode
-  const [pendingText, setPendingText] = useState('')
-  const [showPreview, setShowPreview] = useState(false)
+  void _appendMode;
+  const [pendingText, setPendingText] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
 
   const {
     isListening,
@@ -31,47 +31,47 @@ export function VoiceInputButton({
     error,
     startListening,
     stopListening,
-    clearTranscript
+    clearTranscript,
   } = useSpeechToText({
     continuous: true,
     interimResults: true,
     language: 'en-AU',
     onResult: (text, isFinal) => {
       if (isFinal) {
-        setPendingText(prev => prev + text + ' ')
+        setPendingText((prev) => prev + text + ' ');
       }
-    }
-  })
+    },
+  });
   // transcript available via clearTranscript, not used directly
-  void _transcript
+  void _transcript;
 
   const handleToggle = useCallback(() => {
     if (isListening) {
-      stopListening()
-      setShowPreview(true)
+      stopListening();
+      setShowPreview(true);
     } else {
-      setPendingText('')
-      clearTranscript()
-      setShowPreview(false)
-      startListening()
+      setPendingText('');
+      clearTranscript();
+      setShowPreview(false);
+      startListening();
     }
-  }, [isListening, startListening, stopListening, clearTranscript])
+  }, [isListening, startListening, stopListening, clearTranscript]);
 
   const handleAccept = useCallback(() => {
-    const finalText = pendingText.trim()
+    const finalText = pendingText.trim();
     if (finalText) {
-      onTranscript(finalText)
+      onTranscript(finalText);
     }
-    setPendingText('')
-    clearTranscript()
-    setShowPreview(false)
-  }, [pendingText, onTranscript, clearTranscript])
+    setPendingText('');
+    clearTranscript();
+    setShowPreview(false);
+  }, [pendingText, onTranscript, clearTranscript]);
 
   const handleCancel = useCallback(() => {
-    setPendingText('')
-    clearTranscript()
-    setShowPreview(false)
-  }, [clearTranscript])
+    setPendingText('');
+    clearTranscript();
+    setShowPreview(false);
+  }, [clearTranscript]);
 
   if (!isSupported) {
     return (
@@ -79,10 +79,10 @@ export function VoiceInputButton({
         <AlertCircle className="w-3 h-3" />
         <span>Voice not supported</span>
       </div>
-    )
+    );
   }
 
-  const displayText = pendingText + (interimTranscript ? interimTranscript : '')
+  const displayText = pendingText + (interimTranscript ? interimTranscript : '');
 
   return (
     <div className={`relative ${className}`}>
@@ -94,9 +94,10 @@ export function VoiceInputButton({
           className={`
             inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium
             transition-all duration-200
-            ${isListening
-              ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
-              : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+            ${
+              isListening
+                ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }
             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             ${buttonClassName}
@@ -116,11 +117,7 @@ export function VoiceInputButton({
           )}
         </button>
 
-        {isListening && (
-          <span className="text-xs text-red-500 animate-pulse">
-            ● Recording...
-          </span>
-        )}
+        {isListening && <span className="text-xs text-red-500 animate-pulse">● Recording...</span>}
       </div>
 
       {/* Error display */}
@@ -166,5 +163,5 @@ export function VoiceInputButton({
         </div>
       )}
     </div>
-  )
+  );
 }

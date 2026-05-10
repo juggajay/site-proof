@@ -1,28 +1,30 @@
-import { useState, useEffect } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react'
-import { apiFetch } from '@/lib/api'
-import { emailSchema } from '@/lib/validation'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useCallback, useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
+import { emailSchema } from '@/lib/validation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
-const resendSchema = z.object({ email: emailSchema })
-type ResendFormData = z.infer<typeof resendSchema>
+const resendSchema = z.object({ email: emailSchema });
+type ResendFormData = z.infer<typeof resendSchema>;
 
 export function VerifyEmailPage() {
-  const [searchParams] = useSearchParams()
-  const token = searchParams.get('token')
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
 
-  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'no-token'>('loading')
-  const [message, setMessage] = useState('')
+  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'no-token'>('loading');
+  const [message, setMessage] = useState('');
 
   // For resend functionality
-  const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const [resendMessage, setResendMessage] = useState('')
+  const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
+    'idle',
+  );
+  const [resendMessage, setResendMessage] = useState('');
 
   // RHF for the resend form (used in both no-token and error states)
   const {
@@ -34,72 +36,83 @@ export function VerifyEmailPage() {
     resolver: zodResolver(resendSchema),
     mode: 'onBlur',
     defaultValues: { email: '' },
-  })
+  });
+
+  const verifyEmail = useCallback(
+    async (verificationToken: string) => {
+      try {
+        // First check if the token is valid
+        const statusData = await apiFetch<{
+          alreadyVerified?: boolean;
+          valid?: boolean;
+          message?: string;
+          email?: string;
+        }>(`/api/auth/verify-email-status?token=${encodeURIComponent(verificationToken)}`);
+
+        if (statusData.alreadyVerified) {
+          setStatus('success');
+          setMessage('Your email has already been verified. You can log in now.');
+          return;
+        }
+
+        if (!statusData.valid) {
+          setStatus('error');
+          setMessage(statusData.message || 'Invalid verification link');
+          return;
+        }
+
+        if (statusData.email) {
+          setValue('email', statusData.email);
+        }
+
+        // Now verify the email
+        const data = await apiFetch<{ verified?: boolean; message?: string }>(
+          '/api/auth/verify-email',
+          {
+            method: 'POST',
+            body: JSON.stringify({ token: verificationToken }),
+          },
+        );
+
+        if (data.verified) {
+          setStatus('success');
+          setMessage('Your email has been verified successfully!');
+        } else {
+          setStatus('error');
+          setMessage(data.message || 'Verification failed. Please try again.');
+        }
+      } catch {
+        setStatus('error');
+        setMessage('An error occurred. Please try again later.');
+      }
+    },
+    [setValue],
+  );
 
   useEffect(() => {
     if (!token) {
-      setStatus('no-token')
-      return
+      setStatus('no-token');
+      return;
     }
 
-    verifyEmail(token)
-  }, [token])
-
-  const verifyEmail = async (verificationToken: string) => {
-    try {
-      // First check if the token is valid
-      const statusData = await apiFetch<{ alreadyVerified?: boolean; valid?: boolean; message?: string; email?: string }>(`/api/auth/verify-email-status?token=${verificationToken}`)
-
-      if (statusData.alreadyVerified) {
-        setStatus('success')
-        setMessage('Your email has already been verified. You can log in now.')
-        return
-      }
-
-      if (!statusData.valid) {
-        setStatus('error')
-        setMessage(statusData.message || 'Invalid verification link')
-        return
-      }
-
-      if (statusData.email) {
-        setValue('email', statusData.email)
-      }
-
-      // Now verify the email
-      const data = await apiFetch<{ verified?: boolean; message?: string }>('/api/auth/verify-email', {
-        method: 'POST',
-        body: JSON.stringify({ token: verificationToken }),
-      })
-
-      if (data.verified) {
-        setStatus('success')
-        setMessage('Your email has been verified successfully!')
-      } else {
-        setStatus('error')
-        setMessage(data.message || 'Verification failed. Please try again.')
-      }
-    } catch (error) {
-      setStatus('error')
-      setMessage('An error occurred. Please try again later.')
-    }
-  }
+    verifyEmail(token);
+  }, [token, verifyEmail]);
 
   const onResend = async (data: ResendFormData) => {
-    setResendStatus('loading')
+    setResendStatus('loading');
     try {
       const result = await apiFetch<{ message: string }>('/api/auth/resend-verification', {
         method: 'POST',
         body: JSON.stringify({ email: data.email }),
-      })
+      });
 
-      setResendStatus('success')
-      setResendMessage(result.message)
-    } catch (error) {
-      setResendStatus('error')
-      setResendMessage('Failed to resend verification email. Please try again.')
+      setResendStatus('success');
+      setResendMessage(result.message);
+    } catch {
+      setResendStatus('error');
+      setResendMessage('Failed to resend verification email. Please try again.');
     }
-  }
+  };
 
   // No token provided - show resend form
   if (status === 'no-token') {
@@ -115,16 +128,12 @@ export function VerifyEmailPage() {
 
         <form onSubmit={handleSubmit(onResend)} className="space-y-4">
           <div>
-            <Label htmlFor="email">
-              Email Address
-            </Label>
+            <Label htmlFor="email">Email Address</Label>
             <Input
               id="email"
               type="email"
               {...register('email')}
-              className={`mt-1 ${
-                errors.email ? 'border-destructive' : ''
-              }`}
+              className={`mt-1 ${errors.email ? 'border-destructive' : ''}`}
               placeholder="you@example.com"
             />
             {errors.email && (
@@ -135,22 +144,22 @@ export function VerifyEmailPage() {
           </div>
 
           {resendStatus === 'success' && (
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
+            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700" role="status">
               {resendMessage}
             </div>
           )}
 
           {resendStatus === 'error' && (
-            <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+            <div
+              className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+              role="alert"
+              aria-live="assertive"
+            >
               {resendMessage}
             </div>
           )}
 
-          <Button
-            type="submit"
-            disabled={resendStatus === 'loading'}
-            className="w-full"
-          >
+          <Button type="submit" disabled={resendStatus === 'loading'} className="w-full">
             {resendStatus === 'loading' ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -168,23 +177,27 @@ export function VerifyEmailPage() {
           </Link>
         </p>
       </div>
-    )
+    );
   }
 
   // Loading state
   if (status === 'loading') {
     return (
-      <div className="flex w-full max-w-md flex-col items-center justify-center space-y-4">
+      <div
+        className="flex w-full max-w-md flex-col items-center justify-center space-y-4"
+        role="status"
+        aria-label="Verifying email"
+      >
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="text-lg text-muted-foreground">Verifying your email...</p>
       </div>
-    )
+    );
   }
 
   // Success state
   if (status === 'success') {
     return (
-      <div className="w-full max-w-md space-y-6 text-center">
+      <div className="w-full max-w-md space-y-6 text-center" role="status">
         <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
         <h2 className="text-2xl font-bold text-green-700">Email Verified!</h2>
         <p className="text-muted-foreground">{message}</p>
@@ -195,12 +208,12 @@ export function VerifyEmailPage() {
           Continue to Login
         </Link>
       </div>
-    )
+    );
   }
 
   // Error state
   return (
-    <div className="w-full max-w-md space-y-6">
+    <div className="w-full max-w-md space-y-6" role="alert">
       <div className="text-center">
         <XCircle className="mx-auto h-16 w-16 text-destructive" />
         <h2 className="mt-4 text-2xl font-bold text-destructive">Verification Failed</h2>
@@ -227,22 +240,22 @@ export function VerifyEmailPage() {
           )}
 
           {resendStatus === 'success' && (
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
+            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700" role="status">
               {resendMessage}
             </div>
           )}
 
           {resendStatus === 'error' && (
-            <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+            <div
+              className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+              role="alert"
+              aria-live="assertive"
+            >
               {resendMessage}
             </div>
           )}
 
-          <Button
-            type="submit"
-            disabled={resendStatus === 'loading'}
-            className="w-full"
-          >
+          <Button type="submit" disabled={resendStatus === 'loading'} className="w-full">
             {resendStatus === 'loading' ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -261,5 +274,5 @@ export function VerifyEmailPage() {
         </Link>
       </p>
     </div>
-  )
+  );
 }

@@ -21,15 +21,11 @@ export {
   ResponsiveContainer,
   ComposedChart,
   ReferenceLine,
-} from 'recharts'
+} from 'recharts';
 
 // Lazy-loaded chart components - use these for better code splitting
-export {
-  LazyCumulativeChart,
-  LazyMonthlyChart,
-  LazyHoldPointsChart,
-} from './LazyCharts'
+export { LazyCumulativeChart, LazyMonthlyChart, LazyHoldPointsChart } from './LazyCharts';
 
 // Specific chart components (internally use recharts, can be lazy loaded)
-export { CumulativeClaimsChart, MonthlyBreakdownChart, ClaimsCharts } from './ClaimsCharts'
-export { HoldPointsReleasesChart } from './HoldPointsChart'
+export { CumulativeClaimsChart, MonthlyBreakdownChart, ClaimsCharts } from './ClaimsCharts';
+export { HoldPointsReleasesChart } from './HoldPointsChart';

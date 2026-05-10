@@ -1,32 +1,32 @@
-import { Link2, Check, RefreshCw, Users, Printer } from 'lucide-react'
-import { LotQRCode } from '@/components/lots/LotQRCode'
-import type { Lot, LotSubcontractorAssignment } from '../types'
-import { lotStatusColors as statusColors } from '../constants'
-import { SubcontractorAssignmentsSection } from './SubcontractorAssignmentsSection'
-import { LotSummaryCards } from './LotSummaryCards'
+import { Link2, Check, RefreshCw, Users, Printer } from 'lucide-react';
+import { LotQRCode } from '@/components/lots/LotQRCode';
+import type { Lot, LotSubcontractorAssignment } from '../types';
+import { lotStatusColors as statusColors } from '../constants';
+import { SubcontractorAssignmentsSection } from './SubcontractorAssignmentsSection';
+import { LotSummaryCards } from './LotSummaryCards';
 
 export interface LotHeaderProps {
-  lot: Lot
-  projectId: string
-  lotId: string
+  lot: Lot;
+  projectId: string;
+  lotId: string;
   // Permissions
-  canEdit: boolean
-  canConformLots: boolean
-  canManageLot: boolean
-  isEditable: boolean
+  canEdit: boolean;
+  canConformLots: boolean;
+  canManageLot: boolean;
+  isEditable: boolean;
   // State
-  linkCopied: boolean
-  assignments: LotSubcontractorAssignment[]
-  removeAssignmentPending: boolean
+  linkCopied: boolean;
+  assignments: LotSubcontractorAssignment[];
+  removeAssignmentPending: boolean;
   // Handlers
-  onCopyLink: () => void
-  onPrint: () => void
-  onEdit: () => void
-  onAssignSubcontractorLegacy: () => void
-  onOverrideStatus: () => void
-  onAddSubcontractor: () => void
-  onEditAssignment: (assignment: LotSubcontractorAssignment) => void
-  onRemoveAssignment: (assignmentId: string) => void
+  onCopyLink: () => void;
+  onPrint: () => void;
+  onEdit: () => void;
+  onAssignSubcontractorLegacy: () => void;
+  onOverrideStatus: () => void;
+  onAddSubcontractor: () => void;
+  onEditAssignment: (assignment: LotSubcontractorAssignment) => void;
+  onRemoveAssignment: (assignmentId: string) => void;
 }
 
 export function LotHeader({
@@ -55,12 +55,7 @@ export function LotHeader({
       <div className="flex items-center justify-between">
         <div className="flex items-start gap-4">
           {/* QR Code */}
-          <LotQRCode
-            lotId={lotId}
-            lotNumber={lot.lotNumber}
-            projectId={projectId}
-            size="medium"
-          />
+          <LotQRCode lotId={lotId} lotNumber={lot.lotNumber} projectId={projectId} size="medium" />
           <div>
             <h1 className="text-2xl font-bold">{lot.lotNumber}</h1>
             <p className="text-sm text-muted-foreground">{lot.description || 'No description'}</p>
@@ -105,10 +100,18 @@ export function LotHeader({
             <button
               onClick={onAssignSubcontractorLegacy}
               className="flex items-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-sm text-primary hover:bg-primary/5"
-              title={lot.assignedSubcontractor ? `Assigned to ${lot.assignedSubcontractor.companyName}` : 'Assign to subcontractor'}
+              title={
+                lot.assignedSubcontractor
+                  ? `Assigned to ${lot.assignedSubcontractor.companyName}`
+                  : 'Assign to subcontractor'
+              }
             >
               <Users className="h-4 w-4" />
-              <span>{lot.assignedSubcontractor ? lot.assignedSubcontractor.companyName : 'Assign Subcontractor'}</span>
+              <span>
+                {lot.assignedSubcontractor
+                  ? lot.assignedSubcontractor.companyName
+                  : 'Assign Subcontractor'}
+              </span>
             </button>
           )}
           {/* Override Status Button - only for quality managers and above */}
@@ -122,7 +125,9 @@ export function LotHeader({
               <span>Override Status</span>
             </button>
           )}
-          <span className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}>
+          <span
+            className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
+          >
             {lot.status.replace('_', ' ')}
           </span>
         </div>
@@ -164,5 +169,5 @@ export function LotHeader({
         onRemoveAssignment={onRemoveAssignment}
       />
     </>
-  )
+  );
 }

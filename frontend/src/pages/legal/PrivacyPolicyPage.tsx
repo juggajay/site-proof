@@ -1,8 +1,19 @@
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Shield, FileText, Lock, Eye, Database, Clock, UserCheck, Mail } from 'lucide-react'
+import { Link } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Shield,
+  FileText,
+  Lock,
+  Eye,
+  Database,
+  Clock,
+  UserCheck,
+  Mail,
+} from 'lucide-react';
+import { LegalContactCard } from './LegalContactCard';
 
 export function PrivacyPolicyPage() {
-  const lastUpdated = 'January 18, 2026'
+  const lastUpdated = 'January 18, 2026';
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,13 +47,13 @@ export function PrivacyPolicyPage() {
               Introduction
             </div>
             <p className="text-muted-foreground">
-              SiteProof ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy
-              explains how we collect, use, disclose, and safeguard your information when you use our
-              civil construction quality management platform.
+              SiteProof ("we", "our", or "us") is committed to protecting your privacy. This Privacy
+              Policy explains how we collect, use, disclose, and safeguard your information when you
+              use our civil construction quality management platform.
             </p>
             <p className="text-muted-foreground">
-              Please read this privacy policy carefully. By using SiteProof, you agree to the collection
-              and use of information in accordance with this policy.
+              Please read this privacy policy carefully. By using SiteProof, you agree to the
+              collection and use of information in accordance with this policy.
             </p>
           </section>
 
@@ -79,8 +90,9 @@ export function PrivacyPolicyPage() {
 
             <h3 className="font-medium mt-4 mb-2">Usage Data</h3>
             <p className="text-muted-foreground">
-              We automatically collect certain information when you use SiteProof, including your IP address,
-              browser type, device information, pages visited, and actions taken within the application.
+              We automatically collect certain information when you use SiteProof, including your IP
+              address, browser type, device information, pages visited, and actions taken within the
+              application.
             </p>
           </section>
 
@@ -120,8 +132,9 @@ export function PrivacyPolicyPage() {
               <li>Secure hosting with ISO 27001 certified providers</li>
             </ul>
             <p className="text-muted-foreground mt-2">
-              While we strive to protect your personal information, no method of transmission over the Internet
-              or electronic storage is 100% secure. We cannot guarantee absolute security.
+              While we strive to protect your personal information, no method of transmission over
+              the Internet or electronic storage is 100% secure. We cannot guarantee absolute
+              security.
             </p>
           </section>
 
@@ -132,10 +145,11 @@ export function PrivacyPolicyPage() {
               Data Retention
             </div>
             <p className="text-muted-foreground">
-              We retain your personal information for as long as your account is active or as needed to provide
-              you services. Project data is retained in accordance with Australian construction industry regulations,
-              typically for 7 years after project completion. You may request deletion of your account and personal
-              data at any time through your account settings.
+              We retain your personal information for as long as your account is active or as needed
+              to provide you services. Project data is retained in accordance with Australian
+              construction industry regulations, typically for 7 years after project completion. You
+              may request deletion of your account and personal data at any time through your
+              account settings.
             </p>
           </section>
 
@@ -146,17 +160,31 @@ export function PrivacyPolicyPage() {
               Your Rights
             </div>
             <p className="text-muted-foreground mb-2">
-              Under applicable privacy laws, including the Australian Privacy Act, you have the right to:
+              Under applicable privacy laws, including the Australian Privacy Act, you have the
+              right to:
             </p>
             <ul className="list-disc pl-6 text-muted-foreground space-y-1">
-              <li><strong>Access:</strong> Request a copy of the personal information we hold about you</li>
-              <li><strong>Correction:</strong> Request correction of inaccurate personal information</li>
-              <li><strong>Deletion:</strong> Request deletion of your personal information</li>
-              <li><strong>Export:</strong> Export your data in a portable format (available in Settings)</li>
-              <li><strong>Objection:</strong> Object to processing of your personal information</li>
+              <li>
+                <strong>Access:</strong> Request a copy of the personal information we hold about
+                you
+              </li>
+              <li>
+                <strong>Correction:</strong> Request correction of inaccurate personal information
+              </li>
+              <li>
+                <strong>Deletion:</strong> Request deletion of your personal information
+              </li>
+              <li>
+                <strong>Export:</strong> Export your data in a portable format (available in
+                Settings)
+              </li>
+              <li>
+                <strong>Objection:</strong> Object to processing of your personal information
+              </li>
             </ul>
             <p className="text-muted-foreground mt-2">
-              To exercise these rights, please visit your account Settings or contact us at privacy@siteproof.com.au.
+              To exercise these rights, please visit your account Settings or contact us at
+              privacy@siteproof.com.au.
             </p>
           </section>
 
@@ -167,13 +195,10 @@ export function PrivacyPolicyPage() {
               Contact Us
             </div>
             <p className="text-muted-foreground">
-              If you have any questions about this Privacy Policy or our data practices, please contact us at:
+              If you have any questions about this Privacy Policy or our data practices, please
+              contact us at:
             </p>
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <p className="font-medium">SiteProof Privacy Team</p>
-              <p className="text-muted-foreground">Email: privacy@siteproof.com.au</p>
-              <p className="text-muted-foreground">Address: Level 10, 123 Construction Street, Sydney NSW 2000</p>
-            </div>
+            <LegalContactCard teamName="SiteProof Privacy Team" email="privacy@siteproof.com.au" />
           </section>
 
           {/* Related Links */}
@@ -206,5 +231,5 @@ export function PrivacyPolicyPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

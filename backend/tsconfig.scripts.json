@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "scripts/migrate.ts",
+    "scripts/backup.ts",
+    "scripts/data-retention.ts",
+    "scripts/migrate-passwords.ts",
+    "scripts/preflight-production-integrations.ts",
+    "scripts/process-scheduled-reports.ts",
+    "scripts/send-notification-digests.ts",
+    "scripts/process-notification-automation.ts"
+  ]
+}

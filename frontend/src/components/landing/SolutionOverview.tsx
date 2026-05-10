@@ -1,39 +1,39 @@
-import { MapPin, CheckSquare, Unlock, AlertOctagon, FileText, Banknote } from 'lucide-react'
-import { FadeIn, StaggerContainer } from './animations/FadeIn'
+import { MapPin, CheckSquare, Unlock, AlertOctagon, FileText, Banknote } from 'lucide-react';
+import { FadeIn, StaggerContainer } from './animations/FadeIn';
 
 export function SolutionOverview() {
   const features = [
     {
       icon: MapPin,
-      title: "Lot Tracking",
-      desc: "Track every work section from start to conformance"
+      title: 'Lot Tracking',
+      desc: 'Track every work section from start to conformance',
     },
     {
       icon: CheckSquare,
-      title: "Digital ITPs",
-      desc: "Checklists with photos, signatures, and GPS"
+      title: 'Digital ITPs',
+      desc: 'Checklists with photos, signatures, and GPS',
     },
     {
       icon: Unlock,
-      title: "Hold Point Release",
-      desc: "Superintendents approve remotely via email"
+      title: 'Hold Point Release',
+      desc: 'Superintendents approve remotely via email',
     },
     {
       icon: AlertOctagon,
-      title: "NCR Management",
-      desc: "Capture defects, track corrective actions"
+      title: 'NCR Management',
+      desc: 'Capture defects, track corrective actions',
     },
     {
       icon: FileText,
-      title: "Daily Diaries",
-      desc: "Weather, crew, plant, activities in 10 minutes"
+      title: 'Daily Diaries',
+      desc: 'Weather, crew, plant, activities in 10 minutes',
     },
     {
       icon: Banknote,
-      title: "Claims & Evidence",
-      desc: "Auto-bundled proof for faster certification"
-    }
-  ]
+      title: 'Claims & Evidence',
+      desc: 'Auto-bundled proof for faster certification',
+    },
+  ];
 
   return (
     <section id="features" className="py-20 bg-muted/50">
@@ -43,7 +43,9 @@ export function SolutionOverview() {
             One platform. Field to office.
           </h2>
           <p className="mt-4 text-lg text-muted-foreground max-w-3xl mx-auto">
-            SiteProof brings your quality records, approvals, and evidence into one place. Foremen capture proof on site. QA verifies without site visits. PMs submit claims with evidence attached.
+            SiteProof brings your quality records, approvals, and evidence into one place. Foremen
+            capture proof on site. QA verifies without site visits. PMs submit claims with evidence
+            attached.
           </p>
         </FadeIn>
 
@@ -60,9 +62,7 @@ export function SolutionOverview() {
                   <h3 className="text-lg font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
                     {feature.title}
                   </h3>
-                  <p className="text-muted-foreground">
-                    {feature.desc}
-                  </p>
+                  <p className="text-muted-foreground">{feature.desc}</p>
                 </div>
               </div>
             </FadeIn>
@@ -70,5 +70,5 @@ export function SolutionOverview() {
         </StaggerContainer>
       </div>
     </section>
-  )
+  );
 }

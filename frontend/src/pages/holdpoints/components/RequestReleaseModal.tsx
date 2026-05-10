@@ -1,42 +1,66 @@
-import { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Eye, Download } from 'lucide-react'
-import { apiFetch } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { generateHPEvidencePackagePDF, HPEvidencePackageData } from '@/lib/pdfGenerator'
-import type { HoldPoint, HoldPointDetails, RequestError } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { useRef, useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Eye, Download } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
+import type { HoldPoint, HoldPointDetails, RequestError } from '../types';
+import {
+  Modal,
+  ModalHeader,
+  ModalDescription,
+  ModalBody,
+  ModalFooter,
+} from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { logError } from '@/lib/logger';
+
+const emailAddressSchema = z.string().trim().email();
+
+function parseNotificationEmails(value: string): string[] {
+  return value
+    .split(/[,\n;]/)
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
 
 const requestReleaseSchema = z.object({
   scheduledDate: z.string().min(1, 'Scheduled date is required'),
   scheduledTime: z.string().min(1, 'Scheduled time is required'),
-  notificationSentTo: z.string().min(1, 'Notification email is required').email('Please enter a valid email address'),
+  notificationSentTo: z
+    .string()
+    .min(1, 'At least one notification email is required')
+    .refine((value) => {
+      const emails = parseNotificationEmails(value);
+      return (
+        emails.length > 0 && emails.every((email) => emailAddressSchema.safeParse(email).success)
+      );
+    }, 'Enter valid email addresses separated by commas or semicolons'),
   overrideReason: z.string().optional(),
-})
+});
 
 interface RequestReleaseModalProps {
-  holdPoint: HoldPoint
-  details: HoldPointDetails | null
-  loading: boolean
-  requesting: boolean
-  error: RequestError | null
-  onClose: () => void
+  holdPoint: HoldPoint;
+  details: HoldPointDetails | null;
+  loading: boolean;
+  requesting: boolean;
+  error: RequestError | null;
+  onClose: () => void;
   onSubmit: (
     scheduledDate: string,
     scheduledTime: string,
     notificationSentTo: string,
     overrideNoticePeriod?: boolean,
-    overrideReason?: string
-  ) => void
+    overrideReason?: string,
+  ) => void;
 }
 
-type RequestReleaseFormData = z.infer<typeof requestReleaseSchema>
+type RequestReleaseFormData = z.infer<typeof requestReleaseSchema>;
 
 export function RequestReleaseModal({
   holdPoint,
@@ -47,9 +71,10 @@ export function RequestReleaseModal({
   onClose,
   onSubmit,
 }: RequestReleaseModalProps) {
-  const [showPreview, setShowPreview] = useState(false)
-  const [previewData, setPreviewData] = useState<HPEvidencePackageData | null>(null)
-  const [loadingPreview, setLoadingPreview] = useState(false)
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<HPEvidencePackageData | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const loadingPreviewRef = useRef(false);
 
   const {
     register,
@@ -67,78 +92,99 @@ export function RequestReleaseModal({
       notificationSentTo: '',
       overrideReason: '',
     },
-  })
+  });
 
-  const notificationSentTo = watch('notificationSentTo')
+  const notificationSentTo = watch('notificationSentTo');
 
   // Feature #697 - Pre-fill notification email with default recipients from project settings
   useEffect(() => {
     if (details?.defaultRecipients && details.defaultRecipients.length > 0 && !notificationSentTo) {
-      setValue('notificationSentTo', details.defaultRecipients.join(', '))
+      setValue('notificationSentTo', details.defaultRecipients.join(', '));
     }
-  }, [details?.defaultRecipients])
+  }, [details?.defaultRecipients, notificationSentTo, setValue]);
 
   // Check if we have a notice period warning that needs override
-  const hasNoticePeriodWarning = error?.code === 'NOTICE_PERIOD_WARNING'
+  const hasNoticePeriodWarning = error?.code === 'NOTICE_PERIOD_WARNING';
 
   const onFormSubmit = (data: RequestReleaseFormData) => {
-    onSubmit(data.scheduledDate, data.scheduledTime, data.notificationSentTo)
-  }
+    onSubmit(data.scheduledDate, data.scheduledTime, data.notificationSentTo);
+  };
 
   const handleOverrideSubmit = () => {
-    const overrideReason = getValues('overrideReason')
+    const overrideReason = getValues('overrideReason');
     if (!overrideReason?.trim()) {
       toast({
         title: 'Override reason required',
         description: 'Please provide a reason for overriding the notice period',
         variant: 'error',
-      })
-      return
+      });
+      return;
     }
-    const { scheduledDate, scheduledTime, notificationSentTo } = getValues()
-    onSubmit(scheduledDate, scheduledTime, notificationSentTo, true, overrideReason)
-  }
+    const { scheduledDate, scheduledTime, notificationSentTo } = getValues();
+    onSubmit(scheduledDate, scheduledTime, notificationSentTo, true, overrideReason);
+  };
 
   const handlePreviewPackage = async () => {
-    setLoadingPreview(true)
+    if (loadingPreviewRef.current) return;
+
+    loadingPreviewRef.current = true;
+    setLoadingPreview(true);
     try {
-      const data = await apiFetch<{ evidencePackage: HPEvidencePackageData }>('/api/holdpoints/preview-evidence-package', {
-        method: 'POST',
-        body: JSON.stringify({
-          lotId: holdPoint.lotId,
-          itpChecklistItemId: holdPoint.itpChecklistItemId,
-        }),
-      })
-      setPreviewData(data.evidencePackage)
-      setShowPreview(true)
+      const data = await apiFetch<{ evidencePackage: HPEvidencePackageData }>(
+        '/api/holdpoints/preview-evidence-package',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            lotId: holdPoint.lotId,
+            itpChecklistItemId: holdPoint.itpChecklistItemId,
+          }),
+        },
+      );
+      setPreviewData(data.evidencePackage);
+      setShowPreview(true);
     } catch (err) {
-      console.error('Failed to fetch preview:', err)
+      logError('Failed to fetch preview:', err);
       toast({
         title: 'Error',
         description: 'Failed to load evidence package preview',
         variant: 'error',
-      })
+      });
     } finally {
-      setLoadingPreview(false)
+      loadingPreviewRef.current = false;
+      setLoadingPreview(false);
     }
-  }
+  };
 
-  const handleDownloadPreviewPDF = () => {
+  const handleDownloadPreviewPDF = async () => {
     if (previewData) {
-      generateHPEvidencePackagePDF(previewData)
+      try {
+        const { generateHPEvidencePackagePDF } = await import('@/lib/pdfGenerator');
+        await generateHPEvidencePackagePDF(previewData);
+      } catch (err) {
+        logError('Failed to generate evidence package preview PDF:', err);
+        toast({
+          title: 'PDF failed',
+          description: 'Failed to generate evidence package preview PDF',
+          variant: 'error',
+        });
+        return;
+      }
       toast({
         title: 'PDF Downloaded',
         description: 'Evidence package preview PDF has been downloaded',
-      })
+      });
     }
-  }
+  };
 
-  const canSubmit = details?.canRequestRelease && !requesting
+  const canSubmit = details?.canRequestRelease && !requesting;
 
   return (
     <>
       <Modal onClose={onClose} className="max-w-lg">
         <ModalHeader>Request Hold Point Release</ModalHeader>
+        <ModalDescription>
+          Schedule release notification and review prerequisites for this hold point.
+        </ModalDescription>
         <ModalBody>
           <div className="mb-4 p-3 bg-muted rounded-lg">
             <div className="text-sm text-muted-foreground">Lot</div>
@@ -148,7 +194,11 @@ export function RequestReleaseModal({
           </div>
 
           {loading ? (
-            <div className="flex justify-center p-8">
+            <div
+              className="flex justify-center p-8"
+              role="status"
+              aria-label="Loading hold point details"
+            >
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
             </div>
           ) : (
@@ -167,9 +217,7 @@ export function RequestReleaseModal({
                             : 'bg-red-50 text-red-800'
                         }`}
                       >
-                        <span className="text-lg">
-                          {prereq.isCompleted ? '\u2713' : '\u2717'}
-                        </span>
+                        <span className="text-lg">{prereq.isCompleted ? '\u2713' : '\u2717'}</span>
                         <span className="flex-1">
                           {prereq.sequenceNumber}. {prereq.description}
                           {prereq.isHoldPoint && (
@@ -184,7 +232,7 @@ export function RequestReleaseModal({
 
               {/* Error / Block Message */}
               {error && !hasNoticePeriodWarning && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg" role="alert">
                   <div className="flex items-start gap-2">
                     <span className="text-red-500 text-xl">&#x26a0;&#xfe0f;</span>
                     <div>
@@ -208,22 +256,29 @@ export function RequestReleaseModal({
 
               {/* Notice Period Warning - Allow Override (Feature #180) */}
               {hasNoticePeriodWarning && (
-                <div className="mb-4 p-4 bg-amber-50 border border-amber-300 rounded-lg">
+                <div
+                  className="mb-4 p-4 bg-amber-50 border border-amber-300 rounded-lg"
+                  role="alert"
+                >
                   <div className="flex items-start gap-2">
                     <span className="text-amber-500 text-xl">&#x26a0;&#xfe0f;</span>
                     <div className="flex-1">
                       <div className="font-medium text-amber-800">{error!.message}</div>
                       {error!.details && (
                         <div className="mt-2 text-sm text-amber-700">
-                          <p>Scheduled date provides only {error!.details.workingDaysNotice} working day{error!.details.workingDaysNotice !== 1 ? 's' : ''} notice.</p>
-                          <p>Minimum required: {error!.details.minimumNoticeDays} working day{error!.details.minimumNoticeDays !== 1 ? 's' : ''}.</p>
+                          <p>
+                            Scheduled date provides only {error!.details.workingDaysNotice} working
+                            day{error!.details.workingDaysNotice !== 1 ? 's' : ''} notice.
+                          </p>
+                          <p>
+                            Minimum required: {error!.details.minimumNoticeDays} working day
+                            {error!.details.minimumNoticeDays !== 1 ? 's' : ''}.
+                          </p>
                         </div>
                       )}
                       <div className="mt-4 space-y-3">
                         <div>
-                          <Label className="text-amber-800">
-                            Override Reason (required)
-                          </Label>
+                          <Label className="text-amber-800">Override Reason (required)</Label>
                           <Textarea
                             {...register('overrideReason')}
                             className="border-amber-300"
@@ -277,7 +332,9 @@ export function RequestReleaseModal({
                       className={errors.scheduledDate ? 'border-destructive' : ''}
                     />
                     {errors.scheduledDate && (
-                      <p className="mt-1 text-sm text-destructive" role="alert">{errors.scheduledDate.message}</p>
+                      <p className="mt-1 text-sm text-destructive" role="alert">
+                        {errors.scheduledDate.message}
+                      </p>
                     )}
                   </div>
 
@@ -289,20 +346,24 @@ export function RequestReleaseModal({
                       className={errors.scheduledTime ? 'border-destructive' : ''}
                     />
                     {errors.scheduledTime && (
-                      <p className="mt-1 text-sm text-destructive" role="alert">{errors.scheduledTime.message}</p>
+                      <p className="mt-1 text-sm text-destructive" role="alert">
+                        {errors.scheduledTime.message}
+                      </p>
                     )}
                   </div>
 
                   <div>
-                    <Label>Notify (Email)</Label>
+                    <Label>Notify (Emails)</Label>
                     <Input
-                      type="email"
+                      type="text"
                       {...register('notificationSentTo')}
                       className={errors.notificationSentTo ? 'border-destructive' : ''}
-                      placeholder="inspector@example.com"
+                      placeholder="inspector@example.com, superintendent@example.com"
                     />
                     {errors.notificationSentTo && (
-                      <p className="mt-1 text-sm text-destructive" role="alert">{errors.notificationSentTo.message}</p>
+                      <p className="mt-1 text-sm text-destructive" role="alert">
+                        {errors.notificationSentTo.message}
+                      </p>
                     )}
                   </div>
 
@@ -335,10 +396,7 @@ export function RequestReleaseModal({
                       >
                         Cancel
                       </Button>
-                      <Button
-                        type="submit"
-                        disabled={!canSubmit}
-                      >
+                      <Button type="submit" disabled={!canSubmit}>
                         {requesting ? 'Requesting...' : 'Request Release'}
                       </Button>
                     </div>
@@ -349,15 +407,14 @@ export function RequestReleaseModal({
               {/* Cannot Request - Show Block */}
               {details && !details.canRequestRelease && !error && (
                 <div className="space-y-4">
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg" role="alert">
                     <div className="flex items-start gap-2">
                       <span className="text-amber-500 text-xl">&#x26a0;&#xfe0f;</span>
                       <div>
-                        <div className="font-medium text-amber-800">
-                          Cannot request release yet
-                        </div>
+                        <div className="font-medium text-amber-800">Cannot request release yet</div>
                         <p className="text-sm text-amber-700 mt-1">
-                          Complete all preceding checklist items before requesting hold point release.
+                          Complete all preceding checklist items before requesting hold point
+                          release.
                         </p>
                       </div>
                     </div>
@@ -398,7 +455,7 @@ export function RequestReleaseModal({
         />
       )}
     </>
-  )
+  );
 }
 
 /** Nested preview modal for evidence package */
@@ -407,9 +464,9 @@ function EvidencePreviewModal({
   onClose,
   onDownload,
 }: {
-  previewData: HPEvidencePackageData
-  onClose: () => void
-  onDownload: () => void
+  previewData: HPEvidencePackageData;
+  onClose: () => void;
+  onDownload: () => void;
 }) {
   return (
     <Modal onClose={onClose} className="max-w-4xl">
@@ -454,7 +511,10 @@ function EvidencePreviewModal({
 
         {/* Checklist Items */}
         <div>
-          <h4 className="font-medium mb-3">Checklist Items ({previewData.summary.completedItems}/{previewData.summary.totalChecklistItems} completed)</h4>
+          <h4 className="font-medium mb-3">
+            Checklist Items ({previewData.summary.completedItems}/
+            {previewData.summary.totalChecklistItems} completed)
+          </h4>
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
@@ -467,14 +527,29 @@ function EvidencePreviewModal({
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {previewData.checklist.map((item: any) => (
-                  <tr key={item.sequenceNumber} className={item.isCompleted ? 'bg-green-50/50' : 'bg-red-50/50'}>
+                {previewData.checklist.map((item) => (
+                  <tr
+                    key={item.sequenceNumber}
+                    className={item.isCompleted ? 'bg-green-50/50' : 'bg-red-50/50'}
+                  >
                     <td className="px-3 py-2">{item.sequenceNumber}</td>
                     <td className="px-3 py-2">{item.description}</td>
                     <td className="px-3 py-2">
-                      {item.pointType === 'hold' && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded">HP</span>}
-                      {item.pointType === 'witness' && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">WP</span>}
-                      {item.pointType === 'standard' && <span className="px-1.5 py-0.5 bg-muted text-foreground text-xs rounded">Std</span>}
+                      {item.pointType === 'hold' && (
+                        <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                          HP
+                        </span>
+                      )}
+                      {item.pointType === 'witness' && (
+                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">
+                          WP
+                        </span>
+                      )}
+                      {item.pointType === 'standard' && (
+                        <span className="px-1.5 py-0.5 bg-muted text-foreground text-xs rounded">
+                          Std
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {item.isCompleted ? (
@@ -494,7 +569,10 @@ function EvidencePreviewModal({
         {/* Test Results */}
         {previewData.testResults.length > 0 && (
           <div>
-            <h4 className="font-medium mb-3">Test Results ({previewData.summary.passingTests}/{previewData.summary.totalTestResults} passing)</h4>
+            <h4 className="font-medium mb-3">
+              Test Results ({previewData.summary.passingTests}/
+              {previewData.summary.totalTestResults} passing)
+            </h4>
             <div className="border rounded-lg overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
@@ -506,11 +584,13 @@ function EvidencePreviewModal({
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {previewData.testResults.map((test: any) => (
+                  {previewData.testResults.map((test) => (
                     <tr key={test.id}>
                       <td className="px-3 py-2">{test.testType}</td>
                       <td className="px-3 py-2">{test.laboratoryName || '-'}</td>
-                      <td className="px-3 py-2">{test.resultValue} {test.resultUnit}</td>
+                      <td className="px-3 py-2">
+                        {test.resultValue} {test.resultUnit}
+                      </td>
                       <td className="px-3 py-2">
                         {test.passFail === 'pass' ? (
                           <span className="text-green-600">&#x2713; Pass</span>
@@ -532,19 +612,27 @@ function EvidencePreviewModal({
           <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
               <div className="text-primary">Checklist Items</div>
-              <div className="font-semibold text-foreground">{previewData.summary.completedItems}/{previewData.summary.totalChecklistItems}</div>
+              <div className="font-semibold text-foreground">
+                {previewData.summary.completedItems}/{previewData.summary.totalChecklistItems}
+              </div>
             </div>
             <div>
               <div className="text-primary">Verified Items</div>
-              <div className="font-semibold text-foreground">{previewData.summary.verifiedItems}</div>
+              <div className="font-semibold text-foreground">
+                {previewData.summary.verifiedItems}
+              </div>
             </div>
             <div>
               <div className="text-primary">Test Results</div>
-              <div className="font-semibold text-foreground">{previewData.summary.passingTests}/{previewData.summary.totalTestResults}</div>
+              <div className="font-semibold text-foreground">
+                {previewData.summary.passingTests}/{previewData.summary.totalTestResults}
+              </div>
             </div>
             <div>
               <div className="text-primary">Photos/Attachments</div>
-              <div className="font-semibold text-foreground">{previewData.summary.totalPhotos + previewData.summary.totalAttachments}</div>
+              <div className="font-semibold text-foreground">
+                {previewData.summary.totalPhotos + previewData.summary.totalAttachments}
+              </div>
             </div>
           </div>
         </div>
@@ -563,10 +651,8 @@ function EvidencePreviewModal({
           <Download className="h-4 w-4" />
           Download PDF
         </Button>
-        <Button onClick={onClose}>
-          Continue to Request
-        </Button>
+        <Button onClick={onClose}>Continue to Request</Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

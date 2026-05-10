@@ -8,16 +8,19 @@ export function OfflineIndicator() {
   const [showConflictModal, setShowConflictModal] = useState(false);
 
   // Callback when conflict is detected during sync
-  const handleConflictDetected = useCallback((_lotId: string, lotNumber: string, message: string) => {
-    toast({
-      title: `Sync Conflict: ${lotNumber}`,
-      description: message,
-      variant: 'warning',
-      duration: 10000
-    });
-    // Open conflict modal after a short delay
-    setTimeout(() => setShowConflictModal(true), 500);
-  }, []);
+  const handleConflictDetected = useCallback(
+    (_lotId: string, lotNumber: string, message: string) => {
+      toast({
+        title: `Sync Conflict: ${lotNumber}`,
+        description: message,
+        variant: 'warning',
+        duration: 10000,
+      });
+      // Open conflict modal after a short delay
+      setTimeout(() => setShowConflictModal(true), 500);
+    },
+    [],
+  );
 
   // Callback when sync completes successfully
   const handleSyncComplete = useCallback((syncedCount: number) => {
@@ -25,14 +28,15 @@ export function OfflineIndicator() {
       title: 'Sync Complete',
       description: `Successfully synced ${syncedCount} change${syncedCount > 1 ? 's' : ''}.`,
       variant: 'success',
-      duration: 5000
+      duration: 5000,
     });
   }, []);
 
-  const { isOnline, pendingSyncCount, isSyncing, syncPendingChanges, conflictCount } = useOfflineStatus({
-    onConflictDetected: handleConflictDetected,
-    onSyncComplete: handleSyncComplete
-  });
+  const { isOnline, pendingSyncCount, isSyncing, syncPendingChanges, conflictCount } =
+    useOfflineStatus({
+      onConflictDetected: handleConflictDetected,
+      onSyncComplete: handleSyncComplete,
+    });
 
   // Don't show when online, synced, and no conflicts
   if (isOnline && pendingSyncCount === 0 && conflictCount === 0) {
@@ -97,7 +101,7 @@ export function OfflineIndicator() {
           toast({
             title: 'Conflicts Resolved',
             description: 'All sync conflicts have been resolved successfully.',
-            variant: 'success'
+            variant: 'success',
           });
         }}
       />
@@ -113,9 +117,11 @@ export function OfflineBadge() {
   }
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-      !isOnline ? 'bg-amber-100 text-amber-800' : 'bg-primary/10 text-primary'
-    }`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+        !isOnline ? 'bg-amber-100 text-amber-800' : 'bg-primary/10 text-primary'
+      }`}
+    >
       {!isOnline ? (
         <>
           <WifiOff className="h-3 w-3" />
@@ -131,7 +137,11 @@ export function OfflineBadge() {
   );
 }
 
-export function SyncStatusBadge({ status }: { status: 'synced' | 'pending' | 'error' | 'conflict' }) {
+export function SyncStatusBadge({
+  status,
+}: {
+  status: 'synced' | 'pending' | 'error' | 'conflict';
+}) {
   if (status === 'synced') {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-green-600">

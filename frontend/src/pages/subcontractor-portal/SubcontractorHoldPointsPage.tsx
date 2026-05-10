@@ -1,35 +1,59 @@
-import { Link } from 'react-router-dom'
-import {
-  ArrowLeft,
-  Hand,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-} from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { apiFetch } from '@/lib/api'
-import { extractErrorMessage } from '@/lib/errorHandling'
+import { Link } from 'react-router-dom';
+import { ArrowLeft, Hand, AlertCircle, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { PortalAccessDenied } from './portalAccess';
+import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 
 interface HoldPoint {
-  id: string
-  lotId: string
-  lotNumber: string
-  description: string
-  status: 'pending' | 'released' | 'rejected'
-  requestedAt: string
-  releasedAt?: string
-  releasedBy?: { fullName: string }
-  checklistItemDescription?: string
+  id: string;
+  lotId: string;
+  lotNumber: string;
+  description: string;
+  status: 'pending' | 'notified' | 'released' | 'rejected';
+  requestedAt?: string;
+  releasedAt?: string;
+  releasedBy?: { fullName: string };
+  checklistItemDescription?: string;
 }
 
 interface SubcontractorCompany {
-  id: string
-  companyName: string
-  projectId: string
-  projectName: string
+  id: string;
+  companyName: string;
+  projectId: string;
+  projectName: string;
+  portalAccess?: PortalAccess;
+}
+
+interface ApiHoldPoint {
+  id: string;
+  lotId: string;
+  lotNumber: string;
+  description: string;
+  status: HoldPoint['status'];
+  notificationSentAt?: string | null;
+  scheduledDate?: string | null;
+  releasedAt?: string | null;
+  releasedByName?: string | null;
+  createdAt?: string | null;
+}
+
+function normalizeHoldPoint(holdPoint: ApiHoldPoint): HoldPoint {
+  return {
+    id: holdPoint.id,
+    lotId: holdPoint.lotId,
+    lotNumber: holdPoint.lotNumber,
+    description: holdPoint.description,
+    checklistItemDescription: holdPoint.description,
+    status: holdPoint.status,
+    requestedAt:
+      holdPoint.notificationSentAt || holdPoint.scheduledDate || holdPoint.createdAt || undefined,
+    releasedAt: holdPoint.releasedAt || undefined,
+    releasedBy: holdPoint.releasedByName ? { fullName: holdPoint.releasedByName } : undefined,
+  };
 }
 
 function getStatusBadge(status: string) {
@@ -40,21 +64,21 @@ function getStatusBadge(status: string) {
           <CheckCircle2 className="h-3 w-3" />
           Released
         </span>
-      )
+      );
     case 'rejected':
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
           <AlertTriangle className="h-3 w-3" />
           Rejected
         </span>
-      )
+      );
     default:
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100">
           <Clock className="h-3 w-3" />
           Pending
         </span>
-      )
+      );
   }
 }
 
@@ -62,27 +86,34 @@ export function SubcontractorHoldPointsPage() {
   const { data: company, isLoading: companyLoading } = useQuery({
     queryKey: queryKeys.portalCompanies,
     queryFn: async () => {
-      const res = await apiFetch<{ company: SubcontractorCompany }>('/api/subcontractors/my-company')
-      return res.company
+      const res = await apiFetch<{ company: SubcontractorCompany }>(
+        '/api/subcontractors/my-company',
+      );
+      return res.company;
     },
-  })
+  });
+  const canViewHoldPoints = isPortalModuleEnabled(company, 'holdPoints');
 
-  const { data: holdPoints = [], isLoading: hpLoading, error } = useQuery({
+  const {
+    data: holdPoints = [],
+    isLoading: hpLoading,
+    error,
+  } = useQuery({
     queryKey: queryKeys.portalHoldPoints,
     queryFn: async () => {
-      const res = await apiFetch<{ holdPoints: HoldPoint[] }>(
-        `/api/holdpoints?projectId=${company!.projectId}&subcontractorView=true`
-      )
-      return res.holdPoints || []
+      const res = await apiFetch<{ holdPoints: ApiHoldPoint[] }>(
+        `/api/holdpoints/project/${company!.projectId}?subcontractorView=true`,
+      );
+      return (res.holdPoints || []).map(normalizeHoldPoint);
     },
-    enabled: !!company?.projectId,
-  })
+    enabled: !!company?.projectId && canViewHoldPoints,
+  });
 
-  const loading = companyLoading || hpLoading
+  const loading = companyLoading || (canViewHoldPoints && hpLoading);
 
-  const pending = holdPoints.filter(hp => hp.status === 'pending')
-  const released = holdPoints.filter(hp => hp.status === 'released')
-  const rejected = holdPoints.filter(hp => hp.status === 'rejected')
+  const pending = holdPoints.filter((hp) => hp.status === 'pending' || hp.status === 'notified');
+  const released = holdPoints.filter((hp) => hp.status === 'released');
+  const rejected = holdPoints.filter((hp) => hp.status === 'rejected');
 
   if (loading) {
     return (
@@ -94,7 +125,11 @@ export function SubcontractorHoldPointsPage() {
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-24 w-full rounded-lg" />
       </div>
-    )
+    );
+  }
+
+  if (!canViewHoldPoints) {
+    return <PortalAccessDenied moduleName="Hold points" />;
   }
 
   if (error) {
@@ -112,7 +147,7 @@ export function SubcontractorHoldPointsPage() {
           Back to Portal
         </Link>
       </div>
-    )
+    );
   }
 
   return (
@@ -203,7 +238,7 @@ export function SubcontractorHoldPointsPage() {
         </>
       )}
     </div>
-  )
+  );
 }
 
 function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
@@ -232,5 +267,5 @@ function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
         </div>
       </div>
     </div>
-  )
+  );
 }

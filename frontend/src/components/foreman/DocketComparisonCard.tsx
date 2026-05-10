@@ -1,27 +1,27 @@
 // DocketComparisonCard - Compare docket vs diary hours for approval
-import { AlertTriangle, CheckCircle2, XCircle, HelpCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { AlertTriangle, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface DocketEntry {
-  submitted: number
-  approved?: number
-  label: string
+  submitted: number;
+  approved?: number;
+  label: string;
 }
 
 interface DocketComparisonCardProps {
-  docketNumber: string
-  subcontractor: string
-  date: string
-  labour: DocketEntry
-  plant: DocketEntry
-  diaryLabourHours?: number
-  diaryPlantHours?: number
-  hasDiscrepancy?: boolean
-  status: 'pending_approval' | 'approved' | 'rejected' | 'queried'
-  onApprove?: () => void
-  onReject?: () => void
-  onQuery?: () => void
-  onViewDetails?: () => void
+  docketNumber: string;
+  subcontractor: string;
+  date: string;
+  labour: DocketEntry;
+  plant: DocketEntry;
+  diaryLabourHours?: number;
+  diaryPlantHours?: number;
+  hasDiscrepancy?: boolean;
+  status: 'pending_approval' | 'approved' | 'rejected' | 'queried';
+  onApprove?: () => void;
+  onReject?: () => void;
+  onQuery?: () => void;
+  onViewDetails?: () => void;
 }
 
 export function DocketComparisonCard({
@@ -39,8 +39,10 @@ export function DocketComparisonCard({
   onQuery,
   onViewDetails,
 }: DocketComparisonCardProps) {
-  const labourDiscrepancy = diaryLabourHours !== undefined && Math.abs(labour.submitted - diaryLabourHours) > 0.5
-  const plantDiscrepancy = diaryPlantHours !== undefined && Math.abs(plant.submitted - diaryPlantHours) > 0.5
+  const labourDiscrepancy =
+    diaryLabourHours !== undefined && Math.abs(labour.submitted - diaryLabourHours) > 0.5;
+  const plantDiscrepancy =
+    diaryPlantHours !== undefined && Math.abs(plant.submitted - diaryPlantHours) > 0.5;
 
   return (
     <div className="bg-card rounded-lg border overflow-hidden">
@@ -72,10 +74,12 @@ export function DocketComparisonCard({
         </div>
 
         {/* Labour Row */}
-        <div className={cn(
-          'grid grid-cols-3 gap-2 text-center py-2 rounded',
-          labourDiscrepancy && 'bg-amber-50 dark:bg-amber-900/20'
-        )}>
+        <div
+          className={cn(
+            'grid grid-cols-3 gap-2 text-center py-2 rounded',
+            labourDiscrepancy && 'bg-amber-50 dark:bg-amber-900/20',
+          )}
+        >
           <div className="text-left font-medium">Labour</div>
           <div>{labour.submitted}h</div>
           <div className={cn(labourDiscrepancy && 'text-amber-600 font-medium')}>
@@ -84,10 +88,12 @@ export function DocketComparisonCard({
         </div>
 
         {/* Plant Row */}
-        <div className={cn(
-          'grid grid-cols-3 gap-2 text-center py-2 rounded',
-          plantDiscrepancy && 'bg-amber-50 dark:bg-amber-900/20'
-        )}>
+        <div
+          className={cn(
+            'grid grid-cols-3 gap-2 text-center py-2 rounded',
+            plantDiscrepancy && 'bg-amber-50 dark:bg-amber-900/20',
+          )}
+        >
           <div className="text-left font-medium">Plant</div>
           <div>{plant.submitted}h</div>
           <div className={cn(plantDiscrepancy && 'text-amber-600 font-medium')}>
@@ -106,7 +112,7 @@ export function DocketComparisonCard({
                 'flex-1 flex items-center justify-center gap-2 py-3 rounded-lg',
                 'bg-green-600 text-white font-medium',
                 'active:bg-green-700 transition-colors',
-                'touch-manipulation min-h-[48px]'
+                'touch-manipulation min-h-[48px]',
               )}
             >
               <CheckCircle2 className="h-5 w-5" />
@@ -118,7 +124,7 @@ export function DocketComparisonCard({
                 'flex-1 flex items-center justify-center gap-2 py-3 rounded-lg',
                 'bg-amber-500 text-white font-medium',
                 'active:bg-amber-600 transition-colors',
-                'touch-manipulation min-h-[48px]'
+                'touch-manipulation min-h-[48px]',
               )}
             >
               <HelpCircle className="h-5 w-5" />
@@ -130,7 +136,7 @@ export function DocketComparisonCard({
                 'flex-1 flex items-center justify-center gap-2 py-3 rounded-lg',
                 'bg-red-600 text-white font-medium',
                 'active:bg-red-700 transition-colors',
-                'touch-manipulation min-h-[48px]'
+                'touch-manipulation min-h-[48px]',
               )}
             >
               <XCircle className="h-5 w-5" />
@@ -147,12 +153,12 @@ export function DocketComparisonCard({
           className={cn(
             'w-full py-3 text-center text-sm text-primary font-medium',
             'border-t active:bg-muted/50',
-            'touch-manipulation min-h-[48px]'
+            'touch-manipulation min-h-[48px]',
           )}
         >
           View Full Details
         </button>
       )}
     </div>
-  )
+  );
 }

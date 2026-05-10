@@ -3,25 +3,25 @@
  * Displays test results linked to a lot.
  */
 
-import { useNavigate } from 'react-router-dom'
-import type { TestResult } from '@/pages/lots/types'
-import { testPassFailColors, testStatusColors } from '@/pages/lots/constants'
+import { useNavigate } from 'react-router-dom';
+import type { TestResult } from '@/pages/lots/types';
+import { testPassFailColors, testStatusColors } from '@/pages/lots/constants';
 
 interface TestsTabContentProps {
-  projectId: string
-  testResults: TestResult[]
-  loading: boolean
+  projectId: string;
+  testResults: TestResult[];
+  loading: boolean;
 }
 
 export function TestsTabContent({ projectId, testResults, loading }: TestsTabContentProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   if (loading) {
     return (
       <div className="flex justify-center p-8">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
-    )
+    );
   }
 
   if (testResults.length === 0) {
@@ -30,7 +30,8 @@ export function TestsTabContent({ projectId, testResults, loading }: TestsTabCon
         <div className="text-4xl mb-2">🧪</div>
         <h3 className="text-lg font-semibold mb-2">No Test Results</h3>
         <p className="text-muted-foreground mb-4">
-          No test results have been linked to this lot yet. Link test results to verify quality compliance.
+          No test results have been linked to this lot yet. Link test results to verify quality
+          compliance.
         </p>
         <button
           onClick={() => navigate(`/projects/${projectId}/tests`)}
@@ -39,7 +40,7 @@ export function TestsTabContent({ projectId, testResults, loading }: TestsTabCon
           Go to Test Results
         </button>
       </div>
-    )
+    );
   }
 
   return (
@@ -67,12 +68,16 @@ export function TestsTabContent({ projectId, testResults, loading }: TestsTabCon
                   : '—'}
               </td>
               <td className="px-4 py-3 text-sm">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${testPassFailColors[test.passFail] || 'bg-muted text-muted-foreground'}`}>
+                <span
+                  className={`px-2 py-1 rounded text-xs font-medium ${testPassFailColors[test.passFail] || 'bg-muted text-muted-foreground'}`}
+                >
                   {test.passFail}
                 </span>
               </td>
               <td className="px-4 py-3 text-sm">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-muted text-muted-foreground'}`}>
+                <span
+                  className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-muted text-muted-foreground'}`}
+                >
                   {test.status}
                 </span>
               </td>
@@ -81,5 +86,5 @@ export function TestsTabContent({ projectId, testResults, loading }: TestsTabCon
         </tbody>
       </table>
     </div>
-  )
+  );
 }

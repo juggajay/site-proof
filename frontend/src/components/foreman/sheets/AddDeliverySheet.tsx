@@ -1,66 +1,87 @@
-import { useState } from 'react'
-import { Loader2, ChevronDown, ChevronUp } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { BottomSheet } from './BottomSheet'
-import { useHaptics } from '@/hooks/useHaptics'
+import { useState } from 'react';
+import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { BottomSheet } from './BottomSheet';
+import { useHaptics } from '@/hooks/useHaptics';
+import {
+  getOptionalDiaryQuantityError,
+  parseOptionalDiaryQuantityInput,
+} from '@/pages/diary/diaryNumericInput';
 
 interface AddDeliverySheetProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen: boolean;
+  onClose: () => void;
   onSave: (data: {
-    description: string
-    supplier?: string
-    docketNumber?: string
-    quantity?: number
-    unit?: string
-    lotId?: string
-    notes?: string
-  }) => Promise<void>
-  defaultLotId: string | null
-  lots: Array<{ id: string; lotNumber: string }>
-  initialData?: { description?: string; supplier?: string; docketNumber?: string; quantity?: number; unit?: string; lotId?: string; notes?: string }
+    description: string;
+    supplier?: string;
+    docketNumber?: string;
+    quantity?: number;
+    unit?: string;
+    lotId?: string;
+    notes?: string;
+  }) => Promise<void>;
+  defaultLotId: string | null;
+  lots: Array<{ id: string; lotNumber: string }>;
+  initialData?: {
+    description?: string;
+    supplier?: string;
+    docketNumber?: string;
+    quantity?: number;
+    unit?: string;
+    lotId?: string;
+    notes?: string;
+  };
 }
 
-export function AddDeliverySheet({ isOpen, onClose, onSave, defaultLotId, lots, initialData }: AddDeliverySheetProps) {
-  const [description, setDescription] = useState(initialData?.description || '')
-  const [supplier, setSupplier] = useState(initialData?.supplier || '')
-  const [docketNumber, setDocketNumber] = useState(initialData?.docketNumber || '')
-  const [quantity, setQuantity] = useState(initialData?.quantity?.toString() || '')
-  const [unit, setUnit] = useState(initialData?.unit || '')
-  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '')
-  const [notes, setNotes] = useState(initialData?.notes || '')
-  const [showMore, setShowMore] = useState(!!initialData)
-  const [saving, setSaving] = useState(false)
-  const { trigger } = useHaptics()
+export function AddDeliverySheet({
+  isOpen,
+  onClose,
+  onSave,
+  defaultLotId,
+  lots,
+  initialData,
+}: AddDeliverySheetProps) {
+  const [description, setDescription] = useState(initialData?.description || '');
+  const [supplier, setSupplier] = useState(initialData?.supplier || '');
+  const [docketNumber, setDocketNumber] = useState(initialData?.docketNumber || '');
+  const [quantity, setQuantity] = useState(initialData?.quantity?.toString() || '');
+  const [unit, setUnit] = useState(initialData?.unit || '');
+  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '');
+  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [showMore, setShowMore] = useState(!!initialData);
+  const [saving, setSaving] = useState(false);
+  const { trigger } = useHaptics();
+  const quantityError = getOptionalDiaryQuantityError(quantity);
 
   const handleSave = async () => {
-    if (!description.trim() || saving) return
-    setSaving(true)
+    if (!description.trim() || quantityError || saving) return;
+    const parsedQuantity = parseOptionalDiaryQuantityInput(quantity);
+    setSaving(true);
     try {
       await onSave({
         description: description.trim(),
         supplier: supplier || undefined,
         docketNumber: docketNumber || undefined,
-        quantity: quantity ? parseFloat(quantity) : undefined,
+        quantity: parsedQuantity ?? undefined,
         unit: unit || undefined,
         lotId: lotId || undefined,
         notes: notes || undefined,
-      })
-      trigger('success')
-      setDescription('')
-      setSupplier('')
-      setDocketNumber('')
-      setQuantity('')
-      setUnit('')
-      setNotes('')
-      setShowMore(false)
-      onClose()
+      });
+      trigger('success');
+      setDescription('');
+      setSupplier('');
+      setDocketNumber('');
+      setQuantity('');
+      setUnit('');
+      setNotes('');
+      setShowMore(false);
+      onClose();
     } catch {
-      trigger('error')
+      trigger('error');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Delivery">
@@ -117,8 +138,16 @@ export function AddDeliverySheet({ isOpen, onClose, onSave, defaultLotId, lots, 
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   placeholder="0"
-                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                  className={cn(
+                    'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
+                    quantityError && 'border-red-500',
+                  )}
                 />
+                {quantityError && (
+                  <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
+                    {quantityError}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium text-muted-foreground">Unit</label>
@@ -139,8 +168,10 @@ export function AddDeliverySheet({ isOpen, onClose, onSave, defaultLotId, lots, 
                 className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
               >
                 <option value="">No lot</option>
-                {lots.map(lot => (
-                  <option key={lot.id} value={lot.id}>Lot {lot.lotNumber}</option>
+                {lots.map((lot) => (
+                  <option key={lot.id} value={lot.id}>
+                    Lot {lot.lotNumber}
+                  </option>
                 ))}
               </select>
             </div>
@@ -158,18 +189,24 @@ export function AddDeliverySheet({ isOpen, onClose, onSave, defaultLotId, lots, 
 
         <button
           onClick={handleSave}
-          disabled={!description.trim() || saving}
+          disabled={!description.trim() || Boolean(quantityError) || saving}
           className={cn(
             'w-full py-4 rounded-lg font-semibold text-white',
             'bg-green-600 active:bg-green-700',
             'touch-manipulation min-h-[56px]',
             'flex items-center justify-center gap-2',
-            (!description.trim() || saving) && 'opacity-50'
+            (!description.trim() || quantityError || saving) && 'opacity-50',
           )}
         >
-          {saving ? <><Loader2 className="h-5 w-5 animate-spin" /> Saving...</> : 'Save Delivery'}
+          {saving ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" /> Saving...
+            </>
+          ) : (
+            'Save Delivery'
+          )}
         </button>
       </div>
     </BottomSheet>
-  )
+  );
 }

@@ -1,35 +1,29 @@
-import { memo } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import type { NCR } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { memo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import type { NCR } from '../types';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const closeNCRSchema = z.object({
-  verificationNotes: z.string().optional().default(''),
-  lessonsLearned: z.string().optional().default(''),
-})
+  verificationNotes: z.string().trim().optional().default(''),
+  lessonsLearned: z.string().trim().optional().default(''),
+});
 
-type CloseNCRFormData = z.infer<typeof closeNCRSchema>
+type CloseNCRFormData = z.infer<typeof closeNCRSchema>;
 
 interface CloseNCRModalProps {
-  isOpen: boolean
-  ncr: NCR | null
-  onClose: () => void
-  onSubmit: (ncrId: string, data: { verificationNotes: string; lessonsLearned: string }) => void
-  loading: boolean
+  isOpen: boolean;
+  ncr: NCR | null;
+  onClose: () => void;
+  onSubmit: (ncrId: string, data: { verificationNotes: string; lessonsLearned: string }) => void;
+  loading: boolean;
 }
 
-function CloseNCRModalInner({
-  isOpen,
-  ncr,
-  onClose,
-  onSubmit,
-  loading,
-}: CloseNCRModalProps) {
+function CloseNCRModalInner({ isOpen, ncr, onClose, onSubmit, loading }: CloseNCRModalProps) {
   const {
     register,
     handleSubmit,
@@ -42,19 +36,22 @@ function CloseNCRModalInner({
       verificationNotes: '',
       lessonsLearned: '',
     },
-  })
+  });
 
   const onFormSubmit = (data: CloseNCRFormData) => {
-    if (!ncr) return
-    onSubmit(ncr.id, { verificationNotes: data.verificationNotes ?? '', lessonsLearned: data.lessonsLearned ?? '' })
-  }
+    if (!ncr) return;
+    onSubmit(ncr.id, {
+      verificationNotes: data.verificationNotes?.trim() ?? '',
+      lessonsLearned: data.lessonsLearned?.trim() ?? '',
+    });
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset();
+    onClose();
+  };
 
-  if (!isOpen || !ncr) return null
+  if (!isOpen || !ncr) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-lg">
@@ -76,7 +73,9 @@ function CloseNCRModalInner({
               placeholder="Notes about the verification and closure..."
             />
             {errors.verificationNotes && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.verificationNotes.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.verificationNotes.message}
+              </p>
             )}
           </div>
           {/* Feature #474: Lessons Learned Recording */}
@@ -95,24 +94,15 @@ function CloseNCRModalInner({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleClose}
-        >
+        <Button type="button" variant="outline" onClick={handleClose}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="close-ncr-form"
-          variant="success"
-          disabled={loading}
-        >
+        <Button type="submit" form="close-ncr-form" variant="success" disabled={loading}>
           {loading ? 'Closing...' : 'Close NCR'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
-export const CloseNCRModal = memo(CloseNCRModalInner)
+export const CloseNCRModal = memo(CloseNCRModalInner);

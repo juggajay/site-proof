@@ -1,9 +1,9 @@
-import React from 'react'
-import type { LotStatusReport } from '../types'
-import { STATUS_COLORS, STATUS_LABELS } from '../types'
+import React from 'react';
+import type { LotStatusReport } from '../types';
+import { STATUS_COLORS, STATUS_LABELS } from '../types';
 
 export interface LotStatusTabProps {
-  report: LotStatusReport
+  report: LotStatusReport;
 }
 
 export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStatusTabProps) {
@@ -15,49 +15,70 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
           <div className="text-2xl font-bold text-foreground">{report.summary.notStarted}</div>
           <div className="text-sm text-muted-foreground">Not Started</div>
           <div className="text-xs text-muted-foreground mt-1">
-            {report.totalLots > 0 ? ((report.summary.notStarted / report.totalLots) * 100).toFixed(1) : 0}%
+            {report.totalLots > 0
+              ? ((report.summary.notStarted / report.totalLots) * 100).toFixed(1)
+              : 0}
+            %
           </div>
         </div>
         <div className="bg-primary/10 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-primary">{report.summary.inProgress}</div>
           <div className="text-sm text-primary">In Progress</div>
           <div className="text-xs text-primary/70 mt-1">
-            {report.totalLots > 0 ? ((report.summary.inProgress / report.totalLots) * 100).toFixed(1) : 0}%
+            {report.totalLots > 0
+              ? ((report.summary.inProgress / report.totalLots) * 100).toFixed(1)
+              : 0}
+            %
           </div>
         </div>
         <div className="bg-amber-100 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-amber-700">{report.summary.awaitingTest}</div>
           <div className="text-sm text-amber-600">Awaiting Test</div>
           <div className="text-xs text-amber-500 mt-1">
-            {report.totalLots > 0 ? ((report.summary.awaitingTest / report.totalLots) * 100).toFixed(1) : 0}%
+            {report.totalLots > 0
+              ? ((report.summary.awaitingTest / report.totalLots) * 100).toFixed(1)
+              : 0}
+            %
           </div>
         </div>
         <div className="bg-amber-200 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-amber-800">{report.summary.holdPoint}</div>
           <div className="text-sm text-amber-700">Hold Point</div>
           <div className="text-xs text-amber-600 mt-1">
-            {report.totalLots > 0 ? ((report.summary.holdPoint / report.totalLots) * 100).toFixed(1) : 0}%
+            {report.totalLots > 0
+              ? ((report.summary.holdPoint / report.totalLots) * 100).toFixed(1)
+              : 0}
+            %
           </div>
         </div>
         <div className="bg-red-100 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-red-700">{report.summary.ncrRaised}</div>
           <div className="text-sm text-red-600">NCR Raised</div>
           <div className="text-xs text-red-400 mt-1">
-            {report.totalLots > 0 ? ((report.summary.ncrRaised / report.totalLots) * 100).toFixed(1) : 0}%
+            {report.totalLots > 0
+              ? ((report.summary.ncrRaised / report.totalLots) * 100).toFixed(1)
+              : 0}
+            %
           </div>
         </div>
         <div className="bg-green-100 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-green-700">{report.summary.conformed}</div>
           <div className="text-sm text-green-600">Conformed</div>
           <div className="text-xs text-green-500 mt-1">
-            {report.totalLots > 0 ? ((report.summary.conformed / report.totalLots) * 100).toFixed(1) : 0}%
+            {report.totalLots > 0
+              ? ((report.summary.conformed / report.totalLots) * 100).toFixed(1)
+              : 0}
+            %
           </div>
         </div>
         <div className="bg-green-200 rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-green-800">{report.summary.claimed}</div>
           <div className="text-sm text-green-700">Claimed</div>
           <div className="text-xs text-green-600 mt-1">
-            {report.totalLots > 0 ? ((report.summary.claimed / report.totalLots) * 100).toFixed(1) : 0}%
+            {report.totalLots > 0
+              ? ((report.summary.claimed / report.totalLots) * 100).toFixed(1)
+              : 0}
+            %
           </div>
         </div>
       </div>
@@ -71,9 +92,7 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
               <div className="text-3xl font-bold text-green-600">
                 {report.periodComparison.conformedThisPeriod}
               </div>
-              <div className="text-sm text-green-600">
-                Conformed This Period
-              </div>
+              <div className="text-sm text-green-600">Conformed This Period</div>
               <div className="text-xs text-green-500 mt-1">
                 {report.periodComparison.currentPeriodLabel}
               </div>
@@ -82,46 +101,52 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
               <div className="text-3xl font-bold text-muted-foreground">
                 {report.periodComparison.conformedLastPeriod}
               </div>
-              <div className="text-sm text-muted-foreground">
-                Conformed Last Period
-              </div>
+              <div className="text-sm text-muted-foreground">Conformed Last Period</div>
               <div className="text-xs text-muted-foreground mt-1">
                 {report.periodComparison.previousPeriodLabel}
               </div>
             </div>
-            <div className={`border rounded-lg p-4 ${
-              report.periodComparison.periodChange > 0
-                ? 'bg-green-50 border-green-200'
-                : report.periodComparison.periodChange < 0
-                ? 'bg-red-50 border-red-200'
-                : 'bg-muted/50 border-border'
-            }`}>
-              <div className={`text-3xl font-bold ${
+            <div
+              className={`border rounded-lg p-4 ${
                 report.periodComparison.periodChange > 0
-                  ? 'text-green-600'
+                  ? 'bg-green-50 border-green-200'
                   : report.periodComparison.periodChange < 0
-                  ? 'text-red-600'
-                  : 'text-muted-foreground'
-              }`}>
+                    ? 'bg-red-50 border-red-200'
+                    : 'bg-muted/50 border-border'
+              }`}
+            >
+              <div
+                className={`text-3xl font-bold ${
+                  report.periodComparison.periodChange > 0
+                    ? 'text-green-600'
+                    : report.periodComparison.periodChange < 0
+                      ? 'text-red-600'
+                      : 'text-muted-foreground'
+                }`}
+              >
                 {report.periodComparison.periodChange > 0 ? '+' : ''}
                 {report.periodComparison.periodChange}
               </div>
-              <div className={`text-sm ${
-                report.periodComparison.periodChange > 0
-                  ? 'text-green-600'
-                  : report.periodComparison.periodChange < 0
-                  ? 'text-red-600'
-                  : 'text-muted-foreground'
-              }`}>
+              <div
+                className={`text-sm ${
+                  report.periodComparison.periodChange > 0
+                    ? 'text-green-600'
+                    : report.periodComparison.periodChange < 0
+                      ? 'text-red-600'
+                      : 'text-muted-foreground'
+                }`}
+              >
                 Change from Previous
               </div>
-              <div className={`text-xs mt-1 ${
-                report.periodComparison.periodChange > 0
-                  ? 'text-green-500'
-                  : report.periodComparison.periodChange < 0
-                  ? 'text-red-500'
-                  : 'text-muted-foreground'
-              }`}>
+              <div
+                className={`text-xs mt-1 ${
+                  report.periodComparison.periodChange > 0
+                    ? 'text-green-500'
+                    : report.periodComparison.periodChange < 0
+                      ? 'text-red-500'
+                      : 'text-muted-foreground'
+                }`}
+              >
                 {report.periodComparison.periodChange > 0 ? '+' : ''}
                 {report.periodComparison.periodChangePercent}%
               </div>
@@ -157,18 +182,30 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Lot Number</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Description</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Activity</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Chainage</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Lot Number
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Description
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Activity
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Chainage
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Status
+                </th>
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
               {report.lots.map((lot) => (
                 <tr key={lot.id}>
                   <td className="px-4 py-3 text-sm font-medium text-foreground">{lot.lotNumber}</td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{lot.description || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                    {lot.description || '-'}
+                  </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{lot.activityType}</td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
                     {lot.chainageStart != null && lot.chainageEnd != null
@@ -176,7 +213,9 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
                       : '-'}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs ${STATUS_COLORS[lot.status] || 'bg-muted'}`}>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${STATUS_COLORS[lot.status] || 'bg-muted'}`}
+                    >
                       {STATUS_LABELS[lot.status] || lot.status}
                     </span>
                   </td>
@@ -187,5 +226,5 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
         </div>
       </div>
     </div>
-  )
-})
+  );
+});

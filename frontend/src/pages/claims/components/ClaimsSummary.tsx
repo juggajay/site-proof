@@ -1,11 +1,11 @@
-import React from 'react'
-import { formatCurrency } from '../utils'
+import React from 'react';
+import { formatCurrency } from '../utils';
 
 interface ClaimsSummaryProps {
-  totalClaimed: number
-  totalCertified: number
-  totalPaid: number
-  outstanding: number
+  totalClaimed: number;
+  totalCertified: number;
+  totalPaid: number;
+  outstanding: number;
 }
 
 export const ClaimsSummary = React.memo(function ClaimsSummary({
@@ -33,5 +33,5 @@ export const ClaimsSummary = React.memo(function ClaimsSummary({
         <p className="text-2xl font-bold text-amber-600">{formatCurrency(outstanding)}</p>
       </div>
     </div>
-  )
-})
+  );
+});

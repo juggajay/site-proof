@@ -1,37 +1,57 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ClipboardList } from 'lucide-react'
-import { apiFetch } from '@/lib/api'
-import type { ITPTemplate } from '../types'
+import { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ClipboardList } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import type { ITPTemplate } from '../types';
+import { logError } from '@/lib/logger';
 
 interface ITPTemplatesTabProps {
-  projectId: string
+  projectId: string;
 }
 
 export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
-  const navigate = useNavigate()
-  const [itpTemplates, setItpTemplates] = useState<ITPTemplate[]>([])
-  const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const navigate = useNavigate();
+  const [itpTemplates, setItpTemplates] = useState<ITPTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templateError, setTemplateError] = useState('');
+  const projectItpPath = `/projects/${encodeURIComponent(projectId)}/itp`;
+
+  const fetchItpTemplates = useCallback(async () => {
+    if (!projectId) {
+      setItpTemplates([]);
+      setTemplateError('Project not found');
+      setLoadingTemplates(false);
+      return;
+    }
+
+    setLoadingTemplates(true);
+    setTemplateError('');
+
+    try {
+      const params = new URLSearchParams({
+        projectId,
+        includeGlobal: 'true',
+      });
+      const data = await apiFetch<{ templates: ITPTemplate[] }>(
+        `/api/itp/templates?${params.toString()}`,
+      );
+      setItpTemplates(data.templates || []);
+    } catch (error) {
+      logError('Failed to fetch ITP templates:', error);
+      setItpTemplates([]);
+      setTemplateError(
+        extractErrorMessage(error, 'Could not load ITP templates. Please try again.'),
+      );
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }, [projectId]);
 
   // Fetch ITP templates on mount
   useEffect(() => {
-    async function fetchItpTemplates() {
-      if (!projectId) return
-
-      setLoadingTemplates(true)
-
-      try {
-        const data = await apiFetch<{ templates: ITPTemplate[] }>(`/api/itp/templates?projectId=${projectId}&includeGlobal=true`)
-        setItpTemplates(data.templates || [])
-      } catch (error) {
-        console.error('Failed to fetch ITP templates:', error)
-      } finally {
-        setLoadingTemplates(false)
-      }
-    }
-
-    fetchItpTemplates()
-  }, [projectId])
+    void fetchItpTemplates();
+  }, [fetchItpTemplates]);
 
   return (
     <div className="space-y-6">
@@ -44,7 +64,7 @@ export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
             </p>
           </div>
           <button
-            onClick={() => navigate(`/projects/${projectId}/itp`)}
+            onClick={() => navigate(projectItpPath)}
             className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
           >
             Manage Templates
@@ -54,12 +74,23 @@ export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
           <div className="flex justify-center p-8">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           </div>
+        ) : templateError ? (
+          <div role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+            <p>{templateError}</p>
+            <button
+              type="button"
+              onClick={() => void fetchItpTemplates()}
+              className="mt-3 rounded-lg border px-3 py-1.5 text-sm hover:bg-background"
+            >
+              Try again
+            </button>
+          </div>
         ) : itpTemplates.length === 0 ? (
           <div className="text-center py-8">
             <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground mb-4">No ITP templates found for this project.</p>
             <button
-              onClick={() => navigate(`/projects/${projectId}/itp`)}
+              onClick={() => navigate(projectItpPath)}
               className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
             >
               Create Your First Template
@@ -68,21 +99,27 @@ export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
         ) : (
           <div className="space-y-3">
             {itpTemplates.map((template) => (
-              <div key={template.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <div
+                key={template.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+              >
                 <div className="flex items-center gap-3">
                   <ClipboardList className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="font-medium">{template.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      {template.checklistItems?.length || 0} checklist items • {template.activityType || 'General'}
+                      {template.checklistItems?.length || 0} checklist items •{' '}
+                      {template.activityType || 'General'}
                     </p>
                   </div>
                 </div>
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  template.isActive !== false
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-amber-100 text-amber-700'
-                }`}>
+                <span
+                  className={`px-2 py-1 text-xs rounded-full ${
+                    template.isActive !== false
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}
+                >
                   {template.isActive !== false ? 'Active' : 'Inactive'}
                 </span>
               </div>
@@ -96,12 +133,12 @@ export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
           Import ITP templates from specification sets or other projects.
         </p>
         <button
-          onClick={() => navigate(`/projects/${projectId}/itp`)}
+          onClick={() => navigate(projectItpPath)}
           className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
         >
           Go to ITP Page to Import
         </button>
       </div>
     </div>
-  )
+  );
 }

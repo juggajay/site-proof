@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react'
-import { Keyboard } from 'lucide-react'
-import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
+import { useEffect, useState } from 'react';
+import { Keyboard } from 'lucide-react';
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal';
 
 interface KeyboardShortcutsHelpProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 interface ShortcutCategory {
-  title: string
-  shortcuts: { keys: string[]; description: string }[]
+  title: string;
+  shortcuts: { keys: string[]; description: string }[];
 }
 
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
@@ -47,10 +47,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['Enter'], description: 'Select search result' },
     ],
   },
-]
+];
 
 export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelpProps) {
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={onClose} className="max-w-2xl">
@@ -69,10 +69,7 @@ export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelp
               </h3>
               <ul className="space-y-2">
                 {category.shortcuts.map((shortcut, index) => (
-                  <li
-                    key={index}
-                    className="flex items-center justify-between gap-4 py-1"
-                  >
+                  <li key={index} className="flex items-center justify-between gap-4 py-1">
                     <span className="text-sm">{shortcut.description}</span>
                     <div className="flex items-center gap-1">
                       {shortcut.keys.map((key, keyIndex) => (
@@ -94,34 +91,35 @@ export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelp
         </div>
 
         <div className="mt-6 pt-3 border-t text-center text-xs text-muted-foreground">
-          Press <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono text-xs">?</kbd> anytime to show this help
+          Press <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono text-xs">?</kbd>{' '}
+          anytime to show this help
         </div>
       </ModalBody>
     </Modal>
-  )
+  );
 }
 
 // Hook to use keyboard shortcuts help globally
 export function useKeyboardShortcutsHelp() {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only trigger if not in an input/textarea
-      const target = e.target as HTMLElement
+      const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
+        return;
       }
 
       if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        setIsOpen(true)
+        e.preventDefault();
+        setIsOpen(true);
       }
-    }
+    };
 
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [])
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
-  return { isOpen, setIsOpen, openHelp: () => setIsOpen(true), closeHelp: () => setIsOpen(false) }
+  return { isOpen, setIsOpen, openHelp: () => setIsOpen(true), closeHelp: () => setIsOpen(false) };
 }

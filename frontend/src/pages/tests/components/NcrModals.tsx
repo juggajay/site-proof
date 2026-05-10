@@ -1,22 +1,29 @@
-import React, { useState, useCallback, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import type { FailedTestForNcr, NcrFormData } from '../types'
-import { INITIAL_NCR_FORM_DATA } from '../constants'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { NativeSelect } from '@/components/ui/native-select'
-import { Label } from '@/components/ui/label'
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import type { FailedTestForNcr, NcrFormData } from '../types';
+import { INITIAL_NCR_FORM_DATA } from '../constants';
+import {
+  Modal,
+  ModalHeader,
+  ModalDescription,
+  ModalBody,
+  ModalFooter,
+} from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Label } from '@/components/ui/label';
+import { extractErrorMessage } from '@/lib/errorHandling';
 
 // Feature #210: NCR Prompt Modal for Failed Test
 interface NcrPromptModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onRaiseNcr: () => void
-  failedTestForNcr: FailedTestForNcr | null
+  isOpen: boolean;
+  onClose: () => void;
+  onRaiseNcr: () => void;
+  failedTestForNcr: FailedTestForNcr | null;
 }
 
 export const NcrPromptModal = React.memo(function NcrPromptModal({
@@ -25,18 +32,31 @@ export const NcrPromptModal = React.memo(function NcrPromptModal({
   onRaiseNcr,
   failedTestForNcr,
 }: NcrPromptModalProps) {
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={onClose} className="max-w-md">
       <ModalHeader>
         <span className="text-red-600">Test Failed</span>
       </ModalHeader>
+      <ModalDescription>
+        Decide whether to raise an NCR for this failed test result.
+      </ModalDescription>
       <ModalBody>
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="w-6 h-6 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
           </div>
           <div>
@@ -46,7 +66,8 @@ export const NcrPromptModal = React.memo(function NcrPromptModal({
           </div>
         </div>
         <p className="text-sm mb-4">
-          This test result has failed. Would you like to raise a Non-Conformance Report (NCR) to document and track this issue?
+          This test result has failed. Would you like to raise a Non-Conformance Report (NCR) to
+          document and track this issue?
         </p>
       </ModalBody>
       <ModalFooter>
@@ -58,25 +79,25 @@ export const NcrPromptModal = React.memo(function NcrPromptModal({
         </Button>
       </ModalFooter>
     </Modal>
-  )
-})
+  );
+});
 
 // Feature #210: NCR Creation Modal
 const ncrCreateSchema = z.object({
-  description: z.string().min(1, 'NCR description is required'),
-  category: z.string().min(1, 'Category is required'),
-  severity: z.string().min(1, 'Severity is required'),
-  specificationReference: z.string(),
-})
+  description: z.string().trim().min(1, 'NCR description is required'),
+  category: z.string().trim().min(1, 'Category is required'),
+  severity: z.string().trim().min(1, 'Severity is required'),
+  specificationReference: z.string().trim(),
+});
 
-type NcrCreateFormData = z.infer<typeof ncrCreateSchema>
+type NcrCreateFormData = z.infer<typeof ncrCreateSchema>;
 
 interface NcrCreateModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit: (ncrFormData: NcrFormData) => Promise<void>
-  failedTestForNcr: FailedTestForNcr | null
-  initialDescription: string
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (ncrFormData: NcrFormData) => Promise<void>;
+  failedTestForNcr: FailedTestForNcr | null;
+  initialDescription: string;
 }
 
 export const NcrCreateModal = React.memo(function NcrCreateModal({
@@ -86,7 +107,9 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
   failedTestForNcr,
   initialDescription,
 }: NcrCreateModalProps) {
-  const [creatingNcr, setCreatingNcr] = useState(false)
+  const [creatingNcr, setCreatingNcr] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const creatingNcrRef = useRef(false);
 
   const {
     register,
@@ -103,9 +126,9 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
       severity: INITIAL_NCR_FORM_DATA.severity,
       specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
     },
-  })
+  });
 
-  const severity = watch('severity')
+  const severity = watch('severity');
 
   // Sync the initial description when it changes (new failed test)
   useEffect(() => {
@@ -114,8 +137,9 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
       category: INITIAL_NCR_FORM_DATA.category,
       severity: INITIAL_NCR_FORM_DATA.severity,
       specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
-    })
-  }, [initialDescription, reset])
+    });
+    setFormError(null);
+  }, [initialDescription, reset]);
 
   const handleClose = useCallback(() => {
     reset({
@@ -123,34 +147,54 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
       category: INITIAL_NCR_FORM_DATA.category,
       severity: INITIAL_NCR_FORM_DATA.severity,
       specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
-    })
-    onClose()
-  }, [onClose, reset])
+    });
+    setFormError(null);
+    onClose();
+  }, [onClose, reset]);
 
-  const onFormSubmit = useCallback(async (data: NcrCreateFormData) => {
-    setCreatingNcr(true)
+  const onFormSubmit = useCallback(
+    async (data: NcrCreateFormData) => {
+      if (creatingNcrRef.current) return;
 
-    try {
-      await onSubmit(data as NcrFormData)
-      reset({
-        description: '',
-        category: INITIAL_NCR_FORM_DATA.category,
-        severity: INITIAL_NCR_FORM_DATA.severity,
-        specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
-      })
-    } catch {
-      // Error handled by parent
-    } finally {
-      setCreatingNcr(false)
-    }
-  }, [onSubmit, reset])
+      creatingNcrRef.current = true;
+      setCreatingNcr(true);
+      setFormError(null);
 
-  if (!isOpen) return null
+      try {
+        await onSubmit(data as NcrFormData);
+        reset({
+          description: '',
+          category: INITIAL_NCR_FORM_DATA.category,
+          severity: INITIAL_NCR_FORM_DATA.severity,
+          specificationReference: INITIAL_NCR_FORM_DATA.specificationReference,
+        });
+      } catch (err) {
+        setFormError(extractErrorMessage(err, 'Failed to raise NCR.'));
+      } finally {
+        creatingNcrRef.current = false;
+        setCreatingNcr(false);
+      }
+    },
+    [onSubmit, reset],
+  );
+
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Raise NCR from Test Failure</ModalHeader>
+      <ModalDescription>
+        Create an NCR linked to this failed test result and associated lot.
+      </ModalDescription>
       <ModalBody>
+        {formError && (
+          <div
+            className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            role="alert"
+          >
+            {formError}
+          </div>
+        )}
         <p className="text-sm text-muted-foreground mb-4">
           Create a Non-Conformance Report for the failed test result.
         </p>
@@ -158,15 +202,18 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
         <form id="ncr-create-form" onSubmit={handleSubmit(onFormSubmit)}>
           <div className="space-y-4">
             <div>
-              <Label>Description *</Label>
+              <Label htmlFor="test-ncr-description">Description *</Label>
               <Textarea
+                id="test-ncr-description"
                 {...register('description')}
                 placeholder="Describe the non-conformance..."
                 rows={4}
                 className={errors.description ? 'border-destructive' : ''}
               />
               {errors.description && (
-                <p className="text-sm text-destructive mt-1" role="alert">{errors.description.message}</p>
+                <p className="text-sm text-destructive mt-1" role="alert">
+                  {errors.description.message}
+                </p>
               )}
             </div>
 
@@ -186,19 +233,11 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
               <Label>Severity *</Label>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    value="minor"
-                    {...register('severity')}
-                  />
+                  <input type="radio" value="minor" {...register('severity')} />
                   <span>Minor</span>
                 </label>
                 <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    value="major"
-                    {...register('severity')}
-                  />
+                  <input type="radio" value="major" {...register('severity')} />
                   <span className="text-red-600 font-medium">Major</span>
                 </label>
               </div>
@@ -221,7 +260,8 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
             {failedTestForNcr?.lotId && (
               <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
                 <p className="text-sm text-primary">
-                  <span className="font-medium">Linked Lot:</span> This NCR will be automatically linked to the lot associated with this test result.
+                  <span className="font-medium">Linked Lot:</span> This NCR will be automatically
+                  linked to the lot associated with this test result.
                 </p>
               </div>
             )}
@@ -232,15 +272,10 @@ export const NcrCreateModal = React.memo(function NcrCreateModal({
         <Button variant="outline" onClick={handleClose} disabled={creatingNcr}>
           Cancel
         </Button>
-        <Button
-          variant="destructive"
-          type="submit"
-          form="ncr-create-form"
-          disabled={creatingNcr}
-        >
+        <Button variant="destructive" type="submit" form="ncr-create-form" disabled={creatingNcr}>
           {creatingNcr ? 'Creating NCR...' : 'Raise NCR'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
-})
+  );
+});

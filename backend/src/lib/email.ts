@@ -2,101 +2,126 @@
 // Uses Resend API for production email delivery
 // Falls back to console logging in development mode
 
-import { Resend } from 'resend'
-import * as fs from 'fs'
+import { Resend } from 'resend';
+import * as fs from 'fs';
+import { randomUUID } from 'node:crypto';
+import { buildFrontendUrl } from './runtimeConfig.js';
+import { logError, logInfo } from './serverLogger.js';
 
 interface EmailAttachment {
-  filename: string
-  content?: Buffer | string
-  path?: string // Alternative: path to file on disk
-  contentType?: string
+  filename: string;
+  content?: Buffer | string;
+  path?: string; // Alternative: path to file on disk
+  contentType?: string;
 }
 
 interface EmailOptions {
-  to: string | string[]
-  subject: string
-  text?: string
-  html?: string
-  from?: string
-  attachments?: EmailAttachment[]
+  to: string | string[];
+  subject: string;
+  text?: string;
+  html?: string;
+  from?: string;
+  attachments?: EmailAttachment[];
 }
 
 interface EmailResult {
-  success: boolean
-  messageId?: string
-  error?: string
-  provider?: 'resend' | 'mock'
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  provider?: 'resend' | 'mock';
 }
 
 // Email queue for testing/development
-const emailQueue: EmailOptions[] = []
+const emailQueue: EmailOptions[] = [];
 
 // Configuration
 const EMAIL_CONFIG = {
   from: process.env.EMAIL_FROM || 'noreply@siteproof.app',
-  enabled: process.env.EMAIL_ENABLED === 'true' || true, // Enable by default for dev
+  enabled: process.env.EMAIL_ENABLED !== 'false',
   resendApiKey: process.env.RESEND_API_KEY,
+};
+
+const isProductionEmailRuntime = process.env.NODE_ENV === 'production';
+const useMockEmail =
+  !isProductionEmailRuntime &&
+  (process.env.NODE_ENV === 'test' || process.env.EMAIL_PROVIDER === 'mock');
+
+function getRecipientCount(to: string | string[]): number {
+  return Array.isArray(to) ? to.length : 1;
+}
+
+function isValidResendApiKey(apiKey: string | undefined): apiKey is string {
+  return Boolean(
+    apiKey &&
+    apiKey.startsWith('re_') &&
+    !apiKey.toLowerCase().includes('placeholder') &&
+    !apiKey.toLowerCase().includes('your_') &&
+    !apiKey.toLowerCase().includes('your-'),
+  );
 }
 
 // Initialize Resend client if API key is provided and valid
-const resend = EMAIL_CONFIG.resendApiKey &&
-  EMAIL_CONFIG.resendApiKey !== 'RESEND_API_KEY' &&
-  EMAIL_CONFIG.resendApiKey !== 're_placeholder' &&
-  EMAIL_CONFIG.resendApiKey.startsWith('re_')
+const resend =
+  !useMockEmail && isValidResendApiKey(EMAIL_CONFIG.resendApiKey)
     ? new Resend(EMAIL_CONFIG.resendApiKey)
-    : null
+    : null;
 
 /**
  * Check if Resend is configured and available
  */
 export function isResendConfigured(): boolean {
-  return resend !== null
+  return resend !== null;
 }
 
 /**
  * Send an email
- * Uses Resend API when configured, otherwise falls back to console logging
+ * Uses Resend API when configured. Development/test can use mock logging;
+ * production fails closed when email delivery is not configured.
  */
 export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   const email = {
     ...options,
     from: options.from || EMAIL_CONFIG.from,
-  }
+  };
 
   if (!EMAIL_CONFIG.enabled) {
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[Email Service] Email sending disabled')
+      logInfo('[Email Service] Email sending disabled');
     }
-    return { success: false, error: 'Email sending disabled' }
+    return { success: false, error: 'Email sending disabled' };
   }
 
-  // Store in queue for testing regardless of provider
-  emailQueue.push(email)
+  // Store in queue for testing/development diagnostics without retaining production email contents.
+  if (!isProductionEmailRuntime) {
+    emailQueue.push(email);
+  }
 
   // Try to use Resend if configured
   if (resend) {
     try {
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[Email Service] Sending via Resend:', email.subject, '->', email.to)
+        logInfo('[Email Service] Sending via Resend:', {
+          recipientCount: getRecipientCount(email.to),
+        });
       }
 
       // Prepare attachments for Resend format
-      const resendAttachments = email.attachments?.map(att => {
-        if (att.content) {
-          return {
-            filename: att.filename,
-            content: typeof att.content === 'string'
-              ? Buffer.from(att.content)
-              : att.content,
+      const resendAttachments = email.attachments
+        ?.map((att) => {
+          if (att.content) {
+            return {
+              filename: att.filename,
+              content: typeof att.content === 'string' ? Buffer.from(att.content) : att.content,
+            };
+          } else if (att.path) {
+            return {
+              filename: att.filename,
+              content: fs.readFileSync(att.path),
+            };
           }
-        } else if (att.path) {
-          return {
-            filename: att.filename,
-            content: fs.readFileSync(att.path),
-          }
-        }
-        return null
-      }).filter(Boolean) as { filename: string; content: Buffer }[] | undefined
+          return null;
+        })
+        .filter(Boolean) as { filename: string; content: Buffer }[] | undefined;
 
       const response = await resend.emails.send({
         from: email.from,
@@ -105,62 +130,129 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
         text: email.text || '',
         html: email.html,
         attachments: resendAttachments,
-      })
+      });
 
       if (response.error) {
-        console.error('[Email Service] Resend API error:', response.error)
+        logError('[Email Service] Resend API error:', response.error);
         return {
           success: false,
           error: response.error.message,
           provider: 'resend',
-        }
+        };
       }
 
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[Email Service] Sent successfully, ID:', response.data?.id)
+        logInfo('[Email Service] Sent successfully:', { messageId: response.data?.id });
       }
 
       return {
         success: true,
         messageId: response.data?.id,
         provider: 'resend',
-      }
+      };
     } catch (error) {
-      console.error('[Email Service] Resend API exception:', error)
+      logError('[Email Service] Resend API exception:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
         provider: 'resend',
-      }
+      };
     }
   }
 
-  // Fallback to mock logging
-  const messageId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  if (isProductionEmailRuntime) {
+    logError('[Email Service] Email delivery is not configured. Set a valid RESEND_API_KEY.');
+    return {
+      success: false,
+      error: 'Email delivery is not configured',
+    };
+  }
+
+  // Fallback to mock logging for development/test only
+  const messageId = `mock_${Date.now()}_${randomUUID()}`;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('[Email Service] MOCK:', email.subject, '->', email.to)
+    logInfo('[Email Service] MOCK:', { recipientCount: getRecipientCount(email.to) });
   }
 
   return {
     success: true,
     messageId,
     provider: 'mock',
-  }
+  };
 }
 
 /**
  * Get queued emails (for testing)
  */
 export function getQueuedEmails(): EmailOptions[] {
-  return [...emailQueue]
+  return [...emailQueue];
 }
 
 /**
  * Clear email queue (for testing)
  */
 export function clearEmailQueue(): void {
-  emailQueue.length = 0
+  emailQueue.length = 0;
+}
+
+function sanitizeSupportEmailLine(value: string | undefined, fallback = 'Not provided'): string {
+  const normalized = value
+    ?.replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return normalized || fallback;
+}
+
+const EMAIL_HTML_ENTITIES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+function escapeEmailHtml(value: unknown): string {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => EMAIL_HTML_ENTITIES[character]);
+}
+
+/**
+ * Send a support request to the support inbox.
+ * The request endpoint is public, so confirmations are not sent to the
+ * provided email address to avoid turning the form into a mail relay.
+ */
+export async function sendSupportRequestEmail(data: {
+  ticketId: string;
+  category: string;
+  subject: string;
+  message: string;
+  userEmail?: string;
+  userName?: string;
+  to?: string;
+}): Promise<EmailResult> {
+  const supportInbox = data.to || process.env.SUPPORT_EMAIL || 'support@siteproof.com.au';
+  const safeTicketId = sanitizeSupportEmailLine(data.ticketId, 'Unknown ticket');
+  const safeCategory = sanitizeSupportEmailLine(data.category, 'general');
+  const safeSubject = sanitizeSupportEmailLine(data.subject, 'No subject');
+  const safeUserEmail = sanitizeSupportEmailLine(data.userEmail);
+  const safeUserName = sanitizeSupportEmailLine(data.userName);
+
+  const text = [
+    `Ticket: ${safeTicketId}`,
+    `Category: ${safeCategory}`,
+    `Subject: ${safeSubject}`,
+    `User email: ${safeUserEmail}`,
+    `User name: ${safeUserName}`,
+    '',
+    'Message:',
+    data.message,
+  ].join('\n');
+
+  return sendEmail({
+    to: supportInbox,
+    subject: `[SiteProof Support] ${safeTicketId}: ${safeSubject}`,
+    text,
+  });
 }
 
 /**
@@ -170,14 +262,25 @@ export async function sendNotificationEmail(
   to: string,
   notificationType: string,
   data: {
-    title: string
-    message: string
-    linkUrl?: string
-    projectName?: string
-    userName?: string
-  }
+    title: string;
+    message: string;
+    linkUrl?: string;
+    projectName?: string;
+    userName?: string;
+  },
 ): Promise<EmailResult> {
-  const subject = `[SiteProof] ${data.title}`
+  const subjectTitle = sanitizeSupportEmailLine(data.title, 'Notification');
+  const subject = `[SiteProof] ${subjectTitle}`;
+  const notificationLinkUrl = data.linkUrl ? buildFrontendUrl(data.linkUrl) : '';
+  const settingsUrl = buildFrontendUrl('/settings');
+  const safeSubject = escapeEmailHtml(subject);
+  const safeTitle = escapeEmailHtml(data.title);
+  const safeMessage = escapeEmailHtml(data.message);
+  const safeProjectName = data.projectName ? escapeEmailHtml(data.projectName) : '';
+  const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
+  const safeNotificationType = escapeEmailHtml(notificationType);
+  const safeNotificationLinkUrl = notificationLinkUrl ? escapeEmailHtml(notificationLinkUrl) : '';
+  const safeSettingsUrl = escapeEmailHtml(settingsUrl);
 
   const html = `
 <!DOCTYPE html>
@@ -185,7 +288,7 @@ export async function sendNotificationEmail(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -205,27 +308,31 @@ export async function sendNotificationEmail(
       <h1>SiteProof</h1>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">${data.title}</h2>
-      ${data.projectName ? `<p class="meta">Project: ${data.projectName}</p>` : ''}
-      ${data.userName ? `<p class="meta">From: ${data.userName}</p>` : ''}
+      <h2 style="margin-top: 0;">${safeTitle}</h2>
+      ${safeProjectName ? `<p class="meta">Project: ${safeProjectName}</p>` : ''}
+      ${safeUserName ? `<p class="meta">From: ${safeUserName}</p>` : ''}
       <div class="message-box">
-        <p>${data.message}</p>
+        <p>${safeMessage}</p>
       </div>
-      ${data.linkUrl ? `
-        <a href="${process.env.FRONTEND_URL || 'http://localhost:5174'}${data.linkUrl}" class="button">
+      ${
+        safeNotificationLinkUrl
+          ? `
+        <a href="${safeNotificationLinkUrl}" class="button">
           View in SiteProof
         </a>
-      ` : ''}
+      `
+          : ''
+      }
     </div>
     <div class="footer">
       <p>This notification was sent from SiteProof Quality Management System.</p>
-      <p>You received this email because you have notifications enabled for ${notificationType} events.</p>
-      <p>To manage your notification preferences, visit your <a href="${process.env.FRONTEND_URL || 'http://localhost:5174'}/settings">Settings</a>.</p>
+      <p>You received this email because you have notifications enabled for ${safeNotificationType} events.</p>
+      <p>To manage your notification preferences, visit your <a href="${safeSettingsUrl}">Settings</a>.</p>
     </div>
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 ${data.title}
@@ -235,19 +342,19 @@ ${data.userName ? `From: ${data.userName}` : ''}
 
 ${data.message}
 
-${data.linkUrl ? `View in SiteProof: ${process.env.FRONTEND_URL || 'http://localhost:5174'}${data.linkUrl}` : ''}
+${notificationLinkUrl ? `View in SiteProof: ${notificationLinkUrl}` : ''}
 
 ---
 This notification was sent from SiteProof Quality Management System.
-To manage your notification preferences, visit: ${process.env.FRONTEND_URL || 'http://localhost:5174'}/settings
-  `
+To manage your notification preferences, visit: ${settingsUrl}
+  `;
 
   return sendEmail({
     to,
     subject,
     html,
     text,
-  })
+  });
 }
 
 /**
@@ -263,23 +370,30 @@ export const NotificationTypes = {
   LOT_STATUS_CHANGE: 'lot_status_change',
   SCHEDULED_REPORT: 'scheduled_report',
   DAILY_DIGEST: 'daily_digest',
-} as const
+} as const;
 
-export type NotificationType = typeof NotificationTypes[keyof typeof NotificationTypes]
+export type NotificationType = (typeof NotificationTypes)[keyof typeof NotificationTypes];
 
 /**
  * Send subcontractor invitation email
  * Feature #942 - Sends invitation to subcontractor with setup link
  */
 export async function sendSubcontractorInvitationEmail(data: {
-  to: string
-  contactName: string
-  companyName: string
-  projectName: string
-  inviterEmail: string
-  inviteUrl: string
+  to: string;
+  contactName: string;
+  companyName: string;
+  projectName: string;
+  inviterEmail: string;
+  inviteUrl: string;
 }): Promise<EmailResult> {
-  const subject = `[SiteProof] Invitation to join ${data.projectName}`
+  const subjectProjectName = sanitizeSupportEmailLine(data.projectName, 'Project');
+  const subject = `[SiteProof] Invitation to join ${subjectProjectName}`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeContactName = escapeEmailHtml(data.contactName);
+  const safeCompanyName = escapeEmailHtml(data.companyName);
+  const safeProjectName = escapeEmailHtml(data.projectName);
+  const safeInviterEmail = escapeEmailHtml(data.inviterEmail);
+  const safeInviteUrl = escapeEmailHtml(data.inviteUrl);
 
   const html = `
 <!DOCTYPE html>
@@ -287,7 +401,7 @@ export async function sendSubcontractorInvitationEmail(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -308,9 +422,9 @@ export async function sendSubcontractorInvitationEmail(data: {
       <p style="margin: 5px 0 0 0;">Subcontractor Portal Invitation</p>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Hi ${data.contactName},</h2>
+      <h2 style="margin-top: 0;">Hi ${safeContactName},</h2>
       <div class="message-box">
-        <p>You have been invited to join the project <strong>"${data.projectName}"</strong> on SiteProof as a subcontractor for <strong>${data.companyName}</strong>.</p>
+        <p>You have been invited to join the project <strong>"${safeProjectName}"</strong> on SiteProof as a subcontractor for <strong>${safeCompanyName}</strong>.</p>
         <p>SiteProof is a quality management platform that helps civil construction teams track lots, manage ITPs, and submit daily dockets.</p>
       </div>
       <div class="highlight">
@@ -323,12 +437,12 @@ export async function sendSubcontractorInvitationEmail(data: {
         </ul>
       </div>
       <div style="text-align: center; margin: 25px 0;">
-        <a href="${data.inviteUrl}" class="button">
+        <a href="${safeInviteUrl}" class="button">
           Accept Invitation & Set Up Account
         </a>
       </div>
       <p style="color: #6b7280; font-size: 14px;">
-        This invitation was sent by <strong>${data.inviterEmail}</strong>.
+        This invitation was sent by <strong>${safeInviterEmail}</strong>.
       </p>
     </div>
     <div class="footer">
@@ -338,7 +452,7 @@ export async function sendSubcontractorInvitationEmail(data: {
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 Hi ${data.contactName},
@@ -360,16 +474,10 @@ This invitation was sent by ${data.inviterEmail}.
 
 ---
 If you were not expecting this invitation, please contact the sender.
-  `
+  `;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n========================================')
-    console.log('SUBCONTRACTOR INVITATION EMAIL')
-    console.log('========================================')
-    console.log('To:', data.to)
-    console.log('Subject:', subject)
-    console.log('Invite URL:', data.inviteUrl)
-    console.log('========================================\n')
+    logInfo('[Email Service] Prepared subcontractor invitation email:', { recipientCount: 1 });
   }
 
   return sendEmail({
@@ -377,31 +485,48 @@ If you were not expecting this invitation, please contact the sender.
     subject,
     html,
     text,
-  })
+  });
 }
 
 /**
  * Send HP release request email to superintendent (Feature #946)
  */
 export async function sendHPReleaseRequestEmail(data: {
-  to: string
-  superintendentName: string
-  projectName: string
-  lotNumber: string
-  holdPointDescription: string
-  scheduledDate?: string
-  scheduledTime?: string
-  evidencePackageUrl?: string
-  releaseUrl: string
-  secureReleaseUrl?: string // Feature #23 - secure link for external release
-  requestedBy: string
-  noticeOverrideReason?: string
+  to: string;
+  superintendentName: string;
+  projectName: string;
+  lotNumber: string;
+  holdPointDescription: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  evidencePackageUrl?: string;
+  releaseUrl: string;
+  secureReleaseUrl?: string; // Feature #23 - secure link for external release
+  requestedBy: string;
+  noticeOverrideReason?: string;
 }): Promise<EmailResult> {
-  const subject = `[SiteProof] Hold Point Release Request - ${data.lotNumber}`
+  const subjectLotNumber = sanitizeSupportEmailLine(data.lotNumber, 'Lot');
+  const subject = `[SiteProof] Hold Point Release Request - ${subjectLotNumber}`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeSuperintendentName = escapeEmailHtml(data.superintendentName);
+  const safeProjectName = escapeEmailHtml(data.projectName);
+  const safeLotNumber = escapeEmailHtml(data.lotNumber);
+  const safeHoldPointDescription = escapeEmailHtml(data.holdPointDescription);
+  const safeRequestedBy = escapeEmailHtml(data.requestedBy);
+  const safeScheduledDate = data.scheduledDate ? escapeEmailHtml(data.scheduledDate) : '';
+  const safeScheduledTime = data.scheduledTime ? escapeEmailHtml(data.scheduledTime) : '';
+  const safeNoticeOverrideReason = data.noticeOverrideReason
+    ? escapeEmailHtml(data.noticeOverrideReason)
+    : '';
+  const safeEvidencePackageUrl = data.evidencePackageUrl
+    ? escapeEmailHtml(data.evidencePackageUrl)
+    : '';
+  const safeReleaseUrl = escapeEmailHtml(data.releaseUrl);
+  const safeSecureReleaseUrl = data.secureReleaseUrl ? escapeEmailHtml(data.secureReleaseUrl) : '';
 
   const scheduledInfo = data.scheduledDate
-    ? `<strong>Scheduled:</strong> ${data.scheduledDate}${data.scheduledTime ? ` at ${data.scheduledTime}` : ''}`
-    : '<strong>Scheduled:</strong> As soon as possible'
+    ? `<strong>Scheduled:</strong> ${safeScheduledDate}${safeScheduledTime ? ` at ${safeScheduledTime}` : ''}`
+    : '<strong>Scheduled:</strong> As soon as possible';
 
   const html = `
 <!DOCTYPE html>
@@ -409,7 +534,7 @@ export async function sendHPReleaseRequestEmail(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -434,57 +559,73 @@ export async function sendHPReleaseRequestEmail(data: {
       <p style="margin: 5px 0 0 0;">Action Required</p>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Hi ${data.superintendentName},</h2>
-      <p>A hold point release has been requested on project <strong>${data.projectName}</strong>.</p>
+      <h2 style="margin-top: 0;">Hi ${safeSuperintendentName},</h2>
+      <p>A hold point release has been requested on project <strong>${safeProjectName}</strong>.</p>
 
       <div class="message-box">
         <div class="detail-row">
-          <strong>📍 Lot:</strong> ${data.lotNumber}
+          <strong>📍 Lot:</strong> ${safeLotNumber}
         </div>
         <div class="detail-row">
-          <strong>🔒 Hold Point:</strong> ${data.holdPointDescription}
+          <strong>🔒 Hold Point:</strong> ${safeHoldPointDescription}
         </div>
         <div class="detail-row">
           ${scheduledInfo}
         </div>
         <div class="detail-row">
-          <strong>👤 Requested By:</strong> ${data.requestedBy}
+          <strong>👤 Requested By:</strong> ${safeRequestedBy}
         </div>
       </div>
 
-      ${data.noticeOverrideReason ? `
+      ${
+        safeNoticeOverrideReason
+          ? `
       <div class="urgent">
         <strong>⚠️ Notice Period Override:</strong><br>
-        ${data.noticeOverrideReason}
+        ${safeNoticeOverrideReason}
       </div>
-      ` : ''}
+      `
+          : ''
+      }
 
-      ${data.evidencePackageUrl ? `
+      ${
+        safeEvidencePackageUrl
+          ? `
       <div class="highlight">
         <strong>📋 Evidence Package Available</strong><br>
         All prerequisite checklist items have been completed. The evidence package is ready for your review.
       </div>
-      ` : ''}
+      `
+          : ''
+      }
 
       <div style="text-align: center; margin: 25px 0;">
-        ${data.evidencePackageUrl ? `
-        <a href="${data.evidencePackageUrl}" class="button secondary">
+        ${
+          safeEvidencePackageUrl
+            ? `
+        <a href="${safeEvidencePackageUrl}" class="button secondary">
           View Evidence Package
         </a>
-        ` : ''}
-        <a href="${data.releaseUrl}" class="button">
+        `
+            : ''
+        }
+        <a href="${safeReleaseUrl}" class="button">
           Review & Release Hold Point
         </a>
-        ${data.secureReleaseUrl ? `
+        ${
+          safeSecureReleaseUrl
+            ? `
         <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
           <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">
             Or release without logging in:
           </p>
-          <a href="${data.secureReleaseUrl}" class="button" style="background: #7c3aed;">
+          <a href="${safeSecureReleaseUrl}" class="button" style="background: #7c3aed;">
             🔐 Release via Secure Link
           </a>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
 
       <p style="color: #6b7280; font-size: 14px;">
@@ -493,12 +634,12 @@ export async function sendHPReleaseRequestEmail(data: {
     </div>
     <div class="footer">
       <p>This notification was sent from SiteProof Quality Management System.</p>
-      <p>Project: ${data.projectName}</p>
+      <p>Project: ${safeProjectName}</p>
     </div>
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 Hi ${data.superintendentName},
@@ -512,12 +653,16 @@ Hold Point: ${data.holdPointDescription}
 Scheduled: ${data.scheduledDate ? `${data.scheduledDate}${data.scheduledTime ? ` at ${data.scheduledTime}` : ''}` : 'As soon as possible'}
 Requested By: ${data.requestedBy}
 ${data.noticeOverrideReason ? `\nNOTICE PERIOD OVERRIDE: ${data.noticeOverrideReason}\n` : ''}
-${data.evidencePackageUrl ? `
+${
+  data.evidencePackageUrl
+    ? `
 EVIDENCE PACKAGE
 ----------------
 All prerequisite checklist items have been completed.
 View evidence package: ${data.evidencePackageUrl}
-` : ''}
+`
+    : ''
+}
 
 ACTIONS
 -------
@@ -528,15 +673,10 @@ Please review the submission and release the hold point when satisfied, or conta
 ---
 This notification was sent from SiteProof Quality Management System.
 Project: ${data.projectName}
-  `
+  `;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n========================================')
-    console.log('HP RELEASE REQUEST EMAIL')
-    console.log('========================================')
-    console.log('To:', data.to, '| Lot:', data.lotNumber)
-    console.log('Hold Point:', data.holdPointDescription)
-    console.log('========================================\n')
+    logInfo('[Email Service] Prepared hold point release request email:', { recipientCount: 1 });
   }
 
   return sendEmail({
@@ -544,7 +684,7 @@ Project: ${data.projectName}
     subject,
     html,
     text,
-  })
+  });
 }
 
 /**
@@ -552,23 +692,36 @@ Project: ${data.projectName}
  * Follow-up reminder for hold points that haven't been released
  */
 export async function sendHPChaseEmail(data: {
-  to: string
-  superintendentName: string
-  projectName: string
-  lotNumber: string
-  holdPointDescription: string
-  originalRequestDate: string
-  chaseCount: number
-  daysSinceRequest: number
-  evidencePackageUrl?: string
-  releaseUrl: string
-  requestedBy: string
+  to: string;
+  superintendentName: string;
+  projectName: string;
+  lotNumber: string;
+  holdPointDescription: string;
+  originalRequestDate: string;
+  chaseCount: number;
+  daysSinceRequest: number;
+  evidencePackageUrl?: string;
+  releaseUrl: string;
+  requestedBy: string;
 }): Promise<EmailResult> {
-  const subject = `[SiteProof] REMINDER: Hold Point Awaiting Release - ${data.lotNumber} (Chase #${data.chaseCount})`
+  const subjectLotNumber = sanitizeSupportEmailLine(data.lotNumber, 'Lot');
+  const subject = `[SiteProof] REMINDER: Hold Point Awaiting Release - ${subjectLotNumber} (Chase #${data.chaseCount})`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeSuperintendentName = escapeEmailHtml(data.superintendentName);
+  const safeProjectName = escapeEmailHtml(data.projectName);
+  const safeLotNumber = escapeEmailHtml(data.lotNumber);
+  const safeHoldPointDescription = escapeEmailHtml(data.holdPointDescription);
+  const safeOriginalRequestDate = escapeEmailHtml(data.originalRequestDate);
+  const safeRequestedBy = escapeEmailHtml(data.requestedBy);
+  const safeEvidencePackageUrl = data.evidencePackageUrl
+    ? escapeEmailHtml(data.evidencePackageUrl)
+    : '';
+  const safeReleaseUrl = escapeEmailHtml(data.releaseUrl);
 
-  const urgencyMessage = data.daysSinceRequest > 5
-    ? `<strong style="color: #dc2626;">This hold point has been awaiting release for ${data.daysSinceRequest} days.</strong>`
-    : `This hold point has been awaiting release for ${data.daysSinceRequest} days.`
+  const urgencyMessage =
+    data.daysSinceRequest > 5
+      ? `<strong style="color: #dc2626;">This hold point has been awaiting release for ${data.daysSinceRequest} days.</strong>`
+      : `This hold point has been awaiting release for ${data.daysSinceRequest} days.`;
 
   const html = `
 <!DOCTYPE html>
@@ -576,7 +729,7 @@ export async function sendHPChaseEmail(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -602,43 +755,51 @@ export async function sendHPChaseEmail(data: {
       <p style="margin: 5px 0 0 0;"><span class="chase-badge">Chase #${data.chaseCount}</span></p>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Hi ${data.superintendentName},</h2>
+      <h2 style="margin-top: 0;">Hi ${safeSuperintendentName},</h2>
 
       <div class="urgent">
         ${urgencyMessage}
       </div>
 
-      <p>This is a reminder about a hold point release request on project <strong>${data.projectName}</strong> that is still awaiting your action.</p>
+      <p>This is a reminder about a hold point release request on project <strong>${safeProjectName}</strong> that is still awaiting your action.</p>
 
       <div class="message-box">
         <div class="detail-row">
-          <strong>📍 Lot:</strong> ${data.lotNumber}
+          <strong>📍 Lot:</strong> ${safeLotNumber}
         </div>
         <div class="detail-row">
-          <strong>🔒 Hold Point:</strong> ${data.holdPointDescription}
+          <strong>🔒 Hold Point:</strong> ${safeHoldPointDescription}
         </div>
         <div class="detail-row">
-          <strong>📅 Originally Requested:</strong> ${data.originalRequestDate}
+          <strong>📅 Originally Requested:</strong> ${safeOriginalRequestDate}
         </div>
         <div class="detail-row">
-          <strong>👤 Requested By:</strong> ${data.requestedBy}
+          <strong>👤 Requested By:</strong> ${safeRequestedBy}
         </div>
       </div>
 
-      ${data.evidencePackageUrl ? `
+      ${
+        safeEvidencePackageUrl
+          ? `
       <div class="highlight">
         <strong>📋 Evidence Package Available</strong><br>
         The original evidence package is still available for your review.
       </div>
-      ` : ''}
+      `
+          : ''
+      }
 
       <div style="text-align: center; margin: 25px 0;">
-        ${data.evidencePackageUrl ? `
-        <a href="${data.evidencePackageUrl}" class="button secondary">
+        ${
+          safeEvidencePackageUrl
+            ? `
+        <a href="${safeEvidencePackageUrl}" class="button secondary">
           View Evidence Package
         </a>
-        ` : ''}
-        <a href="${data.releaseUrl}" class="button">
+        `
+            : ''
+        }
+        <a href="${safeReleaseUrl}" class="button">
           Review & Release Hold Point
         </a>
       </div>
@@ -649,12 +810,12 @@ export async function sendHPChaseEmail(data: {
     </div>
     <div class="footer">
       <p>This is reminder #${data.chaseCount} for this hold point release request.</p>
-      <p>Project: ${data.projectName}</p>
+      <p>Project: ${safeProjectName}</p>
     </div>
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 Hi ${data.superintendentName},
@@ -670,12 +831,16 @@ Hold Point: ${data.holdPointDescription}
 Originally Requested: ${data.originalRequestDate}
 Requested By: ${data.requestedBy}
 
-${data.evidencePackageUrl ? `
+${
+  data.evidencePackageUrl
+    ? `
 EVIDENCE PACKAGE
 ----------------
 The original evidence package is still available for your review.
 View evidence package: ${data.evidencePackageUrl}
-` : ''}
+`
+    : ''
+}
 
 ACTIONS
 -------
@@ -686,15 +851,13 @@ Please review and release the hold point, or contact the requestor if you requir
 ---
 This is reminder #${data.chaseCount} for this hold point release request.
 Project: ${data.projectName}
-  `
+  `;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n========================================')
-    console.log('HP CHASE EMAIL (Reminder #' + data.chaseCount + ')')
-    console.log('========================================')
-    console.log('To:', data.to, '| Lot:', data.lotNumber)
-    console.log('Hold Point:', data.holdPointDescription)
-    console.log('========================================\n')
+    logInfo('[Email Service] Prepared hold point chase email:', {
+      recipientCount: 1,
+      chaseCount: data.chaseCount,
+    });
   }
 
   return sendEmail({
@@ -702,7 +865,7 @@ Project: ${data.projectName}
     subject,
     html,
     text,
-  })
+  });
 }
 
 /**
@@ -710,24 +873,37 @@ Project: ${data.projectName}
  * Sent to both contractor and superintendent when HP is released
  */
 export async function sendHPReleaseConfirmationEmail(data: {
-  to: string
-  recipientName: string
-  recipientRole: 'contractor' | 'superintendent'
-  projectName: string
-  lotNumber: string
-  holdPointDescription: string
-  releasedByName: string
-  releasedByOrg?: string
-  releaseMethod?: string
-  releaseNotes?: string
-  releasedAt: string
-  lotUrl: string
+  to: string;
+  recipientName: string;
+  recipientRole: 'contractor' | 'superintendent';
+  projectName: string;
+  lotNumber: string;
+  holdPointDescription: string;
+  releasedByName: string;
+  releasedByOrg?: string;
+  releaseMethod?: string;
+  releaseNotes?: string;
+  releasedAt: string;
+  lotUrl: string;
 }): Promise<EmailResult> {
-  const subject = `[SiteProof] Hold Point Released - ${data.lotNumber}`
+  const subjectLotNumber = sanitizeSupportEmailLine(data.lotNumber, 'Lot');
+  const subject = `[SiteProof] Hold Point Released - ${subjectLotNumber}`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeRecipientName = escapeEmailHtml(data.recipientName);
+  const safeProjectName = escapeEmailHtml(data.projectName);
+  const safeLotNumber = escapeEmailHtml(data.lotNumber);
+  const safeHoldPointDescription = escapeEmailHtml(data.holdPointDescription);
+  const safeReleasedByName = escapeEmailHtml(data.releasedByName);
+  const safeReleasedByOrg = data.releasedByOrg ? escapeEmailHtml(data.releasedByOrg) : '';
+  const safeReleaseMethod = data.releaseMethod ? escapeEmailHtml(data.releaseMethod) : '';
+  const safeReleaseNotes = data.releaseNotes ? escapeEmailHtml(data.releaseNotes) : '';
+  const safeReleasedAt = escapeEmailHtml(data.releasedAt);
+  const safeLotUrl = escapeEmailHtml(data.lotUrl);
 
-  const roleSpecificMessage = data.recipientRole === 'contractor'
-    ? 'You may now proceed with the next phase of work.'
-    : 'This is confirmation that the hold point has been released.'
+  const roleSpecificMessage =
+    data.recipientRole === 'contractor'
+      ? 'You may now proceed with the next phase of work.'
+      : 'This is confirmation that the hold point has been released.';
 
   const html = `
 <!DOCTYPE html>
@@ -735,7 +911,7 @@ export async function sendHPReleaseConfirmationEmail(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -757,7 +933,7 @@ export async function sendHPReleaseConfirmationEmail(data: {
       <h1>✅ Hold Point Released</h1>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Hi ${data.recipientName},</h2>
+      <h2 style="margin-top: 0;">Hi ${safeRecipientName},</h2>
 
       <div class="success-badge">
         The hold point has been released successfully
@@ -767,43 +943,51 @@ export async function sendHPReleaseConfirmationEmail(data: {
 
       <div class="message-box">
         <div class="detail-row">
-          <strong>📍 Lot:</strong> ${data.lotNumber}
+          <strong>📍 Lot:</strong> ${safeLotNumber}
         </div>
         <div class="detail-row">
-          <strong>🔒 Hold Point:</strong> ${data.holdPointDescription}
+          <strong>🔒 Hold Point:</strong> ${safeHoldPointDescription}
         </div>
         <div class="detail-row">
-          <strong>✍️ Released By:</strong> ${data.releasedByName}${data.releasedByOrg ? ` (${data.releasedByOrg})` : ''}
+          <strong>✍️ Released By:</strong> ${safeReleasedByName}${safeReleasedByOrg ? ` (${safeReleasedByOrg})` : ''}
         </div>
         <div class="detail-row">
-          <strong>📅 Released At:</strong> ${data.releasedAt}
+          <strong>📅 Released At:</strong> ${safeReleasedAt}
         </div>
-        ${data.releaseMethod ? `
+        ${
+          safeReleaseMethod
+            ? `
         <div class="detail-row">
-          <strong>📝 Release Method:</strong> ${data.releaseMethod}
+          <strong>📝 Release Method:</strong> ${safeReleaseMethod}
         </div>
-        ` : ''}
-        ${data.releaseNotes ? `
+        `
+            : ''
+        }
+        ${
+          safeReleaseNotes
+            ? `
         <div class="detail-row">
-          <strong>📋 Notes:</strong> ${data.releaseNotes}
+          <strong>📋 Notes:</strong> ${safeReleaseNotes}
         </div>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
 
       <div style="text-align: center; margin: 25px 0;">
-        <a href="${data.lotUrl}" class="button">
+        <a href="${safeLotUrl}" class="button">
           View Lot Details
         </a>
       </div>
     </div>
     <div class="footer">
       <p>This confirmation was sent from SiteProof Quality Management System.</p>
-      <p>Project: ${data.projectName}</p>
+      <p>Project: ${safeProjectName}</p>
     </div>
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 Hi ${data.recipientName},
@@ -825,15 +1009,12 @@ View lot details: ${data.lotUrl}
 ---
 This confirmation was sent from SiteProof Quality Management System.
 Project: ${data.projectName}
-  `
+  `;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n========================================')
-    console.log('HP RELEASE CONFIRMATION EMAIL')
-    console.log('========================================')
-    console.log('To:', data.to, '| Lot:', data.lotNumber)
-    console.log('Released By:', data.releasedByName)
-    console.log('========================================\n')
+    logInfo('[Email Service] Prepared hold point release confirmation email:', {
+      recipientCount: 1,
+    });
   }
 
   return sendEmail({
@@ -841,7 +1022,7 @@ Project: ${data.projectName}
     subject,
     html,
     text,
-  })
+  });
 }
 
 /**
@@ -849,13 +1030,16 @@ Project: ${data.projectName}
  * Sent when a user registers or requests a new verification link
  */
 export async function sendVerificationEmail(data: {
-  to: string
-  userName?: string
-  verificationUrl: string
-  expiresInHours?: number
+  to: string;
+  userName?: string;
+  verificationUrl: string;
+  expiresInHours?: number;
 }): Promise<EmailResult> {
-  const expiresIn = data.expiresInHours || 24
-  const subject = `[SiteProof] Verify your email address`
+  const expiresIn = data.expiresInHours || 24;
+  const subject = `[SiteProof] Verify your email address`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
+  const safeVerificationUrl = escapeEmailHtml(data.verificationUrl);
 
   const html = `
 <!DOCTYPE html>
@@ -863,7 +1047,7 @@ export async function sendVerificationEmail(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -882,12 +1066,12 @@ export async function sendVerificationEmail(data: {
       <h1>Verify Your Email</h1>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Hi${data.userName ? ` ${data.userName}` : ''},</h2>
+      <h2 style="margin-top: 0;">Hi${safeUserName ? ` ${safeUserName}` : ''},</h2>
 
       <p>Thanks for signing up for SiteProof! Please verify your email address by clicking the button below.</p>
 
       <div style="text-align: center;">
-        <a href="${data.verificationUrl}" class="button">
+        <a href="${safeVerificationUrl}" class="button">
           Verify Email Address
         </a>
       </div>
@@ -899,7 +1083,7 @@ export async function sendVerificationEmail(data: {
 
       <p style="color: #6b7280; font-size: 14px;">
         If the button doesn't work, copy and paste this link into your browser:<br>
-        <span style="word-break: break-all;">${data.verificationUrl}</span>
+        <span style="word-break: break-all;">${safeVerificationUrl}</span>
       </p>
     </div>
     <div class="footer">
@@ -908,7 +1092,7 @@ export async function sendVerificationEmail(data: {
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 Hi${data.userName ? ` ${data.userName}` : ''},
@@ -923,15 +1107,10 @@ If you didn't create an account, you can safely ignore this email.
 
 ---
 This verification link was sent from SiteProof.
-  `
+  `;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n========================================')
-    console.log('EMAIL VERIFICATION')
-    console.log('========================================')
-    console.log('To:', data.to)
-    console.log('URL:', data.verificationUrl)
-    console.log('========================================\n')
+    logInfo('[Email Service] Prepared email verification:', { recipientCount: 1 });
   }
 
   return sendEmail({
@@ -939,7 +1118,7 @@ This verification link was sent from SiteProof.
     subject,
     html,
     text,
-  })
+  });
 }
 
 /**
@@ -947,13 +1126,16 @@ This verification link was sent from SiteProof.
  * Sent when a user requests to reset their password
  */
 export async function sendPasswordResetEmail(data: {
-  to: string
-  userName?: string
-  resetUrl: string
-  expiresInMinutes?: number
+  to: string;
+  userName?: string;
+  resetUrl: string;
+  expiresInMinutes?: number;
 }): Promise<EmailResult> {
-  const expiresIn = data.expiresInMinutes || 60
-  const subject = `[SiteProof] Reset your password`
+  const expiresIn = data.expiresInMinutes || 60;
+  const subject = `[SiteProof] Reset your password`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
+  const safeResetUrl = escapeEmailHtml(data.resetUrl);
 
   const html = `
 <!DOCTYPE html>
@@ -961,7 +1143,7 @@ export async function sendPasswordResetEmail(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -980,12 +1162,12 @@ export async function sendPasswordResetEmail(data: {
       <h1>Reset Your Password</h1>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Hi${data.userName ? ` ${data.userName}` : ''},</h2>
+      <h2 style="margin-top: 0;">Hi${safeUserName ? ` ${safeUserName}` : ''},</h2>
 
       <p>We received a request to reset your password. Click the button below to create a new password.</p>
 
       <div style="text-align: center;">
-        <a href="${data.resetUrl}" class="button">
+        <a href="${safeResetUrl}" class="button">
           Reset Password
         </a>
       </div>
@@ -997,7 +1179,7 @@ export async function sendPasswordResetEmail(data: {
 
       <p style="color: #6b7280; font-size: 14px;">
         If the button doesn't work, copy and paste this link into your browser:<br>
-        <span style="word-break: break-all;">${data.resetUrl}</span>
+        <span style="word-break: break-all;">${safeResetUrl}</span>
       </p>
     </div>
     <div class="footer">
@@ -1007,7 +1189,7 @@ export async function sendPasswordResetEmail(data: {
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 Hi${data.userName ? ` ${data.userName}` : ''},
@@ -1023,15 +1205,10 @@ If you didn't request a password reset, you can safely ignore this email. Your p
 ---
 This password reset was requested from SiteProof.
 For security reasons, this link can only be used once.
-  `
+  `;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n========================================')
-    console.log('PASSWORD RESET EMAIL')
-    console.log('========================================')
-    console.log('To:', data.to)
-    console.log('URL:', data.resetUrl)
-    console.log('========================================\n')
+    logInfo('[Email Service] Prepared password reset email:', { recipientCount: 1 });
   }
 
   return sendEmail({
@@ -1039,7 +1216,7 @@ For security reasons, this link can only be used once.
     subject,
     html,
     text,
-  })
+  });
 }
 
 /**
@@ -1047,12 +1224,15 @@ For security reasons, this link can only be used once.
  * Passwordless login via email link
  */
 export async function sendMagicLinkEmail(data: {
-  to: string
-  userName?: string
-  magicLinkUrl: string
-  expiresInMinutes: number
+  to: string;
+  userName?: string;
+  magicLinkUrl: string;
+  expiresInMinutes: number;
 }): Promise<EmailResult> {
-  const subject = `[SiteProof] Your Login Link`
+  const subject = `[SiteProof] Your Login Link`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
+  const safeMagicLinkUrl = escapeEmailHtml(data.magicLinkUrl);
 
   const html = `
 <!DOCTYPE html>
@@ -1060,7 +1240,7 @@ export async function sendMagicLinkEmail(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -1079,12 +1259,12 @@ export async function sendMagicLinkEmail(data: {
       <h1>🔐 Sign In to SiteProof</h1>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Hi${data.userName ? ` ${data.userName}` : ''},</h2>
+      <h2 style="margin-top: 0;">Hi${safeUserName ? ` ${safeUserName}` : ''},</h2>
 
       <p>Click the button below to sign in to your SiteProof account. No password needed!</p>
 
       <div style="text-align: center;">
-        <a href="${data.magicLinkUrl}" class="button">
+        <a href="${safeMagicLinkUrl}" class="button">
           Sign In to SiteProof
         </a>
       </div>
@@ -1096,7 +1276,7 @@ export async function sendMagicLinkEmail(data: {
 
       <p style="color: #6b7280; font-size: 14px;">
         If the button doesn't work, copy and paste this link into your browser:<br>
-        <span style="word-break: break-all;">${data.magicLinkUrl}</span>
+        <span style="word-break: break-all;">${safeMagicLinkUrl}</span>
       </p>
     </div>
     <div class="footer">
@@ -1106,7 +1286,7 @@ export async function sendMagicLinkEmail(data: {
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 Hi${data.userName ? ` ${data.userName}` : ''},
@@ -1125,15 +1305,10 @@ For security, this link can only be used once.
 
 ---
 This login link was requested from SiteProof.
-  `
+  `;
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n========================================')
-    console.log('MAGIC LINK LOGIN EMAIL')
-    console.log('========================================')
-    console.log('To:', data.to)
-    console.log('URL:', data.magicLinkUrl)
-    console.log('========================================\n')
+    logInfo('[Email Service] Prepared magic link login email:', { recipientCount: 1 });
   }
 
   return sendEmail({
@@ -1141,29 +1316,47 @@ This login link was requested from SiteProof.
     subject,
     html,
     text,
-  })
+  });
 }
 
 /**
  * Send scheduled report email with PDF attachment (Feature #1016)
  */
 export async function sendScheduledReportEmail(data: {
-  to: string | string[]
-  recipientName?: string
-  projectName: string
-  reportType: string
-  reportName: string
-  generatedAt: string
-  dateRange?: { from: string; to: string }
-  pdfBuffer?: Buffer
-  pdfPath?: string
-  viewReportUrl?: string
+  to: string | string[];
+  recipientName?: string;
+  projectName: string;
+  reportType: string;
+  reportName: string;
+  generatedAt: string;
+  dateRange?: { from: string; to: string };
+  pdfBuffer?: Buffer;
+  pdfPath?: string;
+  viewReportUrl?: string;
 }): Promise<EmailResult> {
-  const subject = `[SiteProof] Scheduled Report: ${data.reportName}`
+  const subjectReportName = sanitizeSupportEmailLine(data.reportName, 'Report');
+  const subject = `[SiteProof] Scheduled Report: ${subjectReportName}`;
+  const safeSubject = escapeEmailHtml(subject);
+  const safeRecipientName = data.recipientName ? escapeEmailHtml(data.recipientName) : '';
+  const safeProjectName = escapeEmailHtml(data.projectName);
+  const safeReportType = escapeEmailHtml(data.reportType);
+  const safeReportName = escapeEmailHtml(data.reportName);
+  const safeGeneratedAt = escapeEmailHtml(data.generatedAt);
+  const safeDateFrom = data.dateRange ? escapeEmailHtml(data.dateRange.from) : '';
+  const safeDateTo = data.dateRange ? escapeEmailHtml(data.dateRange.to) : '';
+  const safeViewReportUrl = data.viewReportUrl ? escapeEmailHtml(data.viewReportUrl) : '';
+  const hasAttachment = Boolean(data.pdfBuffer || data.pdfPath);
 
   const dateRangeText = data.dateRange
-    ? `<div class="detail-row"><strong>📅 Date Range:</strong> ${data.dateRange.from} to ${data.dateRange.to}</div>`
-    : ''
+    ? `<div class="detail-row"><strong>📅 Date Range:</strong> ${safeDateFrom} to ${safeDateTo}</div>`
+    : '';
+  const attachmentNotice = hasAttachment
+    ? `
+      <div class="attachment-notice">
+        <strong>📎 Attachment:</strong> ${safeReportName}.pdf
+      </div>
+    `
+    : '';
 
   const html = `
 <!DOCTYPE html>
@@ -1171,7 +1364,7 @@ export async function sendScheduledReportEmail(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -1193,37 +1386,39 @@ export async function sendScheduledReportEmail(data: {
       <h1>📊 Scheduled Report</h1>
     </div>
     <div class="content">
-      <h2 style="margin-top: 0;">Hi${data.recipientName ? ` ${data.recipientName}` : ''},</h2>
+      <h2 style="margin-top: 0;">Hi${safeRecipientName ? ` ${safeRecipientName}` : ''},</h2>
 
-      <p>Your scheduled report has been generated and is attached to this email.</p>
+      <p>Your scheduled report has been generated${hasAttachment ? ' and is attached to this email' : ''}.</p>
 
       <div class="message-box">
         <div class="detail-row">
-          <strong>📋 Report:</strong> ${data.reportName}
+          <strong>📋 Report:</strong> ${safeReportName}
         </div>
         <div class="detail-row">
-          <strong>📁 Type:</strong> ${data.reportType}
+          <strong>📁 Type:</strong> ${safeReportType}
         </div>
         <div class="detail-row">
-          <strong>🏗️ Project:</strong> ${data.projectName}
+          <strong>🏗️ Project:</strong> ${safeProjectName}
         </div>
         ${dateRangeText}
         <div class="detail-row">
-          <strong>🕒 Generated:</strong> ${data.generatedAt}
+          <strong>🕒 Generated:</strong> ${safeGeneratedAt}
         </div>
       </div>
 
-      <div class="attachment-notice">
-        <strong>📎 Attachment:</strong> ${data.reportName}.pdf
-      </div>
+      ${attachmentNotice}
 
-      ${data.viewReportUrl ? `
+      ${
+        safeViewReportUrl
+          ? `
       <div style="text-align: center; margin: 25px 0;">
-        <a href="${data.viewReportUrl}" class="button">
+        <a href="${safeViewReportUrl}" class="button">
           View Report Online
         </a>
       </div>
-      ` : ''}
+      `
+          : ''
+      }
 
       <p style="color: #6b7280; font-size: 14px;">
         This is an automated email from your scheduled report settings.
@@ -1231,17 +1426,17 @@ export async function sendScheduledReportEmail(data: {
     </div>
     <div class="footer">
       <p>This report was generated by SiteProof Quality Management System.</p>
-      <p>Project: ${data.projectName}</p>
+      <p>Project: ${safeProjectName}</p>
     </div>
   </div>
 </body>
 </html>
-  `
+  `;
 
   const text = `
 Hi${data.recipientName ? ` ${data.recipientName}` : ''},
 
-Your scheduled report has been generated and is attached to this email.
+Your scheduled report has been generated${hasAttachment ? ' and is attached to this email' : ''}.
 
 REPORT DETAILS
 --------------
@@ -1250,40 +1445,39 @@ Type: ${data.reportType}
 Project: ${data.projectName}
 ${data.dateRange ? `Date Range: ${data.dateRange.from} to ${data.dateRange.to}\n` : ''}Generated: ${data.generatedAt}
 
-ATTACHMENT
+${
+  hasAttachment
+    ? `ATTACHMENT
 ----------
 ${data.reportName}.pdf
 
-${data.viewReportUrl ? `View report online: ${data.viewReportUrl}\n` : ''}
+`
+    : ''
+}${data.viewReportUrl ? `View report online: ${data.viewReportUrl}\n` : ''}
 
 ---
 This report was generated by SiteProof Quality Management System.
 Project: ${data.projectName}
-  `
+  `;
 
   // Build attachments array
-  const attachments: EmailAttachment[] = []
+  const attachments: EmailAttachment[] = [];
   if (data.pdfBuffer) {
     attachments.push({
       filename: `${data.reportName.replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`,
       content: data.pdfBuffer,
-      contentType: 'application/pdf'
-    })
+      contentType: 'application/pdf',
+    });
   } else if (data.pdfPath) {
     attachments.push({
       filename: `${data.reportName.replace(/[^a-zA-Z0-9-_]/g, '_')}.pdf`,
       path: data.pdfPath,
-      contentType: 'application/pdf'
-    })
+      contentType: 'application/pdf',
+    });
   }
 
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n========================================')
-    console.log('SCHEDULED REPORT EMAIL')
-    console.log('========================================')
-    console.log('To:', data.to, '| Report:', data.reportName)
-    console.log('Project:', data.projectName)
-    console.log('========================================\n')
+    logInfo('[Email Service] Prepared scheduled report email:', { recipientCount: 1 });
   }
 
   return sendEmail({
@@ -1291,74 +1485,90 @@ Project: ${data.projectName}
     subject,
     html,
     text,
-    attachments: attachments.length > 0 ? attachments : undefined
-  })
+    attachments: attachments.length > 0 ? attachments : undefined,
+  });
 }
 
 /**
  * Digest notification item
  */
 export interface DigestItem {
-  type: string
-  title: string
-  message: string
-  projectName?: string
-  linkUrl?: string
-  timestamp: Date
+  type: string;
+  title: string;
+  message: string;
+  projectName?: string;
+  linkUrl?: string;
+  timestamp: Date;
 }
 
 /**
  * Send daily digest email
  */
-export async function sendDailyDigestEmail(
-  to: string,
-  items: DigestItem[]
-): Promise<EmailResult> {
+export async function sendDailyDigestEmail(to: string, items: DigestItem[]): Promise<EmailResult> {
   if (items.length === 0) {
-    return { success: false, error: 'No items in digest' }
+    return { success: false, error: 'No items in digest' };
   }
 
-  const subject = `[SiteProof] Daily Digest - ${items.length} notification${items.length > 1 ? 's' : ''}`
+  const subject = `[SiteProof] Daily Digest - ${items.length} notification${items.length > 1 ? 's' : ''}`;
+  const safeSubject = escapeEmailHtml(subject);
   const today = new Date().toLocaleDateString('en-AU', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
-  })
+    day: 'numeric',
+  });
+  const dashboardUrl = buildFrontendUrl('/dashboard');
+  const settingsUrl = buildFrontendUrl('/settings');
+  const safeToday = escapeEmailHtml(today);
+  const safeDashboardUrl = escapeEmailHtml(dashboardUrl);
+  const safeSettingsUrl = escapeEmailHtml(settingsUrl);
 
   // Group items by project
-  const itemsByProject = items.reduce((acc, item) => {
-    const project = item.projectName || 'General'
-    if (!acc[project]) {
-      acc[project] = []
-    }
-    acc[project].push(item)
-    return acc
-  }, {} as Record<string, DigestItem[]>)
+  const itemsByProject = items.reduce(
+    (acc, item) => {
+      const project = item.projectName || 'General';
+      if (!acc[project]) {
+        acc[project] = [];
+      }
+      acc[project].push(item);
+      return acc;
+    },
+    {} as Record<string, DigestItem[]>,
+  );
 
-  const projectSections = Object.entries(itemsByProject).map(([project, projectItems]) => {
-    const itemsHtml = projectItems.map(item => `
+  const projectSections = Object.entries(itemsByProject)
+    .map(([project, projectItems]) => {
+      const itemsHtml = projectItems
+        .map(
+          (item) => `
       <div style="padding: 12px 0; border-bottom: 1px solid #e5e7eb;">
-        <div style="font-weight: 500; color: #374151;">${item.title}</div>
-        <div style="color: #6b7280; font-size: 14px; margin-top: 4px;">${item.message}</div>
-        ${item.linkUrl ? `
-          <a href="${process.env.FRONTEND_URL || 'http://localhost:5174'}${item.linkUrl}"
+        <div style="font-weight: 500; color: #374151;">${escapeEmailHtml(item.title)}</div>
+        <div style="color: #6b7280; font-size: 14px; margin-top: 4px;">${escapeEmailHtml(item.message)}</div>
+        ${
+          item.linkUrl
+            ? `
+          <a href="${escapeEmailHtml(buildFrontendUrl(item.linkUrl))}"
              style="display: inline-block; margin-top: 8px; color: #2563eb; text-decoration: none; font-size: 14px;">
             View Details →
           </a>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
-    `).join('')
+    `,
+        )
+        .join('');
 
-    return `
+      return `
       <div style="margin-bottom: 24px;">
         <h3 style="margin: 0 0 12px 0; padding: 8px 12px; background: #f3f4f6; border-radius: 6px; font-size: 14px; color: #374151;">
-          📁 ${project}
+          📁 ${escapeEmailHtml(project)}
         </h3>
         ${itemsHtml}
       </div>
-    `
-  }).join('')
+    `;
+    })
+    .join('');
 
   const html = `
 <!DOCTYPE html>
@@ -1366,13 +1576,13 @@ export async function sendDailyDigestEmail(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
+  <title>${safeSubject}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
   <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
       <h1 style="margin: 0; font-size: 24px;">📬 Daily Digest</h1>
-      <p style="margin: 8px 0 0 0; opacity: 0.9;">${today}</p>
+      <p style="margin: 8px 0 0 0; opacity: 0.9;">${safeToday}</p>
     </div>
     <div style="background: #f9fafb; padding: 24px; border: 1px solid #e5e7eb;">
       <div style="background: white; padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e5e7eb;">
@@ -1384,7 +1594,7 @@ export async function sendDailyDigestEmail(
       ${projectSections}
 
       <div style="text-align: center; margin-top: 24px;">
-        <a href="${process.env.FRONTEND_URL || 'http://localhost:5174'}/dashboard"
+        <a href="${safeDashboardUrl}"
            style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
           View All in SiteProof
         </a>
@@ -1394,17 +1604,20 @@ export async function sendDailyDigestEmail(
       <p style="margin: 0;">This is your daily digest from SiteProof Quality Management System.</p>
       <p style="margin: 8px 0 0 0;">
         To manage your notification preferences, visit your
-        <a href="${process.env.FRONTEND_URL || 'http://localhost:5174'}/settings" style="color: #2563eb;">Settings</a>.
+        <a href="${safeSettingsUrl}" style="color: #2563eb;">Settings</a>.
       </p>
     </div>
   </div>
 </body>
 </html>
-  `
+  `;
 
-  const itemsList = items.map(item =>
-    `- ${item.title}: ${item.message}${item.linkUrl ? ` (${process.env.FRONTEND_URL || 'http://localhost:5174'}${item.linkUrl})` : ''}`
-  ).join('\n')
+  const itemsList = items
+    .map(
+      (item) =>
+        `- ${item.title}: ${item.message}${item.linkUrl ? ` (${buildFrontendUrl(item.linkUrl)})` : ''}`,
+    )
+    .join('\n');
 
   const text = `
 Daily Digest - ${today}
@@ -1414,14 +1627,14 @@ You have ${items.length} notification${items.length > 1 ? 's' : ''} from today:
 ${itemsList}
 
 ---
-View all in SiteProof: ${process.env.FRONTEND_URL || 'http://localhost:5174'}/dashboard
-To manage your notification preferences, visit: ${process.env.FRONTEND_URL || 'http://localhost:5174'}/settings
-  `
+View all in SiteProof: ${dashboardUrl}
+To manage your notification preferences, visit: ${settingsUrl}
+  `;
 
   return sendEmail({
     to,
     subject,
     html,
     text,
-  })
+  });
 }

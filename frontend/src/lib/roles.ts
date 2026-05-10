@@ -15,9 +15,9 @@ export const ROLES = {
   SUBCONTRACTOR: 'subcontractor',
   VIEWER: 'viewer',
   MEMBER: 'member',
-} as const
+} as const;
 
-export type Role = typeof ROLES[keyof typeof ROLES]
+export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 /**
  * Role hierarchy for permission checking
@@ -35,36 +35,36 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
   [ROLES.SUBCONTRACTOR]: 30,
   [ROLES.VIEWER]: 20,
   [ROLES.MEMBER]: 10,
-}
+};
 
 /**
  * Check if a role has at least the specified minimum permission level
  */
 export function hasMinimumRole(userRole: string, minimumRole: Role): boolean {
-  const userLevel = ROLE_HIERARCHY[userRole as Role] ?? 0
-  const minimumLevel = ROLE_HIERARCHY[minimumRole]
-  return userLevel >= minimumLevel
+  const userLevel = ROLE_HIERARCHY[userRole as Role] ?? 0;
+  const minimumLevel = ROLE_HIERARCHY[minimumRole];
+  return userLevel >= minimumLevel;
 }
 
 /**
  * Check if a role is an admin-level role (owner or admin)
  */
 export function isAdminRole(role: string): boolean {
-  return role === ROLES.OWNER || role === ROLES.ADMIN
+  return role === ROLES.OWNER || role === ROLES.ADMIN;
 }
 
 /**
  * Check if a role can manage projects
  */
 export function canManageProjects(role: string): boolean {
-  return hasMinimumRole(role, ROLES.PROJECT_MANAGER)
+  return hasMinimumRole(role, ROLES.PROJECT_MANAGER);
 }
 
 /**
  * Check if a role can approve items (NCRs, holdpoints, etc.)
  */
 export function canApproveItems(role: string): boolean {
-  return hasMinimumRole(role, ROLES.QUALITY_MANAGER)
+  return hasMinimumRole(role, ROLES.QUALITY_MANAGER);
 }
 
 /**
@@ -83,8 +83,8 @@ export function getRoleDisplayName(role: string): string {
     [ROLES.SUBCONTRACTOR]: 'Subcontractor',
     [ROLES.VIEWER]: 'Viewer',
     [ROLES.MEMBER]: 'Member',
-  }
-  return displayNames[role] || role
+  };
+  return displayNames[role] || role;
 }
 
 /**
@@ -102,7 +102,7 @@ export const ROLE_OPTIONS = [
   { value: ROLES.SUBCONTRACTOR, label: 'Subcontractor' },
   { value: ROLES.VIEWER, label: 'Viewer' },
   { value: ROLES.MEMBER, label: 'Member' },
-] as const
+] as const;
 
 /**
  * Role groups for permission checking.
@@ -125,7 +125,14 @@ export const ROLE_GROUPS = {
   SUBCONTRACTOR: [ROLES.SUBCONTRACTOR, ROLES.SUBCONTRACTOR_ADMIN] as const,
 
   // Field operations roles
-  FIELD: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER, ROLES.SITE_ENGINEER, ROLES.FOREMAN] as const,
+  FIELD: [
+    ROLES.OWNER,
+    ROLES.ADMIN,
+    ROLES.PROJECT_MANAGER,
+    ROLES.SITE_MANAGER,
+    ROLES.SITE_ENGINEER,
+    ROLES.FOREMAN,
+  ] as const,
 
   // Can view subcontractor rates
   RATE_VIEWERS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
@@ -135,43 +142,43 @@ export const ROLE_GROUPS = {
 
   // Read-only access
   VIEWER: [ROLES.VIEWER] as const,
-}
+};
 
 /**
  * Check if a role is in a specific role group
  */
 export function hasRoleInGroup(
   userRole: string | undefined | null,
-  group: readonly string[]
+  group: readonly string[],
 ): boolean {
-  if (!userRole) return false
-  return group.includes(userRole)
+  if (!userRole) return false;
+  return group.includes(userRole);
 }
 
 /**
  * Check if user has commercial access
  */
 export function hasCommercialAccess(role: string | undefined | null): boolean {
-  return hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL)
+  return hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL);
 }
 
 /**
  * Check if user is a subcontractor
  */
 export function isSubcontractorRole(role: string | undefined | null): boolean {
-  return hasRoleInGroup(role, ROLE_GROUPS.SUBCONTRACTOR)
+  return hasRoleInGroup(role, ROLE_GROUPS.SUBCONTRACTOR);
 }
 
 /**
  * Check if user is a viewer (read-only)
  */
 export function isViewerRole(role: string | undefined | null): boolean {
-  return hasRoleInGroup(role, ROLE_GROUPS.VIEWER)
+  return hasRoleInGroup(role, ROLE_GROUPS.VIEWER);
 }
 
 /**
  * Check if user has quality management access
  */
 export function hasQualityAccess(role: string | undefined | null): boolean {
-  return hasRoleInGroup(role, ROLE_GROUPS.QUALITY)
+  return hasRoleInGroup(role, ROLE_GROUPS.QUALITY);
 }

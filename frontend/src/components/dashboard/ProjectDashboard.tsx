@@ -1,10 +1,11 @@
 // ProjectDashboard - Landing page when entering a project
 // Shows project health at a glance: attention items, progress, stats ribbon, activity
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { apiFetch, ApiError } from '@/lib/api'
+import { useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { apiFetch, ApiError } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import {
   MapPin,
   Calendar,
@@ -22,106 +23,131 @@ import {
   CheckCircle2,
   XCircle,
   TrendingUp,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface AttentionItem {
-  id: string
-  type: 'ncr' | 'holdpoint'
-  title: string
-  description: string
-  urgency: 'critical' | 'warning'
-  daysOverdue: number
-  link: string
+  id: string;
+  type: 'ncr' | 'holdpoint';
+  title: string;
+  description: string;
+  urgency: 'critical' | 'warning';
+  daysOverdue: number;
+  link: string;
 }
 
 interface ProjectDashboardData {
   project: {
-    id: string
-    name: string
-    projectNumber: string
-    status: string
-    client?: string
-    state?: string
-  }
+    id: string;
+    name: string;
+    projectNumber: string;
+    status: string;
+    client?: string;
+    state?: string;
+  };
   stats: {
     lots: {
-      total: number
-      completed: number
-      inProgress: number
-      notStarted: number
-      onHold: number
-      progressPct: number
-    }
+      total: number;
+      completed: number;
+      inProgress: number;
+      notStarted: number;
+      onHold: number;
+      progressPct: number;
+    };
     ncrs: {
-      open: number
-      total: number
-      overdue: number
-      major: number
-      minor: number
-      observation: number
-    }
-    holdPoints: { pending: number; released: number }
-    itps: { pending: number; completed: number }
-    dockets: { pendingApproval: number }
-    tests: { total: number }
-    documents: { total: number }
-    diary: { todayStatus: 'not_started' | 'draft' | 'submitted' | null }
-  }
-  attentionItems: AttentionItem[]
+      open: number;
+      total: number;
+      overdue: number;
+      major: number;
+      minor: number;
+      observation: number;
+    };
+    holdPoints: { pending: number; released: number };
+    itps: { pending: number; completed: number };
+    dockets: { pendingApproval: number };
+    tests: { total: number };
+    documents: { total: number };
+    diary: { todayStatus: 'not_started' | 'draft' | 'submitted' | null };
+  };
+  attentionItems: AttentionItem[];
   recentActivity: Array<{
-    id: string
-    type: 'lot' | 'ncr' | 'holdpoint' | 'diary' | 'docket'
-    description: string
-    timestamp: string
-    link?: string
-  }>
+    id: string;
+    type: 'lot' | 'ncr' | 'holdpoint' | 'diary' | 'docket';
+    description: string;
+    timestamp: string;
+    link?: string;
+  }>;
 }
 
 export function ProjectDashboard() {
-  const { projectId } = useParams()
-  const queryClient = useQueryClient()
-  const [refreshing, setRefreshing] = useState(false)
+  const { projectId } = useParams();
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
+  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
 
-  const { data, isLoading: loading, error: queryError } = useQuery({
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
     queryKey: queryKeys.dashboard(projectId),
-    queryFn: () => apiFetch<ProjectDashboardData>(`/api/projects/${projectId}/dashboard`),
+    queryFn: () => apiFetch<ProjectDashboardData>(`/api/projects/${encodedProjectId}/dashboard`),
     enabled: !!projectId,
-  })
+  });
 
   const error = queryError
     ? queryError instanceof ApiError && queryError.status === 404
       ? 'Project not found'
-      : 'Failed to load project dashboard'
-    : null
+      : extractErrorMessage(queryError, 'Failed to load project dashboard')
+    : null;
 
-  const handleRefresh = () => {
-    setRefreshing(true)
-    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(projectId) }).then(() => {
-      setRefreshing(false)
-    })
-  }
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(projectId) });
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div
+        className="flex items-center justify-center h-64"
+        role="status"
+        aria-label="Loading project dashboard"
+      >
+        <span className="sr-only">Loading project dashboard...</span>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
-    )
+    );
   }
 
   if (error || !data) {
     return (
       <div className="p-6">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
-          {error || 'Failed to load project dashboard'}
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg dark:bg-red-900/20 dark:border-red-800 dark:text-red-300"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>{error || 'Failed to load project dashboard'}</span>
+            {projectId && (
+              <Button type="button" variant="outline" size="sm" onClick={handleRefresh}>
+                Try again
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-    )
+    );
   }
 
-  const { project, stats, attentionItems, recentActivity } = data
+  const { project, stats, attentionItems, recentActivity } = data;
+  const projectRouteBase = `/projects/${encodedProjectId}`;
 
   const statusColors: Record<string, string> = {
     active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
@@ -129,26 +155,32 @@ export function ProjectDashboard() {
     on_hold: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     pending: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
     draft: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-  }
+  };
 
   const getDiaryLabel = () => {
     switch (stats.diary.todayStatus) {
-      case 'submitted': return 'Submitted'
-      case 'draft': return 'Draft'
-      default: return 'Not started'
+      case 'submitted':
+        return 'Submitted';
+      case 'draft':
+        return 'Draft';
+      default:
+        return 'Not started';
     }
-  }
+  };
 
   const getDiaryColor = () => {
     switch (stats.diary.todayStatus) {
-      case 'submitted': return 'text-green-600 dark:text-green-400'
-      case 'draft': return 'text-amber-600 dark:text-amber-400'
-      default: return 'text-muted-foreground'
+      case 'submitted':
+        return 'text-green-600 dark:text-green-400';
+      case 'draft':
+        return 'text-amber-600 dark:text-amber-400';
+      default:
+        return 'text-muted-foreground';
     }
-  }
+  };
 
-  const hasAttentionItems = attentionItems.length > 0
-  const criticalCount = attentionItems.filter(i => i.urgency === 'critical').length
+  const hasAttentionItems = attentionItems.length > 0;
+  const criticalCount = attentionItems.filter((i) => i.urgency === 'critical').length;
 
   return (
     <div className="space-y-5 p-6">
@@ -157,11 +189,13 @@ export function ProjectDashboard() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">{project.name}</h1>
-            <span className={cn(
-              'px-2.5 py-0.5 rounded-full text-xs font-medium',
-              statusColors[project.status?.toLowerCase()] || statusColors.draft
-            )}>
-              {project.status || 'Draft'}
+            <span
+              className={cn(
+                'px-2.5 py-0.5 rounded-full text-xs font-medium',
+                statusColors[project.status?.toLowerCase()] || statusColors.draft,
+              )}
+            >
+              {formatStatusLabel(project.status)}
             </span>
           </div>
           <p className="text-muted-foreground mt-1">
@@ -171,17 +205,12 @@ export function ProjectDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
             Refresh
           </Button>
           <Link
-            to={`/projects/${projectId}/settings`}
+            to={`${projectRouteBase}/settings`}
             className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
           >
             <Settings className="h-4 w-4" />
@@ -192,34 +221,49 @@ export function ProjectDashboard() {
 
       {/* Attention Banner */}
       {hasAttentionItems && (
-        <div className={cn(
-          'rounded-lg border p-4',
-          criticalCount > 0
-            ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900'
-            : 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900'
-        )}>
+        <div
+          className={cn(
+            'rounded-lg border p-4',
+            criticalCount > 0
+              ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900'
+              : 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900',
+          )}
+        >
           <div className="flex items-center gap-2 mb-3">
-            <AlertCircle className={cn(
-              'h-5 w-5',
-              criticalCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
-            )} />
-            <h2 className={cn(
-              'text-sm font-semibold',
-              criticalCount > 0 ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'
-            )}>
-              {attentionItems.length} item{attentionItems.length !== 1 ? 's' : ''} need{attentionItems.length === 1 ? 's' : ''} attention
+            <AlertCircle
+              className={cn(
+                'h-5 w-5',
+                criticalCount > 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-amber-600 dark:text-amber-400',
+              )}
+            />
+            <h2
+              className={cn(
+                'text-sm font-semibold',
+                criticalCount > 0
+                  ? 'text-red-800 dark:text-red-300'
+                  : 'text-amber-800 dark:text-amber-300',
+              )}
+            >
+              {attentionItems.length} item{attentionItems.length !== 1 ? 's' : ''} need
+              {attentionItems.length === 1 ? 's' : ''} attention
             </h2>
           </div>
           <div className="space-y-2">
             {attentionItems.slice(0, 4).map((item) => (
               <Link
                 key={item.id}
-                to={item.link}
+                to={getSafeProjectLink(
+                  item.link,
+                  projectRouteBase,
+                  getAttentionFallbackRoute(item.type, projectRouteBase),
+                )}
                 className={cn(
                   'flex items-center justify-between p-2.5 rounded-md transition-colors text-sm',
                   item.urgency === 'critical'
                     ? 'bg-red-100/60 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40'
-                    : 'bg-amber-100/60 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40'
+                    : 'bg-amber-100/60 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40',
                 )}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -228,26 +272,38 @@ export function ProjectDashboard() {
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                   )}
-                  <span className={cn(
-                    'font-medium truncate',
-                    item.urgency === 'critical' ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'
-                  )}>
+                  <span
+                    className={cn(
+                      'font-medium truncate',
+                      item.urgency === 'critical'
+                        ? 'text-red-800 dark:text-red-300'
+                        : 'text-amber-800 dark:text-amber-300',
+                    )}
+                  >
                     {item.title}
                   </span>
                 </div>
-                <span className={cn(
-                  'text-xs flex-shrink-0 ml-3',
-                  item.urgency === 'critical' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
-                )}>
+                <span
+                  className={cn(
+                    'text-xs flex-shrink-0 ml-3',
+                    item.urgency === 'critical'
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-amber-600 dark:text-amber-400',
+                  )}
+                >
                   {item.daysOverdue}d overdue
                 </span>
               </Link>
             ))}
             {attentionItems.length > 4 && (
-              <p className={cn(
-                'text-xs pl-2',
-                criticalCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
-              )}>
+              <p
+                className={cn(
+                  'text-xs pl-2',
+                  criticalCount > 0
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-amber-600 dark:text-amber-400',
+                )}
+              >
                 + {attentionItems.length - 4} more
               </p>
             )}
@@ -328,7 +384,7 @@ export function ProjectDashboard() {
                 Lot Progress
               </h2>
               <Link
-                to={`/projects/${projectId}/lots`}
+                to={`${projectRouteBase}/lots`}
                 className="text-xs text-primary hover:underline flex items-center gap-1"
               >
                 View all <ArrowRight className="h-3 w-3" />
@@ -338,7 +394,7 @@ export function ProjectDashboard() {
             {stats.lots.total === 0 ? (
               <div className="text-center py-6 text-muted-foreground text-sm">
                 No lots created yet.{' '}
-                <Link to={`/projects/${projectId}/lots`} className="text-primary hover:underline">
+                <Link to={`${projectRouteBase}/lots`} className="text-primary hover:underline">
                   Create your first lot
                 </Link>
               </div>
@@ -376,8 +432,16 @@ export function ProjectDashboard() {
 
                 {/* Status breakdown */}
                 <div className="grid grid-cols-4 gap-3 text-center">
-                  <StatusCount label="Not Started" count={stats.lots.notStarted} color="bg-gray-400" />
-                  <StatusCount label="In Progress" count={stats.lots.inProgress} color="bg-blue-500" />
+                  <StatusCount
+                    label="Not Started"
+                    count={stats.lots.notStarted}
+                    color="bg-gray-400"
+                  />
+                  <StatusCount
+                    label="In Progress"
+                    count={stats.lots.inProgress}
+                    color="bg-blue-500"
+                  />
                   <StatusCount label="On Hold" count={stats.lots.onHold} color="bg-amber-500" />
                   <StatusCount label="Complete" count={stats.lots.completed} color="bg-green-500" />
                 </div>
@@ -393,7 +457,7 @@ export function ProjectDashboard() {
                 Quality Overview
               </h2>
               <Link
-                to={`/projects/${projectId}/ncr`}
+                to={`${projectRouteBase}/ncr`}
                 className="text-xs text-primary hover:underline flex items-center gap-1"
               >
                 View NCRs <ArrowRight className="h-3 w-3" />
@@ -474,7 +538,14 @@ export function ProjectDashboard() {
               recentActivity.slice(0, 10).map((activity) => (
                 <div key={activity.id} className="hover:bg-muted/50 transition-colors">
                   {activity.link ? (
-                    <Link to={activity.link} className="flex items-start gap-3 p-3">
+                    <Link
+                      to={getSafeProjectLink(
+                        activity.link,
+                        projectRouteBase,
+                        getActivityFallbackRoute(activity.type, projectRouteBase),
+                      )}
+                      className="flex items-start gap-3 p-3"
+                    >
                       <ActivityIcon type={activity.type} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm truncate">{activity.description}</p>
@@ -501,7 +572,7 @@ export function ProjectDashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // --- Sub-components ---
@@ -514,31 +585,30 @@ function StatPill({
   color,
   alert,
 }: {
-  label: string
-  value: string | number
-  sub: string
-  icon: React.ReactNode
-  color: string
-  alert?: boolean
+  label: string;
+  value: string | number;
+  sub: string;
+  icon: React.ReactNode;
+  color: string;
+  alert?: boolean;
 }) {
   return (
-    <div className={cn(
-      'bg-card px-3 py-2.5 text-center',
-      alert && 'ring-1 ring-inset ring-red-200 dark:ring-red-800'
-    )}>
-      <div className={cn('flex items-center justify-center mb-1', color)}>
-        {icon}
-      </div>
-      <p className={cn(
-        'text-lg font-bold leading-tight',
-        alert && 'text-red-600 dark:text-red-400'
-      )}>
+    <div
+      className={cn(
+        'bg-card px-3 py-2.5 text-center',
+        alert && 'ring-1 ring-inset ring-red-200 dark:ring-red-800',
+      )}
+    >
+      <div className={cn('flex items-center justify-center mb-1', color)}>{icon}</div>
+      <p
+        className={cn('text-lg font-bold leading-tight', alert && 'text-red-600 dark:text-red-400')}
+      >
         {value}
       </p>
       <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{sub}</p>
       <p className="text-[10px] text-muted-foreground font-medium leading-tight">{label}</p>
     </div>
-  )
+  );
 }
 
 function StatusCount({ label, count, color }: { label: string; count: number; color: string }) {
@@ -550,7 +620,7 @@ function StatusCount({ label, count, color }: { label: string; count: number; co
       </div>
       <p className="text-[10px] text-muted-foreground">{label}</p>
     </div>
-  )
+  );
 }
 
 function NCRCategoryBar({
@@ -559,12 +629,12 @@ function NCRCategoryBar({
   total,
   color,
 }: {
-  label: string
-  count: number
-  total: number
-  color: string
+  label: string;
+  count: number;
+  total: number;
+  color: string;
 }) {
-  const pct = total > 0 ? (count / total) * 100 : 0
+  const pct = total > 0 ? (count / total) * 100 : 0;
   return (
     <div className="flex items-center gap-3">
       <span className="text-xs w-20 text-muted-foreground">{label}</span>
@@ -573,38 +643,92 @@ function NCRCategoryBar({
       </div>
       <span className="text-xs font-medium w-6 text-right">{count}</span>
     </div>
-  )
+  );
 }
 
 function ActivityIcon({ type }: { type: string }) {
-  const base = 'h-4 w-4 mt-0.5 flex-shrink-0'
+  const base = 'h-4 w-4 mt-0.5 flex-shrink-0';
   switch (type) {
     case 'ncr':
-      return <AlertTriangle className={cn(base, 'text-red-500')} />
+      return <AlertTriangle className={cn(base, 'text-red-500')} />;
     case 'lot':
-      return <MapPin className={cn(base, 'text-blue-500')} />
+      return <MapPin className={cn(base, 'text-blue-500')} />;
     case 'holdpoint':
-      return <Clock className={cn(base, 'text-orange-500')} />
+      return <Clock className={cn(base, 'text-orange-500')} />;
     case 'docket':
-      return <FileCheck className={cn(base, 'text-amber-500')} />
+      return <FileCheck className={cn(base, 'text-amber-500')} />;
     case 'diary':
-      return <Calendar className={cn(base, 'text-purple-500')} />
+      return <Calendar className={cn(base, 'text-purple-500')} />;
     default:
-      return <Activity className={cn(base, 'text-muted-foreground')} />
+      return <Activity className={cn(base, 'text-muted-foreground')} />;
   }
 }
 
-function formatRelativeTime(timestamp: string): string {
-  const now = new Date()
-  const date = new Date(timestamp)
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / (1000 * 60))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+function getSafeProjectLink(
+  link: string | undefined,
+  projectRouteBase: string,
+  fallback: string,
+): string {
+  if (
+    link &&
+    (link === projectRouteBase || link.startsWith(`${projectRouteBase}/`)) &&
+    !link.startsWith('//')
+  ) {
+    return link;
+  }
+  return fallback;
+}
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString()
+function getAttentionFallbackRoute(type: AttentionItem['type'], projectRouteBase: string): string {
+  if (type === 'ncr') {
+    return `${projectRouteBase}/ncr`;
+  }
+  return `${projectRouteBase}/hold-points`;
+}
+
+function getActivityFallbackRoute(
+  type: ProjectDashboardData['recentActivity'][number]['type'],
+  projectRouteBase: string,
+): string {
+  switch (type) {
+    case 'lot':
+      return `${projectRouteBase}/lots`;
+    case 'ncr':
+      return `${projectRouteBase}/ncr`;
+    case 'holdpoint':
+      return `${projectRouteBase}/hold-points`;
+    case 'diary':
+      return `${projectRouteBase}/diary`;
+    case 'docket':
+      return `${projectRouteBase}/dockets`;
+    default:
+      return projectRouteBase;
+  }
+}
+
+function formatStatusLabel(status: string | null | undefined): string {
+  const normalized = status?.trim();
+  if (!normalized) return 'Draft';
+
+  return normalized
+    .replace(/[_-]+/g, ' ')
+    .replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+}
+
+function formatRelativeTime(timestamp: string): string {
+  const now = new Date();
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown time';
+  }
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
 }

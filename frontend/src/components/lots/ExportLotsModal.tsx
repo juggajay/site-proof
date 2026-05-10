@@ -1,30 +1,45 @@
-import { useState, useMemo } from 'react'
-import { Download, Check, Calendar } from 'lucide-react'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useState, useMemo } from 'react';
+import { Download, Check, Calendar } from 'lucide-react';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { downloadCsv } from '@/lib/csv';
 
 interface ExportColumn {
-  key: string
-  label: string
-  required?: boolean
+  key: string;
+  label: string;
+  required?: boolean;
+}
+
+interface ExportLot {
+  lotNumber?: string | null;
+  description?: string | null;
+  chainageStart?: number | string | null;
+  chainageEnd?: number | string | null;
+  activityType?: string | null;
+  status?: string | null;
+  budgetAmount?: number | string | null;
+  createdAt?: string | null;
+  assignedSubcontractor?: {
+    companyName?: string | null;
+  } | null;
 }
 
 interface ExportLotsModalProps {
-  projectId: string
-  lots: any[]
-  canViewBudgets: boolean
-  isSubcontractor: boolean
-  onClose: () => void
+  projectId: string;
+  lots: ExportLot[];
+  canViewBudgets: boolean;
+  isSubcontractor: boolean;
+  onClose: () => void;
 }
 
 // Helper to parse date from input
 const parseDateFromInput = (value: string): Date | null => {
-  if (!value) return null
-  const date = new Date(value)
-  return isNaN(date.getTime()) ? null : date
-}
+  if (!value) return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : date;
+};
 
 const ALL_COLUMNS: ExportColumn[] = [
   { key: 'lotNumber', label: 'Lot Number', required: true },
@@ -35,7 +50,7 @@ const ALL_COLUMNS: ExportColumn[] = [
   { key: 'status', label: 'Status' },
   { key: 'budgetAmount', label: 'Budget' },
   { key: 'subcontractor', label: 'Subcontractor' },
-]
+];
 
 export function ExportLotsModal({
   projectId,
@@ -46,150 +61,129 @@ export function ExportLotsModal({
 }: ExportLotsModalProps) {
   // Filter columns based on permissions
   const availableColumns = ALL_COLUMNS.filter((col) => {
-    if (col.key === 'budgetAmount' && !canViewBudgets) return false
-    if (col.key === 'subcontractor' && isSubcontractor) return false
-    return true
-  })
+    if (col.key === 'budgetAmount' && !canViewBudgets) return false;
+    if (col.key === 'subcontractor' && isSubcontractor) return false;
+    return true;
+  });
 
   // Initialize selected columns (all selected by default except conditionally hidden ones)
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(
-    new Set(availableColumns.map((col) => col.key))
-  )
+    new Set(availableColumns.map((col) => col.key)),
+  );
 
   // Date range filter state
-  const [startDate, setStartDate] = useState<string>('')
-  const [endDate, setEndDate] = useState<string>('')
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   // Filter lots by date range
   const filteredLots = useMemo(() => {
-    let result = lots
+    let result = lots;
 
     if (startDate) {
-      const start = parseDateFromInput(startDate)
+      const start = parseDateFromInput(startDate);
       if (start) {
         // Set to start of day
-        start.setHours(0, 0, 0, 0)
+        start.setHours(0, 0, 0, 0);
         result = result.filter((lot) => {
-          const lotDate = new Date(lot.createdAt)
-          return lotDate >= start
-        })
+          if (!lot.createdAt) return false;
+          const lotDate = new Date(lot.createdAt);
+          return lotDate >= start;
+        });
       }
     }
 
     if (endDate) {
-      const end = parseDateFromInput(endDate)
+      const end = parseDateFromInput(endDate);
       if (end) {
         // Set to end of day
-        end.setHours(23, 59, 59, 999)
+        end.setHours(23, 59, 59, 999);
         result = result.filter((lot) => {
-          const lotDate = new Date(lot.createdAt)
-          return lotDate <= end
-        })
+          if (!lot.createdAt) return false;
+          const lotDate = new Date(lot.createdAt);
+          return lotDate <= end;
+        });
       }
     }
 
-    return result
-  }, [lots, startDate, endDate])
+    return result;
+  }, [lots, startDate, endDate]);
 
   const toggleColumn = (key: string) => {
-    const column = availableColumns.find((c) => c.key === key)
-    if (column?.required) return // Can't deselect required columns
+    const column = availableColumns.find((c) => c.key === key);
+    if (column?.required) return; // Can't deselect required columns
 
-    const newSelected = new Set(selectedColumns)
+    const newSelected = new Set(selectedColumns);
     if (newSelected.has(key)) {
-      newSelected.delete(key)
+      newSelected.delete(key);
     } else {
-      newSelected.add(key)
+      newSelected.add(key);
     }
-    setSelectedColumns(newSelected)
-  }
+    setSelectedColumns(newSelected);
+  };
 
   const selectAll = () => {
-    setSelectedColumns(new Set(availableColumns.map((col) => col.key)))
-  }
+    setSelectedColumns(new Set(availableColumns.map((col) => col.key)));
+  };
 
   const selectNone = () => {
     // Keep only required columns
     setSelectedColumns(
-      new Set(availableColumns.filter((col) => col.required).map((col) => col.key))
-    )
-  }
+      new Set(availableColumns.filter((col) => col.required).map((col) => col.key)),
+    );
+  };
 
   const handleExport = () => {
     // Build headers based on selected columns
     const headers = availableColumns
       .filter((col) => selectedColumns.has(col.key))
-      .map((col) => col.label)
+      .map((col) => col.label);
 
     // Convert lots to CSV rows (using filtered lots)
     const rows = filteredLots.map((lot) => {
-      const row: string[] = []
+      const row: string[] = [];
       availableColumns.forEach((col) => {
-        if (!selectedColumns.has(col.key)) return
+        if (!selectedColumns.has(col.key)) return;
 
         switch (col.key) {
           case 'lotNumber':
-            row.push(lot.lotNumber || '')
-            break
+            row.push(lot.lotNumber || '');
+            break;
           case 'description':
-            row.push(lot.description || '')
-            break
+            row.push(lot.description || '');
+            break;
           case 'chainageStart':
-            row.push(lot.chainageStart?.toString() || '')
-            break
+            row.push(lot.chainageStart?.toString() || '');
+            break;
           case 'chainageEnd':
-            row.push(lot.chainageEnd?.toString() || '')
-            break
+            row.push(lot.chainageEnd?.toString() || '');
+            break;
           case 'activityType':
-            row.push(lot.activityType || '')
-            break
+            row.push(lot.activityType || '');
+            break;
           case 'status':
-            row.push(lot.status || '')
-            break
+            row.push(lot.status || '');
+            break;
           case 'budgetAmount':
-            row.push(lot.budgetAmount?.toString() || '')
-            break
+            row.push(lot.budgetAmount?.toString() || '');
+            break;
           case 'subcontractor':
-            row.push(lot.assignedSubcontractor?.companyName || '')
-            break
+            row.push(lot.assignedSubcontractor?.companyName || '');
+            break;
         }
-      })
-      return row
-    })
+      });
+      return row;
+    });
 
-    // Escape CSV values (handle commas, quotes, newlines)
-    const escapeCSV = (value: string) => {
-      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-        return `"${value.replace(/"/g, '""')}"`
-      }
-      return value
-    }
+    downloadCsv(`lot-register-${projectId}-${new Date().toISOString().split('T')[0]}.csv`, [
+      headers,
+      ...rows,
+    ]);
 
-    // Build CSV content
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row) => row.map(escapeCSV).join(','))
-    ].join('\n')
+    onClose();
+  };
 
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute(
-      'download',
-      `lot-register-${projectId}-${new Date().toISOString().split('T')[0]}.csv`
-    )
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    onClose()
-  }
-
-  const selectedCount = selectedColumns.size
-  const totalCount = availableColumns.length
+  const selectedCount = selectedColumns.size;
+  const totalCount = availableColumns.length;
 
   return (
     <Modal onClose={onClose} className="max-w-md">
@@ -206,17 +200,11 @@ export function ExportLotsModal({
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium">Select columns to include:</p>
             <div className="flex gap-2 text-xs">
-              <button
-                onClick={selectAll}
-                className="text-primary hover:underline"
-              >
+              <button onClick={selectAll} className="text-primary hover:underline">
                 Select All
               </button>
               <span className="text-muted-foreground">|</span>
-              <button
-                onClick={selectNone}
-                className="text-primary hover:underline"
-              >
+              <button onClick={selectNone} className="text-primary hover:underline">
                 Select None
               </button>
             </div>
@@ -238,9 +226,7 @@ export function ExportLotsModal({
                       : 'border-input'
                   }`}
                 >
-                  {selectedColumns.has(column.key) && (
-                    <Check className="h-3 w-3" />
-                  )}
+                  {selectedColumns.has(column.key) && <Check className="h-3 w-3" />}
                 </div>
                 <span className="flex-1">{column.label}</span>
                 {column.required && (
@@ -280,8 +266,8 @@ export function ExportLotsModal({
           {(startDate || endDate) && (
             <button
               onClick={() => {
-                setStartDate('')
-                setEndDate('')
+                setStartDate('');
+                setEndDate('');
               }}
               className="text-xs text-primary hover:underline mt-2"
             >
@@ -304,14 +290,11 @@ export function ExportLotsModal({
         <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button
-          onClick={handleExport}
-          disabled={selectedCount === 0 || filteredLots.length === 0}
-        >
+        <Button onClick={handleExport} disabled={selectedCount === 0 || filteredLots.length === 0}>
           <Download className="h-4 w-4" />
           Export CSV
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

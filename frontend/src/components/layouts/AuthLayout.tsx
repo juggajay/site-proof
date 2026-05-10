@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet } from 'react-router-dom';
 
 export function AuthLayout() {
   return (
@@ -13,5 +13,5 @@ export function AuthLayout() {
         </div>
       </div>
     </div>
-  )
+  );
 }

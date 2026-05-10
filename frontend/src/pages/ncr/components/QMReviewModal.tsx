@@ -1,82 +1,79 @@
-import { useState, memo } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { apiFetch } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { handleApiError } from '@/lib/errorHandling'
-import type { NCR } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { useRef, useState, memo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import { handleApiError } from '@/lib/errorHandling';
+import type { NCR } from '../types';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const qmReviewSchema = z.object({
-  qmReviewComments: z.string().optional().default(''),
-})
+  qmReviewComments: z.string().trim().optional().default(''),
+});
 
-type QMReviewFormData = z.infer<typeof qmReviewSchema>
+type QMReviewFormData = z.infer<typeof qmReviewSchema>;
 
 interface QMReviewModalProps {
-  isOpen: boolean
-  ncr: NCR | null
-  onClose: () => void
-  onSuccess: () => void
+  isOpen: boolean;
+  ncr: NCR | null;
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
-function QMReviewModalInner({
-  isOpen,
-  ncr,
-  onClose,
-  onSuccess,
-}: QMReviewModalProps) {
-  const [submittingReview, setSubmittingReview] = useState(false)
+function QMReviewModalInner({ isOpen, ncr, onClose, onSuccess }: QMReviewModalProps) {
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const submittingReviewRef = useRef(false);
 
-  const {
-    register,
-    getValues,
-    reset,
-  } = useForm<QMReviewFormData>({
+  const { register, getValues, reset } = useForm<QMReviewFormData>({
     resolver: zodResolver(qmReviewSchema),
     mode: 'onBlur',
     defaultValues: {
       qmReviewComments: '',
     },
-  })
+  });
 
   const handleQmReview = async (action: 'accept' | 'request_revision') => {
-    if (!ncr) return
+    if (!ncr || submittingReviewRef.current) return;
 
-    const { qmReviewComments } = getValues()
-    setSubmittingReview(true)
+    const { qmReviewComments } = getValues();
+    submittingReviewRef.current = true;
+    setSubmittingReview(true);
     try {
-      const data = await apiFetch<{ message: string }>(`/api/ncrs/${ncr.id}/qm-review`, {
-        method: 'POST',
-        body: JSON.stringify({
-          action,
-          comments: qmReviewComments || undefined,
-        }),
-      })
+      const data = await apiFetch<{ message: string }>(
+        `/api/ncrs/${encodeURIComponent(ncr.id)}/qm-review`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            action,
+            comments: qmReviewComments?.trim() || undefined,
+          }),
+        },
+      );
 
       toast({
         title: action === 'accept' ? 'Response Accepted' : 'Revision Requested',
         description: data.message,
-      })
-      handleClose()
-      onSuccess()
+      });
+      handleClose();
+      onSuccess();
     } catch (err) {
-      handleApiError(err, 'Failed to submit review')
+      handleApiError(err, 'Failed to submit review');
     } finally {
-      setSubmittingReview(false)
+      submittingReviewRef.current = false;
+      setSubmittingReview(false);
     }
-  }
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset();
+    onClose();
+  };
 
-  if (!isOpen || !ncr) return null
+  if (!isOpen || !ncr) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-lg">
@@ -91,7 +88,10 @@ function QMReviewModalInner({
         <div className="mb-4">
           <p className="text-sm font-medium text-foreground mb-2">Submitted Response:</p>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-            <p className="text-amber-800">The responsible party has submitted a response. Review the root cause analysis and proposed corrective action.</p>
+            <p className="text-amber-800">
+              The responsible party has submitted a response. Review the root cause analysis and
+              proposed corrective action.
+            </p>
           </div>
         </div>
 
@@ -106,12 +106,7 @@ function QMReviewModalInner({
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleClose}
-          disabled={submittingReview}
-        >
+        <Button type="button" variant="outline" onClick={handleClose} disabled={submittingReview}>
           Cancel
         </Button>
         <Button
@@ -130,7 +125,7 @@ function QMReviewModalInner({
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
-export const QMReviewModal = memo(QMReviewModalInner)
+export const QMReviewModal = memo(QMReviewModalInner);

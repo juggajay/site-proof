@@ -1,15 +1,15 @@
 # SQL Scripts
 
-This folder contains SQL scripts for database migrations and maintenance tasks.
+This folder contains SQL scripts for legacy data fixes and maintenance tasks.
 
-Since this project uses Supabase as a hosted PostgreSQL database (not Prisma migrations),
-these scripts document database changes and can be executed manually or via `prisma db execute`.
+Schema changes are managed through Prisma migrations. Use these scripts only for targeted data
+backfills or operational maintenance that is not part of the Prisma schema.
 
 ## Running a migration
 
 ```bash
 cd backend
-pnpm prisma db execute --file sql/script_name.sql
+npx prisma db execute --file sql/script_name.sql
 ```
 
 ## Scripts

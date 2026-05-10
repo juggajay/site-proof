@@ -1,47 +1,73 @@
-import React from 'react'
-import { Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react'
-import type { CompletenessData, CompletenessLot, CompletenessIssue } from '../types'
-import { formatCurrency } from '../utils'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
+import React from 'react';
+import { Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react';
+import type { CompletenessData, CompletenessLot, CompletenessIssue } from '../types';
+import { formatCurrency } from '../utils';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
 
 interface CompletenessCheckModalProps {
-  loading: boolean
-  data: CompletenessData | null
-  onClose: () => void
-  onExcludeLots: () => void
+  loading: boolean;
+  data: CompletenessData | null;
+  onClose: () => void;
 }
 
 function LotIssueItem({ issue }: { issue: CompletenessIssue }) {
   return (
-    <div className={`flex items-start gap-2 p-2 rounded text-sm ${
-      issue.severity === 'critical' ? 'bg-red-100' :
-      issue.severity === 'warning' ? 'bg-amber-100' : 'bg-primary/10'
-    }`}>
-      {issue.severity === 'critical' && <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />}
-      {issue.severity === 'warning' && <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />}
+    <div
+      className={`flex items-start gap-2 p-2 rounded text-sm ${
+        issue.severity === 'critical'
+          ? 'bg-red-100'
+          : issue.severity === 'warning'
+            ? 'bg-amber-100'
+            : 'bg-primary/10'
+      }`}
+    >
+      {issue.severity === 'critical' && (
+        <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+      )}
+      {issue.severity === 'warning' && (
+        <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+      )}
       {issue.severity === 'info' && <Info className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />}
       <div>
-        <div className={`font-medium ${
-          issue.severity === 'critical' ? 'text-red-800' :
-          issue.severity === 'warning' ? 'text-amber-800' : 'text-primary'
-        }`}>{issue.message}</div>
-        <div className={`text-xs mt-0.5 ${
-          issue.severity === 'critical' ? 'text-red-700' :
-          issue.severity === 'warning' ? 'text-amber-700' : 'text-primary/80'
-        }`}>{issue.suggestion}</div>
+        <div
+          className={`font-medium ${
+            issue.severity === 'critical'
+              ? 'text-red-800'
+              : issue.severity === 'warning'
+                ? 'text-amber-800'
+                : 'text-primary'
+          }`}
+        >
+          {issue.message}
+        </div>
+        <div
+          className={`text-xs mt-0.5 ${
+            issue.severity === 'critical'
+              ? 'text-red-700'
+              : issue.severity === 'warning'
+                ? 'text-amber-700'
+                : 'text-primary/80'
+          }`}
+        >
+          {issue.suggestion}
+        </div>
       </div>
     </div>
-  )
+  );
 }
 
 function LotAnalysisCard({ lot }: { lot: CompletenessLot }) {
   return (
-    <div className={`rounded-lg border p-4 ${
-      lot.recommendation === 'exclude' ? 'border-red-200 bg-red-50' :
-      lot.recommendation === 'review' ? 'border-amber-200 bg-amber-50' :
-      'border-green-200 bg-green-50'
-    }`}>
+    <div
+      className={`rounded-lg border p-4 ${
+        lot.recommendation === 'exclude'
+          ? 'border-red-200 bg-red-50'
+          : lot.recommendation === 'review'
+            ? 'border-amber-200 bg-amber-50'
+            : 'border-green-200 bg-green-50'
+      }`}
+    >
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2">
@@ -67,10 +93,15 @@ function LotAnalysisCard({ lot }: { lot: CompletenessLot }) {
             {formatCurrency(lot.claimAmount)}
           </div>
         </div>
-        <div className={`text-2xl font-bold ${
-          lot.completenessScore >= 80 ? 'text-green-600' :
-          lot.completenessScore >= 60 ? 'text-amber-600' : 'text-red-600'
-        }`}>
+        <div
+          className={`text-2xl font-bold ${
+            lot.completenessScore >= 80
+              ? 'text-green-600'
+              : lot.completenessScore >= 60
+                ? 'text-amber-600'
+                : 'text-red-600'
+          }`}
+        >
           {lot.completenessScore}%
         </div>
       </div>
@@ -115,14 +146,13 @@ function LotAnalysisCard({ lot }: { lot: CompletenessLot }) {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 export const CompletenessCheckModal = React.memo(function CompletenessCheckModal({
   loading,
   data,
   onClose,
-  onExcludeLots,
 }: CompletenessCheckModalProps) {
   return (
     <Modal onClose={onClose} className="max-w-4xl">
@@ -137,17 +167,24 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
           <div className="flex flex-col items-center justify-center p-12">
             <Loader2 className="h-12 w-12 animate-spin text-purple-600 mb-4" />
             <p className="text-muted-foreground">Analyzing claim completeness...</p>
-            <p className="text-sm text-muted-foreground mt-1">Checking ITP completion, hold points, test results, NCRs, and evidence</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Checking ITP completion, hold points, test results, NCRs, and evidence
+            </p>
           </div>
         ) : data ? (
           <div className="space-y-6">
             {/* Summary Section */}
             <div className="grid gap-4 md:grid-cols-4">
               <div className="rounded-lg border bg-card p-4 text-center">
-                <div className={`text-3xl font-bold ${
-                  data.summary.averageCompletenessScore >= 80 ? 'text-green-600' :
-                  data.summary.averageCompletenessScore >= 60 ? 'text-amber-600' : 'text-red-600'
-                }`}>
+                <div
+                  className={`text-3xl font-bold ${
+                    data.summary.averageCompletenessScore >= 80
+                      ? 'text-green-600'
+                      : data.summary.averageCompletenessScore >= 60
+                        ? 'text-amber-600'
+                        : 'text-red-600'
+                  }`}
+                >
                   {data.summary.averageCompletenessScore}%
                 </div>
                 <p className="text-sm text-muted-foreground">Average Score</p>
@@ -167,11 +204,15 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
                 <p className="text-sm text-muted-foreground mt-1">Lot Status</p>
               </div>
               <div className="rounded-lg border bg-card p-4 text-center">
-                <div className="text-xl font-bold">{formatCurrency(data.summary.totalClaimAmount)}</div>
+                <div className="text-xl font-bold">
+                  {formatCurrency(data.summary.totalClaimAmount)}
+                </div>
                 <p className="text-sm text-muted-foreground">Total Claim</p>
               </div>
               <div className="rounded-lg border bg-card p-4 text-center">
-                <div className="text-xl font-bold text-green-600">{formatCurrency(data.summary.recommendedAmount)}</div>
+                <div className="text-xl font-bold text-green-600">
+                  {formatCurrency(data.summary.recommendedAmount)}
+                </div>
                 <p className="text-sm text-muted-foreground">Recommended</p>
               </div>
             </div>
@@ -194,6 +235,13 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
               </div>
             )}
 
+            {data.summary.excludeCount > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                Review the claim lots before submission. Lots marked for exclusion should be removed
+                by creating a corrected claim package.
+              </div>
+            )}
+
             {/* Lot-by-Lot Analysis */}
             <div>
               <h3 className="font-semibold mb-3">Lot Analysis</h3>
@@ -210,16 +258,7 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
         <Button variant="outline" onClick={onClose}>
           Close
         </Button>
-        {data && data.summary.excludeCount > 0 && (
-          <Button
-            onClick={onExcludeLots}
-            className="bg-amber-600 hover:bg-amber-700"
-          >
-            <XCircle className="h-4 w-4" />
-            Exclude Problem Lots
-          </Button>
-        )}
       </ModalFooter>
     </Modal>
-  )
-})
+  );
+});

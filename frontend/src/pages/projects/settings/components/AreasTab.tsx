@@ -1,7 +1,8 @@
-import { MapPin } from 'lucide-react'
+import { MapPin } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface AreasTabProps {
-  projectId: string
+  projectId: string;
 }
 
 export function AreasTab({ projectId }: AreasTabProps) {
@@ -12,14 +13,14 @@ export function AreasTab({ projectId }: AreasTabProps) {
         <p className="text-sm text-muted-foreground mb-4">
           Define areas or zones within your project for organization and reporting.
         </p>
-        <a
-          href={`/projects/${projectId}/areas`}
+        <Link
+          to={`/projects/${encodeURIComponent(projectId)}/areas`}
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
         >
           <MapPin className="h-4 w-4" />
           Manage Areas
-        </a>
+        </Link>
       </div>
     </div>
-  )
+  );
 }

@@ -1,50 +1,51 @@
 // WeatherWidget - Weather display for foreman dashboard
-import { Sun, Cloud, CloudRain, CloudSnow, Wind, Thermometer, Droplets } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Sun, Cloud, CloudRain, CloudSnow, Wind, Thermometer, Droplets } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface WeatherData {
-  conditions: string | null
-  temperatureMin: number | null
-  temperatureMax: number | null
-  rainfallMm: number | null
+  conditions: string | null;
+  temperatureMin: number | null;
+  temperatureMax: number | null;
+  rainfallMm: number | null;
 }
 
 interface WeatherWidgetProps {
-  weather: WeatherData
-  loading?: boolean
-  className?: string
+  weather: WeatherData;
+  loading?: boolean;
+  className?: string;
 }
 
 function getWeatherIcon(conditions: string | null) {
-  if (!conditions) return <Sun className="h-10 w-10 text-yellow-500" />
+  if (!conditions) return <Sun className="h-10 w-10 text-yellow-500" />;
 
-  const lower = conditions.toLowerCase()
+  const lower = conditions.toLowerCase();
   if (lower.includes('rain') || lower.includes('shower')) {
-    return <CloudRain className="h-10 w-10 text-blue-500" />
+    return <CloudRain className="h-10 w-10 text-blue-500" />;
   }
   if (lower.includes('snow')) {
-    return <CloudSnow className="h-10 w-10 text-blue-200" />
+    return <CloudSnow className="h-10 w-10 text-blue-200" />;
   }
   if (lower.includes('wind')) {
-    return <Wind className="h-10 w-10 text-muted-foreground" />
+    return <Wind className="h-10 w-10 text-muted-foreground" />;
   }
   if (lower.includes('cloud') || lower.includes('overcast')) {
-    return <Cloud className="h-10 w-10 text-muted-foreground" />
+    return <Cloud className="h-10 w-10 text-muted-foreground" />;
   }
-  return <Sun className="h-10 w-10 text-yellow-500" />
+  return <Sun className="h-10 w-10 text-yellow-500" />;
 }
 
 function getGradient(conditions: string | null) {
-  if (!conditions) return 'from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20'
+  if (!conditions)
+    return 'from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20';
 
-  const lower = conditions.toLowerCase()
+  const lower = conditions.toLowerCase();
   if (lower.includes('rain') || lower.includes('shower')) {
-    return 'from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20'
+    return 'from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20';
   }
   if (lower.includes('cloud') || lower.includes('overcast')) {
-    return 'from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20'
+    return 'from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20';
   }
-  return 'from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20'
+  return 'from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20';
 }
 
 export function WeatherWidget({ weather, loading, className }: WeatherWidgetProps) {
@@ -59,7 +60,7 @@ export function WeatherWidget({ weather, loading, className }: WeatherWidgetProp
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -67,7 +68,7 @@ export function WeatherWidget({ weather, loading, className }: WeatherWidgetProp
       className={cn(
         'rounded-lg border p-4 bg-gradient-to-r',
         getGradient(weather.conditions),
-        className
+        className,
       )}
     >
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -99,5 +100,5 @@ export function WeatherWidget({ weather, loading, className }: WeatherWidgetProp
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,4 +1,6 @@
 import Dexie, { Table } from 'dexie';
+import { devLog } from './logger';
+import { createLocalId } from './localIds';
 
 // Define types for offline storage
 export interface OfflineITPCompletion {
@@ -34,19 +36,48 @@ export interface OfflineChecklistItem {
   completedBy?: string;
 }
 
-export interface SyncQueueItem {
+interface SyncQueueBase<TType extends string, TAction extends 'create' | 'update', TData> {
   id?: number;
-  type: 'itp_completion' | 'photo_upload' | 'diary_save' | 'diary_submit' | 'docket_create' | 'docket_submit' | 'lot_edit' | 'lot_conflict' | 'delivery_save' | 'event_save';
-  action: 'create' | 'update';
-  data: any;
+  type: TType;
+  action: TAction;
+  data: TData;
   createdAt: string;
   attempts: number;
   lastError?: string;
 }
 
+type SyncQueueIdData<TKey extends string> = Record<TKey, string>;
+
+type LotEditSyncData = {
+  lotId: string;
+  forceOverwrite?: boolean;
+};
+
+type LotEditSyncQueueItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
+
+type LotConflictSyncData = {
+  lotId: string;
+  lotNumber: string;
+  projectId: string;
+  message: string;
+};
+
+export type SyncQueueItem =
+  | SyncQueueBase<'itp_completion', 'update', OfflineITPCompletion>
+  | SyncQueueBase<'photo_upload', 'create', SyncQueueIdData<'photoId'>>
+  | SyncQueueBase<'diary_save', 'update', SyncQueueIdData<'diaryId'>>
+  | SyncQueueBase<'diary_submit', 'update', SyncQueueIdData<'diaryId'>>
+  | SyncQueueBase<'docket_create', 'create' | 'update', SyncQueueIdData<'docketId'>>
+  | SyncQueueBase<'docket_submit', 'update', SyncQueueIdData<'docketId'>>
+  | SyncQueueBase<'lot_edit', 'update', LotEditSyncData>
+  | SyncQueueBase<'lot_conflict', 'create', LotConflictSyncData>
+  | SyncQueueBase<'delivery_save', 'create' | 'update', SyncQueueIdData<'deliveryId'>>
+  | SyncQueueBase<'event_save', 'create' | 'update', SyncQueueIdData<'eventId'>>;
+
 // Feature #313: Offline Docket Creation
 export interface OfflineDocket {
   id: string;
+  serverId?: string;
   projectId: string;
   subcontractorCompanyId: string;
   date: string;
@@ -162,7 +193,7 @@ export interface OfflinePhoto {
   syncStatus: 'synced' | 'pending' | 'error';
   localUpdatedAt: string;
   // Feature #317: Compression stats
-  originalSize?: number;   // Original file size in bytes
+  originalSize?: number; // Original file size in bytes
   compressedSize?: number; // Compressed size in bytes
 }
 
@@ -189,14 +220,23 @@ interface OfflineLotEditTable {
   localUpdatedAt: string;
   serverUpdatedAt?: string;
   conflictData?: {
-    serverVersion: any;
-    localVersion: any;
+    serverVersion: OfflineLotEditTable;
+    localVersion: OfflineLotEditTable;
     detectedAt: string;
     resolved: boolean;
     resolution?: 'local' | 'server' | 'merged';
   };
   editedBy: string;
 }
+
+type OfflineDailyDiaryServerData = Partial<
+  Omit<
+    OfflineDailyDiary,
+    'id' | 'projectId' | 'date' | 'createdBy' | 'syncStatus' | 'localUpdatedAt'
+  >
+> & {
+  createdById?: string;
+};
 
 // Dexie database class
 class OfflineDatabase extends Dexie {
@@ -216,7 +256,7 @@ class OfflineDatabase extends Dexie {
     this.version(1).stores({
       itpChecklists: 'id, lotId, templateId, cachedAt',
       itpCompletions: 'id, lotId, checklistItemId, syncStatus, localUpdatedAt',
-      syncQueue: '++id, type, action, createdAt'
+      syncQueue: '++id, type, action, createdAt',
     });
 
     // Version 2: Add photos table for Feature #311
@@ -224,7 +264,7 @@ class OfflineDatabase extends Dexie {
       itpChecklists: 'id, lotId, templateId, cachedAt',
       itpCompletions: 'id, lotId, checklistItemId, syncStatus, localUpdatedAt',
       syncQueue: '++id, type, action, createdAt',
-      photos: 'id, projectId, lotId, entityType, entityId, syncStatus, capturedAt'
+      photos: 'id, projectId, lotId, entityType, entityId, syncStatus, capturedAt',
     });
 
     // Version 3: Add diaries table for Feature #312
@@ -233,7 +273,7 @@ class OfflineDatabase extends Dexie {
       itpCompletions: 'id, lotId, checklistItemId, syncStatus, localUpdatedAt',
       syncQueue: '++id, type, action, createdAt',
       photos: 'id, projectId, lotId, entityType, entityId, syncStatus, capturedAt',
-      diaries: 'id, projectId, date, status, syncStatus, localUpdatedAt'
+      diaries: 'id, projectId, date, status, syncStatus, localUpdatedAt',
     });
 
     // Version 4: Add dockets table for Feature #313
@@ -243,7 +283,7 @@ class OfflineDatabase extends Dexie {
       syncQueue: '++id, type, action, createdAt',
       photos: 'id, projectId, lotId, entityType, entityId, syncStatus, capturedAt',
       diaries: 'id, projectId, date, status, syncStatus, localUpdatedAt',
-      dockets: 'id, projectId, subcontractorCompanyId, date, status, syncStatus, localUpdatedAt'
+      dockets: 'id, projectId, subcontractorCompanyId, date, status, syncStatus, localUpdatedAt',
     });
 
     // Version 5: Add lots table for Feature #314 (Sync Conflict Handling)
@@ -254,7 +294,7 @@ class OfflineDatabase extends Dexie {
       photos: 'id, projectId, lotId, entityType, entityId, syncStatus, capturedAt',
       diaries: 'id, projectId, date, status, syncStatus, localUpdatedAt',
       dockets: 'id, projectId, subcontractorCompanyId, date, status, syncStatus, localUpdatedAt',
-      lots: 'id, projectId, lotNumber, syncStatus, localUpdatedAt'
+      lots: 'id, projectId, lotNumber, syncStatus, localUpdatedAt',
     });
 
     // Version 6: Add delivery and event tables for mobile diary timeline
@@ -279,7 +319,7 @@ export async function cacheITPChecklist(
   lotId: string,
   templateId: string,
   templateName: string,
-  items: OfflineChecklistItem[]
+  items: OfflineChecklistItem[],
 ): Promise<void> {
   const checklist: OfflineITPChecklist = {
     id: `${lotId}-${templateId}`,
@@ -287,13 +327,15 @@ export async function cacheITPChecklist(
     templateId,
     templateName,
     items,
-    cachedAt: new Date().toISOString()
+    cachedAt: new Date().toISOString(),
   };
 
   await offlineDb.itpChecklists.put(checklist);
 }
 
-export async function getCachedITPChecklist(lotId: string): Promise<OfflineITPChecklist | undefined> {
+export async function getCachedITPChecklist(
+  lotId: string,
+): Promise<OfflineITPChecklist | undefined> {
   return offlineDb.itpChecklists.where('lotId').equals(lotId).first();
 }
 
@@ -302,7 +344,7 @@ export async function updateChecklistItemOffline(
   checklistItemId: string,
   status: 'pending' | 'completed' | 'na' | 'failed',
   notes?: string,
-  completedBy?: string
+  completedBy?: string,
 ): Promise<void> {
   const completion: OfflineITPCompletion = {
     id: `${lotId}-${checklistItemId}`,
@@ -313,7 +355,7 @@ export async function updateChecklistItemOffline(
     completedAt: status === 'completed' ? new Date().toISOString() : undefined,
     completedBy,
     syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   };
 
   // Store the completion
@@ -325,20 +367,20 @@ export async function updateChecklistItemOffline(
     action: 'update',
     data: completion,
     createdAt: new Date().toISOString(),
-    attempts: 0
+    attempts: 0,
   });
 
   // Update the cached checklist item
   const cachedChecklist = await getCachedITPChecklist(lotId);
   if (cachedChecklist) {
-    const updatedItems = cachedChecklist.items.map(item => {
+    const updatedItems = cachedChecklist.items.map((item) => {
       if (item.id === checklistItemId) {
         return {
           ...item,
           status,
           notes,
           completedAt: status === 'completed' ? new Date().toISOString() : undefined,
-          completedBy
+          completedBy,
         };
       }
       return item;
@@ -346,7 +388,7 @@ export async function updateChecklistItemOffline(
 
     await offlineDb.itpChecklists.update(cachedChecklist.id, {
       items: updatedItems,
-      cachedAt: new Date().toISOString()
+      cachedAt: new Date().toISOString(),
     });
   }
 }
@@ -368,9 +410,70 @@ export async function markSyncItemError(id: number, error: string): Promise<void
   if (item) {
     await offlineDb.syncQueue.update(id, {
       attempts: item.attempts + 1,
-      lastError: error
+      lastError: error,
     });
   }
+}
+
+function isLotEditSyncQueueItem(item: SyncQueueItem): item is LotEditSyncQueueItem {
+  return item.type === 'lot_edit';
+}
+
+async function getQueuedLotEditSyncs(
+  lotId: string,
+  options?: { forceOverwrite?: boolean },
+): Promise<LotEditSyncQueueItem[]> {
+  return offlineDb.syncQueue
+    .filter((item) => {
+      if (!isLotEditSyncQueueItem(item) || item.data.lotId !== lotId) {
+        return false;
+      }
+
+      if (options?.forceOverwrite === undefined) {
+        return true;
+      }
+
+      return Boolean(item.data.forceOverwrite) === options.forceOverwrite;
+    })
+    .toArray() as Promise<LotEditSyncQueueItem[]>;
+}
+
+async function removeQueuedLotEditSyncs(
+  lotId: string,
+  options?: { forceOverwrite?: boolean },
+): Promise<void> {
+  const queuedItems = await getQueuedLotEditSyncs(lotId, options);
+  const queuedIds = queuedItems
+    .map((item) => item.id)
+    .filter((id): id is number => typeof id === 'number');
+
+  if (queuedIds.length > 0) {
+    await offlineDb.syncQueue.bulkDelete(queuedIds);
+  }
+}
+
+async function queueLatestLotEditSync(
+  lotId: string,
+  options?: { forceOverwrite?: boolean },
+): Promise<void> {
+  if (options?.forceOverwrite) {
+    await removeQueuedLotEditSyncs(lotId);
+  } else {
+    const forcedSyncs = await getQueuedLotEditSyncs(lotId, { forceOverwrite: true });
+    await removeQueuedLotEditSyncs(lotId, { forceOverwrite: false });
+
+    if (forcedSyncs.length > 0) {
+      return;
+    }
+  }
+
+  await offlineDb.syncQueue.add({
+    type: 'lot_edit',
+    action: 'update',
+    data: options?.forceOverwrite ? { lotId, forceOverwrite: true } : { lotId },
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+  });
 }
 
 export async function markCompletionSynced(lotId: string, checklistItemId: string): Promise<void> {
@@ -397,19 +500,21 @@ export async function clearAllOfflineData(): Promise<void> {
 
 // Compression configuration
 const COMPRESSION_CONFIG = {
-  maxWidth: 1920,      // Maximum width in pixels
-  maxHeight: 1080,     // Maximum height in pixels
-  quality: 0.8,        // JPEG quality (0-1)
-  maxSizeKB: 500       // Target max file size in KB
+  maxWidth: 1920, // Maximum width in pixels
+  maxHeight: 1080, // Maximum height in pixels
+  quality: 0.8, // JPEG quality (0-1)
+  maxSizeKB: 500, // Target max file size in KB
 };
 
 // Generate unique photo ID
 function generatePhotoId(): string {
-  return `photo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return createLocalId('photo');
 }
 
 // Feature #317: Compress and resize image
-export async function compressImage(file: File): Promise<{ dataUrl: string; originalSize: number; compressedSize: number }> {
+export async function compressImage(
+  file: File,
+): Promise<{ dataUrl: string; originalSize: number; compressedSize: number }> {
   const originalSize = file.size;
 
   // Skip compression for already small files (< 100KB) or non-image files
@@ -428,49 +533,57 @@ export async function compressImage(file: File): Promise<{ dataUrl: string; orig
       return;
     }
 
+    const objectUrl = URL.createObjectURL(file);
+
     img.onload = () => {
-      // Calculate new dimensions while maintaining aspect ratio
-      let { width, height } = img;
-      const { maxWidth, maxHeight, quality } = COMPRESSION_CONFIG;
+      try {
+        // Calculate new dimensions while maintaining aspect ratio
+        let { width, height } = img;
+        const { maxWidth, maxHeight, quality } = COMPRESSION_CONFIG;
 
-      // Scale down if needed
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
+        // Scale down if needed
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+
+        // Set canvas dimensions
+        canvas.width = width;
+        canvas.height = height;
+
+        // Draw image with smoothing
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to JPEG with compression
+        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const compressedDataUrl = canvas.toDataURL(mimeType, quality);
+
+        // Calculate compressed size (base64 is ~1.37x larger than binary)
+        const base64Length = compressedDataUrl.split(',')[1]?.length || 0;
+        const compressedSize = Math.round(base64Length * 0.75);
+
+        devLog(
+          `[Compression] Original: ${(originalSize / 1024).toFixed(1)}KB -> Compressed: ${(compressedSize / 1024).toFixed(1)}KB (${Math.round((1 - compressedSize / originalSize) * 100)}% reduction)`,
+        );
+
+        resolve({ dataUrl: compressedDataUrl, originalSize, compressedSize });
+      } catch (error) {
+        reject(error);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
       }
-
-      // Set canvas dimensions
-      canvas.width = width;
-      canvas.height = height;
-
-      // Draw image with smoothing
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Convert to JPEG with compression
-      const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-      const compressedDataUrl = canvas.toDataURL(mimeType, quality);
-
-      // Calculate compressed size (base64 is ~1.37x larger than binary)
-      const base64Length = compressedDataUrl.split(',')[1]?.length || 0;
-      const compressedSize = Math.round(base64Length * 0.75);
-
-      console.log(`[Compression] Original: ${(originalSize / 1024).toFixed(1)}KB -> Compressed: ${(compressedSize / 1024).toFixed(1)}KB (${Math.round((1 - compressedSize / originalSize) * 100)}% reduction)`);
-
-      resolve({ dataUrl: compressedDataUrl, originalSize, compressedSize });
-
-      // Cleanup
-      URL.revokeObjectURL(img.src);
     };
 
     img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
       reject(new Error('Failed to load image for compression'));
     };
 
     // Load the image
-    img.src = URL.createObjectURL(file);
+    img.src = objectUrl;
   });
 }
 
@@ -497,7 +610,7 @@ export async function capturePhotoOffline(
     capturedBy: string;
     gpsLatitude?: number;
     gpsLongitude?: number;
-  }
+  },
 ): Promise<OfflinePhoto> {
   // Feature #317: Apply compression before storing
   const { dataUrl, originalSize, compressedSize } = await compressImage(file);
@@ -521,7 +634,7 @@ export async function capturePhotoOffline(
     localUpdatedAt: new Date().toISOString(),
     // Feature #317: Store compression stats
     originalSize,
-    compressedSize
+    compressedSize,
   };
 
   // Store the photo
@@ -533,7 +646,7 @@ export async function capturePhotoOffline(
     action: 'create',
     data: { photoId: photo.id },
     createdAt: new Date().toISOString(),
-    attempts: 0
+    attempts: 0,
   });
 
   return photo;
@@ -547,11 +660,12 @@ export async function getOfflinePhotosForLot(lotId: string): Promise<OfflinePhot
 // Get all photos for an entity
 export async function getOfflinePhotosForEntity(
   entityType: OfflinePhoto['entityType'],
-  entityId: string
+  entityId: string,
 ): Promise<OfflinePhoto[]> {
   return offlineDb.photos
-    .where('entityType').equals(entityType)
-    .and(p => p.entityId === entityId)
+    .where('entityType')
+    .equals(entityType)
+    .and((p) => p.entityId === entityId)
     .toArray();
 }
 
@@ -569,7 +683,7 @@ export async function getPendingPhotosCount(): Promise<number> {
 export async function markPhotoSynced(photoId: string, _serverDocumentId?: string): Promise<void> {
   await offlineDb.photos.update(photoId, {
     syncStatus: 'synced',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 }
 
@@ -577,7 +691,7 @@ export async function markPhotoSynced(photoId: string, _serverDocumentId?: strin
 export async function markPhotoSyncError(photoId: string): Promise<void> {
   await offlineDb.photos.update(photoId, {
     syncStatus: 'error',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 }
 
@@ -594,11 +708,11 @@ export async function getOfflinePhoto(photoId: string): Promise<OfflinePhoto | u
 // Update photo caption/tags
 export async function updateOfflinePhotoMeta(
   photoId: string,
-  updates: { caption?: string; tags?: string[]; lotId?: string; entityId?: string }
+  updates: { caption?: string; tags?: string[]; lotId?: string; entityId?: string },
 ): Promise<void> {
   await offlineDb.photos.update(photoId, {
     ...updates,
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 }
 
@@ -616,7 +730,7 @@ export async function saveDiaryOffline(
   projectId: string,
   date: string,
   data: Omit<OfflineDailyDiary, 'id' | 'projectId' | 'date' | 'syncStatus' | 'localUpdatedAt'>,
-  userId: string
+  userId: string,
 ): Promise<OfflineDailyDiary> {
   const id = generateDiaryId(projectId, date);
 
@@ -633,7 +747,7 @@ export async function saveDiaryOffline(
     notes: data.notes,
     createdBy: userId,
     syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   };
 
   // Store the diary
@@ -645,24 +759,21 @@ export async function saveDiaryOffline(
     action: 'update',
     data: { diaryId: id },
     createdAt: new Date().toISOString(),
-    attempts: 0
+    attempts: 0,
   });
 
   return diary;
 }
 
 // Submit diary offline
-export async function submitDiaryOffline(
-  projectId: string,
-  date: string
-): Promise<void> {
+export async function submitDiaryOffline(projectId: string, date: string): Promise<void> {
   const id = generateDiaryId(projectId, date);
 
   // Update status to submitted
   await offlineDb.diaries.update(id, {
     status: 'submitted',
     syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 
   // Add submission to sync queue
@@ -671,12 +782,15 @@ export async function submitDiaryOffline(
     action: 'update',
     data: { diaryId: id },
     createdAt: new Date().toISOString(),
-    attempts: 0
+    attempts: 0,
   });
 }
 
 // Get diary for a date
-export async function getOfflineDiary(projectId: string, date: string): Promise<OfflineDailyDiary | undefined> {
+export async function getOfflineDiary(
+  projectId: string,
+  date: string,
+): Promise<OfflineDailyDiary | undefined> {
   const id = generateDiaryId(projectId, date);
   return offlineDb.diaries.get(id);
 }
@@ -695,7 +809,7 @@ export async function getPendingDiaries(): Promise<OfflineDailyDiary[]> {
 export async function markDiarySynced(diaryId: string): Promise<void> {
   await offlineDb.diaries.update(diaryId, {
     syncStatus: 'synced',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 }
 
@@ -703,7 +817,7 @@ export async function markDiarySynced(diaryId: string): Promise<void> {
 export async function markDiarySyncError(diaryId: string): Promise<void> {
   await offlineDb.diaries.update(diaryId, {
     syncStatus: 'error',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 }
 
@@ -716,8 +830,8 @@ export async function deleteOfflineDiary(diaryId: string): Promise<void> {
 export async function cacheDiaryFromServer(
   projectId: string,
   date: string,
-  serverData: any,
-  userId: string
+  serverData: OfflineDailyDiaryServerData,
+  userId: string,
 ): Promise<void> {
   const id = generateDiaryId(projectId, date);
 
@@ -726,15 +840,25 @@ export async function cacheDiaryFromServer(
     projectId,
     date,
     status: serverData.status || 'draft',
-    weather: serverData.weather || { conditions: '', temperature: undefined, rainfall: undefined, notes: '' },
-    workforce: serverData.workforce || { contractors: 0, subcontractors: 0, visitors: 0, notes: '' },
+    weather: serverData.weather || {
+      conditions: '',
+      temperature: undefined,
+      rainfall: undefined,
+      notes: '',
+    },
+    workforce: serverData.workforce || {
+      contractors: 0,
+      subcontractors: 0,
+      visitors: 0,
+      notes: '',
+    },
     activities: serverData.activities || [],
     delays: serverData.delays || [],
     equipment: serverData.equipment || [],
     notes: serverData.notes || '',
     createdBy: serverData.createdById || userId,
     syncStatus: 'synced', // Already on server
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   };
 
   await offlineDb.diaries.put(diary);
@@ -746,7 +870,7 @@ export async function cacheDiaryFromServer(
 
 // Generate docket ID
 function generateDocketId(): string {
-  return `docket-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return createLocalId('docket');
 }
 
 // Create docket offline
@@ -759,7 +883,7 @@ export async function createDocketOffline(
     plantEntries: OfflineDocket['plantEntries'];
     notes?: string;
   },
-  userId: string
+  userId: string,
 ): Promise<OfflineDocket> {
   const id = generateDocketId();
 
@@ -774,7 +898,7 @@ export async function createDocketOffline(
     notes: data.notes,
     createdBy: userId,
     syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   };
 
   // Store the docket
@@ -786,7 +910,7 @@ export async function createDocketOffline(
     action: 'create',
     data: { docketId: id },
     createdAt: new Date().toISOString(),
-    attempts: 0
+    attempts: 0,
   });
 
   return docket;
@@ -798,7 +922,7 @@ export async function submitDocketOffline(docketId: string): Promise<void> {
   await offlineDb.dockets.update(docketId, {
     status: 'pending_approval',
     syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 
   // Add submission to sync queue
@@ -807,19 +931,19 @@ export async function submitDocketOffline(docketId: string): Promise<void> {
     action: 'update',
     data: { docketId },
     createdAt: new Date().toISOString(),
-    attempts: 0
+    attempts: 0,
   });
 }
 
 // Update docket offline
 export async function updateDocketOffline(
   docketId: string,
-  updates: Partial<Pick<OfflineDocket, 'labourEntries' | 'plantEntries' | 'notes'>>
+  updates: Partial<Pick<OfflineDocket, 'labourEntries' | 'plantEntries' | 'notes'>>,
 ): Promise<void> {
   await offlineDb.dockets.update(docketId, {
     ...updates,
     syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 
   // Add update to sync queue
@@ -828,7 +952,7 @@ export async function updateDocketOffline(
     action: 'update',
     data: { docketId },
     createdAt: new Date().toISOString(),
-    attempts: 0
+    attempts: 0,
   });
 }
 
@@ -844,12 +968,9 @@ export async function getOfflineDocketsForProject(projectId: string): Promise<Of
 
 // Get offline dockets for a subcontractor
 export async function getOfflineDocketsForSubcontractor(
-  subcontractorCompanyId: string
+  subcontractorCompanyId: string,
 ): Promise<OfflineDocket[]> {
-  return offlineDb.dockets
-    .where('subcontractorCompanyId')
-    .equals(subcontractorCompanyId)
-    .toArray();
+  return offlineDb.dockets.where('subcontractorCompanyId').equals(subcontractorCompanyId).toArray();
 }
 
 // Get all pending docket syncs
@@ -858,10 +979,21 @@ export async function getPendingDockets(): Promise<OfflineDocket[]> {
 }
 
 // Mark docket as synced
-export async function markDocketSynced(docketId: string, _serverId?: string): Promise<void> {
+export async function markDocketServerId(docketId: string, serverId?: string): Promise<void> {
+  if (!serverId) {
+    return;
+  }
+
   await offlineDb.dockets.update(docketId, {
+    serverId,
+  });
+}
+
+export async function markDocketSynced(docketId: string, serverId?: string): Promise<void> {
+  await offlineDb.dockets.update(docketId, {
+    ...(serverId ? { serverId } : {}),
     syncStatus: 'synced',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 }
 
@@ -869,7 +1001,7 @@ export async function markDocketSynced(docketId: string, _serverId?: string): Pr
 export async function markDocketSyncError(docketId: string): Promise<void> {
   await offlineDb.dockets.update(docketId, {
     syncStatus: 'error',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 }
 
@@ -933,7 +1065,7 @@ export interface SyncConflictNotification {
 export async function cacheLotForOfflineEdit(
   lotData: Partial<OfflineLotEdit> & { id: string; projectId: string; lotNumber: string },
   serverUpdatedAt: string,
-  userId: string
+  userId: string,
 ): Promise<OfflineLotEdit> {
   const lot: OfflineLotEdit = {
     id: lotData.id,
@@ -955,7 +1087,7 @@ export async function cacheLotForOfflineEdit(
     syncStatus: 'synced',
     localUpdatedAt: new Date().toISOString(),
     serverUpdatedAt,
-    editedBy: userId
+    editedBy: userId,
   };
 
   await offlineDb.lots.put(lot);
@@ -966,7 +1098,7 @@ export async function cacheLotForOfflineEdit(
 export async function saveLotEditOffline(
   lotDataOrId: OfflineLotEdit | string,
   updatesOrUserId?: Partial<OfflineLotEdit> | string,
-  userId?: string
+  userId?: string,
 ): Promise<OfflineLotEdit> {
   let updatedLot: OfflineLotEdit;
   let lotId: string;
@@ -988,7 +1120,7 @@ export async function saveLotEditOffline(
       ...updates,
       syncStatus: 'pending',
       localUpdatedAt: new Date().toISOString(),
-      editedBy
+      editedBy,
     } as OfflineLotEdit;
   } else {
     // New signature: saveLotEditOffline(lotData) - full lot object
@@ -996,21 +1128,14 @@ export async function saveLotEditOffline(
     updatedLot = {
       ...lotDataOrId,
       syncStatus: 'pending',
-      localUpdatedAt: new Date().toISOString()
+      localUpdatedAt: new Date().toISOString(),
     };
   }
 
   // Store the updated lot
   await offlineDb.lots.put(updatedLot as OfflineLotEditTable);
 
-  // Add to sync queue
-  await offlineDb.syncQueue.add({
-    type: 'lot_edit',
-    action: 'update',
-    data: { lotId },
-    createdAt: new Date().toISOString(),
-    attempts: 0
-  });
+  await queueLatestLotEditSync(lotId);
 
   return updatedLot;
 }
@@ -1027,12 +1152,16 @@ export async function getOfflineLotsForProject(projectId: string): Promise<Offli
 
 // Get pending lot edits
 export async function getPendingLotEdits(): Promise<OfflineLotEdit[]> {
-  return offlineDb.lots.where('syncStatus').equals('pending').toArray() as Promise<OfflineLotEdit[]>;
+  return offlineDb.lots.where('syncStatus').equals('pending').toArray() as Promise<
+    OfflineLotEdit[]
+  >;
 }
 
 // Get lots with conflicts
 export async function getConflictedLots(): Promise<OfflineLotEdit[]> {
-  return offlineDb.lots.where('syncStatus').equals('conflict').toArray() as Promise<OfflineLotEdit[]>;
+  return offlineDb.lots.where('syncStatus').equals('conflict').toArray() as Promise<
+    OfflineLotEdit[]
+  >;
 }
 
 // Detect and handle sync conflict
@@ -1054,16 +1183,19 @@ export async function detectLotSyncConflict(
     status?: string;
     budget?: number;
     notes?: string;
-  }
+  },
 ): Promise<{ hasConflict: boolean; conflictDetails?: OfflineLotEdit['conflictData'] }> {
-  const localLot = await offlineDb.lots.get(lotId) as OfflineLotEdit | undefined;
+  const localLot = (await offlineDb.lots.get(lotId)) as OfflineLotEdit | undefined;
 
-  if (!localLot || localLot.syncStatus !== 'pending') {
+  if (!localLot || (localLot.syncStatus !== 'pending' && localLot.syncStatus !== 'error')) {
     return { hasConflict: false };
   }
 
   // Compare server updatedAt with our last known server timestamp
-  if (localLot.serverUpdatedAt && new Date(serverData.updatedAt) > new Date(localLot.serverUpdatedAt)) {
+  if (
+    localLot.serverUpdatedAt &&
+    new Date(serverData.updatedAt) > new Date(localLot.serverUpdatedAt)
+  ) {
     // Server has been updated since we cached - CONFLICT!
     const conflictData: OfflineLotEdit['conflictData'] = {
       serverVersion: {
@@ -1086,31 +1218,31 @@ export async function detectLotSyncConflict(
         syncStatus: 'synced',
         localUpdatedAt: serverData.updatedAt,
         serverUpdatedAt: serverData.updatedAt,
-        editedBy: 'server'
+        editedBy: 'server',
       },
       localVersion: { ...localLot },
       detectedAt: new Date().toISOString(),
-      resolved: false
+      resolved: false,
     };
 
     // Update the lot with conflict status
     await offlineDb.lots.update(lotId, {
       syncStatus: 'conflict',
-      conflictData
+      conflictData,
     });
 
     // Add conflict notification to sync queue
     await offlineDb.syncQueue.add({
-      type: 'lot_conflict' as any,
+      type: 'lot_conflict',
       action: 'create',
       data: {
         lotId,
         lotNumber: localLot.lotNumber,
         projectId: localLot.projectId,
-        message: `Sync conflict detected for lot ${localLot.lotNumber}. Another user edited this lot while you were offline.`
+        message: `Sync conflict detected for lot ${localLot.lotNumber}. Another user edited this lot while you were offline.`,
       },
       createdAt: new Date().toISOString(),
-      attempts: 0
+      attempts: 0,
     });
 
     return { hasConflict: true, conflictDetails: conflictData };
@@ -1121,7 +1253,7 @@ export async function detectLotSyncConflict(
 
 // Resolve conflict - choose local version
 export async function resolveConflictWithLocal(lotId: string): Promise<void> {
-  const lot = await offlineDb.lots.get(lotId) as OfflineLotEdit | undefined;
+  const lot = (await offlineDb.lots.get(lotId)) as OfflineLotEdit | undefined;
   if (!lot || lot.syncStatus !== 'conflict') {
     throw new Error('No conflict to resolve');
   }
@@ -1132,46 +1264,40 @@ export async function resolveConflictWithLocal(lotId: string): Promise<void> {
     conflictData: {
       ...lot.conflictData!,
       resolved: true,
-      resolution: 'local'
-    }
+      resolution: 'local',
+    },
   } as Partial<OfflineLotEditTable>);
 
-  // Add back to sync queue to push local changes
-  await offlineDb.syncQueue.add({
-    type: 'lot_edit',
-    action: 'update',
-    data: { lotId, forceOverwrite: true },
-    createdAt: new Date().toISOString(),
-    attempts: 0
-  });
+  await queueLatestLotEditSync(lotId, { forceOverwrite: true });
 }
 
 // Resolve conflict - choose server version
 export async function resolveConflictWithServer(lotId: string): Promise<void> {
-  const lot = await offlineDb.lots.get(lotId) as OfflineLotEdit | undefined;
+  const lot = (await offlineDb.lots.get(lotId)) as OfflineLotEdit | undefined;
   if (!lot || lot.syncStatus !== 'conflict' || !lot.conflictData) {
     throw new Error('No conflict to resolve');
   }
 
   // Replace local with server version
   const serverVersion = lot.conflictData.serverVersion;
+  await removeQueuedLotEditSyncs(lotId);
   await offlineDb.lots.update(lotId, {
     ...serverVersion,
     syncStatus: 'synced',
     conflictData: {
       ...lot.conflictData,
       resolved: true,
-      resolution: 'server'
-    }
+      resolution: 'server',
+    },
   });
 }
 
 // Resolve conflict - merge versions
 export async function resolveConflictWithMerge(
   lotId: string,
-  mergedData: Partial<OfflineLotEdit>
+  mergedData: Partial<OfflineLotEdit>,
 ): Promise<void> {
-  const lot = await offlineDb.lots.get(lotId) as OfflineLotEdit | undefined;
+  const lot = (await offlineDb.lots.get(lotId)) as OfflineLotEdit | undefined;
   if (!lot || lot.syncStatus !== 'conflict') {
     throw new Error('No conflict to resolve');
   }
@@ -1184,18 +1310,11 @@ export async function resolveConflictWithMerge(
     conflictData: {
       ...lot.conflictData!,
       resolved: true,
-      resolution: 'merged'
-    }
+      resolution: 'merged',
+    },
   } as Partial<OfflineLotEditTable>);
 
-  // Add to sync queue to push merged version
-  await offlineDb.syncQueue.add({
-    type: 'lot_edit',
-    action: 'update',
-    data: { lotId, forceOverwrite: true },
-    createdAt: new Date().toISOString(),
-    attempts: 0
-  });
+  await queueLatestLotEditSync(lotId, { forceOverwrite: true });
 }
 
 // Mark lot as synced
@@ -1203,7 +1322,8 @@ export async function markLotSynced(lotId: string, serverUpdatedAt: string): Pro
   await offlineDb.lots.update(lotId, {
     syncStatus: 'synced',
     serverUpdatedAt,
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
+    conflictData: undefined,
   });
 }
 
@@ -1211,7 +1331,7 @@ export async function markLotSynced(lotId: string, serverUpdatedAt: string): Pro
 export async function markLotSyncError(lotId: string): Promise<void> {
   await offlineDb.lots.update(lotId, {
     syncStatus: 'error',
-    localUpdatedAt: new Date().toISOString()
+    localUpdatedAt: new Date().toISOString(),
   });
 }
 

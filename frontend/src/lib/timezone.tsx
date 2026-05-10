@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, ReactNode } from 'react';
+import { readLocalStorageItem, writeLocalStorageItem } from './storagePreferences';
 
 // Common timezones
 export const TIMEZONES = [
@@ -14,56 +15,62 @@ export const TIMEZONES = [
   { value: 'America/New_York', label: 'New York (EST/EDT)', offset: '-5/-4' },
   { value: 'America/Los_Angeles', label: 'Los Angeles (PST/PDT)', offset: '-8/-7' },
   { value: 'UTC', label: 'UTC', offset: '+0' },
-] as const
+] as const;
 
-export type TimezoneValue = typeof TIMEZONES[number]['value']
+export type TimezoneValue = (typeof TIMEZONES)[number]['value'];
 
 interface TimezoneContextValue {
-  timezone: string
-  setTimezone: (tz: string) => void
-  formatTime: (date: Date | string, options?: Intl.DateTimeFormatOptions) => string
-  formatDateTime: (date: Date | string) => string
+  timezone: string;
+  setTimezone: (tz: string) => void;
+  formatTime: (date: Date | string, options?: Intl.DateTimeFormatOptions) => string;
+  formatDateTime: (date: Date | string) => string;
 }
 
-const TimezoneContext = createContext<TimezoneContextValue | undefined>(undefined)
+const TimezoneContext = createContext<TimezoneContextValue | undefined>(undefined);
 
-const TIMEZONE_STORAGE_KEY = 'siteproof_timezone'
+const TIMEZONE_STORAGE_KEY = 'siteproof_timezone';
 
 // Get user's local timezone as default
 function getLocalTimezone(): string {
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch {
-    return 'Australia/Sydney' // Fallback
+    return 'Australia/Sydney'; // Fallback
+  }
+}
+
+function isValidTimezone(value: string | null): value is string {
+  if (!value?.trim()) {
+    return false;
+  }
+
+  try {
+    new Intl.DateTimeFormat('en-AU', { timeZone: value }).format(new Date(0));
+    return true;
+  } catch {
+    return false;
   }
 }
 
 export function TimezoneProvider({ children }: { children: ReactNode }) {
   const [timezone, setTimezoneState] = useState<string>(() => {
-    if (typeof window === 'undefined') return getLocalTimezone()
-    try {
-      const stored = localStorage.getItem(TIMEZONE_STORAGE_KEY)
-      if (stored) {
-        return stored
-      }
-    } catch (e) {
-      console.error('Error loading timezone:', e)
+    const stored = readLocalStorageItem(TIMEZONE_STORAGE_KEY);
+    if (isValidTimezone(stored)) {
+      return stored;
     }
-    return getLocalTimezone()
-  })
+
+    return getLocalTimezone();
+  });
 
   const setTimezone = (newTimezone: string) => {
-    setTimezoneState(newTimezone)
-    try {
-      localStorage.setItem(TIMEZONE_STORAGE_KEY, newTimezone)
-    } catch (e) {
-      console.error('Error saving timezone:', e)
-    }
-  }
+    const nextTimezone = isValidTimezone(newTimezone) ? newTimezone : getLocalTimezone();
+    setTimezoneState(nextTimezone);
+    writeLocalStorageItem(TIMEZONE_STORAGE_KEY, nextTimezone);
+  };
 
   const formatTime = (date: Date | string, options?: Intl.DateTimeFormatOptions): string => {
-    const d = typeof date === 'string' ? new Date(date) : date
-    if (isNaN(d.getTime())) return 'Invalid time'
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return 'Invalid time';
 
     try {
       return d.toLocaleTimeString('en-AU', {
@@ -71,15 +78,15 @@ export function TimezoneProvider({ children }: { children: ReactNode }) {
         hour: '2-digit',
         minute: '2-digit',
         ...options,
-      })
+      });
     } catch {
-      return d.toLocaleTimeString()
+      return d.toLocaleTimeString();
     }
-  }
+  };
 
   const formatDateTime = (date: Date | string): string => {
-    const d = typeof date === 'string' ? new Date(date) : date
-    if (isNaN(d.getTime())) return 'Invalid date'
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return 'Invalid date';
 
     try {
       return d.toLocaleString('en-AU', {
@@ -89,23 +96,23 @@ export function TimezoneProvider({ children }: { children: ReactNode }) {
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-      })
+      });
     } catch {
-      return d.toLocaleString()
+      return d.toLocaleString();
     }
-  }
+  };
 
   return (
     <TimezoneContext.Provider value={{ timezone, setTimezone, formatTime, formatDateTime }}>
       {children}
     </TimezoneContext.Provider>
-  )
+  );
 }
 
 export function useTimezone() {
-  const context = useContext(TimezoneContext)
+  const context = useContext(TimezoneContext);
   if (context === undefined) {
-    throw new Error('useTimezone must be used within a TimezoneProvider')
+    throw new Error('useTimezone must be used within a TimezoneProvider');
   }
-  return context
+  return context;
 }

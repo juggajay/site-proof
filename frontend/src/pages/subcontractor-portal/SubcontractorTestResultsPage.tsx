@@ -1,35 +1,64 @@
-import { Link } from 'react-router-dom'
-import {
-  ArrowLeft,
-  FlaskConical,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Clock,
-} from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { apiFetch } from '@/lib/api'
-import { extractErrorMessage } from '@/lib/errorHandling'
+import { Link } from 'react-router-dom';
+import { ArrowLeft, FlaskConical, AlertCircle, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { PortalAccessDenied } from './portalAccess';
+import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 
 interface TestResult {
-  id: string
-  lotId: string
-  lotNumber: string
-  testType: string
-  result: 'pass' | 'fail' | 'pending'
-  value?: string
-  testedAt: string
-  testedBy?: { fullName: string }
-  notes?: string
+  id: string;
+  lotId: string | null;
+  lotNumber: string;
+  testType: string;
+  result: 'pass' | 'fail' | 'pending';
+  value?: string;
+  testedAt: string;
+  testedBy?: { fullName: string };
+  notes?: string;
 }
 
 interface SubcontractorCompany {
-  id: string
-  companyName: string
-  projectId: string
-  projectName: string
+  id: string;
+  companyName: string;
+  projectId: string;
+  projectName: string;
+  portalAccess?: PortalAccess;
+}
+
+interface ApiTestResult {
+  id: string;
+  lotId: string | null;
+  lot?: { lotNumber?: string | null } | null;
+  testType: string;
+  passFail?: string | null;
+  status?: string | null;
+  resultValue?: number | string | null;
+  resultUnit?: string | null;
+  sampleDate?: string | null;
+  testDate?: string | null;
+  resultDate?: string | null;
+  createdAt: string;
+}
+
+function normalizeTestResult(test: ApiTestResult): TestResult {
+  const result = test.passFail === 'pass' || test.passFail === 'fail' ? test.passFail : 'pending';
+  const value =
+    test.resultValue != null
+      ? `${test.resultValue}${test.resultUnit ? ` ${test.resultUnit}` : ''}`
+      : undefined;
+
+  return {
+    id: test.id,
+    lotId: test.lotId,
+    lotNumber: test.lot?.lotNumber || 'Unassigned lot',
+    testType: test.testType,
+    result,
+    value,
+    testedAt: test.resultDate || test.testDate || test.sampleDate || test.createdAt,
+  };
 }
 
 function getResultBadge(result: string) {
@@ -40,21 +69,21 @@ function getResultBadge(result: string) {
           <CheckCircle2 className="h-3 w-3" />
           Pass
         </span>
-      )
+      );
     case 'fail':
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
           <XCircle className="h-3 w-3" />
           Fail
         </span>
-      )
+      );
     default:
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
           <Clock className="h-3 w-3" />
           Pending
         </span>
-      )
+      );
   }
 }
 
@@ -62,27 +91,34 @@ export function SubcontractorTestResultsPage() {
   const { data: company, isLoading: companyLoading } = useQuery({
     queryKey: queryKeys.portalCompanies,
     queryFn: async () => {
-      const res = await apiFetch<{ company: SubcontractorCompany }>('/api/subcontractors/my-company')
-      return res.company
+      const res = await apiFetch<{ company: SubcontractorCompany }>(
+        '/api/subcontractors/my-company',
+      );
+      return res.company;
     },
-  })
+  });
+  const canViewTestResults = isPortalModuleEnabled(company, 'testResults');
 
-  const { data: testResults = [], isLoading: testsLoading, error } = useQuery({
+  const {
+    data: testResults = [],
+    isLoading: testsLoading,
+    error,
+  } = useQuery({
     queryKey: queryKeys.portalTestResults,
     queryFn: async () => {
-      const res = await apiFetch<{ testResults?: TestResult[]; tests?: TestResult[] }>(
-        `/api/tests?projectId=${company!.projectId}&subcontractorView=true`
-      )
-      return res.testResults || res.tests || []
+      const res = await apiFetch<{ testResults?: ApiTestResult[] }>(
+        `/api/test-results?projectId=${company!.projectId}&subcontractorView=true`,
+      );
+      return (res.testResults || []).map(normalizeTestResult);
     },
-    enabled: !!company?.projectId,
-  })
+    enabled: !!company?.projectId && canViewTestResults,
+  });
 
-  const loading = companyLoading || testsLoading
+  const loading = companyLoading || (canViewTestResults && testsLoading);
 
-  const passed = testResults.filter(t => t.result === 'pass')
-  const failed = testResults.filter(t => t.result === 'fail')
-  const pending = testResults.filter(t => t.result === 'pending' || !t.result)
+  const passed = testResults.filter((t) => t.result === 'pass');
+  const failed = testResults.filter((t) => t.result === 'fail');
+  const pending = testResults.filter((t) => t.result === 'pending' || !t.result);
 
   if (loading) {
     return (
@@ -94,7 +130,11 @@ export function SubcontractorTestResultsPage() {
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-24 w-full rounded-lg" />
       </div>
-    )
+    );
+  }
+
+  if (!canViewTestResults) {
+    return <PortalAccessDenied moduleName="Test results" />;
   }
 
   if (error) {
@@ -112,7 +152,7 @@ export function SubcontractorTestResultsPage() {
           Back to Portal
         </Link>
       </div>
-    )
+    );
   }
 
   return (
@@ -203,7 +243,7 @@ export function SubcontractorTestResultsPage() {
         </>
       )}
     </div>
-  )
+  );
 }
 
 function TestResultCard({ testResult }: { testResult: TestResult }) {
@@ -219,9 +259,7 @@ function TestResultCard({ testResult }: { testResult: TestResult }) {
               <p className="font-medium text-foreground">{testResult.lotNumber}</p>
               <p className="text-sm text-muted-foreground">{testResult.testType}</p>
               {testResult.value && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Value: {testResult.value}
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">Value: {testResult.value}</p>
               )}
               <p className="text-xs text-muted-foreground mt-1">
                 {new Date(testResult.testedAt).toLocaleDateString()}
@@ -233,5 +271,5 @@ function TestResultCard({ testResult }: { testResult: TestResult }) {
         </div>
       </div>
     </div>
-  )
+  );
 }

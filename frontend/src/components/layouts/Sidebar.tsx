@@ -1,5 +1,5 @@
-import { NavLink, useParams } from 'react-router-dom'
-import { useEffect } from 'react'
+import { NavLink, useParams } from 'react-router-dom';
+import { useEffect } from 'react';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -22,36 +22,85 @@ import {
   ChevronLeft,
   ChevronRight,
   Briefcase,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useAuth } from '@/lib/auth'
-import { apiFetch } from '@/lib/api'
-import { useQuery } from '@tanstack/react-query'
-import { Button } from '@/components/ui/button'
-import { queryKeys } from '@/lib/queryKeys'
-import { useUIStore } from '@/stores/uiStore'  // Feature #442: Zustand client state
-import { ROLE_GROUPS, hasRoleInGroup, isAdminRole, isSubcontractorRole, hasCommercialAccess } from '@/lib/roles'
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { queryKeys } from '@/lib/queryKeys';
+import { useUIStore } from '@/stores/uiStore'; // Feature #442: Zustand client state
+import {
+  ROLE_GROUPS,
+  hasRoleInGroup,
+  isAdminRole,
+  isSubcontractorRole,
+  hasCommercialAccess,
+} from '@/lib/roles';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseSettings(settings: unknown) {
+  if (typeof settings === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(settings);
+      return isRecord(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return isRecord(settings) ? settings : null;
+}
 
 // Foreman simplified menu - only sees essential field items
-const FOREMAN_MENU_ITEMS = ['Lots', 'ITPs', 'Hold Points', 'Test Results', 'NCRs', 'Daily Diary', 'Docket Approvals']
+const FOREMAN_MENU_ITEMS = [
+  'Lots',
+  'ITPs',
+  'Hold Points',
+  'Test Results',
+  'NCRs',
+  'Daily Diary',
+  'Docket Approvals',
+];
 
 interface NavigationItem {
-  name: string
-  href: string
-  icon: typeof LayoutDashboard
-  requiresProject?: boolean
-  requiresCommercialAccess?: boolean
-  requiresAdmin?: boolean
-  requiresManagement?: boolean
-  allowedRoles?: readonly string[]
-  excludeRoles?: readonly string[]
+  name: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  requiresProject?: boolean;
+  requiresCommercialAccess?: boolean;
+  requiresAdmin?: boolean;
+  requiresManagement?: boolean;
+  allowedRoles?: readonly string[];
+  excludeRoles?: readonly string[];
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
-  { name: 'Portfolio', href: '/portfolio', icon: PieChart, requiresProject: false, requiresAdmin: true },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
-]
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard,
+    requiresProject: false,
+    excludeRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
+  {
+    name: 'Portfolio',
+    href: '/portfolio',
+    icon: PieChart,
+    requiresProject: false,
+    requiresAdmin: true,
+  },
+  {
+    name: 'Projects',
+    href: '/projects',
+    icon: FolderKanban,
+    requiresProject: false,
+    excludeRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
+];
 
 const projectNavigation: NavigationItem[] = [
   { name: 'Lots', href: 'lots', icon: MapPin },
@@ -67,7 +116,7 @@ const projectNavigation: NavigationItem[] = [
   { name: 'Subcontractors', href: 'subcontractors', icon: Users, requiresManagement: true },
   { name: 'Reports', href: 'reports', icon: BarChart3 },
   { name: 'Project Settings', href: 'settings', icon: Settings, requiresManagement: true },
-]
+];
 
 // Settings navigation items
 const settingsNavigation: NavigationItem[] = [
@@ -75,13 +124,23 @@ const settingsNavigation: NavigationItem[] = [
   { name: 'Help & Support', href: '/support', icon: HelpCircle },
   { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
   { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAdmin: true },
-]
+];
 
 // Subcontractor-specific navigation
 const subcontractorNavigation: NavigationItem[] = [
-  { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase, allowedRoles: ROLE_GROUPS.SUBCONTRACTOR },
-  { name: 'My Company', href: '/my-company', icon: Building2, allowedRoles: ROLE_GROUPS.SUBCONTRACTOR },
-]
+  {
+    name: 'Portal',
+    href: '/subcontractor-portal',
+    icon: Briefcase,
+    allowedRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
+  {
+    name: 'My Company',
+    href: '/my-company',
+    icon: Building2,
+    allowedRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
+];
 
 // Module to navigation mapping (Feature #700)
 const MODULE_NAV_MAPPING: Record<string, string[]> = {
@@ -90,15 +149,15 @@ const MODULE_NAV_MAPPING: Record<string, string[]> = {
   subcontractors: ['Subcontractors'],
   dockets: ['Docket Approvals'],
   dailyDiary: ['Daily Diary'],
-}
+};
 
 export function Sidebar() {
-  const { projectId } = useParams()
-  const { user } = useAuth()
+  const { projectId } = useParams();
+  const { user } = useAuth();
 
   // Feature #442: Use Zustand store for sidebar state (persists during navigation)
-  const { sidebar, toggleSidebar: zustandToggleSidebar, setCurrentProject } = useUIStore()
-  const isCollapsed = sidebar.isCollapsed
+  const { sidebar, toggleSidebar: zustandToggleSidebar, setCurrentProject } = useUIStore();
+  const isCollapsed = sidebar.isCollapsed;
 
   // Feature #700 - Enabled modules via TanStack Query
   const defaultModules: Record<string, boolean> = {
@@ -107,82 +166,87 @@ export function Sidebar() {
     subcontractors: true,
     dockets: true,
     dailyDiary: true,
-  }
+  };
 
   const { data: projectData } = useQuery({
     queryKey: queryKeys.projectModules(projectId!),
-    queryFn: () => apiFetch<{ project?: { name?: string; settings?: any } }>(`/api/projects/${projectId}`),
+    queryFn: () =>
+      apiFetch<{ project?: { name?: string; settings?: unknown } }>(`/api/projects/${projectId}`),
     enabled: !!projectId,
-  })
+  });
 
   const enabledModules = (() => {
-    if (!projectData?.project?.settings) return defaultModules
-    try {
-      const settings = typeof projectData.project.settings === 'string'
-        ? JSON.parse(projectData.project.settings)
-        : projectData.project.settings
-      if (settings.enabledModules) {
-        return { ...defaultModules, ...settings.enabledModules }
-      }
-    } catch {
-      // Invalid JSON, use defaults
+    if (!projectData?.project?.settings) return defaultModules;
+    const settings = parseSettings(projectData.project.settings);
+    const enabledModulesSetting = settings?.enabledModules;
+    if (isRecord(enabledModulesSetting)) {
+      return Object.keys(defaultModules).reduce<Record<string, boolean>>(
+        (modules, key) => {
+          const value = enabledModulesSetting[key];
+          if (typeof value === 'boolean') {
+            modules[key] = value;
+          }
+          return modules;
+        },
+        { ...defaultModules },
+      );
     }
-    return defaultModules
-  })()
+    return defaultModules;
+  })();
 
   // Feature #442: Update current project in Zustand store when projectId changes
   useEffect(() => {
-    setCurrentProject(projectId || null)
-  }, [projectId, setCurrentProject])
+    setCurrentProject(projectId || null);
+  }, [projectId, setCurrentProject]);
 
   // Use Zustand toggle instead of local state
-  const toggleSidebar = zustandToggleSidebar
+  const toggleSidebar = zustandToggleSidebar;
 
-  const userRole = user?.role || ''
+  const userRole = user?.roleInCompany || user?.role || '';
 
   // Role-based access checks
-  const hasCommercial = hasCommercialAccess(userRole)
-  const hasAdmin = isAdminRole(userRole)
-  const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT)
-  const isForeman = userRole === 'foreman'
-  const isSubcontractor = isSubcontractorRole(userRole)
+  const hasCommercial = hasCommercialAccess(userRole);
+  const hasAdmin = isAdminRole(userRole);
+  const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
+  const isForeman = userRole === 'foreman';
+  const isSubcontractor = isSubcontractorRole(userRole);
 
   // Helper function to check if a menu item should be visible
   const shouldShowItem = (item: NavigationItem): boolean => {
     // Check commercial access requirement
     if (item.requiresCommercialAccess && !hasCommercial) {
-      return false
+      return false;
     }
     // Check admin access requirement
     if (item.requiresAdmin && !hasAdmin) {
-      return false
+      return false;
     }
     // Check management access requirement
     if (item.requiresManagement && !hasManagement) {
-      return false
+      return false;
     }
     // Check allowed roles
     if (item.allowedRoles && !item.allowedRoles.includes(userRole)) {
-      return false
+      return false;
     }
     // Check excluded roles
     if (item.excludeRoles && item.excludeRoles.includes(userRole)) {
-      return false
+      return false;
     }
-    return true
-  }
+    return true;
+  };
 
   // Filter main navigation
-  const filteredNavigation = navigation.filter(shouldShowItem)
+  const filteredNavigation = navigation.filter(shouldShowItem);
 
   // Filter project navigation based on user role
-  let filteredProjectNavigation = projectNavigation.filter(shouldShowItem)
+  let filteredProjectNavigation = projectNavigation.filter(shouldShowItem);
 
   // Foreman gets simplified menu
   if (isForeman) {
-    filteredProjectNavigation = filteredProjectNavigation.filter(
-      (item) => FOREMAN_MENU_ITEMS.includes(item.name)
-    )
+    filteredProjectNavigation = filteredProjectNavigation.filter((item) =>
+      FOREMAN_MENU_ITEMS.includes(item.name),
+    );
   }
 
   // Feature #700 - Filter by enabled modules
@@ -191,46 +255,49 @@ export function Sidebar() {
     for (const [moduleKey, navNames] of Object.entries(MODULE_NAV_MAPPING)) {
       if (navNames.includes(item.name)) {
         // If the module is disabled, hide the nav item
-        return enabledModules[moduleKey] !== false
+        return enabledModules[moduleKey] !== false;
       }
     }
     // If not controlled by a module, always show
-    return true
-  })
+    return true;
+  });
 
   // Viewer gets read-only items (no create/edit features - just viewing)
   // For now, viewers can see most items but actions will be disabled elsewhere
 
   // Filter settings navigation
-  const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem)
+  const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem);
 
   // Filter subcontractor navigation (only for subcontractors)
   const filteredSubcontractorNavigation = isSubcontractor
     ? subcontractorNavigation.filter(shouldShowItem)
-    : []
+    : [];
 
   return (
     <aside
       className={cn(
         'hidden md:flex flex-col border-r bg-card transition-all duration-300 ease-in-out',
-        isCollapsed ? 'w-16' : 'w-64'
+        isCollapsed ? 'w-16' : 'w-64',
       )}
       data-testid="sidebar"
     >
-      <div className={cn(
-        'flex h-16 items-center border-b transition-all duration-300',
-        isCollapsed ? 'justify-center px-2' : 'px-6'
-      )}>
+      <div
+        className={cn(
+          'flex h-16 items-center border-b transition-all duration-300',
+          isCollapsed ? 'justify-center px-2' : 'px-6',
+        )}
+      >
         {isCollapsed ? (
           <span className="text-xl font-bold text-primary">SP</span>
         ) : (
-          <span className="text-xl font-bold text-primary whitespace-nowrap overflow-hidden">SiteProof</span>
+          <span className="text-xl font-bold text-primary whitespace-nowrap overflow-hidden">
+            SiteProof
+          </span>
         )}
       </div>
-      <nav className={cn(
-        'flex-1 space-y-1 transition-all duration-300',
-        isCollapsed ? 'p-2' : 'p-4'
-      )}>
+      <nav
+        className={cn('flex-1 space-y-1 transition-all duration-300', isCollapsed ? 'p-2' : 'p-4')}
+      >
         {filteredNavigation.map((item) => (
           <NavLink
             key={item.name}
@@ -242,7 +309,7 @@ export function Sidebar() {
                 isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
                 isActive
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )
             }
           >
@@ -272,12 +339,14 @@ export function Sidebar() {
                     isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
                     isActive
                       ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )
                 }
               >
                 <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
+                {!isCollapsed && (
+                  <span className="transition-opacity duration-200">{item.name}</span>
+                )}
               </NavLink>
             ))}
           </>
@@ -304,21 +373,25 @@ export function Sidebar() {
                     isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
                     isActive
                       ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )
                 }
               >
                 <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
+                {!isCollapsed && (
+                  <span className="transition-opacity duration-200">{item.name}</span>
+                )}
               </NavLink>
             ))}
           </>
         )}
       </nav>
-      <div className={cn(
-        'border-t space-y-1 transition-all duration-300',
-        isCollapsed ? 'p-2' : 'p-4'
-      )}>
+      <div
+        className={cn(
+          'border-t space-y-1 transition-all duration-300',
+          isCollapsed ? 'p-2' : 'p-4',
+        )}
+      >
         {filteredSettingsNavigation.map((item) => (
           <NavLink
             key={item.name}
@@ -330,7 +403,7 @@ export function Sidebar() {
                 isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
                 isActive
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )
             }
           >
@@ -345,7 +418,7 @@ export function Sidebar() {
           onClick={toggleSidebar}
           className={cn(
             'w-full text-muted-foreground hover:text-foreground',
-            isCollapsed ? 'justify-center px-2' : 'justify-start gap-3 px-3'
+            isCollapsed ? 'justify-center px-2' : 'justify-start gap-3 px-3',
           )}
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           data-testid="sidebar-toggle"
@@ -361,5 +434,5 @@ export function Sidebar() {
         </Button>
       </div>
     </aside>
-  )
+  );
 }

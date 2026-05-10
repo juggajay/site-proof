@@ -1,30 +1,86 @@
-import { AddActivitySheet } from '@/components/foreman/sheets/AddActivitySheet'
-import { AddDelaySheet } from '@/components/foreman/sheets/AddDelaySheet'
-import { AddDeliverySheet } from '@/components/foreman/sheets/AddDeliverySheet'
-import { AddEventSheet } from '@/components/foreman/sheets/AddEventSheet'
-import { AddManualLabourPlantSheet } from '@/components/foreman/sheets/AddManualLabourPlantSheet'
-import { AddWeatherSheet } from '@/components/foreman/sheets/AddWeatherSheet'
-import type { QuickAddType } from '@/components/foreman/DiaryQuickAddBar'
-import type { Lot, DailyDiary, WeatherFormState } from '../types'
+import { AddActivitySheet } from '@/components/foreman/sheets/AddActivitySheet';
+import { AddDelaySheet } from '@/components/foreman/sheets/AddDelaySheet';
+import { AddDeliverySheet } from '@/components/foreman/sheets/AddDeliverySheet';
+import { AddEventSheet } from '@/components/foreman/sheets/AddEventSheet';
+import { AddManualLabourPlantSheet } from '@/components/foreman/sheets/AddManualLabourPlantSheet';
+import { AddWeatherSheet } from '@/components/foreman/sheets/AddWeatherSheet';
+import type { QuickAddType } from '@/components/foreman/DiaryQuickAddBar';
+import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
+import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
+import type { Lot, DailyDiary, WeatherFormState } from '../types';
+
+interface ManualPersonnelData {
+  name: string;
+  company?: string;
+  role?: string;
+  hours?: number;
+  lotId?: string;
+}
+
+interface ManualPlantData {
+  description: string;
+  idRego?: string;
+  company?: string;
+  hoursOperated?: number;
+  lotId?: string;
+}
 
 interface DiaryMobileSheetsProps {
-  activeSheet: QuickAddType | 'weather' | null
-  onCloseSheet: () => void
-  editingEntry: any
-  setEditingEntry: (entry: any) => void
-  activeLotId: string | null
-  lots: Lot[]
-  diary: DailyDiary | null
-  weatherForm: WeatherFormState
-  onAddActivity: (data: { description: string; lotId?: string; quantity?: number; unit?: string; notes?: string }) => Promise<void>
-  onAddDelay: (data: { delayType: string; description: string; durationHours?: number; impact?: string; lotId?: string }) => Promise<void>
-  onAddDelivery: (data: { description: string; supplier?: string; docketNumber?: string; quantity?: number; unit?: string; lotId?: string; notes?: string }) => Promise<void>
-  onAddEvent: (data: { eventType: string; description: string; notes?: string; lotId?: string }) => Promise<void>
-  onDeleteEntry: (entry: { id: string; type: string }) => Promise<void>
-  onSavePersonnel: (data: any) => Promise<void>
-  onSavePlant: (data: any) => Promise<void>
-  onSaveWeather: (data: { conditions: string; temperatureMin: string; temperatureMax: string; rainfallMm: string }) => Promise<void>
+  activeSheet: QuickAddType | 'weather' | null;
+  onCloseSheet: () => void;
+  editingEntry: TimelineEntry | null;
+  setEditingEntry: (entry: TimelineEntry | null) => void;
+  activeLotId: string | null;
+  lots: Lot[];
+  diary: DailyDiary | null;
+  weatherForm: WeatherFormState;
+  onAddActivity: (data: {
+    description: string;
+    lotId?: string;
+    quantity?: number;
+    unit?: string;
+    notes?: string;
+  }) => Promise<void>;
+  onAddDelay: (data: {
+    delayType: string;
+    description: string;
+    durationHours?: number;
+    impact?: string;
+    lotId?: string;
+  }) => Promise<void>;
+  onAddDelivery: (data: {
+    description: string;
+    supplier?: string;
+    docketNumber?: string;
+    quantity?: number;
+    unit?: string;
+    lotId?: string;
+    notes?: string;
+  }) => Promise<void>;
+  onAddEvent: (data: {
+    eventType: string;
+    description: string;
+    notes?: string;
+    lotId?: string;
+  }) => Promise<void>;
+  onDeleteEntry: (entry: { id: string; type: string }) => Promise<void>;
+  onSavePersonnel: (data: ManualPersonnelData) => Promise<void>;
+  onSavePlant: (data: ManualPlantData) => Promise<void>;
+  onSaveWeather: (data: {
+    conditions: string;
+    temperatureMin: string;
+    temperatureMax: string;
+    rainfallMm: string;
+  }) => Promise<void>;
 }
+
+const toOptionalNumber = (value: number | string | undefined) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim()) {
+    return parseOptionalNonNegativeDecimalInput(value) ?? undefined;
+  }
+  return undefined;
+};
 
 export function DiaryMobileSheets({
   activeSheet,
@@ -51,18 +107,25 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            if (editingEntry) { await onDeleteEntry(editingEntry); setEditingEntry(null) }
-            await onAddActivity({ ...data, lotId: data.lotId || activeLotId || undefined })
+            if (editingEntry) {
+              await onDeleteEntry(editingEntry);
+              setEditingEntry(null);
+            }
+            await onAddActivity({ ...data, lotId: data.lotId || activeLotId || undefined });
           }}
           defaultLotId={activeLotId}
           lots={lots}
-          initialData={editingEntry?.type === 'activity' ? {
-            description: editingEntry.description,
-            quantity: editingEntry.data?.quantity,
-            unit: editingEntry.data?.unit,
-            notes: editingEntry.data?.notes,
-            lotId: editingEntry.data?.lotId,
-          } : undefined}
+          initialData={
+            editingEntry?.type === 'activity'
+              ? {
+                  description: editingEntry.description,
+                  quantity: toOptionalNumber(editingEntry.data?.quantity),
+                  unit: editingEntry.data?.unit,
+                  notes: editingEntry.data?.notes,
+                  lotId: editingEntry.data?.lotId,
+                }
+              : undefined
+          }
         />
       )}
       {activeSheet === 'delay' && (
@@ -70,18 +133,25 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            if (editingEntry) { await onDeleteEntry(editingEntry); setEditingEntry(null) }
-            await onAddDelay({ ...data, lotId: data.lotId || activeLotId || undefined })
+            if (editingEntry) {
+              await onDeleteEntry(editingEntry);
+              setEditingEntry(null);
+            }
+            await onAddDelay({ ...data, lotId: data.lotId || activeLotId || undefined });
           }}
           defaultLotId={activeLotId}
           lots={lots}
-          initialData={editingEntry?.type === 'delay' ? {
-            delayType: editingEntry.data?.delayType,
-            description: editingEntry.description,
-            durationHours: editingEntry.data?.durationHours,
-            impact: editingEntry.data?.impact,
-            lotId: editingEntry.data?.lotId,
-          } : undefined}
+          initialData={
+            editingEntry?.type === 'delay'
+              ? {
+                  delayType: editingEntry.data?.delayType,
+                  description: editingEntry.description,
+                  durationHours: toOptionalNumber(editingEntry.data?.durationHours),
+                  impact: editingEntry.data?.impact,
+                  lotId: editingEntry.data?.lotId,
+                }
+              : undefined
+          }
         />
       )}
       {activeSheet === 'delivery' && (
@@ -89,20 +159,27 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            if (editingEntry) { await onDeleteEntry(editingEntry); setEditingEntry(null) }
-            await onAddDelivery({ ...data, lotId: data.lotId || activeLotId || undefined })
+            if (editingEntry) {
+              await onDeleteEntry(editingEntry);
+              setEditingEntry(null);
+            }
+            await onAddDelivery({ ...data, lotId: data.lotId || activeLotId || undefined });
           }}
           defaultLotId={activeLotId}
           lots={lots}
-          initialData={editingEntry?.type === 'delivery' ? {
-            description: editingEntry.description,
-            supplier: editingEntry.data?.supplier,
-            docketNumber: editingEntry.data?.docketNumber,
-            quantity: editingEntry.data?.quantity,
-            unit: editingEntry.data?.unit,
-            lotId: editingEntry.data?.lotId,
-            notes: editingEntry.data?.notes,
-          } : undefined}
+          initialData={
+            editingEntry?.type === 'delivery'
+              ? {
+                  description: editingEntry.description,
+                  supplier: editingEntry.data?.supplier,
+                  docketNumber: editingEntry.data?.docketNumber,
+                  quantity: toOptionalNumber(editingEntry.data?.quantity),
+                  unit: editingEntry.data?.unit,
+                  lotId: editingEntry.data?.lotId,
+                  notes: editingEntry.data?.notes,
+                }
+              : undefined
+          }
         />
       )}
       {activeSheet === 'event' && (
@@ -110,17 +187,24 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            if (editingEntry) { await onDeleteEntry(editingEntry); setEditingEntry(null) }
-            await onAddEvent({ ...data, lotId: data.lotId || activeLotId || undefined })
+            if (editingEntry) {
+              await onDeleteEntry(editingEntry);
+              setEditingEntry(null);
+            }
+            await onAddEvent({ ...data, lotId: data.lotId || activeLotId || undefined });
           }}
           defaultLotId={activeLotId}
           lots={lots}
-          initialData={editingEntry?.type === 'event' ? {
-            eventType: editingEntry.data?.eventType,
-            description: editingEntry.description,
-            notes: editingEntry.data?.notes,
-            lotId: editingEntry.data?.lotId,
-          } : undefined}
+          initialData={
+            editingEntry?.type === 'event'
+              ? {
+                  eventType: editingEntry.data?.eventType,
+                  description: editingEntry.description,
+                  notes: editingEntry.data?.notes,
+                  lotId: editingEntry.data?.lotId,
+                }
+              : undefined
+          }
         />
       )}
       {activeSheet === 'manual' && (
@@ -138,19 +222,25 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={onSaveWeather}
-          initialData={diary ? {
-            conditions: diary.weatherConditions || '',
-            temperatureMin: diary.temperatureMin?.toString() || '',
-            temperatureMax: diary.temperatureMax?.toString() || '',
-            rainfallMm: diary.rainfallMm?.toString() || '',
-          } : weatherForm.weatherConditions ? {
-            conditions: weatherForm.weatherConditions,
-            temperatureMin: weatherForm.temperatureMin,
-            temperatureMax: weatherForm.temperatureMax,
-            rainfallMm: weatherForm.rainfallMm,
-          } : null}
+          initialData={
+            diary
+              ? {
+                  conditions: diary.weatherConditions || '',
+                  temperatureMin: diary.temperatureMin?.toString() || '',
+                  temperatureMax: diary.temperatureMax?.toString() || '',
+                  rainfallMm: diary.rainfallMm?.toString() || '',
+                }
+              : weatherForm.weatherConditions
+                ? {
+                    conditions: weatherForm.weatherConditions,
+                    temperatureMin: weatherForm.temperatureMin,
+                    temperatureMax: weatherForm.temperatureMax,
+                    rainfallMm: weatherForm.rainfallMm,
+                  }
+                : null
+          }
         />
       )}
     </>
-  )
+  );
 }

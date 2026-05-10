@@ -1,9 +1,22 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronRight, Calendar, FileText, TestTube, AlertTriangle } from 'lucide-react'
-import { COLUMN_CONFIG, type ColumnId } from './LotFiltersBar'
-import type { Lot } from '../lotsPageTypes'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  FileText,
+  TestTube,
+  AlertTriangle,
+} from 'lucide-react';
+import { COLUMN_CONFIG, type ColumnId } from './LotFiltersBar';
+import type { Lot } from '../lotsPageTypes';
+import {
+  isRecord,
+  parseJsonPreference,
+  readLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 
 // Default column widths in pixels
 const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
@@ -14,9 +27,11 @@ const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
   status: 110,
   subcontractor: 140,
   budget: 100,
-}
+};
 
-const COLUMN_WIDTH_STORAGE_KEY = 'siteproof_lot_column_widths'
+const COLUMN_WIDTH_STORAGE_KEY = 'siteproof_lot_column_widths';
+const MIN_COLUMN_WIDTH = 60;
+const MAX_COLUMN_WIDTH = 600;
 
 // Feature #438: Okabe-Ito color-blind safe palette
 const statusColors: Record<string, string> = {
@@ -25,16 +40,16 @@ const statusColors: Record<string, string> = {
   completed: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
   on_hold: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200',
   not_started: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
-}
+};
 
 // Helper function to highlight search terms in text
 function highlightSearchTerm(text: string, searchTerm: string): React.ReactNode {
-  if (!searchTerm || !text) return text
+  if (!searchTerm || !text) return text;
 
-  const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
-  const parts = text.split(regex)
+  const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
 
-  if (parts.length === 1) return text
+  if (parts.length === 1) return text;
 
   return parts.map((part, index) =>
     regex.test(part) ? (
@@ -43,8 +58,8 @@ function highlightSearchTerm(text: string, searchTerm: string): React.ReactNode 
       </mark>
     ) : (
       part
-    )
-  )
+    ),
+  );
 }
 
 // Format chainage for display
@@ -52,41 +67,58 @@ function formatChainage(lot: Lot) {
   if (lot.chainageStart != null && lot.chainageEnd != null) {
     return lot.chainageStart === lot.chainageEnd
       ? `${lot.chainageStart}`
-      : `${lot.chainageStart}-${lot.chainageEnd}`
+      : `${lot.chainageStart}-${lot.chainageEnd}`;
   }
-  return lot.chainageStart ?? lot.chainageEnd ?? '\u2014'
+  return lot.chainageStart ?? lot.chainageEnd ?? '\u2014';
+}
+
+function parseColumnWidthsPreference(raw: string | null): Record<string, number> {
+  return parseJsonPreference(raw, DEFAULT_COLUMN_WIDTHS, (value) => {
+    if (!isRecord(value)) return null;
+
+    const widths = { ...DEFAULT_COLUMN_WIDTHS };
+    for (const columnId of Object.keys(DEFAULT_COLUMN_WIDTHS)) {
+      const width = value[columnId];
+      if (typeof width === 'number' && Number.isFinite(width)) {
+        widths[columnId] = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, width));
+      }
+    }
+
+    return widths;
+  });
 }
 
 interface LotTableProps {
-  displayedLots: Lot[]
-  filteredLots: Lot[]
-  allLots: Lot[]
-  orderedVisibleColumns: ColumnId[]
-  searchQuery: string
-  sortField: string
-  sortDirection: 'asc' | 'desc'
-  canDelete: boolean
-  canCreate: boolean
-  canViewBudgets: boolean
-  isSubcontractor: boolean
-  projectId: string
+  displayedLots: Lot[];
+  filteredLots: Lot[];
+  allLots: Lot[];
+  orderedVisibleColumns: ColumnId[];
+  searchQuery: string;
+  sortField: string;
+  sortDirection: 'asc' | 'desc';
+  canDelete: boolean;
+  canCreate: boolean;
+  canViewBudgets: boolean;
+  isSubcontractor: boolean;
+  projectId: string;
   // Selection
-  selectedLots: Set<string>
-  onSelectLot: (lotId: string) => void
-  onSelectAll: () => void
-  allDeletableSelected: boolean
+  selectedLots: Set<string>;
+  cloningLotId: string | null;
+  onSelectLot: (lotId: string) => void;
+  onSelectAll: () => void;
+  allDeletableSelected: boolean;
   // Handlers
-  onSort: (field: string) => void
-  onDeleteClick: (lot: Lot) => void
-  onCloneLot: (lot: Lot) => void
-  onContextMenu: (e: React.MouseEvent, lot: Lot) => void
-  onLotMouseEnter: (lotId: string, event: React.MouseEvent) => void
-  onLotMouseLeave: () => void
-  onOpenCreateModal: () => void
+  onSort: (field: string) => void;
+  onDeleteClick: (lot: Lot) => void;
+  onCloneLot: (lot: Lot) => void;
+  onContextMenu: (e: React.MouseEvent, lot: Lot) => void;
+  onLotMouseEnter: (lotId: string, event: React.MouseEvent) => void;
+  onLotMouseLeave: () => void;
+  onOpenCreateModal: () => void;
   // Infinite scroll
-  loadMoreRef: React.RefObject<HTMLDivElement | null>
-  loadingMore: boolean
-  hasMore: boolean
+  loadMoreRef: React.RefObject<HTMLDivElement | null>;
+  loadingMore: boolean;
+  hasMore: boolean;
 }
 
 export const LotTable = React.memo(function LotTable({
@@ -103,6 +135,7 @@ export const LotTable = React.memo(function LotTable({
   isSubcontractor,
   projectId,
   selectedLots,
+  cloningLotId,
   onSelectLot,
   onSelectAll,
   allDeletableSelected,
@@ -117,131 +150,139 @@ export const LotTable = React.memo(function LotTable({
   loadingMore,
   hasMore,
 }: LotTableProps) {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Expandable rows state
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const toggleRowExpansion = useCallback((lotId: string) => {
-    setExpandedRows(prev => {
-      const next = new Set(prev)
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
       if (next.has(lotId)) {
-        next.delete(lotId)
+        next.delete(lotId);
       } else {
-        next.add(lotId)
+        next.add(lotId);
       }
-      return next
-    })
-  }, [])
+      return next;
+    });
+  }, []);
 
   // Column widths state for resizing
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
-    try {
-      const stored = localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY)
-      if (stored) {
-        return { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(stored) }
-      }
-    } catch (e) {
-      console.error('Error loading column widths:', e)
-    }
-    return DEFAULT_COLUMN_WIDTHS
-  })
-  const [resizingColumn, setResizingColumn] = useState<string | null>(null)
-  const resizeStartX = useRef<number>(0)
-  const resizeStartWidth = useRef<number>(0)
+    return parseColumnWidthsPreference(readLocalStorageItem(COLUMN_WIDTH_STORAGE_KEY));
+  });
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+  const resizeStartX = useRef<number>(0);
+  const resizeStartWidth = useRef<number>(0);
 
   // Handle column resize
-  const handleResizeStart = useCallback((e: React.MouseEvent, columnId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setResizingColumn(columnId)
-    resizeStartX.current = e.clientX
-    resizeStartWidth.current = columnWidths[columnId] || DEFAULT_COLUMN_WIDTHS[columnId] || 100
-  }, [columnWidths])
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent, columnId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setResizingColumn(columnId);
+      resizeStartX.current = e.clientX;
+      resizeStartWidth.current = columnWidths[columnId] || DEFAULT_COLUMN_WIDTHS[columnId] || 100;
+    },
+    [columnWidths],
+  );
 
   useEffect(() => {
-    if (!resizingColumn) return
+    if (!resizingColumn) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const diff = e.clientX - resizeStartX.current
-      const newWidth = Math.max(60, resizeStartWidth.current + diff)
-      setColumnWidths(prev => ({
+      const diff = e.clientX - resizeStartX.current;
+      const newWidth = Math.max(60, resizeStartWidth.current + diff);
+      setColumnWidths((prev) => ({
         ...prev,
         [resizingColumn]: newWidth,
-      }))
-    }
+      }));
+    };
 
     const handleMouseUp = () => {
       if (resizingColumn) {
-        setColumnWidths(prev => {
-          localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(prev))
-          return prev
-        })
-        setResizingColumn(null)
+        setColumnWidths((prev) => {
+          writeLocalStorageItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(prev));
+          return prev;
+        });
+        setResizingColumn(null);
       }
-    }
+    };
 
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [resizingColumn])
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingColumn]);
 
   // Sortable column header component with resize handle
-  const SortableHeader = useCallback(({ field, children }: { field: string; children: React.ReactNode }) => (
-    <th
-      className="text-left p-3 font-medium cursor-pointer hover:bg-muted/70 select-none relative group/resize"
-      style={{ width: columnWidths[field] || DEFAULT_COLUMN_WIDTHS[field] || 'auto', minWidth: 60 }}
-      onClick={() => onSort(field)}
-      data-testid={`column-header-${field}`}
-    >
-      <div className="flex items-center gap-1 pr-2">
-        {children}
-        <span className="text-muted-foreground">
-          {sortField === field ? (
-            sortDirection === 'asc' ? '\u2191' : '\u2193'
-          ) : (
-            <span className="opacity-0 group-hover:opacity-50">{'\u2195'}</span>
-          )}
-        </span>
-      </div>
-      {/* Resize handle */}
-      <div
-        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover/resize:bg-muted-foreground/30"
-        onMouseDown={(e) => handleResizeStart(e, field)}
-        onClick={(e) => e.stopPropagation()}
-        data-testid={`column-resize-${field}`}
-      />
-    </th>
-  ), [columnWidths, sortField, sortDirection, onSort, handleResizeStart])
+  const SortableHeader = useCallback(
+    ({ field, children }: { field: string; children: React.ReactNode }) => (
+      <th
+        className="text-left p-3 font-medium cursor-pointer hover:bg-muted/70 select-none relative group/resize"
+        style={{
+          width: columnWidths[field] || DEFAULT_COLUMN_WIDTHS[field] || 'auto',
+          minWidth: 60,
+        }}
+        onClick={() => onSort(field)}
+        data-testid={`column-header-${field}`}
+      >
+        <div className="flex items-center gap-1 pr-2">
+          {children}
+          <span className="text-muted-foreground">
+            {sortField === field ? (
+              sortDirection === 'asc' ? (
+                '\u2191'
+              ) : (
+                '\u2193'
+              )
+            ) : (
+              <span className="opacity-0 group-hover:opacity-50">{'\u2195'}</span>
+            )}
+          </span>
+        </div>
+        {/* Resize handle */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 group-hover/resize:bg-muted-foreground/30"
+          onMouseDown={(e) => handleResizeStart(e, field)}
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`column-resize-${field}`}
+        />
+      </th>
+    ),
+    [columnWidths, sortField, sortDirection, onSort, handleResizeStart],
+  );
 
   // Row virtualizer for table body
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Memoize expanded rows key to trigger virtualizer re-measurement
-  const expandedRowsKey = useMemo(() => Array.from(expandedRows).sort().join(','), [expandedRows])
+  const expandedRowsKey = useMemo(() => Array.from(expandedRows).sort().join(','), [expandedRows]);
 
   const rowVirtualizer = useVirtualizer({
     count: displayedLots.length,
     getScrollElement: () => scrollContainerRef.current,
-    estimateSize: useCallback((index: number) => {
-      // Expanded rows are taller
-      const lot = displayedLots[index]
-      return lot && expandedRows.has(lot.id) ? 220 : 52
-    }, [displayedLots, expandedRowsKey]),
+    estimateSize: useCallback(
+      (index: number) => {
+        // Expanded rows are taller
+        const lot = displayedLots[index];
+        return lot && expandedRows.has(lot.id) ? 220 : 52;
+      },
+      [displayedLots, expandedRows],
+    ),
     overscan: 5,
-  })
+  });
 
   // Re-measure all rows when expandedRows changes
   useEffect(() => {
-    rowVirtualizer.measure()
-  }, [expandedRowsKey, rowVirtualizer])
+    rowVirtualizer.measure();
+  }, [expandedRowsKey, rowVirtualizer]);
 
-  const colSpanCount = canDelete ? (isSubcontractor ? 7 : 9) : (isSubcontractor ? 6 : 8)
+  const colSpanCount = canDelete ? (isSubcontractor ? 7 : 9) : isSubcontractor ? 6 : 8;
 
   return (
     <div
@@ -259,30 +300,38 @@ export const LotTable = React.memo(function LotTable({
                   checked={allDeletableSelected}
                   onChange={onSelectAll}
                   className="h-4 w-4 rounded border-border"
+                  aria-label="Select all deletable lots"
                   title="Select all"
                 />
               </th>
             )}
             {orderedVisibleColumns.map((columnId) => {
-              if (columnId === 'subcontractor' && isSubcontractor) return null
-              if (columnId === 'budget' && !canViewBudgets) return null
+              if (columnId === 'subcontractor' && isSubcontractor) return null;
+              if (columnId === 'budget' && !canViewBudgets) return null;
 
-              const column = COLUMN_CONFIG.find(c => c.id === columnId)
-              if (!column) return null
+              const column = COLUMN_CONFIG.find((c) => c.id === columnId);
+              if (!column) return null;
 
-              if (['lotNumber', 'description', 'chainage', 'activityType', 'status'].includes(columnId)) {
+              if (
+                ['lotNumber', 'description', 'chainage', 'activityType', 'status'].includes(
+                  columnId,
+                )
+              ) {
                 return (
                   <SortableHeader key={columnId} field={columnId}>
                     {column.label}
                   </SortableHeader>
-                )
+                );
               }
 
               return (
                 <th
                   key={columnId}
                   className="text-left p-3 font-medium relative group/resize"
-                  style={{ width: columnWidths[columnId] || DEFAULT_COLUMN_WIDTHS[columnId] || 'auto', minWidth: 60 }}
+                  style={{
+                    width: columnWidths[columnId] || DEFAULT_COLUMN_WIDTHS[columnId] || 'auto',
+                    minWidth: 60,
+                  }}
                   data-testid={`column-header-${columnId}`}
                 >
                   <div className="pr-2">{column.label}</div>
@@ -292,7 +341,7 @@ export const LotTable = React.memo(function LotTable({
                     data-testid={`column-resize-${columnId}`}
                   />
                 </th>
-              )
+              );
             })}
             <th className="text-left p-3 font-medium">Actions</th>
           </tr>
@@ -335,13 +384,17 @@ export const LotTable = React.memo(function LotTable({
                 <tr>
                   <td
                     colSpan={colSpanCount}
-                    style={{ height: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px`, padding: 0, border: 'none' }}
+                    style={{
+                      height: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px`,
+                      padding: 0,
+                      border: 'none',
+                    }}
                   />
                 </tr>
               )}
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const lot = displayedLots[virtualRow.index]
-                if (!lot) return null
+                const lot = displayedLots[virtualRow.index];
+                if (!lot) return null;
                 return (
                   <React.Fragment key={lot.id}>
                     <tr
@@ -357,12 +410,14 @@ export const LotTable = React.memo(function LotTable({
                           <div className="flex items-center gap-2">
                             <button
                               onClick={(e) => {
-                                e.stopPropagation()
-                                toggleRowExpansion(lot.id)
+                                e.stopPropagation();
+                                toggleRowExpansion(lot.id);
                               }}
                               className="p-1 hover:bg-muted rounded transition-transform"
                               data-testid={`expand-row-${lot.id}`}
-                              title={expandedRows.has(lot.id) ? 'Collapse details' : 'Expand details'}
+                              title={
+                                expandedRows.has(lot.id) ? 'Collapse details' : 'Expand details'
+                              }
                             >
                               {expandedRows.has(lot.id) ? (
                                 <ChevronDown className="h-4 w-4" />
@@ -376,14 +431,15 @@ export const LotTable = React.memo(function LotTable({
                                 checked={selectedLots.has(lot.id)}
                                 onChange={() => onSelectLot(lot.id)}
                                 className="h-4 w-4 rounded border-border"
+                                aria-label={`Select lot ${lot.lotNumber}`}
                               />
                             )}
                           </div>
                         </td>
                       )}
                       {orderedVisibleColumns.map((columnId) => {
-                        if (columnId === 'subcontractor' && isSubcontractor) return null
-                        if (columnId === 'budget' && !canViewBudgets) return null
+                        if (columnId === 'subcontractor' && isSubcontractor) return null;
+                        if (columnId === 'budget' && !canViewBudgets) return null;
 
                         switch (columnId) {
                           case 'lotNumber':
@@ -391,60 +447,92 @@ export const LotTable = React.memo(function LotTable({
                               <td key={columnId} className="p-3 font-medium">
                                 {highlightSearchTerm(lot.lotNumber, searchQuery)}
                               </td>
-                            )
+                            );
                           case 'description':
                             return (
                               <td key={columnId} className="p-3 max-w-xs">
                                 <span className="block truncate" title={lot.description || ''}>
-                                  {lot.description ? highlightSearchTerm(lot.description, searchQuery) : '\u2014'}
+                                  {lot.description
+                                    ? highlightSearchTerm(lot.description, searchQuery)
+                                    : '\u2014'}
                                 </span>
                               </td>
-                            )
+                            );
                           case 'chainage':
-                            return <td key={columnId} className="p-3">{formatChainage(lot)}</td>
+                            return (
+                              <td key={columnId} className="p-3">
+                                {formatChainage(lot)}
+                              </td>
+                            );
                           case 'activityType':
-                            return <td key={columnId} className="p-3 capitalize">{lot.activityType || '\u2014'}</td>
+                            return (
+                              <td key={columnId} className="p-3 capitalize">
+                                {lot.activityType || '\u2014'}
+                              </td>
+                            );
                           case 'status':
                             return (
                               <td key={columnId} className="p-3">
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}>
+                                <span
+                                  className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
+                                >
                                   {lot.status.replace('_', ' ')}
                                 </span>
                               </td>
-                            )
+                            );
                           case 'subcontractor':
-                            return <td key={columnId} className="p-3">{lot.assignedSubcontractor?.companyName || '\u2014'}</td>
+                            return (
+                              <td key={columnId} className="p-3">
+                                {lot.assignedSubcontractor?.companyName || '\u2014'}
+                              </td>
+                            );
                           case 'budget':
-                            return <td key={columnId} className="p-3">{lot.budgetAmount ? `$${lot.budgetAmount.toLocaleString()}` : '\u2014'}</td>
+                            return (
+                              <td key={columnId} className="p-3">
+                                {lot.budgetAmount
+                                  ? `$${lot.budgetAmount.toLocaleString()}`
+                                  : '\u2014'}
+                              </td>
+                            );
                           default:
-                            return null
+                            return null;
                         }
                       })}
                       <td className="p-3">
                         <div className="flex items-center gap-1">
                           <button
                             className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
-                            onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`, {
-                              state: { returnFilters: searchParams.toString() }
-                            })}
+                            onClick={() =>
+                              navigate(
+                                `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(lot.id)}`,
+                                {
+                                  state: { returnFilters: searchParams.toString() },
+                                },
+                              )
+                            }
                           >
                             View
                           </button>
                           {canCreate && lot.status !== 'conformed' && lot.status !== 'claimed' && (
                             <button
                               className="text-sm text-amber-600 hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
-                              onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}/edit`)}
+                              onClick={() =>
+                                navigate(
+                                  `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(lot.id)}/edit`,
+                                )
+                              }
                             >
                               Edit
                             </button>
                           )}
                           {canCreate && (
                             <button
-                              className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
+                              className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation disabled:opacity-50"
                               onClick={() => onCloneLot(lot)}
+                              disabled={cloningLotId === lot.id}
                               title="Clone lot with adjacent chainage"
                             >
-                              Clone
+                              {cloningLotId === lot.id ? 'Cloning...' : 'Clone'}
                             </button>
                           )}
                           {canDelete && lot.status !== 'conformed' && lot.status !== 'claimed' && (
@@ -460,7 +548,10 @@ export const LotTable = React.memo(function LotTable({
                     </tr>
                     {/* Expanded detail row */}
                     {expandedRows.has(lot.id) && (
-                      <tr className="bg-muted/30 border-b animate-in fade-in slide-in-from-top-2 duration-200" data-testid={`expanded-row-${lot.id}`}>
+                      <tr
+                        className="bg-muted/30 border-b animate-in fade-in slide-in-from-top-2 duration-200"
+                        data-testid={`expanded-row-${lot.id}`}
+                      >
                         <td colSpan={colSpanCount} className="p-4">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                             {/* Dates Section */}
@@ -470,8 +561,18 @@ export const LotTable = React.memo(function LotTable({
                                 Dates
                               </h4>
                               <div className="space-y-1 text-muted-foreground">
-                                <p>Created: {lot.createdAt ? new Date(lot.createdAt).toLocaleDateString() : '\u2014'}</p>
-                                <p>Updated: {lot.updatedAt ? new Date(lot.updatedAt).toLocaleDateString() : '\u2014'}</p>
+                                <p>
+                                  Created:{' '}
+                                  {lot.createdAt
+                                    ? new Date(lot.createdAt).toLocaleDateString()
+                                    : '\u2014'}
+                                </p>
+                                <p>
+                                  Updated:{' '}
+                                  {lot.updatedAt
+                                    ? new Date(lot.updatedAt).toLocaleDateString()
+                                    : '\u2014'}
+                                </p>
                               </div>
                             </div>
 
@@ -516,7 +617,7 @@ export const LotTable = React.memo(function LotTable({
                       </tr>
                     )}
                   </React.Fragment>
-                )
+                );
               })}
               {/* Bottom spacer to maintain correct scroll area */}
               {rowVirtualizer.getVirtualItems().length > 0 && (
@@ -541,8 +642,19 @@ export const LotTable = React.memo(function LotTable({
         {loadingMore && (
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
             </svg>
             <span className="text-sm">Loading more lots...</span>
           </div>
@@ -559,5 +671,5 @@ export const LotTable = React.memo(function LotTable({
         )}
       </div>
     </div>
-  )
-})
+  );
+});

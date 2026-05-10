@@ -1,29 +1,35 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, FileText, Plus, CheckCircle } from 'lucide-react'
-import { toast } from '@/components/ui/toaster'
-import { getAuthToken } from '@/lib/auth'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import type {
-  ITPAttachment,
-  ITPChecklistItem,
-  ITPCompletion,
-  ITPInstance,
-  LotTab,
-} from '../types'
+import { useRef, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  FileText,
+  Plus,
+  CheckCircle,
+} from 'lucide-react';
+import { toast } from '@/components/ui/toaster';
+import { authFetch } from '@/lib/api';
+import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import type { ITPAttachment, ITPChecklistItem, ITPCompletion, ITPInstance, LotTab } from '../types';
+import { logError } from '@/lib/logger';
+import { PhotoLocationMap } from './PhotoLocationMap';
 
 interface PhotosTabProps {
-  itpInstance: ITPInstance | null
-  lotId: string
-  onTabChange: (tab: LotTab) => void
-  onItpInstanceUpdate: (instance: ITPInstance) => void
+  itpInstance: ITPInstance | null;
+  lotId: string;
+  onTabChange: (tab: LotTab) => void;
+  onItpInstanceUpdate: (instance: ITPInstance) => void;
 }
 
 interface ITPPhoto {
-  attachment: ITPAttachment
-  checklistItem: ITPChecklistItem
-  completion: ITPCompletion
+  attachment: ITPAttachment;
+  checklistItem: ITPChecklistItem;
+  completion: ITPCompletion;
 }
 
 export function PhotosTab({
@@ -33,224 +39,224 @@ export function PhotosTab({
   onItpInstanceUpdate,
 }: PhotosTabProps) {
   // Photo viewer state
-  const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null)
-  const [photoZoom, setPhotoZoom] = useState(1)
+  const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null);
+  const [photoZoom, setPhotoZoom] = useState(1);
 
   // Batch photo selection state
-  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
-  const [showBatchCaptionModal, setShowBatchCaptionModal] = useState(false)
-  const [batchCaption, setBatchCaption] = useState('')
-  const [applyingBatchCaption, setApplyingBatchCaption] = useState(false)
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [showBatchCaptionModal, setShowBatchCaptionModal] = useState(false);
+  const [batchCaption, setBatchCaption] = useState('');
+  const [applyingBatchCaption, setApplyingBatchCaption] = useState(false);
+  const applyingBatchCaptionRef = useRef(false);
 
   // Add to Evidence modal state
-  const [showAddToEvidenceModal, setShowAddToEvidenceModal] = useState(false)
-  const [selectedEvidenceItem, setSelectedEvidenceItem] = useState<string | null>(null)
-  const [addingToEvidence, setAddingToEvidence] = useState(false)
+  const [showAddToEvidenceModal, setShowAddToEvidenceModal] = useState(false);
+  const [selectedEvidenceItem, setSelectedEvidenceItem] = useState<string | null>(null);
+  const [addingToEvidence, setAddingToEvidence] = useState(false);
+  const addingToEvidenceRef = useRef(false);
 
   // Collect all photos from ITP completions
-  const itpPhotos: ITPPhoto[] = []
+  const itpPhotos: ITPPhoto[] = [];
   if (itpInstance) {
-    itpInstance.completions.forEach(completion => {
+    itpInstance.completions.forEach((completion) => {
       if (completion.attachments && completion.attachments.length > 0) {
         const checklistItem = itpInstance.template.checklistItems.find(
-          item => item.id === completion.checklistItemId
-        )
+          (item) => item.id === completion.checklistItemId,
+        );
         if (checklistItem) {
-          completion.attachments.forEach(attachment => {
-            itpPhotos.push({ attachment, checklistItem, completion })
-          })
+          completion.attachments.forEach((attachment) => {
+            itpPhotos.push({ attachment, checklistItem, completion });
+          });
         }
       }
-    })
+    });
   }
 
   // Helper function to toggle photo selection
   const togglePhotoSelection = (photoId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSelectedPhotos(prev => {
-      const newSet = new Set(prev)
+    e.stopPropagation();
+    setSelectedPhotos((prev) => {
+      const newSet = new Set(prev);
       if (newSet.has(photoId)) {
-        newSet.delete(photoId)
+        newSet.delete(photoId);
       } else {
-        newSet.add(photoId)
+        newSet.add(photoId);
       }
-      return newSet
-    })
-  }
+      return newSet;
+    });
+  };
 
   // Helper function to select/deselect all photos
   const toggleSelectAll = () => {
     if (selectedPhotos.size === itpPhotos.length) {
-      setSelectedPhotos(new Set())
+      setSelectedPhotos(new Set());
     } else {
-      setSelectedPhotos(new Set(itpPhotos.map(p => p.attachment.document.id)))
+      setSelectedPhotos(new Set(itpPhotos.map((p) => p.attachment.document.id)));
     }
-  }
+  };
 
   // Refresh ITP data helper
   const refreshItpData = async () => {
-    const token = getAuthToken()
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-    const itpRes = await fetch(`${apiUrl}/api/itp/instances/lot/${lotId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    const itpRes = await authFetch(`/api/itp/instances/lot/${encodeURIComponent(lotId)}`);
     if (itpRes.ok) {
-      const data = await itpRes.json()
-      onItpInstanceUpdate(data.instance)
+      const data = await itpRes.json();
+      onItpInstanceUpdate(data.instance);
     }
-  }
+  };
 
   // Function to apply batch caption to selected photos
   const applyBatchCaptionToPhotos = async () => {
-    if (selectedPhotos.size === 0 || !batchCaption.trim()) return
+    if (selectedPhotos.size === 0 || !batchCaption.trim() || applyingBatchCaptionRef.current)
+      return;
 
-    setApplyingBatchCaption(true)
+    applyingBatchCaptionRef.current = true;
+    setApplyingBatchCaption(true);
     try {
-      const token = getAuthToken()
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-      const updatePromises = Array.from(selectedPhotos).map(documentId =>
-        fetch(`${apiUrl}/api/documents/${documentId}`, {
+      const updatePromises = Array.from(selectedPhotos).map((documentId) =>
+        authFetch(`/api/documents/${encodeURIComponent(documentId)}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ caption: batchCaption.trim() })
-        })
-      )
+          body: JSON.stringify({ caption: batchCaption.trim() }),
+        }),
+      );
 
-      const results = await Promise.all(updatePromises)
-      const failed = results.filter(r => !r.ok)
+      const results = await Promise.all(updatePromises);
+      const failed = results.filter((r) => !r.ok);
 
       if (failed.length > 0) {
         toast({
           title: 'Partial Success',
           description: `Updated ${results.length - failed.length} of ${results.length} photos`,
-          variant: 'warning'
-        })
+          variant: 'warning',
+        });
       } else {
         toast({
           title: 'Success',
           description: `Caption applied to ${selectedPhotos.size} photo${selectedPhotos.size !== 1 ? 's' : ''}`,
-        })
+        });
       }
 
       // Refresh ITP data to show updated captions
-      await refreshItpData()
+      await refreshItpData();
 
       // Clear selections and close modal
-      setSelectedPhotos(new Set())
-      setBatchCaption('')
-      setShowBatchCaptionModal(false)
+      setSelectedPhotos(new Set());
+      setBatchCaption('');
+      setShowBatchCaptionModal(false);
     } catch (error) {
-      console.error('Error applying batch caption:', error)
+      logError('Error applying batch caption:', error);
       toast({
         title: 'Error',
         description: 'Failed to apply caption to photos',
-        variant: 'error'
-      })
+        variant: 'error',
+      });
     } finally {
-      setApplyingBatchCaption(false)
+      applyingBatchCaptionRef.current = false;
+      setApplyingBatchCaption(false);
     }
-  }
+  };
 
   // Function to add selected photos to an ITP checklist item as evidence
   const addPhotosToEvidence = async () => {
-    if (selectedPhotos.size === 0 || !selectedEvidenceItem) return
+    if (selectedPhotos.size === 0 || !selectedEvidenceItem || addingToEvidenceRef.current) return;
 
-    setAddingToEvidence(true)
+    addingToEvidenceRef.current = true;
+    setAddingToEvidence(true);
     try {
-      const token = getAuthToken()
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-
       // First, ensure there's a completion for this checklist item
-      let completionId: string | null = null
+      let completionId: string | null = null;
       const existingCompletion = itpInstance?.completions?.find(
-        c => c.checklistItemId === selectedEvidenceItem
-      )
+        (c) => c.checklistItemId === selectedEvidenceItem,
+      );
 
       if (existingCompletion) {
-        completionId = existingCompletion.id
+        completionId = existingCompletion.id;
       } else {
         // Create a pending completion first
-        const createRes = await fetch(`${apiUrl}/api/itp/completions`, {
+        const createRes = await authFetch('/api/itp/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             itpInstanceId: itpInstance?.id,
             checklistItemId: selectedEvidenceItem,
             isCompleted: false,
-            notes: ''
-          })
-        })
+            notes: '',
+          }),
+        });
         if (createRes.ok) {
-          const data = await createRes.json()
-          completionId = data.completion.id
+          const data = await createRes.json();
+          completionId = data.completion.id;
         }
       }
 
       if (!completionId) {
-        throw new Error('Could not find or create completion')
+        throw new Error('Could not find or create completion');
       }
 
       // Now add each selected photo as an attachment
       const attachmentPromises = Array.from(selectedPhotos).map(async (documentId) => {
         // Find the document details
-        const photoDoc = itpPhotos.find(p => p.attachment.document.id === documentId)
-        if (!photoDoc) return null
+        const photoDoc = itpPhotos.find((p) => p.attachment.document.id === documentId);
+        if (!photoDoc) return null;
 
-        const res = await fetch(`${apiUrl}/api/itp/completions/${completionId}/attachments`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+        const res = await authFetch(
+          `/api/itp/completions/${encodeURIComponent(completionId)}/attachments`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              filename: photoDoc.attachment.document.filename,
+              fileUrl: photoDoc.attachment.document.fileUrl,
+              caption:
+                photoDoc.attachment.document.caption ||
+                `Evidence photo added ${new Date().toLocaleString()}`,
+            }),
           },
-          body: JSON.stringify({
-            filename: photoDoc.attachment.document.filename,
-            fileUrl: photoDoc.attachment.document.fileUrl,
-            caption: photoDoc.attachment.document.caption || `Evidence photo added ${new Date().toLocaleString()}`
-          })
-        })
-        return res.ok
-      })
+        );
+        return res.ok;
+      });
 
-      const results = await Promise.all(attachmentPromises)
-      const successCount = results.filter(r => r === true).length
+      const results = await Promise.all(attachmentPromises);
+      const successCount = results.filter((r) => r === true).length;
 
       if (successCount > 0) {
         toast({
           title: 'Success',
           description: `Added ${successCount} photo${successCount !== 1 ? 's' : ''} as evidence`,
-        })
+        });
 
         // Refresh ITP data
-        await refreshItpData()
+        await refreshItpData();
       } else {
         toast({
           title: 'Error',
           description: 'Failed to add photos as evidence',
-          variant: 'error'
-        })
+          variant: 'error',
+        });
       }
 
       // Clear selections and close modal
-      setSelectedPhotos(new Set())
-      setSelectedEvidenceItem(null)
-      setShowAddToEvidenceModal(false)
+      setSelectedPhotos(new Set());
+      setSelectedEvidenceItem(null);
+      setShowAddToEvidenceModal(false);
     } catch (error) {
-      console.error('Error adding photos to evidence:', error)
+      logError('Error adding photos to evidence:', error);
       toast({
         title: 'Error',
         description: 'Failed to add photos as evidence',
-        variant: 'error'
-      })
+        variant: 'error',
+      });
     } finally {
-      setAddingToEvidence(false)
+      addingToEvidenceRef.current = false;
+      setAddingToEvidence(false);
     }
-  }
+  };
 
   // Empty state
   if (itpPhotos.length === 0) {
@@ -263,18 +269,15 @@ export function PhotosTab({
           <div className="text-4xl mb-2">📷</div>
           <h3 className="text-lg font-semibold mb-2">No Photos</h3>
           <p className="text-muted-foreground">
-            No photos have been uploaded for this lot yet. Add photos to ITP checklist items to document work progress.
+            No photos have been uploaded for this lot yet. Add photos to ITP checklist items to
+            document work progress.
           </p>
-          <Button
-            variant="outline"
-            onClick={() => onTabChange('itp')}
-            className="mt-4"
-          >
+          <Button variant="outline" onClick={() => onTabChange('itp')} className="mt-4">
             Go to ITP Checklist
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -287,7 +290,8 @@ export function PhotosTab({
         {/* Header with selection controls */}
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            {itpPhotos.length} photo{itpPhotos.length !== 1 ? 's' : ''} attached to ITP checklist items
+            {itpPhotos.length} photo{itpPhotos.length !== 1 ? 's' : ''} attached to ITP checklist
+            items
           </p>
           <div className="flex items-center gap-2">
             {/* Select All checkbox */}
@@ -303,18 +307,11 @@ export function PhotosTab({
             {/* Bulk Caption button - only show when photos selected */}
             {selectedPhotos.size > 0 && (
               <>
-                <Button
-                  size="sm"
-                  onClick={() => setShowBatchCaptionModal(true)}
-                >
+                <Button size="sm" onClick={() => setShowBatchCaptionModal(true)}>
                   <FileText className="h-4 w-4" />
                   Bulk Caption ({selectedPhotos.size})
                 </Button>
-                <Button
-                  variant="success"
-                  size="sm"
-                  onClick={() => setShowAddToEvidenceModal(true)}
-                >
+                <Button variant="success" size="sm" onClick={() => setShowAddToEvidenceModal(true)}>
                   <Plus className="h-4 w-4" />
                   Add to Evidence ({selectedPhotos.size})
                 </Button>
@@ -326,12 +323,14 @@ export function PhotosTab({
         {/* Photo grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {itpPhotos.map(({ attachment, checklistItem }) => {
-            const isSelected = selectedPhotos.has(attachment.document.id)
+            const isSelected = selectedPhotos.has(attachment.document.id);
             return (
               <div
                 key={attachment.id}
                 className={`relative group cursor-pointer rounded-lg border overflow-hidden transition-colors ${
-                  isSelected ? 'border-primary border-2 ring-2 ring-primary/20' : 'hover:border-primary'
+                  isSelected
+                    ? 'border-primary border-2 ring-2 ring-primary/20'
+                    : 'hover:border-primary'
                 }`}
                 onClick={() => setSelectedPhoto(attachment)}
               >
@@ -347,8 +346,9 @@ export function PhotosTab({
                     className="h-5 w-5 rounded border-2 border-white bg-white/80 cursor-pointer"
                   />
                 </div>
-                <img
-                  src={attachment.document.fileUrl}
+                <SecureDocumentImage
+                  documentId={attachment.document.id}
+                  fileUrl={attachment.document.fileUrl}
                   alt={attachment.document.caption || attachment.document.filename}
                   className="w-full h-40 object-cover"
                 />
@@ -375,17 +375,24 @@ export function PhotosTab({
                   )}
                 </div>
               </div>
-            )
+            );
           })}
         </div>
 
         {/* Batch Caption Modal */}
         {showBatchCaptionModal && (
-          <Modal onClose={() => { setShowBatchCaptionModal(false); setBatchCaption('') }} className="max-w-md">
+          <Modal
+            onClose={() => {
+              setShowBatchCaptionModal(false);
+              setBatchCaption('');
+            }}
+            className="max-w-md"
+          >
             <ModalHeader>Bulk Caption Photos</ModalHeader>
             <ModalBody>
               <p className="text-sm text-muted-foreground mb-4">
-                Apply caption to {selectedPhotos.size} selected photo{selectedPhotos.size !== 1 ? 's' : ''}
+                Apply caption to {selectedPhotos.size} selected photo
+                {selectedPhotos.size !== 1 ? 's' : ''}
               </p>
               <Textarea
                 value={batchCaption}
@@ -399,8 +406,8 @@ export function PhotosTab({
               <Button
                 variant="outline"
                 onClick={() => {
-                  setShowBatchCaptionModal(false)
-                  setBatchCaption('')
+                  setShowBatchCaptionModal(false);
+                  setBatchCaption('');
                 }}
                 disabled={applyingBatchCaption}
               >
@@ -425,16 +432,25 @@ export function PhotosTab({
 
         {/* Add to Evidence Modal */}
         {showAddToEvidenceModal && itpInstance?.template?.checklistItems && (
-          <Modal onClose={() => { setShowAddToEvidenceModal(false); setSelectedEvidenceItem(null) }} className="max-w-lg">
+          <Modal
+            onClose={() => {
+              setShowAddToEvidenceModal(false);
+              setSelectedEvidenceItem(null);
+            }}
+            className="max-w-lg"
+          >
             <ModalHeader>Add Photos to Evidence</ModalHeader>
             <ModalBody className="max-h-[60vh] overflow-y-auto">
               <p className="text-sm text-muted-foreground mb-4">
-                Select an ITP checklist item to attach {selectedPhotos.size} photo{selectedPhotos.size !== 1 ? 's' : ''} as evidence
+                Select an ITP checklist item to attach {selectedPhotos.size} photo
+                {selectedPhotos.size !== 1 ? 's' : ''} as evidence
               </p>
               <div className="space-y-2">
                 {itpInstance.template.checklistItems.map((item: ITPChecklistItem) => {
-                  const completion = itpInstance.completions?.find(c => c.checklistItemId === item.id)
-                  const isSelected = selectedEvidenceItem === item.id
+                  const completion = itpInstance.completions?.find(
+                    (c) => c.checklistItemId === item.id,
+                  );
+                  const isSelected = selectedEvidenceItem === item.id;
                   return (
                     <button
                       key={item.id}
@@ -451,8 +467,11 @@ export function PhotosTab({
                             {item.order}. {item.description}
                           </p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {item.evidenceRequired !== 'none' ? `Requires: ${item.evidenceRequired}` : 'No evidence required'}
-                            {(completion?.attachments?.length ?? 0) > 0 && ` • ${completion?.attachments?.length ?? 0} attached`}
+                            {item.evidenceRequired !== 'none'
+                              ? `Requires: ${item.evidenceRequired}`
+                              : 'No evidence required'}
+                            {(completion?.attachments?.length ?? 0) > 0 &&
+                              ` • ${completion?.attachments?.length ?? 0} attached`}
                           </p>
                         </div>
                         {isSelected && (
@@ -460,7 +479,7 @@ export function PhotosTab({
                         )}
                       </div>
                     </button>
-                  )
+                  );
                 })}
               </div>
             </ModalBody>
@@ -468,8 +487,8 @@ export function PhotosTab({
               <Button
                 variant="outline"
                 onClick={() => {
-                  setShowAddToEvidenceModal(false)
-                  setSelectedEvidenceItem(null)
+                  setShowAddToEvidenceModal(false);
+                  setSelectedEvidenceItem(null);
                 }}
                 disabled={addingToEvidence}
               >
@@ -500,27 +519,27 @@ export function PhotosTab({
         photoZoom={photoZoom}
         itpInstance={itpInstance}
         onClose={() => {
-          setSelectedPhoto(null)
-          setPhotoZoom(1)
+          setSelectedPhoto(null);
+          setPhotoZoom(1);
         }}
         onPhotoChange={(photo) => {
-          setSelectedPhoto(photo)
-          setPhotoZoom(1)
+          setSelectedPhoto(photo);
+          setPhotoZoom(1);
         }}
         onZoomChange={setPhotoZoom}
       />
     </div>
-  )
+  );
 }
 
 // Photo Viewer Modal Component
 interface PhotoViewerModalProps {
-  selectedPhoto: ITPAttachment | null
-  photoZoom: number
-  itpInstance: ITPInstance | null
-  onClose: () => void
-  onPhotoChange: (photo: ITPAttachment) => void
-  onZoomChange: (zoom: number) => void
+  selectedPhoto: ITPAttachment | null;
+  photoZoom: number;
+  itpInstance: ITPInstance | null;
+  onClose: () => void;
+  onPhotoChange: (photo: ITPAttachment) => void;
+  onZoomChange: (zoom: number) => void;
 }
 
 function PhotoViewerModal({
@@ -531,59 +550,59 @@ function PhotoViewerModal({
   onPhotoChange,
   onZoomChange,
 }: PhotoViewerModalProps) {
-  if (!selectedPhoto) return null
+  if (!selectedPhoto) return null;
 
   // Collect all photos for navigation
-  const allPhotos: ITPAttachment[] = []
+  const allPhotos: ITPAttachment[] = [];
   if (itpInstance) {
-    itpInstance.completions.forEach(completion => {
+    itpInstance.completions.forEach((completion) => {
       if (completion.attachments && completion.attachments.length > 0) {
-        completion.attachments.forEach(attachment => {
-          allPhotos.push(attachment)
-        })
+        completion.attachments.forEach((attachment) => {
+          allPhotos.push(attachment);
+        });
       }
-    })
+    });
   }
 
-  const currentIndex = allPhotos.findIndex(p => p.id === selectedPhoto.id)
-  const hasPrev = currentIndex > 0
-  const hasNext = currentIndex < allPhotos.length - 1
+  const currentIndex = allPhotos.findIndex((p) => p.id === selectedPhoto.id);
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < allPhotos.length - 1;
 
   const goToPrev = () => {
     if (hasPrev) {
-      onPhotoChange(allPhotos[currentIndex - 1])
+      onPhotoChange(allPhotos[currentIndex - 1]);
     }
-  }
+  };
 
   const goToNext = () => {
     if (hasNext) {
-      onPhotoChange(allPhotos[currentIndex + 1])
+      onPhotoChange(allPhotos[currentIndex + 1]);
     }
-  }
+  };
 
   const handleZoomIn = () => {
-    onZoomChange(Math.min(photoZoom + 0.5, 4))
-  }
+    onZoomChange(Math.min(photoZoom + 0.5, 4));
+  };
 
   const handleZoomOut = () => {
-    onZoomChange(Math.max(photoZoom - 0.5, 0.5))
-  }
+    onZoomChange(Math.max(photoZoom - 0.5, 0.5));
+  };
 
   const handleResetZoom = () => {
-    onZoomChange(1)
-  }
+    onZoomChange(1);
+  };
 
   return (
     <div
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
       onClick={onClose}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') goToPrev()
-        else if (e.key === 'ArrowRight') goToNext()
-        else if (e.key === 'Escape') onClose()
-        else if (e.key === '+' || e.key === '=') handleZoomIn()
-        else if (e.key === '-') handleZoomOut()
-        else if (e.key === '0') handleResetZoom()
+        if (e.key === 'ArrowLeft') goToPrev();
+        else if (e.key === 'ArrowRight') goToNext();
+        else if (e.key === 'Escape') onClose();
+        else if (e.key === '+' || e.key === '=') handleZoomIn();
+        else if (e.key === '-') handleZoomOut();
+        else if (e.key === '0') handleResetZoom();
       }}
       tabIndex={0}
       data-testid="photo-lightbox"
@@ -593,7 +612,10 @@ function PhotoViewerModal({
         <Button
           variant="ghost"
           size="icon"
-          onClick={(e) => { e.stopPropagation(); goToPrev() }}
+          onClick={(e) => {
+            e.stopPropagation();
+            goToPrev();
+          }}
           className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full text-white z-10"
           title="Previous photo"
           data-testid="photo-lightbox-prev"
@@ -607,7 +629,10 @@ function PhotoViewerModal({
         <Button
           variant="ghost"
           size="icon"
-          onClick={(e) => { e.stopPropagation(); goToNext() }}
+          onClick={(e) => {
+            e.stopPropagation();
+            goToNext();
+          }}
           className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full text-white z-10"
           title="Next photo"
           data-testid="photo-lightbox-next"
@@ -632,7 +657,10 @@ function PhotoViewerModal({
         >
           <ZoomOut className="h-5 w-5" />
         </Button>
-        <span className="text-white text-sm min-w-[60px] text-center" data-testid="photo-lightbox-zoom-level">
+        <span
+          className="text-white text-sm min-w-[60px] text-center"
+          data-testid="photo-lightbox-zoom-level"
+        >
           {Math.round(photoZoom * 100)}%
         </span>
         <Button
@@ -660,7 +688,10 @@ function PhotoViewerModal({
         )}
       </div>
 
-      <div className="relative max-w-4xl max-h-[90vh] p-4 overflow-auto" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="relative max-w-4xl max-h-[90vh] p-4 overflow-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <Button
           variant="ghost"
           size="icon"
@@ -671,8 +702,9 @@ function PhotoViewerModal({
           ✕
         </Button>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <img
-            src={selectedPhoto.document.fileUrl}
+          <SecureDocumentImage
+            documentId={selectedPhoto.document.id}
+            fileUrl={selectedPhoto.document.fileUrl}
             alt={selectedPhoto.document.caption || selectedPhoto.document.filename}
             className="max-w-full max-h-[80vh] object-contain rounded-lg transition-transform duration-200"
             style={{ transform: `scale(${photoZoom})` }}
@@ -680,7 +712,9 @@ function PhotoViewerModal({
           />
         </div>
         <div className="mt-3 text-white text-center">
-          <p className="font-medium">{selectedPhoto.document.caption || selectedPhoto.document.filename}</p>
+          <p className="font-medium">
+            {selectedPhoto.document.caption || selectedPhoto.document.filename}
+          </p>
           {allPhotos.length > 1 && (
             <p className="text-sm text-white/50 mt-1">
               {currentIndex + 1} of {allPhotos.length}
@@ -688,65 +722,40 @@ function PhotoViewerModal({
           )}
           {selectedPhoto.document.uploadedBy && (
             <p className="text-sm text-white/70 mt-1">
-              Uploaded by {selectedPhoto.document.uploadedBy.fullName || selectedPhoto.document.uploadedBy.email}
-              {selectedPhoto.document.uploadedAt && ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
+              Uploaded by{' '}
+              {selectedPhoto.document.uploadedBy.fullName ||
+                selectedPhoto.document.uploadedBy.email}
+              {selectedPhoto.document.uploadedAt &&
+                ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
             </p>
           )}
           {/* Show ITP item reference */}
-          {itpInstance && (() => {
-            const completion = itpInstance.completions.find(c =>
-              c.attachments?.some(a => a.id === selectedPhoto.id)
-            )
-            if (completion) {
-              const checklistItem = itpInstance.template.checklistItems.find(
-                item => item.id === completion.checklistItemId
-              )
-              if (checklistItem) {
-                return (
-                  <p className="text-sm bg-primary/30 px-3 py-1 rounded mt-2 inline-block">
-                    📋 ITP Item: {checklistItem.order}. {checklistItem.description}
-                  </p>
-                )
+          {itpInstance &&
+            (() => {
+              const completion = itpInstance.completions.find((c) =>
+                c.attachments?.some((a) => a.id === selectedPhoto.id),
+              );
+              if (completion) {
+                const checklistItem = itpInstance.template.checklistItems.find(
+                  (item) => item.id === completion.checklistItemId,
+                );
+                if (checklistItem) {
+                  return (
+                    <p className="text-sm bg-primary/30 px-3 py-1 rounded mt-2 inline-block">
+                      📋 ITP Item: {checklistItem.order}. {checklistItem.description}
+                    </p>
+                  );
+                }
               }
-            }
-            return null
-          })()}
-          {/* GPS Location Map */}
-          {selectedPhoto.document.gpsLatitude && selectedPhoto.document.gpsLongitude && (
-            <div className="mt-4" data-testid="photo-gps-map">
-              <div className="flex items-center gap-2 text-white/70 text-sm mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                  <circle cx="12" cy="10" r="3"></circle>
-                </svg>
-                <span>Photo Location</span>
-                <span className="text-white/50">
-                  ({Number(selectedPhoto.document.gpsLatitude).toFixed(6)}, {Number(selectedPhoto.document.gpsLongitude).toFixed(6)})
-                </span>
-              </div>
-              <div className="rounded-lg overflow-hidden border border-white/20">
-                <iframe
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(selectedPhoto.document.gpsLongitude) - 0.005}%2C${Number(selectedPhoto.document.gpsLatitude) - 0.003}%2C${Number(selectedPhoto.document.gpsLongitude) + 0.005}%2C${Number(selectedPhoto.document.gpsLatitude) + 0.003}&layer=mapnik&marker=${selectedPhoto.document.gpsLatitude}%2C${selectedPhoto.document.gpsLongitude}`}
-                  width="300"
-                  height="200"
-                  style={{ border: 0 }}
-                  title="Photo location map"
-                  loading="lazy"
-                />
-              </div>
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${selectedPhoto.document.gpsLatitude},${selectedPhoto.document.gpsLongitude}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-primary/70 hover:text-primary mt-1 inline-block"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Open in Google Maps →
-              </a>
-            </div>
-          )}
+              return null;
+            })()}
+          <PhotoLocationMap
+            gpsLatitude={selectedPhoto.document.gpsLatitude}
+            gpsLongitude={selectedPhoto.document.gpsLongitude}
+            openLabel="Open in Google Maps →"
+          />
         </div>
       </div>
     </div>
-  )
+  );
 }

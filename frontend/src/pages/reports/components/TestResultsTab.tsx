@@ -1,11 +1,11 @@
-import React, { useState, useCallback, useMemo } from 'react'
-import type { TestReport } from '../types'
-import { applyDatePreset } from '../types'
+import React, { useState, useCallback, useMemo } from 'react';
+import type { TestReport } from '../types';
+import { applyDatePreset } from '../types';
 
 export interface TestResultsTabProps {
-  report: TestReport | null
-  loading: boolean
-  onRefresh: (startDate: string, endDate: string, testTypes: string[]) => void
+  report: TestReport | null;
+  loading: boolean;
+  onRefresh: (startDate: string, endDate: string, testTypes: string[]) => void;
 }
 
 export const TestResultsTab = React.memo(function TestResultsTab({
@@ -13,34 +13,32 @@ export const TestResultsTab = React.memo(function TestResultsTab({
   loading,
   onRefresh,
 }: TestResultsTabProps) {
-  const [testStartDate, setTestStartDate] = useState<string>('')
-  const [testEndDate, setTestEndDate] = useState<string>('')
-  const [selectedTestTypes, setSelectedTestTypes] = useState<string[]>([])
+  const [testStartDate, setTestStartDate] = useState<string>('');
+  const [testEndDate, setTestEndDate] = useState<string>('');
+  const [selectedTestTypes, setSelectedTestTypes] = useState<string[]>([]);
 
   const availableTestTypes = useMemo(() => {
-    if (!report) return []
-    return Object.keys(report.testTypeCounts)
-  }, [report])
+    if (!report) return [];
+    return Object.keys(report.testTypeCounts);
+  }, [report]);
 
   const handleToggleTestType = useCallback((testType: string) => {
-    setSelectedTestTypes(prev =>
-      prev.includes(testType)
-        ? prev.filter(t => t !== testType)
-        : [...prev, testType]
-    )
-  }, [])
+    setSelectedTestTypes((prev) =>
+      prev.includes(testType) ? prev.filter((t) => t !== testType) : [...prev, testType],
+    );
+  }, []);
 
   const handleGenerateReport = useCallback(() => {
-    onRefresh(testStartDate, testEndDate, selectedTestTypes)
-  }, [onRefresh, testStartDate, testEndDate, selectedTestTypes])
+    onRefresh(testStartDate, testEndDate, selectedTestTypes);
+  }, [onRefresh, testStartDate, testEndDate, selectedTestTypes]);
 
   const handleClearFilters = useCallback(() => {
-    setTestStartDate('')
-    setTestEndDate('')
-    setSelectedTestTypes([])
-  }, [])
+    setTestStartDate('');
+    setTestEndDate('');
+    setSelectedTestTypes([]);
+  }, []);
 
-  const hasFilters = testStartDate || testEndDate || selectedTestTypes.length > 0
+  const hasFilters = testStartDate || testEndDate || selectedTestTypes.length > 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -50,16 +48,26 @@ export const TestResultsTab = React.memo(function TestResultsTab({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Date Range */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Date Range (Sample Date)</label>
+            <span className="block text-sm font-medium text-foreground mb-2">
+              Date Range (Sample Date)
+            </span>
             <div className="flex items-center gap-2">
+              <label htmlFor="test-report-start-date" className="sr-only">
+                Test report start date
+              </label>
               <input
+                id="test-report-start-date"
                 type="date"
                 value={testStartDate}
                 onChange={(e) => setTestStartDate(e.target.value)}
                 className="px-3 py-2 border border-border rounded-md text-sm"
               />
               <span className="text-muted-foreground">to</span>
+              <label htmlFor="test-report-end-date" className="sr-only">
+                Test report end date
+              </label>
               <input
+                id="test-report-end-date"
                 type="date"
                 value={testEndDate}
                 onChange={(e) => setTestEndDate(e.target.value)}
@@ -102,7 +110,9 @@ export const TestResultsTab = React.memo(function TestResultsTab({
               {availableTestTypes.length > 0 ? (
                 availableTestTypes.map((testType) => (
                   <button
+                    type="button"
                     key={testType}
+                    aria-pressed={selectedTestTypes.includes(testType)}
                     onClick={() => handleToggleTestType(testType)}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       selectedTestTypes.includes(testType)
@@ -114,7 +124,9 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                   </button>
                 ))
               ) : (
-                <span className="text-muted-foreground text-sm">All types (generate report to see options)</span>
+                <span className="text-muted-foreground text-sm">
+                  All types (generate report to see options)
+                </span>
               )}
             </div>
           </div>
@@ -122,6 +134,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
 
         <div className="flex gap-3 mt-4">
           <button
+            type="button"
             onClick={handleGenerateReport}
             disabled={loading}
             className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50"
@@ -130,6 +143,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
           </button>
           {hasFilters && (
             <button
+              type="button"
               onClick={handleClearFilters}
               className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
             >
@@ -144,6 +158,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
           {/* Feature #208: Report Actions */}
           <div className="flex justify-end gap-3 print:hidden">
             <button
+              type="button"
               onClick={() => window.print()}
               className="px-4 py-2 text-sm font-medium rounded-md border border-border hover:bg-muted/50 flex items-center gap-2"
             >
@@ -197,12 +212,24 @@ export const TestResultsTab = React.memo(function TestResultsTab({
               <table className="min-w-full divide-y divide-border">
                 <thead className="bg-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Test ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Laboratory</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Result</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Pass/Fail</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Test ID
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Laboratory
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Result
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Pass/Fail
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Status
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-card divide-y divide-border">
@@ -212,16 +239,24 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                         {test.testRequestNumber || test.id.slice(0, 8)}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{test.testType}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{test.laboratoryName || '-'}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : '-'}
+                        {test.laboratoryName || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {test.resultValue != null
+                          ? `${test.resultValue} ${test.resultUnit || ''}`
+                          : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          test.passFail === 'pass' ? 'bg-green-100 text-green-700' :
-                          test.passFail === 'fail' ? 'bg-red-100 text-red-700' :
-                          'bg-muted text-foreground'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs ${
+                            test.passFail === 'pass'
+                              ? 'bg-green-100 text-green-700'
+                              : test.passFail === 'fail'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-muted text-foreground'
+                          }`}
+                        >
                           {test.passFail || 'Pending'}
                         </span>
                       </td>
@@ -231,12 +266,14 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                 </tbody>
               </table>
               {report.tests.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">No test results found for this project.</div>
+                <div className="text-center py-8 text-muted-foreground">
+                  No test results found for this project.
+                </div>
               )}
             </div>
           </div>
         </>
       )}
     </div>
-  )
-})
+  );
+});

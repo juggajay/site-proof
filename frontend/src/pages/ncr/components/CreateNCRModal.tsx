@@ -1,39 +1,55 @@
-import { useState, useEffect, memo } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { getAuthToken } from '@/lib/auth'
-import { apiFetch } from '@/lib/api'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { NativeSelect } from '@/components/ui/native-select'
-import { Label } from '@/components/ui/label'
+import { useState, useEffect, memo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { getAuthToken } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import {
+  Modal,
+  ModalHeader,
+  ModalDescription,
+  ModalBody,
+  ModalFooter,
+} from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Label } from '@/components/ui/label';
+import { logError } from '@/lib/logger';
+import { Check } from 'lucide-react';
 
 const createNCRSchema = z.object({
-  description: z.string().min(1, 'Description is required'),
-  category: z.string().min(1, 'Category is required'),
-  severity: z.string().min(1, 'Severity is required'),
-  specificationReference: z.string().optional().default(''),
-  dueDate: z.string().optional().default(''),
-})
+  description: z.string().trim().min(1, 'Description is required'),
+  category: z.string().trim().min(1, 'Category is required'),
+  severity: z.string().trim().min(1, 'Severity is required'),
+  specificationReference: z.string().trim().optional().default(''),
+  dueDate: z.string().trim().optional().default(''),
+});
 
-type CreateNCRFormData = z.infer<typeof createNCRSchema>
+type CreateNCRFormData = z.infer<typeof createNCRSchema>;
+
+const DEFAULT_CREATE_NCR_VALUES: CreateNCRFormData = {
+  description: '',
+  category: '',
+  severity: 'minor',
+  specificationReference: '',
+  dueDate: '',
+};
 
 interface CreateNCRModalProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen: boolean;
+  onClose: () => void;
   onSubmit: (data: {
-    description: string
-    category: string
-    severity: string
-    specificationReference?: string
-    lotIds?: string[]
-    dueDate?: string
-  }) => void
-  loading: boolean
-  projectId?: string
+    description: string;
+    category: string;
+    severity: string;
+    specificationReference?: string;
+    lotIds?: string[];
+    dueDate?: string;
+  }) => void;
+  loading: boolean;
+  projectId?: string;
 }
 
 function CreateNCRModalInner({
@@ -43,73 +59,107 @@ function CreateNCRModalInner({
   loading,
   projectId,
 }: CreateNCRModalProps) {
-  const [selectedLotIds, setSelectedLotIds] = useState<string[]>([])
-  const [lots, setLots] = useState<Array<{ id: string; lotNumber: string; description: string }>>([])
-  const [lotsLoading, setLotsLoading] = useState(true)
-  const token = getAuthToken()
+  const [selectedLotIds, setSelectedLotIds] = useState<string[]>([]);
+  const [lots, setLots] = useState<Array<{ id: string; lotNumber: string; description: string }>>(
+    [],
+  );
+  const [lotsLoading, setLotsLoading] = useState(true);
+  const [lotsError, setLotsError] = useState<string | null>(null);
+  const [lotLookupRetryKey, setLotLookupRetryKey] = useState(0);
+  const token = getAuthToken();
 
   const {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
   } = useForm<CreateNCRFormData>({
     resolver: zodResolver(createNCRSchema),
     mode: 'onBlur',
-    defaultValues: {
-      description: '',
-      category: '',
-      severity: 'minor',
-      specificationReference: '',
-      dueDate: '',
-    },
-  })
+    defaultValues: DEFAULT_CREATE_NCR_VALUES,
+  });
 
-  const severity = watch('severity')
+  const severity = watch('severity');
 
   // Fetch lots for this project
   useEffect(() => {
+    if (!isOpen) {
+      reset(DEFAULT_CREATE_NCR_VALUES);
+      setSelectedLotIds([]);
+      setLotsError(null);
+      return;
+    }
+
+    let cancelled = false;
     const fetchLots = async () => {
+      setLotsLoading(true);
       if (!projectId) {
-        setLotsLoading(false)
-        return
+        setLotsLoading(false);
+        setLotsError(null);
+        return;
       }
       try {
-        const data = await apiFetch<{ lots: Array<{ id: string; lotNumber: string; description: string }> }>(`/api/lots?projectId=${projectId}`)
-        setLots(data.lots || [])
+        setLotsError(null);
+        const data = await apiFetch<{
+          lots: Array<{ id: string; lotNumber: string; description: string }>;
+        }>(`/api/lots?projectId=${encodeURIComponent(projectId)}`);
+        if (!cancelled) {
+          setLots(data.lots || []);
+        }
       } catch (err) {
-        console.error('Failed to fetch lots:', err)
+        if (!cancelled) {
+          logError('Failed to fetch lots:', err);
+          setLots([]);
+          setLotsError('Failed to load available lots.');
+        }
       } finally {
-        setLotsLoading(false)
+        if (!cancelled) {
+          setLotsLoading(false);
+        }
       }
-    }
-    fetchLots()
-  }, [projectId, token])
+    };
+    fetchLots();
 
-  const handleLotToggle = (lotId: string) => {
-    setSelectedLotIds(prev =>
-      prev.includes(lotId)
-        ? prev.filter(id => id !== lotId)
-        : [...prev, lotId]
-    )
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, projectId, token, reset, lotLookupRetryKey]);
+
+  const handleLotSelectionChange = (lotId: string, checked: boolean) => {
+    setSelectedLotIds((prev) => {
+      if (checked) {
+        return prev.includes(lotId) ? prev : [...prev, lotId];
+      }
+      return prev.filter((id) => id !== lotId);
+    });
+  };
 
   const onFormSubmit = (data: CreateNCRFormData) => {
     onSubmit({
-      description: data.description,
+      description: data.description.trim(),
       category: data.category,
       severity: data.severity,
-      specificationReference: data.specificationReference || undefined,
+      specificationReference: data.specificationReference?.trim() || undefined,
       lotIds: selectedLotIds.length > 0 ? selectedLotIds : undefined,
-      dueDate: data.dueDate || undefined,
-    })
-  }
+      dueDate: data.dueDate?.trim() || undefined,
+    });
+  };
 
-  if (!isOpen) return null
+  const handleClose = () => {
+    reset(DEFAULT_CREATE_NCR_VALUES);
+    setSelectedLotIds([]);
+    onClose();
+  };
+
+  if (!isOpen) return null;
 
   return (
-    <Modal onClose={onClose} className="max-w-lg">
+    <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Raise Non-Conformance Report</ModalHeader>
+      <ModalDescription>
+        Describe the non-conformance, affected lots, severity, and target close-out date.
+      </ModalDescription>
       <ModalBody>
         <form id="create-ncr-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           <div>
@@ -121,7 +171,9 @@ function CreateNCRModalInner({
               rows={3}
             />
             {errors.description && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.description.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.description.message}
+              </p>
             )}
           </div>
           <div>
@@ -140,31 +192,69 @@ function CreateNCRModalInner({
               <option value="other">Other</option>
             </NativeSelect>
             {errors.category && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.category.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.category.message}
+              </p>
             )}
           </div>
           <div>
             <Label>Affected Lots</Label>
             {lotsLoading ? (
-              <p className="text-sm text-muted-foreground">Loading lots...</p>
+              <p className="text-sm text-muted-foreground" role="status">
+                Loading lots...
+              </p>
+            ) : lotsError ? (
+              <div
+                className="mt-1 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+                role="alert"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span>{lotsError}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setLotLookupRetryKey((key) => key + 1)}
+                  >
+                    Try again
+                  </Button>
+                </div>
+              </div>
             ) : lots.length === 0 ? (
               <p className="text-sm text-muted-foreground">No lots available</p>
             ) : (
               <div className="border rounded-lg max-h-40 overflow-y-auto p-2 space-y-1 mt-1">
-                {lots.map((lot) => (
-                  <label key={lot.id} className="flex items-center gap-2 p-1 hover:bg-muted/50 rounded cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedLotIds.includes(lot.id)}
-                      onChange={() => handleLotToggle(lot.id)}
-                      className="rounded"
-                    />
-                    <span className="text-sm">
-                      <span className="font-medium">{lot.lotNumber}</span>
-                      {lot.description && <span className="text-muted-foreground"> - {lot.description}</span>}
-                    </span>
-                  </label>
-                ))}
+                {lots.map((lot) => {
+                  const selected = selectedLotIds.includes(lot.id);
+                  const label = `${lot.lotNumber}${lot.description ? ` - ${lot.description}` : ''}`;
+                  return (
+                    <button
+                      key={lot.id}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={selected}
+                      aria-label={label}
+                      onPointerDown={() => handleLotSelectionChange(lot.id, !selected)}
+                      onKeyDown={(event) => {
+                        if (event.key === ' ' || event.key === 'Enter') {
+                          event.preventDefault();
+                          handleLotSelectionChange(lot.id, !selected);
+                        }
+                      }}
+                      className="flex w-full items-center gap-2 p-1 hover:bg-muted/50 rounded text-left"
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center rounded border border-border bg-background">
+                        {selected && <Check className="h-3 w-3 text-primary" />}
+                      </span>
+                      <span className="text-sm">
+                        <span className="font-medium">{lot.lotNumber}</span>
+                        {lot.description && (
+                          <span className="text-muted-foreground"> - {lot.description}</span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
             {selectedLotIds.length > 0 && (
@@ -177,24 +267,18 @@ function CreateNCRModalInner({
             <Label>Severity *</Label>
             <div className="flex gap-4 mt-1">
               <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="minor"
-                  {...register('severity')}
-                />
+                <input type="radio" value="minor" {...register('severity')} />
                 <span>Minor</span>
               </label>
               <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="major"
-                  {...register('severity')}
-                />
+                <input type="radio" value="major" {...register('severity')} />
                 <span className="text-red-600 font-medium">Major</span>
               </label>
             </div>
             {errors.severity && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.severity.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.severity.message}
+              </p>
             )}
             {severity === 'major' && (
               <p className="text-amber-600 text-sm mt-1">
@@ -224,24 +308,15 @@ function CreateNCRModalInner({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onClose}
-        >
+        <Button type="button" variant="outline" onClick={handleClose}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="create-ncr-form"
-          variant="destructive"
-          disabled={loading}
-        >
+        <Button type="submit" form="create-ncr-form" variant="destructive" disabled={loading}>
           {loading ? 'Creating...' : 'Raise NCR'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
-export const CreateNCRModal = memo(CreateNCRModalInner)
+export const CreateNCRModal = memo(CreateNCRModalInner);

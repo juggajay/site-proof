@@ -1,41 +1,47 @@
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
-const witnessPointSchema = z.object({
-  witnessPresent: z.boolean().nullable(),
-  witnessName: z.string(),
-  witnessCompany: z.string(),
-}).superRefine((data, ctx) => {
-  if (data.witnessPresent === null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Please indicate if witness was present',
-      path: ['witnessPresent'],
-    })
-  }
-  if (data.witnessPresent === true && !data.witnessName.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Witness name is required when present',
-      path: ['witnessName'],
-    })
-  }
-})
+const witnessPointSchema = z
+  .object({
+    witnessPresent: z.boolean().nullable(),
+    witnessName: z.string(),
+    witnessCompany: z.string(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.witnessPresent === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Please indicate if witness was present',
+        path: ['witnessPresent'],
+      });
+    }
+    if (data.witnessPresent === true && !data.witnessName.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Witness name is required when present',
+        path: ['witnessName'],
+      });
+    }
+  });
 
-type WitnessPointFormData = z.infer<typeof witnessPointSchema>
+type WitnessPointFormData = z.infer<typeof witnessPointSchema>;
 
 interface WitnessPointModalProps {
-  isOpen: boolean
-  itemDescription: string
-  onClose: () => void
-  onSubmit: (witnessPresent: boolean, witnessName?: string, witnessCompany?: string) => Promise<void>
-  isSubmitting: boolean
+  isOpen: boolean;
+  itemDescription: string;
+  onClose: () => void;
+  onSubmit: (
+    witnessPresent: boolean,
+    witnessName?: string,
+    witnessCompany?: string,
+  ) => Promise<void>;
+  isSubmitting: boolean;
 }
 
 export function WitnessPointModal({
@@ -43,7 +49,7 @@ export function WitnessPointModal({
   itemDescription,
   onClose,
   onSubmit,
-  isSubmitting
+  isSubmitting,
 }: WitnessPointModalProps) {
   const {
     register,
@@ -60,26 +66,28 @@ export function WitnessPointModal({
       witnessName: '',
       witnessCompany: '',
     },
-  })
+  });
 
-  useEffect(() => { if (isOpen) reset() }, [isOpen, reset])
+  useEffect(() => {
+    if (isOpen) reset();
+  }, [isOpen, reset]);
 
-  const witnessPresent = watch('witnessPresent')
+  const witnessPresent = watch('witnessPresent');
 
   const onFormSubmit = (data: WitnessPointFormData) => {
     onSubmit(
       data.witnessPresent!,
       data.witnessPresent ? data.witnessName.trim() : undefined,
-      data.witnessPresent ? data.witnessCompany.trim() : undefined
-    )
-  }
+      data.witnessPresent ? data.witnessCompany.trim() : undefined,
+    );
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset();
+    onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={handleClose}>
@@ -130,7 +138,9 @@ export function WitnessPointModal({
                 </button>
               </div>
               {errors.witnessPresent && (
-                <p className="text-sm text-destructive mt-1" role="alert">{errors.witnessPresent.message}</p>
+                <p className="text-sm text-destructive mt-1" role="alert">
+                  {errors.witnessPresent.message}
+                </p>
               )}
             </div>
 
@@ -148,7 +158,9 @@ export function WitnessPointModal({
                     autoFocus
                   />
                   {errors.witnessName && (
-                    <p className="text-sm text-destructive mt-1" role="alert">{errors.witnessName.message}</p>
+                    <p className="text-sm text-destructive mt-1" role="alert">
+                      {errors.witnessName.message}
+                    </p>
                   )}
                 </div>
 
@@ -167,7 +179,8 @@ export function WitnessPointModal({
             {witnessPresent === false && (
               <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                 <p className="text-sm text-orange-700 dark:text-orange-400">
-                  <strong>Note:</strong> The item will be marked as complete with a record that notification was given but the witness was not present.
+                  <strong>Note:</strong> The item will be marked as complete with a record that
+                  notification was given but the witness was not present.
                 </p>
               </div>
             )}
@@ -175,22 +188,13 @@ export function WitnessPointModal({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleClose}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="witness-point-form"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" form="witness-point-form" disabled={isSubmitting}>
           {isSubmitting ? 'Saving...' : 'Complete Witness Point'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

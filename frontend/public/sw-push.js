@@ -1,23 +1,79 @@
-// Service Worker for Push Notifications
-// This file is loaded by VitePWA's service worker
+// Service Worker for Push Notifications.
+// This file is loaded by VitePWA's generated service worker.
 
-self.addEventListener('push', function(event) {
-  console.log('[SW] Push received:', event)
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
 
-  if (!event.data) {
-    console.log('[SW] Push event has no data')
-    return
-  }
-
-  let data
-  try {
-    data = event.data.json()
-  } catch (e) {
-    data = {
-      title: 'SiteProof Notification',
-      body: event.data.text()
+function parsePushPayload(eventData) {
+  if (!eventData) {
+    return {
+      title: 'SiteProof',
+      body: 'You have a new notification',
+      data: {},
     }
   }
+
+  try {
+    const parsed = eventData.json()
+    if (isRecord(parsed)) {
+      return parsed
+    }
+  } catch {
+    return {
+      title: 'SiteProof Notification',
+      body: eventData.text(),
+      data: {},
+    }
+  }
+
+  return {
+    title: 'SiteProof Notification',
+    body: eventData.text(),
+    data: {},
+  }
+}
+
+function isSafeAppPath(value) {
+  if (typeof value !== 'string') return false
+
+  const normalized = value.trim()
+  if (
+    !normalized.startsWith('/') ||
+    normalized.startsWith('//') ||
+    normalized.includes('\\') ||
+    /[\u0000-\u001f\u007f]/.test(normalized)
+  ) {
+    return false
+  }
+
+  try {
+    const url = new URL(normalized, self.location.origin)
+    return url.origin === self.location.origin
+  } catch {
+    return false
+  }
+}
+
+function getNotificationNavigationUrl(notificationData) {
+  const rawUrl = isRecord(notificationData) ? notificationData.url : undefined
+  if (!isSafeAppPath(rawUrl)) {
+    return new URL('/', self.location.origin).href
+  }
+
+  const url = new URL(rawUrl.trim(), self.location.origin)
+  return url.href
+}
+
+async function notifyClientsOfSubscriptionChange() {
+  const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+  for (const client of clientList) {
+    client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' })
+  }
+}
+
+self.addEventListener('push', function(event) {
+  const data = parsePushPayload(event.data)
 
   const options = {
     body: data.body || 'You have a new notification',
@@ -26,13 +82,9 @@ self.addEventListener('push', function(event) {
     tag: data.tag || 'siteproof-notification',
     renotify: true,
     requireInteraction: data.requireInteraction || false,
-    data: data.data || {},
-    actions: data.actions || []
-  }
-
-  // Add vibration pattern for mobile
-  if ('vibrate' in navigator) {
-    options.vibrate = [100, 50, 100]
+    data: isRecord(data.data) ? data.data : {},
+    actions: Array.isArray(data.actions) ? data.actions : [],
+    vibrate: [100, 50, 100],
   }
 
   event.waitUntil(
@@ -41,54 +93,32 @@ self.addEventListener('push', function(event) {
 })
 
 self.addEventListener('notificationclick', function(event) {
-  console.log('[SW] Notification click:', event.notification.tag)
-
   event.notification.close()
 
-  // Get the URL to open from the notification data
-  const url = event.notification.data?.url || '/'
+  const navigationUrl = getNotificationNavigationUrl(event.notification.data)
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(function(clientList) {
-        // Check if there's already a window/tab open
         for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            // Focus the existing window and navigate
-            return client.focus().then(function() {
-              return client.navigate(url)
-            })
+          try {
+            if (new URL(client.url).origin === self.location.origin && 'focus' in client) {
+              return client.focus().then(function() {
+                return client.navigate(navigationUrl)
+              })
+            }
+          } catch {
+            // Ignore malformed client URLs from old browser state.
           }
         }
-        // Open a new window
+
         if (clients.openWindow) {
-          return clients.openWindow(url)
+          return clients.openWindow(navigationUrl)
         }
       })
   )
 })
 
-self.addEventListener('notificationclose', function(event) {
-  console.log('[SW] Notification dismissed:', event.notification.tag)
-})
-
-// Handle push subscription change (e.g., browser refreshes subscription)
 self.addEventListener('pushsubscriptionchange', function(event) {
-  console.log('[SW] Push subscription changed')
-
-  event.waitUntil(
-    // Re-subscribe with new subscription
-    self.registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      // Note: applicationServerKey should be stored/retrieved properly
-      // This is a fallback - the main subscription logic is in the app
-    }).then(function(subscription) {
-      // The app will need to send this new subscription to the server
-      console.log('[SW] Re-subscribed to push')
-    }).catch(function(error) {
-      console.error('[SW] Failed to re-subscribe:', error)
-    })
-  )
+  event.waitUntil(notifyClientsOfSubscriptionChange())
 })
-
-console.log('[SW] Push notification service worker loaded')

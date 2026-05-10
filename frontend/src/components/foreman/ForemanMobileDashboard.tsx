@@ -1,10 +1,11 @@
 // ForemanMobileDashboard - Mobile-optimized dashboard for foreman role
-import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
-import { apiFetch } from '@/lib/api'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 import {
   RefreshCw,
   Calendar,
@@ -16,70 +17,76 @@ import {
   ChevronRight,
   Users,
   Truck,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { DashboardCard, DashboardStat } from './DashboardCard'
-import { WeatherWidget } from './WeatherWidget'
-import { QuickCaptureButton } from './QuickCaptureButton'
-import { PhotoCaptureModal } from './PhotoCaptureModal'
-import { useForemanMobileStore } from '@/stores/foremanMobileStore'
-import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { DashboardCard, DashboardStat } from './DashboardCard';
+import { WeatherWidget } from './WeatherWidget';
+import { QuickCaptureButton } from './QuickCaptureButton';
+import { PhotoCaptureModal } from './PhotoCaptureModal';
+import { useForemanMobileStore } from '@/stores/foremanMobileStore';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 interface DashboardData {
   todayDiary: {
-    exists: boolean
-    status: 'draft' | 'submitted' | null
-    id: string | null
-  }
+    exists: boolean;
+    status: 'draft' | 'submitted' | null;
+    id: string | null;
+  };
   pendingDockets: {
-    count: number
-    totalLabourHours: number
-    totalPlantHours: number
-  }
+    count: number;
+    totalLabourHours: number;
+    totalPlantHours: number;
+  };
   inspectionsDueToday: {
-    count: number
+    count: number;
     items: Array<{
-      id: string
-      type: string
-      description: string
-      lotNumber: string
-      link: string
-    }>
-  }
+      id: string;
+      type: string;
+      description: string;
+      lotNumber: string;
+      link: string;
+    }>;
+  };
   weather: {
-    conditions: string | null
-    temperatureMin: number | null
-    temperatureMax: number | null
-    rainfallMm: number | null
-  }
+    conditions: string | null;
+    temperatureMin: number | null;
+    temperatureMax: number | null;
+    rainfallMm: number | null;
+  };
   project: {
-    id: string
-    name: string
-    projectNumber: string
-  } | null
+    id: string;
+    name: string;
+    projectNumber: string;
+  } | null;
 }
 
 function getTimeOfDay(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'morning'
-  if (hour < 17) return 'afternoon'
-  return 'evening'
+  const hour = new Date().getHours();
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
 }
 
 function formatDateForUrl(date: Date): string {
-  return date.toISOString().split('T')[0]
+  return date.toISOString().split('T')[0];
+}
+
+function getSafeInternalLink(link: string | undefined, fallback: string): string {
+  if (link?.startsWith('/') && !link.startsWith('//')) {
+    return link;
+  }
+  return fallback;
 }
 
 export function ForemanMobileDashboard() {
-  const { projectId } = useParams()
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore()
-  useOnlineStatus() // Initialize online status tracking
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore();
+  useOnlineStatus(); // Initialize online status tracking
 
-  const queryClient = useQueryClient()
-  const [refreshing, setRefreshing] = useState(false)
+  const [refreshing, setRefreshing] = useState(false);
 
   const defaultData: DashboardData = {
     todayDiary: { exists: false, status: null, id: null },
@@ -87,47 +94,97 @@ export function ForemanMobileDashboard() {
     inspectionsDueToday: { count: 0, items: [] },
     weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
     project: null,
-  }
+  };
 
-  const queryKeyId = projectId || 'default'
+  const queryKeyId = projectId || 'default';
 
-  const { data = defaultData, isLoading: loading } = useQuery({
+  const {
+    data: dashboardData,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: queryKeys.foremanDashboard(queryKeyId),
     queryFn: () => apiFetch<DashboardData>('/api/dashboard/foreman'),
-  })
+  });
+  const data = dashboardData ?? defaultData;
+  const errorMessage = error
+    ? extractErrorMessage(error, 'Failed to load foreman dashboard')
+    : null;
+  const hasHardError = Boolean(errorMessage && !dashboardData);
 
   const handleRefresh = async () => {
-    setRefreshing(true)
-    await queryClient.invalidateQueries({ queryKey: queryKeys.foremanDashboard(queryKeyId) })
-    setRefreshing(false)
-  }
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const today = new Date().toLocaleDateString('en-AU', {
     weekday: 'long',
     day: 'numeric',
     month: 'short',
-  })
+  });
 
   // Quick action handlers - use effectiveProjectId (from URL or API) for navigation
   const getProjectPath = (path: string) => {
-    const pid = projectId || data.project?.id
-    return pid ? `/projects/${pid}/${path}` : '/projects'
-  }
-  const handleCapturePhoto = () => setIsCameraOpen(true)
-  const handleAddDelay = () => navigate(getProjectPath('diary?tab=delays'))
-  const handleRaiseNCR = () => navigate(getProjectPath('ncr/new'))
-  const handleAddNote = () => navigate(getProjectPath('diary'))
-  const handleRequestHoldPoint = () => navigate(getProjectPath('hold-points'))
+    const pid = projectId || data.project?.id;
+    return pid ? `/projects/${encodeURIComponent(pid)}/${path}` : '/projects';
+  };
+  const handleCapturePhoto = () => setIsCameraOpen(true);
+  const handleAddDelay = () => navigate(getProjectPath('diary?tab=delays'));
+  const handleRaiseNCR = () => navigate(getProjectPath('ncr?create=1'));
+  const handleAddNote = () => navigate(getProjectPath('diary'));
+  const handleRequestHoldPoint = () => navigate(getProjectPath('hold-points'));
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
-    )
+    );
   }
 
-  const effectiveProjectId = projectId || data.project?.id
+  const effectiveProjectId = projectId || data.project?.id;
+
+  if (hasHardError) {
+    return (
+      <div className="pb-28 md:pb-6 overflow-x-hidden">
+        <div className="sticky top-0 z-10 bg-background border-b px-4 py-3 md:px-6 md:py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold">
+                Good {getTimeOfDay()}, {user?.fullName?.split(' ')[0] || 'Foreman'}!
+              </h1>
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {today}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="touch-manipulation min-h-[44px] min-w-[44px]"
+              aria-label="Try again"
+            >
+              <RefreshCw className={cn('h-5 w-5', refreshing && 'animate-spin')} />
+            </Button>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-4 md:p-6 md:space-y-6">
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <p className="font-medium">Foreman dashboard could not be loaded.</p>
+            <p className="mt-1 text-sm">{errorMessage}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // If no project is available, show a message to select/join a project
   if (!effectiveProjectId) {
@@ -152,7 +209,8 @@ export function ForemanMobileDashboard() {
             </div>
             <h2 className="text-lg font-semibold mb-2">No Project Assigned</h2>
             <p className="text-muted-foreground mb-4">
-              You need to be assigned to a project before you can access the foreman dashboard features.
+              You need to be assigned to a project before you can access the foreman dashboard
+              features.
             </p>
             <Button
               onClick={() => navigate('/projects')}
@@ -164,7 +222,7 @@ export function ForemanMobileDashboard() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -203,6 +261,13 @@ export function ForemanMobileDashboard() {
 
       {/* Main content */}
       <div className="p-4 space-y-4 md:p-6 md:space-y-6">
+        {errorMessage && (
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            <p className="font-medium">Foreman dashboard data could not be refreshed.</p>
+            <p className="mt-1 text-sm">{errorMessage}</p>
+          </div>
+        )}
+
         {/* Weather Widget */}
         <WeatherWidget weather={data.weather} />
 
@@ -216,17 +281,23 @@ export function ForemanMobileDashboard() {
               data.todayDiary.status === 'submitted'
                 ? 'Submitted'
                 : data.todayDiary.exists
-                ? 'Draft'
-                : 'Not Started'
+                  ? 'Draft'
+                  : 'Not Started'
             }
             badgeVariant={
               data.todayDiary.status === 'submitted'
                 ? 'success'
                 : data.todayDiary.exists
-                ? 'warning'
-                : 'default'
+                  ? 'warning'
+                  : 'default'
             }
-            onClick={() => navigate(effectiveProjectId ? `/projects/${effectiveProjectId}/diary?date=${formatDateForUrl(new Date())}` : `/diary?date=${formatDateForUrl(new Date())}`)}
+            onClick={() =>
+              navigate(
+                effectiveProjectId
+                  ? `/projects/${effectiveProjectId}/diary?date=${formatDateForUrl(new Date())}`
+                  : `/diary?date=${formatDateForUrl(new Date())}`,
+              )
+            }
           >
             {data.todayDiary.exists ? (
               <p className="text-sm text-muted-foreground">
@@ -246,9 +317,17 @@ export function ForemanMobileDashboard() {
           <DashboardCard
             title="Pending Dockets"
             icon={<ClipboardCheck className="h-5 w-5" />}
-            badge={data.pendingDockets.count > 0 ? `${data.pendingDockets.count} pending` : undefined}
+            badge={
+              data.pendingDockets.count > 0 ? `${data.pendingDockets.count} pending` : undefined
+            }
             badgeVariant="warning"
-            onClick={() => navigate(effectiveProjectId ? `/projects/${effectiveProjectId}/dockets?status=pending_approval` : '/dockets?status=pending_approval')}
+            onClick={() =>
+              navigate(
+                effectiveProjectId
+                  ? `/projects/${effectiveProjectId}/dockets?status=pending_approval`
+                  : '/dockets?status=pending_approval',
+              )
+            }
           >
             {data.pendingDockets.count > 0 ? (
               <div className="grid grid-cols-2 gap-3">
@@ -276,7 +355,9 @@ export function ForemanMobileDashboard() {
         <DashboardCard
           title="Inspections Due Today"
           icon={<Clock className="h-5 w-5" />}
-          badge={data.inspectionsDueToday.count > 0 ? `${data.inspectionsDueToday.count} due` : undefined}
+          badge={
+            data.inspectionsDueToday.count > 0 ? `${data.inspectionsDueToday.count} due` : undefined
+          }
           badgeVariant="warning"
         >
           {data.inspectionsDueToday.count > 0 ? (
@@ -284,12 +365,14 @@ export function ForemanMobileDashboard() {
               {data.inspectionsDueToday.items.slice(0, 3).map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => navigate(item.link)}
+                  onClick={() =>
+                    navigate(getSafeInternalLink(item.link, getProjectPath('hold-points')))
+                  }
                   className={cn(
                     'w-full flex items-center justify-between p-3',
                     'bg-muted/30 rounded-lg',
                     'active:bg-muted/50 transition-colors',
-                    'touch-manipulation min-h-[48px]'
+                    'touch-manipulation min-h-[48px]',
                   )}
                 >
                   <div className="text-left">
@@ -303,7 +386,11 @@ export function ForemanMobileDashboard() {
               ))}
               {data.inspectionsDueToday.count > 3 && (
                 <Link
-                  to={effectiveProjectId ? `/projects/${effectiveProjectId}/hold-points` : '/hold-points'}
+                  to={
+                    effectiveProjectId
+                      ? `/projects/${effectiveProjectId}/hold-points`
+                      : '/hold-points'
+                  }
                   className="block text-center text-sm text-primary py-2"
                 >
                   View all {data.inspectionsDueToday.count} inspections
@@ -330,13 +417,10 @@ export function ForemanMobileDashboard() {
 
       {/* Photo Capture Modal */}
       {isCameraOpen && effectiveProjectId && (
-        <PhotoCaptureModal
-          projectId={effectiveProjectId}
-          onClose={() => setIsCameraOpen(false)}
-        />
+        <PhotoCaptureModal projectId={effectiveProjectId} onClose={() => setIsCameraOpen(false)} />
       )}
 
       {/* Bottom Navigation is rendered by MobileNav in MainLayout for foreman users */}
     </div>
-  )
+  );
 }

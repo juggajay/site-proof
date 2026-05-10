@@ -11,10 +11,10 @@ export const ncrStatusColors: Record<string, string> = {
   verification: 'bg-blue-100 text-blue-800',
   closed: 'bg-green-100 text-green-800',
   closed_concession: 'bg-green-100 text-green-700',
-}
+};
 
 // Default fallback status color
-export const DEFAULT_STATUS_COLOR = 'bg-muted text-foreground'
+export const DEFAULT_STATUS_COLOR = 'bg-muted text-foreground';
 
 // NCR category options for the create form
 export const NCR_CATEGORIES = [
@@ -24,7 +24,7 @@ export const NCR_CATEGORIES = [
   { value: 'process', label: 'Process' },
   { value: 'design', label: 'Design' },
   { value: 'other', label: 'Other' },
-] as const
+] as const;
 
 // Root cause category options for the respond form
 export const ROOT_CAUSE_CATEGORIES = [
@@ -34,11 +34,11 @@ export const ROOT_CAUSE_CATEGORIES = [
   { value: 'process', label: 'Process' },
   { value: 'training', label: 'Training' },
   { value: 'other', label: 'Other' },
-] as const
+] as const;
 
 /**
  * Returns the CSS class names for a given NCR status badge.
  */
 export function getStatusBadgeColor(status: string): string {
-  return ncrStatusColors[status] ?? DEFAULT_STATUS_COLOR
+  return ncrStatusColors[status] ?? DEFAULT_STATUS_COLOR;
 }

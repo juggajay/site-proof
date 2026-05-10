@@ -1,10 +1,11 @@
 // Feature #294: Project Manager Dashboard
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { apiFetch } from '@/lib/api'
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import {
   AlertTriangle,
   ClipboardCheck,
@@ -15,138 +16,210 @@ import {
   AlertCircle,
   FileText,
   BarChart3,
-  Layers
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+  Layers,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface PMDashboardData {
   // Lot progress summary
   lotProgress: {
-    total: number
-    notStarted: number
-    inProgress: number
-    onHold: number
-    completed: number
-    progressPercentage: number
-  }
+    total: number;
+    notStarted: number;
+    inProgress: number;
+    onHold: number;
+    completed: number;
+    progressPercentage: number;
+  };
   // Open NCRs summary
   openNCRs: {
-    total: number
-    major: number
-    minor: number
-    overdue: number
+    total: number;
+    major: number;
+    minor: number;
+    overdue: number;
     items: Array<{
-      id: string
-      ncrNumber: string
-      description: string
-      category: string
-      status: string
-      daysOpen: number
-      link: string
-    }>
-  }
+      id: string;
+      ncrNumber: string;
+      description: string;
+      category: string;
+      status: string;
+      daysOpen: number;
+      link: string;
+    }>;
+  };
   // HP pipeline
   holdPointPipeline: {
-    pending: number
-    scheduled: number
-    requested: number
-    released: number
-    thisWeek: number
+    pending: number;
+    scheduled: number;
+    requested: number;
+    released: number;
+    thisWeek: number;
     items: Array<{
-      id: string
-      description: string
-      lotNumber: string
-      status: string
-      scheduledDate: string | null
-      link: string
-    }>
-  }
+      id: string;
+      description: string;
+      lotNumber: string;
+      status: string;
+      scheduledDate: string | null;
+      link: string;
+    }>;
+  };
   // Claim status
   claimStatus: {
-    totalClaimed: number
-    totalCertified: number
-    totalPaid: number
-    outstanding: number
-    pendingClaims: number
+    totalClaimed: number;
+    totalCertified: number;
+    totalPaid: number;
+    outstanding: number;
+    pendingClaims: number;
     recentClaims: Array<{
-      id: string
-      claimNumber: string
-      amount: number
-      status: string
-      link: string
-    }>
-  }
+      id: string;
+      claimNumber: string;
+      amount: number;
+      status: string;
+      link: string;
+    }>;
+  };
   // Cost tracking
   costTracking: {
-    budgetTotal: number
-    actualSpend: number
-    variance: number
-    variancePercentage: number
-    labourCost: number
-    plantCost: number
-    trend: 'under' | 'over' | 'on_track'
-  }
+    budgetTotal: number;
+    actualSpend: number;
+    variance: number;
+    variancePercentage: number;
+    labourCost: number;
+    plantCost: number;
+    trend: 'under' | 'over' | 'on_track';
+  };
   // Items requiring attention
   attentionItems: Array<{
-    id: string
-    type: 'ncr' | 'holdpoint' | 'claim' | 'diary'
-    title: string
-    description: string
-    urgency: 'critical' | 'warning' | 'info'
-    link: string
-  }>
+    id: string;
+    type: 'ncr' | 'holdpoint' | 'claim' | 'diary';
+    title: string;
+    description: string;
+    urgency: 'critical' | 'warning' | 'info';
+    link: string;
+  }>;
   // Project context
   project: {
-    id: string
-    name: string
-    projectNumber: string
-    status: string
-  } | null
+    id: string;
+    name: string;
+    projectNumber: string;
+    status: string;
+  } | null;
 }
 
 const defaultPMData: PMDashboardData = {
-  lotProgress: { total: 0, notStarted: 0, inProgress: 0, onHold: 0, completed: 0, progressPercentage: 0 },
+  lotProgress: {
+    total: 0,
+    notStarted: 0,
+    inProgress: 0,
+    onHold: 0,
+    completed: 0,
+    progressPercentage: 0,
+  },
   openNCRs: { total: 0, major: 0, minor: 0, overdue: 0, items: [] },
-  holdPointPipeline: { pending: 0, scheduled: 0, requested: 0, released: 0, thisWeek: 0, items: [] },
-  claimStatus: { totalClaimed: 0, totalCertified: 0, totalPaid: 0, outstanding: 0, pendingClaims: 0, recentClaims: [] },
-  costTracking: { budgetTotal: 0, actualSpend: 0, variance: 0, variancePercentage: 0, labourCost: 0, plantCost: 0, trend: 'on_track' },
+  holdPointPipeline: {
+    pending: 0,
+    scheduled: 0,
+    requested: 0,
+    released: 0,
+    thisWeek: 0,
+    items: [],
+  },
+  claimStatus: {
+    totalClaimed: 0,
+    totalCertified: 0,
+    totalPaid: 0,
+    outstanding: 0,
+    pendingClaims: 0,
+    recentClaims: [],
+  },
+  costTracking: {
+    budgetTotal: 0,
+    actualSpend: 0,
+    variance: 0,
+    variancePercentage: 0,
+    labourCost: 0,
+    plantCost: 0,
+    trend: 'on_track',
+  },
   attentionItems: [],
-  project: null
+  project: null,
+};
+
+function getProjectRoute(projectId: string | undefined, suffix: string): string {
+  return projectId ? `/projects/${encodeURIComponent(projectId)}${suffix}` : '/projects';
+}
+
+function getSafeInternalLink(link: string | undefined, fallback: string): string {
+  if (link?.startsWith('/') && !link.startsWith('//')) {
+    return link;
+  }
+  return fallback;
 }
 
 export function ProjectManagerDashboard() {
-  useAuth() // Auth check
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [refreshing, setRefreshing] = useState(false)
+  useAuth(); // Auth check
+  const navigate = useNavigate();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { data = defaultPMData, isLoading: loading } = useQuery({
+  const {
+    data: dashboardData,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: queryKeys.pmDashboard,
     queryFn: () => apiFetch<PMDashboardData>('/api/dashboard/project-manager'),
-  })
+  });
+  const data = dashboardData ?? defaultPMData;
+  const errorMessage = error
+    ? extractErrorMessage(error, 'Failed to load project manager dashboard')
+    : null;
+  const hasHardError = Boolean(errorMessage && !dashboardData);
 
   const handleRefresh = () => {
-    setRefreshing(true)
-    queryClient.invalidateQueries({ queryKey: queryKeys.pmDashboard }).then(() => {
-      setRefreshing(false)
-    })
-  }
+    setRefreshing(true);
+    refetch().finally(() => {
+      setRefreshing(false);
+    });
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: 'AUD',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount)
-  }
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const projectId = data.project?.id;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
-    )
+    );
+  }
+
+  if (hasHardError) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Project Dashboard</h1>
+            <p className="text-muted-foreground">Project overview and key metrics</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Try again
+          </Button>
+        </div>
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <p className="font-medium">Project manager dashboard could not be loaded.</p>
+          <p className="mt-1 text-sm">{errorMessage}</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -155,27 +228,43 @@ export function ProjectManagerDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Project Dashboard</h1>
-          <p className="text-muted-foreground">
-            Project overview and key metrics
-          </p>
+          <p className="text-muted-foreground">Project overview and key metrics</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
+
+      {errorMessage && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-medium">Project manager dashboard data could not be refreshed.</p>
+              <p className="mt-1 text-sm">{errorMessage}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Try again
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Project Context */}
       {data.project && (
         <div className="text-sm text-muted-foreground border-l-4 border-primary pl-3">
           <strong>{data.project.name}</strong>
           {data.project.projectNumber && ` (${data.project.projectNumber})`}
-          <span className={`ml-2 px-2 py-0.5 rounded text-xs ${data.project.status === 'active' ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200' : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}>
+          <span
+            className={`ml-2 px-2 py-0.5 rounded text-xs ${data.project.status === 'active' ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200' : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'}`}
+          >
             {data.project.status}
           </span>
         </div>
@@ -195,16 +284,22 @@ export function ProjectManagerDashboard() {
             {data.attentionItems.slice(0, 5).map((item) => (
               <button
                 key={item.id}
-                onClick={() => navigate(item.link)}
+                onClick={() =>
+                  navigate(getSafeInternalLink(item.link, getProjectRoute(projectId, '')))
+                }
                 className="w-full flex items-center justify-between p-3 hover:bg-red-100/50 transition-colors text-left"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-xs ${
-                      item.urgency === 'critical' ? 'bg-red-100 text-red-700' :
-                      item.urgency === 'warning' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-blue-100 text-blue-700'
-                    }`}>
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs ${
+                        item.urgency === 'critical'
+                          ? 'bg-red-100 text-red-700'
+                          : item.urgency === 'warning'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
                       {item.type.toUpperCase()}
                     </span>
                     <span className="font-medium text-sm">{item.title}</span>
@@ -228,7 +323,9 @@ export function ProjectManagerDashboard() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Lot Progress</p>
-              <p className="text-2xl font-bold">{data.lotProgress.progressPercentage.toFixed(0)}%</p>
+              <p className="text-2xl font-bold">
+                {data.lotProgress.progressPercentage.toFixed(0)}%
+              </p>
             </div>
           </div>
           <div className="mt-3">
@@ -246,12 +343,16 @@ export function ProjectManagerDashboard() {
 
         {/* Open NCRs */}
         <button
-          onClick={() => navigate('/ncr')}
+          onClick={() => navigate(getProjectRoute(projectId, '/ncr'))}
           className="bg-card rounded-lg border p-4 text-left hover:bg-muted/50 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${data.openNCRs.total > 0 ? 'bg-red-100' : 'bg-green-100'}`}>
-              <AlertTriangle className={`h-5 w-5 ${data.openNCRs.total > 0 ? 'text-red-600' : 'text-green-600'}`} />
+            <div
+              className={`p-2 rounded-lg ${data.openNCRs.total > 0 ? 'bg-red-100' : 'bg-green-100'}`}
+            >
+              <AlertTriangle
+                className={`h-5 w-5 ${data.openNCRs.total > 0 ? 'text-red-600' : 'text-green-600'}`}
+              />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Open NCRs</p>
@@ -259,8 +360,12 @@ export function ProjectManagerDashboard() {
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
-            {data.openNCRs.major > 0 && <span className="text-red-600">{data.openNCRs.major} major • </span>}
-            {data.openNCRs.overdue > 0 && <span className="text-orange-600">{data.openNCRs.overdue} overdue</span>}
+            {data.openNCRs.major > 0 && (
+              <span className="text-red-600">{data.openNCRs.major} major • </span>
+            )}
+            {data.openNCRs.overdue > 0 && (
+              <span className="text-orange-600">{data.openNCRs.overdue} overdue</span>
+            )}
             {data.openNCRs.total === 0 && <span className="text-green-600">All clear</span>}
           </div>
         </button>
@@ -284,32 +389,47 @@ export function ProjectManagerDashboard() {
         {/* Cost Variance */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${
-              data.costTracking.trend === 'under' ? 'bg-green-100' :
-              data.costTracking.trend === 'over' ? 'bg-red-100' :
-              'bg-blue-100'
-            }`}>
-              <TrendingUp className={`h-5 w-5 ${
-                data.costTracking.trend === 'under' ? 'text-green-600' :
-                data.costTracking.trend === 'over' ? 'text-red-600' :
-                'text-blue-600'
-              }`} />
+            <div
+              className={`p-2 rounded-lg ${
+                data.costTracking.trend === 'under'
+                  ? 'bg-green-100'
+                  : data.costTracking.trend === 'over'
+                    ? 'bg-red-100'
+                    : 'bg-blue-100'
+              }`}
+            >
+              <TrendingUp
+                className={`h-5 w-5 ${
+                  data.costTracking.trend === 'under'
+                    ? 'text-green-600'
+                    : data.costTracking.trend === 'over'
+                      ? 'text-red-600'
+                      : 'text-blue-600'
+                }`}
+              />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Cost Variance</p>
-              <p className={`text-2xl font-bold ${
-                data.costTracking.variance < 0 ? 'text-green-600' :
-                data.costTracking.variance > 0 ? 'text-red-600' :
-                ''
-              }`}>
-                {data.costTracking.variance >= 0 ? '+' : ''}{data.costTracking.variancePercentage.toFixed(1)}%
+              <p
+                className={`text-2xl font-bold ${
+                  data.costTracking.variance < 0
+                    ? 'text-green-600'
+                    : data.costTracking.variance > 0
+                      ? 'text-red-600'
+                      : ''
+                }`}
+              >
+                {data.costTracking.variance >= 0 ? '+' : ''}
+                {data.costTracking.variancePercentage.toFixed(1)}%
               </p>
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
-            {data.costTracking.trend === 'under' ? 'Under budget' :
-             data.costTracking.trend === 'over' ? 'Over budget' :
-             'On track'}
+            {data.costTracking.trend === 'under'
+              ? 'Under budget'
+              : data.costTracking.trend === 'over'
+                ? 'Over budget'
+                : 'On track'}
           </div>
         </div>
       </div>
@@ -389,24 +509,36 @@ export function ProjectManagerDashboard() {
                 {data.holdPointPipeline.items.slice(0, 3).map((hp) => (
                   <button
                     key={hp.id}
-                    onClick={() => navigate(hp.link)}
+                    onClick={() =>
+                      navigate(
+                        getSafeInternalLink(hp.link, getProjectRoute(projectId, '/hold-points')),
+                      )
+                    }
                     className="w-full flex items-center justify-between p-2 bg-muted/30 rounded hover:bg-muted/50 text-left"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{hp.description}</p>
                       <p className="text-xs text-muted-foreground">Lot {hp.lotNumber}</p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded ${
-                      hp.status === 'pending' ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200' :
-                      hp.status === 'scheduled' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200' :
-                      hp.status === 'requested' ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-200' :
-                      'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200'
-                    }`}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${
+                        hp.status === 'pending'
+                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+                          : hp.status === 'scheduled'
+                            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200'
+                            : hp.status === 'requested'
+                              ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-200'
+                              : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200'
+                      }`}
+                    >
                       {hp.status}
                     </span>
                   </button>
                 ))}
-                <Link to="/holdpoints" className="block text-sm text-primary hover:underline pt-1">
+                <Link
+                  to={getProjectRoute(projectId, '/hold-points')}
+                  className="block text-sm text-primary hover:underline pt-1"
+                >
                   View all hold points →
                 </Link>
               </div>
@@ -425,27 +557,38 @@ export function ProjectManagerDashboard() {
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span>Budget</span>
-                  <span className="font-medium">{formatCurrency(data.costTracking.budgetTotal)}</span>
+                  <span className="font-medium">
+                    {formatCurrency(data.costTracking.budgetTotal)}
+                  </span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
-                  <div className="bg-muted-foreground/40 h-2 rounded-full" style={{ width: '100%' }} />
+                  <div
+                    className="bg-muted-foreground/40 h-2 rounded-full"
+                    style={{ width: '100%' }}
+                  />
                 </div>
               </div>
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span>Actual Spend</span>
-                  <span className="font-medium">{formatCurrency(data.costTracking.actualSpend)}</span>
+                  <span className="font-medium">
+                    {formatCurrency(data.costTracking.actualSpend)}
+                  </span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div
                     className={`h-2 rounded-full ${data.costTracking.trend === 'over' ? 'bg-red-500' : 'bg-green-500'}`}
-                    style={{ width: `${Math.min(100, data.costTracking.budgetTotal > 0 ? (data.costTracking.actualSpend / data.costTracking.budgetTotal) * 100 : 0)}%` }}
+                    style={{
+                      width: `${Math.min(100, data.costTracking.budgetTotal > 0 ? (data.costTracking.actualSpend / data.costTracking.budgetTotal) * 100 : 0)}%`,
+                    }}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                 <div className="text-center">
-                  <p className="text-lg font-bold">{formatCurrency(data.costTracking.labourCost)}</p>
+                  <p className="text-lg font-bold">
+                    {formatCurrency(data.costTracking.labourCost)}
+                  </p>
                   <p className="text-xs text-muted-foreground">Labour</p>
                 </div>
                 <div className="text-center">
@@ -477,7 +620,9 @@ export function ProjectManagerDashboard() {
                 <p className="text-xs text-muted-foreground">Claimed</p>
               </div>
               <div>
-                <p className="text-lg font-bold">{formatCurrency(data.claimStatus.totalCertified)}</p>
+                <p className="text-lg font-bold">
+                  {formatCurrency(data.claimStatus.totalCertified)}
+                </p>
                 <p className="text-xs text-muted-foreground">Certified</p>
               </div>
               <div>
@@ -490,23 +635,34 @@ export function ProjectManagerDashboard() {
                 {data.claimStatus.recentClaims.slice(0, 3).map((claim) => (
                   <button
                     key={claim.id}
-                    onClick={() => navigate(claim.link)}
+                    onClick={() =>
+                      navigate(
+                        getSafeInternalLink(claim.link, getProjectRoute(projectId, '/claims')),
+                      )
+                    }
                     className="w-full flex items-center justify-between p-2 bg-muted/30 rounded hover:bg-muted/50 text-left"
                   >
                     <span className="text-sm font-medium">{claim.claimNumber}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-sm">{formatCurrency(claim.amount)}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        claim.status === 'paid' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200' :
-                        claim.status === 'certified' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200' :
-                        'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
-                      }`}>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded ${
+                          claim.status === 'paid'
+                            ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200'
+                            : claim.status === 'certified'
+                              ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+                        }`}
+                      >
                         {claim.status}
                       </span>
                     </div>
                   </button>
                 ))}
-                <Link to="/claims" className="block text-sm text-primary hover:underline pt-1">
+                <Link
+                  to={getProjectRoute(projectId, '/claims')}
+                  className="block text-sm text-primary hover:underline pt-1"
+                >
                   View all claims →
                 </Link>
               </div>
@@ -522,28 +678,28 @@ export function ProjectManagerDashboard() {
         </div>
         <div className="p-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <Link
-            to="/lots"
+            to={getProjectRoute(projectId, '/lots')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <Layers className="h-5 w-5 text-blue-600" />
             <span className="font-medium">Manage Lots</span>
           </Link>
           <Link
-            to="/claims"
+            to={getProjectRoute(projectId, '/claims')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <DollarSign className="h-5 w-5 text-green-600" />
             <span className="font-medium">Progress Claims</span>
           </Link>
           <Link
-            to="/reports"
+            to={getProjectRoute(projectId, '/reports')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <BarChart3 className="h-5 w-5 text-purple-600" />
             <span className="font-medium">Reports</span>
           </Link>
           <Link
-            to="/dockets"
+            to={getProjectRoute(projectId, '/dockets')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <ClipboardCheck className="h-5 w-5 text-amber-600" />
@@ -552,5 +708,5 @@ export function ProjectManagerDashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }

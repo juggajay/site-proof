@@ -1,53 +1,60 @@
-import React, { useState, useCallback, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import type { Lot, CreateTestFormData } from '../types'
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import type { Lot, CreateTestFormData } from '../types';
 import {
   testTypeSpecs,
   stateTestMethods,
   stateSpecRefs,
   calculatePassFail,
   INITIAL_FORM_DATA,
-} from '../constants'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
-import { Label } from '@/components/ui/label'
+} from '../constants';
+import {
+  Modal,
+  ModalHeader,
+  ModalDescription,
+  ModalBody,
+  ModalFooter,
+} from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Label } from '@/components/ui/label';
+import { extractErrorMessage } from '@/lib/errorHandling';
 
 const createTestSchema = z.object({
-  testType: z.string().min(1, 'Test type is required'),
-  testMethod: z.string(),
-  testRequestNumber: z.string(),
-  laboratoryName: z.string(),
-  laboratoryReportNumber: z.string(),
-  nataSiteNumber: z.string(),
-  sampleLocation: z.string(),
-  sampleDepth: z.string(),
-  materialType: z.string(),
-  layerLift: z.string(),
-  sampledBy: z.string(),
-  sampleDate: z.string(),
-  testDate: z.string(),
-  resultDate: z.string(),
-  lotId: z.string(),
-  resultValue: z.string(),
-  resultUnit: z.string(),
-  specificationMin: z.string(),
-  specificationMax: z.string(),
-  specificationRef: z.string(),
-  passFail: z.string(),
-})
+  testType: z.string().trim().min(1, 'Test type is required'),
+  testMethod: z.string().trim(),
+  testRequestNumber: z.string().trim(),
+  laboratoryName: z.string().trim(),
+  laboratoryReportNumber: z.string().trim(),
+  nataSiteNumber: z.string().trim(),
+  sampleLocation: z.string().trim(),
+  sampleDepth: z.string().trim(),
+  materialType: z.string().trim(),
+  layerLift: z.string().trim(),
+  sampledBy: z.string().trim(),
+  sampleDate: z.string().trim(),
+  testDate: z.string().trim(),
+  resultDate: z.string().trim(),
+  lotId: z.string().trim(),
+  resultValue: z.string().trim(),
+  resultUnit: z.string().trim(),
+  specificationMin: z.string().trim(),
+  specificationMax: z.string().trim(),
+  specificationRef: z.string().trim(),
+  passFail: z.string().trim(),
+});
 
-type CreateTestFormDataSchema = z.infer<typeof createTestSchema>
+type CreateTestFormDataSchema = z.infer<typeof createTestSchema>;
 
 interface CreateTestModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSuccess: (formData: CreateTestFormData) => Promise<void>
-  lots: Lot[]
-  projectState: string
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: (formData: CreateTestFormData) => Promise<void>;
+  lots: Lot[];
+  projectState: string;
 }
 
 export const CreateTestModal = React.memo(function CreateTestModal({
@@ -57,7 +64,9 @@ export const CreateTestModal = React.memo(function CreateTestModal({
   lots,
   projectState,
 }: CreateTestModalProps) {
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const creatingRef = useRef(false);
 
   const {
     register,
@@ -70,66 +79,92 @@ export const CreateTestModal = React.memo(function CreateTestModal({
     resolver: zodResolver(createTestSchema),
     mode: 'onBlur',
     defaultValues: { ...INITIAL_FORM_DATA },
-  })
+  });
 
-  const testType = watch('testType')
-  const resultValue = watch('resultValue')
-  const specificationMin = watch('specificationMin')
-  const specificationMax = watch('specificationMax')
-  const passFail = watch('passFail')
+  const testType = watch('testType');
+  const resultValue = watch('resultValue');
+  const specificationMin = watch('specificationMin');
+  const specificationMax = watch('specificationMax');
+  const passFail = watch('passFail');
 
-  useEffect(() => { if (isOpen) reset({ ...INITIAL_FORM_DATA }) }, [isOpen, reset])
+  useEffect(() => {
+    if (isOpen) {
+      reset({ ...INITIAL_FORM_DATA });
+      setFormError(null);
+    }
+  }, [isOpen, reset]);
 
   // Feature #198: Auto-populate spec values when test type changes
   useEffect(() => {
-    if (!testType) return
-    const normalizedType = testType.toLowerCase().replace(/\s+/g, '_')
-    const specs = testTypeSpecs[normalizedType]
+    if (!testType) return;
+    const normalizedType = testType.toLowerCase().replace(/\s+/g, '_');
+    const specs = testTypeSpecs[normalizedType];
     if (specs) {
-      setValue('testMethod', specs.method || '')
-      setValue('specificationMin', specs.min)
-      setValue('specificationMax', specs.max)
-      setValue('resultUnit', specs.unit)
+      setValue('testMethod', specs.method || '');
+      setValue('specificationMin', specs.min);
+      setValue('specificationMax', specs.max);
+      setValue('resultUnit', specs.unit);
     }
-  }, [testType, setValue])
+  }, [testType, setValue]);
 
   // Auto-calculate pass/fail when result value or spec bounds change
   useEffect(() => {
-    const newPassFail = calculatePassFail(resultValue, specificationMin, specificationMax)
+    const newPassFail = calculatePassFail(resultValue, specificationMin, specificationMax);
     if (newPassFail !== passFail) {
-      setValue('passFail', newPassFail)
+      setValue('passFail', newPassFail);
     }
-  }, [resultValue, specificationMin, specificationMax, setValue, passFail])
+  }, [resultValue, specificationMin, specificationMax, setValue, passFail]);
 
-  const onFormSubmit = useCallback(async (data: CreateTestFormDataSchema) => {
-    setCreating(true)
-    try {
-      await onSuccess(data as CreateTestFormData)
-      reset({ ...INITIAL_FORM_DATA })
-    } catch {
-      // Error handled by parent
-    } finally {
-      setCreating(false)
-    }
-  }, [onSuccess, reset])
+  const onFormSubmit = useCallback(
+    async (data: CreateTestFormDataSchema) => {
+      if (creatingRef.current) return;
+
+      creatingRef.current = true;
+      setCreating(true);
+      setFormError(null);
+      try {
+        await onSuccess(data as CreateTestFormData);
+        reset({ ...INITIAL_FORM_DATA });
+      } catch (err) {
+        setFormError(extractErrorMessage(err, 'Failed to create test result.'));
+      } finally {
+        creatingRef.current = false;
+        setCreating(false);
+      }
+    },
+    [onSuccess, reset],
+  );
 
   const handleClose = useCallback(() => {
-    reset({ ...INITIAL_FORM_DATA })
-    onClose()
-  }, [onClose, reset])
+    reset({ ...INITIAL_FORM_DATA });
+    setFormError(null);
+    onClose();
+  }, [onClose, reset]);
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Add Test Result</ModalHeader>
+      <ModalDescription>
+        Record laboratory details, linked lot, specification limits, and result status.
+      </ModalDescription>
       <ModalBody>
+        {formError && (
+          <div
+            className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            role="alert"
+          >
+            {formError}
+          </div>
+        )}
         <form id="create-test-form" onSubmit={handleSubmit(onFormSubmit)}>
           <div className="space-y-4">
             {/* Feature #198: Enhanced form with all fields */}
             <div>
-              <Label>Test Type *</Label>
+              <Label htmlFor="test-type">Test Type *</Label>
               <Input
+                id="test-type"
                 type="text"
                 {...register('testType')}
                 placeholder="e.g., Compaction, CBR, Grading"
@@ -175,13 +210,18 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                 </optgroup>
               </datalist>
               {errors.testType && (
-                <p className="text-sm text-destructive mt-1" role="alert">{errors.testType.message}</p>
+                <p className="text-sm text-destructive mt-1" role="alert">
+                  {errors.testType.message}
+                </p>
               )}
-              <p className="text-xs text-muted-foreground mt-1">Select a test type to auto-populate method & specs</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Select a test type to auto-populate method & specs
+              </p>
             </div>
             <div>
-              <Label>Test Method/Standard</Label>
+              <Label htmlFor="test-method">Test Method/Standard</Label>
               <Input
+                id="test-method"
                 type="text"
                 {...register('testMethod')}
                 placeholder="e.g., AS 1289.5.4.1, TfNSW T111, TMR Q114A"
@@ -208,7 +248,7 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                 </optgroup>
                 {stateTestMethods[projectState] && (
                   <optgroup label={stateTestMethods[projectState].label}>
-                    {stateTestMethods[projectState].methods.map(method => (
+                    {stateTestMethods[projectState].methods.map((method) => (
                       <option key={method} value={method} />
                     ))}
                   </optgroup>
@@ -217,16 +257,18 @@ export const CreateTestModal = React.memo(function CreateTestModal({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Test Request Number</Label>
+                <Label htmlFor="test-request-number">Test Request Number</Label>
                 <Input
+                  id="test-request-number"
                   type="text"
                   {...register('testRequestNumber')}
                   placeholder="e.g., TR-001"
                 />
               </div>
               <div>
-                <Label>Lab Report Number</Label>
+                <Label htmlFor="laboratory-report-number">Lab Report Number</Label>
                 <Input
+                  id="laboratory-report-number"
                   type="text"
                   {...register('laboratoryReportNumber')}
                   placeholder="e.g., LAB-2024-0001"
@@ -234,8 +276,8 @@ export const CreateTestModal = React.memo(function CreateTestModal({
               </div>
             </div>
             <div>
-              <Label>Link to Lot</Label>
-              <NativeSelect {...register('lotId')}>
+              <Label htmlFor="test-lot-id">Link to Lot</Label>
+              <NativeSelect id="test-lot-id" {...register('lotId')}>
                 <option value="">No lot linked</option>
                 {lots.map((lot) => (
                   <option key={lot.id} value={lot.id}>
@@ -246,16 +288,18 @@ export const CreateTestModal = React.memo(function CreateTestModal({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Laboratory Name</Label>
+                <Label htmlFor="laboratory-name">Laboratory Name</Label>
                 <Input
+                  id="laboratory-name"
                   type="text"
                   {...register('laboratoryName')}
                   placeholder="e.g., ABC Testing Labs"
                 />
               </div>
               <div>
-                <Label>NATA Site Number</Label>
+                <Label htmlFor="nata-site-number">NATA Site Number</Label>
                 <Input
+                  id="nata-site-number"
                   type="text"
                   {...register('nataSiteNumber')}
                   placeholder="e.g., 12345"
@@ -263,8 +307,8 @@ export const CreateTestModal = React.memo(function CreateTestModal({
               </div>
             </div>
             <div>
-              <Label>Material Type</Label>
-              <NativeSelect {...register('materialType')}>
+              <Label htmlFor="material-type">Material Type</Label>
+              <NativeSelect id="material-type" {...register('materialType')}>
                 <option value="">Select material type</option>
                 <optgroup label="Fill Materials">
                   <option value="general_fill">General Fill</option>
@@ -301,16 +345,17 @@ export const CreateTestModal = React.memo(function CreateTestModal({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Sample Location</Label>
+                <Label htmlFor="sample-location">Sample Location</Label>
                 <Input
+                  id="sample-location"
                   type="text"
                   {...register('sampleLocation')}
                   placeholder="e.g., CH 1000+50, 2m LHS"
                 />
               </div>
               <div>
-                <Label>Sample Depth</Label>
-                <NativeSelect {...register('sampleDepth')}>
+                <Label htmlFor="sample-depth">Sample Depth</Label>
+                <NativeSelect id="sample-depth" {...register('sampleDepth')}>
                   <option value="">Select depth</option>
                   <option value="surface">Surface</option>
                   <option value="0-150">0-150mm</option>
@@ -323,8 +368,8 @@ export const CreateTestModal = React.memo(function CreateTestModal({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Layer/Lift</Label>
-                <NativeSelect {...register('layerLift')}>
+                <Label htmlFor="layer-lift">Layer/Lift</Label>
+                <NativeSelect id="layer-lift" {...register('layerLift')}>
                   <option value="">N/A</option>
                   <option value="1">Layer 1</option>
                   <option value="2">Layer 2</option>
@@ -334,8 +379,9 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                 </NativeSelect>
               </div>
               <div>
-                <Label>Sampled By</Label>
+                <Label htmlFor="sampled-by">Sampled By</Label>
                 <Input
+                  id="sampled-by"
                   type="text"
                   {...register('sampledBy')}
                   placeholder="Technician name"
@@ -345,32 +391,24 @@ export const CreateTestModal = React.memo(function CreateTestModal({
             {/* Dates Section */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <Label>Sample Date</Label>
-                <Input
-                  type="date"
-                  {...register('sampleDate')}
-                />
+                <Label htmlFor="sample-date">Sample Date</Label>
+                <Input id="sample-date" type="date" {...register('sampleDate')} />
               </div>
               <div>
-                <Label>Test Date</Label>
-                <Input
-                  type="date"
-                  {...register('testDate')}
-                />
+                <Label htmlFor="test-date">Test Date</Label>
+                <Input id="test-date" type="date" {...register('testDate')} />
               </div>
               <div>
-                <Label>Result Date</Label>
-                <Input
-                  type="date"
-                  {...register('resultDate')}
-                />
+                <Label htmlFor="result-date">Result Date</Label>
+                <Input id="result-date" type="date" {...register('resultDate')} />
               </div>
             </div>
             {/* Result Section */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Result Value</Label>
+                <Label htmlFor="result-value">Result Value</Label>
                 <Input
+                  id="result-value"
                   type="number"
                   step="any"
                   {...register('resultValue')}
@@ -378,8 +416,9 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                 />
               </div>
               <div>
-                <Label>Unit</Label>
+                <Label htmlFor="result-unit">Unit</Label>
                 <Input
+                  id="result-unit"
                   type="text"
                   {...register('resultUnit')}
                   placeholder="e.g., %"
@@ -389,8 +428,9 @@ export const CreateTestModal = React.memo(function CreateTestModal({
             {/* Specification Section */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Spec Min</Label>
+                <Label htmlFor="specification-min">Spec Min</Label>
                 <Input
+                  id="specification-min"
                   type="number"
                   step="any"
                   {...register('specificationMin')}
@@ -398,8 +438,9 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                 />
               </div>
               <div>
-                <Label>Spec Max</Label>
+                <Label htmlFor="specification-max">Spec Max</Label>
                 <Input
+                  id="specification-max"
                   type="number"
                   step="any"
                   {...register('specificationMax')}
@@ -408,8 +449,9 @@ export const CreateTestModal = React.memo(function CreateTestModal({
               </div>
             </div>
             <div>
-              <Label>Specification Reference</Label>
+              <Label htmlFor="specification-ref">Specification Reference</Label>
               <Input
+                id="specification-ref"
                 type="text"
                 {...register('specificationRef')}
                 placeholder="e.g., TfNSW R44 Table 10, MRTS04 Cl.5.3, AS 3798"
@@ -422,7 +464,7 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                 </optgroup>
                 {stateSpecRefs[projectState] && (
                   <optgroup label={stateSpecRefs[projectState].label}>
-                    {stateSpecRefs[projectState].specs.map(spec => (
+                    {stateSpecRefs[projectState].specs.map((spec) => (
                       <option key={spec} value={spec} />
                     ))}
                   </optgroup>
@@ -431,18 +473,21 @@ export const CreateTestModal = React.memo(function CreateTestModal({
             </div>
             {/* Pass/Fail with auto-calculated indicator */}
             <div>
-              <Label>
+              <Label htmlFor="pass-fail">
                 Pass/Fail Status
                 {resultValue && (specificationMin || specificationMax) && (
                   <span className="ml-2 text-xs text-muted-foreground">(auto-calculated)</span>
                 )}
               </Label>
               <NativeSelect
+                id="pass-fail"
                 {...register('passFail')}
                 className={
-                  passFail === 'pass' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' :
-                  passFail === 'fail' ? 'border-red-500 bg-red-50 dark:bg-red-900/20' :
-                  ''
+                  passFail === 'pass'
+                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                    : passFail === 'fail'
+                      ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                      : ''
                 }
               >
                 <option value="pending">Pending</option>
@@ -462,5 +507,5 @@ export const CreateTestModal = React.memo(function CreateTestModal({
         </Button>
       </ModalFooter>
     </Modal>
-  )
-})
+  );
+});

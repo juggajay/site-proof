@@ -1,18 +1,22 @@
-import { beforeAll, afterAll, beforeEach } from 'vitest'
-import { prisma } from '../lib/prisma.js'
+import { beforeAll, afterAll, beforeEach } from 'vitest';
+import { assertSafeTestDatabaseUrl } from './databaseSafety.js';
+
+assertSafeTestDatabaseUrl();
+
+const { prisma } = await import('../lib/prisma.js');
 
 beforeAll(async () => {
   // Ensure test database is clean
-  console.log('Setting up test environment...')
-})
+  console.log('Setting up test environment...');
+});
 
 afterAll(async () => {
-  await prisma.$disconnect()
-})
+  await prisma.$disconnect();
+});
 
 beforeEach(async () => {
   // Reset database state between tests if needed
-})
+});
 
 // Test utilities
 export async function createTestUser(overrides = {}) {
@@ -25,7 +29,7 @@ export async function createTestUser(overrides = {}) {
       emailVerified: true,
       ...overrides,
     },
-  })
+  });
 }
 
 export async function createTestCompany(overrides = {}) {
@@ -34,7 +38,7 @@ export async function createTestCompany(overrides = {}) {
       name: `Test Company ${Date.now()}`,
       ...overrides,
     },
-  })
+  });
 }
 
 export async function createTestProject(companyId: string, overrides = {}) {
@@ -48,7 +52,7 @@ export async function createTestProject(companyId: string, overrides = {}) {
       specificationSet: 'TfNSW',
       ...overrides,
     },
-  })
+  });
 }
 
 export async function createTestLot(projectId: string, overrides = {}) {
@@ -62,19 +66,19 @@ export async function createTestLot(projectId: string, overrides = {}) {
       activityType: 'Earthworks',
       ...overrides,
     },
-  })
+  });
 }
 
 export async function cleanupTestData(userId?: string, projectId?: string, companyId?: string) {
   if (projectId) {
-    await prisma.lot.deleteMany({ where: { projectId } })
-    await prisma.projectUser.deleteMany({ where: { projectId } })
-    await prisma.project.delete({ where: { id: projectId } }).catch(() => {})
+    await prisma.lot.deleteMany({ where: { projectId } });
+    await prisma.projectUser.deleteMany({ where: { projectId } });
+    await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
   }
   if (userId) {
-    await prisma.user.delete({ where: { id: userId } }).catch(() => {})
+    await prisma.user.delete({ where: { id: userId } }).catch(() => {});
   }
   if (companyId) {
-    await prisma.company.delete({ where: { id: companyId } }).catch(() => {})
+    await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   }
 }

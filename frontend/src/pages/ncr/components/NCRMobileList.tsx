@@ -1,19 +1,19 @@
-import { memo, useRef, type RefObject } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { ChevronRight, Link2 } from 'lucide-react'
-import { MobileDataCard } from '@/components/ui/MobileDataCard'
-import { PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
-import { SwipeableCard } from '@/components/foreman/SwipeableCard'
-import type { NCR } from '../types'
+import { memo, useRef, type RefObject } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { ChevronRight, Link2 } from 'lucide-react';
+import { MobileDataCard } from '@/components/ui/MobileDataCard';
+import { PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
+import { SwipeableCard } from '@/components/foreman/SwipeableCard';
+import type { NCR } from '../types';
 
 interface NCRMobileListProps {
-  ncrs: NCR[]
-  containerRef: RefObject<HTMLElement>
-  pullDistance: number
-  isRefreshing: boolean
-  progress: number
-  onSelectNcr: (ncr: NCR) => void
-  onCopyLink: (ncrId: string, ncrNumber: string) => void
+  ncrs: NCR[];
+  containerRef: RefObject<HTMLElement>;
+  pullDistance: number;
+  isRefreshing: boolean;
+  progress: number;
+  onSelectNcr: (ncr: NCR) => void;
+  onCopyLink: (ncrId: string, ncrNumber: string) => void;
 }
 
 function NCRMobileListInner({
@@ -26,21 +26,22 @@ function NCRMobileListInner({
   onCopyLink,
 }: NCRMobileListProps) {
   // Use the passed containerRef as the scroll element for virtualizer
-  const localScrollRef = useRef<HTMLDivElement>(null)
+  const localScrollRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
     count: ncrs.length,
-    getScrollElement: () => (containerRef.current as HTMLDivElement | null) ?? localScrollRef.current,
+    getScrollElement: () =>
+      (containerRef.current as HTMLDivElement | null) ?? localScrollRef.current,
     estimateSize: () => 140, // estimated card height in px
     overscan: 5,
-  })
+  });
 
   return (
     <div
       ref={(node) => {
         // Assign to both containerRef and localScrollRef
         (containerRef as React.MutableRefObject<HTMLElement | null>).current = node;
-        (localScrollRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+        (localScrollRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       }}
       className="relative overflow-auto"
       style={{ maxHeight: 'calc(100vh - 300px)' }}
@@ -57,15 +58,25 @@ function NCRMobileListInner({
         className="space-y-0"
       >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const ncr = ncrs[virtualRow.index]
-          if (!ncr) return null
+          const ncr = ncrs[virtualRow.index];
+          if (!ncr) return null;
 
-          const ageInDays = Math.floor((Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24))
-          const isOverdue = ncr.dueDate && new Date(ncr.dueDate) < new Date() && ncr.status !== 'closed' && ncr.status !== 'closed_concession'
-          const statusVariant = ncr.status === 'closed' || ncr.status === 'closed_concession' ? 'success'
-            : ncr.status === 'open' ? 'error'
-            : ncr.status === 'verification' ? 'info'
-            : 'warning'
+          const ageInDays = Math.floor(
+            (Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24),
+          );
+          const isOverdue =
+            ncr.dueDate &&
+            new Date(ncr.dueDate) < new Date() &&
+            ncr.status !== 'closed' &&
+            ncr.status !== 'closed_concession';
+          const statusVariant =
+            ncr.status === 'closed' || ncr.status === 'closed_concession'
+              ? 'success'
+              : ncr.status === 'open'
+                ? 'error'
+                : ncr.status === 'verification'
+                  ? 'info'
+                  : 'warning';
 
           return (
             <div
@@ -100,12 +111,25 @@ function NCRMobileListInner({
                   subtitle={ncr.description}
                   status={{
                     label: ncr.status.replace('_', ' '),
-                    variant: statusVariant
+                    variant: statusVariant,
                   }}
                   fields={[
-                    { label: 'Category', value: ncr.category.replace(/_/g, ' '), priority: 'primary' },
-                    { label: 'Responsible', value: ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned', priority: 'primary' },
-                    { label: 'Due', value: ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString() : '-', priority: 'secondary' },
+                    {
+                      label: 'Category',
+                      value: ncr.category.replace(/_/g, ' '),
+                      priority: 'primary',
+                    },
+                    {
+                      label: 'Responsible',
+                      value:
+                        ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned',
+                      priority: 'primary',
+                    },
+                    {
+                      label: 'Due',
+                      value: ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString() : '-',
+                      priority: 'secondary',
+                    },
                     { label: 'Age', value: `${ageInDays}d`, priority: 'secondary' },
                   ]}
                   onClick={() => onSelectNcr(ncr)}
@@ -113,11 +137,11 @@ function NCRMobileListInner({
                 />
               </SwipeableCard>
             </div>
-          )
+          );
         })}
       </div>
     </div>
-  )
+  );
 }
 
-export const NCRMobileList = memo(NCRMobileListInner)
+export const NCRMobileList = memo(NCRMobileListInner);

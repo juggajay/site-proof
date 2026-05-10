@@ -1,73 +1,71 @@
 # Security Documentation
 
-This document describes the security measures implemented in SiteProof.
+This document describes the security controls implemented in SiteProof and the deployment requirements that support them.
 
 ## Authentication
 
 ### Password Hashing
-- **Algorithm:** bcrypt with 12 rounds
-- **Password Requirements:**
-  - Minimum 12 characters
-  - Must contain uppercase letters
-  - Must contain lowercase letters
-  - Must contain numbers
-  - Must contain special characters
+
+- Passwords are hashed with bcrypt using 12 rounds.
+- Legacy SHA-256 password hashes are detected for migration compatibility and should be phased out through reset or rehash flows.
+- New passwords must be at least 12 characters and include uppercase letters, lowercase letters, numbers, and special characters.
 
 ### JWT Authentication
-- Configurable token expiry (default: 24 hours)
-- Token invalidation on logout
-- Secure token storage guidance in frontend
 
-### Two-Factor Authentication (Optional)
-- TOTP-based 2FA using authenticator apps
-- Encrypted secret storage using AES-256-GCM
+- API authentication uses bearer JWTs.
+- Logout and security-sensitive account changes invalidate existing tokens with a server-side invalidation timestamp.
+- The frontend stores sessions in local or session storage through guarded helper functions. Because bearer tokens are readable by JavaScript, production deployments must keep XSS controls strict and avoid unreviewed HTML/script injection.
 
-## Rate Limiting
+### Multi-Factor Authentication
 
-### Login Protection
-- Maximum 10 login attempts per minute per IP
-- 15-minute account lockout after 5 consecutive failed attempts
-- Lockout counter resets on successful login
+- Optional TOTP MFA is supported.
+- TOTP secrets are encrypted at rest with AES-256-GCM.
+- Production startup requires a 64-character hex `ENCRYPTION_KEY`.
 
-### API Rate Limiting
-- 100 requests per minute per authenticated user
-- Configurable limits per endpoint category
+## Runtime Security Controls
+
+- Production startup validates required secrets, public HTTPS URLs, email delivery configuration, and file-storage settings.
+- `npm run preflight:integrations` performs read-only production checks for configured Resend, Supabase Storage, Google OAuth, and VAPID push settings before go-live.
+- If Google OAuth is configured, `GOOGLE_REDIRECT_URI` must also use the public HTTPS backend origin in production.
+- Production frontend builds validate public browser URLs and reject localhost, plain HTTP, and placeholder `VITE_API_URL` / `VITE_SUPABASE_URL` values.
+- `RATE_LIMIT_STORE=memory` is rejected in production; durable database-backed rate limiting and auth lockouts are required for multi-instance deployments.
+- Login attempts are rate-limited, and repeated failed authentication attempts trigger account lockout.
+- Helmet is enabled with HSTS headers.
+- Production HTTP requests are redirected to HTTPS when `NODE_ENV=production`.
+- CORS is restricted to the configured `FRONTEND_URL` in production.
+- Set `TRUST_PROXY=true` only when Express is behind a trusted proxy or load balancer that owns `X-Forwarded-*` headers.
 
 ## Data Protection
 
-### Encryption
-- **2FA Secrets:** AES-256-GCM encryption at rest
-- **Encryption Key:** 32-byte key stored in ENCRYPTION_KEY environment variable
-- **Passwords:** bcrypt one-way hashing (not reversible)
+- Prisma parameterized queries are used for database access. Raw SQL must use parameterized Prisma template APIs, not unsafe string-built SQL.
+- Uploaded documents, drawings, certificates, and protected files must be served through signed or authorized routes.
+- Production file storage requires Supabase configuration unless durable local storage is explicitly accepted with `ALLOW_LOCAL_FILE_STORAGE=true`.
+- Operational logs use redaction helpers for authorization headers, cookies, tokens, and secret-like values.
+- Database backups use PostgreSQL `pg_dump` custom-format dumps with SHA-256 checksums. Restore requires an explicit `CONFIRM_RESTORE` value.
 
-### Database Security
-- Parameterized queries via Prisma ORM (SQL injection prevention)
-- No raw SQL queries with user input
-- Database connection over encrypted channels (PostgreSQL)
+## Frontend Security
 
-### Frontend Security
-- React's automatic XSS prevention through JSX escaping
-- Content Security Policy headers recommended
-- Secure cookie configuration for authentication tokens
+- React JSX escaping is the default rendering path.
+- Intentional HTML/SVG rendering paths sanitize content with DOMPurify or narrow rich-text policies.
+- New-tab links and programmatic opens use `noopener`/`noreferrer` or clear `window.opener`.
+- The service worker must not runtime-cache authenticated API responses.
+
+## Deployment Checklist
+
+1. Use HTTPS for frontend and backend origins.
+2. Set strong, unique values for `JWT_SECRET` and `ENCRYPTION_KEY`.
+3. Build frontend assets with `VITE_API_URL=/api` or an HTTPS API origin, and leave `VITE_SUPABASE_URL` blank unless a real Supabase project is enabled.
+4. Use PostgreSQL in production and require encrypted database connections at the infrastructure/provider level.
+5. Configure durable Supabase file storage, or explicitly document the accepted risk of local file storage.
+6. Keep `RATE_LIMIT_STORE` database-backed in production.
+7. Configure production email delivery with `RESEND_API_KEY`, unless email is intentionally disabled.
+8. Run `npm run preflight:integrations` with real production integration credentials before go-live.
+9. Run the manual GitHub Actions `Production Preflight` workflow from the staging or production environment before go-live.
+10. Run `npm run migrate:status` before and after database migration windows.
+11. Create and verify a PostgreSQL backup before any migration, restore, or manual SQL maintenance.
+12. Keep Node.js and dependencies patched; run dependency audits from an environment with working TLS certificate validation.
+13. Forward structured logs to durable monitoring and alerting.
 
 ## Reporting Vulnerabilities
 
-If you discover a security vulnerability, please report it responsibly:
-
-1. **Do not** disclose the vulnerability publicly
-2. Email security concerns to the development team
-3. Include detailed steps to reproduce the issue
-4. Allow reasonable time for the team to address the issue
-
-We take all security reports seriously and will respond promptly to verified vulnerabilities.
-
-## Security Best Practices for Deployment
-
-1. Always use HTTPS in production
-2. Set strong, unique values for JWT_SECRET and ENCRYPTION_KEY
-3. Use PostgreSQL in production with encrypted connections
-4. Keep Node.js and all dependencies up to date
-5. Enable rate limiting at the reverse proxy level (nginx/cloudflare)
-6. Implement proper CORS configuration for your domain
-7. Use secure, HTTP-only cookies for sensitive tokens
-8. Enable audit logging for sensitive operations
+Report suspected security issues privately to the development team. Include affected routes, reproduction steps, expected impact, and any relevant logs or request examples. Do not disclose vulnerabilities publicly before they have been triaged and fixed.

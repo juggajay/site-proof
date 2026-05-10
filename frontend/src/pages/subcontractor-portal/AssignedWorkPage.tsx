@@ -1,23 +1,20 @@
-import { Link } from 'react-router-dom'
-import {
-  ArrowLeft,
-  MapPin,
-  AlertCircle,
-  Clock,
-} from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { apiFetch } from '@/lib/api'
-import { extractErrorMessage } from '@/lib/errorHandling'
-import { cn } from '@/lib/utils'
+import { Link } from 'react-router-dom';
+import { ArrowLeft, MapPin, AlertCircle, Clock } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { cn } from '@/lib/utils';
+import { PortalAccessDenied } from './portalAccess';
+import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 
 interface Lot {
-  id: string
-  lotNumber: string
-  activity?: string
-  status: string
-  area?: number
+  id: string;
+  lotNumber: string;
+  activity?: string;
+  status: string;
+  area?: number;
 }
 
 function getStatusBadge(status: string) {
@@ -26,48 +23,60 @@ function getStatusBadge(status: string) {
     in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
     completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
     on_hold: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-  }
+  };
   const labels: Record<string, string> = {
     not_started: 'Not Started',
     in_progress: 'In Progress',
     completed: 'Completed',
     on_hold: 'On Hold',
-  }
+  };
   return (
-    <span className={cn('px-2 py-1 text-xs font-medium rounded-full', variants[status] || variants.not_started)}>
+    <span
+      className={cn(
+        'px-2 py-1 text-xs font-medium rounded-full',
+        variants[status] || variants.not_started,
+      )}
+    >
       {labels[status] || status}
     </span>
-  )
+  );
 }
 
 export function AssignedWorkPage() {
   const { data: company, isLoading: companyLoading } = useQuery({
     queryKey: queryKeys.portalCompanies,
     queryFn: async () => {
-      const res = await apiFetch<{ company: { projectName: string; projectId: string } }>('/api/subcontractors/my-company')
-      return res.company
+      const res = await apiFetch<{
+        company: { projectName: string; projectId: string; portalAccess?: PortalAccess };
+      }>('/api/subcontractors/my-company');
+      return res.company;
     },
-  })
+  });
+  const canViewAssignedWork = isPortalModuleEnabled(company, 'lots');
 
-  const { data: lots = [], isLoading: lotsLoading, error } = useQuery({
+  const {
+    data: lots = [],
+    isLoading: lotsLoading,
+    error,
+  } = useQuery({
     queryKey: queryKeys.portalAssignedWork,
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${company!.projectId}`
-      )
-      return res.lots || []
+        `/api/lots?projectId=${company!.projectId}&portalModule=lots`,
+      );
+      return res.lots || [];
     },
-    enabled: !!company?.projectId,
-  })
+    enabled: !!company?.projectId && canViewAssignedWork,
+  });
 
-  const loading = companyLoading || lotsLoading
-  const projectName = company?.projectName || ''
+  const loading = companyLoading || (canViewAssignedWork && lotsLoading);
+  const projectName = company?.projectName || '';
 
   // Group lots by status
-  const inProgress = lots.filter(l => l.status === 'in_progress')
-  const notStarted = lots.filter(l => l.status === 'not_started' || !l.status)
-  const completed = lots.filter(l => l.status === 'completed')
-  const onHold = lots.filter(l => l.status === 'on_hold')
+  const inProgress = lots.filter((l) => l.status === 'in_progress');
+  const notStarted = lots.filter((l) => l.status === 'not_started' || !l.status);
+  const completed = lots.filter((l) => l.status === 'completed');
+  const onHold = lots.filter((l) => l.status === 'on_hold');
 
   if (loading) {
     return (
@@ -80,7 +89,11 @@ export function AssignedWorkPage() {
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-24 w-full rounded-lg" />
       </div>
-    )
+    );
+  }
+
+  if (!canViewAssignedWork) {
+    return <PortalAccessDenied moduleName="Assigned work" />;
   }
 
   if (error) {
@@ -98,7 +111,7 @@ export function AssignedWorkPage() {
           Back to Portal
         </Link>
       </div>
-    )
+    );
   }
 
   return (
@@ -213,7 +226,7 @@ export function AssignedWorkPage() {
         </>
       )}
     </div>
-  )
+  );
 }
 
 function LotCard({ lot }: { lot: Lot }) {
@@ -227,9 +240,7 @@ function LotCard({ lot }: { lot: Lot }) {
             </div>
             <div>
               <p className="font-medium text-foreground">{lot.lotNumber}</p>
-              {lot.activity && (
-                <p className="text-sm text-muted-foreground">{lot.activity}</p>
-              )}
+              {lot.activity && <p className="text-sm text-muted-foreground">{lot.activity}</p>}
               {lot.area && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Area: {lot.area.toLocaleString()} m²
@@ -241,5 +252,5 @@ function LotCard({ lot }: { lot: Lot }) {
         </div>
       </div>
     </div>
-  )
+  );
 }

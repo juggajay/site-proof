@@ -1,125 +1,149 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { X, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { X, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 
 interface TourStep {
-  title: string
-  content: string
-  target?: string // CSS selector for element to highlight (optional)
-  route?: string // Route to navigate to for this step
+  title: string;
+  content: string;
+  target?: string; // CSS selector for element to highlight (optional)
+  route?: string; // Route to navigate to for this step
 }
 
 const TOUR_STEPS: TourStep[] = [
   {
     title: 'Welcome to SiteProof!',
-    content: 'SiteProof helps you manage construction quality, track lots, inspections, and maintain compliance. Let\'s take a quick tour of the key features.',
+    content:
+      "SiteProof helps you manage construction quality, track lots, inspections, and maintain compliance. Let's take a quick tour of the key features.",
   },
   {
     title: 'Dashboard Overview',
-    content: 'The Dashboard gives you a quick overview of your project\'s status, including lot progress, recent activity, and outstanding items.',
+    content:
+      "The Dashboard gives you a quick overview of your project's status, including lot progress, recent activity, and outstanding items.",
     route: '/dashboard',
   },
   {
     title: 'Projects',
-    content: 'Manage multiple projects from the Projects page. Each project contains its own lots, ITPs, NCRs, and other quality data.',
+    content:
+      'Manage multiple projects from the Projects page. Each project contains its own lots, ITPs, NCRs, and other quality data.',
     route: '/projects',
   },
   {
     title: 'Lot Register',
-    content: 'The Lot Register is the heart of SiteProof. Create and track work lots through their lifecycle from Not Started to Conformed and Claimed.',
+    content:
+      'The Lot Register is the heart of SiteProof. Create and track work lots through their lifecycle from Not Started to Conformed and Claimed.',
   },
   {
     title: 'Quality Management',
-    content: 'Track Inspection & Test Plans (ITPs), Hold Points, Test Results, and Non-Conformance Reports (NCRs) to maintain quality standards.',
+    content:
+      'Track Inspection & Test Plans (ITPs), Hold Points, Test Results, and Non-Conformance Reports (NCRs) to maintain quality standards.',
   },
   {
     title: 'Daily Diary & Dockets',
-    content: 'Record daily site activities, weather conditions, and manage docket approvals for work verification.',
+    content:
+      'Record daily site activities, weather conditions, and manage docket approvals for work verification.',
   },
   {
     title: 'Progress Claims & Costs',
-    content: 'Track progress claims for conformed work and manage project costs with budget tracking and variance analysis.',
+    content:
+      'Track progress claims for conformed work and manage project costs with budget tracking and variance analysis.',
   },
   {
     title: 'Quick Search',
-    content: 'Press Cmd+K (or Ctrl+K) anytime to quickly search across lots, NCRs, and test results. Press ? for keyboard shortcuts.',
+    content:
+      'Press Cmd+K (or Ctrl+K) anytime to quickly search across lots, NCRs, and test results. Press ? for keyboard shortcuts.',
   },
   {
-    title: 'You\'re all set!',
-    content: 'That\'s the basics! Explore the sidebar navigation to access all features. Click the help icon (?) on any page for context-specific guidance.',
+    title: "You're all set!",
+    content:
+      "That's the basics! Explore the sidebar navigation to access all features. Click the help icon (?) on any page for context-specific guidance.",
   },
-]
+];
 
-const ONBOARDING_STORAGE_KEY = 'siteproof_onboarding_completed'
+const ONBOARDING_STORAGE_KEY = 'siteproof_onboarding_completed';
 
 interface OnboardingTourProps {
-  forceShow?: boolean // For testing - force show the tour
-  onComplete?: () => void
+  enabled?: boolean;
+  forceShow?: boolean; // For testing - force show the tour
+  onComplete?: () => void;
 }
 
-export function OnboardingTour({ forceShow = false, onComplete }: OnboardingTourProps) {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [isVisible, setIsVisible] = useState(false)
-  const [currentStep, setCurrentStep] = useState(0)
+export function OnboardingTour({
+  enabled = true,
+  forceShow = false,
+  onComplete,
+}: OnboardingTourProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isVisible, setIsVisible] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
 
   // Check if user has completed onboarding
   useEffect(() => {
-    if (forceShow) {
-      setIsVisible(true)
-      return
+    if (!enabled && !forceShow) {
+      setIsVisible(false);
+      return;
     }
 
-    const completed = localStorage.getItem(ONBOARDING_STORAGE_KEY)
+    if (forceShow) {
+      setIsVisible(true);
+      return;
+    }
+
+    const completed = readLocalStorageItem(ONBOARDING_STORAGE_KEY);
     if (!completed) {
       // Small delay to let the page render first
-      const timer = setTimeout(() => setIsVisible(true), 500)
-      return () => clearTimeout(timer)
+      const timer = setTimeout(() => setIsVisible(true), 500);
+      return () => clearTimeout(timer);
     }
-  }, [forceShow])
+  }, [enabled, forceShow]);
 
   const handleNext = () => {
     if (currentStep < TOUR_STEPS.length - 1) {
-      const nextStep = currentStep + 1
-      setCurrentStep(nextStep)
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
 
       // Navigate to the route if specified
       if (TOUR_STEPS[nextStep].route && location.pathname !== TOUR_STEPS[nextStep].route) {
-        navigate(TOUR_STEPS[nextStep].route)
+        navigate(TOUR_STEPS[nextStep].route);
       }
     } else {
-      completeTour()
+      completeTour();
     }
-  }
+  };
 
   const handlePrev = () => {
     if (currentStep > 0) {
-      const prevStep = currentStep - 1
-      setCurrentStep(prevStep)
+      const prevStep = currentStep - 1;
+      setCurrentStep(prevStep);
 
       // Navigate to the route if specified
       if (TOUR_STEPS[prevStep].route && location.pathname !== TOUR_STEPS[prevStep].route) {
-        navigate(TOUR_STEPS[prevStep].route)
+        navigate(TOUR_STEPS[prevStep].route);
       }
     }
-  }
+  };
 
   const handleSkip = () => {
-    completeTour()
-  }
+    completeTour();
+  };
 
   const completeTour = () => {
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true')
-    setIsVisible(false)
-    onComplete?.()
-  }
+    writeLocalStorageItem(ONBOARDING_STORAGE_KEY, 'true');
+    setIsVisible(false);
+    onComplete?.();
+  };
 
-  if (!isVisible) return null
+  if (!isVisible) return null;
 
-  const step = TOUR_STEPS[currentStep]
-  const isFirstStep = currentStep === 0
-  const isLastStep = currentStep === TOUR_STEPS.length - 1
-  const progress = ((currentStep + 1) / TOUR_STEPS.length) * 100
+  const step = TOUR_STEPS[currentStep];
+  const isFirstStep = currentStep === 0;
+  const isLastStep = currentStep === TOUR_STEPS.length - 1;
+  const progress = ((currentStep + 1) / TOUR_STEPS.length) * 100;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
@@ -200,32 +224,32 @@ export function OnboardingTour({ forceShow = false, onComplete }: OnboardingTour
                 index === currentStep
                   ? 'bg-primary'
                   : index < currentStep
-                  ? 'bg-primary/50'
-                  : 'bg-muted'
+                    ? 'bg-primary/50'
+                    : 'bg-muted'
               }`}
             />
           ))}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // Hook to check onboarding status and reset for testing
 export function useOnboarding() {
   const [completed, setCompleted] = useState(() => {
-    return localStorage.getItem(ONBOARDING_STORAGE_KEY) === 'true'
-  })
+    return readLocalStorageItem(ONBOARDING_STORAGE_KEY) === 'true';
+  });
 
   const resetOnboarding = () => {
-    localStorage.removeItem(ONBOARDING_STORAGE_KEY)
-    setCompleted(false)
-  }
+    removeLocalStorageItem(ONBOARDING_STORAGE_KEY);
+    setCompleted(false);
+  };
 
   const markCompleted = () => {
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true')
-    setCompleted(true)
-  }
+    writeLocalStorageItem(ONBOARDING_STORAGE_KEY, 'true');
+    setCompleted(true);
+  };
 
-  return { completed, resetOnboarding, markCompleted }
+  return { completed, resetOnboarding, markCompleted };
 }

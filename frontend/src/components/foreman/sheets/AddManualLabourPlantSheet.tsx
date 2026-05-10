@@ -1,96 +1,109 @@
-import { useState } from 'react'
-import { Loader2, Info } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { BottomSheet } from './BottomSheet'
-import { useHaptics } from '@/hooks/useHaptics'
+import { useState } from 'react';
+import { Loader2, Info } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { BottomSheet } from './BottomSheet';
+import { useHaptics } from '@/hooks/useHaptics';
+import {
+  getOptionalDiaryHoursError,
+  parseOptionalDiaryHoursInput,
+} from '@/pages/diary/diaryNumericInput';
 
 interface AddManualLabourPlantSheetProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen: boolean;
+  onClose: () => void;
   onSavePersonnel: (data: {
-    name: string
-    company?: string
-    role?: string
-    hours?: number
-    lotId?: string
-  }) => Promise<void>
+    name: string;
+    company?: string;
+    role?: string;
+    hours?: number;
+    lotId?: string;
+  }) => Promise<void>;
   onSavePlant: (data: {
-    description: string
-    idRego?: string
-    company?: string
-    hoursOperated?: number
-    lotId?: string
-  }) => Promise<void>
-  defaultLotId: string | null
-  lots: Array<{ id: string; lotNumber: string }>
+    description: string;
+    idRego?: string;
+    company?: string;
+    hoursOperated?: number;
+    lotId?: string;
+  }) => Promise<void>;
+  defaultLotId: string | null;
+  lots: Array<{ id: string; lotNumber: string }>;
 }
 
 export function AddManualLabourPlantSheet({
-  isOpen, onClose, onSavePersonnel, onSavePlant, defaultLotId, lots
+  isOpen,
+  onClose,
+  onSavePersonnel,
+  onSavePlant,
+  defaultLotId,
+  lots,
 }: AddManualLabourPlantSheetProps) {
   // Personnel fields
-  const [personnelName, setPersonnelName] = useState('')
-  const [personnelCompany, setPersonnelCompany] = useState('')
-  const [personnelRole, setPersonnelRole] = useState('')
-  const [personnelHours, setPersonnelHours] = useState('')
-  const [personnelLotId, setPersonnelLotId] = useState(defaultLotId || '')
-  const [savingPersonnel, setSavingPersonnel] = useState(false)
+  const [personnelName, setPersonnelName] = useState('');
+  const [personnelCompany, setPersonnelCompany] = useState('');
+  const [personnelRole, setPersonnelRole] = useState('');
+  const [personnelHours, setPersonnelHours] = useState('');
+  const [personnelLotId, setPersonnelLotId] = useState(defaultLotId || '');
+  const [savingPersonnel, setSavingPersonnel] = useState(false);
 
   // Plant fields
-  const [plantDescription, setPlantDescription] = useState('')
-  const [plantIdRego, setPlantIdRego] = useState('')
-  const [plantCompany, setPlantCompany] = useState('')
-  const [plantHours, setPlantHours] = useState('')
-  const [plantLotId, setPlantLotId] = useState(defaultLotId || '')
-  const [savingPlant, setSavingPlant] = useState(false)
+  const [plantDescription, setPlantDescription] = useState('');
+  const [plantIdRego, setPlantIdRego] = useState('');
+  const [plantCompany, setPlantCompany] = useState('');
+  const [plantHours, setPlantHours] = useState('');
+  const [plantLotId, setPlantLotId] = useState(defaultLotId || '');
+  const [savingPlant, setSavingPlant] = useState(false);
 
-  const { trigger } = useHaptics()
+  const { trigger } = useHaptics();
+  const personnelHoursError = getOptionalDiaryHoursError(personnelHours);
+  const plantHoursError = getOptionalDiaryHoursError(plantHours, 'Hours operated');
 
   const handleSavePersonnel = async () => {
-    if (!personnelName.trim() || savingPersonnel) return
-    setSavingPersonnel(true)
+    if (!personnelName.trim() || personnelHoursError || savingPersonnel) return;
+    const parsedPersonnelHours = parseOptionalDiaryHoursInput(personnelHours);
+    setSavingPersonnel(true);
     try {
       await onSavePersonnel({
         name: personnelName.trim(),
         company: personnelCompany || undefined,
         role: personnelRole || undefined,
-        hours: personnelHours ? parseFloat(personnelHours) : undefined,
+        hours: parsedPersonnelHours ?? undefined,
         lotId: personnelLotId || undefined,
-      })
-      trigger('success')
-      setPersonnelName('')
-      setPersonnelCompany('')
-      setPersonnelRole('')
-      setPersonnelHours('')
+      });
+      trigger('success');
+      setPersonnelName('');
+      setPersonnelCompany('');
+      setPersonnelRole('');
+      setPersonnelHours('');
     } catch {
-      trigger('error')
+      trigger('error');
     } finally {
-      setSavingPersonnel(false)
+      setSavingPersonnel(false);
     }
-  }
+  };
 
   const handleSavePlant = async () => {
-    if (!plantDescription.trim() || savingPlant) return
-    setSavingPlant(true)
+    if (!plantDescription.trim() || plantHoursError || savingPlant) return;
+    const parsedPlantHours = parseOptionalDiaryHoursInput(plantHours);
+    setSavingPlant(true);
     try {
       await onSavePlant({
         description: plantDescription.trim(),
         idRego: plantIdRego || undefined,
         company: plantCompany || undefined,
-        hoursOperated: plantHours ? parseFloat(plantHours) : undefined,
+        hoursOperated: parsedPlantHours ?? undefined,
         lotId: plantLotId || undefined,
-      })
-      trigger('success')
-      setPlantDescription('')
-      setPlantIdRego('')
-      setPlantCompany('')
-      setPlantHours('')
+      });
+      trigger('success');
+      setPlantDescription('');
+      setPlantIdRego('');
+      setPlantCompany('');
+      setPlantHours('');
     } catch {
-      trigger('error')
+      trigger('error');
     } finally {
-      setSavingPlant(false)
+      setSavingPlant(false);
     }
-  }
+  };
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Labour / Plant">
@@ -105,7 +118,9 @@ export function AddManualLabourPlantSheet({
 
         {/* Personnel section */}
         <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Personnel</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+            Personnel
+          </h3>
           <div>
             <label className="text-sm font-medium text-muted-foreground">Name *</label>
             <input
@@ -147,8 +162,16 @@ export function AddManualLabourPlantSheet({
                 onChange={(e) => setPersonnelHours(e.target.value)}
                 placeholder="0"
                 step="0.5"
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                className={cn(
+                  'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
+                  personnelHoursError && 'border-red-500',
+                )}
               />
+              {personnelHoursError && (
+                <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
+                  {personnelHoursError}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Lot</label>
@@ -158,24 +181,32 @@ export function AddManualLabourPlantSheet({
                 className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
               >
                 <option value="">No lot</option>
-                {lots.map(lot => (
-                  <option key={lot.id} value={lot.id}>Lot {lot.lotNumber}</option>
+                {lots.map((lot) => (
+                  <option key={lot.id} value={lot.id}>
+                    Lot {lot.lotNumber}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
           <button
             onClick={handleSavePersonnel}
-            disabled={!personnelName.trim() || savingPersonnel}
+            disabled={!personnelName.trim() || Boolean(personnelHoursError) || savingPersonnel}
             className={cn(
               'w-full py-3 rounded-lg font-semibold text-white',
               'bg-emerald-600 active:bg-emerald-700',
               'touch-manipulation min-h-[48px]',
               'flex items-center justify-center gap-2',
-              (!personnelName.trim() || savingPersonnel) && 'opacity-50'
+              (!personnelName.trim() || personnelHoursError || savingPersonnel) && 'opacity-50',
             )}
           >
-            {savingPersonnel ? <><Loader2 className="h-5 w-5 animate-spin" /> Saving...</> : 'Save Personnel'}
+            {savingPersonnel ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" /> Saving...
+              </>
+            ) : (
+              'Save Personnel'
+            )}
           </button>
         </div>
 
@@ -184,7 +215,9 @@ export function AddManualLabourPlantSheet({
 
         {/* Plant section */}
         <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Plant / Equipment</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+            Plant / Equipment
+          </h3>
           <div>
             <label className="text-sm font-medium text-muted-foreground">Description *</label>
             <input
@@ -226,8 +259,16 @@ export function AddManualLabourPlantSheet({
                 onChange={(e) => setPlantHours(e.target.value)}
                 placeholder="0"
                 step="0.5"
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                className={cn(
+                  'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
+                  plantHoursError && 'border-red-500',
+                )}
               />
+              {plantHoursError && (
+                <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
+                  {plantHoursError}
+                </p>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">Lot</label>
@@ -237,27 +278,35 @@ export function AddManualLabourPlantSheet({
                 className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
               >
                 <option value="">No lot</option>
-                {lots.map(lot => (
-                  <option key={lot.id} value={lot.id}>Lot {lot.lotNumber}</option>
+                {lots.map((lot) => (
+                  <option key={lot.id} value={lot.id}>
+                    Lot {lot.lotNumber}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
           <button
             onClick={handleSavePlant}
-            disabled={!plantDescription.trim() || savingPlant}
+            disabled={!plantDescription.trim() || Boolean(plantHoursError) || savingPlant}
             className={cn(
               'w-full py-3 rounded-lg font-semibold text-white',
               'bg-gray-600 dark:bg-gray-700 active:bg-gray-700 dark:active:bg-gray-600',
               'touch-manipulation min-h-[48px]',
               'flex items-center justify-center gap-2',
-              (!plantDescription.trim() || savingPlant) && 'opacity-50'
+              (!plantDescription.trim() || plantHoursError || savingPlant) && 'opacity-50',
             )}
           >
-            {savingPlant ? <><Loader2 className="h-5 w-5 animate-spin" /> Saving...</> : 'Save Plant'}
+            {savingPlant ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" /> Saving...
+              </>
+            ) : (
+              'Save Plant'
+            )}
           </button>
         </div>
       </div>
     </BottomSheet>
-  )
+  );
 }

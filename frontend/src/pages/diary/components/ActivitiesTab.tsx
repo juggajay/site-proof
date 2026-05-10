@@ -1,15 +1,20 @@
-import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { apiFetch } from '@/lib/api'
-import type { DailyDiary, Activity, ActivityFormState, Lot } from '../types'
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { apiFetch } from '@/lib/api';
+import { logError } from '@/lib/logger';
+import {
+  getOptionalDiaryQuantityError,
+  parseOptionalDiaryQuantityInput,
+} from '../diaryNumericInput';
+import type { DailyDiary, Activity, ActivityFormState, Lot } from '../types';
 
 interface ActivitiesTabProps {
-  diary: DailyDiary
-  projectId: string
-  lots: Lot[]
-  saving: boolean
-  setSaving: (saving: boolean) => void
-  onDiaryUpdate: (diary: DailyDiary) => void
+  diary: DailyDiary;
+  projectId: string;
+  lots: Lot[];
+  saving: boolean;
+  setSaving: (saving: boolean) => void;
+  onDiaryUpdate: (diary: DailyDiary) => void;
 }
 
 export const ActivitiesTab = React.memo(function ActivitiesTab({
@@ -26,42 +31,51 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
     quantity: '',
     unit: '',
     notes: '',
-  })
+  });
+  const quantityError = getOptionalDiaryQuantityError(activityForm.quantity);
 
   const addActivity = async () => {
-    if (!activityForm.description) return
-    setSaving(true)
+    const description = activityForm.description.trim();
+    if (!description || quantityError || saving) return;
+    const quantity = parseOptionalDiaryQuantityInput(activityForm.quantity);
+    setSaving(true);
     try {
-      const activity = await apiFetch<Activity>(`/api/diary/${diary.id}/activities`, {
-        method: 'POST',
-        body: JSON.stringify({
-          description: activityForm.description,
-          lotId: activityForm.lotId || undefined,
-          quantity: activityForm.quantity ? parseFloat(activityForm.quantity) : undefined,
-          unit: activityForm.unit || undefined,
-          notes: activityForm.notes || undefined,
-        }),
-      })
+      const activity = await apiFetch<Activity>(
+        `/api/diary/${encodeURIComponent(diary.id)}/activities`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            description,
+            lotId: activityForm.lotId || undefined,
+            quantity: quantity ?? undefined,
+            unit: activityForm.unit.trim() || undefined,
+            notes: activityForm.notes.trim() || undefined,
+          }),
+        },
+      );
 
-      onDiaryUpdate({ ...diary, activities: [...diary.activities, activity] })
-      setActivityForm({ description: '', lotId: '', quantity: '', unit: '', notes: '' })
+      onDiaryUpdate({ ...diary, activities: [...diary.activities, activity] });
+      setActivityForm({ description: '', lotId: '', quantity: '', unit: '', notes: '' });
     } catch (err) {
-      console.error('Error adding activity:', err)
+      logError('Error adding activity:', err);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const removeActivity = async (activityId: string) => {
     try {
-      await apiFetch(`/api/diary/${diary.id}/activities/${activityId}`, {
-        method: 'DELETE',
-      })
-      onDiaryUpdate({ ...diary, activities: diary.activities.filter(a => a.id !== activityId) })
+      await apiFetch(
+        `/api/diary/${encodeURIComponent(diary.id)}/activities/${encodeURIComponent(activityId)}`,
+        {
+          method: 'DELETE',
+        },
+      );
+      onDiaryUpdate({ ...diary, activities: diary.activities.filter((a) => a.id !== activityId) });
     } catch (err) {
-      console.error('Error removing activity:', err)
+      logError('Error removing activity:', err);
     }
-  }
+  };
 
   return (
     <div className="rounded-lg border bg-card p-6">
@@ -88,12 +102,14 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
                   <td className="py-2">
                     {a.lot ? (
                       <Link
-                        to={`/projects/${projectId}/lots/${a.lot.id}`}
+                        to={`/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(a.lot.id)}`}
                         className="text-primary hover:text-primary/80 hover:underline font-medium"
                       >
                         {a.lot.lotNumber}
                       </Link>
-                    ) : '-'}
+                    ) : (
+                      '-'
+                    )}
                   </td>
                   <td className="py-2">{a.quantity || '-'}</td>
                   <td className="py-2">{a.unit || '-'}</td>
@@ -104,8 +120,18 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
                         onClick={() => removeActivity(a.id)}
                         className="text-red-600 hover:text-red-700"
                       >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
                         </svg>
                       </button>
                     </td>
@@ -136,7 +162,9 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
             >
               <option value="">Select Lot...</option>
               {lots.map((lot) => (
-                <option key={lot.id} value={lot.id}>{lot.lotNumber}</option>
+                <option key={lot.id} value={lot.id}>
+                  {lot.lotNumber}
+                </option>
               ))}
             </select>
             <input
@@ -144,7 +172,9 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
               value={activityForm.quantity}
               onChange={(e) => setActivityForm({ ...activityForm, quantity: e.target.value })}
               placeholder="Quantity"
-              className="rounded-md border border-input bg-background px-3 py-2"
+              className={`rounded-md border bg-background px-3 py-2 ${
+                quantityError ? 'border-red-500' : 'border-input'
+              }`}
             />
             <input
               type="text"
@@ -155,14 +185,19 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
             />
             <button
               onClick={addActivity}
-              disabled={!activityForm.description || saving}
+              disabled={!activityForm.description || Boolean(quantityError) || saving}
               className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               Add
             </button>
           </div>
+          {quantityError && (
+            <p className="mt-2 text-sm text-red-600" role="alert" aria-live="assertive">
+              {quantityError}
+            </p>
+          )}
         </div>
       )}
     </div>
-  )
-})
+  );
+});

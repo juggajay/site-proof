@@ -1,44 +1,53 @@
-import { useState } from 'react'
-import { Users, Wrench, ChevronDown, ChevronUp, Clock, Check, Loader2 } from 'lucide-react'
+import { useState } from 'react';
+import { Users, Wrench, ChevronDown, ChevronUp, Clock, Check, Loader2 } from 'lucide-react';
 
-interface DocketSummaryData {
+export interface DocketSummaryData {
   approvedDockets: Array<{
-    id: string
-    subcontractor: string
-    workerCount: number
-    totalLabourHours: number
-    machineCount: number
-    totalPlantHours: number
-    workers: Array<{ name: string; role: string | null; hours: number }>
-    machines: Array<{ type: string; description: string | null; idRego: string | null; hours: number }>
-  }>
-  pendingCount: number
-  pendingDockets: Array<{ id: string; subcontractor: string }>
+    id: string;
+    subcontractor: string;
+    workerCount: number;
+    totalLabourHours: number;
+    machineCount: number;
+    totalPlantHours: number;
+    workers: Array<{ name: string; role: string | null; hours: number }>;
+    machines: Array<{
+      type: string;
+      description: string | null;
+      idRego: string | null;
+      hours: number;
+    }>;
+  }>;
+  pendingCount: number;
+  pendingDockets: Array<{ id: string; subcontractor: string }>;
   totals: {
-    workers: number
-    labourHours: number
-    machines: number
-    plantHours: number
-  }
+    workers: number;
+    labourHours: number;
+    machines: number;
+    plantHours: number;
+  };
 }
 
-interface ManualEntries {
-  personnel: Array<{ id: string; name: string; hours?: number }>
-  plant: Array<{ id: string; description: string; hoursOperated?: number }>
+export interface ManualEntries {
+  personnel: Array<{ id: string; name: string; hours?: number }>;
+  plant: Array<{ id: string; description: string; hoursOperated?: number }>;
 }
 
 interface DiaryDocketSummaryProps {
-  summary: DocketSummaryData | null
-  manualEntries: ManualEntries
-  loading: boolean
-  onTapPending: (docketId: string) => void
-  onAddManual: () => void
+  summary: DocketSummaryData | null;
+  manualEntries: ManualEntries;
+  loading: boolean;
+  onTapPending: (docketId: string) => void;
+  onAddManual: () => void;
 }
 
 export function DiaryDocketSummary({
-  summary, manualEntries, loading, onTapPending, onAddManual
+  summary,
+  manualEntries,
+  loading,
+  onTapPending,
+  onAddManual,
 }: DiaryDocketSummaryProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false);
 
   if (loading) {
     return (
@@ -46,11 +55,11 @@ export function DiaryDocketSummary({
         <Loader2 className="h-4 w-4 animate-spin" />
         <span className="text-sm text-muted-foreground">Loading docket data...</span>
       </div>
-    )
+    );
   }
 
-  const hasDockets = summary && (summary.approvedDockets.length > 0 || summary.pendingCount > 0)
-  const hasManual = manualEntries.personnel.length > 0 || manualEntries.plant.length > 0
+  const hasDockets = summary && (summary.approvedDockets.length > 0 || summary.pendingCount > 0);
+  const hasManual = manualEntries.personnel.length > 0 || manualEntries.plant.length > 0;
 
   if (!hasDockets && !hasManual) {
     return (
@@ -66,7 +75,7 @@ export function DiaryDocketSummary({
           Add manually
         </button>
       </div>
-    )
+    );
   }
 
   return (
@@ -101,7 +110,7 @@ export function DiaryDocketSummary({
 
       {isExpanded && (
         <div className="border-t px-4 py-3 space-y-3">
-          {summary?.approvedDockets.map(d => (
+          {summary?.approvedDockets.map((d) => (
             <div key={d.id} className="space-y-1">
               <div className="flex items-center gap-2">
                 <Check className="h-3 w-3 text-green-600" />
@@ -109,12 +118,17 @@ export function DiaryDocketSummary({
               </div>
               <p className="text-xs text-muted-foreground ml-5">
                 {d.workerCount} workers &middot; {d.totalLabourHours}hrs
-                {d.machineCount > 0 && <> &middot; {d.machineCount} machines &middot; {d.totalPlantHours}hrs</>}
+                {d.machineCount > 0 && (
+                  <>
+                    {' '}
+                    &middot; {d.machineCount} machines &middot; {d.totalPlantHours}hrs
+                  </>
+                )}
               </p>
             </div>
           ))}
 
-          {summary?.pendingDockets.map(d => (
+          {summary?.pendingDockets.map((d) => (
             <button
               key={d.id}
               onClick={() => onTapPending(d.id)}
@@ -128,23 +142,33 @@ export function DiaryDocketSummary({
           {summary && (
             <div className="border-t pt-2 text-xs text-muted-foreground">
               Totals: {summary.totals.workers} workers &middot; {summary.totals.labourHours}hrs
-              {summary.totals.machines > 0 && <> &middot; {summary.totals.machines} machines &middot; {summary.totals.plantHours}hrs</>}
+              {summary.totals.machines > 0 && (
+                <>
+                  {' '}
+                  &middot; {summary.totals.machines} machines &middot; {summary.totals.plantHours}
+                  hrs
+                </>
+              )}
             </div>
           )}
 
           {hasManual && (
             <div className="border-t pt-2">
               <p className="text-xs text-muted-foreground mb-1">+ Foreman-entered:</p>
-              {manualEntries.personnel.map(p => (
-                <p key={p.id} className="text-xs ml-3">{p.name} ({p.hours || 0}hrs)</p>
+              {manualEntries.personnel.map((p) => (
+                <p key={p.id} className="text-xs ml-3">
+                  {p.name} ({p.hours || 0}hrs)
+                </p>
               ))}
-              {manualEntries.plant.map(p => (
-                <p key={p.id} className="text-xs ml-3">{p.description} ({p.hoursOperated || 0}hrs)</p>
+              {manualEntries.plant.map((p) => (
+                <p key={p.id} className="text-xs ml-3">
+                  {p.description} ({p.hoursOperated || 0}hrs)
+                </p>
               ))}
             </div>
           )}
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -1,50 +1,52 @@
 // Foreman Mobile UI State Store
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { createLocalId } from '@/lib/localIds';
+import { safeLocalStateStorage } from '@/lib/storagePreferences';
 
-export type ForemanTab = 'home' | 'diary' | 'capture' | 'approve' | 'quick'
+export type ForemanTab = 'home' | 'diary' | 'capture' | 'approve' | 'quick';
 
 interface QuickAction {
-  id: string
-  type: 'photo' | 'delay' | 'ncr' | 'note' | 'holdpoint'
-  timestamp: string
-  data: Record<string, unknown>
+  id: string;
+  type: 'photo' | 'delay' | 'ncr' | 'note' | 'holdpoint';
+  timestamp: string;
+  data: Record<string, unknown>;
 }
 
 interface ForemanMobileState {
   // Active tab
-  activeTab: ForemanTab
-  setActiveTab: (tab: ForemanTab) => void
+  activeTab: ForemanTab;
+  setActiveTab: (tab: ForemanTab) => void;
 
   // Pending quick actions (before sync)
-  pendingActions: QuickAction[]
-  addPendingAction: (action: Omit<QuickAction, 'id' | 'timestamp'>) => void
-  removePendingAction: (id: string) => void
-  clearPendingActions: () => void
+  pendingActions: QuickAction[];
+  addPendingAction: (action: Omit<QuickAction, 'id' | 'timestamp'>) => void;
+  removePendingAction: (id: string) => void;
+  clearPendingActions: () => void;
 
   // GPS state
-  currentLocation: { lat: number; lng: number } | null
-  setCurrentLocation: (location: { lat: number; lng: number } | null) => void
-  gpsError: string | null
-  setGpsError: (error: string | null) => void
+  currentLocation: { lat: number; lng: number } | null;
+  setCurrentLocation: (location: { lat: number; lng: number } | null) => void;
+  gpsError: string | null;
+  setGpsError: (error: string | null) => void;
 
   // Camera state
-  isCameraOpen: boolean
-  setIsCameraOpen: (open: boolean) => void
+  isCameraOpen: boolean;
+  setIsCameraOpen: (open: boolean) => void;
 
   // Offline indicator
-  isOnline: boolean
-  setIsOnline: (online: boolean) => void
-  pendingSyncCount: number
-  setPendingSyncCount: (count: number) => void
+  isOnline: boolean;
+  setIsOnline: (online: boolean) => void;
+  pendingSyncCount: number;
+  setPendingSyncCount: (count: number) => void;
 
   // Voice input
-  isVoiceActive: boolean
-  setIsVoiceActive: (active: boolean) => void
+  isVoiceActive: boolean;
+  setIsVoiceActive: (active: boolean) => void;
 
   // Quick actions modal
-  isQuickActionsOpen: boolean
-  setIsQuickActionsOpen: (open: boolean) => void
+  isQuickActionsOpen: boolean;
+  setIsQuickActionsOpen: (open: boolean) => void;
 }
 
 export const useForemanMobileStore = create<ForemanMobileState>()(
@@ -62,7 +64,7 @@ export const useForemanMobileStore = create<ForemanMobileState>()(
             ...state.pendingActions,
             {
               ...action,
-              id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              id: createLocalId('action'),
               timestamp: new Date().toISOString(),
             },
           ],
@@ -99,25 +101,25 @@ export const useForemanMobileStore = create<ForemanMobileState>()(
     }),
     {
       name: 'siteproof-foreman-mobile',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStateStorage),
       partialize: (state) => ({
         activeTab: state.activeTab,
         pendingActions: state.pendingActions,
       }),
-    }
-  )
-)
+    },
+  ),
+);
 
 // Selector hooks
-export const useForemanActiveTab = () => useForemanMobileStore((s) => s.activeTab)
-export const useForemanLocation = () => useForemanMobileStore((s) => s.currentLocation)
+export const useForemanActiveTab = () => useForemanMobileStore((s) => s.activeTab);
+export const useForemanLocation = () => useForemanMobileStore((s) => s.currentLocation);
 export const useForemanOnlineStatus = () =>
   useForemanMobileStore((s) => ({
     isOnline: s.isOnline,
     pendingSyncCount: s.pendingSyncCount,
-  }))
+  }));
 export const useForemanCamera = () =>
   useForemanMobileStore((s) => ({
     isCameraOpen: s.isCameraOpen,
     setIsCameraOpen: s.setIsCameraOpen,
-  }))
+  }));

@@ -1,30 +1,31 @@
 // Encryption Module for 2FA Secrets
 // Uses AES-256-GCM for authenticated encryption
 
-import crypto from 'crypto'
+import crypto from 'crypto';
+import { logError, logWarn } from './serverLogger.js';
 
-const ALGORITHM = 'aes-256-gcm'
-const IV_LENGTH = 12 // 96 bits recommended for GCM
-const AUTH_TAG_LENGTH = 16 // 128 bits
-const ENCRYPTED_FORMAT_REGEX = /^[a-f0-9]{24}:[a-f0-9]{32}:[a-f0-9]+$/i
+const ALGORITHM = 'aes-256-gcm';
+const IV_LENGTH = 12; // 96 bits recommended for GCM
+const AUTH_TAG_LENGTH = 16; // 128 bits
+const ENCRYPTED_FORMAT_REGEX = /^[a-f0-9]{24}:[a-f0-9]{32}:[a-f0-9]+$/i;
 
 // Get encryption key from environment (64 char hex string = 32 bytes = 256 bits)
 function getEncryptionKey(): Buffer | null {
-  const keyHex = process.env.ENCRYPTION_KEY
+  const keyHex = process.env.ENCRYPTION_KEY;
 
   if (!keyHex) {
     if (process.env.NODE_ENV === 'production') {
-      console.warn('[Encryption] WARNING: ENCRYPTION_KEY not set in production environment')
+      logWarn('[Encryption] WARNING: ENCRYPTION_KEY not set in production environment');
     }
-    return null
+    return null;
   }
 
   if (keyHex.length !== 64) {
-    console.error('[Encryption] ENCRYPTION_KEY must be 64 hex characters (32 bytes)')
-    return null
+    logError('[Encryption] ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
+    return null;
   }
 
-  return Buffer.from(keyHex, 'hex')
+  return Buffer.from(keyHex, 'hex');
 }
 
 /**
@@ -33,33 +34,33 @@ function getEncryptionKey(): Buffer | null {
  * @returns Encrypted string in format: iv:authTag:ciphertext (all hex encoded)
  */
 export function encrypt(plaintext: string): string {
-  const key = getEncryptionKey()
+  const key = getEncryptionKey();
 
   // In development without key, return plaintext as fallback
   if (!key) {
     if (process.env.NODE_ENV !== 'production') {
-      return plaintext
+      return plaintext;
     }
-    throw new Error('Encryption key not configured')
+    throw new Error('Encryption key not configured');
   }
 
   // Generate random IV
-  const iv = crypto.randomBytes(IV_LENGTH)
+  const iv = crypto.randomBytes(IV_LENGTH);
 
   // Create cipher
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv, {
-    authTagLength: AUTH_TAG_LENGTH
-  })
+    authTagLength: AUTH_TAG_LENGTH,
+  });
 
   // Encrypt the plaintext
-  let ciphertext = cipher.update(plaintext, 'utf8', 'hex')
-  ciphertext += cipher.final('hex')
+  let ciphertext = cipher.update(plaintext, 'utf8', 'hex');
+  ciphertext += cipher.final('hex');
 
   // Get the authentication tag
-  const authTag = cipher.getAuthTag()
+  const authTag = cipher.getAuthTag();
 
   // Return in format: iv:authTag:ciphertext
-  return `${iv.toString('hex')}:${authTag.toString('hex')}:${ciphertext}`
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${ciphertext}`;
 }
 
 /**
@@ -68,47 +69,47 @@ export function encrypt(plaintext: string): string {
  * @returns Decrypted plaintext
  */
 export function decrypt(encryptedValue: string): string {
-  const key = getEncryptionKey()
+  const key = getEncryptionKey();
 
   // Check if value is encrypted format
   if (!isEncrypted(encryptedValue)) {
     // Value is not encrypted, return as-is (for migration support)
-    return encryptedValue
+    return encryptedValue;
   }
 
   // In development without key, return as-is (assuming it's plaintext)
   if (!key) {
     if (process.env.NODE_ENV !== 'production') {
       // If it looks encrypted but no key, this is likely plaintext that happens to match format
-      return encryptedValue
+      return encryptedValue;
     }
-    throw new Error('Encryption key not configured')
+    throw new Error('Encryption key not configured');
   }
 
   // Parse the encrypted value
-  const parts = encryptedValue.split(':')
+  const parts = encryptedValue.split(':');
   if (parts.length !== 3) {
-    throw new Error('Invalid encrypted value format')
+    throw new Error('Invalid encrypted value format');
   }
 
-  const [ivHex, authTagHex, ciphertextHex] = parts
+  const [ivHex, authTagHex, ciphertextHex] = parts;
 
-  const iv = Buffer.from(ivHex, 'hex')
-  const authTag = Buffer.from(authTagHex, 'hex')
+  const iv = Buffer.from(ivHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
 
   // Create decipher
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
-    authTagLength: AUTH_TAG_LENGTH
-  })
+    authTagLength: AUTH_TAG_LENGTH,
+  });
 
   // Set the authentication tag
-  decipher.setAuthTag(authTag)
+  decipher.setAuthTag(authTag);
 
   // Decrypt
-  let plaintext = decipher.update(ciphertextHex, 'hex', 'utf8')
-  plaintext += decipher.final('utf8')
+  let plaintext = decipher.update(ciphertextHex, 'hex', 'utf8');
+  plaintext += decipher.final('utf8');
 
-  return plaintext
+  return plaintext;
 }
 
 /**
@@ -118,11 +119,11 @@ export function decrypt(encryptedValue: string): string {
  */
 export function isEncrypted(value: string): boolean {
   if (!value || typeof value !== 'string') {
-    return false
+    return false;
   }
 
   // Check if it matches the encrypted format pattern
-  return ENCRYPTED_FORMAT_REGEX.test(value)
+  return ENCRYPTED_FORMAT_REGEX.test(value);
 }
 
 /**
@@ -130,5 +131,5 @@ export function isEncrypted(value: string): boolean {
  * @returns A 64-character hex string suitable for ENCRYPTION_KEY
  */
 export function generateEncryptionKey(): string {
-  return crypto.randomBytes(32).toString('hex')
+  return crypto.randomBytes(32).toString('hex');
 }

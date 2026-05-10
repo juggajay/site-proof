@@ -1,16 +1,34 @@
-import { Request, Response, NextFunction } from 'express'
-import { AppError } from '../lib/AppError.js'
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../lib/AppError.js';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Route params that should be valid UUIDs
 const UUID_PARAM_NAMES = new Set([
-  'id', 'projectId', 'lotId', 'diaryId', 'ncrId', 'docketId',
-  'claimId', 'documentId', 'drawingId', 'templateId', 'instanceId',
-  'holdPointId', 'testResultId', 'commentId', 'attachmentId',
-  'companyId', 'userId', 'notificationId', 'webhookId',
-  'subcontractorId', 'employeeId', 'plantId', 'assignmentId',
-])
+  'id',
+  'projectId',
+  'lotId',
+  'diaryId',
+  'ncrId',
+  'docketId',
+  'claimId',
+  'documentId',
+  'drawingId',
+  'templateId',
+  'instanceId',
+  'holdPointId',
+  'testResultId',
+  'commentId',
+  'attachmentId',
+  'companyId',
+  'userId',
+  'notificationId',
+  'webhookId',
+  'subcontractorId',
+  'employeeId',
+  'plantId',
+  'assignmentId',
+]);
 
 /**
  * Middleware to validate that specified route parameters are valid UUIDs.
@@ -23,13 +41,13 @@ const UUID_PARAM_NAMES = new Set([
 export function validateUuidParams(...paramNames: string[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     for (const param of paramNames) {
-      const value = req.params[param]
+      const value = req.params[param];
       if (value && !UUID_REGEX.test(value)) {
-        throw AppError.badRequest(`Parameter '${param}' must be a valid UUID`)
+        throw AppError.badRequest(`Parameter '${param}' must be a valid UUID`);
       }
     }
-    next()
-  }
+    next();
+  };
 }
 
 /**
@@ -39,8 +57,8 @@ export function validateUuidParams(...paramNames: string[]) {
 export function validateUuidRouteParams(req: Request, _res: Response, next: NextFunction) {
   for (const [param, value] of Object.entries(req.params)) {
     if (UUID_PARAM_NAMES.has(param) && value && !UUID_REGEX.test(value)) {
-      throw AppError.badRequest(`Parameter '${param}' must be a valid UUID`)
+      throw AppError.badRequest(`Parameter '${param}' must be a valid UUID`);
     }
   }
-  next()
+  next();
 }

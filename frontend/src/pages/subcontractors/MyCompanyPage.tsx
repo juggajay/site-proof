@@ -1,230 +1,279 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/auth'
-import { apiFetch } from '@/lib/api'
-import { Plus, Users, Truck, CheckCircle, Clock, X, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { Plus, Users, Truck, CheckCircle, Clock, X, Trash2 } from 'lucide-react';
+import { logError } from '@/lib/logger';
+import { parseRateInput } from './rateValidation';
 
 interface Employee {
-  id: string
-  name: string
-  phone: string
-  role: string
-  hourlyRate: number
-  status: 'pending' | 'approved' | 'inactive'
+  id: string;
+  name: string;
+  phone: string;
+  role: string;
+  hourlyRate: number;
+  status: 'pending' | 'approved' | 'inactive';
 }
 
 interface Plant {
-  id: string
-  type: string
-  description: string
-  idRego: string
-  dryRate: number
-  wetRate: number
-  status: 'pending' | 'approved' | 'inactive'
+  id: string;
+  type: string;
+  description: string;
+  idRego: string;
+  dryRate: number;
+  wetRate: number;
+  status: 'pending' | 'approved' | 'inactive';
 }
 
 interface CompanyData {
-  id: string
-  companyName: string
-  abn: string
-  primaryContactName: string
-  primaryContactEmail: string
-  primaryContactPhone: string
-  status: string
-  employees: Employee[]
-  plant: Plant[]
+  id: string;
+  companyName: string;
+  abn: string;
+  primaryContactName: string;
+  primaryContactEmail: string;
+  primaryContactPhone: string;
+  status: string;
+  employees: Employee[];
+  plant: Plant[];
 }
 
 export function MyCompanyPage() {
-  const { user } = useAuth()
-  const [companyData, setCompanyData] = useState<CompanyData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false)
-  const [showAddPlantModal, setShowAddPlantModal] = useState(false)
-  const [employeeForm, setEmployeeForm] = useState({ name: '', phone: '', role: '', hourlyRate: '' })
-  const [plantForm, setPlantForm] = useState({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
-  const [saving, setSaving] = useState(false)
+  const { user } = useAuth();
+  const [companyData, setCompanyData] = useState<CompanyData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
+  const [showAddPlantModal, setShowAddPlantModal] = useState(false);
+  const [employeeForm, setEmployeeForm] = useState({
+    name: '',
+    phone: '',
+    role: '',
+    hourlyRate: '',
+  });
+  const [plantForm, setPlantForm] = useState({
+    type: '',
+    description: '',
+    idRego: '',
+    dryRate: '',
+    wetRate: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Only subcontractor_admin can manage roster - regular subcontractor users can only view
   // Note: user.role is used (from auth context) not roleInCompany
-  const canManageRoster = user?.role === 'subcontractor_admin'
+  const canManageRoster = user?.role === 'subcontractor_admin';
 
   useEffect(() => {
-    fetchCompanyData()
-  }, [])
+    fetchCompanyData();
+  }, []);
 
   const fetchCompanyData = async () => {
-    setLoading(true)
+    setLoading(true);
+    setLoadError(null);
 
     try {
-      const data = await apiFetch<{ company: CompanyData }>(`/api/subcontractors/my-company`)
-      setCompanyData(data.company)
+      const data = await apiFetch<{ company: CompanyData }>(`/api/subcontractors/my-company`);
+      setCompanyData(data.company);
     } catch (error) {
-      console.error('Error fetching company data:', error)
-      // Demo data for development
-      setCompanyData({
-        id: '1',
-        companyName: 'ABC Earthmoving Pty Ltd',
-        abn: '12 345 678 901',
-        primaryContactName: 'Subcontractor Admin',
-        primaryContactEmail: 'subadmin@test.com',
-        primaryContactPhone: '0412 345 678',
-        status: 'active',
-        employees: [
-          { id: 'e1', name: 'John Smith', phone: '0412 111 222', role: 'Supervisor', hourlyRate: 95, status: 'approved' },
-          { id: 'e2', name: 'Mike Johnson', phone: '0412 333 444', role: 'Operator', hourlyRate: 85, status: 'approved' },
-          { id: 'e3', name: 'Dave Williams', phone: '0412 555 666', role: 'Labourer', hourlyRate: 65, status: 'pending' }
-        ],
-        plant: [
-          { id: 'p1', type: 'Excavator', description: '20T Excavator', idRego: 'EXC-001', dryRate: 150, wetRate: 200, status: 'approved' },
-          { id: 'p2', type: 'Roller', description: 'Padfoot Roller', idRego: 'ROL-001', dryRate: 120, wetRate: 160, status: 'approved' }
-        ]
-      })
+      logError('Error fetching company data:', error);
+      setCompanyData(null);
+      setLoadError('Unable to load your subcontractor company. Please try again.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const addEmployee = async () => {
-    if (!employeeForm.name || !employeeForm.role || !employeeForm.hourlyRate) return
-    setSaving(true)
+    const name = employeeForm.name.trim();
+    const phone = employeeForm.phone.trim();
+    const role = employeeForm.role.trim();
+    const hourlyRate = parseRateInput(employeeForm.hourlyRate);
+
+    if (!name || !role || hourlyRate === null) {
+      setActionError(
+        'Enter an employee name, role, and hourly rate greater than 0 with up to 2 decimal places.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setActionError(null);
 
     try {
       await apiFetch(`/api/subcontractors/my-company/employees`, {
         method: 'POST',
         body: JSON.stringify({
-          name: employeeForm.name,
-          phone: employeeForm.phone,
-          role: employeeForm.role,
-          hourlyRate: parseFloat(employeeForm.hourlyRate)
-        })
-      })
+          name,
+          phone,
+          role,
+          hourlyRate,
+        }),
+      });
 
-      await fetchCompanyData()
-      setShowAddEmployeeModal(false)
-      setEmployeeForm({ name: '', phone: '', role: '', hourlyRate: '' })
+      await fetchCompanyData();
+      setShowAddEmployeeModal(false);
+      setEmployeeForm({ name: '', phone: '', role: '', hourlyRate: '' });
     } catch (error) {
-      console.error('Error adding employee:', error)
-      // Demo mode - add locally
-      const newEmployee: Employee = {
-        id: String(Date.now()),
-        name: employeeForm.name,
-        phone: employeeForm.phone,
-        role: employeeForm.role,
-        hourlyRate: parseFloat(employeeForm.hourlyRate),
-        status: 'pending'
-      }
-      setCompanyData(prev => prev ? {
-        ...prev,
-        employees: [...prev.employees, newEmployee]
-      } : null)
-      setShowAddEmployeeModal(false)
-      setEmployeeForm({ name: '', phone: '', role: '', hourlyRate: '' })
+      logError('Error adding employee:', error);
+      setActionError('Employee could not be added. Please try again.');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const addPlant = async () => {
-    if (!plantForm.type || !plantForm.description || !plantForm.dryRate) return
-    setSaving(true)
+    const type = plantForm.type.trim();
+    const description = plantForm.description.trim();
+    const idRego = plantForm.idRego.trim();
+    const dryRate = parseRateInput(plantForm.dryRate);
+    const wetRate = parseRateInput(plantForm.wetRate, { required: false, allowZero: true });
+
+    if (!type || !description || dryRate === null || wetRate === null) {
+      setActionError(
+        'Enter plant type, description, a dry rate greater than 0, and an optional wet rate with up to 2 decimal places.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setActionError(null);
 
     try {
       await apiFetch(`/api/subcontractors/my-company/plant`, {
         method: 'POST',
         body: JSON.stringify({
-          type: plantForm.type,
-          description: plantForm.description,
-          idRego: plantForm.idRego,
-          dryRate: parseFloat(plantForm.dryRate),
-          wetRate: plantForm.wetRate ? parseFloat(plantForm.wetRate) : 0
-        })
-      })
+          type,
+          description,
+          idRego,
+          dryRate,
+          wetRate,
+        }),
+      });
 
-      await fetchCompanyData()
-      setShowAddPlantModal(false)
-      setPlantForm({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
+      await fetchCompanyData();
+      setShowAddPlantModal(false);
+      setPlantForm({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' });
     } catch (error) {
-      console.error('Error adding plant:', error)
-      // Demo mode - add locally
-      const newPlant: Plant = {
-        id: String(Date.now()),
-        type: plantForm.type,
-        description: plantForm.description,
-        idRego: plantForm.idRego,
-        dryRate: parseFloat(plantForm.dryRate),
-        wetRate: plantForm.wetRate ? parseFloat(plantForm.wetRate) : 0,
-        status: 'pending'
-      }
-      setCompanyData(prev => prev ? {
-        ...prev,
-        plant: [...prev.plant, newPlant]
-      } : null)
-      setShowAddPlantModal(false)
-      setPlantForm({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' })
+      logError('Error adding plant:', error);
+      setActionError('Plant could not be added. Please try again.');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
-  const deleteEmployee = (empId: string) => {
-    setCompanyData(prev => prev ? {
-      ...prev,
-      employees: prev.employees.filter(e => e.id !== empId)
-    } : null)
-  }
+  const deleteEmployee = async (empId: string) => {
+    setSaving(true);
+    setActionError(null);
 
-  const deletePlant = (plantId: string) => {
-    setCompanyData(prev => prev ? {
-      ...prev,
-      plant: prev.plant.filter(p => p.id !== plantId)
-    } : null)
-  }
+    try {
+      await apiFetch(`/api/subcontractors/my-company/employees/${encodeURIComponent(empId)}`, {
+        method: 'DELETE',
+      });
+      await fetchCompanyData();
+    } catch (error) {
+      logError('Error deleting employee:', error);
+      setActionError('Employee could not be deleted. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deletePlant = async (plantId: string) => {
+    setSaving(true);
+    setActionError(null);
+
+    try {
+      await apiFetch(`/api/subcontractors/my-company/plant/${encodeURIComponent(plantId)}`, {
+        method: 'DELETE',
+      });
+      await fetchCompanyData();
+    } catch (error) {
+      logError('Error deleting plant:', error);
+      setActionError('Plant could not be deleted. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: 'AUD',
-      minimumFractionDigits: 0
-    }).format(amount)
-  }
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Clock className="h-3 w-3" /> Pending Approval</span>
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+            <Clock className="h-3 w-3" /> Pending Approval
+          </span>
+        );
       case 'approved':
       case 'active':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700"><CheckCircle className="h-3 w-3" /> Approved</span>
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+            <CheckCircle className="h-3 w-3" /> Approved
+          </span>
+        );
       case 'inactive':
-        return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground"><X className="h-3 w-3" /> Inactive</span>
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
+            <X className="h-3 w-3" /> Inactive
+          </span>
+        );
       default:
-        return <span className="px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">{status}</span>
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
+            {status}
+          </span>
+        );
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
-    )
+    );
+  }
+
+  if (!companyData && loadError) {
+    return (
+      <div className="p-6">
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <h3 className="font-semibold text-red-800">Unable to Load Company</h3>
+          <p className="text-sm text-red-700 mt-1">{loadError}</p>
+          <button
+            type="button"
+            onClick={fetchCompanyData}
+            className="mt-3 rounded-lg bg-red-700 px-3 py-1.5 text-sm text-white hover:bg-red-800"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!companyData) {
     return (
       <div className="p-6">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4">
           <h3 className="font-semibold text-red-800">No Company Found</h3>
           <p className="text-sm text-red-700 mt-1">
             You are not associated with a subcontractor company. Please contact your administrator.
           </p>
         </div>
       </div>
-    )
+    );
   }
 
-  const pendingEmployees = companyData.employees.filter(e => e.status === 'pending').length
-  const pendingPlant = companyData.plant.filter(p => p.status === 'pending').length
+  const pendingEmployees = companyData.employees.filter((e) => e.status === 'pending').length;
+  const pendingPlant = companyData.plant.filter((p) => p.status === 'pending').length;
 
   return (
     <div className="space-y-6">
@@ -237,6 +286,15 @@ export function MyCompanyPage() {
             : "View your company's employee roster and plant register"}
         </p>
       </div>
+
+      {actionError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+        >
+          {actionError}
+        </div>
+      )}
 
       {/* Company Info Card */}
       <div className="rounded-lg border bg-card p-6">
@@ -273,7 +331,8 @@ export function MyCompanyPage() {
             {pendingPlant > 0 && `${pendingPlant} plant rate(s) pending approval`}
           </p>
           <p className="text-xs text-amber-600 mt-2">
-            Pending items need to be approved by the head contractor before they can be used in dockets.
+            Pending items need to be approved by the head contractor before they can be used in
+            dockets.
           </p>
         </div>
       )}
@@ -311,8 +370,13 @@ export function MyCompanyPage() {
             <tbody>
               {companyData.employees.length === 0 ? (
                 <tr>
-                  <td colSpan={canManageRoster ? 6 : 5} className="p-6 text-center text-muted-foreground">
-                    {canManageRoster ? 'No employees added yet. Click "Add Employee" to get started.' : 'No employees registered yet.'}
+                  <td
+                    colSpan={canManageRoster ? 6 : 5}
+                    className="p-6 text-center text-muted-foreground"
+                  >
+                    {canManageRoster
+                      ? 'No employees added yet. Click "Add Employee" to get started.'
+                      : 'No employees registered yet.'}
                   </td>
                 </tr>
               ) : (
@@ -321,13 +385,16 @@ export function MyCompanyPage() {
                     <td className="p-3 font-medium">{emp.name}</td>
                     <td className="p-3">{emp.phone || '-'}</td>
                     <td className="p-3">{emp.role}</td>
-                    <td className="p-3 text-right font-semibold">{formatCurrency(emp.hourlyRate)}/hr</td>
+                    <td className="p-3 text-right font-semibold">
+                      {formatCurrency(emp.hourlyRate)}/hr
+                    </td>
                     <td className="p-3 text-center">{getStatusBadge(emp.status)}</td>
                     {canManageRoster && (
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => deleteEmployee(emp.id)}
+                            onClick={() => void deleteEmployee(emp.id)}
+                            disabled={saving}
                             className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                             title="Delete"
                           >
@@ -378,8 +445,13 @@ export function MyCompanyPage() {
             <tbody>
               {companyData.plant.length === 0 ? (
                 <tr>
-                  <td colSpan={canManageRoster ? 7 : 6} className="p-6 text-center text-muted-foreground">
-                    {canManageRoster ? 'No plant registered yet. Click "Add Plant" to get started.' : 'No plant registered yet.'}
+                  <td
+                    colSpan={canManageRoster ? 7 : 6}
+                    className="p-6 text-center text-muted-foreground"
+                  >
+                    {canManageRoster
+                      ? 'No plant registered yet. Click "Add Plant" to get started.'
+                      : 'No plant registered yet.'}
                   </td>
                 </tr>
               ) : (
@@ -389,13 +461,16 @@ export function MyCompanyPage() {
                     <td className="p-3">{p.description}</td>
                     <td className="p-3">{p.idRego || '-'}</td>
                     <td className="p-3 text-right font-semibold">{formatCurrency(p.dryRate)}/hr</td>
-                    <td className="p-3 text-right font-semibold">{p.wetRate > 0 ? `${formatCurrency(p.wetRate)}/hr` : '-'}</td>
+                    <td className="p-3 text-right font-semibold">
+                      {p.wetRate > 0 ? `${formatCurrency(p.wetRate)}/hr` : '-'}
+                    </td>
                     <td className="p-3 text-center">{getStatusBadge(p.status)}</td>
                     {canManageRoster && (
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => deletePlant(p.id)}
+                            onClick={() => void deletePlant(p.id)}
+                            disabled={saving}
                             className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                             title="Delete"
                           >
@@ -415,40 +490,70 @@ export function MyCompanyPage() {
       {/* Add Employee Modal */}
       {showAddEmployeeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+          <div
+            className="bg-background rounded-lg shadow-xl w-full max-w-md"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="my-company-add-employee-title"
+          >
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-xl font-semibold">Add Employee</h2>
-              <button onClick={() => setShowAddEmployeeModal(false)} className="p-2 hover:bg-muted rounded-lg">
+              <h2 id="my-company-add-employee-title" className="text-xl font-semibold">
+                Add Employee
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowAddEmployeeModal(false)}
+                className="p-2 hover:bg-muted rounded-lg"
+                aria-label="Close add employee"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Name *</label>
+                <label
+                  htmlFor="my-company-employee-name"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Name *
+                </label>
                 <input
+                  id="my-company-employee-name"
                   type="text"
                   value={employeeForm.name}
-                  onChange={(e) => setEmployeeForm(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) => setEmployeeForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="John Smith"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Phone</label>
+                <label
+                  htmlFor="my-company-employee-phone"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Phone
+                </label>
                 <input
+                  id="my-company-employee-phone"
                   type="tel"
                   value={employeeForm.phone}
-                  onChange={(e) => setEmployeeForm(prev => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) => setEmployeeForm((prev) => ({ ...prev, phone: e.target.value }))}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="0412 345 678"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Role *</label>
+                <label
+                  htmlFor="my-company-employee-role"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Role *
+                </label>
                 <select
+                  id="my-company-employee-role"
                   value={employeeForm.role}
-                  onChange={(e) => setEmployeeForm(prev => ({ ...prev, role: e.target.value }))}
+                  onChange={(e) => setEmployeeForm((prev) => ({ ...prev, role: e.target.value }))}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select role...</option>
@@ -462,15 +567,25 @@ export function MyCompanyPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Proposed Hourly Rate *</label>
+                <label
+                  htmlFor="my-company-employee-hourly-rate"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Proposed Hourly Rate *
+                </label>
                 <div className="relative">
                   <span className="absolute left-3 top-2 text-muted-foreground">$</span>
                   <input
+                    id="my-company-employee-hourly-rate"
                     type="number"
                     value={employeeForm.hourlyRate}
-                    onChange={(e) => setEmployeeForm(prev => ({ ...prev, hourlyRate: e.target.value }))}
+                    onChange={(e) =>
+                      setEmployeeForm((prev) => ({ ...prev, hourlyRate: e.target.value }))
+                    }
                     className="w-full pl-7 pr-12 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="85"
+                    min="0"
+                    step="0.01"
                   />
                   <span className="absolute right-3 top-2 text-muted-foreground">/hr</span>
                 </div>
@@ -482,14 +597,21 @@ export function MyCompanyPage() {
 
             <div className="flex justify-end gap-2 p-4 border-t">
               <button
+                type="button"
                 onClick={() => setShowAddEmployeeModal(false)}
                 className="px-4 py-2 border rounded-lg hover:bg-muted"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={addEmployee}
-                disabled={saving || !employeeForm.name || !employeeForm.role || !employeeForm.hourlyRate}
+                disabled={
+                  saving ||
+                  !employeeForm.name.trim() ||
+                  !employeeForm.role.trim() ||
+                  !employeeForm.hourlyRate
+                }
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
                 {saving ? 'Adding...' : 'Add Employee'}
@@ -502,20 +624,35 @@ export function MyCompanyPage() {
       {/* Add Plant Modal */}
       {showAddPlantModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-md">
+          <div
+            className="bg-background rounded-lg shadow-xl w-full max-w-md"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="my-company-add-plant-title"
+          >
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-xl font-semibold">Add Plant</h2>
-              <button onClick={() => setShowAddPlantModal(false)} className="p-2 hover:bg-muted rounded-lg">
+              <h2 id="my-company-add-plant-title" className="text-xl font-semibold">
+                Add Plant
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowAddPlantModal(false)}
+                className="p-2 hover:bg-muted rounded-lg"
+                aria-label="Close add plant"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Type *</label>
+                <label htmlFor="my-company-plant-type" className="block text-sm font-medium mb-1">
+                  Type *
+                </label>
                 <select
+                  id="my-company-plant-type"
                   value={plantForm.type}
-                  onChange={(e) => setPlantForm(prev => ({ ...prev, type: e.target.value }))}
+                  onChange={(e) => setPlantForm((prev) => ({ ...prev, type: e.target.value }))}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Select type...</option>
@@ -532,50 +669,84 @@ export function MyCompanyPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Description *</label>
+                <label
+                  htmlFor="my-company-plant-description"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Description *
+                </label>
                 <input
+                  id="my-company-plant-description"
                   type="text"
                   value={plantForm.description}
-                  onChange={(e) => setPlantForm(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setPlantForm((prev) => ({ ...prev, description: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="20T Excavator"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">ID/Rego</label>
+                <label
+                  htmlFor="my-company-plant-id-rego"
+                  className="block text-sm font-medium mb-1"
+                >
+                  ID/Rego
+                </label>
                 <input
+                  id="my-company-plant-id-rego"
                   type="text"
                   value={plantForm.idRego}
-                  onChange={(e) => setPlantForm(prev => ({ ...prev, idRego: e.target.value }))}
+                  onChange={(e) => setPlantForm((prev) => ({ ...prev, idRego: e.target.value }))}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="EXC-001"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Dry Rate *</label>
+                  <label
+                    htmlFor="my-company-plant-dry-rate"
+                    className="block text-sm font-medium mb-1"
+                  >
+                    Dry Rate *
+                  </label>
                   <div className="relative">
                     <span className="absolute left-3 top-2 text-muted-foreground">$</span>
                     <input
+                      id="my-company-plant-dry-rate"
                       type="number"
                       value={plantForm.dryRate}
-                      onChange={(e) => setPlantForm(prev => ({ ...prev, dryRate: e.target.value }))}
+                      onChange={(e) =>
+                        setPlantForm((prev) => ({ ...prev, dryRate: e.target.value }))
+                      }
                       className="w-full pl-7 pr-12 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="150"
+                      min="0"
+                      step="0.01"
                     />
                     <span className="absolute right-3 top-2 text-muted-foreground">/hr</span>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Wet Rate</label>
+                  <label
+                    htmlFor="my-company-plant-wet-rate"
+                    className="block text-sm font-medium mb-1"
+                  >
+                    Wet Rate
+                  </label>
                   <div className="relative">
                     <span className="absolute left-3 top-2 text-muted-foreground">$</span>
                     <input
+                      id="my-company-plant-wet-rate"
                       type="number"
                       value={plantForm.wetRate}
-                      onChange={(e) => setPlantForm(prev => ({ ...prev, wetRate: e.target.value }))}
+                      onChange={(e) =>
+                        setPlantForm((prev) => ({ ...prev, wetRate: e.target.value }))
+                      }
                       className="w-full pl-7 pr-12 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="200"
+                      min="0"
+                      step="0.01"
                     />
                     <span className="absolute right-3 top-2 text-muted-foreground">/hr</span>
                   </div>
@@ -588,14 +759,21 @@ export function MyCompanyPage() {
 
             <div className="flex justify-end gap-2 p-4 border-t">
               <button
+                type="button"
                 onClick={() => setShowAddPlantModal(false)}
                 className="px-4 py-2 border rounded-lg hover:bg-muted"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={addPlant}
-                disabled={saving || !plantForm.type || !plantForm.description || !plantForm.dryRate}
+                disabled={
+                  saving ||
+                  !plantForm.type.trim() ||
+                  !plantForm.description.trim() ||
+                  !plantForm.dryRate
+                }
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
                 {saving ? 'Adding...' : 'Add Plant'}
@@ -605,5 +783,5 @@ export function MyCompanyPage() {
         </div>
       )}
     </div>
-  )
+  );
 }

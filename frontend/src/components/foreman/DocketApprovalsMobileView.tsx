@@ -1,43 +1,44 @@
-import { useRef, useCallback } from 'react'
-import { cn } from '@/lib/utils'
-import { Check, X, CheckSquare } from 'lucide-react'
-import { SwipeableCard } from './SwipeableCard'
-import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard'
-import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
+import { useRef, useCallback } from 'react';
+import { cn } from '@/lib/utils';
+import { AlertCircle, Check, X, CheckSquare } from 'lucide-react';
+import { SwipeableCard } from './SwipeableCard';
+import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard';
+import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 
 interface Docket {
-  id: string
-  docketNumber: string
-  subcontractor: string
-  subcontractorId: string
-  date: string
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected'
-  notes: string | null
-  labourHours: number
-  plantHours: number
-  totalLabourSubmitted: number
-  totalLabourApproved: number
-  totalPlantSubmitted: number
-  totalPlantApproved: number
-  submittedAt: string | null
-  approvedAt: string | null
-  foremanNotes: string | null
+  id: string;
+  docketNumber: string;
+  subcontractor: string;
+  subcontractorId: string;
+  date: string;
+  status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
+  notes: string | null;
+  labourHours: number;
+  plantHours: number;
+  totalLabourSubmitted: number;
+  totalLabourApproved: number;
+  totalPlantSubmitted: number;
+  totalPlantApproved: number;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  foremanNotes: string | null;
 }
 
 interface DocketApprovalsMobileViewProps {
-  dockets: Docket[]
-  filteredDockets: Docket[]
-  loading: boolean
-  statusFilter: string
-  setStatusFilter: (filter: string) => void
-  pendingCount: number
-  totalLabourHours: number
-  totalPlantHours: number
-  canApprove: boolean
-  onApprove: (docket: Docket) => void
-  onReject: (docket: Docket) => void
-  onTapDocket: (docket: Docket) => void
-  onRefresh: () => Promise<void>
+  dockets: Docket[];
+  filteredDockets: Docket[];
+  loading: boolean;
+  statusFilter: string;
+  setStatusFilter: (filter: string) => void;
+  pendingCount: number;
+  totalLabourHours: number;
+  totalPlantHours: number;
+  loadError?: string | null;
+  canApprove: boolean;
+  onApprove: (docket: Docket) => void;
+  onReject: (docket: Docket) => void;
+  onTapDocket: (docket: Docket) => void;
+  onRefresh: () => Promise<void>;
 }
 
 const statusColors: Record<string, string> = {
@@ -45,60 +46,54 @@ const statusColors: Record<string, string> = {
   pending_approval: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
   approved: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
   rejected: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200',
-}
+};
 
 const statusLabels: Record<string, string> = {
   draft: 'Draft',
   pending_approval: 'Pending',
   approved: 'Approved',
   rejected: 'Rejected',
-}
+};
 
 const filters = [
   { key: 'all', label: 'All' },
   { key: 'pending_approval', label: 'Pending' },
   { key: 'approved', label: 'Approved' },
   { key: 'rejected', label: 'Rejected' },
-]
+];
 
 function formatDateAU(dateStr: string): string {
   try {
-    const date = new Date(dateStr)
+    const date = new Date(dateStr);
     return date.toLocaleDateString('en-AU', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
-    })
+    });
   } catch {
-    return dateStr
+    return dateStr;
   }
 }
 
-function DocketCard({
-  docket,
-  onTap,
-}: {
-  docket: Docket
-  onTap: () => void
-}) {
-  const touchStartRef = useRef({ x: 0, y: 0 })
+function DocketCard({ docket, onTap }: { docket: Docket; onTap: () => void }) {
+  const touchStartRef = useRef({ x: 0, y: 0 });
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
-    }
-  }, [])
+    };
+  }, []);
 
   const handleClick = useCallback(() => {
-    onTap()
-  }, [onTap])
+    onTap();
+  }, [onTap]);
 
   return (
     <div
       className={cn(
         'bg-card border rounded-xl p-4 space-y-3',
-        'touch-manipulation active:scale-[0.98] transition-transform duration-100'
+        'touch-manipulation active:scale-[0.98] transition-transform duration-100',
       )}
       onTouchStart={handleTouchStart}
       onClick={handleClick}
@@ -106,15 +101,14 @@ function DocketCard({
       {/* Header: title + status badge */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-base truncate">
-            {docket.subcontractor}
-          </h3>
+          <h3 className="font-semibold text-base truncate">{docket.subcontractor}</h3>
           <p className="text-sm text-muted-foreground">{docket.docketNumber}</p>
         </div>
         <span
           className={cn(
             'text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap',
-            statusColors[docket.status] || 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
+            statusColors[docket.status] ||
+              'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
           )}
         >
           {statusLabels[docket.status] || docket.status}
@@ -124,26 +118,20 @@ function DocketCard({
       {/* Primary fields grid */}
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
-            Date
-          </p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Date</p>
           <p className="font-medium text-sm">{formatDateAU(docket.date)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
-            Labour
-          </p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Labour</p>
           <p className="font-medium text-sm">{docket.labourHours}h</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
-            Plant
-          </p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Plant</p>
           <p className="font-medium text-sm">{docket.plantHours}h</p>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function DocketApprovalsMobileView({
@@ -154,14 +142,14 @@ export function DocketApprovalsMobileView({
   pendingCount,
   totalLabourHours,
   totalPlantHours,
+  loadError,
   canApprove,
   onApprove,
   onReject,
   onTapDocket,
   onRefresh,
 }: DocketApprovalsMobileViewProps) {
-  const { containerRef, pullDistance, isRefreshing, progress } =
-    usePullToRefresh({ onRefresh })
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh });
 
   return (
     <div className="flex flex-col h-full">
@@ -178,26 +166,22 @@ export function DocketApprovalsMobileView({
       {/* B. Filter pills */}
       <div className="flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide">
         {filters.map((f) => {
-          const isActive = statusFilter === f.key
+          const isActive = statusFilter === f.key;
           const count =
-            f.key === 'pending_approval' && pendingCount > 0
-              ? ` (${pendingCount})`
-              : ''
+            f.key === 'pending_approval' && pendingCount > 0 ? ` (${pendingCount})` : '';
           return (
             <button
               key={f.key}
               onClick={() => setStatusFilter(f.key)}
               className={cn(
                 'px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors',
-                isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground'
+                isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
               )}
             >
               {f.label}
               {count}
             </button>
-          )
+          );
         })}
       </div>
 
@@ -232,8 +216,7 @@ export function DocketApprovalsMobileView({
         <div
           className="px-4 pb-24 space-y-3"
           style={{
-            transform:
-              pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+            transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
             transition: pullDistance === 0 ? 'transform 0.2s ease-out' : 'none',
           }}
         >
@@ -246,14 +229,33 @@ export function DocketApprovalsMobileView({
             </>
           )}
 
+          {loadError && !loading && (
+            <div
+              className="rounded-xl border border-destructive/30 bg-destructive/10 p-4"
+              role="alert"
+            >
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-destructive">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void onRefresh()}
+                    className="mt-3 rounded-md border border-destructive/40 px-3 py-1.5 text-sm font-medium text-destructive"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* F. Empty state */}
-          {!loading && filteredDockets.length === 0 && (
+          {!loadError && !loading && filteredDockets.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
               <p className="text-base font-medium text-muted-foreground">
-                {statusFilter === 'pending_approval'
-                  ? 'All caught up'
-                  : 'No dockets found'}
+                {statusFilter === 'pending_approval' ? 'All caught up' : 'No dockets found'}
               </p>
               <p className="text-sm text-muted-foreground/70 mt-1">
                 {statusFilter === 'pending_approval'
@@ -264,7 +266,8 @@ export function DocketApprovalsMobileView({
           )}
 
           {/* E. Docket cards */}
-          {!loading &&
+          {!loadError &&
+            !loading &&
             filteredDockets.map((docket) =>
               docket.status === 'pending_approval' ? (
                 <SwipeableCard
@@ -283,21 +286,14 @@ export function DocketApprovalsMobileView({
                   }}
                   disabled={!canApprove}
                 >
-                  <DocketCard
-                    docket={docket}
-                    onTap={() => onTapDocket(docket)}
-                  />
+                  <DocketCard docket={docket} onTap={() => onTapDocket(docket)} />
                 </SwipeableCard>
               ) : (
-                <DocketCard
-                  key={docket.id}
-                  docket={docket}
-                  onTap={() => onTapDocket(docket)}
-                />
-              )
+                <DocketCard key={docket.id} docket={docket} onTap={() => onTapDocket(docket)} />
+              ),
             )}
         </div>
       </div>
     </div>
-  )
+  );
 }

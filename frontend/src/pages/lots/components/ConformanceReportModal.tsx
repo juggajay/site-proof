@@ -1,10 +1,10 @@
-import { FileText } from 'lucide-react'
-import type { ConformanceFormat } from '@/lib/pdfGenerator'
+import { FileText } from 'lucide-react';
+import type { ConformanceFormat } from '@/lib/pdfGenerator';
 
 interface FormatOption {
-  value: ConformanceFormat
-  label: string
-  description: string
+  value: ConformanceFormat;
+  label: string;
+  description: string;
 }
 
 const FORMAT_OPTIONS: FormatOption[] = [
@@ -16,7 +16,8 @@ const FORMAT_OPTIONS: FormatOption[] = [
   {
     value: 'tmr',
     label: 'TMR (Queensland)',
-    description: 'Transport and Main Roads format - MRTS compliant with contractor/superintendent signature blocks',
+    description:
+      'Transport and Main Roads format - MRTS compliant with contractor/superintendent signature blocks',
   },
   {
     value: 'tfnsw',
@@ -33,14 +34,14 @@ const FORMAT_OPTIONS: FormatOption[] = [
     label: 'DIT (South Australia)',
     description: 'Department for Infrastructure and Transport Master Specification format',
   },
-]
+];
 
 interface ConformanceReportModalProps {
-  isOpen: boolean
-  selectedFormat: ConformanceFormat
-  onFormatChange: (format: ConformanceFormat) => void
-  onGenerate: () => void
-  onClose: () => void
+  isOpen: boolean;
+  selectedFormat: ConformanceFormat;
+  onFormatChange: (format: ConformanceFormat) => void;
+  onGenerate: () => void;
+  onClose: () => void;
 }
 
 export function ConformanceReportModal({
@@ -50,7 +51,7 @@ export function ConformanceReportModal({
   onGenerate,
   onClose,
 }: ConformanceReportModalProps) {
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -61,15 +62,15 @@ export function ConformanceReportModal({
           </div>
           <div>
             <h2 className="text-xl font-semibold">Generate Conformance Package</h2>
-            <p className="text-sm text-muted-foreground">Select output format for the conformance report</p>
+            <p className="text-sm text-muted-foreground">
+              Select output format for the conformance report
+            </p>
           </div>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">
-              Report Format
-            </label>
+            <label className="block text-sm font-medium mb-2">Report Format</label>
             <div className="space-y-2">
               {FORMAT_OPTIONS.map((option) => (
                 <label
@@ -99,10 +100,7 @@ export function ConformanceReportModal({
         </div>
 
         <div className="flex justify-end gap-3 mt-6">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded-lg hover:bg-muted"
-          >
+          <button onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-muted">
             Cancel
           </button>
           <button
@@ -114,5 +112,5 @@ export function ConformanceReportModal({
         </div>
       </div>
     </div>
-  )
+  );
 }

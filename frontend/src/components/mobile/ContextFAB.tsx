@@ -1,25 +1,25 @@
-import { useState, useCallback } from 'react'
-import { Plus, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useIsMobile } from '@/hooks/useMediaQuery'
+import { useState, useCallback } from 'react';
+import { Plus, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 
 /**
  * FAB Action item configuration
  */
 export interface FABAction {
-  id: string
-  label: string
-  icon: React.ReactNode
-  color: string // Tailwind bg class like 'bg-red-500'
-  onClick: () => void
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  color: string; // Tailwind bg class like 'bg-red-500'
+  onClick: () => void;
 }
 
 /**
  * ContextFAB Props
  */
 export interface ContextFABProps {
-  actions: FABAction[]
-  mainColor?: string
+  actions: FABAction[];
+  mainColor?: string;
 }
 
 /**
@@ -31,8 +31,8 @@ function triggerHaptic(intensity: 'light' | 'medium' | 'heavy' = 'medium') {
       light: 10,
       medium: 25,
       heavy: 50,
-    }
-    navigator.vibrate(durations[intensity])
+    };
+    navigator.vibrate(durations[intensity]);
   }
 }
 
@@ -95,7 +95,7 @@ const fabStyles = `
   .fab-backdrop-exit {
     animation: fab-backdrop-out 0.15s ease-in forwards;
   }
-`
+`;
 
 /**
  * ContextFAB - A floating action button for mobile construction app UI
@@ -110,62 +110,62 @@ const fabStyles = `
  * - Haptic feedback on interactions
  */
 export function ContextFAB({ actions, mainColor = 'bg-amber-500' }: ContextFABProps) {
-  const isMobile = useIsMobile()
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [isAnimatingOut, setIsAnimatingOut] = useState(false)
+  const isMobile = useIsMobile();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isAnimatingOut, setIsAnimatingOut] = useState(false);
 
   const handleMainClick = useCallback(() => {
-    triggerHaptic('medium')
+    triggerHaptic('medium');
 
     // Single action - trigger directly
     if (actions.length === 1) {
-      actions[0].onClick()
-      return
+      actions[0].onClick();
+      return;
     }
 
     // Multiple actions - toggle expand
     if (isExpanded) {
-      setIsAnimatingOut(true)
+      setIsAnimatingOut(true);
       setTimeout(() => {
-        setIsExpanded(false)
-        setIsAnimatingOut(false)
-      }, 150)
+        setIsExpanded(false);
+        setIsAnimatingOut(false);
+      }, 150);
     } else {
-      setIsExpanded(true)
+      setIsExpanded(true);
     }
-  }, [actions, isExpanded])
+  }, [actions, isExpanded]);
 
   const handleActionClick = useCallback((action: FABAction) => {
-    triggerHaptic('light')
-    action.onClick()
+    triggerHaptic('light');
+    action.onClick();
 
     // Close the FAB after action
-    setIsAnimatingOut(true)
+    setIsAnimatingOut(true);
     setTimeout(() => {
-      setIsExpanded(false)
-      setIsAnimatingOut(false)
-    }, 150)
-  }, [])
+      setIsExpanded(false);
+      setIsAnimatingOut(false);
+    }, 150);
+  }, []);
 
   const handleBackdropClick = useCallback(() => {
-    setIsAnimatingOut(true)
+    setIsAnimatingOut(true);
     setTimeout(() => {
-      setIsExpanded(false)
-      setIsAnimatingOut(false)
-    }, 150)
-  }, [])
+      setIsExpanded(false);
+      setIsAnimatingOut(false);
+    }, 150);
+  }, []);
 
   // Only render on mobile
   if (!isMobile) {
-    return null
+    return null;
   }
 
   // Don't render if no actions
   if (actions.length === 0) {
-    return null
+    return null;
   }
 
-  const showExpanded = isExpanded || isAnimatingOut
+  const showExpanded = isExpanded || isAnimatingOut;
 
   return (
     <>
@@ -177,7 +177,7 @@ export function ContextFAB({ actions, mainColor = 'bg-amber-500' }: ContextFABPr
         <div
           className={cn(
             'fixed inset-0 bg-black/60 z-40',
-            isAnimatingOut ? 'fab-backdrop-exit' : 'fab-backdrop-enter'
+            isAnimatingOut ? 'fab-backdrop-exit' : 'fab-backdrop-enter',
           )}
           onClick={handleBackdropClick}
           aria-hidden="true"
@@ -195,7 +195,7 @@ export function ContextFAB({ actions, mainColor = 'bg-amber-500' }: ContextFABPr
                 onClick={() => handleActionClick(action)}
                 className={cn(
                   'flex items-center gap-3 touch-manipulation',
-                  isAnimatingOut ? 'fab-action-exit' : 'fab-action-enter'
+                  isAnimatingOut ? 'fab-action-exit' : 'fab-action-enter',
                 )}
                 style={{
                   animationDelay: isAnimatingOut
@@ -209,7 +209,7 @@ export function ContextFAB({ actions, mainColor = 'bg-amber-500' }: ContextFABPr
                   className={cn(
                     'px-3 py-2 rounded-lg text-sm font-bold',
                     'bg-zinc-800 text-white shadow-lg',
-                    'border-2 border-zinc-700'
+                    'border-2 border-zinc-700',
                   )}
                 >
                   {action.label}
@@ -221,7 +221,7 @@ export function ContextFAB({ actions, mainColor = 'bg-amber-500' }: ContextFABPr
                     'w-12 h-12 rounded-xl flex items-center justify-center',
                     'shadow-lg border-2 border-black/20',
                     'active:scale-95 transition-transform duration-100',
-                    action.color
+                    action.color,
                   )}
                 >
                   <span className="text-white drop-shadow-sm">{action.icon}</span>
@@ -239,7 +239,7 @@ export function ContextFAB({ actions, mainColor = 'bg-amber-500' }: ContextFABPr
             'shadow-xl border-2 border-black/20',
             'active:scale-95 transition-all duration-200',
             'touch-manipulation',
-            mainColor
+            mainColor,
           )}
           style={{
             // Chunky shadow for industrial feel
@@ -248,12 +248,7 @@ export function ContextFAB({ actions, mainColor = 'bg-amber-500' }: ContextFABPr
           aria-label={isExpanded ? 'Close actions' : 'Open actions'}
           aria-expanded={isExpanded}
         >
-          <div
-            className={cn(
-              'transition-transform duration-200',
-              isExpanded && 'rotate-45'
-            )}
-          >
+          <div className={cn('transition-transform duration-200', isExpanded && 'rotate-45')}>
             {isExpanded ? (
               <X className="w-7 h-7 text-white drop-shadow-sm" strokeWidth={2.5} />
             ) : (
@@ -263,7 +258,7 @@ export function ContextFAB({ actions, mainColor = 'bg-amber-500' }: ContextFABPr
         </button>
       </div>
     </>
-  )
+  );
 }
 
-export default ContextFAB
+export default ContextFAB;

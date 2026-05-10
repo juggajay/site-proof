@@ -1,14 +1,14 @@
-import { Plus } from 'lucide-react'
-import type { Lot, LotSubcontractorAssignment } from '../types'
+import { Plus } from 'lucide-react';
+import type { Lot, LotSubcontractorAssignment } from '../types';
 
 export interface SubcontractorAssignmentsSectionProps {
-  lot: Lot
-  assignments: LotSubcontractorAssignment[]
-  canManageLot: boolean
-  removeAssignmentPending: boolean
-  onAddSubcontractor: () => void
-  onEditAssignment: (assignment: LotSubcontractorAssignment) => void
-  onRemoveAssignment: (assignmentId: string) => void
+  lot: Lot;
+  assignments: LotSubcontractorAssignment[];
+  canManageLot: boolean;
+  removeAssignmentPending: boolean;
+  onAddSubcontractor: () => void;
+  onEditAssignment: (assignment: LotSubcontractorAssignment) => void;
+  onRemoveAssignment: (assignmentId: string) => void;
 }
 
 export function SubcontractorAssignmentsSection({
@@ -36,29 +36,36 @@ export function SubcontractorAssignmentsSection({
       </div>
 
       {/* Show legacy assignment if exists but not in new assignments table */}
-      {lot.assignedSubcontractor && !assignments.some(a => a.subcontractorCompany.id === lot.assignedSubcontractorId) && (
-        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-amber-800">{lot.assignedSubcontractor.companyName}</div>
-              <div className="text-sm text-amber-600">
-                Legacy assignment - click Add to set ITP permissions
+      {lot.assignedSubcontractor &&
+        !assignments.some((a) => a.subcontractorCompany.id === lot.assignedSubcontractorId) && (
+          <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-amber-800">
+                  {lot.assignedSubcontractor.companyName}
+                </div>
+                <div className="text-sm text-amber-600">
+                  Legacy assignment - click Add to set ITP permissions
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {assignments.length === 0 && !lot.assignedSubcontractor ? (
         <p className="text-sm text-muted-foreground">No subcontractors assigned</p>
       ) : assignments.length > 0 ? (
         <div className="space-y-2">
-          {assignments.map(assignment => (
-            <div key={assignment.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
+          {assignments.map((assignment) => (
+            <div
+              key={assignment.id}
+              className="flex items-center justify-between p-3 bg-muted rounded-md"
+            >
               <div>
                 <div className="font-medium">{assignment.subcontractorCompany.companyName}</div>
                 <div className="text-sm text-muted-foreground">
-                  ITP: {assignment.canCompleteITP ? (
+                  ITP:{' '}
+                  {assignment.canCompleteITP ? (
                     <>
                       <span className="text-green-600">Can complete</span>
                       {assignment.itpRequiresVerification && (
@@ -92,5 +99,5 @@ export function SubcontractorAssignmentsSection({
         </div>
       ) : null}
     </div>
-  )
+  );
 }

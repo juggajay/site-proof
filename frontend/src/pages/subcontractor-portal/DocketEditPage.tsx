@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Users,
@@ -12,95 +12,96 @@ import {
   AlertCircle,
   Check,
   X,
-} from 'lucide-react'
-import { apiFetch } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { extractErrorMessage, handleApiError } from '@/lib/errorHandling'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { NativeSelect } from '@/components/ui/native-select'
+} from 'lucide-react';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
+import { logError } from '@/lib/logger';
 
 interface Employee {
-  id: string
-  name: string
-  role: string
-  hourlyRate: number
-  status: string
+  id: string;
+  name: string;
+  role: string;
+  hourlyRate: number;
+  status: string;
 }
 
 interface Plant {
-  id: string
-  type: string
-  description: string
-  idRego: string
-  dryRate: number
-  wetRate: number
-  status: string
+  id: string;
+  type: string;
+  description: string;
+  idRego: string;
+  dryRate: number;
+  wetRate: number;
+  status: string;
 }
 
 interface Lot {
-  id: string
-  lotNumber: string
-  activity?: string
+  id: string;
+  lotNumber: string;
+  activity?: string;
 }
 
 interface LabourEntry {
-  id: string
+  id: string;
   employee: {
-    id: string
-    name: string
-    role: string
-    hourlyRate: number
-  }
-  startTime: string
-  finishTime: string
-  submittedHours: number
-  hourlyRate: number
-  submittedCost: number
+    id: string;
+    name: string;
+    role: string;
+    hourlyRate: number;
+  };
+  startTime: string;
+  finishTime: string;
+  submittedHours: number;
+  hourlyRate: number;
+  submittedCost: number;
   lotAllocations: Array<{
-    lotId: string
-    lotNumber: string
-    hours: number
-  }>
+    lotId: string;
+    lotNumber: string;
+    hours: number;
+  }>;
 }
 
 interface PlantEntry {
-  id: string
+  id: string;
   plant: {
-    id: string
-    type: string
-    description: string
-    dryRate: number
-    wetRate: number
-  }
-  hoursOperated: number
-  wetOrDry: 'dry' | 'wet'
-  hourlyRate: number
-  submittedCost: number
+    id: string;
+    type: string;
+    description: string;
+    dryRate: number;
+    wetRate: number;
+  };
+  hoursOperated: number;
+  wetOrDry: 'dry' | 'wet';
+  hourlyRate: number;
+  submittedCost: number;
 }
 
 interface Docket {
-  id: string
-  docketNumber: string
-  date: string
-  status: string
-  notes?: string
-  foremanNotes?: string
-  totalLabourSubmitted: number
-  totalPlantSubmitted: number
-  labourEntries: LabourEntry[]
-  plantEntries: PlantEntry[]
+  id: string;
+  docketNumber: string;
+  date: string;
+  status: string;
+  notes?: string;
+  foremanNotes?: string;
+  totalLabourSubmitted: number;
+  totalPlantSubmitted: number;
+  labourEntries: LabourEntry[];
+  plantEntries: PlantEntry[];
 }
 
 interface Company {
-  id: string
-  projectId: string
-  projectName: string
-  employees: Employee[]
-  plant: Plant[]
+  id: string;
+  projectId: string;
+  projectName: string;
+  employees: Employee[];
+  plant: Plant[];
 }
 
 function formatCurrency(amount: number) {
@@ -109,26 +110,54 @@ function formatCurrency(amount: number) {
     currency: 'AUD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount)
+  }).format(amount);
 }
 
 function formatDate(dateString: string) {
-  const date = new Date(dateString)
+  const date = new Date(dateString);
   return date.toLocaleDateString('en-AU', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-  })
+  });
 }
 
 function calculateHours(startTime: string, finishTime: string): number {
-  if (!startTime || !finishTime) return 0
-  const [startH, startM] = startTime.split(':').map(Number)
-  const [finishH, finishM] = finishTime.split(':').map(Number)
-  let hours = (finishH + finishM / 60) - (startH + startM / 60)
-  if (hours < 0) hours += 24 // Handle overnight
-  return Math.round(hours * 10) / 10 // Round to 1 decimal
+  if (!startTime || !finishTime) return 0;
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [finishH, finishM] = finishTime.split(':').map(Number);
+  let hours = finishH + finishM / 60 - (startH + startM / 60);
+  if (hours < 0) hours += 24; // Handle overnight
+  return Math.round(hours * 10) / 10; // Round to 1 decimal
+}
+
+const DAILY_HOURS_PATTERN = /^\d+(?:\.\d+)?$/;
+const PLANT_HOURS_INPUT_ERROR = 'Hours operated must be greater than 0 and 24 or less.';
+
+function parseDailyHoursInput(value: string): number | null {
+  const normalized = value.trim();
+  if (!normalized || !DAILY_HOURS_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 24 ? parsed : null;
+}
+
+function getPlantHoursError(value: string): string | null {
+  const normalized = value.trim();
+  if (!normalized) {
+    return 'Hours operated is required.';
+  }
+  if (normalized.startsWith('-')) {
+    return 'Hours operated cannot be negative.';
+  }
+  return parseDailyHoursInput(value) === null ? PLANT_HOURS_INPUT_ERROR : null;
+}
+
+function isEditableDocketStatus(status?: string) {
+  return !status || status === 'draft' || status === 'queried' || status === 'rejected';
 }
 
 // Common time presets
@@ -137,58 +166,58 @@ const TIME_PRESETS = [
   { label: '7am-3pm', start: '07:00', finish: '15:00' },
   { label: '7am-5pm', start: '07:00', finish: '17:00' },
   { label: '6am-6pm', start: '06:00', finish: '18:00' },
-]
+];
 
 export function DocketEditPage() {
-  const navigate = useNavigate()
-  const { docketId } = useParams()
-  const isNewDocket = !docketId || docketId === 'new'
+  const navigate = useNavigate();
+  const { docketId } = useParams();
+  const isNewDocket = !docketId || docketId === 'new';
 
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [company, setCompany] = useState<Company | null>(null)
-  const [docket, setDocket] = useState<Docket | null>(null)
-  const [assignedLots, setAssignedLots] = useState<Lot[]>([])
-  const [notes, setNotes] = useState('')
-  const [activeTab, setActiveTab] = useState('labour')
+  const [company, setCompany] = useState<Company | null>(null);
+  const [docket, setDocket] = useState<Docket | null>(null);
+  const [assignedLots, setAssignedLots] = useState<Lot[]>([]);
+  const [notes, setNotes] = useState('');
+  const [activeTab, setActiveTab] = useState('labour');
 
   // Query response state
-  const [queryResponse, setQueryResponse] = useState('')
-  const [respondingToQuery, setRespondingToQuery] = useState(false)
+  const [queryResponse, setQueryResponse] = useState('');
+  const [respondingToQuery, setRespondingToQuery] = useState(false);
 
   // Entry sheet state
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [sheetType, setSheetType] = useState<'labour' | 'plant'>('labour')
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
-  const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null)
-  const [startTime, setStartTime] = useState('07:00')
-  const [finishTime, setFinishTime] = useState('15:30')
-  const [hoursOperated, setHoursOperated] = useState('8')
-  const [wetOrDry, setWetOrDry] = useState<'dry' | 'wet'>('dry')
-  const [selectedLotId, setSelectedLotId] = useState<string>('')
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetType, setSheetType] = useState<'labour' | 'plant'>('labour');
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
+  const [startTime, setStartTime] = useState('07:00');
+  const [finishTime, setFinishTime] = useState('15:30');
+  const [hoursOperated, setHoursOperated] = useState('8');
+  const [wetOrDry, setWetOrDry] = useState<'dry' | 'wet'>('dry');
+  const [selectedLotId, setSelectedLotId] = useState<string>('');
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toISOString().split('T')[0];
 
   // Fetch initial data
   useEffect(() => {
     async function fetchData() {
       try {
         // Fetch company data
-        const companyData = await apiFetch<{ company: Company }>(`/api/subcontractors/my-company`)
-        setCompany(companyData.company)
+        const companyData = await apiFetch<{ company: Company }>(`/api/subcontractors/my-company`);
+        setCompany(companyData.company);
 
         // Fetch assigned lots
         try {
           const lotsData = await apiFetch<{ lots: Lot[] }>(
-            `/api/lots?projectId=${companyData.company.projectId}`
-          )
-          setAssignedLots(lotsData.lots || [])
+            `/api/lots?projectId=${companyData.company.projectId}`,
+          );
+          setAssignedLots(lotsData.lots || []);
           // Auto-select if only one lot
           if (lotsData.lots?.length === 1) {
-            setSelectedLotId(lotsData.lots[0].id)
+            setSelectedLotId(lotsData.lots[0].id);
           }
         } catch {
           // Lots fetch failed, continue with empty
@@ -197,41 +226,41 @@ export function DocketEditPage() {
         // If editing existing docket, fetch it
         if (!isNewDocket) {
           try {
-            const docketData = await apiFetch<{ docket: Docket }>(`/api/dockets/${docketId}`)
-            setDocket(docketData.docket)
-            setNotes(docketData.docket.notes || '')
+            const docketData = await apiFetch<{ docket: Docket }>(`/api/dockets/${docketId}`);
+            setDocket(docketData.docket);
+            setNotes(docketData.docket.notes || '');
           } catch {
-            setError('Docket not found')
+            setError('Docket not found');
           }
         } else {
           // Check if a docket already exists for today
           try {
             const existingData = await apiFetch<{ dockets: Docket[] }>(
-              `/api/dockets?projectId=${companyData.company.projectId}`
-            )
-            const todayDocket = existingData.dockets.find((d: Docket) => d.date === today)
+              `/api/dockets?projectId=${companyData.company.projectId}`,
+            );
+            const todayDocket = existingData.dockets.find((d: Docket) => d.date === today);
             if (todayDocket) {
               // Redirect to existing docket
-              navigate(`/subcontractor-portal/docket/${todayDocket.id}`, { replace: true })
-              return
+              navigate(`/subcontractor-portal/docket/${todayDocket.id}`, { replace: true });
+              return;
             }
           } catch {
             // Existing dockets fetch failed, continue
           }
         }
       } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load data'))
+        setError(extractErrorMessage(err, 'Failed to load data'));
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
 
-    fetchData()
-  }, [docketId, isNewDocket, navigate, today])
+    fetchData();
+  }, [docketId, isNewDocket, navigate, today]);
 
   // Create docket if new
   const ensureDocket = useCallback(async () => {
-    if (docket) return docket
+    if (docket) return docket;
 
     try {
       const data = await apiFetch<{ docket: Docket }>(`/api/dockets`, {
@@ -241,7 +270,7 @@ export function DocketEditPage() {
           date: today,
           notes,
         }),
-      })
+      });
 
       const newDocket: Docket = {
         ...data.docket,
@@ -249,16 +278,53 @@ export function DocketEditPage() {
         plantEntries: [],
         totalLabourSubmitted: 0,
         totalPlantSubmitted: 0,
-      }
-      setDocket(newDocket)
+      };
+      setDocket(newDocket);
       // Update URL to show docket ID
-      navigate(`/subcontractor-portal/docket/${newDocket.id}`, { replace: true })
-      return newDocket
+      navigate(`/subcontractor-portal/docket/${newDocket.id}`, { replace: true });
+      return newDocket;
     } catch (err) {
-      console.error('Error creating docket:', err)
-      throw err
+      logError('Error creating docket:', err);
+      throw err;
     }
-  }, [docket, company, today, notes, navigate])
+  }, [docket, company, today, notes, navigate]);
+
+  const saveDocketNotes = useCallback(
+    async (targetDocket?: Docket | null) => {
+      const currentDocket = targetDocket || docket;
+      if (!currentDocket || !isEditableDocketStatus(currentDocket.status)) {
+        return currentDocket;
+      }
+
+      const currentNotes = currentDocket.notes || '';
+      if (currentNotes === notes) {
+        return currentDocket;
+      }
+
+      const data = await apiFetch<{ docket: Docket }>(`/api/dockets/${currentDocket.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ notes }),
+      });
+
+      const updatedDocket = {
+        ...currentDocket,
+        notes: data.docket.notes || '',
+      };
+
+      setDocket((prev) =>
+        prev?.id === currentDocket.id ? { ...prev, notes: updatedDocket.notes } : prev,
+      );
+      return updatedDocket;
+    },
+    [docket, notes],
+  );
+
+  const handleNotesBlur = () => {
+    if (!docket || !isEditableDocketStatus(docket.status)) return;
+    void saveDocketNotes(docket).catch((err) => {
+      handleApiError(err, 'Failed to save docket notes');
+    });
+  };
 
   // Add labour entry
   const addLabourEntry = async () => {
@@ -267,44 +333,47 @@ export function DocketEditPage() {
         title: 'Missing information',
         description: 'Please select an employee and a lot',
         variant: 'error',
-      })
-      return
+      });
+      return;
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
-      const currentDocket = await ensureDocket()
-      const hours = calculateHours(startTime, finishTime)
+      const currentDocket = await ensureDocket();
+      const hours = calculateHours(startTime, finishTime);
 
-      const data = await apiFetch<{ labourEntry: LabourEntry; runningTotal: { cost: number } }>(`/api/dockets/${currentDocket.id}/labour`, {
-        method: 'POST',
-        body: JSON.stringify({
-          employeeId: selectedEmployee.id,
-          startTime,
-          finishTime,
-          lotAllocations: [{ lotId: selectedLotId, hours }],
-        }),
-      })
+      const data = await apiFetch<{ labourEntry: LabourEntry; runningTotal: { cost: number } }>(
+        `/api/dockets/${currentDocket.id}/labour`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            employeeId: selectedEmployee.id,
+            startTime,
+            finishTime,
+            lotAllocations: [{ lotId: selectedLotId, hours }],
+          }),
+        },
+      );
 
       // Update local state
-      setDocket(prev => {
-        if (!prev) return prev
+      setDocket((prev) => {
+        if (!prev) return prev;
         return {
           ...prev,
           labourEntries: [...prev.labourEntries, data.labourEntry],
           totalLabourSubmitted: data.runningTotal.cost,
-        }
-      })
+        };
+      });
 
-      setSheetOpen(false)
-      resetSheetState()
-      toast({ title: 'Labour entry added', variant: 'success' })
+      setSheetOpen(false);
+      resetSheetState();
+      toast({ title: 'Labour entry added', variant: 'success' });
     } catch (err) {
-      handleApiError(err, 'Failed to add labour entry')
+      handleApiError(err, 'Failed to add labour entry');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   // Add plant entry
   const addPlantEntry = async () => {
@@ -313,100 +382,113 @@ export function DocketEditPage() {
         title: 'Missing information',
         description: 'Please select plant/equipment',
         variant: 'error',
-      })
-      return
+      });
+      return;
     }
 
-    setSaving(true)
-    try {
-      const currentDocket = await ensureDocket()
+    const parsedHoursOperated = parseDailyHoursInput(hoursOperated);
+    if (parsedHoursOperated === null) {
+      toast({
+        title: 'Invalid hours operated',
+        description: PLANT_HOURS_INPUT_ERROR,
+        variant: 'warning',
+      });
+      return;
+    }
 
-      const data = await apiFetch<{ plantEntry: PlantEntry; runningTotal: { cost: number } }>(`/api/dockets/${currentDocket.id}/plant`, {
-        method: 'POST',
-        body: JSON.stringify({
-          plantId: selectedPlant.id,
-          hoursOperated: parseFloat(hoursOperated),
-          wetOrDry,
-        }),
-      })
+    setSaving(true);
+    try {
+      const currentDocket = await ensureDocket();
+
+      const data = await apiFetch<{ plantEntry: PlantEntry; runningTotal: { cost: number } }>(
+        `/api/dockets/${currentDocket.id}/plant`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            plantId: selectedPlant.id,
+            hoursOperated: parsedHoursOperated,
+            wetOrDry,
+          }),
+        },
+      );
 
       // Update local state
-      setDocket(prev => {
-        if (!prev) return prev
+      setDocket((prev) => {
+        if (!prev) return prev;
         return {
           ...prev,
           plantEntries: [...prev.plantEntries, data.plantEntry],
           totalPlantSubmitted: data.runningTotal.cost,
-        }
-      })
+        };
+      });
 
-      setSheetOpen(false)
-      resetSheetState()
-      toast({ title: 'Plant entry added', variant: 'success' })
+      setSheetOpen(false);
+      resetSheetState();
+      toast({ title: 'Plant entry added', variant: 'success' });
     } catch (err) {
-      handleApiError(err, 'Failed to add plant entry')
+      handleApiError(err, 'Failed to add plant entry');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   // Delete labour entry
   const deleteLabourEntry = async (entryId: string) => {
-    if (!docket) return
+    if (!docket) return;
 
     try {
       await apiFetch(`/api/dockets/${docket.id}/labour/${entryId}`, {
         method: 'DELETE',
-      })
+      });
 
       // Update local state
-      setDocket(prev => {
-        if (!prev) return prev
-        const removed = prev.labourEntries.find(e => e.id === entryId)
-        const newTotal = prev.totalLabourSubmitted - (removed?.submittedCost || 0)
+      setDocket((prev) => {
+        if (!prev) return prev;
+        const removed = prev.labourEntries.find((e) => e.id === entryId);
+        const newTotal = prev.totalLabourSubmitted - (removed?.submittedCost || 0);
         return {
           ...prev,
-          labourEntries: prev.labourEntries.filter(e => e.id !== entryId),
+          labourEntries: prev.labourEntries.filter((e) => e.id !== entryId),
           totalLabourSubmitted: newTotal,
-        }
-      })
+        };
+      });
 
-      toast({ title: 'Entry deleted', variant: 'success' })
+      toast({ title: 'Entry deleted', variant: 'success' });
     } catch (err) {
-      handleApiError(err, 'Failed to delete entry')
+      handleApiError(err, 'Failed to delete entry');
     }
-  }
+  };
 
   // Delete plant entry
   const deletePlantEntry = async (entryId: string) => {
-    if (!docket) return
+    if (!docket) return;
 
     try {
       await apiFetch(`/api/dockets/${docket.id}/plant/${entryId}`, {
         method: 'DELETE',
-      })
+      });
 
       // Update local state
-      setDocket(prev => {
-        if (!prev) return prev
-        const removed = prev.plantEntries.find(e => e.id === entryId)
-        const newTotal = prev.totalPlantSubmitted - (removed?.submittedCost || 0)
+      setDocket((prev) => {
+        if (!prev) return prev;
+        const removed = prev.plantEntries.find((e) => e.id === entryId);
+        const newTotal = prev.totalPlantSubmitted - (removed?.submittedCost || 0);
         return {
           ...prev,
-          plantEntries: prev.plantEntries.filter(e => e.id !== entryId),
+          plantEntries: prev.plantEntries.filter((e) => e.id !== entryId),
           totalPlantSubmitted: newTotal,
-        }
-      })
+        };
+      });
 
-      toast({ title: 'Entry deleted', variant: 'success' })
+      toast({ title: 'Entry deleted', variant: 'success' });
     } catch (err) {
-      handleApiError(err, 'Failed to delete entry')
+      handleApiError(err, 'Failed to delete entry');
     }
-  }
+  };
 
   // Submit docket
   const submitDocket = async () => {
-    if (!docket) return
+    if (!docket) return;
 
     // Validation
     if (docket.labourEntries.length === 0 && docket.plantEntries.length === 0) {
@@ -414,104 +496,115 @@ export function DocketEditPage() {
         title: 'Cannot submit',
         description: 'Add at least one labour or plant entry',
         variant: 'error',
-      })
-      return
+      });
+      return;
     }
 
-    setSubmitting(true)
+    setSubmitting(true);
     try {
+      await saveDocketNotes(docket);
       await apiFetch(`/api/dockets/${docket.id}/submit`, {
         method: 'POST',
-      })
+      });
 
       toast({
         title: 'Docket submitted',
         description: 'Your docket has been sent for approval',
         variant: 'success',
-      })
+      });
 
-      navigate('/subcontractor-portal')
+      navigate('/subcontractor-portal');
     } catch (err) {
-      handleApiError(err, 'Failed to submit docket')
+      handleApiError(err, 'Failed to submit docket');
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   // Respond to a query
   const respondToQuery = async () => {
-    if (!docket || !queryResponse.trim()) return
+    if (!docket || !queryResponse.trim()) return;
 
-    setRespondingToQuery(true)
+    setRespondingToQuery(true);
     try {
+      await saveDocketNotes(docket);
       await apiFetch(`/api/dockets/${docket.id}/respond`, {
         method: 'POST',
         body: JSON.stringify({ response: queryResponse.trim() }),
-      })
+      });
 
       toast({
         title: 'Response sent',
         description: 'Your docket has been resubmitted for approval',
         variant: 'success',
-      })
+      });
 
-      navigate('/subcontractor-portal')
+      navigate('/subcontractor-portal');
     } catch (err) {
-      handleApiError(err, 'Failed to respond to query')
+      handleApiError(err, 'Failed to respond to query');
     } finally {
-      setRespondingToQuery(false)
+      setRespondingToQuery(false);
     }
-  }
+  };
 
   const resetSheetState = () => {
-    setSelectedEmployee(null)
-    setSelectedPlant(null)
-    setStartTime('07:00')
-    setFinishTime('15:30')
-    setHoursOperated('8')
-    setWetOrDry('dry')
-    setSelectedLotId(assignedLots.length === 1 ? assignedLots[0].id : '')
-  }
+    setSelectedEmployee(null);
+    setSelectedPlant(null);
+    setStartTime('07:00');
+    setFinishTime('15:30');
+    setHoursOperated('8');
+    setWetOrDry('dry');
+    setSelectedLotId(assignedLots.length === 1 ? assignedLots[0].id : '');
+  };
 
   const openAddLabour = (emp?: Employee) => {
-    resetSheetState()
-    if (emp) setSelectedEmployee(emp)
-    setSheetType('labour')
-    setSheetOpen(true)
-  }
+    resetSheetState();
+    if (emp) setSelectedEmployee(emp);
+    setSheetType('labour');
+    setSheetOpen(true);
+  };
 
   const openAddPlant = (plant?: Plant) => {
-    resetSheetState()
-    if (plant) setSelectedPlant(plant)
-    setSheetType('plant')
-    setSheetOpen(true)
-  }
+    resetSheetState();
+    if (plant) setSelectedPlant(plant);
+    setSheetType('plant');
+    setSheetOpen(true);
+  };
 
   // Get approved employees/plant only
-  const approvedEmployees = company?.employees.filter(e => e.status === 'approved') || []
-  const approvedPlant = company?.plant.filter(p => p.status === 'approved') || []
+  const approvedEmployees = company?.employees.filter((e) => e.status === 'approved') || [];
+  const approvedPlant = company?.plant.filter((p) => p.status === 'approved') || [];
+  const plantHoursError = sheetType === 'plant' ? getPlantHoursError(hoursOperated) : null;
 
   // Calculate sheet preview
-  const previewHours = sheetType === 'labour'
-    ? calculateHours(startTime, finishTime)
-    : parseFloat(hoursOperated) || 0
+  const previewHours =
+    sheetType === 'labour'
+      ? calculateHours(startTime, finishTime)
+      : parseDailyHoursInput(hoursOperated) || 0;
 
-  const previewCost = sheetType === 'labour'
-    ? previewHours * (selectedEmployee?.hourlyRate || 0)
-    : previewHours * (wetOrDry === 'wet' ? (selectedPlant?.wetRate || selectedPlant?.dryRate || 0) : (selectedPlant?.dryRate || 0))
+  const previewCost =
+    sheetType === 'labour'
+      ? previewHours * (selectedEmployee?.hourlyRate || 0)
+      : previewHours *
+        (wetOrDry === 'wet'
+          ? selectedPlant?.wetRate || selectedPlant?.dryRate || 0
+          : selectedPlant?.dryRate || 0);
 
   // Total cost
-  const totalCost = (docket?.totalLabourSubmitted || 0) + (docket?.totalPlantSubmitted || 0)
+  const totalCost = (docket?.totalLabourSubmitted || 0) + (docket?.totalPlantSubmitted || 0);
 
-  const canEdit = !docket || docket.status === 'draft' || docket.status === 'queried' || docket.status === 'rejected'
-  const canSubmit = docket && (docket.status === 'draft' || docket.status === 'rejected') && (docket.labourEntries.length > 0 || docket.plantEntries.length > 0)
+  const canEdit = isEditableDocketStatus(docket?.status);
+  const canSubmit =
+    docket &&
+    (docket.status === 'draft' || docket.status === 'rejected') &&
+    (docket.labourEntries.length > 0 || docket.plantEntries.length > 0);
 
   if (loading) {
     return (
       <div className="container max-w-2xl mx-auto p-4 flex items-center justify-center min-h-[50vh]">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -529,7 +622,7 @@ export function DocketEditPage() {
           Back to Portal
         </Link>
       </div>
-    )
+    );
   }
 
   return (
@@ -546,26 +639,34 @@ export function DocketEditPage() {
           <h1 className="text-lg font-semibold text-foreground">
             {isNewDocket ? "Today's Docket" : `Docket ${docket?.docketNumber || ''}`}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {formatDate(docket?.date || today)}
-          </p>
+          <p className="text-sm text-muted-foreground">{formatDate(docket?.date || today)}</p>
         </div>
         {docket && (
           <span
             className={cn(
               'ml-auto px-2.5 py-1 text-xs font-medium rounded-full',
-              docket.status === 'approved' && 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
-              docket.status === 'pending_approval' && 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-              docket.status === 'queried' && 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-              docket.status === 'rejected' && 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
-              docket.status === 'draft' && 'bg-muted text-foreground'
+              docket.status === 'approved' &&
+                'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
+              docket.status === 'pending_approval' &&
+                'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+              docket.status === 'queried' &&
+                'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+              docket.status === 'rejected' &&
+                'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
+              docket.status === 'draft' && 'bg-muted text-foreground',
             )}
           >
-            {docket.status === 'draft' ? 'Draft' :
-             docket.status === 'pending_approval' ? 'Pending' :
-             docket.status === 'queried' ? 'Queried' :
-             docket.status === 'rejected' ? 'Rejected' :
-             docket.status === 'approved' ? 'Approved' : docket.status}
+            {docket.status === 'draft'
+              ? 'Draft'
+              : docket.status === 'pending_approval'
+                ? 'Pending'
+                : docket.status === 'queried'
+                  ? 'Queried'
+                  : docket.status === 'rejected'
+                    ? 'Rejected'
+                    : docket.status === 'approved'
+                      ? 'Approved'
+                      : docket.status}
           </span>
         )}
       </div>
@@ -576,7 +677,8 @@ export function DocketEditPage() {
           <div className="flex items-start gap-3 p-4">
             <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-amber-800 dark:text-amber-200">
-              <strong>Query from foreman:</strong> {docket.foremanNotes || 'Please review this docket'}
+              <strong>Query from foreman:</strong>{' '}
+              {docket.foremanNotes || 'Please review this docket'}
             </div>
           </div>
           <div className="px-4 pb-4 space-y-3">
@@ -594,7 +696,7 @@ export function DocketEditPage() {
                 'w-full',
                 queryResponse.trim() && !respondingToQuery
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                  : ''
+                  : '',
               )}
             >
               {respondingToQuery ? (
@@ -631,7 +733,8 @@ export function DocketEditPage() {
         <div className="flex items-start gap-3 p-4 mb-4 bg-primary/5 border border-primary/30 rounded-lg">
           <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <p className="text-primary">
-            No lots have been assigned to you yet. Contact your project manager to get lot assignments.
+            No lots have been assigned to you yet. Contact your project manager to get lot
+            assignments.
           </p>
         </div>
       )}
@@ -645,7 +748,7 @@ export function DocketEditPage() {
               'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
               activeTab === 'labour'
                 ? 'bg-card text-foreground shadow'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
             )}
           >
             <Users className="h-4 w-4" />
@@ -662,7 +765,7 @@ export function DocketEditPage() {
               'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
               activeTab === 'plant'
                 ? 'bg-card text-foreground shadow'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
             )}
           >
             <Truck className="h-4 w-4" />
@@ -679,7 +782,7 @@ export function DocketEditPage() {
               'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
               activeTab === 'summary'
                 ? 'bg-card text-foreground shadow'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
             )}
           >
             <FileText className="h-4 w-4" />
@@ -695,7 +798,9 @@ export function DocketEditPage() {
                 <p className="text-sm text-muted-foreground mb-3">Tap an employee to add hours</p>
                 <div className="grid grid-cols-2 gap-2">
                   {approvedEmployees.map((emp) => {
-                    const alreadyAdded = docket?.labourEntries.some(e => e.employee.id === emp.id)
+                    const alreadyAdded = docket?.labourEntries.some(
+                      (e) => e.employee.id === emp.id,
+                    );
                     return (
                       <button
                         key={emp.id}
@@ -704,7 +809,7 @@ export function DocketEditPage() {
                           'relative p-3 rounded-lg border text-left transition-colors min-h-[60px]',
                           alreadyAdded
                             ? 'bg-primary/5 border-primary'
-                            : 'hover:border-primary hover:bg-muted/50 border-border'
+                            : 'hover:border-primary hover:bg-muted/50 border-border',
                         )}
                       >
                         <p className="font-medium text-sm text-foreground truncate">{emp.name}</p>
@@ -714,7 +819,7 @@ export function DocketEditPage() {
                           <Check className="h-4 w-4 text-primary absolute top-2 right-2" />
                         )}
                       </button>
-                    )
+                    );
                   })}
                 </div>
               </div>
@@ -725,7 +830,10 @@ export function DocketEditPage() {
                 <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <p className="text-primary">
                   No approved employees yet. Add employees in{' '}
-                  <Link to="/my-company" className="underline">My Company</Link> and wait for rate approval.
+                  <Link to="/my-company" className="underline">
+                    My Company
+                  </Link>{' '}
+                  and wait for rate approval.
                 </p>
               </div>
             )}
@@ -743,12 +851,13 @@ export function DocketEditPage() {
                           {entry.startTime} - {entry.finishTime}
                         </p>
                         <p className="text-sm text-foreground">
-                          {entry.submittedHours}h × ${entry.hourlyRate}/hr = {formatCurrency(entry.submittedCost)}
+                          {entry.submittedHours}h × ${entry.hourlyRate}/hr ={' '}
+                          {formatCurrency(entry.submittedCost)}
                         </p>
                         {entry.lotAllocations.length > 0 && (
                           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                             <MapPin className="h-3 w-3" />
-                            {entry.lotAllocations.map(a => a.lotNumber).join(', ')}
+                            {entry.lotAllocations.map((a) => a.lotNumber).join(', ')}
                           </p>
                         )}
                       </div>
@@ -767,7 +876,9 @@ export function DocketEditPage() {
                 ))}
                 <div className="text-right p-2">
                   <p className="text-sm text-muted-foreground">Labour Subtotal</p>
-                  <p className="text-lg font-semibold text-foreground">{formatCurrency(docket.totalLabourSubmitted)}</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    {formatCurrency(docket.totalLabourSubmitted)}
+                  </p>
                 </div>
               </div>
             )}
@@ -782,7 +893,7 @@ export function DocketEditPage() {
                 <p className="text-sm text-muted-foreground mb-3">Tap equipment to add hours</p>
                 <div className="grid grid-cols-2 gap-2">
                   {approvedPlant.map((plant) => {
-                    const alreadyAdded = docket?.plantEntries.some(e => e.plant.id === plant.id)
+                    const alreadyAdded = docket?.plantEntries.some((e) => e.plant.id === plant.id);
                     return (
                       <button
                         key={plant.id}
@@ -791,16 +902,19 @@ export function DocketEditPage() {
                           'relative p-3 rounded-lg border text-left transition-colors min-h-[60px]',
                           alreadyAdded
                             ? 'bg-primary/5 border-primary'
-                            : 'hover:border-primary hover:bg-muted/50 border-border'
+                            : 'hover:border-primary hover:bg-muted/50 border-border',
                         )}
                       >
                         <p className="font-medium text-sm text-foreground truncate">{plant.type}</p>
-                        <p className="text-xs text-muted-foreground truncate">{plant.description}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {plant.description}
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          ${plant.dryRate}{plant.wetRate > 0 ? `/$${plant.wetRate}` : ''}/hr
+                          ${plant.dryRate}
+                          {plant.wetRate > 0 ? `/$${plant.wetRate}` : ''}/hr
                         </p>
                       </button>
-                    )
+                    );
                   })}
                 </div>
               </div>
@@ -811,7 +925,10 @@ export function DocketEditPage() {
                 <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <p className="text-primary">
                   No approved plant yet. Add plant in{' '}
-                  <Link to="/my-company" className="underline">My Company</Link> and wait for rate approval.
+                  <Link to="/my-company" className="underline">
+                    My Company
+                  </Link>{' '}
+                  and wait for rate approval.
                 </p>
               </div>
             )}
@@ -827,7 +944,8 @@ export function DocketEditPage() {
                         <p className="font-medium text-foreground">{entry.plant.type}</p>
                         <p className="text-sm text-muted-foreground">{entry.plant.description}</p>
                         <p className="text-sm text-foreground">
-                          {entry.hoursOperated}h × ${entry.hourlyRate}/hr ({entry.wetOrDry}) = {formatCurrency(entry.submittedCost)}
+                          {entry.hoursOperated}h × ${entry.hourlyRate}/hr ({entry.wetOrDry}) ={' '}
+                          {formatCurrency(entry.submittedCost)}
                         </p>
                       </div>
                       {canEdit && (
@@ -845,7 +963,9 @@ export function DocketEditPage() {
                 ))}
                 <div className="text-right p-2">
                   <p className="text-sm text-muted-foreground">Plant Subtotal</p>
-                  <p className="text-lg font-semibold text-foreground">{formatCurrency(docket.totalPlantSubmitted)}</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    {formatCurrency(docket.totalPlantSubmitted)}
+                  </p>
                 </div>
               </div>
             )}
@@ -863,12 +983,20 @@ export function DocketEditPage() {
               <div className="p-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-muted-foreground">Labour ({docket?.labourEntries.length || 0} entries)</p>
-                    <p className="text-lg font-semibold text-foreground">{formatCurrency(docket?.totalLabourSubmitted || 0)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Labour ({docket?.labourEntries.length || 0} entries)
+                    </p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {formatCurrency(docket?.totalLabourSubmitted || 0)}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Plant ({docket?.plantEntries.length || 0} entries)</p>
-                    <p className="text-lg font-semibold text-foreground">{formatCurrency(docket?.totalPlantSubmitted || 0)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Plant ({docket?.plantEntries.length || 0} entries)
+                    </p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {formatCurrency(docket?.totalPlantSubmitted || 0)}
+                    </p>
                   </div>
                 </div>
 
@@ -879,13 +1007,12 @@ export function DocketEditPage() {
 
                 {canEdit && (
                   <div className="pt-4">
-                    <Label htmlFor="notes">
-                      Notes (optional)
-                    </Label>
+                    <Label htmlFor="notes">Notes (optional)</Label>
                     <Textarea
                       id="notes"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
+                      onBlur={handleNotesBlur}
                       placeholder="Add any notes for this docket..."
                       rows={3}
                       className="mt-1"
@@ -911,9 +1038,7 @@ export function DocketEditPage() {
               disabled={!canSubmit || submitting}
               className={cn(
                 'px-6 py-3 h-auto',
-                canSubmit && !submitting
-                  ? 'bg-primary hover:bg-primary/90 text-white'
-                  : ''
+                canSubmit && !submitting ? 'bg-primary hover:bg-primary/90 text-white' : '',
               )}
             >
               {submitting ? (
@@ -946,10 +1071,7 @@ export function DocketEditPage() {
       {sheetOpen && (
         <div className="fixed inset-0 z-50">
           {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setSheetOpen(false)}
-          />
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSheetOpen(false)} />
           {/* Sheet */}
           <div className="absolute bottom-0 left-0 right-0 bg-background rounded-t-2xl max-h-[90vh] overflow-y-auto animate-slide-up">
             {/* Handle */}
@@ -963,20 +1085,21 @@ export function DocketEditPage() {
                 <h3 className="text-lg font-semibold text-foreground">
                   {sheetType === 'labour' ? 'Add Labour Hours' : 'Add Plant Hours'}
                 </h3>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSheetOpen(false)}
-                >
+                <Button variant="ghost" size="icon" onClick={() => setSheetOpen(false)}>
                   <X className="h-5 w-5 text-muted-foreground" />
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground mt-1">
                 {sheetType === 'labour' && selectedEmployee && (
-                  <span>{selectedEmployee.name} - {selectedEmployee.role} (${selectedEmployee.hourlyRate}/hr)</span>
+                  <span>
+                    {selectedEmployee.name} - {selectedEmployee.role} ($
+                    {selectedEmployee.hourlyRate}/hr)
+                  </span>
                 )}
                 {sheetType === 'plant' && selectedPlant && (
-                  <span>{selectedPlant.type} - {selectedPlant.description}</span>
+                  <span>
+                    {selectedPlant.type} - {selectedPlant.description}
+                  </span>
                 )}
               </p>
             </div>
@@ -987,9 +1110,7 @@ export function DocketEditPage() {
                   {/* Time inputs */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="startTime">
-                        Start Time
-                      </Label>
+                      <Label htmlFor="startTime">Start Time</Label>
                       <Input
                         id="startTime"
                         type="time"
@@ -999,9 +1120,7 @@ export function DocketEditPage() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="finishTime">
-                        Finish Time
-                      </Label>
+                      <Label htmlFor="finishTime">Finish Time</Label>
                       <Input
                         id="finishTime"
                         type="time"
@@ -1023,8 +1142,8 @@ export function DocketEditPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setStartTime(preset.start)
-                            setFinishTime(preset.finish)
+                            setStartTime(preset.start);
+                            setFinishTime(preset.finish);
                           }}
                         >
                           {preset.label}
@@ -1035,9 +1154,7 @@ export function DocketEditPage() {
 
                   {/* Lot selection */}
                   <div>
-                    <Label>
-                      Allocate to Lot
-                    </Label>
+                    <Label>Allocate to Lot</Label>
                     {assignedLots.length === 1 ? (
                       <div className="flex items-center gap-2 p-3 bg-muted rounded-lg mt-1">
                         <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -1066,9 +1183,7 @@ export function DocketEditPage() {
                 <>
                   {/* Hours input */}
                   <div>
-                    <Label htmlFor="hours">
-                      Hours Operated
-                    </Label>
+                    <Label htmlFor="hours">Hours Operated</Label>
                     <Input
                       id="hours"
                       type="number"
@@ -1079,14 +1194,15 @@ export function DocketEditPage() {
                       onChange={(e) => setHoursOperated(e.target.value)}
                       className="mt-1 h-12 text-lg"
                     />
+                    {plantHoursError && (
+                      <p className="mt-1 text-sm text-red-600">{plantHoursError}</p>
+                    )}
                   </div>
 
                   {/* Wet/Dry toggle */}
                   {selectedPlant && selectedPlant.wetRate > 0 && (
                     <div>
-                      <Label>
-                        Condition
-                      </Label>
+                      <Label>Condition</Label>
                       <div className="grid grid-cols-2 gap-2 mt-1">
                         <button
                           type="button"
@@ -1094,12 +1210,14 @@ export function DocketEditPage() {
                             'p-3 rounded-lg border text-center transition-colors',
                             wetOrDry === 'dry'
                               ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-border'
+                              : 'border-border hover:border-border',
                           )}
                           onClick={() => setWetOrDry('dry')}
                         >
                           <p className="font-medium text-foreground">Dry</p>
-                          <p className="text-sm text-muted-foreground">${selectedPlant.dryRate}/hr</p>
+                          <p className="text-sm text-muted-foreground">
+                            ${selectedPlant.dryRate}/hr
+                          </p>
                         </button>
                         <button
                           type="button"
@@ -1107,12 +1225,14 @@ export function DocketEditPage() {
                             'p-3 rounded-lg border text-center transition-colors',
                             wetOrDry === 'wet'
                               ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-border'
+                              : 'border-border hover:border-border',
                           )}
                           onClick={() => setWetOrDry('wet')}
                         >
                           <p className="font-medium text-foreground">Wet</p>
-                          <p className="text-sm text-muted-foreground">${selectedPlant.wetRate}/hr</p>
+                          <p className="text-sm text-muted-foreground">
+                            ${selectedPlant.wetRate}/hr
+                          </p>
                         </button>
                       </div>
                     </div>
@@ -1129,7 +1249,9 @@ export function DocketEditPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">Cost</p>
-                    <p className="text-lg font-bold text-foreground">{formatCurrency(previewCost)}</p>
+                    <p className="text-lg font-bold text-foreground">
+                      {formatCurrency(previewCost)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1139,12 +1261,18 @@ export function DocketEditPage() {
             <div className="px-4 pb-8 pt-2">
               <Button
                 onClick={sheetType === 'labour' ? addLabourEntry : addPlantEntry}
-                disabled={saving || (sheetType === 'labour' && !selectedLotId)}
+                disabled={
+                  saving ||
+                  (sheetType === 'labour' && !selectedLotId) ||
+                  (sheetType === 'plant' && Boolean(plantHoursError))
+                }
                 className={cn(
                   'w-full h-12',
-                  saving || (sheetType === 'labour' && !selectedLotId)
+                  saving ||
+                    (sheetType === 'labour' && !selectedLotId) ||
+                    (sheetType === 'plant' && Boolean(plantHoursError))
                     ? ''
-                    : 'bg-primary hover:bg-primary/90 text-white'
+                    : 'bg-primary hover:bg-primary/90 text-white',
                 )}
               >
                 {saving ? (
@@ -1176,5 +1304,5 @@ export function DocketEditPage() {
         }
       `}</style>
     </div>
-  )
+  );
 }

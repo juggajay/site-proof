@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from 'express'
+import type { Request, Response, NextFunction } from 'express';
 
 /**
  * Wraps an async Express route handler so rejected promises
@@ -8,9 +8,9 @@ import type { Request, Response, NextFunction } from 'express'
  *   router.get('/', requireAuth, asyncHandler(async (req, res) => { ... }))
  */
 export function asyncHandler(
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>,
 ) {
   return (req: Request, res: Response, next: NextFunction) => {
-    fn(req, res, next).catch(next)
-  }
+    fn(req, res, next).catch(next);
+  };
 }

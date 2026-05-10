@@ -15,9 +15,9 @@ export const ROLES = {
   SUBCONTRACTOR: 'subcontractor',
   VIEWER: 'viewer',
   MEMBER: 'member',
-} as const
+} as const;
 
-export type Role = typeof ROLES[keyof typeof ROLES]
+export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 /**
  * Role hierarchy for permission checking
@@ -35,36 +35,36 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
   [ROLES.SUBCONTRACTOR]: 30,
   [ROLES.VIEWER]: 20,
   [ROLES.MEMBER]: 10,
-}
+};
 
 /**
  * Check if a role has at least the specified minimum permission level
  */
 export function hasMinimumRole(userRole: string, minimumRole: Role): boolean {
-  const userLevel = ROLE_HIERARCHY[userRole as Role] ?? 0
-  const minimumLevel = ROLE_HIERARCHY[minimumRole]
-  return userLevel >= minimumLevel
+  const userLevel = ROLE_HIERARCHY[userRole as Role] ?? 0;
+  const minimumLevel = ROLE_HIERARCHY[minimumRole];
+  return userLevel >= minimumLevel;
 }
 
 /**
  * Check if a role is an admin-level role (owner or admin)
  */
 export function isAdminRole(role: string): boolean {
-  return role === ROLES.OWNER || role === ROLES.ADMIN
+  return role === ROLES.OWNER || role === ROLES.ADMIN;
 }
 
 /**
  * Check if a role can manage projects
  */
 export function canManageProjects(role: string): boolean {
-  return hasMinimumRole(role, ROLES.PROJECT_MANAGER)
+  return hasMinimumRole(role, ROLES.PROJECT_MANAGER);
 }
 
 /**
  * Check if a role can approve items (NCRs, holdpoints, etc.)
  */
 export function canApproveItems(role: string): boolean {
-  return hasMinimumRole(role, ROLES.QUALITY_MANAGER)
+  return hasMinimumRole(role, ROLES.QUALITY_MANAGER);
 }
 
 /**
@@ -77,15 +77,22 @@ export const ROLE_GROUPS = {
   MANAGEMENT: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER] as const,
   QUALITY: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.QUALITY_MANAGER] as const,
   SUBCONTRACTOR: [ROLES.SUBCONTRACTOR, ROLES.SUBCONTRACTOR_ADMIN] as const,
-  FIELD: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER, ROLES.SITE_ENGINEER, ROLES.FOREMAN] as const,
+  FIELD: [
+    ROLES.OWNER,
+    ROLES.ADMIN,
+    ROLES.PROJECT_MANAGER,
+    ROLES.SITE_MANAGER,
+    ROLES.SITE_ENGINEER,
+    ROLES.FOREMAN,
+  ] as const,
   VIEWER: [ROLES.VIEWER] as const,
-}
+};
 
 /**
  * Check if a role is in a specific role group
  */
 export function hasRoleInGroup(role: string, group: readonly string[]): boolean {
-  return group.includes(role)
+  return group.includes(role);
 }
 
 /**
@@ -104,6 +111,6 @@ export function getRoleDisplayName(role: string): string {
     [ROLES.SUBCONTRACTOR]: 'Subcontractor',
     [ROLES.VIEWER]: 'Viewer',
     [ROLES.MEMBER]: 'Member',
-  }
-  return displayNames[role] || role
+  };
+  return displayNames[role] || role;
 }

@@ -3,25 +3,25 @@
  * Displays non-conformance reports linked to a lot.
  */
 
-import { useNavigate } from 'react-router-dom'
-import type { NCR } from '@/pages/lots/types'
-import { ncrStatusColors, severityColors } from '@/pages/lots/constants'
+import { useNavigate } from 'react-router-dom';
+import type { NCR } from '@/pages/lots/types';
+import { ncrStatusColors, severityColors } from '@/pages/lots/constants';
 
 interface NCRsTabContentProps {
-  projectId: string
-  ncrs: NCR[]
-  loading: boolean
+  projectId: string;
+  ncrs: NCR[];
+  loading: boolean;
 }
 
 export function NCRsTabContent({ projectId, ncrs, loading }: NCRsTabContentProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   if (loading) {
     return (
       <div className="flex justify-center p-8">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
-    )
+    );
   }
 
   if (ncrs.length === 0) {
@@ -39,7 +39,7 @@ export function NCRsTabContent({ projectId, ncrs, loading }: NCRsTabContentProps
           Go to NCR Register
         </button>
       </div>
-    )
+    );
   }
 
   return (
@@ -62,20 +62,26 @@ export function NCRsTabContent({ projectId, ncrs, loading }: NCRsTabContentProps
               <td className="px-4 py-3 text-sm max-w-xs truncate">{ncr.description}</td>
               <td className="px-4 py-3 text-sm capitalize">{ncr.category}</td>
               <td className="px-4 py-3 text-sm">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${severityColors[ncr.severity] || 'bg-muted text-muted-foreground'}`}>
+                <span
+                  className={`px-2 py-1 rounded text-xs font-medium ${severityColors[ncr.severity] || 'bg-muted text-muted-foreground'}`}
+                >
                   {ncr.severity.toUpperCase()}
                 </span>
               </td>
               <td className="px-4 py-3 text-sm">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${ncrStatusColors[ncr.status] || 'bg-muted text-muted-foreground'}`}>
+                <span
+                  className={`px-2 py-1 rounded text-xs font-medium ${ncrStatusColors[ncr.status] || 'bg-muted text-muted-foreground'}`}
+                >
                   {ncr.status.replace('_', ' ')}
                 </span>
               </td>
-              <td className="px-4 py-3 text-sm">{ncr.raisedBy?.fullName || ncr.raisedBy?.email || '—'}</td>
+              <td className="px-4 py-3 text-sm">
+                {ncr.raisedBy?.fullName || ncr.raisedBy?.email || '—'}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  )
+  );
 }

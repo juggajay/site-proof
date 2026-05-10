@@ -1,22 +1,29 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import DOMPurify from 'dompurify'
-import { apiFetch } from '@/lib/api'
-import { RichTextEditor } from '@/components/ui/RichTextEditor'
-import { VoiceInputButton } from '@/components/ui/VoiceInputButton'
-import { WEATHER_CONDITIONS } from '../constants'
-import type { DailyDiary, WeatherFormState } from '../types'
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { apiFetch } from '@/lib/api';
+import { logError } from '@/lib/logger';
+import { RichTextEditor } from '@/components/ui/RichTextEditor';
+import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
+import { escapeHtml } from '@/lib/html';
+import { sanitizeRichTextHtml } from '@/lib/sanitizeRichText';
+import { WEATHER_CONDITIONS } from '../constants';
+import {
+  getDiaryWeatherNumberError,
+  parseOptionalDiaryRainfallInput,
+  parseOptionalDiaryTemperatureInput,
+} from '../diaryNumericInput';
+import type { DailyDiary, WeatherFormState } from '../types';
 
 interface WeatherTabProps {
-  diary: DailyDiary | null
-  projectId: string
-  selectedDate: string
-  weatherForm: WeatherFormState
-  setWeatherForm: React.Dispatch<React.SetStateAction<WeatherFormState>>
-  saving: boolean
-  onSave: () => Promise<void>
-  fetchingWeather: boolean
-  weatherSource: string | null
-  onFetchWeather: (date: string) => Promise<void>
+  diary: DailyDiary | null;
+  projectId: string;
+  selectedDate: string;
+  weatherForm: WeatherFormState;
+  setWeatherForm: React.Dispatch<React.SetStateAction<WeatherFormState>>;
+  saving: boolean;
+  onSave: () => Promise<void>;
+  fetchingWeather: boolean;
+  weatherSource: string | null;
+  onFetchWeather: (date: string) => Promise<void>;
 }
 
 export const WeatherTab = React.memo(function WeatherTab({
@@ -31,89 +38,96 @@ export const WeatherTab = React.memo(function WeatherTab({
   weatherSource,
   onFetchWeather,
 }: WeatherTabProps) {
+  const weatherNumberError = getDiaryWeatherNumberError(weatherForm);
+
   // Auto-save state
-  const [autoSaving, setAutoSaving] = useState(false)
-  const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null)
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const previousWeatherFormRef = useRef<string>('')
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const previousWeatherFormRef = useRef<string>('');
 
   // Auto-save functionality
   const performAutoSave = useCallback(async () => {
-    if (!diary || diary.status === 'submitted' || saving || autoSaving) return
+    if (!diary || diary.status === 'submitted' || saving || autoSaving) return;
+    if (weatherNumberError) return;
 
-    const currentFormJson = JSON.stringify(weatherForm)
+    const currentFormJson = JSON.stringify(weatherForm);
     if (currentFormJson === previousWeatherFormRef.current) {
-      setHasUnsavedChanges(false)
-      return
+      setHasUnsavedChanges(false);
+      return;
     }
 
-    setAutoSaving(true)
+    setAutoSaving(true);
     try {
+      const temperatureMin = parseOptionalDiaryTemperatureInput(weatherForm.temperatureMin);
+      const temperatureMax = parseOptionalDiaryTemperatureInput(weatherForm.temperatureMax);
+      const rainfallMm = parseOptionalDiaryRainfallInput(weatherForm.rainfallMm);
+
       await apiFetch<DailyDiary>('/api/diary', {
         method: 'POST',
         body: JSON.stringify({
           projectId,
           date: selectedDate,
           weatherConditions: weatherForm.weatherConditions || undefined,
-          temperatureMin: weatherForm.temperatureMin ? parseFloat(weatherForm.temperatureMin) : undefined,
-          temperatureMax: weatherForm.temperatureMax ? parseFloat(weatherForm.temperatureMax) : undefined,
-          rainfallMm: weatherForm.rainfallMm ? parseFloat(weatherForm.rainfallMm) : undefined,
+          temperatureMin: temperatureMin ?? undefined,
+          temperatureMax: temperatureMax ?? undefined,
+          rainfallMm: rainfallMm ?? undefined,
           weatherNotes: weatherForm.weatherNotes || undefined,
           generalNotes: weatherForm.generalNotes || undefined,
         }),
-      })
+      });
 
-      setLastAutoSaved(new Date())
-      setHasUnsavedChanges(false)
-      previousWeatherFormRef.current = currentFormJson
+      setLastAutoSaved(new Date());
+      setHasUnsavedChanges(false);
+      previousWeatherFormRef.current = currentFormJson;
     } catch (err) {
-      console.error('Auto-save failed:', err)
+      logError('Auto-save failed:', err);
     } finally {
-      setAutoSaving(false)
+      setAutoSaving(false);
     }
-  }, [diary, saving, autoSaving, weatherForm, projectId, selectedDate])
+  }, [diary, saving, autoSaving, weatherForm, projectId, selectedDate, weatherNumberError]);
 
   // Track weather form changes for auto-save
   useEffect(() => {
     if (diary && diary.status !== 'submitted') {
-      const currentFormJson = JSON.stringify(weatherForm)
+      const currentFormJson = JSON.stringify(weatherForm);
       if (currentFormJson !== previousWeatherFormRef.current) {
-        setHasUnsavedChanges(true)
+        setHasUnsavedChanges(true);
       }
     }
-  }, [weatherForm, diary])
+  }, [weatherForm, diary]);
 
   // Auto-save timer - save every 60 seconds if there are changes
   useEffect(() => {
     if (diary && diary.status !== 'submitted' && hasUnsavedChanges) {
       if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current)
+        clearTimeout(autoSaveTimerRef.current);
       }
       autoSaveTimerRef.current = setTimeout(() => {
-        performAutoSave()
-      }, 60000)
+        performAutoSave();
+      }, 60000);
     }
 
     return () => {
       if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current)
+        clearTimeout(autoSaveTimerRef.current);
       }
-    }
-  }, [diary, hasUnsavedChanges, performAutoSave])
+    };
+  }, [diary, hasUnsavedChanges, performAutoSave]);
 
   // Save before page unload
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges && diary && diary.status !== 'submitted') {
-        e.preventDefault()
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
       }
-    }
+    };
 
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasUnsavedChanges, diary])
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, diary]);
 
   // Initialize previous form ref when diary loads
   useEffect(() => {
@@ -125,9 +139,9 @@ export const WeatherTab = React.memo(function WeatherTab({
         rainfallMm: diary.rainfallMm?.toString() || '',
         weatherNotes: diary.weatherNotes || '',
         generalNotes: diary.generalNotes || '',
-      })
+      });
     }
-  }, [diary?.id])
+  }, [diary]);
 
   return (
     <div className="rounded-lg border bg-card p-6">
@@ -143,13 +157,12 @@ export const WeatherTab = React.memo(function WeatherTab({
           )}
           {!autoSaving && lastAutoSaved && (
             <span className="text-xs text-muted-foreground">
-              Auto-saved {lastAutoSaved.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
+              Auto-saved{' '}
+              {lastAutoSaved.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
           {!autoSaving && hasUnsavedChanges && !lastAutoSaved && (
-            <span className="text-xs text-orange-500">
-              &bull; Unsaved changes
-            </span>
+            <span className="text-xs text-orange-500">&bull; Unsaved changes</span>
           )}
         </div>
         <div className="flex items-center gap-3">
@@ -160,9 +173,7 @@ export const WeatherTab = React.memo(function WeatherTab({
             </span>
           )}
           {weatherSource && !fetchingWeather && (
-            <span className="text-sm text-green-600">
-              &#10003; {weatherSource}
-            </span>
+            <span className="text-sm text-green-600">&#10003; {weatherSource}</span>
           )}
         </div>
       </div>
@@ -177,7 +188,9 @@ export const WeatherTab = React.memo(function WeatherTab({
           >
             <option value="">Select conditions...</option>
             {WEATHER_CONDITIONS.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </select>
         </div>
@@ -229,7 +242,13 @@ export const WeatherTab = React.memo(function WeatherTab({
             />
             {diary?.status !== 'submitted' && (
               <VoiceInputButton
-                onTranscript={(text) => setWeatherForm({ ...weatherForm, weatherNotes: (weatherForm.weatherNotes ? weatherForm.weatherNotes + ' ' : '') + text })}
+                onTranscript={(text) =>
+                  setWeatherForm({
+                    ...weatherForm,
+                    weatherNotes:
+                      (weatherForm.weatherNotes ? weatherForm.weatherNotes + ' ' : '') + text,
+                  })
+                }
                 appendMode={true}
               />
             )}
@@ -241,11 +260,12 @@ export const WeatherTab = React.memo(function WeatherTab({
             {diary?.status !== 'submitted' && (
               <VoiceInputButton
                 onTranscript={(text) => {
-                  const currentContent = weatherForm.generalNotes || ''
+                  const currentContent = weatherForm.generalNotes || '';
+                  const escapedText = escapeHtml(text);
                   const newContent = currentContent
-                    ? `${currentContent}<p>${text}</p>`
-                    : `<p>${text}</p>`
-                  setWeatherForm({ ...weatherForm, generalNotes: newContent })
+                    ? `${currentContent}<p>${escapedText}</p>`
+                    : `<p>${escapedText}</p>`;
+                  setWeatherForm({ ...weatherForm, generalNotes: newContent });
                 }}
                 appendMode={true}
                 className="flex-shrink-0"
@@ -253,10 +273,17 @@ export const WeatherTab = React.memo(function WeatherTab({
             )}
           </div>
           {diary?.status === 'submitted' ? (
-            <div
-              className="w-full rounded-md border border-input bg-muted/50 px-3 py-2 prose prose-sm max-w-none dark:prose-invert min-h-[100px]"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(weatherForm.generalNotes || '<span class="text-muted-foreground">No notes</span>') }}
-            />
+            <div className="w-full rounded-md border border-input bg-muted/50 px-3 py-2 prose prose-sm max-w-none dark:prose-invert min-h-[100px]">
+              {weatherForm.generalNotes ? (
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeRichTextHtml(weatherForm.generalNotes),
+                  }}
+                />
+              ) : (
+                <span className="text-muted-foreground">No notes</span>
+              )}
+            </div>
           ) : (
             <RichTextEditor
               value={weatherForm.generalNotes}
@@ -267,11 +294,16 @@ export const WeatherTab = React.memo(function WeatherTab({
           )}
         </div>
       </div>
+      {weatherNumberError && (
+        <p className="mt-3 text-sm text-red-600" role="alert" aria-live="assertive">
+          {weatherNumberError}
+        </p>
+      )}
       {diary?.status !== 'submitted' && (
         <div className="mt-4 flex items-center gap-3">
           <button
             onClick={onSave}
-            disabled={saving}
+            disabled={saving || Boolean(weatherNumberError)}
             className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {saving ? 'Saving...' : diary ? 'Update Weather Info' : 'Create Diary Entry'}
@@ -283,12 +315,17 @@ export const WeatherTab = React.memo(function WeatherTab({
             title="Refresh weather from API"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
             </svg>
             {fetchingWeather ? 'Fetching...' : 'Refresh Weather'}
           </button>
         </div>
       )}
     </div>
-  )
-})
+  );
+});

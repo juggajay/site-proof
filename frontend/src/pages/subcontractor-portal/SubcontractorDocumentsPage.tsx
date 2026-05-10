@@ -1,54 +1,54 @@
-import { Link } from 'react-router-dom'
-import {
-  ArrowLeft,
-  FolderOpen,
-  AlertCircle,
-  FileText,
-  ExternalLink,
-} from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { apiFetch } from '@/lib/api'
-import { extractErrorMessage } from '@/lib/errorHandling'
+import { Link } from 'react-router-dom';
+import { ArrowLeft, FolderOpen, AlertCircle, FileText, ExternalLink } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { apiFetch } from '@/lib/api';
+import { openDocumentAccessUrl } from '@/lib/documentAccess';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { toast } from '@/components/ui/toaster';
+import { logError } from '@/lib/logger';
+import { PortalAccessDenied } from './portalAccess';
+import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 
 interface Document {
-  id: string
-  filename: string
-  fileUrl: string
-  category: string
-  description?: string
-  uploadedAt: string
-  uploadedBy?: { fullName: string }
-  fileSize?: number
+  id: string;
+  filename: string;
+  fileUrl: string;
+  category: string;
+  description?: string;
+  uploadedAt: string;
+  uploadedBy?: { fullName: string };
+  fileSize?: number;
 }
 
 interface SubcontractorCompany {
-  id: string
-  companyName: string
-  projectId: string
-  projectName: string
+  id: string;
+  companyName: string;
+  projectId: string;
+  projectName: string;
+  portalAccess?: PortalAccess;
 }
 
 function formatFileSize(bytes?: number): string {
-  if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function getCategoryIcon(category: string) {
   switch (category.toLowerCase()) {
     case 'drawing':
     case 'drawings':
-      return <FileText className="h-4 w-4 text-primary" />
+      return <FileText className="h-4 w-4 text-primary" />;
     case 'specification':
     case 'specifications':
-      return <FileText className="h-4 w-4 text-purple-600 dark:text-purple-300" />
+      return <FileText className="h-4 w-4 text-purple-600 dark:text-purple-300" />;
     case 'safety':
-      return <FileText className="h-4 w-4 text-red-600 dark:text-red-300" />
+      return <FileText className="h-4 w-4 text-red-600 dark:text-red-300" />;
     default:
-      return <FileText className="h-4 w-4 text-muted-foreground" />
+      return <FileText className="h-4 w-4 text-muted-foreground" />;
   }
 }
 
@@ -56,33 +56,43 @@ export function SubcontractorDocumentsPage() {
   const { data: company, isLoading: companyLoading } = useQuery({
     queryKey: queryKeys.portalCompanies,
     queryFn: async () => {
-      const res = await apiFetch<{ company: SubcontractorCompany }>('/api/subcontractors/my-company')
-      return res.company
+      const res = await apiFetch<{ company: SubcontractorCompany }>(
+        '/api/subcontractors/my-company',
+      );
+      return res.company;
     },
-  })
+  });
+  const canViewDocuments = isPortalModuleEnabled(company, 'documents');
 
-  const { data: documents = [], isLoading: docsLoading, error } = useQuery({
+  const {
+    data: documents = [],
+    isLoading: docsLoading,
+    error,
+  } = useQuery({
     queryKey: queryKeys.portalDocuments,
     queryFn: async () => {
       const res = await apiFetch<{ documents: Document[] }>(
-        `/api/documents?projectId=${company!.projectId}&subcontractorView=true`
-      )
-      return res.documents || []
+        `/api/documents/${company!.projectId}?subcontractorView=true`,
+      );
+      return res.documents || [];
     },
-    enabled: !!company?.projectId,
-  })
+    enabled: !!company?.projectId && canViewDocuments,
+  });
 
-  const loading = companyLoading || docsLoading
+  const loading = companyLoading || (canViewDocuments && docsLoading);
 
   // Group by category
-  const groupedDocs = documents.reduce((acc, doc) => {
-    const cat = doc.category || 'Other'
-    if (!acc[cat]) acc[cat] = []
-    acc[cat].push(doc)
-    return acc
-  }, {} as Record<string, Document[]>)
+  const groupedDocs = documents.reduce(
+    (acc, doc) => {
+      const cat = doc.category || 'Other';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(doc);
+      return acc;
+    },
+    {} as Record<string, Document[]>,
+  );
 
-  const categories = Object.keys(groupedDocs).sort()
+  const categories = Object.keys(groupedDocs).sort();
 
   if (loading) {
     return (
@@ -94,7 +104,11 @@ export function SubcontractorDocumentsPage() {
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-24 w-full rounded-lg" />
       </div>
-    )
+    );
+  }
+
+  if (!canViewDocuments) {
+    return <PortalAccessDenied moduleName="Documents" />;
   }
 
   if (error) {
@@ -112,7 +126,7 @@ export function SubcontractorDocumentsPage() {
           Back to Portal
         </Link>
       </div>
-    )
+    );
   }
 
   return (
@@ -138,7 +152,9 @@ export function SubcontractorDocumentsPage() {
           <p className="text-xs text-muted-foreground">Total Documents</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{categories.length}</p>
+          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+            {categories.length}
+          </p>
           <p className="text-xs text-muted-foreground">Categories</p>
         </div>
       </div>
@@ -170,10 +186,23 @@ export function SubcontractorDocumentsPage() {
         </>
       )}
     </div>
-  )
+  );
 }
 
 function DocumentCard({ document }: { document: Document }) {
+  const handleOpenDocument = async () => {
+    try {
+      await openDocumentAccessUrl(document.id, document.fileUrl);
+    } catch (err) {
+      logError('Failed to open subcontractor document:', err);
+      toast({
+        title: 'Failed to open document',
+        description: extractErrorMessage(err, 'Please try again.'),
+        variant: 'error',
+      });
+    }
+  };
+
   return (
     <div className="border border-border rounded-lg bg-card">
       <div className="p-4">
@@ -198,17 +227,16 @@ function DocumentCard({ document }: { document: Document }) {
               </div>
             </div>
           </div>
-          <a
-            href={document.fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => void handleOpenDocument()}
             className="p-2 rounded-lg hover:bg-muted transition-colors"
             title="View document"
           >
             <ExternalLink className="h-4 w-4 text-muted-foreground" />
-          </a>
+          </button>
         </div>
       </div>
     </div>
-  )
+  );
 }

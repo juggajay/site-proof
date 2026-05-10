@@ -1,10 +1,10 @@
-import React from 'react'
-import type { StatusFilter, HoldPointStats } from '../types'
+import React from 'react';
+import type { StatusFilter, HoldPointStats } from '../types';
 
 interface HoldPointStatusFilterProps {
-  statusFilter: StatusFilter
-  onStatusFilterChange: (filter: StatusFilter) => void
-  onExportCSV: () => void
+  statusFilter: StatusFilter;
+  onStatusFilterChange: (filter: StatusFilter) => void;
+  onExportCSV: () => void;
 }
 
 export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
@@ -34,11 +34,11 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
         </button>
       </div>
     </>
-  )
-})
+  );
+});
 
 interface SummaryCardsProps {
-  stats: HoldPointStats
+  stats: HoldPointStats;
 }
 
 export const HoldPointSummaryCards = React.memo(function HoldPointSummaryCards({
@@ -59,9 +59,7 @@ export const HoldPointSummaryCards = React.memo(function HoldPointSummaryCards({
         <div className="text-2xl font-bold mt-1 text-amber-600">
           {stats.notified}
           {stats.overdue > 0 && (
-            <span className="ml-2 text-sm font-normal text-red-600">
-              ({stats.overdue} overdue)
-            </span>
+            <span className="ml-2 text-sm font-normal text-red-600">({stats.overdue} overdue)</span>
           )}
         </div>
       </div>
@@ -70,5 +68,5 @@ export const HoldPointSummaryCards = React.memo(function HoldPointSummaryCards({
         <div className="text-2xl font-bold mt-1 text-green-600">{stats.releasedThisWeek}</div>
       </div>
     </div>
-  )
-})
+  );
+});

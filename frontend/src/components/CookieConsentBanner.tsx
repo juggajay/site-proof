@@ -1,62 +1,77 @@
 // Feature #777: Cookie consent banner
-import { useState, useEffect } from 'react'
-import { Cookie, X } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react';
+import { Cookie, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  isRecord,
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 
-const CONSENT_KEY = 'cookie_consent'
-const CONSENT_VERSION = 'v1' // Bump this to re-ask for consent after policy updates
+const CONSENT_KEY = 'cookie_consent';
+const CONSENT_VERSION = 'v1'; // Bump this to re-ask for consent after policy updates
 
 interface ConsentState {
-  version: string
-  accepted: boolean
-  timestamp: string
+  version: string;
+  accepted: boolean;
+  timestamp: string;
+}
+
+function isConsentState(value: unknown): value is ConsentState {
+  return (
+    isRecord(value) &&
+    typeof value.version === 'string' &&
+    typeof value.accepted === 'boolean' &&
+    typeof value.timestamp === 'string'
+  );
+}
+
+function readStoredConsent(): ConsentState | null {
+  const consentData = readLocalStorageItem(CONSENT_KEY);
+  if (!consentData) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(consentData);
+    return isConsentState(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasCurrentConsent(consent: ConsentState | null): boolean {
+  return consent?.version === CONSENT_VERSION;
 }
 
 export function CookieConsentBanner() {
-  const [showBanner, setShowBanner] = useState(false)
+  const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
-    // Check if consent has already been given
-    const consentData = localStorage.getItem(CONSENT_KEY)
-
-    if (!consentData) {
-      // First visit - show banner
-      setShowBanner(true)
-      return
-    }
-
-    try {
-      const consent: ConsentState = JSON.parse(consentData)
-      // If consent version is outdated, show banner again
-      if (consent.version !== CONSENT_VERSION) {
-        setShowBanner(true)
-      }
-    } catch {
-      // Invalid consent data - show banner
-      setShowBanner(true)
-    }
-  }, [])
+    setShowBanner(!hasCurrentConsent(readStoredConsent()));
+  }, []);
 
   const saveConsent = (accepted: boolean) => {
     const consent: ConsentState = {
       version: CONSENT_VERSION,
       accepted,
-      timestamp: new Date().toISOString()
-    }
-    localStorage.setItem(CONSENT_KEY, JSON.stringify(consent))
-    setShowBanner(false)
-  }
+      timestamp: new Date().toISOString(),
+    };
+    writeLocalStorageItem(CONSENT_KEY, JSON.stringify(consent));
+    setShowBanner(false);
+  };
 
   const handleAccept = () => {
-    saveConsent(true)
-  }
+    saveConsent(true);
+  };
 
   const handleReject = () => {
-    saveConsent(false)
-  }
+    saveConsent(false);
+  };
 
   if (!showBanner) {
-    return null
+    return null;
   }
 
   return (
@@ -71,8 +86,8 @@ export function CookieConsentBanner() {
           <Cookie className="h-6 w-6 text-orange-500 mt-0.5 flex-shrink-0" />
           <div>
             <p className="text-sm text-foreground">
-              We use cookies to enhance your experience and analyze site usage.
-              By continuing to use SiteProof, you agree to our{' '}
+              We use cookies to enhance your experience and analyze site usage. By continuing to use
+              SiteProof, you agree to our{' '}
               <Link
                 to="/privacy-policy"
                 className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
@@ -109,31 +124,25 @@ export function CookieConsentBanner() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // Hook to check consent status
 export function useCookieConsent() {
-  const [consent, setConsent] = useState<ConsentState | null>(null)
+  const [consent, setConsent] = useState<ConsentState | null>(null);
 
   useEffect(() => {
-    const consentData = localStorage.getItem(CONSENT_KEY)
-    if (consentData) {
-      try {
-        setConsent(JSON.parse(consentData))
-      } catch {
-        setConsent(null)
-      }
-    }
-  }, [])
+    const storedConsent = readStoredConsent();
+    setConsent(hasCurrentConsent(storedConsent) ? storedConsent : null);
+  }, []);
 
   return {
     hasConsent: consent !== null,
     accepted: consent?.accepted ?? false,
     timestamp: consent?.timestamp,
     clearConsent: () => {
-      localStorage.removeItem(CONSENT_KEY)
-      setConsent(null)
-    }
-  }
+      removeLocalStorageItem(CONSENT_KEY);
+      setConsent(null);
+    },
+  };
 }

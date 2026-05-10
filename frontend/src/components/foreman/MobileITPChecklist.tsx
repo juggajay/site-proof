@@ -1,60 +1,65 @@
 // MobileITPChecklist - Mobile-optimized ITP completion interface for foremen/subcontractors
 // Features: Simple status buttons (Pass/N/A/Fail), notes, photos
-import { useState, useRef, useEffect, useMemo } from 'react'
-import { BottomSheet } from './sheets/BottomSheet'
-import { useHaptics } from '@/hooks/useHaptics'
-import { Camera, MessageSquare, Image, ChevronRight, ChevronDown } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { BottomSheet } from './sheets/BottomSheet';
+import { useHaptics } from '@/hooks/useHaptics';
+import { Camera, MessageSquare, Image, ChevronRight, ChevronDown } from 'lucide-react';
+import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 
 interface ITPChecklistItem {
-  id: string
-  description: string
-  category: string
-  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general'
-  isHoldPoint: boolean
-  pointType: 'standard' | 'witness' | 'hold_point'
-  evidenceRequired: 'none' | 'photo' | 'test' | 'document'
-  order: number
-  testType?: string | null
-  acceptanceCriteria?: string | null
+  id: string;
+  description: string;
+  category: string;
+  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general';
+  isHoldPoint: boolean;
+  pointType: 'standard' | 'witness' | 'hold_point';
+  evidenceRequired: 'none' | 'photo' | 'test' | 'document';
+  order: number;
+  testType?: string | null;
+  acceptanceCriteria?: string | null;
 }
 
 interface ITPAttachment {
-  id: string
-  documentId: string
+  id: string;
+  documentId: string;
   document: {
-    id: string
-    filename: string
-    fileUrl: string
-    caption: string | null
-  }
+    id: string;
+    filename: string;
+    fileUrl: string;
+    caption: string | null;
+  };
 }
 
 interface ITPCompletion {
-  id: string
-  checklistItemId: string
-  isCompleted: boolean
-  isNotApplicable?: boolean
-  isFailed?: boolean
-  isVerified?: boolean
-  notes: string | null
-  completedAt: string | null
-  completedBy: { id: string; fullName: string; email: string } | null
-  attachments: ITPAttachment[]
+  id: string;
+  checklistItemId: string;
+  isCompleted: boolean;
+  isNotApplicable?: boolean;
+  isFailed?: boolean;
+  isVerified?: boolean;
+  notes: string | null;
+  completedAt: string | null;
+  completedBy: { id: string; fullName: string; email: string } | null;
+  attachments: ITPAttachment[];
 }
 
 interface MobileITPChecklistProps {
-  lotNumber: string
-  templateName: string
-  checklistItems: ITPChecklistItem[]
-  completions: ITPCompletion[]
-  onToggleCompletion: (checklistItemId: string, isCompleted: boolean, notes: string | null) => Promise<void>
-  onMarkNotApplicable: (checklistItemId: string, reason: string) => Promise<void>
-  onMarkFailed: (checklistItemId: string, reason: string) => Promise<void>
-  onUpdateNotes: (checklistItemId: string, notes: string) => Promise<void>
-  onAddPhoto: (checklistItemId: string, file: File) => Promise<void>
-  updatingItem?: string | null
+  lotNumber: string;
+  templateName: string;
+  checklistItems: ITPChecklistItem[];
+  completions: ITPCompletion[];
+  onToggleCompletion: (
+    checklistItemId: string,
+    isCompleted: boolean,
+    notes: string | null,
+  ) => Promise<void>;
+  onMarkNotApplicable: (checklistItemId: string, reason: string) => Promise<void>;
+  onMarkFailed: (checklistItemId: string, reason: string) => Promise<void>;
+  onUpdateNotes: (checklistItemId: string, notes: string) => Promise<void>;
+  onAddPhoto: (checklistItemId: string, file: File) => Promise<void>;
+  updatingItem?: string | null;
   /** Whether the current user can complete ITP items (false for subcontractors without permission) */
-  canCompleteItems?: boolean
+  canCompleteItems?: boolean;
 }
 
 export function MobileITPChecklist({
@@ -70,60 +75,60 @@ export function MobileITPChecklist({
   updatingItem,
   canCompleteItems = true,
 }: MobileITPChecklistProps) {
-  const [selectedItem, setSelectedItem] = useState<ITPChecklistItem | null>(null)
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
-  const { trigger } = useHaptics()
+  const [selectedItem, setSelectedItem] = useState<ITPChecklistItem | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const { trigger } = useHaptics();
 
-  const getCompletion = (itemId: string) => completions.find(c => c.checklistItemId === itemId)
+  const getCompletion = (itemId: string) => completions.find((c) => c.checklistItemId === itemId);
 
   const getItemStatus = (itemId: string): 'pending' | 'completed' | 'na' | 'failed' => {
-    const completion = getCompletion(itemId)
-    if (!completion) return 'pending'
-    if (completion.isFailed) return 'failed'
-    if (completion.isNotApplicable) return 'na'
-    if (completion.isCompleted) return 'completed'
-    return 'pending'
-  }
+    const completion = getCompletion(itemId);
+    if (!completion) return 'pending';
+    if (completion.isFailed) return 'failed';
+    if (completion.isNotApplicable) return 'na';
+    if (completion.isCompleted) return 'completed';
+    return 'pending';
+  };
 
   // Group items by category
   const categorizedItems = useMemo(() => {
-    const groups: Record<string, ITPChecklistItem[]> = {}
-    checklistItems.forEach(item => {
-      const category = item.category || 'General'
-      if (!groups[category]) groups[category] = []
-      groups[category].push(item)
-    })
-    return groups
-  }, [checklistItems])
+    const groups: Record<string, ITPChecklistItem[]> = {};
+    checklistItems.forEach((item) => {
+      const category = item.category || 'General';
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(item);
+    });
+    return groups;
+  }, [checklistItems]);
 
-  const categories = Object.keys(categorizedItems)
+  const categories = Object.keys(categorizedItems);
 
   // Get category completion stats
   const getCategoryStats = (category: string) => {
-    const items = categorizedItems[category] || []
-    const completed = items.filter(item => {
-      const completion = getCompletion(item.id)
-      return completion?.isCompleted || completion?.isNotApplicable
-    }).length
-    return { completed, total: items.length }
-  }
+    const items = categorizedItems[category] || [];
+    const completed = items.filter((item) => {
+      const completion = getCompletion(item.id);
+      return completion?.isCompleted || completion?.isNotApplicable;
+    }).length;
+    return { completed, total: items.length };
+  };
 
   const toggleCategory = (category: string) => {
-    trigger('light')
-    setExpandedCategories(prev => {
-      const next = new Set(prev)
+    trigger('light');
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
       if (next.has(category)) {
-        next.delete(category)
+        next.delete(category);
       } else {
-        next.add(category)
+        next.add(category);
       }
-      return next
-    })
-  }
+      return next;
+    });
+  };
 
-  const completedCount = completions.filter(c => c.isCompleted || c.isNotApplicable).length
-  const totalCount = checklistItems.length
-  const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+  const completedCount = completions.filter((c) => c.isCompleted || c.isNotApplicable).length;
+  const totalCount = checklistItems.length;
+  const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -136,7 +141,9 @@ export function MobileITPChecklist({
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-primary">{progress}%</p>
-            <p className="text-xs text-muted-foreground">{completedCount}/{totalCount}</p>
+            <p className="text-xs text-muted-foreground">
+              {completedCount}/{totalCount}
+            </p>
           </div>
         </div>
         {/* Progress bar */}
@@ -152,19 +159,19 @@ export function MobileITPChecklist({
       {!canCompleteItems && (
         <div className="mx-4 mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
           <p className="text-sm text-amber-800 dark:text-amber-200">
-            You can view this ITP but do not have permission to complete items.
-            Contact the head contractor to request completion access.
+            You can view this ITP but do not have permission to complete items. Contact the head
+            contractor to request completion access.
           </p>
         </div>
       )}
 
       {/* Checklist items grouped by category */}
       <div className="flex-1 overflow-y-auto">
-        {categories.map(category => {
-          const isExpanded = expandedCategories.has(category)
-          const stats = getCategoryStats(category)
-          const items = categorizedItems[category]
-          const isComplete = stats.completed === stats.total
+        {categories.map((category) => {
+          const isExpanded = expandedCategories.has(category);
+          const stats = getCategoryStats(category);
+          const items = categorizedItems[category];
+          const isComplete = stats.completed === stats.total;
 
           return (
             <div key={category} className="border-b">
@@ -182,50 +189,57 @@ export function MobileITPChecklist({
                   <span className="font-semibold text-sm">{category}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    isComplete
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      isComplete
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
                     {stats.completed}/{stats.total}
                   </span>
                 </div>
               </button>
 
               {/* Category items - expandable */}
-              {isExpanded && items.map((item) => {
-                const status = getItemStatus(item.id)
-                const completion = getCompletion(item.id)
-                const hasNotes = !!completion?.notes
-                const hasPhotos = (completion?.attachments?.length || 0) > 0
+              {isExpanded &&
+                items.map((item) => {
+                  const status = getItemStatus(item.id);
+                  const completion = getCompletion(item.id);
+                  const hasNotes = !!completion?.notes;
+                  const hasPhotos = (completion?.attachments?.length || 0) > 0;
 
-                return (
-                  <MobileITPItem
-                    key={item.id}
-                    item={item}
-                    status={status}
-                    hasNotes={hasNotes}
-                    hasPhotos={hasPhotos}
-                    photoCount={completion?.attachments?.length || 0}
-                    isUpdating={updatingItem === item.id}
-                    canComplete={canCompleteItems}
-                    onTap={() => {
-                      trigger('light')
-                      setSelectedItem(item)
-                    }}
-                    onQuickComplete={() => {
-                      if (!canCompleteItems) {
-                        trigger('error')
-                        return
-                      }
-                      trigger('medium')
-                      onToggleCompletion(item.id, status !== 'completed', completion?.notes || null)
-                    }}
-                  />
-                )
-              })}
+                  return (
+                    <MobileITPItem
+                      key={item.id}
+                      item={item}
+                      status={status}
+                      hasNotes={hasNotes}
+                      hasPhotos={hasPhotos}
+                      photoCount={completion?.attachments?.length || 0}
+                      isUpdating={updatingItem === item.id}
+                      canComplete={canCompleteItems}
+                      onTap={() => {
+                        trigger('light');
+                        setSelectedItem(item);
+                      }}
+                      onQuickComplete={() => {
+                        if (!canCompleteItems) {
+                          trigger('error');
+                          return;
+                        }
+                        trigger('medium');
+                        onToggleCompletion(
+                          item.id,
+                          status !== 'completed',
+                          completion?.notes || null,
+                        );
+                      }}
+                    />
+                  );
+                })}
             </div>
-          )
+          );
         })}
       </div>
 
@@ -237,59 +251,59 @@ export function MobileITPChecklist({
         canComplete={canCompleteItems}
         onClose={() => setSelectedItem(null)}
         onPass={(notes) => {
-          if (!selectedItem) return
+          if (!selectedItem) return;
           if (!canCompleteItems) {
-            trigger('error')
-            return
+            trigger('error');
+            return;
           }
-          trigger('medium')
-          onToggleCompletion(selectedItem.id, true, notes)
-          setSelectedItem(null)
+          trigger('medium');
+          onToggleCompletion(selectedItem.id, true, notes);
+          setSelectedItem(null);
         }}
         onNA={(reason) => {
-          if (!selectedItem) return
+          if (!selectedItem) return;
           if (!canCompleteItems) {
-            trigger('error')
-            return
+            trigger('error');
+            return;
           }
-          trigger('medium')
-          onMarkNotApplicable(selectedItem.id, reason)
-          setSelectedItem(null)
+          trigger('medium');
+          onMarkNotApplicable(selectedItem.id, reason);
+          setSelectedItem(null);
         }}
         onFail={(reason) => {
-          if (!selectedItem) return
+          if (!selectedItem) return;
           if (!canCompleteItems) {
-            trigger('error')
-            return
+            trigger('error');
+            return;
           }
-          trigger('error')
-          onMarkFailed(selectedItem.id, reason)
-          setSelectedItem(null)
+          trigger('error');
+          onMarkFailed(selectedItem.id, reason);
+          setSelectedItem(null);
         }}
         onUpdateNotes={(notes) => {
-          if (!selectedItem) return
-          onUpdateNotes(selectedItem.id, notes)
+          if (!selectedItem) return;
+          onUpdateNotes(selectedItem.id, notes);
         }}
         onAddPhoto={(file) => {
-          if (!selectedItem) return
-          onAddPhoto(selectedItem.id, file)
+          if (!selectedItem) return;
+          onAddPhoto(selectedItem.id, file);
         }}
       />
     </div>
-  )
+  );
 }
 
 // Individual checklist item row
 interface MobileITPItemProps {
-  item: ITPChecklistItem
-  status: 'pending' | 'completed' | 'na' | 'failed'
-  hasNotes: boolean
-  hasPhotos: boolean
-  photoCount: number
-  isUpdating: boolean
-  canComplete: boolean
-  onTap: () => void
-  onQuickComplete: () => void
+  item: ITPChecklistItem;
+  status: 'pending' | 'completed' | 'na' | 'failed';
+  hasNotes: boolean;
+  hasPhotos: boolean;
+  photoCount: number;
+  isUpdating: boolean;
+  canComplete: boolean;
+  onTap: () => void;
+  onQuickComplete: () => void;
 }
 
 function MobileITPItem({
@@ -308,23 +322,30 @@ function MobileITPItem({
     completed: 'bg-green-500 border-green-500 text-white',
     na: 'bg-gray-400 dark:bg-gray-600 border-gray-400 dark:border-gray-600 text-white',
     failed: 'bg-red-500 border-red-500 text-white',
-    disabled: 'bg-gray-300 dark:bg-gray-700 border-gray-400 dark:border-gray-600 text-gray-500 dark:text-gray-400',
-  }
+    disabled:
+      'bg-gray-300 dark:bg-gray-700 border-gray-400 dark:border-gray-600 text-gray-500 dark:text-gray-400',
+  };
 
   const statusIcons = {
     pending: '',
     completed: '✓',
     na: '—',
     failed: '✗',
-  }
+  };
 
   const pointTypeBadge = {
-    standard: { label: 'S', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
-    witness: { label: 'W', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' },
+    standard: {
+      label: 'S',
+      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    },
+    witness: {
+      label: 'W',
+      color: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+    },
     hold_point: { label: 'H', color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' },
-  }
+  };
 
-  const badge = pointTypeBadge[item.pointType]
+  const badge = pointTypeBadge[item.pointType];
 
   return (
     <div
@@ -336,9 +357,9 @@ function MobileITPItem({
       {/* Status indicator - quick tap to toggle complete */}
       <button
         onClick={(e) => {
-          e.stopPropagation()
+          e.stopPropagation();
           if (canComplete && (status === 'pending' || status === 'completed')) {
-            onQuickComplete()
+            onQuickComplete();
           }
         }}
         disabled={isUpdating || status === 'na' || status === 'failed' || !canComplete}
@@ -353,11 +374,15 @@ function MobileITPItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-2 mb-1">
           {/* Point type badge */}
-          <span className={`flex-shrink-0 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded ${badge.color}`}>
+          <span
+            className={`flex-shrink-0 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded ${badge.color}`}
+          >
             {badge.label}
           </span>
           {/* Item number and description */}
-          <span className={`text-sm leading-tight ${status === 'completed' || status === 'na' ? 'line-through text-muted-foreground' : ''}`}>
+          <span
+            className={`text-sm leading-tight ${status === 'completed' || status === 'na' ? 'line-through text-muted-foreground' : ''}`}
+          >
             <span className="font-medium">{item.order}.</span> {item.description}
           </span>
         </div>
@@ -388,21 +413,21 @@ function MobileITPItem({
         <ChevronRight className="w-5 h-5" />
       </div>
     </div>
-  )
+  );
 }
 
 // Bottom sheet for item details
 interface MobileITPItemSheetProps {
-  isOpen: boolean
-  item: ITPChecklistItem | null
-  completion?: ITPCompletion
-  canComplete: boolean
-  onClose: () => void
-  onPass: (notes: string | null) => void
-  onNA: (reason: string) => void
-  onFail: (reason: string) => void
-  onUpdateNotes: (notes: string) => void
-  onAddPhoto: (file: File) => void
+  isOpen: boolean;
+  item: ITPChecklistItem | null;
+  completion?: ITPCompletion;
+  canComplete: boolean;
+  onClose: () => void;
+  onPass: (notes: string | null) => void;
+  onNA: (reason: string) => void;
+  onFail: (reason: string) => void;
+  onUpdateNotes: (notes: string) => void;
+  onAddPhoto: (file: File) => void;
 }
 
 function MobileITPItemSheet({
@@ -417,54 +442,55 @@ function MobileITPItemSheet({
   onUpdateNotes,
   onAddPhoto,
 }: MobileITPItemSheetProps) {
-  const [notes, setNotes] = useState('')
-  const [naReason, setNaReason] = useState('')
-  const [failReason, setFailReason] = useState('')
-  const [showNAInput, setShowNAInput] = useState(false)
-  const [showFailInput, setShowFailInput] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [notes, setNotes] = useState('');
+  const [naReason, setNaReason] = useState('');
+  const [failReason, setFailReason] = useState('');
+  const [showNAInput, setShowNAInput] = useState(false);
+  const [showFailInput, setShowFailInput] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when item changes
   useEffect(() => {
     if (item) {
-      setNotes(completion?.notes || '')
-      setNaReason('')
-      setFailReason('')
-      setShowNAInput(false)
-      setShowFailInput(false)
+      setNotes(completion?.notes || '');
+      setNaReason('');
+      setFailReason('');
+      setShowNAInput(false);
+      setShowFailInput(false);
     }
-  }, [item, completion])
+  }, [item, completion]);
 
-  if (!isOpen || !item) return null
+  if (!isOpen || !item) return null;
 
-  const isCompleted = completion?.isCompleted
-  const isNA = completion?.isNotApplicable
-  const isFailed = completion?.isFailed
-  const photos = completion?.attachments || []
+  const isCompleted = completion?.isCompleted;
+  const isNA = completion?.isNotApplicable;
+  const isFailed = completion?.isFailed;
+  const photos = completion?.attachments || [];
 
   const pointTypeLabel = {
     standard: 'Standard Point',
     witness: 'Witness Point',
     hold_point: 'Hold Point',
-  }
+  };
 
   const responsiblePartyLabel = {
     contractor: 'Contractor',
     subcontractor: 'Subcontractor',
     superintendent: 'Superintendent',
     general: 'General',
-  }
+  };
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={`Item ${item.order}`}>
       <div className="space-y-4">
-
         {/* No permission banner */}
         {!canComplete && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
             <div>
               <p className="text-sm font-medium text-amber-800 dark:text-amber-200">View Only</p>
-              <p className="text-xs text-amber-600 dark:text-amber-400">Contact head contractor for completion access</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Contact head contractor for completion access
+              </p>
             </div>
           </div>
         )}
@@ -472,11 +498,15 @@ function MobileITPItemSheet({
         {/* Item description */}
         <div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-              item.pointType === 'hold_point' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-              item.pointType === 'witness' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200' :
-              'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-            }`}>
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium ${
+                item.pointType === 'hold_point'
+                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                  : item.pointType === 'witness'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+              }`}
+            >
               {pointTypeLabel[item.pointType]}
             </span>
             <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted">
@@ -500,8 +530,8 @@ function MobileITPItemSheet({
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isCompleted
-                ? 'bg-green-500 text-white ring-2 ring-green-600 ring-offset-2'
-                : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-200'
+                  ? 'bg-green-500 text-white ring-2 ring-green-600 ring-offset-2'
+                  : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-200'
             }`}
           >
             <span className="text-2xl block mb-1">✓</span>
@@ -509,10 +539,10 @@ function MobileITPItemSheet({
           </button>
           <button
             onClick={() => {
-              if (!canComplete || isNA) return
+              if (!canComplete || isNA) return;
               if (!showNAInput) {
-                setShowNAInput(true)
-                setShowFailInput(false)
+                setShowNAInput(true);
+                setShowFailInput(false);
               }
             }}
             disabled={!canComplete}
@@ -520,8 +550,8 @@ function MobileITPItemSheet({
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isNA
-                ? 'bg-gray-500 text-white ring-2 ring-gray-600 ring-offset-2'
-                : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200'
+                  ? 'bg-gray-500 text-white ring-2 ring-gray-600 ring-offset-2'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200'
             }`}
           >
             <span className="text-2xl block mb-1">—</span>
@@ -529,10 +559,10 @@ function MobileITPItemSheet({
           </button>
           <button
             onClick={() => {
-              if (!canComplete || isFailed) return
+              if (!canComplete || isFailed) return;
               if (!showFailInput) {
-                setShowFailInput(true)
-                setShowNAInput(false)
+                setShowFailInput(true);
+                setShowNAInput(false);
               }
             }}
             disabled={!canComplete}
@@ -540,8 +570,8 @@ function MobileITPItemSheet({
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isFailed
-                ? 'bg-red-500 text-white ring-2 ring-red-600 ring-offset-2'
-                : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200'
+                  ? 'bg-red-500 text-white ring-2 ring-red-600 ring-offset-2'
+                  : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200'
             }`}
           >
             <span className="text-2xl block mb-1">✗</span>
@@ -580,7 +610,9 @@ function MobileITPItemSheet({
         {/* Fail reason input */}
         {showFailInput && (
           <div className="p-3 bg-red-50 dark:bg-red-950/30 rounded-lg space-y-2">
-            <label className="text-sm font-medium text-red-800 dark:text-red-200">Reason for failure:</label>
+            <label className="text-sm font-medium text-red-800 dark:text-red-200">
+              Reason for failure:
+            </label>
             <textarea
               value={failReason}
               onChange={(e) => setFailReason(e.target.value)}
@@ -613,12 +645,13 @@ function MobileITPItemSheet({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               onBlur={() => {
-                if (notes !== (completion?.notes || '')) {
-                  onUpdateNotes(notes)
+                if (canComplete && notes !== (completion?.notes || '')) {
+                  onUpdateNotes(notes);
                 }
               }}
               placeholder="Add notes about this item..."
-              className="w-full px-3 py-2 border rounded-lg text-sm min-h-[80px] bg-background"
+              disabled={!canComplete}
+              className="w-full px-3 py-2 border rounded-lg text-sm min-h-[80px] bg-background disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
         )}
@@ -628,34 +661,39 @@ function MobileITPItemSheet({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium">Photos</label>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-sm text-primary font-medium flex items-center gap-1 py-2 px-3 bg-primary/10 rounded-lg touch-manipulation"
-              >
-                <Camera className="w-4 h-4" />
-                <span>Add Photo</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) {
-                    onAddPhoto(file)
-                    e.target.value = '' // Reset for next upload
-                  }
-                }}
-              />
+              {canComplete && (
+                <>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-sm text-primary font-medium flex items-center gap-1 py-2 px-3 bg-primary/10 rounded-lg touch-manipulation"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Add Photo</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        onAddPhoto(file);
+                        e.target.value = ''; // Reset for next upload
+                      }
+                    }}
+                  />
+                </>
+              )}
             </div>
             {photos.length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
                 {photos.map((photo) => (
                   <div key={photo.id} className="aspect-square rounded-lg overflow-hidden border">
-                    <img
-                      src={photo.document.fileUrl}
+                    <SecureDocumentImage
+                      documentId={photo.document.id}
+                      fileUrl={photo.document.fileUrl}
                       alt={photo.document.caption || photo.document.filename}
                       className="w-full h-full object-cover"
                     />
@@ -673,12 +711,19 @@ function MobileITPItemSheet({
         {/* Completion info */}
         {completion?.completedBy && (
           <p className="text-xs text-muted-foreground pt-2 border-t">
-            {isCompleted ? 'Completed' : isNA ? 'Marked N/A' : isFailed ? 'Marked Failed' : 'Updated'} by{' '}
-            {completion.completedBy.fullName || completion.completedBy.email}
-            {completion.completedAt && ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
+            {isCompleted
+              ? 'Completed'
+              : isNA
+                ? 'Marked N/A'
+                : isFailed
+                  ? 'Marked Failed'
+                  : 'Updated'}{' '}
+            by {completion.completedBy.fullName || completion.completedBy.email}
+            {completion.completedAt &&
+              ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
           </p>
         )}
       </div>
     </BottomSheet>
-  )
+  );
 }
