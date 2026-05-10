@@ -5,8 +5,11 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '@/lib/theme';
 import { DateFormatProvider } from '@/lib/dateFormat';
 import { TimezoneProvider } from '@/lib/timezone';
+import { installStaleAssetRecovery } from '@/lib/staleAssetRecovery';
 import App from './App';
 import './index.css';
+
+installStaleAssetRecovery();
 
 const queryClient = new QueryClient({
   defaultOptions: {
