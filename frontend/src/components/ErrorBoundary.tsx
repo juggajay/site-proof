@@ -2,6 +2,7 @@ import { Component, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { logError, reportClientError } from '@/lib/logger';
+import { isStaleAssetLoadError, recoverFromStaleAssetLoad } from '@/lib/staleAssetRecovery';
 
 interface Props {
   children: ReactNode;
@@ -34,6 +35,10 @@ class ErrorBoundaryFrame extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     logError('Error caught by ErrorBoundary:', { error, errorInfo });
+
+    if (isStaleAssetLoadError(error) && recoverFromStaleAssetLoad(error)) {
+      return;
+    }
 
     if (import.meta.env.PROD) {
       this.setState({ errorInfo, reportStatus: 'pending' });
