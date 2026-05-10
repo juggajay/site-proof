@@ -1,27 +1,27 @@
-import React, { useState, useCallback } from 'react'
-import type { Lot } from '../types'
+import React, { useState, useCallback } from 'react';
+import type { Lot } from '../types';
 
 interface TestFiltersProps {
-  searchQuery: string
-  onSearchQueryChange: (value: string) => void
-  filterTestType: string
-  onFilterTestTypeChange: (value: string) => void
-  filterStatus: string
-  onFilterStatusChange: (value: string) => void
-  filterPassFail: string
-  onFilterPassFailChange: (value: string) => void
-  filterLot: string
-  onFilterLotChange: (value: string) => void
-  filterDateFrom: string
-  onFilterDateFromChange: (value: string) => void
-  filterDateTo: string
-  onFilterDateToChange: (value: string) => void
-  uniqueTestTypes: string[]
-  lots: Lot[]
-  filteredCount: number
-  totalCount: number
-  hasActiveFilters: boolean
-  onClearFilters: () => void
+  searchQuery: string;
+  onSearchQueryChange: (value: string) => void;
+  filterTestType: string;
+  onFilterTestTypeChange: (value: string) => void;
+  filterStatus: string;
+  onFilterStatusChange: (value: string) => void;
+  filterPassFail: string;
+  onFilterPassFailChange: (value: string) => void;
+  filterLot: string;
+  onFilterLotChange: (value: string) => void;
+  filterDateFrom: string;
+  onFilterDateFromChange: (value: string) => void;
+  filterDateTo: string;
+  onFilterDateToChange: (value: string) => void;
+  uniqueTestTypes: string[];
+  lots: Lot[];
+  filteredCount: number;
+  totalCount: number;
+  hasActiveFilters: boolean;
+  onClearFilters: () => void;
 }
 
 export const TestFilters = React.memo(function TestFilters({
@@ -46,11 +46,11 @@ export const TestFilters = React.memo(function TestFilters({
   hasActiveFilters,
   onClearFilters,
 }: TestFiltersProps) {
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilters, setShowFilters] = useState(false);
 
   const toggleFilters = useCallback(() => {
-    setShowFilters(prev => !prev)
-  }, [])
+    setShowFilters((prev) => !prev);
+  }, []);
 
   return (
     <div className="mb-4">
@@ -64,7 +64,9 @@ export const TestFilters = React.memo(function TestFilters({
             placeholder="Search by report #, lot #, lab name..."
             className="w-full rounded-lg border px-3 py-2 pl-9 text-sm"
           />
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">{'\uD83D\uDD0D'}</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {'\uD83D\uDD0D'}
+          </span>
           {searchQuery && (
             <button
               onClick={() => onSearchQueryChange('')}
@@ -80,7 +82,12 @@ export const TestFilters = React.memo(function TestFilters({
           onClick={toggleFilters}
           className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border hover:bg-muted"
         >
-          {'\u2699\uFE0F'} Filters {hasActiveFilters && <span className="bg-primary text-primary-foreground px-1.5 py-0.5 rounded text-xs">{filteredCount}/{totalCount}</span>}
+          {'\u2699\uFE0F'} Filters{' '}
+          {hasActiveFilters && (
+            <span className="bg-primary text-primary-foreground px-1.5 py-0.5 rounded text-xs">
+              {filteredCount}/{totalCount}
+            </span>
+          )}
         </button>
       </div>
 
@@ -96,8 +103,10 @@ export const TestFilters = React.memo(function TestFilters({
                 className="w-full rounded border px-2 py-1.5 text-sm"
               >
                 <option value="">All Types</option>
-                {uniqueTestTypes.map(type => (
-                  <option key={type} value={type}>{type}</option>
+                {uniqueTestTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
                 ))}
               </select>
             </div>
@@ -143,8 +152,10 @@ export const TestFilters = React.memo(function TestFilters({
                 className="w-full rounded border px-2 py-1.5 text-sm"
               >
                 <option value="">All Lots</option>
-                {lots.map(lot => (
-                  <option key={lot.id} value={lot.id}>{lot.lotNumber}</option>
+                {lots.map((lot) => (
+                  <option key={lot.id} value={lot.id}>
+                    {lot.lotNumber}
+                  </option>
                 ))}
               </select>
             </div>
@@ -177,10 +188,7 @@ export const TestFilters = React.memo(function TestFilters({
               <span className="text-sm text-muted-foreground">
                 Showing {filteredCount} of {totalCount} results
               </span>
-              <button
-                onClick={onClearFilters}
-                className="text-sm text-red-600 hover:text-red-700"
-              >
+              <button onClick={onClearFilters} className="text-sm text-red-600 hover:text-red-700">
                 Clear all filters
               </button>
             </div>
@@ -188,5 +196,5 @@ export const TestFilters = React.memo(function TestFilters({
         </div>
       )}
     </div>
-  )
-})
+  );
+});

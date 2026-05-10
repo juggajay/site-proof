@@ -1,42 +1,65 @@
-import { useState, useEffect, useMemo } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Building2, ClipboardCheck, User, AlertCircle, Loader2, Check, Eye, EyeOff } from 'lucide-react'
-import { useAuth } from '@/lib/auth'
-import { apiFetch } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { extractErrorMessage, isNotFound } from '@/lib/errorHandling'
-import { acceptInviteSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  Building2,
+  ClipboardCheck,
+  User,
+  AlertCircle,
+  Loader2,
+  Check,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import { extractErrorMessage, isNotFound } from '@/lib/errorHandling';
+import { acceptInviteSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { logError } from '@/lib/logger';
 
-type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>
+type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>;
+
+interface RegisteredInviteUser {
+  id: string;
+  email: string;
+  fullName?: string | null;
+  role?: string;
+  roleInCompany?: string;
+  companyId?: string | null;
+  companyName?: string | null;
+}
 
 interface Invitation {
-  id: string
-  companyName: string
-  projectName: string
-  headContractorName: string
-  primaryContactEmail: string
-  primaryContactName?: string
-  status: string
+  id: string;
+  companyName: string;
+  projectName: string;
+  headContractorName: string;
+  primaryContactEmail: string;
+  primaryContactName?: string;
+  status: string;
 }
 
 export function AcceptInvitePage() {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const invitationId = searchParams.get('id')
-  const { user, loading: authLoading, refreshUser } = useAuth()
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const invitationId = searchParams.get('id')?.trim() || null;
+  const invitationApiPath = invitationId
+    ? `/api/subcontractors/invitation/${encodeURIComponent(invitationId)}`
+    : null;
+  const { user, loading: authLoading, refreshUser, setToken } = useAuth();
 
-  const [invitation, setInvitation] = useState<Invitation | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [accepting, setAccepting] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [invitation, setInvitation] = useState<Invitation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const {
     register,
@@ -54,86 +77,97 @@ export function AcceptInvitePage() {
       confirmPassword: '',
       tosAccepted: false,
     },
-  })
+  });
 
   // Watch password for real-time validation feedback
-  const password = watch('password', '')
-  const confirmPassword = watch('confirmPassword', '')
+  const password = watch('password', '');
+  const confirmPassword = watch('confirmPassword', '');
 
   // Password requirements (must match backend: 12+ chars, uppercase, lowercase, number, special)
-  const passwordChecks = useMemo(() => ({
-    minLength: password.length >= MIN_PASSWORD_LENGTH,
-    hasUppercase: /[A-Z]/.test(password),
-    hasLowercase: /[a-z]/.test(password),
-    hasNumber: /\d/.test(password),
-    hasSpecial: /[^A-Za-z0-9]/.test(password),
-  }), [password])
+  const passwordChecks = useMemo(
+    () => ({
+      minLength: password.length >= MIN_PASSWORD_LENGTH,
+      hasUppercase: /[A-Z]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasNumber: /\d/.test(password),
+      hasSpecial: /[^A-Za-z0-9]/.test(password),
+    }),
+    [password],
+  );
 
   // Fetch invitation details
   useEffect(() => {
     async function fetchInvitation() {
       if (!invitationId) {
-        setError('No invitation ID provided')
-        setLoading(false)
-        return
+        setError('No invitation ID provided');
+        setLoading(false);
+        return;
       }
 
       try {
-        const data = await apiFetch<{ invitation: Invitation }>(`/api/subcontractors/invitation/${invitationId}`)
-        setInvitation(data.invitation)
+        const data = await apiFetch<{ invitation: Invitation }>(invitationApiPath!);
+        setInvitation(data.invitation);
 
         // Pre-fill email from invitation
         if (data.invitation.primaryContactEmail) {
-          setValue('email', data.invitation.primaryContactEmail)
+          setValue('email', data.invitation.primaryContactEmail);
         }
         if (data.invitation.primaryContactName) {
-          setValue('fullName', data.invitation.primaryContactName)
+          setValue('fullName', data.invitation.primaryContactName);
         }
       } catch (err) {
         if (isNotFound(err)) {
-          setError('This invitation was not found or has expired.')
+          setError('This invitation was not found or has expired.');
         } else {
-          setError(extractErrorMessage(err, 'Failed to load invitation details'))
+          setError(extractErrorMessage(err, 'Failed to load invitation details'));
         }
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
 
-    fetchInvitation()
-  }, [invitationId, setValue])
+    fetchInvitation();
+  }, [invitationApiPath, invitationId, setValue]);
 
   // Handle accepting invitation for logged-in users
   const handleAcceptAsLoggedIn = async () => {
-    if (!invitationId) return
+    if (!invitationId) return;
 
-    setAccepting(true)
-    setFormError(null)
+    setAccepting(true);
+    setFormError(null);
 
     try {
-      await apiFetch(`/api/subcontractors/invitation/${invitationId}/accept`, {
+      await apiFetch(`/api/subcontractors/invitation/${encodeURIComponent(invitationId)}/accept`, {
         method: 'POST',
-      })
+      });
 
       // Refresh auth to get updated role
-      await refreshUser()
+      await refreshUser();
 
-      toast({ title: 'Welcome!', description: `You've joined ${invitation?.companyName}. Let's get started!`, variant: 'success' })
-      navigate('/subcontractor-portal')
+      toast({
+        title: 'Welcome!',
+        description: `You've joined ${invitation?.companyName}. Let's get started!`,
+        variant: 'success',
+      });
+      navigate('/subcontractor-portal');
     } catch (err) {
-      console.error('Error accepting invitation:', err)
-      setFormError(extractErrorMessage(err, 'Failed to accept invitation. Please try again.'))
-      setAccepting(false)
+      logError('Error accepting invitation:', err);
+      setFormError(extractErrorMessage(err, 'Failed to accept invitation. Please try again.'));
+      setAccepting(false);
     }
-  }
+  };
 
   // Handle registration and accepting invitation
   const onRegisterSubmit = async (data: AcceptInviteFormData) => {
-    setFormError(null)
-    setAccepting(true)
+    setFormError(null);
+    setAccepting(true);
 
     try {
-      const result = await apiFetch<{ user: any; token: string; company: { companyName: string } }>('/api/auth/register-and-accept-invitation', {
+      const result = await apiFetch<{
+        user: RegisteredInviteUser;
+        token: string;
+        company: { companyName: string };
+      }>('/api/auth/register-and-accept-invitation', {
         method: 'POST',
         body: JSON.stringify({
           email: data.email,
@@ -142,25 +176,22 @@ export function AcceptInvitePage() {
           invitationId,
           tosAccepted: data.tosAccepted,
         }),
-      })
+      });
 
-      // Store auth token in localStorage
-      localStorage.setItem('siteproof_auth', JSON.stringify({
-        user: result.user,
-        token: result.token,
-      }))
-      localStorage.setItem('siteproof_remember_me', 'true')
+      await setToken(result.token);
 
-      toast({ title: 'Account Created!', description: `You've joined ${result.company.companyName}.`, variant: 'success' })
-
-      // Force page reload to update auth state
-      window.location.href = '/subcontractor-portal'
+      toast({
+        title: 'Account Created!',
+        description: `You've joined ${result.company.companyName}.`,
+        variant: 'success',
+      });
+      navigate('/subcontractor-portal', { replace: true });
     } catch (err) {
-      console.error('Error registering:', err)
-      setFormError(extractErrorMessage(err, 'Failed to create account. Please try again.'))
-      setAccepting(false)
+      logError('Error registering:', err);
+      setFormError(extractErrorMessage(err, 'Failed to create account. Please try again.'));
+      setAccepting(false);
     }
-  }
+  };
 
   // Loading state
   if (loading || authLoading) {
@@ -171,7 +202,7 @@ export function AcceptInvitePage() {
           <span>Loading invitation...</span>
         </div>
       </div>
-    )
+    );
   }
 
   // Error state
@@ -188,15 +219,19 @@ export function AcceptInvitePage() {
               {error || 'This invitation link is invalid or has expired.'}
             </p>
             <p className="text-sm text-muted-foreground mb-4">
-              If you believe this is an error, please contact the head contractor who sent you the invitation.
+              If you believe this is an error, please contact the head contractor who sent you the
+              invitation.
             </p>
-            <Link to="/auth/login" className="inline-block px-4 py-2 border border-border rounded-md text-foreground hover:bg-muted/50">
+            <Link
+              to="/login"
+              className="inline-block px-4 py-2 border border-border rounded-md text-foreground hover:bg-muted/50"
+            >
               Go to Login
             </Link>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   // Already accepted
@@ -209,22 +244,26 @@ export function AcceptInvitePage() {
               <Check className="h-6 w-6 text-green-600" />
             </div>
             <h2 className="text-xl font-semibold mb-2">Invitation Already Accepted</h2>
-            <p className="text-muted-foreground mb-4">
-              This invitation has already been accepted.
-            </p>
+            <p className="text-muted-foreground mb-4">This invitation has already been accepted.</p>
             {user ? (
-              <Link to="/subcontractor-portal" className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90">
+              <Link
+                to="/subcontractor-portal"
+                className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+              >
                 Go to Portal
               </Link>
             ) : (
-              <Link to="/auth/login" className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90">
+              <Link
+                to="/login"
+                className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+              >
                 Log In
               </Link>
             )}
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -283,11 +322,7 @@ export function AcceptInvitePage() {
                   <p className="text-sm text-red-600">{formError}</p>
                 </div>
               )}
-              <Button
-                onClick={handleAcceptAsLoggedIn}
-                disabled={accepting}
-                className="w-full py-3"
-              >
+              <Button onClick={handleAcceptAsLoggedIn} disabled={accepting} className="w-full py-3">
                 {accepting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -299,7 +334,7 @@ export function AcceptInvitePage() {
               </Button>
               <p className="text-center text-sm text-muted-foreground mt-4">
                 Not you?{' '}
-                <Link to="/auth/login" className="text-primary hover:underline">
+                <Link to="/login" className="text-primary hover:underline">
                   Log in with a different account
                 </Link>
               </p>
@@ -330,9 +365,7 @@ export function AcceptInvitePage() {
                     {...register('fullName')}
                     placeholder="John Smith"
                     autoComplete="name"
-                    className={`py-3 ${
-                      errors.fullName ? 'border-destructive' : ''
-                    }`}
+                    className={`py-3 ${errors.fullName ? 'border-destructive' : ''}`}
                   />
                   {errors.fullName && (
                     <p className="mt-1 text-sm text-destructive" role="alert">
@@ -351,10 +384,11 @@ export function AcceptInvitePage() {
                     {...register('email')}
                     placeholder="john@company.com"
                     autoComplete="email"
-                    disabled={!!invitation.primaryContactEmail}
+                    readOnly={!!invitation.primaryContactEmail}
+                    aria-readonly={!!invitation.primaryContactEmail}
                     className={`py-3 ${
                       errors.email ? 'border-destructive' : ''
-                    }`}
+                    } ${invitation.primaryContactEmail ? 'bg-muted cursor-not-allowed' : ''}`}
                   />
                   {invitation.primaryContactEmail && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
@@ -380,9 +414,7 @@ export function AcceptInvitePage() {
                       {...register('password')}
                       placeholder="Create a secure password"
                       autoComplete="new-password"
-                      className={`py-3 pr-10 ${
-                        errors.password ? 'border-destructive' : ''
-                      }`}
+                      className={`py-3 pr-10 ${errors.password ? 'border-destructive' : ''}`}
                     />
                     <Button
                       type="button"
@@ -397,19 +429,40 @@ export function AcceptInvitePage() {
                   {/* Password requirements */}
                   {password && (
                     <div className="text-xs space-y-1 mt-2">
-                      <p className={passwordChecks.minLength ? 'text-green-600' : 'text-muted-foreground'}>
-                        {passwordChecks.minLength ? '✓' : '○'} At least {MIN_PASSWORD_LENGTH} characters
+                      <p
+                        className={
+                          passwordChecks.minLength ? 'text-green-600' : 'text-muted-foreground'
+                        }
+                      >
+                        {passwordChecks.minLength ? '✓' : '○'} At least {MIN_PASSWORD_LENGTH}{' '}
+                        characters
                       </p>
-                      <p className={passwordChecks.hasUppercase ? 'text-green-600' : 'text-muted-foreground'}>
+                      <p
+                        className={
+                          passwordChecks.hasUppercase ? 'text-green-600' : 'text-muted-foreground'
+                        }
+                      >
                         {passwordChecks.hasUppercase ? '✓' : '○'} One uppercase letter
                       </p>
-                      <p className={passwordChecks.hasLowercase ? 'text-green-600' : 'text-muted-foreground'}>
+                      <p
+                        className={
+                          passwordChecks.hasLowercase ? 'text-green-600' : 'text-muted-foreground'
+                        }
+                      >
                         {passwordChecks.hasLowercase ? '✓' : '○'} One lowercase letter
                       </p>
-                      <p className={passwordChecks.hasNumber ? 'text-green-600' : 'text-muted-foreground'}>
+                      <p
+                        className={
+                          passwordChecks.hasNumber ? 'text-green-600' : 'text-muted-foreground'
+                        }
+                      >
                         {passwordChecks.hasNumber ? '✓' : '○'} One number
                       </p>
-                      <p className={passwordChecks.hasSpecial ? 'text-green-600' : 'text-muted-foreground'}>
+                      <p
+                        className={
+                          passwordChecks.hasSpecial ? 'text-green-600' : 'text-muted-foreground'
+                        }
+                      >
                         {passwordChecks.hasSpecial ? '✓' : '○'} One special character
                       </p>
                     </div>
@@ -431,9 +484,7 @@ export function AcceptInvitePage() {
                     {...register('confirmPassword')}
                     placeholder="Confirm your password"
                     autoComplete="new-password"
-                    className={`py-3 ${
-                      errors.confirmPassword ? 'border-destructive' : ''
-                    }`}
+                    className={`py-3 ${errors.confirmPassword ? 'border-destructive' : ''}`}
                   />
                   {confirmPassword && password !== confirmPassword && !errors.confirmPassword && (
                     <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
@@ -446,19 +497,27 @@ export function AcceptInvitePage() {
                 </div>
 
                 <div className="flex items-start gap-2 pt-2">
-                  <input
-                    id="tos"
-                    type="checkbox"
-                    {...register('tosAccepted')}
-                    className="mt-1"
-                  />
-                  <Label htmlFor="tos" className="text-sm text-muted-foreground dark:text-muted-foreground font-normal">
+                  <input id="tos" type="checkbox" {...register('tosAccepted')} className="mt-1" />
+                  <Label
+                    htmlFor="tos"
+                    className="text-sm text-muted-foreground dark:text-muted-foreground font-normal"
+                  >
                     I agree to the{' '}
-                    <Link to="/terms-of-service" target="_blank" className="text-primary hover:underline">
+                    <Link
+                      to="/terms-of-service"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
                       Terms of Service
                     </Link>{' '}
                     and{' '}
-                    <Link to="/privacy-policy" target="_blank" className="text-primary hover:underline">
+                    <Link
+                      to="/privacy-policy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
                       Privacy Policy
                     </Link>
                   </Label>
@@ -469,11 +528,7 @@ export function AcceptInvitePage() {
                   </p>
                 )}
 
-                <Button
-                  type="submit"
-                  disabled={accepting}
-                  className="w-full py-3"
-                >
+                <Button type="submit" disabled={accepting} className="w-full py-3">
                   {accepting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -487,7 +542,7 @@ export function AcceptInvitePage() {
                 <p className="text-center text-sm text-muted-foreground">
                   Already have an account?{' '}
                   <Link
-                    to={`/auth/login?redirect=${encodeURIComponent(`/subcontractor-portal/accept-invite?id=${invitationId}`)}`}
+                    to={`/login?redirect=${encodeURIComponent(`/subcontractor-portal/accept-invite?id=${invitationId}`)}`}
                     className="text-primary hover:underline"
                   >
                     Log in instead
@@ -499,5 +554,5 @@ export function AcceptInvitePage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,17 +1,17 @@
-import { useState } from 'react'
-import { HelpCircle } from 'lucide-react'
-import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
+import { useState } from 'react';
+import { HelpCircle } from 'lucide-react';
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
 
 interface ContextHelpProps {
-  title: string
-  content: string | React.ReactNode
-  className?: string
+  title: string;
+  content: string | React.ReactNode;
+  className?: string;
 }
 
 // Page-specific help content
 export const HELP_CONTENT: Record<string, { title: string; content: string }> = {
-  'lots': {
+  lots: {
     title: 'Lot Register',
     content: `The Lot Register is the central hub for managing work lots in your project.
 
@@ -37,7 +37,7 @@ Tips:
 • Click column headers to sort the register
 • Use the Columns button to show/hide columns`,
   },
-  'itp': {
+  itp: {
     title: 'Inspection & Test Plans (ITPs)',
     content: `ITPs define the quality inspection requirements for your project.
 
@@ -78,7 +78,7 @@ Tips:
 • Witness points are optional inspections
 • Track hold point metrics in Reports`,
   },
-  'tests': {
+  tests: {
     title: 'Test Results',
     content: `The Test Results register tracks all quality tests for your project.
 
@@ -99,7 +99,7 @@ Tips:
 • Failed tests can trigger NCRs
 • Use filters to find specific test types`,
   },
-  'ncr': {
+  ncr: {
     title: 'Non-Conformance Reports (NCRs)',
     content: `NCRs document quality issues that need to be addressed.
 
@@ -120,7 +120,7 @@ Tips:
 • Track NCR metrics in Reports
 • Attach photos as evidence`,
   },
-  'diary': {
+  diary: {
     title: 'Daily Diary',
     content: `The Daily Diary records day-to-day site activities and conditions.
 
@@ -141,7 +141,7 @@ Tips:
 • Include weather delays for claims
 • Generate daily reports for stakeholders`,
   },
-  'dockets': {
+  dockets: {
     title: 'Docket Approvals',
     content: `Docket Approvals manages delivery and work dockets requiring sign-off.
 
@@ -161,7 +161,7 @@ Tips:
 • Attach photos for verification
 • Link to relevant lots`,
   },
-  'claims': {
+  claims: {
     title: 'Progress Claims',
     content: `Progress Claims tracks work completed for payment certification.
 
@@ -182,7 +182,7 @@ Tips:
 • Track cumulative progress over time
 • Export claims for accounting`,
   },
-  'costs': {
+  costs: {
     title: 'Cost Management',
     content: `Cost Management tracks project budgets and expenditure.
 
@@ -203,7 +203,7 @@ Tips:
 • Update actuals regularly
 • Use reports for variance analysis`,
   },
-  'documents': {
+  documents: {
     title: 'Document Management',
     content: `Document Management stores and organizes project files.
 
@@ -224,7 +224,7 @@ Tips:
 • Organize by discipline or area
 • Link documents to lots`,
   },
-  'subcontractors': {
+  subcontractors: {
     title: 'Subcontractor Management',
     content: `Subcontractor Management tracks all subcontractors on the project.
 
@@ -244,7 +244,7 @@ Tips:
 • Assign subcontractors to lots
 • Track dockets by subcontractor`,
   },
-  'reports': {
+  reports: {
     title: 'Reports',
     content: `Reports provides analytics and reporting across the project.
 
@@ -260,7 +260,7 @@ Tips:
 • Schedule regular report generation
 • Share reports with stakeholders`,
   },
-  'dashboard': {
+  dashboard: {
     title: 'Dashboard',
     content: `The Dashboard provides an overview of your project status.
 
@@ -280,7 +280,7 @@ Tips:
 • Review notifications promptly
 • Use quick actions for common tasks`,
   },
-  'projects': {
+  projects: {
     title: 'Projects',
     content: `The Projects page lists all your projects.
 
@@ -295,10 +295,10 @@ Tips:
 • Pin frequently used projects
 • Archive completed projects`,
   },
-}
+};
 
 export function ContextHelp({ title, content, className = '' }: ContextHelpProps) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <>
@@ -326,7 +326,10 @@ export function ContextHelp({ title, content, className = '' }: ContextHelpProps
               {typeof content === 'string' ? (
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   {content.split('\n\n').map((paragraph, i) => (
-                    <p key={i} className="whitespace-pre-line text-sm text-muted-foreground mb-4 last:mb-0">
+                    <p
+                      key={i}
+                      className="whitespace-pre-line text-sm text-muted-foreground mb-4 last:mb-0"
+                    >
                       {paragraph}
                     </p>
                   ))}
@@ -337,13 +340,14 @@ export function ContextHelp({ title, content, className = '' }: ContextHelpProps
             </div>
 
             <div className="mt-6 pt-3 border-t text-center text-xs text-muted-foreground">
-              Press <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono text-xs">?</kbd> for keyboard shortcuts
+              Press <kbd className="px-1.5 py-0.5 rounded border bg-muted font-mono text-xs">?</kbd>{' '}
+              for keyboard shortcuts
             </div>
           </ModalBody>
         </Modal>
       )}
     </>
-  )
+  );
 }
 
 // Hook to get help content for current page
@@ -351,6 +355,6 @@ export function useContextHelp(pageKey: string) {
   const helpContent = HELP_CONTENT[pageKey] || {
     title: 'Help',
     content: 'Help content is not available for this page.',
-  }
-  return helpContent
+  };
+  return helpContent;
 }

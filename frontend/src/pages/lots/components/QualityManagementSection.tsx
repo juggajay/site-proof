@@ -1,24 +1,24 @@
-import { FileText } from 'lucide-react'
-import type { Lot, ConformStatus, LotTab } from '../types'
-import type { ConformanceFormat } from '@/lib/pdfGenerator'
-import { ConformanceReportModal } from './ConformanceReportModal'
+import { FileText } from 'lucide-react';
+import type { Lot, ConformStatus, LotTab } from '../types';
+import type { ConformanceFormat } from '@/lib/pdfGenerator';
+import { ConformanceReportModal } from './ConformanceReportModal';
 
 interface QualityManagementSectionProps {
-  lot: Lot
-  conformStatus: ConformStatus | null
-  loadingConformStatus: boolean
-  canConformLots: boolean
-  canVerifyTestResults: boolean
-  conforming: boolean
-  generatingReport: boolean
-  showReportFormatDialog: boolean
-  selectedReportFormat: ConformanceFormat
-  onConformLot: () => void
-  onTabChange: (tab: LotTab) => void
-  onShowReportDialog: () => void
-  onGenerateReport: () => void
-  onCloseReportDialog: () => void
-  onReportFormatChange: (format: ConformanceFormat) => void
+  lot: Lot;
+  conformStatus: ConformStatus | null;
+  loadingConformStatus: boolean;
+  canConformLots: boolean;
+  canVerifyTestResults: boolean;
+  conforming: boolean;
+  generatingReport: boolean;
+  showReportFormatDialog: boolean;
+  selectedReportFormat: ConformanceFormat;
+  onConformLot: () => void;
+  onTabChange: (tab: LotTab) => void;
+  onShowReportDialog: () => void;
+  onGenerateReport: () => void;
+  onCloseReportDialog: () => void;
+  onReportFormatChange: (format: ConformanceFormat) => void;
 }
 
 export function QualityManagementSection({
@@ -38,8 +38,9 @@ export function QualityManagementSection({
   onCloseReportDialog,
   onReportFormatChange,
 }: QualityManagementSectionProps) {
-  const isConformedOrClaimed = lot.status === 'conformed' || lot.status === 'claimed'
-  const canShowConformSection = canConformLots && lot.status !== 'conformed' && lot.status !== 'claimed'
+  const isConformedOrClaimed = lot.status === 'conformed' || lot.status === 'claimed';
+  const canShowConformSection =
+    canConformLots && lot.status !== 'conformed' && lot.status !== 'claimed';
 
   return (
     <>
@@ -62,40 +63,75 @@ export function QualityManagementSection({
               <h3 className="text-sm font-medium text-green-800 mb-2">Prerequisites:</h3>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-600'}>
+                  <span
+                    className={
+                      conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-600'
+                    }
+                  >
                     {conformStatus.prerequisites.itpAssigned ? '\u2713' : '\u2717'}
                   </span>
-                  <span className={conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-700'}>
+                  <span
+                    className={
+                      conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-700'
+                    }
+                  >
                     ITP Assigned
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-600'}>
+                  <span
+                    className={
+                      conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-600'
+                    }
+                  >
                     {conformStatus.prerequisites.itpCompleted ? '\u2713' : '\u2717'}
                   </span>
-                  <span className={conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-700'}>
-                    ITP Completed ({conformStatus.prerequisites.itpCompletedCount}/{conformStatus.prerequisites.itpTotalCount} items)
+                  <span
+                    className={
+                      conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-700'
+                    }
+                  >
+                    ITP Completed ({conformStatus.prerequisites.itpCompletedCount}/
+                    {conformStatus.prerequisites.itpTotalCount} items)
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-600'}>
+                  <span
+                    className={
+                      conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-600'
+                    }
+                  >
                     {conformStatus.prerequisites.hasPassingTest ? '\u2713' : '\u2717'}
                   </span>
-                  <span className={conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-700'}>
+                  <span
+                    className={
+                      conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-700'
+                    }
+                  >
                     Passing Verified Test Result
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-600'}>
+                  <span
+                    className={
+                      conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-600'
+                    }
+                  >
                     {conformStatus.prerequisites.noOpenNcrs ? '\u2713' : '\u2717'}
                   </span>
-                  <span className={conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-700'}>
+                  <span
+                    className={
+                      conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-700'
+                    }
+                  >
                     No Open NCRs
-                    {!conformStatus.prerequisites.noOpenNcrs && conformStatus.prerequisites.openNcrs.length > 0 && (
-                      <span className="text-red-600 ml-1">
-                        ({conformStatus.prerequisites.openNcrs.map(n => n.ncrNumber).join(', ')})
-                      </span>
-                    )}
+                    {!conformStatus.prerequisites.noOpenNcrs &&
+                      conformStatus.prerequisites.openNcrs.length > 0 && (
+                        <span className="text-red-600 ml-1">
+                          ({conformStatus.prerequisites.openNcrs.map((n) => n.ncrNumber).join(', ')}
+                          )
+                        </span>
+                      )}
                   </span>
                 </div>
               </div>
@@ -138,23 +174,35 @@ export function QualityManagementSection({
 
       {/* Conformed Status Display (also show for claimed lots as they were previously conformed) */}
       {isConformedOrClaimed && (
-        <div className={`mt-6 rounded-lg border p-4 ${lot.status === 'claimed' ? 'border-blue-400 bg-blue-100' : 'border-green-400 bg-green-100'}`}>
+        <div
+          className={`mt-6 rounded-lg border p-4 ${lot.status === 'claimed' ? 'border-blue-400 bg-blue-100' : 'border-green-400 bg-green-100'}`}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{lot.status === 'claimed' ? '\uD83D\uDCB0' : '\u2705'}</span>
+              <span className="text-2xl">
+                {lot.status === 'claimed' ? '\uD83D\uDCB0' : '\u2705'}
+              </span>
               <div>
-                <h2 className={`text-lg font-semibold ${lot.status === 'claimed' ? 'text-blue-800' : 'text-green-800'}`}>
+                <h2
+                  className={`text-lg font-semibold ${lot.status === 'claimed' ? 'text-blue-800' : 'text-green-800'}`}
+                >
                   {lot.status === 'claimed' ? 'Lot Claimed' : 'Lot Conformed'}
                 </h2>
-                <p className={`text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}>
+                <p
+                  className={`text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}
+                >
                   {lot.status === 'claimed'
                     ? 'This lot has been included in a progress claim.'
                     : 'This lot has been quality-approved and is ready for claiming.'}
                 </p>
                 {/* Conformance Details */}
                 {(lot.conformedAt || lot.conformedBy) && (
-                  <div className={`mt-2 pt-2 border-t ${lot.status === 'claimed' ? 'border-blue-300' : 'border-green-300'}`}>
-                    <div className={`flex flex-wrap gap-4 text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}>
+                  <div
+                    className={`mt-2 pt-2 border-t ${lot.status === 'claimed' ? 'border-blue-300' : 'border-green-300'}`}
+                  >
+                    <div
+                      className={`flex flex-wrap gap-4 text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}
+                    >
                       {lot.conformedBy && (
                         <div className="flex items-center gap-1">
                           <span className="font-medium">Conformed by:</span>
@@ -164,7 +212,10 @@ export function QualityManagementSection({
                       {lot.conformedAt && (
                         <div className="flex items-center gap-1">
                           <span className="font-medium">Conformed on:</span>
-                          <time dateTime={lot.conformedAt} title={new Date(lot.conformedAt).toISOString()}>
+                          <time
+                            dateTime={lot.conformedAt}
+                            title={new Date(lot.conformedAt).toISOString()}
+                          >
                             {new Date(lot.conformedAt).toLocaleString('en-AU', {
                               dateStyle: 'medium',
                               timeStyle: 'short',
@@ -199,5 +250,5 @@ export function QualityManagementSection({
         onClose={onCloseReportDialog}
       />
     </>
-  )
+  );
 }

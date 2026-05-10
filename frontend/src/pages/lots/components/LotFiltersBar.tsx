@@ -1,11 +1,33 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { Settings2, Check, ChevronUp, ChevronDown, Save, Bookmark, Trash2, LayoutGrid, LayoutList, MapPin } from 'lucide-react'
-import { FilterBottomSheet, FilterTriggerButton, type FilterConfig, type FilterValues } from '@/components/mobile/FilterBottomSheet'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { NativeSelect } from '@/components/ui/native-select'
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import {
+  Settings2,
+  Check,
+  ChevronUp,
+  ChevronDown,
+  Save,
+  Bookmark,
+  Trash2,
+  LayoutGrid,
+  LayoutList,
+  MapPin,
+} from 'lucide-react';
+import {
+  FilterBottomSheet,
+  FilterTriggerButton,
+  type FilterConfig,
+  type FilterValues,
+} from '@/components/mobile/FilterBottomSheet';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
+import {
+  isRecord,
+  parseJsonPreference,
+  readLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 
 // Column configuration
 export const COLUMN_CONFIG = [
@@ -16,15 +38,23 @@ export const COLUMN_CONFIG = [
   { id: 'status', label: 'Status', required: false },
   { id: 'subcontractor', label: 'Subcontractor', required: false },
   { id: 'budget', label: 'Budget', required: false },
-] as const
+] as const;
 
-export type ColumnId = typeof COLUMN_CONFIG[number]['id']
+export type ColumnId = (typeof COLUMN_CONFIG)[number]['id'];
 
-export const DEFAULT_COLUMN_ORDER: ColumnId[] = ['lotNumber', 'description', 'chainage', 'activityType', 'status', 'subcontractor', 'budget']
+export const DEFAULT_COLUMN_ORDER: ColumnId[] = [
+  'lotNumber',
+  'description',
+  'chainage',
+  'activityType',
+  'status',
+  'subcontractor',
+  'budget',
+];
 
-const COLUMN_STORAGE_KEY = 'siteproof_lot_columns'
-const COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order'
-const SAVED_FILTERS_STORAGE_KEY = 'siteproof_lot_saved_filters'
+const COLUMN_STORAGE_KEY = 'siteproof_lot_columns';
+const COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order';
+const SAVED_FILTERS_STORAGE_KEY = 'siteproof_lot_saved_filters';
 
 // Status options for multi-select filter
 export const STATUS_OPTIONS = [
@@ -36,50 +66,71 @@ export const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'conformed', label: 'Conformed' },
   { value: 'claimed', label: 'Claimed' },
-]
+];
 
 export interface SavedFilter {
-  id: string
-  name: string
-  status: string
-  activity: string
-  search: string
-  subcontractor?: string
-  areaZone?: string
-  createdAt: string
+  id: string;
+  name: string;
+  status: string;
+  activity: string;
+  search: string;
+  subcontractor?: string;
+  areaZone?: string;
+  createdAt: string;
+}
+
+function isSavedFilter(value: unknown): value is SavedFilter {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.status === 'string' &&
+    typeof value.activity === 'string' &&
+    typeof value.search === 'string' &&
+    typeof value.createdAt === 'string' &&
+    (value.subcontractor === undefined || typeof value.subcontractor === 'string') &&
+    (value.areaZone === undefined || typeof value.areaZone === 'string')
+  );
+}
+
+function parseSavedFiltersPreference(raw: string | null): SavedFilter[] {
+  return parseJsonPreference(raw, [], (value) => {
+    if (!Array.isArray(value)) return null;
+    return value.filter(isSavedFilter);
+  });
 }
 
 interface LotFiltersBarProps {
-  isMobile: boolean
-  isSubcontractor: boolean
-  canViewBudgets: boolean
+  isMobile: boolean;
+  isSubcontractor: boolean;
+  canViewBudgets: boolean;
   // Filter values from URL
-  statusFilters: string[]
-  activityFilter: string
-  searchQuery: string
-  chainageMinFilter: string
-  chainageMaxFilter: string
-  subcontractorFilter: string
-  areaZoneFilter: string
-  sortField: string
-  sortDirection: 'asc' | 'desc'
+  statusFilters: string[];
+  activityFilter: string;
+  searchQuery: string;
+  chainageMinFilter: string;
+  chainageMaxFilter: string;
+  subcontractorFilter: string;
+  areaZoneFilter: string;
+  sortField: string;
+  sortDirection: 'asc' | 'desc';
   // Data for filter dropdowns
-  activityTypes: (string | null | undefined)[]
-  areaZones: string[]
-  subcontractors: { id: string; companyName: string }[]
+  activityTypes: (string | null | undefined)[];
+  areaZones: string[];
+  subcontractors: { id: string; companyName: string }[];
   // Counts
-  totalLots: number
-  filteredLotsCount: number
+  totalLots: number;
+  filteredLotsCount: number;
   // View mode
-  viewMode: 'list' | 'card' | 'linear'
-  onToggleViewMode: (mode: 'list' | 'card' | 'linear') => void
+  viewMode: 'list' | 'card' | 'linear';
+  onToggleViewMode: (mode: 'list' | 'card' | 'linear') => void;
   // Update filters
-  onUpdateFilters: (params: Record<string, string>) => void
+  onUpdateFilters: (params: Record<string, string>) => void;
   // Column config
-  visibleColumns: ColumnId[]
-  onSetVisibleColumns: React.Dispatch<React.SetStateAction<ColumnId[]>>
-  columnOrder: ColumnId[]
-  onSetColumnOrder: React.Dispatch<React.SetStateAction<ColumnId[]>>
+  visibleColumns: ColumnId[];
+  onSetVisibleColumns: React.Dispatch<React.SetStateAction<ColumnId[]>>;
+  columnOrder: ColumnId[];
+  onSetColumnOrder: React.Dispatch<React.SetStateAction<ColumnId[]>>;
 }
 
 export const LotFiltersBar = React.memo(function LotFiltersBar({
@@ -106,97 +157,97 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
   columnOrder,
   onSetColumnOrder,
 }: LotFiltersBarProps) {
-  const statusDropdownRef = useRef<HTMLDivElement>(null)
-  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
-  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false)
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
 
   // Saved filters state
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => {
-    try {
-      const stored = localStorage.getItem(SAVED_FILTERS_STORAGE_KEY)
-      if (stored) {
-        return JSON.parse(stored) as SavedFilter[]
-      }
-    } catch (e) {
-      console.error('Error loading saved filters:', e)
-    }
-    return []
-  })
-  const [showSaveFilterModal, setShowSaveFilterModal] = useState(false)
-  const [newFilterName, setNewFilterName] = useState('')
-  const [savedFiltersDropdownOpen, setSavedFiltersDropdownOpen] = useState(false)
+    return parseSavedFiltersPreference(readLocalStorageItem(SAVED_FILTERS_STORAGE_KEY));
+  });
+  const [showSaveFilterModal, setShowSaveFilterModal] = useState(false);
+  const [newFilterName, setNewFilterName] = useState('');
+  const [savedFiltersDropdownOpen, setSavedFiltersDropdownOpen] = useState(false);
 
   // Mobile filter bottom sheet state
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [mobileFilterValues, setMobileFilterValues] = useState<FilterValues>({
     status: statusFilters,
     activity: activityFilter || null,
     subcontractor: subcontractorFilter || null,
     areaZone: areaZoneFilter || null,
-  })
+  });
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {
-    let count = 0
-    if (statusFilters.length > 0) count++
-    if (activityFilter) count++
-    if (searchQuery) count++
-    if (chainageMinFilter || chainageMaxFilter) count++
-    if (subcontractorFilter) count++
-    if (areaZoneFilter) count++
-    return count
-  }, [statusFilters, activityFilter, searchQuery, chainageMinFilter, chainageMaxFilter, subcontractorFilter, areaZoneFilter])
+    let count = 0;
+    if (statusFilters.length > 0) count++;
+    if (activityFilter) count++;
+    if (searchQuery) count++;
+    if (chainageMinFilter || chainageMaxFilter) count++;
+    if (subcontractorFilter) count++;
+    if (areaZoneFilter) count++;
+    return count;
+  }, [
+    statusFilters,
+    activityFilter,
+    searchQuery,
+    chainageMinFilter,
+    chainageMaxFilter,
+    subcontractorFilter,
+    areaZoneFilter,
+  ]);
 
   // Close status dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
-        setStatusDropdownOpen(false)
+        setStatusDropdownOpen(false);
       }
-    }
+    };
 
     if (statusDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [statusDropdownOpen])
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [statusDropdownOpen]);
 
   const handleStatusToggle = (status: string) => {
-    let newFilters: string[]
+    let newFilters: string[];
     if (statusFilters.includes(status)) {
-      newFilters = statusFilters.filter(s => s !== status)
+      newFilters = statusFilters.filter((s) => s !== status);
     } else {
-      newFilters = [...statusFilters, status]
+      newFilters = [...statusFilters, status];
     }
-    onUpdateFilters({ status: newFilters.join(',') })
-  }
+    onUpdateFilters({ status: newFilters.join(',') });
+  };
 
   const clearStatusFilters = () => {
-    onUpdateFilters({ status: '' })
-  }
+    onUpdateFilters({ status: '' });
+  };
 
   const handleSearch = (query: string) => {
-    onUpdateFilters({ search: query })
-  }
+    onUpdateFilters({ search: query });
+  };
 
   const handleActivityFilter = (activity: string) => {
-    onUpdateFilters({ activity })
-  }
+    onUpdateFilters({ activity });
+  };
 
   const handleSubcontractorFilter = (subcontractor: string) => {
-    onUpdateFilters({ subcontractor })
-  }
+    onUpdateFilters({ subcontractor });
+  };
 
   const handleAreaZoneFilter = (areaZone: string) => {
-    onUpdateFilters({ areaZone })
-  }
+    onUpdateFilters({ areaZone });
+  };
 
-  // Save filter to localStorage
+  // Save filter to local storage
   const saveCurrentFilter = () => {
-    if (!newFilterName.trim()) return
+    if (!newFilterName.trim()) return;
 
     const newFilter: SavedFilter = {
       id: crypto.randomUUID(),
@@ -207,14 +258,14 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
       subcontractor: subcontractorFilter,
       areaZone: areaZoneFilter,
       createdAt: new Date().toISOString(),
-    }
+    };
 
-    const updatedFilters = [...savedFilters, newFilter]
-    setSavedFilters(updatedFilters)
-    localStorage.setItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters))
-    setShowSaveFilterModal(false)
-    setNewFilterName('')
-  }
+    const updatedFilters = [...savedFilters, newFilter];
+    setSavedFilters(updatedFilters);
+    writeLocalStorageItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters));
+    setShowSaveFilterModal(false);
+    setNewFilterName('');
+  };
 
   // Load a saved filter
   const loadSavedFilter = (filter: SavedFilter) => {
@@ -224,61 +275,61 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
       search: filter.search,
       subcontractor: filter.subcontractor || '',
       areaZone: filter.areaZone || '',
-    })
-    setSavedFiltersDropdownOpen(false)
-  }
+    });
+    setSavedFiltersDropdownOpen(false);
+  };
 
   // Delete a saved filter
   const deleteSavedFilter = (filterId: string) => {
-    const updatedFilters = savedFilters.filter(f => f.id !== filterId)
-    setSavedFilters(updatedFilters)
-    localStorage.setItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters))
-  }
+    const updatedFilters = savedFilters.filter((f) => f.id !== filterId);
+    setSavedFilters(updatedFilters);
+    writeLocalStorageItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters));
+  };
 
   // Toggle column visibility
   const toggleColumn = (columnId: ColumnId) => {
-    const column = COLUMN_CONFIG.find(c => c.id === columnId)
-    if (column?.required) return
+    const column = COLUMN_CONFIG.find((c) => c.id === columnId);
+    if (column?.required) return;
 
-    onSetVisibleColumns(prev => {
+    onSetVisibleColumns((prev) => {
       const newColumns = prev.includes(columnId)
-        ? prev.filter(c => c !== columnId)
-        : [...prev, columnId]
+        ? prev.filter((c) => c !== columnId)
+        : [...prev, columnId];
 
-      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(newColumns))
-      return newColumns
-    })
-  }
+      writeLocalStorageItem(COLUMN_STORAGE_KEY, JSON.stringify(newColumns));
+      return newColumns;
+    });
+  };
 
   // Move column up in order
   const moveColumnUp = (columnId: ColumnId) => {
-    onSetColumnOrder(prev => {
-      const index = prev.indexOf(columnId)
-      if (index <= 0) return prev
-      if (prev[index - 1] === 'lotNumber') return prev
+    onSetColumnOrder((prev) => {
+      const index = prev.indexOf(columnId);
+      if (index <= 0) return prev;
+      if (prev[index - 1] === 'lotNumber') return prev;
 
-      const newOrder = [...prev]
-      ;[newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
-      localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(newOrder))
-      return newOrder
-    })
-  }
+      const newOrder = [...prev];
+      [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+      writeLocalStorageItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(newOrder));
+      return newOrder;
+    });
+  };
 
   // Move column down in order
   const moveColumnDown = (columnId: ColumnId) => {
-    onSetColumnOrder(prev => {
-      const index = prev.indexOf(columnId)
-      if (index < 0 || index >= prev.length - 1) return prev
-      if (columnId === 'lotNumber') return prev
+    onSetColumnOrder((prev) => {
+      const index = prev.indexOf(columnId);
+      if (index < 0 || index >= prev.length - 1) return prev;
+      if (columnId === 'lotNumber') return prev;
 
-      const newOrder = [...prev]
-      ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
-      localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(newOrder))
-      return newOrder
-    })
-  }
+      const newOrder = [...prev];
+      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+      writeLocalStorageItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(newOrder));
+      return newOrder;
+    });
+  };
 
-  const isColumnVisible = (columnId: ColumnId) => visibleColumns.includes(columnId)
+  const isColumnVisible = (columnId: ColumnId) => visibleColumns.includes(columnId);
 
   if (isMobile) {
     return (
@@ -305,52 +356,64 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           isOpen={filterSheetOpen}
           onClose={() => setFilterSheetOpen(false)}
           title="Filter Lots"
-          filters={[
-            {
-              type: 'multiselect',
-              id: 'status',
-              label: 'Status',
-              options: STATUS_OPTIONS,
-              value: statusFilters,
-            },
-            {
-              type: 'select',
-              id: 'activity',
-              label: 'Activity Type',
-              options: activityTypes.filter((t): t is string => t !== null && t !== undefined).map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) })),
-              value: activityFilter || null,
-            },
-            ...(!isSubcontractor && subcontractors.length > 0 ? [{
-              type: 'select' as const,
-              id: 'subcontractor',
-              label: 'Subcontractor',
-              options: [
-                { value: 'unassigned', label: 'Unassigned' },
-                ...subcontractors.map(s => ({ value: s.id, label: s.companyName })),
-              ],
-              value: subcontractorFilter || null,
-            }] : []),
-            ...(areaZones.length > 0 ? [{
-              type: 'select' as const,
-              id: 'areaZone',
-              label: 'Area/Zone',
-              options: [
-                { value: 'unassigned', label: 'Unassigned' },
-                ...areaZones.map(z => ({ value: z, label: z })),
-              ],
-              value: areaZoneFilter || null,
-            }] : []),
-          ] as FilterConfig[]}
+          filters={
+            [
+              {
+                type: 'multiselect',
+                id: 'status',
+                label: 'Status',
+                options: STATUS_OPTIONS,
+                value: statusFilters,
+              },
+              {
+                type: 'select',
+                id: 'activity',
+                label: 'Activity Type',
+                options: activityTypes
+                  .filter((t): t is string => t !== null && t !== undefined)
+                  .map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) })),
+                value: activityFilter || null,
+              },
+              ...(!isSubcontractor && subcontractors.length > 0
+                ? [
+                    {
+                      type: 'select' as const,
+                      id: 'subcontractor',
+                      label: 'Subcontractor',
+                      options: [
+                        { value: 'unassigned', label: 'Unassigned' },
+                        ...subcontractors.map((s) => ({ value: s.id, label: s.companyName })),
+                      ],
+                      value: subcontractorFilter || null,
+                    },
+                  ]
+                : []),
+              ...(areaZones.length > 0
+                ? [
+                    {
+                      type: 'select' as const,
+                      id: 'areaZone',
+                      label: 'Area/Zone',
+                      options: [
+                        { value: 'unassigned', label: 'Unassigned' },
+                        ...areaZones.map((z) => ({ value: z, label: z })),
+                      ],
+                      value: areaZoneFilter || null,
+                    },
+                  ]
+                : []),
+            ] as FilterConfig[]
+          }
           values={mobileFilterValues}
           onChange={(values) => setMobileFilterValues(values)}
           onApply={(values) => {
             onUpdateFilters({
-              status: (values.status as string[] || []).join(','),
-              activity: values.activity as string || '',
-              subcontractor: values.subcontractor as string || '',
-              areaZone: values.areaZone as string || '',
-            })
-            setFilterSheetOpen(false)
+              status: ((values.status as string[]) || []).join(','),
+              activity: (values.activity as string) || '',
+              subcontractor: (values.subcontractor as string) || '',
+              areaZone: (values.areaZone as string) || '',
+            });
+            setFilterSheetOpen(false);
           }}
           onClear={() => {
             setMobileFilterValues({
@@ -358,12 +421,12 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
               activity: null,
               subcontractor: null,
               areaZone: null,
-            })
-            onUpdateFilters({ status: '', activity: '', subcontractor: '', areaZone: '' })
+            });
+            onUpdateFilters({ status: '', activity: '', subcontractor: '', areaZone: '' });
           }}
         />
       </>
-    )
+    );
   }
 
   return (
@@ -384,9 +447,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Label htmlFor="search-input">
-            Search:
-          </Label>
+          <Label htmlFor="search-input">Search:</Label>
           <div className="flex items-center">
             <Input
               id="search-input"
@@ -405,7 +466,17 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 title="Clear search"
                 aria-label="Clear search"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
@@ -414,9 +485,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Label>
-            Status:
-          </Label>
+          <Label>Status:</Label>
           <div className="relative" ref={statusDropdownRef}>
             <button
               onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
@@ -426,10 +495,19 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 {statusFilters.length === 0
                   ? 'All Statuses'
                   : statusFilters.length === 1
-                    ? STATUS_OPTIONS.find(s => s.value === statusFilters[0])?.label
+                    ? STATUS_OPTIONS.find((s) => s.value === statusFilters[0])?.label
                     : `${statusFilters.length} selected`}
               </span>
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${statusDropdownOpen ? 'rotate-180' : ''}`}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={`transition-transform ${statusDropdownOpen ? 'rotate-180' : ''}`}
+              >
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
@@ -457,8 +535,8 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                       variant="link"
                       size="sm"
                       onClick={() => {
-                        clearStatusFilters()
-                        setStatusDropdownOpen(false)
+                        clearStatusFilters();
+                        setStatusDropdownOpen(false);
                       }}
                       className="w-full"
                     >
@@ -477,7 +555,17 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 title="Clear status filter"
                 aria-label="Clear status filter"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
@@ -486,9 +574,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Label htmlFor="activity-filter">
-            Activity:
-          </Label>
+          <Label htmlFor="activity-filter">Activity:</Label>
           <div className="flex items-center">
             <NativeSelect
               id="activity-filter"
@@ -512,7 +598,17 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 title="Clear activity filter"
                 aria-label="Clear activity filter"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
@@ -522,9 +618,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
         </div>
         {/* Chainage Range Filter */}
         <div className="flex items-center gap-2">
-          <Label>
-            Chainage:
-          </Label>
+          <Label>Chainage:</Label>
           <div className="flex items-center gap-1">
             <Input
               type="number"
@@ -552,7 +646,17 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 title="Clear chainage filter"
                 aria-label="Clear chainage filter"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
@@ -563,9 +667,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
         {/* Subcontractor Filter */}
         {!isSubcontractor && subcontractors.length > 0 && (
           <div className="flex items-center gap-2">
-            <Label htmlFor="subcontractor-filter">
-              Subcontractor:
-            </Label>
+            <Label htmlFor="subcontractor-filter">Subcontractor:</Label>
             <div className="flex items-center">
               <NativeSelect
                 id="subcontractor-filter"
@@ -590,7 +692,17 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                   title="Clear subcontractor filter"
                   aria-label="Clear subcontractor filter"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
@@ -602,9 +714,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
         {/* Area/Zone Filter */}
         {areaZones.length > 0 && (
           <div className="flex items-center gap-2">
-            <Label htmlFor="area-zone-filter">
-              Area/Zone:
-            </Label>
+            <Label htmlFor="area-zone-filter">Area/Zone:</Label>
             <div className="flex items-center">
               <NativeSelect
                 id="area-zone-filter"
@@ -629,7 +739,17 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                   title="Clear area/zone filter"
                   aria-label="Clear area/zone filter"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>
                   </svg>
@@ -638,13 +758,27 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
             </div>
           </div>
         )}
-        {(statusFilters.length > 0 || activityFilter || searchQuery || chainageMinFilter || chainageMaxFilter || subcontractorFilter || areaZoneFilter) && (
+        {(statusFilters.length > 0 ||
+          activityFilter ||
+          searchQuery ||
+          chainageMinFilter ||
+          chainageMaxFilter ||
+          subcontractorFilter ||
+          areaZoneFilter) && (
           <>
             <Button
               variant="link"
               size="sm"
               onClick={() => {
-                onUpdateFilters({ status: '', activity: '', search: '', chMin: '', chMax: '', subcontractor: '', areaZone: '' })
+                onUpdateFilters({
+                  status: '',
+                  activity: '',
+                  search: '',
+                  chMin: '',
+                  chMax: '',
+                  subcontractor: '',
+                  areaZone: '',
+                });
               }}
             >
               Clear All Filters
@@ -701,8 +835,8 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                           variant="ghost"
                           size="icon"
                           onClick={(e) => {
-                            e.stopPropagation()
-                            deleteSavedFilter(filter.id)
+                            e.stopPropagation();
+                            deleteSavedFilter(filter.id);
                           }}
                           className="h-6 w-6 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
                           title="Delete filter"
@@ -764,23 +898,22 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           </Button>
           {columnSettingsOpen && (
             <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setColumnSettingsOpen(false)}
-              />
+              <div className="fixed inset-0 z-10" onClick={() => setColumnSettingsOpen(false)} />
               <div className="absolute right-0 top-full mt-1 z-20 w-64 rounded-lg border bg-card shadow-lg">
                 <div className="p-2 border-b">
-                  <span className="text-xs font-medium text-muted-foreground">Show/Hide & Reorder Columns</span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Show/Hide & Reorder Columns
+                  </span>
                 </div>
                 <div className="p-1">
                   {columnOrder.map((columnId, index) => {
-                    const column = COLUMN_CONFIG.find(c => c.id === columnId)
-                    if (!column) return null
-                    if (column.id === 'subcontractor' && isSubcontractor) return null
-                    if (column.id === 'budget' && !canViewBudgets) return null
+                    const column = COLUMN_CONFIG.find((c) => c.id === columnId);
+                    if (!column) return null;
+                    if (column.id === 'subcontractor' && isSubcontractor) return null;
+                    if (column.id === 'budget' && !canViewBudgets) return null;
 
-                    const isFirst = index === 0 || columnOrder[index - 1] === 'lotNumber'
-                    const isLast = index === columnOrder.length - 1
+                    const isFirst = index === 0 || columnOrder[index - 1] === 'lotNumber';
+                    const isLast = index === columnOrder.length - 1;
 
                     return (
                       <div
@@ -789,20 +922,22 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                       >
                         <button
                           onClick={(e) => {
-                            e.stopPropagation()
-                            toggleColumn(column.id)
+                            e.stopPropagation();
+                            toggleColumn(column.id);
                           }}
                           disabled={column.required}
                           className={`flex items-center gap-2 flex-1 text-left ${
                             column.required ? 'opacity-50 cursor-not-allowed' : ''
                           }`}
                         >
-                          <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                            isColumnVisible(column.id) ? 'bg-primary border-primary' : 'border-border'
-                          }`}>
-                            {isColumnVisible(column.id) && (
-                              <Check className="h-3 w-3 text-white" />
-                            )}
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center ${
+                              isColumnVisible(column.id)
+                                ? 'bg-primary border-primary'
+                                : 'border-border'
+                            }`}
+                          >
+                            {isColumnVisible(column.id) && <Check className="h-3 w-3 text-white" />}
                           </div>
                           <span className="truncate">{column.label}</span>
                           {column.required && (
@@ -813,8 +948,8 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                           <div className="flex items-center gap-0.5">
                             <button
                               onClick={(e) => {
-                                e.stopPropagation()
-                                moveColumnUp(column.id)
+                                e.stopPropagation();
+                                moveColumnUp(column.id);
                               }}
                               disabled={isFirst}
                               className={`p-0.5 rounded hover:bg-muted ${isFirst ? 'opacity-30 cursor-not-allowed' : ''}`}
@@ -824,8 +959,8 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                             </button>
                             <button
                               onClick={(e) => {
-                                e.stopPropagation()
-                                moveColumnDown(column.id)
+                                e.stopPropagation();
+                                moveColumnDown(column.id);
                               }}
                               disabled={isLast}
                               className={`p-0.5 rounded hover:bg-muted ${isLast ? 'opacity-30 cursor-not-allowed' : ''}`}
@@ -836,7 +971,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                           </div>
                         )}
                       </div>
-                    )
+                    );
                   })}
                 </div>
               </div>
@@ -847,7 +982,13 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
 
       {/* Save Filter Modal */}
       {showSaveFilterModal && (
-        <Modal onClose={() => { setShowSaveFilterModal(false); setNewFilterName('') }} className="max-w-md">
+        <Modal
+          onClose={() => {
+            setShowSaveFilterModal(false);
+            setNewFilterName('');
+          }}
+          className="max-w-md"
+        >
           <ModalHeader>Save Current Filter</ModalHeader>
           <ModalBody>
             <p className="text-sm text-muted-foreground mb-4">
@@ -862,7 +1003,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 placeholder="e.g., Completed Earthworks"
                 autoFocus
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveCurrentFilter()
+                  if (e.key === 'Enter') saveCurrentFilter();
                 }}
               />
             </div>
@@ -870,7 +1011,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
               <p>Current filter:</p>
               <ul className="mt-1 ml-4 list-disc">
                 {statusFilters.length > 0 && (
-                  <li>Status: {statusFilters.map(s => s.replace('_', ' ')).join(', ')}</li>
+                  <li>Status: {statusFilters.map((s) => s.replace('_', ' ')).join(', ')}</li>
                 )}
                 {activityFilter && <li>Activity: {activityFilter}</li>}
                 {searchQuery && <li>Search: &quot;{searchQuery}&quot;</li>}
@@ -881,21 +1022,18 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
             <Button
               variant="outline"
               onClick={() => {
-                setShowSaveFilterModal(false)
-                setNewFilterName('')
+                setShowSaveFilterModal(false);
+                setNewFilterName('');
               }}
             >
               Cancel
             </Button>
-            <Button
-              onClick={saveCurrentFilter}
-              disabled={!newFilterName.trim()}
-            >
+            <Button onClick={saveCurrentFilter} disabled={!newFilterName.trim()}>
               Save Filter
             </Button>
           </ModalFooter>
         </Modal>
       )}
     </>
-  )
-})
+  );
+});

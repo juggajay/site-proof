@@ -1,142 +1,183 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Archive, CheckCircle2 } from 'lucide-react'
-import { apiFetch } from '@/lib/api'
-import { extractErrorMessage, isUnauthorized } from '@/lib/errorHandling'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Modal, AlertModalHeader, AlertModalDescription, ModalBody, AlertModalFooter } from '@/components/ui/Modal'
-import type { Project } from '../types'
+import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, Archive, CheckCircle2 } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage, isUnauthorized } from '@/lib/errorHandling';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Modal,
+  AlertModalHeader,
+  AlertModalDescription,
+  ModalBody,
+  AlertModalFooter,
+} from '@/components/ui/Modal';
+import type { Project } from '../types';
 
 interface DangerZoneProps {
-  projectId: string
-  project: Project
-  onProjectUpdate: (project: Project) => void
+  projectId: string;
+  project: Project;
+  onProjectUpdate: (project: Project) => void;
 }
 
 export function DangerZone({ projectId, project, onProjectUpdate }: DangerZoneProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   // Delete dialog state
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [deletePassword, setDeletePassword] = useState('')
-  const [deleteError, setDeleteError] = useState('')
-  const [deleting, setDeleting] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
 
   // Archive dialog state
-  const [showArchiveDialog, setShowArchiveDialog] = useState(false)
-  const [archiving, setArchiving] = useState(false)
-  const [archiveError, setArchiveError] = useState('')
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState('');
+  const archivingRef = useRef(false);
 
   // Complete project dialog state
-  const [showCompleteDialog, setShowCompleteDialog] = useState(false)
-  const [completing, setCompleting] = useState(false)
-  const [completeError, setCompleteError] = useState('')
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState('');
+  const completingRef = useRef(false);
 
   // Delete handlers
   const handleDeleteClick = () => {
-    setShowDeleteDialog(true)
-    setDeletePassword('')
-    setDeleteError('')
-  }
+    setShowDeleteDialog(true);
+    setDeletePassword('');
+    setDeleteError('');
+  };
 
   const handleCancelDelete = () => {
-    setShowDeleteDialog(false)
-    setDeletePassword('')
-    setDeleteError('')
-  }
+    if (deletingRef.current) return;
+
+    setShowDeleteDialog(false);
+    setDeletePassword('');
+    setDeleteError('');
+  };
 
   const handleConfirmDelete = async () => {
+    if (deletingRef.current) return;
+
     if (!deletePassword) {
-      setDeleteError('Password is required')
-      return
+      setDeleteError('Password is required');
+      return;
     }
 
-    setDeleting(true)
-    setDeleteError('')
+    if (!projectId) {
+      setDeleteError('Project not found');
+      return;
+    }
+
+    deletingRef.current = true;
+    setDeleting(true);
+    setDeleteError('');
 
     try {
-      await apiFetch(`/api/projects/${projectId}`, {
+      await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, {
         method: 'DELETE',
         body: JSON.stringify({ password: deletePassword }),
-      })
+      });
 
       // Success - navigate to projects list
-      navigate('/projects', { replace: true })
+      navigate('/projects', { replace: true });
     } catch (error) {
       if (isUnauthorized(error)) {
-        setDeleteError('Incorrect password')
+        setDeleteError('Incorrect password');
       } else {
-        setDeleteError(extractErrorMessage(error, 'Failed to delete project. Please try again.'))
+        setDeleteError(extractErrorMessage(error, 'Failed to delete project. Please try again.'));
       }
     } finally {
-      setDeleting(false)
+      deletingRef.current = false;
+      setDeleting(false);
     }
-  }
+  };
 
   // Archive handlers
   const handleArchiveClick = () => {
-    setShowArchiveDialog(true)
-    setArchiveError('')
-  }
+    setShowArchiveDialog(true);
+    setArchiveError('');
+  };
 
   const handleCancelArchive = () => {
-    setShowArchiveDialog(false)
-    setArchiveError('')
-  }
+    if (archivingRef.current) return;
+
+    setShowArchiveDialog(false);
+    setArchiveError('');
+  };
 
   const handleConfirmArchive = async () => {
-    setArchiving(true)
-    setArchiveError('')
+    if (archivingRef.current) return;
+    if (!projectId) {
+      setArchiveError('Project not found');
+      return;
+    }
+
+    archivingRef.current = true;
+    setArchiving(true);
+    setArchiveError('');
 
     try {
-      const newStatus = project?.status === 'archived' ? 'active' : 'archived'
-      await apiFetch(`/api/projects/${projectId}`, {
+      const newStatus = project?.status === 'archived' ? 'active' : 'archived';
+      await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus }),
-      })
+      });
 
       // Update local project state
-      onProjectUpdate({ ...project, status: newStatus })
-      setShowArchiveDialog(false)
+      onProjectUpdate({ ...project, status: newStatus });
+      setShowArchiveDialog(false);
     } catch (error) {
-      setArchiveError(extractErrorMessage(error, 'Failed to update project status'))
+      setArchiveError(extractErrorMessage(error, 'Failed to update project status'));
     } finally {
-      setArchiving(false)
+      archivingRef.current = false;
+      setArchiving(false);
     }
-  }
+  };
 
   // Complete handlers
   const handleCompleteClick = () => {
-    setShowCompleteDialog(true)
-    setCompleteError('')
-  }
+    setShowCompleteDialog(true);
+    setCompleteError('');
+  };
 
   const handleCancelComplete = () => {
-    setShowCompleteDialog(false)
-    setCompleteError('')
-  }
+    if (completingRef.current) return;
+
+    setShowCompleteDialog(false);
+    setCompleteError('');
+  };
 
   const handleConfirmComplete = async () => {
-    setCompleting(true)
-    setCompleteError('')
+    if (completingRef.current) return;
+    if (!projectId) {
+      setCompleteError('Project not found');
+      return;
+    }
+
+    completingRef.current = true;
+    setCompleting(true);
+    setCompleteError('');
 
     try {
-      const newStatus = project?.status === 'completed' ? 'active' : 'completed'
-      await apiFetch(`/api/projects/${projectId}`, {
+      const newStatus = project?.status === 'completed' ? 'active' : 'completed';
+      await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus }),
-      })
+      });
 
       // Update local project state
-      onProjectUpdate({ ...project, status: newStatus })
-      setShowCompleteDialog(false)
+      onProjectUpdate({ ...project, status: newStatus });
+      setShowCompleteDialog(false);
     } catch (error) {
-      setCompleteError(extractErrorMessage(error, 'Failed to update project status'))
+      setCompleteError(extractErrorMessage(error, 'Failed to update project status'));
     } finally {
-      setCompleting(false)
+      completingRef.current = false;
+      setCompleting(false);
     }
-  }
+  };
 
   return (
     <>
@@ -159,6 +200,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
           </div>
         )}
         <Button
+          type="button"
           onClick={handleCompleteClick}
           className={
             project?.status === 'completed'
@@ -189,6 +231,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
           </div>
         )}
         <Button
+          type="button"
           onClick={handleArchiveClick}
           className={
             project?.status === 'archived'
@@ -209,7 +252,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
         <p className="text-sm text-muted-foreground mb-4">
           Once you delete a project, there is no going back. Please be certain.
         </p>
-        <Button variant="destructive" onClick={handleDeleteClick}>
+        <Button type="button" variant="destructive" onClick={handleDeleteClick}>
           Delete Project
         </Button>
       </div>
@@ -220,7 +263,8 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
           <AlertModalHeader>Delete Project</AlertModalHeader>
           <AlertModalDescription>
             This action cannot be undone. This will permanently delete the project
-            <strong className="text-foreground"> {project?.name || projectId}</strong> and all associated data.
+            <strong className="text-foreground"> {project?.name || projectId}</strong> and all
+            associated data.
           </AlertModalDescription>
           <ModalBody>
             <p className="text-sm text-muted-foreground mb-4">
@@ -228,24 +272,38 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
             </p>
 
             {deleteError && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4">
+              <div
+                role="alert"
+                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4"
+              >
                 {deleteError}
               </div>
             )}
 
+            <Label htmlFor="delete-project-password" className="mb-1">
+              Password
+            </Label>
             <Input
+              id="delete-project-password"
               type="password"
               value={deletePassword}
               onChange={(e) => setDeletePassword(e.target.value)}
               placeholder="Enter your password"
+              disabled={deleting}
               autoFocus
             />
           </ModalBody>
           <AlertModalFooter>
-            <Button variant="outline" onClick={handleCancelDelete} disabled={deleting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelDelete}
+              disabled={deleting}
+            >
               Cancel
             </Button>
             <Button
+              type="button"
               variant="destructive"
               onClick={handleConfirmDelete}
               disabled={deleting || !deletePassword}
@@ -263,22 +321,41 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
             {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
           </AlertModalHeader>
           <AlertModalDescription>
-            {project?.status === 'archived'
-              ? <>Are you sure you want to restore <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become active and editable again.</>
-              : <>Are you sure you want to archive <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become read-only but can be restored later.</>}
+            {project?.status === 'archived' ? (
+              <>
+                Are you sure you want to restore{' '}
+                <strong className="text-foreground">{project?.name || projectId}</strong>? The
+                project will become active and editable again.
+              </>
+            ) : (
+              <>
+                Are you sure you want to archive{' '}
+                <strong className="text-foreground">{project?.name || projectId}</strong>? The
+                project will become read-only but can be restored later.
+              </>
+            )}
           </AlertModalDescription>
           <ModalBody>
             {archiveError && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              <div
+                role="alert"
+                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+              >
                 {archiveError}
               </div>
             )}
           </ModalBody>
           <AlertModalFooter>
-            <Button variant="outline" onClick={handleCancelArchive} disabled={archiving}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelArchive}
+              disabled={archiving}
+            >
               Cancel
             </Button>
             <Button
+              type="button"
               onClick={handleConfirmArchive}
               disabled={archiving}
               className={
@@ -288,8 +365,12 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
               }
             >
               {archiving
-                ? (project?.status === 'archived' ? 'Restoring...' : 'Archiving...')
-                : (project?.status === 'archived' ? 'Restore Project' : 'Archive Project')}
+                ? project?.status === 'archived'
+                  ? 'Restoring...'
+                  : 'Archiving...'
+                : project?.status === 'archived'
+                  ? 'Restore Project'
+                  : 'Archive Project'}
             </Button>
           </AlertModalFooter>
         </Modal>
@@ -302,22 +383,41 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
             {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
           </AlertModalHeader>
           <AlertModalDescription>
-            {project?.status === 'completed'
-              ? <>Are you sure you want to reactivate <strong className="text-foreground">{project?.name || projectId}</strong>? The project will become active and editable again.</>
-              : <>Are you sure you want to mark <strong className="text-foreground">{project?.name || projectId}</strong> as completed? Completed projects remain accessible but indicate all work is finished.</>}
+            {project?.status === 'completed' ? (
+              <>
+                Are you sure you want to reactivate{' '}
+                <strong className="text-foreground">{project?.name || projectId}</strong>? The
+                project will become active and editable again.
+              </>
+            ) : (
+              <>
+                Are you sure you want to mark{' '}
+                <strong className="text-foreground">{project?.name || projectId}</strong> as
+                completed? Completed projects remain accessible but indicate all work is finished.
+              </>
+            )}
           </AlertModalDescription>
           <ModalBody>
             {completeError && (
-              <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              <div
+                role="alert"
+                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+              >
                 {completeError}
               </div>
             )}
           </ModalBody>
           <AlertModalFooter>
-            <Button variant="outline" onClick={handleCancelComplete} disabled={completing}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelComplete}
+              disabled={completing}
+            >
               Cancel
             </Button>
             <Button
+              type="button"
               onClick={handleConfirmComplete}
               disabled={completing}
               className={
@@ -327,12 +427,16 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
               }
             >
               {completing
-                ? (project?.status === 'completed' ? 'Reactivating...' : 'Completing...')
-                : (project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed')}
+                ? project?.status === 'completed'
+                  ? 'Reactivating...'
+                  : 'Completing...'
+                : project?.status === 'completed'
+                  ? 'Reactivate Project'
+                  : 'Mark as Completed'}
             </Button>
           </AlertModalFooter>
         </Modal>
       )}
     </>
-  )
+  );
 }

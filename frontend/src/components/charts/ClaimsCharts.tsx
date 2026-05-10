@@ -9,103 +9,107 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from 'recharts'
-import { TrendingUp, Download } from 'lucide-react'
-import { BarChart3 } from 'lucide-react'
+} from 'recharts';
+import { TrendingUp, Download } from 'lucide-react';
+import { BarChart3 } from 'lucide-react';
 
 interface ChartDataPoint {
-  name: string
-  claimNumber: number
-  claimed: number
-  certified: number
-  paid: number
-  claimAmount?: number
-  certifiedAmount?: number | null
-  paidAmount?: number | null
-  status?: string
+  name: string;
+  claimNumber: number;
+  claimed: number;
+  certified: number;
+  paid: number;
+  claimAmount?: number;
+  certifiedAmount?: number | null;
+  paidAmount?: number | null;
+  status?: string;
 }
 
 interface ClaimsChartsProps {
-  cumulativeChartData: ChartDataPoint[]
-  monthlyBreakdownData: ChartDataPoint[]
-  formatCurrency: (amount: number | null) => string
-  onExportCumulativeData: () => void
-  onExportMonthlyData: () => void
+  cumulativeChartData: ChartDataPoint[];
+  monthlyBreakdownData: ChartDataPoint[];
+  formatCurrency: (amount: number | null) => string;
+  onExportCumulativeData: () => void;
+  onExportMonthlyData: () => void;
+}
+
+interface ClaimsTooltipPayload {
+  payload: ChartDataPoint;
+}
+
+interface ClaimsTooltipProps {
+  active?: boolean;
+  payload?: ClaimsTooltipPayload[];
+  label?: string | number;
+  formatCurrency: (amount: number | null) => string;
 }
 
 // Custom tooltip for the cumulative chart
-function CumulativeTooltip({ active, payload, label, formatCurrency }: any) {
+function CumulativeTooltip({ active, payload, label, formatCurrency }: ClaimsTooltipProps) {
   if (active && payload && payload.length) {
-    const data = payload[0].payload
+    const data = payload[0].payload;
     return (
       <div className="bg-card p-3 border rounded-lg shadow-lg">
-        <p className="font-semibold mb-2">Claim {data.claimNumber} ({label})</p>
+        <p className="font-semibold mb-2">
+          Claim {data.claimNumber} ({label})
+        </p>
         <div className="space-y-1 text-sm">
-          <p className="text-blue-600">
-            Cumulative Claimed: {formatCurrency(data.claimed)}
-          </p>
-          <p className="text-amber-600">
-            Cumulative Certified: {formatCurrency(data.certified)}
-          </p>
-          <p className="text-green-600">
-            Cumulative Paid: {formatCurrency(data.paid)}
-          </p>
+          <p className="text-blue-600">Cumulative Claimed: {formatCurrency(data.claimed)}</p>
+          <p className="text-amber-600">Cumulative Certified: {formatCurrency(data.certified)}</p>
+          <p className="text-green-600">Cumulative Paid: {formatCurrency(data.paid)}</p>
         </div>
         <div className="border-t mt-2 pt-2 text-xs text-muted-foreground">
-          <p>This claim: {formatCurrency(data.claimAmount)}</p>
+          <p>This claim: {formatCurrency(data.claimAmount ?? null)}</p>
         </div>
       </div>
-    )
+    );
   }
-  return null
+  return null;
 }
 
 // Custom tooltip for monthly breakdown chart
-function MonthlyTooltip({ active, payload, label, formatCurrency }: any) {
+function MonthlyTooltip({ active, payload, label, formatCurrency }: ClaimsTooltipProps) {
   if (active && payload && payload.length) {
-    const data = payload[0].payload
+    const data = payload[0].payload;
     const statusColors: Record<string, string> = {
       draft: 'text-muted-foreground',
       submitted: 'text-blue-600',
       certified: 'text-amber-600',
       paid: 'text-green-600',
-      disputed: 'text-red-600'
-    }
+      disputed: 'text-red-600',
+    };
+    const status = data.status || 'unknown';
     return (
       <div className="bg-card p-3 border rounded-lg shadow-lg">
-        <p className="font-semibold mb-2">Claim {data.claimNumber} ({label})</p>
+        <p className="font-semibold mb-2">
+          Claim {data.claimNumber} ({label})
+        </p>
         <div className="space-y-1 text-sm">
-          <p className="text-blue-600">
-            Claimed: {formatCurrency(data.claimed)}
-          </p>
-          <p className="text-amber-600">
-            Certified: {formatCurrency(data.certified)}
-          </p>
-          <p className="text-green-600">
-            Paid: {formatCurrency(data.paid)}
-          </p>
+          <p className="text-blue-600">Claimed: {formatCurrency(data.claimed)}</p>
+          <p className="text-amber-600">Certified: {formatCurrency(data.certified)}</p>
+          <p className="text-green-600">Paid: {formatCurrency(data.paid)}</p>
         </div>
         <div className="border-t mt-2 pt-2 text-xs">
-          <p className={statusColors[data.status] || 'text-muted-foreground'}>
-            Status: {data.status?.charAt(0).toUpperCase() + data.status?.slice(1)}
+          <p className={statusColors[status] || 'text-muted-foreground'}>
+            Status: {status.charAt(0).toUpperCase() + status.slice(1)}
           </p>
         </div>
       </div>
-    )
+    );
   }
-  return null
+  return null;
 }
 
 export function CumulativeClaimsChart({
   data,
   formatCurrency,
-  onExport
+  onExport,
 }: {
-  data: ChartDataPoint[]
-  formatCurrency: (amount: number | null) => string
-  onExport: () => void
+  data: ChartDataPoint[];
+  formatCurrency: (amount: number | null) => string;
+  onExport: () => void;
 }) {
-  if (data.length < 2) return null
+  if (data.length < 2) return null;
 
   return (
     <div className="rounded-lg border bg-card p-6">
@@ -128,24 +132,20 @@ export function CumulativeClaimsChart({
           <AreaChart data={data} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
             <defs>
               <linearGradient id="colorClaimed" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorCertified" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis
-              dataKey="name"
-              tick={{ fontSize: 12 }}
-              stroke="#6b7280"
-            />
+            <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#6b7280" />
             <YAxis
               tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
               tick={{ fontSize: 12 }}
@@ -187,19 +187,19 @@ export function CumulativeClaimsChart({
         Showing cumulative totals across {data.length} claims
       </p>
     </div>
-  )
+  );
 }
 
 export function MonthlyBreakdownChart({
   data,
   formatCurrency,
-  onExport
+  onExport,
 }: {
-  data: ChartDataPoint[]
-  formatCurrency: (amount: number | null) => string
-  onExport: () => void
+  data: ChartDataPoint[];
+  formatCurrency: (amount: number | null) => string;
+  onExport: () => void;
 }) {
-  if (data.length < 2) return null
+  if (data.length < 2) return null;
 
   return (
     <div className="rounded-lg border bg-card p-6">
@@ -221,11 +221,7 @@ export function MonthlyBreakdownChart({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis
-              dataKey="name"
-              tick={{ fontSize: 12 }}
-              stroke="#6b7280"
-            />
+            <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#6b7280" />
             <YAxis
               tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
               tick={{ fontSize: 12 }}
@@ -233,24 +229,9 @@ export function MonthlyBreakdownChart({
             />
             <Tooltip content={<MonthlyTooltip formatCurrency={formatCurrency} />} />
             <Legend />
-            <Bar
-              dataKey="claimed"
-              name="Claimed"
-              fill="#3b82f6"
-              radius={[4, 4, 0, 0]}
-            />
-            <Bar
-              dataKey="certified"
-              name="Certified"
-              fill="#f59e0b"
-              radius={[4, 4, 0, 0]}
-            />
-            <Bar
-              dataKey="paid"
-              name="Paid"
-              fill="#22c55e"
-              radius={[4, 4, 0, 0]}
-            />
+            <Bar dataKey="claimed" name="Claimed" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="certified" name="Certified" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="paid" name="Paid" fill="#22c55e" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -258,7 +239,7 @@ export function MonthlyBreakdownChart({
         Individual claim amounts per month
       </p>
     </div>
-  )
+  );
 }
 
 // Combined export for convenience
@@ -267,7 +248,7 @@ export function ClaimsCharts({
   monthlyBreakdownData,
   formatCurrency,
   onExportCumulativeData,
-  onExportMonthlyData
+  onExportMonthlyData,
 }: ClaimsChartsProps) {
   return (
     <>
@@ -282,5 +263,5 @@ export function ClaimsCharts({
         onExport={onExportMonthlyData}
       />
     </>
-  )
+  );
 }

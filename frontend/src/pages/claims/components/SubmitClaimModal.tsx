@@ -1,13 +1,20 @@
-import React, { useState } from 'react'
-import { Mail, Download, Upload } from 'lucide-react'
-import type { Claim, SubmitMethod } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
+import React, { useRef, useState } from 'react';
+import { Download } from 'lucide-react';
+import type { Claim, SubmitMethod } from '../types';
+import { CLAIM_SUBMISSION_OPTIONS } from '../submissionOptions';
+import {
+  Modal,
+  ModalHeader,
+  ModalDescription,
+  ModalBody,
+  ModalFooter,
+} from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
 
 interface SubmitClaimModalProps {
-  claim: Claim
-  onClose: () => void
-  onSubmitted: (claimId: string, method: SubmitMethod) => void
+  claim: Claim;
+  onClose: () => void;
+  onSubmitted: (claimId: string, method: SubmitMethod) => Promise<void>;
 }
 
 export const SubmitClaimModal = React.memo(function SubmitClaimModal({
@@ -15,67 +22,50 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
   onClose,
   onSubmitted,
 }: SubmitClaimModalProps) {
-  const [submitting, setSubmitting] = useState(false)
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const handleSubmit = async (method: SubmitMethod) => {
-    setSubmitting(true)
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
-      onSubmitted(claim.id, method)
+      await onSubmitted(claim.id, method);
     } finally {
-      setSubmitting(false)
+      submittingRef.current = false;
+      setSubmitting(false);
     }
-  }
+  };
 
   return (
     <Modal onClose={onClose} className="max-w-md">
       <ModalHeader>Submit Claim</ModalHeader>
+      <ModalDescription>
+        Download the claim package and mark this progress claim as submitted.
+      </ModalDescription>
       <ModalBody>
         <p className="text-muted-foreground mb-6">
-          Choose how you would like to submit this progress claim:
+          Download the claim package, then submit it through your client channel.
         </p>
 
         <div className="space-y-3">
-          <button
-            onClick={() => handleSubmit('email')}
-            disabled={submitting}
-            className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
-          >
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <Mail className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <div className="font-medium">Email</div>
-              <div className="text-sm text-muted-foreground">Send claim via email to client</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => handleSubmit('download')}
-            disabled={submitting}
-            className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
-          >
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Download className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              <div className="font-medium">Download</div>
-              <div className="text-sm text-muted-foreground">Download package for manual submission</div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => handleSubmit('portal')}
-            disabled={submitting}
-            className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
-          >
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Upload className="h-5 w-5 text-purple-600" />
-            </div>
-            <div>
-              <div className="font-medium">Portal Upload</div>
-              <div className="text-sm text-muted-foreground">Upload directly to client portal</div>
-            </div>
-          </button>
+          {CLAIM_SUBMISSION_OPTIONS.map((option) => (
+            <button
+              key={option.method}
+              onClick={() => handleSubmit(option.method)}
+              disabled={submitting}
+              className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
+            >
+              <div className="p-2 bg-green-100 rounded-lg">
+                <Download className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <div className="font-medium">{option.label}</div>
+                <div className="text-sm text-muted-foreground">{option.description}</div>
+              </div>
+            </button>
+          ))}
         </div>
       </ModalBody>
       <ModalFooter>
@@ -84,5 +74,5 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
         </Button>
       </ModalFooter>
     </Modal>
-  )
-})
+  );
+});

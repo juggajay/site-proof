@@ -1,31 +1,40 @@
-import { useState, lazy, Suspense } from 'react'
-import { useParams } from 'react-router-dom'
-import { useIsMobile } from '@/hooks/useMediaQuery'
-import { DiaryMobileView } from '@/components/foreman/DiaryMobileView'
-import type { DiaryTab } from './types'
-import { useDiaryData } from './hooks/useDiaryData'
-import { useDiaryMobileHandlers } from './hooks/useDiaryMobileHandlers'
-import { DiaryDateSelector } from './components/DiaryDateSelector'
-import { DiaryMobileSheets } from './components/DiaryMobileSheets'
-import { DiarySubmitSection } from './components/DiarySubmitSection'
-import { DiaryDesktopHeader } from './components/DiaryDesktopHeader'
-import { DiaryTabNav } from './components/DiaryTabNav'
-import { DiaryEmptyState } from './components/DiaryEmptyState'
+import { useState, lazy, Suspense } from 'react';
+import { useParams } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { DiaryMobileView } from '@/components/foreman/DiaryMobileView';
+import type { DiaryTab } from './types';
+import { useDiaryData } from './hooks/useDiaryData';
+import { useDiaryMobileHandlers } from './hooks/useDiaryMobileHandlers';
+import { DiaryDateSelector } from './components/DiaryDateSelector';
+import { DiaryMobileSheets } from './components/DiaryMobileSheets';
+import { DiarySubmitSection } from './components/DiarySubmitSection';
+import { DiaryDesktopHeader } from './components/DiaryDesktopHeader';
+import { DiaryTabNav } from './components/DiaryTabNav';
+import { DiaryEmptyState } from './components/DiaryEmptyState';
+import { Button } from '@/components/ui/button';
 
 // Lazy-loaded tab components
-const WeatherTab = lazy(() => import('./components/WeatherTab').then(m => ({ default: m.WeatherTab })))
-const PersonnelTab = lazy(() => import('./components/PersonnelTab').then(m => ({ default: m.PersonnelTab })))
-const PlantTab = lazy(() => import('./components/PlantTab').then(m => ({ default: m.PlantTab })))
-const ActivitiesTab = lazy(() => import('./components/ActivitiesTab').then(m => ({ default: m.ActivitiesTab })))
-const DelaysTab = lazy(() => import('./components/DelaysTab').then(m => ({ default: m.DelaysTab })))
+const WeatherTab = lazy(() =>
+  import('./components/WeatherTab').then((m) => ({ default: m.WeatherTab })),
+);
+const PersonnelTab = lazy(() =>
+  import('./components/PersonnelTab').then((m) => ({ default: m.PersonnelTab })),
+);
+const PlantTab = lazy(() => import('./components/PlantTab').then((m) => ({ default: m.PlantTab })));
+const ActivitiesTab = lazy(() =>
+  import('./components/ActivitiesTab').then((m) => ({ default: m.ActivitiesTab })),
+);
+const DelaysTab = lazy(() =>
+  import('./components/DelaysTab').then((m) => ({ default: m.DelaysTab })),
+);
 
 export function DailyDiaryPage() {
-  const { projectId } = useParams()
-  const isMobile = useIsMobile()
-  const [activeTab, setActiveTab] = useState<DiaryTab>('weather')
+  const { projectId } = useParams();
+  const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState<DiaryTab>('weather');
 
   // Data hook (state, fetching, effects)
-  const data = useDiaryData({ projectId, isMobile })
+  const data = useDiaryData({ projectId, isMobile });
 
   // Mobile handlers hook
   const mobile = useDiaryMobileHandlers({
@@ -39,25 +48,29 @@ export function DailyDiaryPage() {
     fetchDocketSummary: data.fetchDocketSummary,
     setDiary: data.setDiary,
     setWeatherForm: data.setWeatherForm,
-  })
+  });
 
   // Derive weather display data for mobile view
-  const mobileWeather = data.diary ? {
-    conditions: data.diary.weatherConditions || '',
-    temperatureMin: data.diary.temperatureMin?.toString() || '',
-    temperatureMax: data.diary.temperatureMax?.toString() || '',
-    rainfallMm: data.diary.rainfallMm?.toString() || '',
-  } : data.weatherForm.weatherConditions ? {
-    conditions: data.weatherForm.weatherConditions,
-    temperatureMin: data.weatherForm.temperatureMin,
-    temperatureMax: data.weatherForm.temperatureMax,
-    rainfallMm: data.weatherForm.rainfallMm,
-  } : null
+  const mobileWeather = data.diary
+    ? {
+        conditions: data.diary.weatherConditions || '',
+        temperatureMin: data.diary.temperatureMin?.toString() || '',
+        temperatureMax: data.diary.temperatureMax?.toString() || '',
+        rainfallMm: data.diary.rainfallMm?.toString() || '',
+      }
+    : data.weatherForm.weatherConditions
+      ? {
+          conditions: data.weatherForm.weatherConditions,
+          temperatureMin: data.weatherForm.temperatureMin,
+          temperatureMax: data.weatherForm.temperatureMax,
+          rainfallMm: data.weatherForm.rainfallMm,
+        }
+      : null;
 
   const handleNewEntry = () => {
-    data.setShowNewEntry(true)
-    setActiveTab('weather')
-  }
+    data.setShowNewEntry(true);
+    setActiveTab('weather');
+  };
 
   // --- Mobile Layout ---
   if (isMobile) {
@@ -87,7 +100,10 @@ export function DailyDiaryPage() {
         />
         <DiaryMobileSheets
           activeSheet={mobile.activeSheet}
-          onCloseSheet={() => { mobile.setActiveSheet(null); mobile.setEditingEntry(null) }}
+          onCloseSheet={() => {
+            mobile.setActiveSheet(null);
+            mobile.setEditingEntry(null);
+          }}
           editingEntry={mobile.editingEntry}
           setEditingEntry={mobile.setEditingEntry}
           activeLotId={mobile.activeLotId}
@@ -104,7 +120,7 @@ export function DailyDiaryPage() {
           onSaveWeather={mobile.handleSaveWeather}
         />
       </>
-    )
+    );
   }
 
   // --- Desktop Layout ---
@@ -112,14 +128,25 @@ export function DailyDiaryPage() {
     <div className="flex items-center justify-center py-12">
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
     </div>
-  )
+  );
 
   return (
     <div className="space-y-6">
       <DiaryDesktopHeader projectId={projectId!} onNewEntry={handleNewEntry} />
 
       {data.error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{data.error}</div>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium">{data.error}</p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void data.fetchDiaryForDate(data.selectedDate)}
+            >
+              Try again
+            </Button>
+          </div>
+        </div>
       )}
 
       <DiaryDateSelector
@@ -132,7 +159,7 @@ export function DailyDiaryPage() {
 
       {data.loading ? (
         tabFallback
-      ) : data.showNewEntry || data.diary ? (
+      ) : data.error ? null : data.showNewEntry || data.diary ? (
         <div className="space-y-6">
           <DiaryTabNav activeTab={activeTab} onTabChange={setActiveTab} diary={data.diary} />
 
@@ -206,5 +233,5 @@ export function DailyDiaryPage() {
         <DiaryEmptyState selectedDate={data.selectedDate} onCreateEntry={handleNewEntry} />
       )}
     </div>
-  )
+  );
 }

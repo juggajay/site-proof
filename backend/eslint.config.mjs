@@ -33,6 +33,25 @@ export default tseslint.config(
     },
   },
   {
+    files: [
+      'scripts/migrate.ts',
+      'scripts/preflight-production-integrations.ts',
+      'scripts/check-migration-drift.mjs',
+      'scripts/seed-e2e.mjs',
+      'scripts/smoke-production.mjs',
+    ],
+    languageOptions: {
+      globals: {
+        AbortController: 'readonly',
+        clearTimeout: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        setTimeout: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
+  {
     files: ['src/**/*.test.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',

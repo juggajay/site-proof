@@ -1,18 +1,20 @@
-import React, { useState, useCallback } from 'react'
-import { getAuthToken } from '@/lib/auth'
-import { apiFetch, apiUrl } from '@/lib/api'
-import type { TestResult, ExtractionResult } from '../types'
-import { getConfidenceIndicator } from '../constants'
-import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { apiFetch, authFetch } from '@/lib/api';
+import type { TestResult, ExtractionResult } from '../types';
+import { getConfidenceIndicator } from '../constants';
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from '@/components/ui/toaster';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { getResponseErrorMessage } from '../utils';
 
 interface UploadCertificateModalProps {
-  isOpen: boolean
-  onClose: () => void
-  projectId: string
-  onTestResultsUpdated: (testResults: TestResult[]) => void
+  isOpen: boolean;
+  onClose: () => void;
+  projectId: string;
+  onTestResultsUpdated: (testResults: TestResult[]) => void;
 }
 
 export const UploadCertificateModal = React.memo(function UploadCertificateModal({
@@ -21,57 +23,75 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
   projectId,
   onTestResultsUpdated,
 }: UploadCertificateModalProps) {
-  const [uploading, setUploading] = useState(false)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null)
-  const [extractedTestId, setExtractedTestId] = useState<string | null>(null)
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
-  const [reviewFormData, setReviewFormData] = useState<Record<string, string>>({})
-  const [confirmingExtraction, setConfirmingExtraction] = useState(false)
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null);
+  const [extractedTestId, setExtractedTestId] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [reviewFormData, setReviewFormData] = useState<Record<string, string>>({});
+  const [confirmingExtraction, setConfirmingExtraction] = useState(false);
+  const pdfUrlRef = useRef<string | null>(null);
+
+  const updatePdfUrl = useCallback((nextUrl: string | null) => {
+    if (pdfUrlRef.current) {
+      URL.revokeObjectURL(pdfUrlRef.current);
+    }
+
+    pdfUrlRef.current = nextUrl;
+    setPdfUrl(nextUrl);
+  }, []);
 
   const resetState = useCallback(() => {
-    setUploadedFile(null)
-    setExtractionResult(null)
-    setExtractedTestId(null)
-    setPdfUrl(null)
-    setReviewFormData({})
-  }, [])
+    setUploadedFile(null);
+    setExtractionResult(null);
+    setExtractedTestId(null);
+    updatePdfUrl(null);
+    setReviewFormData({});
+  }, [updatePdfUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfUrlRef.current) {
+        URL.revokeObjectURL(pdfUrlRef.current);
+        pdfUrlRef.current = null;
+      }
+    };
+  }, []);
 
   const handleClose = useCallback(() => {
-    resetState()
-    onClose()
-  }, [resetState, onClose])
+    resetState();
+    onClose();
+  }, [resetState, onClose]);
 
   // Feature #200: Handle certificate upload with AI extraction (FormData - uses raw fetch)
   const handleUploadCertificate = useCallback(async () => {
     if (!uploadedFile) {
-      alert('Please select a file first')
-      return
+      toast({
+        title: 'Select a certificate file',
+        variant: 'warning',
+      });
+      return;
     }
 
-    setUploading(true)
-    const token = getAuthToken()
+    setUploading(true);
 
     try {
-      const formDataObj = new FormData()
-      formDataObj.append('certificate', uploadedFile)
-      formDataObj.append('projectId', projectId || '')
+      const formDataObj = new FormData();
+      formDataObj.append('certificate', uploadedFile);
+      formDataObj.append('projectId', projectId || '');
 
-      const response = await fetch(apiUrl('/api/test-results/upload-certificate'), {
+      const response = await authFetch('/api/test-results/upload-certificate', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formDataObj,
-      })
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        setExtractionResult(data.extraction)
-        setExtractedTestId(data.testResult.id)
+        const data = await response.json();
+        setExtractionResult(data.extraction);
+        setExtractedTestId(data.testResult.id);
 
         // Set form data for review from extracted values
-        const extractedFields = data.extraction.extractedFields
+        const extractedFields = data.extraction.extractedFields;
         setReviewFormData({
           testType: extractedFields.testType?.value || '',
           laboratoryName: extractedFields.laboratoryName?.value || '',
@@ -83,62 +103,94 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
           resultUnit: extractedFields.resultUnit?.value || '',
           specificationMin: extractedFields.specificationMin?.value || '',
           specificationMax: extractedFields.specificationMax?.value || '',
-        })
+        });
 
         // Create preview URL for the PDF
-        const previewUrl = URL.createObjectURL(uploadedFile)
-        setPdfUrl(previewUrl)
+        const previewUrl = URL.createObjectURL(uploadedFile);
+        updatePdfUrl(previewUrl);
 
         // Refresh test results list
-        const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
-        onTestResultsUpdated(testsData.testResults || [])
+        const testsData = await apiFetch<{ testResults: TestResult[] }>(
+          `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
+        );
+        onTestResultsUpdated(testsData.testResults || []);
+        toast({
+          title: 'Certificate processed',
+          description: 'Review the extracted fields before saving.',
+          variant: 'success',
+        });
       } else {
-        const data = await response.json()
-        alert(data.message || 'Failed to upload certificate')
+        toast({
+          title: 'Failed to upload certificate',
+          description: await getResponseErrorMessage(response, 'Please try again.'),
+          variant: 'error',
+        });
       }
     } catch (err) {
-      alert('Failed to upload certificate')
+      toast({
+        title: 'Failed to upload certificate',
+        description: extractErrorMessage(err, 'Please try again.'),
+        variant: 'error',
+      });
     } finally {
-      setUploading(false)
+      setUploading(false);
     }
-  }, [uploadedFile, projectId, onTestResultsUpdated])
+  }, [uploadedFile, projectId, onTestResultsUpdated, updatePdfUrl]);
 
   // Feature #200: Confirm extraction and save corrections
   const handleConfirmExtraction = useCallback(async () => {
-    if (!extractedTestId) return
+    if (!extractedTestId) return;
 
-    setConfirmingExtraction(true)
+    setConfirmingExtraction(true);
 
     try {
-      await apiFetch(`/api/test-results/${extractedTestId}/confirm-extraction`, {
-        method: 'PATCH',
-        body: JSON.stringify({ corrections: reviewFormData }),
-      })
+      await apiFetch(
+        `/api/test-results/${encodeURIComponent(extractedTestId)}/confirm-extraction`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ corrections: reviewFormData }),
+        },
+      );
 
       // Close modal and refresh
-      resetState()
-      onClose()
+      resetState();
+      onClose();
 
       // Refresh test results
-      const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
-      onTestResultsUpdated(testsData.testResults || [])
+      const testsData = await apiFetch<{ testResults: TestResult[] }>(
+        `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
+      );
+      onTestResultsUpdated(testsData.testResults || []);
+      toast({
+        title: 'Extraction saved',
+        variant: 'success',
+      });
     } catch (err) {
-      alert('Failed to confirm extraction')
+      toast({
+        title: 'Failed to confirm extraction',
+        description: extractErrorMessage(err, 'Please try again.'),
+        variant: 'error',
+      });
     } finally {
-      setConfirmingExtraction(false)
+      setConfirmingExtraction(false);
     }
-  }, [extractedTestId, reviewFormData, resetState, onClose, projectId, onTestResultsUpdated])
+  }, [extractedTestId, reviewFormData, resetState, onClose, projectId, onTestResultsUpdated]);
 
-  const confidenceForField = useCallback((field: string) => {
-    return getConfidenceIndicator(extractionResult?.confidence, field)
-  }, [extractionResult])
+  const confidenceForField = useCallback(
+    (field: string) => {
+      return getConfidenceIndicator(extractionResult?.confidence, field);
+    },
+    [extractionResult],
+  );
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-5xl">
       <ModalHeader>
-        {extractionResult ? '\uD83D\uDCCA Review AI Extracted Data' : '\uD83D\uDCC4 Upload Test Certificate'}
+        {extractionResult
+          ? '\uD83D\uDCCA Review AI Extracted Data'
+          : '\uD83D\uDCC4 Upload Test Certificate'}
       </ModalHeader>
       <ModalBody className="p-0">
         {/* Before extraction - File upload */}
@@ -173,19 +225,10 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
               )}
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setUploadedFile(null)
-                  onClose()
-                }}
-              >
+              <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleUploadCertificate}
-                disabled={!uploadedFile || uploading}
-              >
+              <Button onClick={handleUploadCertificate} disabled={!uploadedFile || uploading}>
                 {uploading ? (
                   <span className="flex items-center gap-2">
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -253,30 +296,45 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                     <Input
                       type="text"
                       value={reviewFormData.testType || ''}
-                      onChange={(e) => setReviewFormData({ ...reviewFormData, testType: e.target.value })}
+                      onChange={(e) =>
+                        setReviewFormData({ ...reviewFormData, testType: e.target.value })
+                      }
                       className={confidenceForField('testType').color}
                     />
-                    <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('testType').text}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {confidenceForField('testType').text}
+                    </p>
                   </div>
                   <div>
                     <Label>Laboratory Name</Label>
                     <Input
                       type="text"
                       value={reviewFormData.laboratoryName || ''}
-                      onChange={(e) => setReviewFormData({ ...reviewFormData, laboratoryName: e.target.value })}
+                      onChange={(e) =>
+                        setReviewFormData({ ...reviewFormData, laboratoryName: e.target.value })
+                      }
                       className={confidenceForField('laboratoryName').color}
                     />
-                    <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('laboratoryName').text}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {confidenceForField('laboratoryName').text}
+                    </p>
                   </div>
                   <div>
                     <Label>Lab Report Number</Label>
                     <Input
                       type="text"
                       value={reviewFormData.laboratoryReportNumber || ''}
-                      onChange={(e) => setReviewFormData({ ...reviewFormData, laboratoryReportNumber: e.target.value })}
+                      onChange={(e) =>
+                        setReviewFormData({
+                          ...reviewFormData,
+                          laboratoryReportNumber: e.target.value,
+                        })
+                      }
                       className={confidenceForField('laboratoryReportNumber').color}
                     />
-                    <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('laboratoryReportNumber').text}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {confidenceForField('laboratoryReportNumber').text}
+                    </p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -284,20 +342,28 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                       <Input
                         type="date"
                         value={reviewFormData.sampleDate || ''}
-                        onChange={(e) => setReviewFormData({ ...reviewFormData, sampleDate: e.target.value })}
+                        onChange={(e) =>
+                          setReviewFormData({ ...reviewFormData, sampleDate: e.target.value })
+                        }
                         className={confidenceForField('sampleDate').color}
                       />
-                      <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('sampleDate').text}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {confidenceForField('sampleDate').text}
+                      </p>
                     </div>
                     <div>
                       <Label>Test Date</Label>
                       <Input
                         type="date"
                         value={reviewFormData.testDate || ''}
-                        onChange={(e) => setReviewFormData({ ...reviewFormData, testDate: e.target.value })}
+                        onChange={(e) =>
+                          setReviewFormData({ ...reviewFormData, testDate: e.target.value })
+                        }
                         className={confidenceForField('testDate').color}
                       />
-                      <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('testDate').text}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {confidenceForField('testDate').text}
+                      </p>
                     </div>
                   </div>
                   <div>
@@ -305,10 +371,14 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                     <Input
                       type="text"
                       value={reviewFormData.sampleLocation || ''}
-                      onChange={(e) => setReviewFormData({ ...reviewFormData, sampleLocation: e.target.value })}
+                      onChange={(e) =>
+                        setReviewFormData({ ...reviewFormData, sampleLocation: e.target.value })
+                      }
                       className={confidenceForField('sampleLocation').color}
                     />
-                    <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('sampleLocation').text}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {confidenceForField('sampleLocation').text}
+                    </p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -317,20 +387,28 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                         type="number"
                         step="any"
                         value={reviewFormData.resultValue || ''}
-                        onChange={(e) => setReviewFormData({ ...reviewFormData, resultValue: e.target.value })}
+                        onChange={(e) =>
+                          setReviewFormData({ ...reviewFormData, resultValue: e.target.value })
+                        }
                         className={confidenceForField('resultValue').color}
                       />
-                      <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('resultValue').text}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {confidenceForField('resultValue').text}
+                      </p>
                     </div>
                     <div>
                       <Label>Unit</Label>
                       <Input
                         type="text"
                         value={reviewFormData.resultUnit || ''}
-                        onChange={(e) => setReviewFormData({ ...reviewFormData, resultUnit: e.target.value })}
+                        onChange={(e) =>
+                          setReviewFormData({ ...reviewFormData, resultUnit: e.target.value })
+                        }
                         className={confidenceForField('resultUnit').color}
                       />
-                      <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('resultUnit').text}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {confidenceForField('resultUnit').text}
+                      </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -340,10 +418,14 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                         type="number"
                         step="any"
                         value={reviewFormData.specificationMin || ''}
-                        onChange={(e) => setReviewFormData({ ...reviewFormData, specificationMin: e.target.value })}
+                        onChange={(e) =>
+                          setReviewFormData({ ...reviewFormData, specificationMin: e.target.value })
+                        }
                         className={confidenceForField('specificationMin').color}
                       />
-                      <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('specificationMin').text}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {confidenceForField('specificationMin').text}
+                      </p>
                     </div>
                     <div>
                       <Label>Spec Max</Label>
@@ -351,10 +433,14 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                         type="number"
                         step="any"
                         value={reviewFormData.specificationMax || ''}
-                        onChange={(e) => setReviewFormData({ ...reviewFormData, specificationMax: e.target.value })}
+                        onChange={(e) =>
+                          setReviewFormData({ ...reviewFormData, specificationMax: e.target.value })
+                        }
                         className={confidenceForField('specificationMax').color}
                       />
-                      <p className="text-xs text-muted-foreground mt-0.5">{confidenceForField('specificationMax').text}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {confidenceForField('specificationMax').text}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -365,10 +451,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                 <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleConfirmExtraction}
-                  disabled={confirmingExtraction}
-                >
+                <Button onClick={handleConfirmExtraction} disabled={confirmingExtraction}>
                   {confirmingExtraction ? 'Saving...' : '\u2713 Confirm & Save'}
                 </Button>
               </div>
@@ -377,5 +460,5 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
         )}
       </ModalBody>
     </Modal>
-  )
-})
+  );
+});

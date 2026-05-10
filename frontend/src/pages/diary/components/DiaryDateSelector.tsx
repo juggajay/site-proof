@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { apiFetch } from '@/lib/api'
-import { formatDate } from '../constants'
-import type { DailyDiary } from '../types'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { apiFetch } from '@/lib/api';
+import { logError } from '@/lib/logger';
+import { formatDate } from '../constants';
+import type { DailyDiary } from '../types';
 
 interface DiaryDateSelectorProps {
-  projectId: string
-  selectedDate: string
-  onDateChange: (date: string) => void
-  diaries: DailyDiary[]
-  diary: DailyDiary | null
+  projectId: string;
+  selectedDate: string;
+  onDateChange: (date: string) => void;
+  diaries: DailyDiary[];
+  diary: DailyDiary | null;
 }
 
 export const DiaryDateSelector = React.memo(function DiaryDateSelector({
@@ -19,114 +20,129 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
   diary,
 }: DiaryDateSelectorProps) {
   // Calendar state
-  const [showCalendar, setShowCalendar] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
-    const now = new Date()
-    return new Date(now.getFullYear(), now.getMonth(), 1)
-  })
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   // Search state
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filteredDiaries, setFilteredDiaries] = useState<DailyDiary[]>([])
-  const [searching, setSearching] = useState(false)
-  const searchTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredDiaries, setFilteredDiaries] = useState<DailyDiary[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Helper function to get diary status for a date
-  const getDiaryStatusForDate = (date: Date): 'submitted' | 'draft' | 'missing' | 'future' => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const checkDate = new Date(date)
-    checkDate.setHours(0, 0, 0, 0)
+  const getDiaryStatusForDate = useCallback(
+    (date: Date): 'submitted' | 'draft' | 'missing' | 'future' => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const checkDate = new Date(date);
+      checkDate.setHours(0, 0, 0, 0);
 
-    if (checkDate > today) return 'future'
+      if (checkDate > today) return 'future';
 
-    const dateStr = date.toISOString().split('T')[0]
-    const d = diaries.find(d => d.date.split('T')[0] === dateStr)
-    if (d) return d.status
-    return 'missing'
-  }
+      const dateStr = date.toISOString().split('T')[0];
+      const d = diaries.find((d) => d.date.split('T')[0] === dateStr);
+      if (d) return d.status;
+      return 'missing';
+    },
+    [diaries],
+  );
 
   // Generate calendar days for current month
   const calendarDays = useMemo(() => {
-    const year = calendarMonth.getFullYear()
-    const month = calendarMonth.getMonth()
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const daysInMonth = lastDay.getDate()
-    const startingDayOfWeek = firstDay.getDay()
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
 
-    const days: Array<{ date: Date | null; status?: 'submitted' | 'draft' | 'missing' | 'future' }> = []
+    const days: Array<{
+      date: Date | null;
+      status?: 'submitted' | 'draft' | 'missing' | 'future';
+    }> = [];
 
     for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push({ date: null })
+      days.push({ date: null });
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day)
+      const date = new Date(year, month, day);
       days.push({
         date,
-        status: getDiaryStatusForDate(date)
-      })
+        status: getDiaryStatusForDate(date),
+      });
     }
 
-    return days
-  }, [calendarMonth, diaries])
+    return days;
+  }, [calendarMonth, getDiaryStatusForDate]);
 
   const previousMonth = () => {
-    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))
-  }
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
+  };
 
   const nextMonth = () => {
-    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))
-  }
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1));
+  };
 
   const handleCalendarDayClick = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0]
-    onDateChange(dateStr)
-    setShowCalendar(false)
-  }
+    const dateStr = date.toISOString().split('T')[0];
+    onDateChange(dateStr);
+    setShowCalendar(false);
+  };
 
   // Search diaries by content
-  const searchDiaries = async (query: string) => {
-    if (!query.trim()) {
-      setFilteredDiaries([])
-      return
-    }
-    setSearching(true)
-    try {
-      const data = await apiFetch<DailyDiary[]>(`/api/diary/${projectId}?search=${encodeURIComponent(query)}`)
-      setFilteredDiaries(data)
-    } catch (err) {
-      console.error('Error searching diaries:', err)
-    } finally {
-      setSearching(false)
-    }
-  }
+  const searchDiaries = useCallback(
+    async (query: string) => {
+      if (!query.trim()) {
+        setFilteredDiaries([]);
+        return;
+      }
+      setSearching(true);
+      try {
+        const queryParams = new URLSearchParams({ search: query.trim() });
+        const data = await apiFetch<DailyDiary[]>(
+          `/api/diary/${encodeURIComponent(projectId)}?${queryParams.toString()}`,
+        );
+        setFilteredDiaries(data);
+      } catch (err) {
+        logError('Error searching diaries:', err);
+        setFilteredDiaries([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [projectId],
+  );
 
   // Debounced search
   useEffect(() => {
     if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current)
+      clearTimeout(searchTimerRef.current);
     }
     if (searchQuery.trim()) {
       searchTimerRef.current = setTimeout(() => {
-        searchDiaries(searchQuery)
-      }, 500)
+        searchDiaries(searchQuery);
+      }, 500);
     } else {
-      setFilteredDiaries([])
+      setFilteredDiaries([]);
     }
     return () => {
       if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current)
+        clearTimeout(searchTimerRef.current);
       }
-    }
-  }, [searchQuery])
+    };
+  }, [searchQuery, searchDiaries]);
 
   return (
     <>
       {/* Date Selector */}
       <div className="flex items-center gap-4">
-        <label htmlFor="diary-date" className="font-medium">Select Date:</label>
+        <label htmlFor="diary-date" className="font-medium">
+          Select Date:
+        </label>
         <input
           id="diary-date"
           type="date"
@@ -136,11 +152,13 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
           className="rounded-md border border-input bg-background px-3 py-2"
         />
         {diary && (
-          <span className={`rounded-full px-3 py-1 text-sm font-medium ${
-            diary.status === 'submitted'
-              ? 'bg-green-100 text-green-700'
-              : 'bg-yellow-100 text-yellow-700'
-          }`}>
+          <span
+            className={`rounded-full px-3 py-1 text-sm font-medium ${
+              diary.status === 'submitted'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-yellow-100 text-yellow-700'
+            }`}
+          >
             {diary.status === 'submitted' ? 'Submitted' : 'Draft'}
           </span>
         )}
@@ -217,10 +235,10 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
                       day.status === 'submitted'
                         ? 'bg-green-500 text-white hover:bg-green-600'
                         : day.status === 'draft'
-                        ? 'bg-yellow-500 text-white hover:bg-yellow-600'
-                        : day.status === 'missing'
-                        ? 'bg-red-500 text-white hover:bg-red-600'
-                        : 'bg-muted text-muted-foreground cursor-not-allowed'
+                          ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                          : day.status === 'missing'
+                            ? 'bg-red-500 text-white hover:bg-red-600'
+                            : 'bg-muted text-muted-foreground cursor-not-allowed'
                     } ${
                       day.date.toISOString().split('T')[0] === selectedDate
                         ? 'ring-2 ring-primary ring-offset-2'
@@ -258,7 +276,12 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
               {searching && (
                 <div className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -270,16 +293,17 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
           {searchQuery.trim() && filteredDiaries.length > 0 && (
             <div className="mb-4">
               <p className="text-sm text-muted-foreground mb-2">
-                Found {filteredDiaries.length} diary {filteredDiaries.length === 1 ? 'entry' : 'entries'} matching "{searchQuery}"
+                Found {filteredDiaries.length} diary{' '}
+                {filteredDiaries.length === 1 ? 'entry' : 'entries'} matching "{searchQuery}"
               </p>
               <div className="space-y-2 border-l-2 border-primary pl-4">
                 {filteredDiaries.slice(0, 10).map((d) => (
                   <button
                     key={d.id}
                     onClick={() => {
-                      onDateChange(d.date.split('T')[0])
-                      setSearchQuery('')
-                      setFilteredDiaries([])
+                      onDateChange(d.date.split('T')[0]);
+                      setSearchQuery('');
+                      setFilteredDiaries([]);
                     }}
                     className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 ${
                       d.date.split('T')[0] === selectedDate ? 'border-primary bg-primary/5' : ''
@@ -292,11 +316,13 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        d.status === 'submitted'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-yellow-100 text-yellow-700'
-                      }`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          d.status === 'submitted'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-yellow-100 text-yellow-700'
+                        }`}
+                      >
                         {d.status}
                       </span>
                     </div>
@@ -316,37 +342,41 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
           {!searchQuery.trim() && (
             <div className="space-y-2">
               {diaries.slice(0, 10).map((d) => (
-              <button
-                key={d.id}
-                onClick={() => onDateChange(d.date.split('T')[0])}
-                className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 ${
-                  d.date.split('T')[0] === selectedDate ? 'border-primary bg-primary/5' : ''
-                }`}
-              >
-                <div>
-                  <span className="font-medium">{formatDate(d.date)}</span>
-                  {d.weatherConditions && (
-                    <span className="ml-2 text-muted-foreground">- {d.weatherConditions}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    d.status === 'submitted'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {d.status}
-                  </span>
-                  {d.personnel.length > 0 && (
-                    <span className="text-xs text-muted-foreground">{d.personnel.length} personnel</span>
-                  )}
-                </div>
-              </button>
-            ))}
+                <button
+                  key={d.id}
+                  onClick={() => onDateChange(d.date.split('T')[0])}
+                  className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 ${
+                    d.date.split('T')[0] === selectedDate ? 'border-primary bg-primary/5' : ''
+                  }`}
+                >
+                  <div>
+                    <span className="font-medium">{formatDate(d.date)}</span>
+                    {d.weatherConditions && (
+                      <span className="ml-2 text-muted-foreground">- {d.weatherConditions}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        d.status === 'submitted'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-yellow-100 text-yellow-700'
+                      }`}
+                    >
+                      {d.status}
+                    </span>
+                    {d.personnel.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {d.personnel.length} personnel
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
           )}
         </div>
       )}
     </>
-  )
-})
+  );
+});

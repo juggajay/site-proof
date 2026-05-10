@@ -1,113 +1,115 @@
-import { useState, useEffect, useCallback } from 'react'
-import { apiFetch } from '@/lib/api'
-import { extractErrorMessage } from '@/lib/errorHandling'
-import type { NCR, UserRole } from '../types'
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { devLog, logError } from '@/lib/logger';
+import type { NCR, UserRole } from '../types';
 
 interface UseNCRDataOptions {
-  projectId: string | undefined
-  token: string | null
+  projectId: string | undefined;
+  token: string | null;
 }
 
 interface UseNCRDataReturn {
-  ncrs: NCR[]
-  loading: boolean
-  error: string | null
-  setError: (error: string | null) => void
-  userRole: UserRole | null
-  fetchNcrs: () => Promise<void>
+  ncrs: NCR[];
+  loading: boolean;
+  error: string | null;
+  setError: (error: string | null) => void;
+  userRole: UserRole | null;
+  fetchNcrs: () => Promise<void>;
 }
 
 export function useNCRData({ projectId, token }: UseNCRDataOptions): UseNCRDataReturn {
-  const [ncrs, setNcrs] = useState<NCR[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [userRole, setUserRole] = useState<UserRole | null>(null)
+  const [ncrs, setNcrs] = useState<NCR[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
 
   const fetchNcrs = useCallback(async () => {
     try {
-      setLoading(true)
-      const path = projectId
-        ? `/api/ncrs?projectId=${projectId}`
-        : `/api/ncrs`
-      const data = await apiFetch<{ ncrs: NCR[] }>(path)
-      setNcrs(data.ncrs)
+      setLoading(true);
+      const path = projectId ? `/api/ncrs?projectId=${encodeURIComponent(projectId)}` : `/api/ncrs`;
+      const data = await apiFetch<{ ncrs: NCR[] }>(path);
+      setNcrs(data.ncrs);
+      setError(null);
     } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to load NCRs'))
+      setError(extractErrorMessage(err, 'Failed to load NCRs'));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [projectId])
+  }, [projectId]);
 
   const checkUserRole = useCallback(async () => {
-    if (!projectId) return
+    if (!projectId) return;
     try {
-      const data = await apiFetch<UserRole>(`/api/ncrs/check-role/${projectId}`)
-      setUserRole(data)
+      const data = await apiFetch<UserRole>(
+        `/api/ncrs/check-role/${encodeURIComponent(projectId)}`,
+      );
+      setUserRole(data);
     } catch (err) {
-      console.error('Failed to check user role:', err)
+      logError('Failed to check user role:', err);
     }
-  }, [projectId])
+  }, [projectId]);
 
   // Initial fetch
   useEffect(() => {
     if (token) {
-      fetchNcrs()
-      checkUserRole()
+      fetchNcrs();
+      checkUserRole();
     }
-  }, [token, projectId, fetchNcrs, checkUserRole])
+  }, [token, projectId, fetchNcrs, checkUserRole]);
 
   // Real-time NCR status update polling (every 30 seconds)
   useEffect(() => {
-    if (!token) return
+    if (!token) return;
 
-    let pollInterval: NodeJS.Timeout | null = null
+    let pollInterval: NodeJS.Timeout | null = null;
 
     const silentFetchNcrs = async () => {
-      const path = projectId
-        ? `/api/ncrs?projectId=${projectId}`
-        : `/api/ncrs`
+      const path = projectId ? `/api/ncrs?projectId=${encodeURIComponent(projectId)}` : `/api/ncrs`;
 
       try {
-        const data = await apiFetch<{ ncrs: NCR[] }>(path)
+        const data = await apiFetch<{ ncrs: NCR[] }>(path);
         setNcrs((prevNcrs: NCR[]) => {
-          const newNcrs = data.ncrs || []
-          const hasChanges = newNcrs.length !== prevNcrs.length ||
-            newNcrs.some((newNcr: NCR, index: number) =>
-              !prevNcrs[index] ||
-              newNcr.id !== prevNcrs[index].id ||
-              newNcr.status !== prevNcrs[index].status ||
-              newNcr.closedAt !== prevNcrs[index].closedAt ||
-              newNcr.qmApprovedAt !== prevNcrs[index].qmApprovedAt
-            )
-          return hasChanges ? newNcrs : prevNcrs
-        })
+          const newNcrs = data.ncrs || [];
+          const hasChanges =
+            newNcrs.length !== prevNcrs.length ||
+            newNcrs.some(
+              (newNcr: NCR, index: number) =>
+                !prevNcrs[index] ||
+                newNcr.id !== prevNcrs[index].id ||
+                newNcr.status !== prevNcrs[index].status ||
+                newNcr.closedAt !== prevNcrs[index].closedAt ||
+                newNcr.qmApprovedAt !== prevNcrs[index].qmApprovedAt,
+            );
+          return hasChanges ? newNcrs : prevNcrs;
+        });
       } catch (err) {
-        console.debug('Background NCR fetch failed:', err)
+        devLog('Background NCR fetch failed:', err);
       }
-    }
+    };
 
     const startPolling = () => {
       pollInterval = setInterval(() => {
         if (document.visibilityState === 'visible') {
-          silentFetchNcrs()
+          silentFetchNcrs();
         }
-      }, 30000)
-    }
+      }, 30000);
+    };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        silentFetchNcrs()
+        silentFetchNcrs();
       }
-    }
+    };
 
-    startPolling()
-    document.addEventListener('visibilitychange', handleVisibilityChange)
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (pollInterval) clearInterval(pollInterval)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [token, projectId])
+      if (pollInterval) clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [token, projectId]);
 
-  return { ncrs, loading, error, setError, userRole, fetchNcrs }
+  return { ncrs, loading, error, setError, userRole, fetchNcrs };
 }

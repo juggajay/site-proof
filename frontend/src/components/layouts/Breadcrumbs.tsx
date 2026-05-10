@@ -1,54 +1,54 @@
-import { Link, useLocation, useParams } from 'react-router-dom'
-import { ChevronRight, Home } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { apiFetch } from '@/lib/api'
+import { Link, useLocation, useParams } from 'react-router-dom';
+import { ChevronRight, Home } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { apiFetch } from '@/lib/api';
 
 interface BreadcrumbItem {
-  label: string
-  path: string
-  isLast: boolean
+  label: string;
+  path: string;
+  isLast: boolean;
 }
 
 interface LocationState {
-  returnFilters?: string
+  returnFilters?: string;
 }
 
 export function Breadcrumbs() {
-  const location = useLocation()
-  const { projectId, lotId } = useParams()
+  const location = useLocation();
+  const { projectId, lotId } = useParams();
 
   // Get return filters from navigation state (passed from LotsPage)
-  const locationState = location.state as LocationState | null
-  const returnFilters = locationState?.returnFilters || ''
+  const locationState = location.state as LocationState | null;
+  const returnFilters = locationState?.returnFilters || '';
 
   // Fetch lot number if we're on a lot detail page
   const { data: lotData } = useQuery({
     queryKey: queryKeys.lot(lotId!),
     queryFn: () => apiFetch<{ lot?: { lotNumber?: string } }>(`/api/lots/${lotId}`),
     enabled: !!lotId,
-  })
-  const lotNumber = lotData?.lot?.lotNumber || null
+  });
+  const lotNumber = lotData?.lot?.lotNumber || null;
 
   // Fetch project name if we have a projectId (shares cache with Sidebar)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: _projectData } = useQuery({
     queryKey: queryKeys.project(projectId!),
     queryFn: () => apiFetch<{ project?: { name?: string } }>(`/api/projects/${projectId}`),
     enabled: !!projectId,
-  })
+  });
 
-  const pathSegments = location.pathname.split('/').filter(Boolean)
+  const pathSegments = location.pathname.split('/').filter(Boolean);
 
   // Build breadcrumbs based on path
-  const breadcrumbs: BreadcrumbItem[] = []
+  const breadcrumbs: BreadcrumbItem[] = [];
 
   // Always start with Dashboard
   breadcrumbs.push({
     label: 'Dashboard',
     path: '/dashboard',
-    isLast: pathSegments.length === 0 || (pathSegments.length === 1 && pathSegments[0] === 'dashboard'),
-  })
+    isLast:
+      pathSegments.length === 0 || (pathSegments.length === 1 && pathSegments[0] === 'dashboard'),
+  });
 
   if (pathSegments[0] === 'projects') {
     // Add Projects breadcrumb
@@ -56,24 +56,25 @@ export function Breadcrumbs() {
       label: 'Projects',
       path: '/projects',
       isLast: pathSegments.length === 1,
-    })
+    });
 
     // If we have a project ID
     if (projectId && pathSegments.length > 1) {
       // Check what subpage we're on within a project
-      const subPage = pathSegments[2] // e.g., 'lots', 'ncr', 'itp', etc.
+      const subPage = pathSegments[2]; // e.g., 'lots', 'ncr', 'itp', etc.
 
       // Project-level navigation items
       if (subPage === 'lots') {
         // Include returnFilters in Lots path if we're on a lot detail page
-        const lotsPath = returnFilters && lotId
-          ? `/projects/${projectId}/lots?${returnFilters}`
-          : `/projects/${projectId}/lots`
+        const lotsPath =
+          returnFilters && lotId
+            ? `/projects/${projectId}/lots?${returnFilters}`
+            : `/projects/${projectId}/lots`;
         breadcrumbs.push({
           label: 'Lots',
           path: lotsPath,
           isLast: pathSegments.length === 3,
-        })
+        });
 
         // If we're on a lot detail page
         if (lotId && pathSegments.length >= 4) {
@@ -83,18 +84,18 @@ export function Breadcrumbs() {
               label: lotNumber || `Lot ${lotId.substring(0, 8)}...`,
               path: `/projects/${projectId}/lots/${lotId}`,
               isLast: false,
-            })
+            });
             breadcrumbs.push({
               label: 'Edit',
               path: `/projects/${projectId}/lots/${lotId}/edit`,
               isLast: true,
-            })
+            });
           } else {
             breadcrumbs.push({
               label: lotNumber || `Lot ${lotId.substring(0, 8)}...`,
               path: `/projects/${projectId}/lots/${lotId}`,
               isLast: true,
-            })
+            });
           }
         }
       } else if (subPage === 'ncr') {
@@ -102,67 +103,67 @@ export function Breadcrumbs() {
           label: 'NCRs',
           path: `/projects/${projectId}/ncr`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'itp') {
         breadcrumbs.push({
           label: 'ITPs',
           path: `/projects/${projectId}/itp`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'hold-points') {
         breadcrumbs.push({
           label: 'Hold Points',
           path: `/projects/${projectId}/hold-points`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'tests') {
         breadcrumbs.push({
           label: 'Test Results',
           path: `/projects/${projectId}/tests`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'diary') {
         breadcrumbs.push({
           label: 'Daily Diary',
           path: `/projects/${projectId}/diary`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'claims') {
         breadcrumbs.push({
           label: 'Progress Claims',
           path: `/projects/${projectId}/claims`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'costs') {
         breadcrumbs.push({
           label: 'Costs',
           path: `/projects/${projectId}/costs`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'documents') {
         breadcrumbs.push({
           label: 'Documents',
           path: `/projects/${projectId}/documents`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'subcontractors') {
         breadcrumbs.push({
           label: 'Subcontractors',
           path: `/projects/${projectId}/subcontractors`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'dockets') {
         breadcrumbs.push({
           label: 'Docket Approvals',
           path: `/projects/${projectId}/dockets`,
           isLast: pathSegments.length === 3,
-        })
+        });
       } else if (subPage === 'reports') {
         breadcrumbs.push({
           label: 'Reports',
           path: `/projects/${projectId}/reports`,
           isLast: pathSegments.length === 3,
-        })
+        });
       }
     }
   } else if (pathSegments[0] === 'settings') {
@@ -170,23 +171,23 @@ export function Breadcrumbs() {
       label: 'Settings',
       path: '/settings',
       isLast: true,
-    })
+    });
   } else if (pathSegments[0] === 'my-company') {
     breadcrumbs.push({
       label: 'My Company',
       path: '/my-company',
       isLast: true,
-    })
+    });
   }
 
   // Update isLast for all items
   breadcrumbs.forEach((item, index) => {
-    item.isLast = index === breadcrumbs.length - 1
-  })
+    item.isLast = index === breadcrumbs.length - 1;
+  });
 
   // Don't show breadcrumbs if we're on dashboard only
   if (breadcrumbs.length === 1 && breadcrumbs[0].path === '/dashboard') {
-    return null
+    return null;
   }
 
   return (
@@ -214,5 +215,5 @@ export function Breadcrumbs() {
         </div>
       ))}
     </nav>
-  )
+  );
 }

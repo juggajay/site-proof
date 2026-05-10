@@ -1,7 +1,7 @@
 // DiaryFinishFlow - End-of-day diary completion in under 60 seconds
 // Research-backed: Foremen finalise diary at end-of-day with quick review of auto-filled data
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Check,
   Cloud,
@@ -11,110 +11,178 @@ import {
   AlertTriangle,
   Edit2,
   X,
-  Loader2
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { apiFetch, ApiError } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
+  Loader2,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { apiFetch, ApiError } from '@/lib/api';
+import { logError } from '@/lib/logger';
+import { toast } from '@/components/ui/toaster';
 
 interface DiaryDraft {
-  id: string
-  date: string
+  id: string;
+  date: string;
+  status: string;
   weather: {
-    conditions: string
-    tempMin: number
-    tempMax: number
-    rainfall: number
-  } | null
-  personnel: Array<{ name: string; hours: number; trade: string }>
-  plant: Array<{ description: string; hours: number }>
-  activities: string[]
-  delays: Array<{ reason: string; hours: number }>
-  isComplete: boolean
+    conditions: string;
+    tempMin: number;
+    tempMax: number;
+    rainfall: number;
+  } | null;
+  personnel: Array<{ name: string; hours: number; trade: string }>;
+  plant: Array<{ description: string; hours: number }>;
+  activities: string[];
+  delays: Array<{ reason: string; hours: number }>;
+  isComplete: boolean;
+}
+
+interface ApiDiary {
+  id: string;
+  date: string;
+  status?: string;
+  weatherConditions?: string | null;
+  temperatureMin?: number | string | null;
+  temperatureMax?: number | string | null;
+  rainfallMm?: number | string | null;
+  personnel?: Array<{
+    name: string;
+    hours?: number | string | null;
+    role?: string | null;
+    company?: string | null;
+  }>;
+  plant?: Array<{ description: string; hoursOperated?: number | string | null }>;
+  activities?: Array<{ description: string }>;
+  delays?: Array<{ description: string; durationHours?: number | string | null }>;
 }
 
 interface DiaryFinishFlowProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit?: () => void
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit?: () => void;
+}
+
+function getLocalDateString(date = new Date()): string {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().split('T')[0];
+}
+
+function toNumber(value: number | string | null | undefined): number {
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeDiaryDraft(diary: ApiDiary): DiaryDraft {
+  const hasTemperatureMin = diary.temperatureMin !== null && diary.temperatureMin !== undefined;
+  const hasTemperatureMax = diary.temperatureMax !== null && diary.temperatureMax !== undefined;
+  const hasRainfall = diary.rainfallMm !== null && diary.rainfallMm !== undefined;
+  const hasWeather = Boolean(
+    diary.weatherConditions || hasTemperatureMin || hasTemperatureMax || hasRainfall,
+  );
+
+  return {
+    id: diary.id,
+    date: diary.date,
+    status: diary.status || 'draft',
+    weather: hasWeather
+      ? {
+          conditions: diary.weatherConditions || 'Recorded',
+          tempMin: toNumber(diary.temperatureMin),
+          tempMax: toNumber(diary.temperatureMax),
+          rainfall: toNumber(diary.rainfallMm),
+        }
+      : null,
+    personnel: (diary.personnel || []).map((person) => ({
+      name: person.name,
+      hours: toNumber(person.hours),
+      trade: person.role || person.company || '',
+    })),
+    plant: (diary.plant || []).map((plant) => ({
+      description: plant.description,
+      hours: toNumber(plant.hoursOperated),
+    })),
+    activities: (diary.activities || []).map((activity) => activity.description).filter(Boolean),
+    delays: (diary.delays || []).map((delay) => ({
+      reason: delay.description,
+      hours: toNumber(delay.durationHours),
+    })),
+    isComplete: diary.status === 'submitted',
+  };
 }
 
 export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowProps) {
-  const { projectId } = useParams()
-  const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [diary, setDiary] = useState<DiaryDraft | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [diary, setDiary] = useState<DiaryDraft | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch today's diary draft with auto-filled data
   const fetchDiary = useCallback(async () => {
     if (!projectId) {
-      setLoading(false)
-      return
+      setLoading(false);
+      return;
     }
 
-    setError(null)
+    setError(null);
     try {
-      const today = new Date().toISOString().split('T')[0]
-      const data = await apiFetch<DiaryDraft>(
-        `/api/projects/${projectId}/diary/draft?date=${today}`
-      )
-      setDiary(data)
+      const today = getLocalDateString();
+      const data = await apiFetch<ApiDiary>(`/api/diary/${projectId}/${today}`);
+      setDiary(normalizeDiaryDraft(data));
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         // No diary for today - that's ok
-        setDiary(null)
+        setDiary(null);
       } else {
-        console.error('Error fetching diary:', err)
-        setError('Unable to load diary')
+        logError('Error fetching diary:', err);
+        setError('Unable to load diary');
       }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [projectId])
+  }, [projectId]);
 
   useEffect(() => {
     if (isOpen) {
-      setLoading(true)
-      fetchDiary()
+      setLoading(true);
+      fetchDiary();
     }
-  }, [isOpen, fetchDiary])
+  }, [isOpen, fetchDiary]);
 
   const handleSubmit = async () => {
-    if (!diary || !projectId) return
+    if (!diary || !projectId) return;
 
-    setSubmitting(true)
+    setSubmitting(true);
     try {
-      await apiFetch(
-        `/api/projects/${projectId}/diary/${diary.id}/submit`,
-        { method: 'POST' }
-      )
+      await apiFetch(`/api/diary/${diary.id}/submit`, { method: 'POST' });
 
-      toast({ description: 'Diary submitted', variant: 'success' })
-      onSubmit?.()
-      onClose()
+      toast({ description: 'Diary submitted', variant: 'success' });
+      onSubmit?.();
+      onClose();
     } catch (err) {
-      console.error('Submit error:', err)
-      toast({ description: 'Failed to submit diary', variant: 'error' })
+      logError('Submit error:', err);
+      toast({ description: 'Failed to submit diary', variant: 'error' });
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const handleEditSection = (section: string) => {
-    navigate(`/projects/${projectId}/diary?section=${section}`)
-    onClose()
-  }
+    navigate(`/projects/${projectId}/diary?section=${section}`);
+    onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   // Get today's date for display
   const today = new Date().toLocaleDateString('en-AU', {
     weekday: 'long',
     day: 'numeric',
-    month: 'long'
-  })
+    month: 'long',
+  });
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end">
@@ -147,7 +215,10 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
               <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
               <p className="text-muted-foreground">{error}</p>
               <button
-                onClick={() => { setLoading(true); fetchDiary() }}
+                onClick={() => {
+                  setLoading(true);
+                  fetchDiary();
+                }}
                 className="mt-4 px-4 py-2 text-primary underline"
               >
                 Try again
@@ -216,12 +287,12 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
                 {diary.activities.length > 0 ? (
                   <ul className="text-sm space-y-1">
                     {diary.activities.slice(0, 3).map((act, i) => (
-                      <li key={i} className="truncate">• {act}</li>
+                      <li key={i} className="truncate">
+                        • {act}
+                      </li>
                     ))}
                     {diary.activities.length > 3 && (
-                      <li className="text-muted-foreground">
-                        +{diary.activities.length - 3} more
-                      </li>
+                      <li className="text-muted-foreground">+{diary.activities.length - 3} more</li>
                     )}
                   </ul>
                 ) : (
@@ -250,8 +321,8 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
               <p className="text-muted-foreground mb-4">No diary entry for today</p>
               <button
                 onClick={() => {
-                  navigate(`/projects/${projectId}/diary`)
-                  onClose()
+                  navigate(`/projects/${projectId}/diary`);
+                  onClose();
                 }}
                 className="px-6 py-3 bg-primary text-white rounded-lg font-medium touch-manipulation min-h-[48px]"
               >
@@ -266,19 +337,24 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
           <div className="sticky bottom-0 p-4 bg-background border-t flex-shrink-0">
             <button
               onClick={handleSubmit}
-              disabled={submitting}
+              disabled={submitting || diary.isComplete}
               className={cn(
                 'w-full py-4 rounded-lg font-semibold text-white',
                 'bg-green-600 active:bg-green-700',
                 'touch-manipulation min-h-[56px]',
                 'flex items-center justify-center gap-2',
-                submitting && 'opacity-50'
+                submitting && 'opacity-50',
               )}
             >
               {submitting ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
                   Submitting...
+                </>
+              ) : diary.isComplete ? (
+                <>
+                  <Check className="h-5 w-5" />
+                  Diary Submitted
                 </>
               ) : (
                 <>
@@ -303,32 +379,42 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
         }
       `}</style>
     </div>
-  )
+  );
 }
 
 interface SectionCardProps {
-  icon: typeof Cloud
-  title: string
-  status: 'auto' | 'complete' | 'missing' | 'optional'
-  onEdit: () => void
-  children: React.ReactNode
+  icon: typeof Cloud;
+  title: string;
+  status: 'auto' | 'complete' | 'missing' | 'optional';
+  onEdit: () => void;
+  children: React.ReactNode;
 }
 
 function SectionCard({ icon: Icon, title, status, onEdit, children }: SectionCardProps) {
   const statusConfig = {
     auto: { color: 'text-primary', bg: 'bg-primary/5 dark:bg-primary/10', label: 'Auto-filled' },
-    complete: { color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20', label: 'Complete' },
+    complete: {
+      color: 'text-green-600',
+      bg: 'bg-green-50 dark:bg-green-900/20',
+      label: 'Complete',
+    },
     missing: { color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Missing' },
-    optional: { color: 'text-muted-foreground', bg: 'bg-muted/50 dark:bg-muted', label: 'Optional' },
-  }
+    optional: {
+      color: 'text-muted-foreground',
+      bg: 'bg-muted/50 dark:bg-muted',
+      label: 'Optional',
+    },
+  };
 
-  const config = statusConfig[status]
+  const config = statusConfig[status];
 
   return (
-    <div className={cn(
-      'rounded-lg border p-4',
-      status === 'missing' && 'border-amber-300 dark:border-amber-700'
-    )}>
+    <div
+      className={cn(
+        'rounded-lg border p-4',
+        status === 'missing' && 'border-amber-300 dark:border-amber-700',
+      )}
+    >
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <Icon className={cn('h-5 w-5', config.color)} />
@@ -349,7 +435,7 @@ function SectionCard({ icon: Icon, title, status, onEdit, children }: SectionCar
       </div>
       {children}
     </div>
-  )
+  );
 }
 
-export default DiaryFinishFlow
+export default DiaryFinishFlow;

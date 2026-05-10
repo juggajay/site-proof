@@ -1,28 +1,52 @@
-import React, { useState } from 'react'
-import { Package } from 'lucide-react'
-import type { ClaimPackageOptions } from '@/lib/pdfGenerator'
-import { DEFAULT_PACKAGE_OPTIONS } from '../constants'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
+import React, { useState } from 'react';
+import { Package } from 'lucide-react';
+import type { ClaimPackageOptions } from '@/lib/pdfGenerator';
+import { DEFAULT_PACKAGE_OPTIONS } from '../constants';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
 
 interface EvidencePackageModalProps {
-  claimId: string
-  onClose: () => void
-  onGenerate: (claimId: string, options: ClaimPackageOptions) => void
+  claimId: string;
+  onClose: () => void;
+  onGenerate: (claimId: string, options: ClaimPackageOptions) => void;
 }
 
 const PACKAGE_SECTIONS: { key: keyof ClaimPackageOptions; label: string; description: string }[] = [
-  { key: 'includeLotSummary', label: 'Lot Summary Table', description: 'Overview table of all lots in the claim' },
-  { key: 'includeLotDetails', label: 'Individual Lot Details', description: 'Detailed breakdown for each lot' },
-  { key: 'includeITPChecklists', label: 'ITP Checklists', description: 'Inspection and test plan completions' },
-  { key: 'includeTestResults', label: 'Test Results', description: 'Laboratory test results and pass/fail status' },
-  { key: 'includeNCRs', label: 'Non-Conformance Reports', description: 'NCR status and resolution details' },
+  {
+    key: 'includeLotSummary',
+    label: 'Lot Summary Table',
+    description: 'Overview table of all lots in the claim',
+  },
+  {
+    key: 'includeLotDetails',
+    label: 'Individual Lot Details',
+    description: 'Detailed breakdown for each lot',
+  },
+  {
+    key: 'includeITPChecklists',
+    label: 'ITP Checklists',
+    description: 'Inspection and test plan completions',
+  },
+  {
+    key: 'includeTestResults',
+    label: 'Test Results',
+    description: 'Laboratory test results and pass/fail status',
+  },
+  {
+    key: 'includeNCRs',
+    label: 'Non-Conformance Reports',
+    description: 'NCR status and resolution details',
+  },
   { key: 'includeHoldPoints', label: 'Hold Points', description: 'Hold point release information' },
   { key: 'includePhotos', label: 'Photo Evidence', description: 'Photo counts and references' },
-  { key: 'includeDeclaration', label: 'Declaration Page', description: 'Signature page for verification' },
-]
+  {
+    key: 'includeDeclaration',
+    label: 'Declaration Page',
+    description: 'Signature page for verification',
+  },
+];
 
-const ALL_TRUE: ClaimPackageOptions = { ...DEFAULT_PACKAGE_OPTIONS }
+const ALL_TRUE: ClaimPackageOptions = { ...DEFAULT_PACKAGE_OPTIONS };
 
 const ALL_FALSE: ClaimPackageOptions = {
   includeLotSummary: false,
@@ -33,14 +57,14 @@ const ALL_FALSE: ClaimPackageOptions = {
   includeHoldPoints: false,
   includePhotos: false,
   includeDeclaration: false,
-}
+};
 
 export const EvidencePackageModal = React.memo(function EvidencePackageModal({
   claimId,
   onClose,
   onGenerate,
 }: EvidencePackageModalProps) {
-  const [options, setOptions] = useState<ClaimPackageOptions>({ ...DEFAULT_PACKAGE_OPTIONS })
+  const [options, setOptions] = useState<ClaimPackageOptions>({ ...DEFAULT_PACKAGE_OPTIONS });
 
   return (
     <Modal onClose={onClose} className="max-w-md">
@@ -53,11 +77,14 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
 
           <div className="space-y-3">
             {PACKAGE_SECTIONS.map(({ key, label, description }) => (
-              <label key={key} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer">
+              <label
+                key={key}
+                className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/30 cursor-pointer"
+              >
                 <input
                   type="checkbox"
                   checked={options[key]}
-                  onChange={(e) => setOptions(prev => ({ ...prev, [key]: e.target.checked }))}
+                  onChange={(e) => setOptions((prev) => ({ ...prev, [key]: e.target.checked }))}
                   className="h-4 w-4 rounded border-border"
                 />
                 <div>
@@ -89,14 +116,11 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
         <Button variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button
-          variant="success"
-          onClick={() => onGenerate(claimId, options)}
-        >
+        <Button variant="success" onClick={() => onGenerate(claimId, options)}>
           <Package className="h-4 w-4" />
           Generate Package
         </Button>
       </ModalFooter>
     </Modal>
-  )
-})
+  );
+});

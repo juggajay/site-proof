@@ -1,7 +1,7 @@
-import type { Lot } from '../types'
+import type { Lot } from '../types';
 
 export interface LotSummaryCardsProps {
-  lot: Lot
+  lot: Lot;
 }
 
 export function LotSummaryCards({ lot }: LotSummaryCardsProps) {
@@ -12,7 +12,7 @@ export function LotSummaryCards({ lot }: LotSummaryCardsProps) {
         <p className="font-medium text-lg">
           {lot.chainageStart != null && lot.chainageEnd != null
             ? `${lot.chainageStart} - ${lot.chainageEnd}`
-            : lot.chainageStart ?? lot.chainageEnd ?? '—'}
+            : (lot.chainageStart ?? lot.chainageEnd ?? '—')}
         </p>
       </div>
       <div className="rounded-lg border p-4">
@@ -28,5 +28,5 @@ export function LotSummaryCards({ lot }: LotSummaryCardsProps) {
         <p className="font-medium text-lg">{lot.areaZone || '—'}</p>
       </div>
     </div>
-  )
+  );
 }

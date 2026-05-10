@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react'
-import { Calendar, Clock } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { Calendar, Clock } from 'lucide-react';
 
 interface DateTimePickerProps {
-  value: string // ISO datetime string
-  onChange: (datetime: string) => void
-  label?: string
-  className?: string
-  minDate?: string
-  disabled?: boolean
+  value: string; // ISO datetime string
+  onChange: (datetime: string) => void;
+  label?: string;
+  className?: string;
+  minDate?: string;
+  disabled?: boolean;
 }
 
 export function DateTimePicker({
@@ -20,71 +20,69 @@ export function DateTimePicker({
 }: DateTimePickerProps) {
   // Parse the ISO datetime into separate date and time parts
   const parseDateTime = (isoString: string) => {
-    if (!isoString) return { date: '', time: '' }
+    if (!isoString) return { date: '', time: '' };
     try {
-      const dt = new Date(isoString)
-      if (isNaN(dt.getTime())) return { date: '', time: '' }
-      const date = dt.toISOString().split('T')[0]
-      const time = dt.toTimeString().slice(0, 5) // HH:MM
-      return { date, time }
+      const dt = new Date(isoString);
+      if (isNaN(dt.getTime())) return { date: '', time: '' };
+      const date = dt.toISOString().split('T')[0];
+      const time = dt.toTimeString().slice(0, 5); // HH:MM
+      return { date, time };
     } catch {
-      return { date: '', time: '' }
+      return { date: '', time: '' };
     }
-  }
+  };
 
-  const { date: initialDate, time: initialTime } = parseDateTime(value)
-  const [date, setDate] = useState(initialDate)
-  const [time, setTime] = useState(initialTime)
+  const { date: initialDate, time: initialTime } = parseDateTime(value);
+  const [date, setDate] = useState(initialDate);
+  const [time, setTime] = useState(initialTime);
 
   // Update internal state when value prop changes
   useEffect(() => {
-    const { date: newDate, time: newTime } = parseDateTime(value)
-    setDate(newDate)
-    setTime(newTime)
-  }, [value])
+    const { date: newDate, time: newTime } = parseDateTime(value);
+    setDate(newDate);
+    setTime(newTime);
+  }, [value]);
 
   // Combine date and time into ISO string and notify parent
   const updateDateTime = (newDate: string, newTime: string) => {
     if (newDate && newTime) {
-      const combined = new Date(`${newDate}T${newTime}:00`)
-      onChange(combined.toISOString())
+      const combined = new Date(`${newDate}T${newTime}:00`);
+      onChange(combined.toISOString());
     } else if (newDate) {
       // If only date is set, use midnight
-      const combined = new Date(`${newDate}T00:00:00`)
-      onChange(combined.toISOString())
+      const combined = new Date(`${newDate}T00:00:00`);
+      onChange(combined.toISOString());
     } else {
-      onChange('')
+      onChange('');
     }
-  }
+  };
 
   const handleDateChange = (newDate: string) => {
-    setDate(newDate)
-    updateDateTime(newDate, time)
-  }
+    setDate(newDate);
+    updateDateTime(newDate, time);
+  };
 
   const handleTimeChange = (newTime: string) => {
-    setTime(newTime)
-    updateDateTime(date, newTime)
-  }
+    setTime(newTime);
+    updateDateTime(date, newTime);
+  };
 
   // Format the display value
   const displayValue = () => {
-    if (!date) return 'Select date and time'
+    if (!date) return 'Select date and time';
     const dateStr = new Date(date).toLocaleDateString('en-AU', {
       weekday: 'short',
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-    })
-    const timeStr = time || '00:00'
-    return `${dateStr} at ${timeStr}`
-  }
+    });
+    const timeStr = time || '00:00';
+    return `${dateStr} at ${timeStr}`;
+  };
 
   return (
     <div className={`space-y-2 ${className}`}>
-      {label && (
-        <label className="block text-sm font-medium">{label}</label>
-      )}
+      {label && <label className="block text-sm font-medium">{label}</label>}
 
       {/* Combined display */}
       <div
@@ -92,9 +90,7 @@ export function DateTimePicker({
         data-testid="datetime-display"
       >
         <Calendar className="h-4 w-4 text-muted-foreground" />
-        <span className={date ? '' : 'text-muted-foreground'}>
-          {displayValue()}
-        </span>
+        <span className={date ? '' : 'text-muted-foreground'}>{displayValue()}</span>
       </div>
 
       {/* Date and Time inputs side by side */}
@@ -130,5 +126,5 @@ export function DateTimePicker({
         </div>
       </div>
     </div>
-  )
+  );
 }

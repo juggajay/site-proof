@@ -1,58 +1,67 @@
-import { Component, ReactNode } from 'react'
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
+import { Component, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { logError, reportClientError } from '@/lib/logger';
 
 interface Props {
-  children: ReactNode
-  fallback?: ReactNode
+  children: ReactNode;
+  fallback?: ReactNode;
+  onGoHome?: () => void;
 }
 
 interface State {
-  hasError: boolean
-  error: Error | null
-  errorInfo: React.ErrorInfo | null
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: React.ErrorInfo | null;
+  reportStatus: 'idle' | 'pending' | 'sent' | 'failed';
 }
 
-export class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundaryFrame extends Component<Props, State> {
   constructor(props: Props) {
-    super(props)
+    super(props);
     this.state = {
       hasError: false,
       error: null,
       errorInfo: null,
-    }
+      reportStatus: 'idle',
+    };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     // Update state so the next render will show the fallback UI
-    return { hasError: true, error }
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log the error to an error reporting service
-    console.error('Error caught by ErrorBoundary:', error, errorInfo)
-    this.setState({ errorInfo })
+    logError('Error caught by ErrorBoundary:', { error, errorInfo });
 
-    // In production, you would send this to an error tracking service like Sentry
-    // logErrorToService(error, errorInfo)
-  }
+    if (import.meta.env.PROD) {
+      this.setState({ errorInfo, reportStatus: 'pending' });
+      void reportClientError(error, errorInfo).then((reported) => {
+        if (this.state.hasError) {
+          this.setState({ reportStatus: reported ? 'sent' : 'failed' });
+        }
+      });
+      return;
+    }
 
-  handleReload = () => {
-    window.location.reload()
+    this.setState({ errorInfo });
   }
 
   handleGoHome = () => {
-    window.location.href = '/dashboard'
-  }
+    this.setState({ hasError: false, error: null, errorInfo: null, reportStatus: 'idle' });
+    this.props.onGoHome?.();
+  };
 
   handleRetry = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null })
-  }
+    this.setState({ hasError: false, error: null, errorInfo: null, reportStatus: 'idle' });
+  };
 
   render() {
     if (this.state.hasError) {
       // Custom fallback UI
       if (this.props.fallback) {
-        return this.props.fallback
+        return this.props.fallback;
       }
 
       return (
@@ -64,14 +73,30 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {/* Error Title */}
-            <h1 className="text-2xl font-bold text-foreground mb-2">
-              Something went wrong
-            </h1>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Something went wrong</h1>
 
             {/* Error Description */}
             <p className="text-muted-foreground mb-6">
-              We're sorry, but something unexpected happened. Our team has been notified and is working on fixing the issue.
+              We're sorry, but something unexpected happened. Try again or go back to your
+              dashboard.
             </p>
+
+            {this.state.reportStatus === 'pending' && (
+              <p className="text-sm text-muted-foreground mb-6">
+                Sending a diagnostic report to support...
+              </p>
+            )}
+            {this.state.reportStatus === 'sent' && (
+              <p className="text-sm text-muted-foreground mb-6">
+                A diagnostic report has been sent to support.
+              </p>
+            )}
+            {this.state.reportStatus === 'failed' && (
+              <p className="text-sm text-muted-foreground mb-6">
+                We could not send a diagnostic report automatically. Contact support if the problem
+                persists.
+              </p>
+            )}
 
             {/* Error Details (Development only) */}
             {import.meta.env.DEV && this.state.error && (
@@ -113,20 +138,17 @@ export class ErrorBoundary extends Component<Props, State> {
             {/* Support Link */}
             <p className="mt-6 text-sm text-muted-foreground">
               If this problem persists, please{' '}
-              <a
-                href="/support"
-                className="text-primary hover:underline"
-              >
+              <a href="/support" className="text-primary hover:underline">
                 contact support
               </a>
               .
             </p>
           </div>
         </div>
-      )
+      );
     }
 
-    return this.props.children
+    return this.props.children;
   }
 }
 
@@ -135,15 +157,28 @@ export class ErrorBoundary extends Component<Props, State> {
  */
 export function withErrorBoundary<P extends object>(
   WrappedComponent: React.ComponentType<P>,
-  fallback?: ReactNode
+  fallback?: ReactNode,
 ) {
   return function WithErrorBoundary(props: P) {
     return (
       <ErrorBoundary fallback={fallback}>
         <WrappedComponent {...props} />
       </ErrorBoundary>
-    )
-  }
+    );
+  };
 }
 
-export default ErrorBoundary
+export function ErrorBoundary({ children, fallback }: Omit<Props, 'onGoHome'>) {
+  const navigate = useNavigate();
+
+  return (
+    <ErrorBoundaryFrame
+      fallback={fallback}
+      onGoHome={() => navigate('/dashboard', { replace: true })}
+    >
+      {children}
+    </ErrorBoundaryFrame>
+  );
+}
+
+export default ErrorBoundary;

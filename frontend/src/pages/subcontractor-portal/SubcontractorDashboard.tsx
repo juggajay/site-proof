@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   MapPin,
   Bell,
@@ -17,77 +17,78 @@ import {
   FlaskConical,
   FolderOpen,
   Hand,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { useAuth } from '@/lib/auth'
-import { apiFetch } from '@/lib/api'
-import { cn } from '@/lib/utils'
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { useAuth } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { isPortalModuleEnabled } from './portalAccessModel';
 
 interface PortalAccess {
-  lots: boolean
-  itps: boolean
-  holdPoints: boolean
-  testResults: boolean
-  ncrs: boolean
-  documents: boolean
+  lots: boolean;
+  itps: boolean;
+  holdPoints: boolean;
+  testResults: boolean;
+  ncrs: boolean;
+  documents: boolean;
 }
 
 interface Company {
-  id: string
-  companyName: string
-  projectId: string
-  projectName: string
+  id: string;
+  companyName: string;
+  projectId: string;
+  projectName: string;
   employees: Array<{
-    id: string
-    name: string
-    status: string
-  }>
+    id: string;
+    name: string;
+    status: string;
+  }>;
   plant: Array<{
-    id: string
-    type: string
-    status: string
-  }>
-  portalAccess?: PortalAccess
+    id: string;
+    type: string;
+    status: string;
+  }>;
+  portalAccess?: PortalAccess;
 }
 
 interface Docket {
-  id: string
-  docketNumber: string
-  date: string
-  status: string
-  totalLabourSubmitted: number
-  totalPlantSubmitted: number
-  foremanNotes?: string
+  id: string;
+  docketNumber: string;
+  date: string;
+  status: string;
+  totalLabourSubmitted: number;
+  totalPlantSubmitted: number;
+  foremanNotes?: string;
 }
 
 interface Lot {
-  id: string
-  lotNumber: string
-  activity?: string
-  status: string
+  id: string;
+  lotNumber: string;
+  activity?: string;
+  status: string;
 }
 
 interface Notification {
-  id: string
-  type: string
-  title: string
-  message: string
-  read: boolean
-  createdAt: string
-  linkUrl?: string
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  linkUrl?: string;
 }
 
 function formatDate(dateString: string) {
-  const date = new Date(dateString)
+  const date = new Date(dateString);
   return date.toLocaleDateString('en-AU', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-  })
+  });
 }
 
 function formatCurrency(amount: number) {
@@ -96,34 +97,34 @@ function formatCurrency(amount: number) {
     currency: 'AUD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount)
+  }).format(amount);
 }
 
 function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 function getToday() {
-  return new Date().toISOString().split('T')[0]
+  return new Date().toISOString().split('T')[0];
 }
 
 function getDocketStatusIcon(status: string) {
   switch (status) {
     case 'draft':
-      return <Clock className="h-5 w-5 text-muted-foreground" />
+      return <Clock className="h-5 w-5 text-muted-foreground" />;
     case 'pending_approval':
-      return <Clock className="h-5 w-5 text-amber-500" />
+      return <Clock className="h-5 w-5 text-amber-500" />;
     case 'approved':
-      return <CheckCircle className="h-5 w-5 text-green-500" />
+      return <CheckCircle className="h-5 w-5 text-green-500" />;
     case 'rejected':
-      return <XCircle className="h-5 w-5 text-red-500" />
+      return <XCircle className="h-5 w-5 text-red-500" />;
     case 'queried':
-      return <MessageSquare className="h-5 w-5 text-amber-500" />
+      return <MessageSquare className="h-5 w-5 text-amber-500" />;
     default:
-      return <Clock className="h-5 w-5 text-muted-foreground" />
+      return <Clock className="h-5 w-5 text-muted-foreground" />;
   }
 }
 
@@ -134,86 +135,95 @@ function getDocketStatusBadge(status: string) {
     approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
     rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
     queried: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-  }
+  };
   const labels: Record<string, string> = {
     draft: 'Draft',
     pending_approval: 'Pending',
     approved: 'Approved',
     rejected: 'Rejected',
     queried: 'Queried',
-  }
+  };
   return (
-    <span className={cn('px-2 py-1 text-xs font-medium rounded-full', variants[status] || variants.draft)}>
+    <span
+      className={cn(
+        'px-2 py-1 text-xs font-medium rounded-full',
+        variants[status] || variants.draft,
+      )}
+    >
       {labels[status] || status}
     </span>
-  )
+  );
 }
 
 export function SubcontractorDashboard() {
-  const { user } = useAuth()
-  const queryClient = useQueryClient()
-  const [refreshing, setRefreshing] = useState(false)
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
 
   const { data: company, isLoading: companyLoading } = useQuery({
     queryKey: queryKeys.portalCompanies,
     queryFn: async () => {
-      const res = await apiFetch<{ company: Company }>('/api/subcontractors/my-company')
-      return res.company
+      const res = await apiFetch<{ company: Company }>('/api/subcontractors/my-company');
+      return res.company;
     },
-  })
+  });
 
   const { data: docketsData } = useQuery({
     queryKey: queryKeys.portalDockets,
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(
-        `/api/dockets?projectId=${company!.projectId}`
-      )
-      return res.dockets || []
+        `/api/dockets?projectId=${company!.projectId}`,
+      );
+      return res.dockets || [];
     },
     enabled: !!company?.projectId,
-  })
+  });
 
-  const today = getToday()
-  const todaysDocket = docketsData?.find((d: Docket) => d.date === today) ?? null
-  const recentDockets = docketsData?.filter((d: Docket) => d.date !== today).slice(0, 5) ?? []
+  const today = getToday();
+  const todaysDocket = docketsData?.find((d: Docket) => d.date === today) ?? null;
+  const recentDockets = docketsData?.filter((d: Docket) => d.date !== today).slice(0, 5) ?? [];
+  const canViewAssignedLots = isPortalModuleEnabled(company, 'lots');
 
   const { data: assignedLots = [] } = useQuery({
     queryKey: queryKeys.portalAssignedWork,
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${company!.projectId}`
-      )
-      return res.lots.slice(0, 5)
+        `/api/lots?projectId=${company!.projectId}&portalModule=lots`,
+      );
+      return res.lots.slice(0, 5);
     },
-    enabled: !!company?.projectId,
-  })
+    enabled: !!company?.projectId && canViewAssignedLots,
+  });
 
   const { data: notifData } = useQuery({
     queryKey: queryKeys.portalDashboard,
-    queryFn: () => apiFetch<{ notifications: Notification[]; unreadCount: number }>('/api/notifications?limit=10'),
+    queryFn: () =>
+      apiFetch<{ notifications: Notification[]; unreadCount: number }>(
+        '/api/notifications?limit=10',
+      ),
     enabled: !!company,
-  })
+  });
 
-  const notifications = notifData?.notifications || []
-  const unreadCount = notifData?.unreadCount || 0
+  const notifications = notifData?.notifications || [];
+  const unreadCount = notifData?.unreadCount || 0;
 
-  const loading = companyLoading
+  const loading = companyLoading;
 
   const handleRefresh = async () => {
-    setRefreshing(true)
-    await queryClient.invalidateQueries({ queryKey: queryKeys.portalCompanies })
-    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDockets })
-    await queryClient.invalidateQueries({ queryKey: queryKeys.portalAssignedWork })
-    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDashboard })
-    setRefreshing(false)
-  }
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalCompanies });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDockets });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalAssignedWork });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDashboard });
+    setRefreshing(false);
+  };
 
   // Get items needing attention
   const needsAttention = [
     // Queried dockets
     ...recentDockets
-      .filter(d => d.status === 'queried')
-      .map(d => ({
+      .filter((d) => d.status === 'queried')
+      .map((d) => ({
         id: d.id,
         type: 'docket_queried',
         title: 'Docket Queried',
@@ -223,8 +233,8 @@ export function SubcontractorDashboard() {
       })),
     // Rejected dockets
     ...recentDockets
-      .filter(d => d.status === 'rejected')
-      .map(d => ({
+      .filter((d) => d.status === 'rejected')
+      .map((d) => ({
         id: d.id,
         type: 'docket_rejected',
         title: 'Docket Rejected',
@@ -234,8 +244,8 @@ export function SubcontractorDashboard() {
       })),
     // Rate counter-proposals from notifications
     ...notifications
-      .filter(n => n.type === 'rate_counter' && !n.read)
-      .map(n => ({
+      .filter((n) => n.type === 'rate_counter' && !n.isRead)
+      .map((n) => ({
         id: n.id,
         type: 'rate_counter',
         title: n.title,
@@ -243,7 +253,7 @@ export function SubcontractorDashboard() {
         date: n.createdAt,
         link: '/my-company',
       })),
-  ]
+  ];
 
   if (loading) {
     return (
@@ -260,7 +270,7 @@ export function SubcontractorDashboard() {
         {/* Lots skeleton */}
         <Skeleton className="h-40 w-full rounded-lg" />
       </div>
-    )
+    );
   }
 
   return (
@@ -275,18 +285,13 @@ export function SubcontractorDashboard() {
             <Building2 className="h-4 w-4" />
             {company?.companyName || 'Your Company'}
           </p>
-          <p className="text-sm text-muted-foreground">
-            {company?.projectName || 'Project'}
-          </p>
+          <p className="text-sm text-muted-foreground">{company?.projectName || 'Project'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
-            <RefreshCw className={cn('h-5 w-5 text-muted-foreground', refreshing && 'animate-spin')} />
+          <Button variant="ghost" size="icon" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw
+              className={cn('h-5 w-5 text-muted-foreground', refreshing && 'animate-spin')}
+            />
           </Button>
           <Link to="/settings" className="relative p-2 rounded-lg hover:bg-muted transition-colors">
             <Bell className="h-5 w-5 text-muted-foreground" />
@@ -331,7 +336,9 @@ export function SubcontractorDashboard() {
               <div className="pt-2 border-t border-border">
                 <p className="text-sm text-muted-foreground mb-1">Total</p>
                 <p className="text-xl font-bold text-foreground">
-                  {formatCurrency(todaysDocket.totalLabourSubmitted + todaysDocket.totalPlantSubmitted)}
+                  {formatCurrency(
+                    todaysDocket.totalLabourSubmitted + todaysDocket.totalPlantSubmitted,
+                  )}
                 </p>
               </div>
               <Link
@@ -363,7 +370,9 @@ export function SubcontractorDashboard() {
           <div className="p-4 pb-2">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
-              <h2 className="text-lg font-semibold text-foreground">Needs Attention ({needsAttention.length})</h2>
+              <h2 className="text-lg font-semibold text-foreground">
+                Needs Attention ({needsAttention.length})
+              </h2>
             </div>
           </div>
           <div className="p-4 pt-2 space-y-3">
@@ -387,7 +396,7 @@ export function SubcontractorDashboard() {
       )}
 
       {/* Assigned Lots - Only show if portal access allows */}
-      {company?.portalAccess?.lots !== false && (
+      {canViewAssignedLots && (
         <div className="border border-border rounded-lg bg-card">
           <div className="p-4 pb-2">
             <div className="flex items-center justify-between">
@@ -471,9 +480,7 @@ export function SubcontractorDashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-4">
-              No previous dockets
-            </p>
+            <p className="text-center text-muted-foreground py-4">No previous dockets</p>
           )}
         </div>
       </div>
@@ -581,5 +588,5 @@ export function SubcontractorDashboard() {
         )}
       </div>
     </div>
-  )
+  );
 }

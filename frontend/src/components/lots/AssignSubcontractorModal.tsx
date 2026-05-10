@@ -1,48 +1,48 @@
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/api'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { toast } from '@/components/ui/toaster'
-import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { NativeSelect } from '@/components/ui/native-select'
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { toast } from '@/components/ui/toaster';
+import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 
 interface SubcontractorCompany {
-  id: string
-  companyName: string
-  status: string
+  id: string;
+  companyName: string;
+  status: string;
 }
 
 interface LotSubcontractorAssignment {
-  id: string
-  subcontractorCompanyId: string
-  canCompleteITP: boolean
-  itpRequiresVerification: boolean
+  id: string;
+  subcontractorCompanyId: string;
+  canCompleteITP: boolean;
+  itpRequiresVerification: boolean;
   subcontractorCompany: {
-    id: string
-    companyName: string
-  }
+    id: string;
+    companyName: string;
+  };
 }
 
 const assignSubcontractorSchema = z.object({
   selectedSubcontractor: z.string(),
   canCompleteITP: z.boolean(),
   itpRequiresVerification: z.boolean(),
-})
+});
 
-type AssignSubcontractorFormData = z.infer<typeof assignSubcontractorSchema>
+type AssignSubcontractorFormData = z.infer<typeof assignSubcontractorSchema>;
 
 interface AssignSubcontractorModalProps {
-  lotId: string
-  lotNumber: string
-  projectId: string
-  existingAssignment?: LotSubcontractorAssignment | null
-  onClose: () => void
-  onSuccess?: () => void
+  lotId: string;
+  lotNumber: string;
+  projectId: string;
+  existingAssignment?: LotSubcontractorAssignment | null;
+  onClose: () => void;
+  onSuccess?: () => void;
 }
 
 export function AssignSubcontractorModal({
@@ -51,17 +51,12 @@ export function AssignSubcontractorModal({
   projectId,
   existingAssignment,
   onClose,
-  onSuccess
+  onSuccess,
 }: AssignSubcontractorModalProps) {
-  const queryClient = useQueryClient()
-  const isEditing = !!existingAssignment
+  const queryClient = useQueryClient();
+  const isEditing = !!existingAssignment;
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-  } = useForm<AssignSubcontractorFormData>({
+  const { register, handleSubmit, reset, watch } = useForm<AssignSubcontractorFormData>({
     resolver: zodResolver(assignSubcontractorSchema),
     mode: 'onBlur',
     defaultValues: {
@@ -69,10 +64,10 @@ export function AssignSubcontractorModal({
       canCompleteITP: existingAssignment?.canCompleteITP || false,
       itpRequiresVerification: existingAssignment?.itpRequiresVerification ?? true,
     },
-  })
+  });
 
-  const selectedSubcontractor = watch('selectedSubcontractor')
-  const canCompleteITP = watch('canCompleteITP')
+  const selectedSubcontractor = watch('selectedSubcontractor');
+  const canCompleteITP = watch('canCompleteITP');
 
   // Reset form when existingAssignment changes
   useEffect(() => {
@@ -81,123 +76,108 @@ export function AssignSubcontractorModal({
         selectedSubcontractor: existingAssignment.subcontractorCompanyId,
         canCompleteITP: existingAssignment.canCompleteITP,
         itpRequiresVerification: existingAssignment.itpRequiresVerification,
-      })
+      });
     } else {
       reset({
         selectedSubcontractor: '',
         canCompleteITP: false,
         itpRequiresVerification: true,
-      })
+      });
     }
-  }, [existingAssignment, reset])
+  }, [existingAssignment, reset]);
 
-  // Fetch subcontractors for this project (exclude only rejected/removed)
-  const { data: subcontractors = [], isLoading: loadingSubcontractors, error: subError } = useQuery({
+  // Fetch subcontractors for this project
+  const {
+    data: subcontractors = [],
+    isLoading: loadingSubcontractors,
+    error: subError,
+  } = useQuery({
     queryKey: ['subcontractors', projectId],
     queryFn: async () => {
-      console.log('[AssignSubModal] Fetching subcontractors for projectId:', projectId)
-      try {
-        const response = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(
-          `/api/subcontractors/for-project/${projectId}`
-        )
-        console.log('[AssignSubModal] API returned subcontractors:', response.subcontractors)
-        // Include approved, pending_approval, active - exclude rejected/removed
-        const filtered = response.subcontractors.filter(s =>
-          s.status !== 'rejected' && s.status !== 'removed'
-        )
-        console.log('[AssignSubModal] After status filter:', filtered)
-        return filtered
-      } catch (err) {
-        console.error('[AssignSubModal] Error fetching subcontractors:', err)
-        throw err
-      }
+      const response = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(
+        `/api/subcontractors/for-project/${projectId}`,
+      );
+      // Include approved, pending_approval, active - exclude rejected/suspended/removed
+      return response.subcontractors.filter(
+        (s) => s.status !== 'rejected' && s.status !== 'suspended' && s.status !== 'removed',
+      );
     },
     enabled: !isEditing && !!projectId,
-    retry: false
-  })
+    retry: false,
+  });
 
   // Fetch existing assignments to filter out already assigned subcontractors
-  const { data: existingAssignments = [], isLoading: loadingAssignments, error: assignError } = useQuery({
+  const {
+    data: existingAssignments = [],
+    isLoading: loadingAssignments,
+    error: assignError,
+  } = useQuery({
     queryKey: ['lot-assignments', lotId],
-    queryFn: async () => {
-      console.log('[AssignSubModal] Fetching existing assignments for lotId:', lotId)
-      try {
-        const result = await apiFetch<LotSubcontractorAssignment[]>(`/api/lots/${lotId}/subcontractors`)
-        console.log('[AssignSubModal] Existing assignments:', result)
-        return result
-      } catch (err) {
-        console.error('[AssignSubModal] Error fetching assignments:', err)
-        throw err
-      }
-    },
+    queryFn: () => apiFetch<LotSubcontractorAssignment[]>(`/api/lots/${lotId}/subcontractors`),
     enabled: !isEditing,
-    retry: false
-  })
-
-  // Log any errors
-  if (subError) console.error('[AssignSubModal] Subcontractors query error:', subError)
-  if (assignError) console.error('[AssignSubModal] Assignments query error:', assignError)
+    retry: false,
+  });
 
   const availableSubcontractors = subcontractors.filter(
-    s => !existingAssignments.some(a => a.subcontractorCompanyId === s.id)
-  )
-
-  // Debug logging
-  console.log('[AssignSubModal] Final available subcontractors:', availableSubcontractors)
+    (s) => !existingAssignments.some((a) => a.subcontractorCompanyId === s.id),
+  );
 
   const assignMutation = useMutation({
     mutationFn: async (data: AssignSubcontractorFormData) => {
       if (isEditing && existingAssignment) {
         return apiFetch(`/api/lots/${lotId}/subcontractors/${existingAssignment.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ canCompleteITP: data.canCompleteITP, itpRequiresVerification: data.itpRequiresVerification })
-        })
+          body: JSON.stringify({
+            canCompleteITP: data.canCompleteITP,
+            itpRequiresVerification: data.itpRequiresVerification,
+          }),
+        });
       }
       return apiFetch(`/api/lots/${lotId}/subcontractors`, {
         method: 'POST',
         body: JSON.stringify({
           subcontractorCompanyId: data.selectedSubcontractor,
           canCompleteITP: data.canCompleteITP,
-          itpRequiresVerification: data.itpRequiresVerification
-        })
-      })
+          itpRequiresVerification: data.itpRequiresVerification,
+        }),
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] })
-      queryClient.invalidateQueries({ queryKey: ['lots'] })
-      queryClient.invalidateQueries({ queryKey: ['lot', lotId] })
+      queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] });
+      queryClient.invalidateQueries({ queryKey: ['lots'] });
+      queryClient.invalidateQueries({ queryKey: ['lot', lotId] });
       toast({
         title: isEditing ? 'Permissions updated' : 'Subcontractor assigned',
         description: isEditing
           ? 'ITP permissions have been updated.'
           : 'Subcontractor has been assigned to this lot.',
-        variant: 'success'
-      })
-      onSuccess?.()
-      onClose()
+        variant: 'success',
+      });
+      onSuccess?.();
+      onClose();
     },
     onError: (error: Error) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to save assignment',
-        variant: 'error'
-      })
-    }
-  })
+        variant: 'error',
+      });
+    },
+  });
 
   const onFormSubmit = (data: AssignSubcontractorFormData) => {
     if (!isEditing && !data.selectedSubcontractor) {
       toast({
         title: 'Error',
         description: 'Please select a subcontractor',
-        variant: 'error'
-      })
-      return
+        variant: 'error',
+      });
+      return;
     }
-    assignMutation.mutate(data)
-  }
+    assignMutation.mutate(data);
+  };
 
-  const isLoading = loadingSubcontractors || loadingAssignments
+  const isLoading = loadingSubcontractors || loadingAssignments;
 
   return (
     <Modal onClose={onClose} className="w-full max-w-md">
@@ -209,16 +189,17 @@ export function AssignSubcontractorModal({
         <div className="space-y-4">
           {!isEditing && (
             <div className="space-y-2">
-              <Label>
-                Subcontractor Company
-              </Label>
+              <Label>Subcontractor Company</Label>
               {!projectId ? (
                 <p className="text-sm text-red-500">
                   Error: Project ID is missing. Please reload the page.
                 </p>
               ) : subError || assignError ? (
                 <p className="text-sm text-red-500">
-                  Error loading data: {(subError as Error)?.message || (assignError as Error)?.message || 'Authentication failed. Please refresh the page.'}
+                  Error loading data:{' '}
+                  {(subError as Error)?.message ||
+                    (assignError as Error)?.message ||
+                    'Authentication failed. Please refresh the page.'}
                 </p>
               ) : isLoading ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -227,11 +208,9 @@ export function AssignSubcontractorModal({
                 </div>
               ) : (
                 <>
-                  <NativeSelect
-                    {...register('selectedSubcontractor')}
-                  >
+                  <NativeSelect {...register('selectedSubcontractor')}>
                     <option value="">Select subcontractor...</option>
-                    {availableSubcontractors.map(sub => (
+                    {availableSubcontractors.map((sub) => (
                       <option key={sub.id} value={sub.id}>
                         {sub.companyName}
                       </option>
@@ -251,14 +230,13 @@ export function AssignSubcontractorModal({
 
           {isEditing && (
             <div className="text-sm text-muted-foreground">
-              Editing permissions for: <strong>{existingAssignment?.subcontractorCompany.companyName}</strong>
+              Editing permissions for:{' '}
+              <strong>{existingAssignment?.subcontractorCompany.companyName}</strong>
             </div>
           )}
 
           <div className="space-y-3">
-            <Label>
-              ITP Permissions
-            </Label>
+            <Label>ITP Permissions</Label>
 
             <div className="flex items-start gap-3">
               <input
@@ -268,10 +246,7 @@ export function AssignSubcontractorModal({
                 className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring"
               />
               <div>
-                <Label
-                  htmlFor="canCompleteITP"
-                  className="cursor-pointer"
-                >
+                <Label htmlFor="canCompleteITP" className="cursor-pointer">
                   Allow ITP completion
                 </Label>
                 <p className="text-sm text-muted-foreground">
@@ -305,11 +280,7 @@ export function AssignSubcontractorModal({
       </ModalBody>
 
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onClose}
-        >
+        <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
         <Button
@@ -322,9 +293,13 @@ export function AssignSubcontractorModal({
               <Loader2 className="h-4 w-4 animate-spin" />
               Saving...
             </span>
-          ) : isEditing ? 'Save' : 'Assign'}
+          ) : isEditing ? (
+            'Save'
+          ) : (
+            'Assign'
+          )}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

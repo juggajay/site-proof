@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react';
 
 // Loading fallback for charts
 function ChartLoadingFallback({ height = 300 }: { height?: number | string }) {
@@ -12,95 +12,87 @@ function ChartLoadingFallback({ height = 300 }: { height?: number | string }) {
         <span className="text-sm">Loading chart...</span>
       </div>
     </div>
-  )
+  );
 }
 
 // Lazy load ClaimsCharts component
 const LazyCumulativeClaimsChart = lazy(() =>
-  import('./ClaimsCharts').then(m => ({ default: m.CumulativeClaimsChart }))
-)
+  import('./ClaimsCharts').then((m) => ({ default: m.CumulativeClaimsChart })),
+);
 
 const LazyMonthlyBreakdownChart = lazy(() =>
-  import('./ClaimsCharts').then(m => ({ default: m.MonthlyBreakdownChart }))
-)
+  import('./ClaimsCharts').then((m) => ({ default: m.MonthlyBreakdownChart })),
+);
 
 // Lazy load HoldPointsChart component
 const LazyHoldPointsReleasesChart = lazy(() =>
-  import('./HoldPointsChart').then(m => ({ default: m.HoldPointsReleasesChart }))
-)
+  import('./HoldPointsChart').then((m) => ({ default: m.HoldPointsReleasesChart })),
+);
 
 // Types
 interface ChartDataPoint {
-  name: string
-  claimNumber: number
-  claimed: number
-  certified: number
-  paid: number
-  claimAmount?: number
-  certifiedAmount?: number | null
-  paidAmount?: number | null
-  status?: string
+  name: string;
+  claimNumber: number;
+  claimed: number;
+  certified: number;
+  paid: number;
+  claimAmount?: number;
+  certifiedAmount?: number | null;
+  paidAmount?: number | null;
+  status?: string;
 }
 
 interface ReleasesOverTimeData {
-  date: string
-  releases: number
+  date: string;
+  releases: number;
 }
 
 // Lazy Claims Charts
 export function LazyCumulativeChart({
   data,
   formatCurrency,
-  onExport
+  onExport,
 }: {
-  data: ChartDataPoint[]
-  formatCurrency: (amount: number | null) => string
-  onExport: () => void
+  data: ChartDataPoint[];
+  formatCurrency: (amount: number | null) => string;
+  onExport: () => void;
 }) {
-  if (data.length < 2) return null
+  if (data.length < 2) return null;
 
   return (
     <Suspense fallback={<ChartLoadingFallback height={400} />}>
-      <LazyCumulativeClaimsChart
-        data={data}
-        formatCurrency={formatCurrency}
-        onExport={onExport}
-      />
+      <LazyCumulativeClaimsChart data={data} formatCurrency={formatCurrency} onExport={onExport} />
     </Suspense>
-  )
+  );
 }
 
 export function LazyMonthlyChart({
   data,
   formatCurrency,
-  onExport
+  onExport,
 }: {
-  data: ChartDataPoint[]
-  formatCurrency: (amount: number | null) => string
-  onExport: () => void
+  data: ChartDataPoint[];
+  formatCurrency: (amount: number | null) => string;
+  onExport: () => void;
 }) {
-  if (data.length < 2) return null
+  if (data.length < 2) return null;
 
   return (
     <Suspense fallback={<ChartLoadingFallback height={400} />}>
-      <LazyMonthlyBreakdownChart
-        data={data}
-        formatCurrency={formatCurrency}
-        onExport={onExport}
-      />
+      <LazyMonthlyBreakdownChart data={data} formatCurrency={formatCurrency} onExport={onExport} />
     </Suspense>
-  )
+  );
 }
 
 // Lazy Hold Points Chart
 export function LazyHoldPointsChart({
   releasesOverTime,
   avgTimeToRelease,
-  releasedCount
+  releasedCount,
 }: {
-  releasesOverTime: ReleasesOverTimeData[]
-  avgTimeToRelease: number
-  releasedCount: number
+  releasesOverTime: ReleasesOverTimeData[];
+  avgTimeToRelease: number;
+  releasedCount: number;
 }) {
   return (
     <Suspense fallback={<ChartLoadingFallback height={250} />}>
@@ -110,5 +102,5 @@ export function LazyHoldPointsChart({
         releasedCount={releasedCount}
       />
     </Suspense>
-  )
+  );
 }

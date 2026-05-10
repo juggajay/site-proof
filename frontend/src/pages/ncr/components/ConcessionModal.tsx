@@ -1,46 +1,43 @@
-import { memo } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import type { NCR } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { memo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import type { NCR } from '../types';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const concessionSchema = z.object({
-  justification: z.string().min(1, 'Concession justification is required'),
-  riskAssessment: z.string().min(1, 'Risk assessment is required'),
-  verificationNotes: z.string().optional().default(''),
+  justification: z.string().trim().min(1, 'Concession justification is required'),
+  riskAssessment: z.string().trim().min(1, 'Risk assessment is required'),
+  verificationNotes: z.string().trim().optional().default(''),
   clientApprovalConfirmed: z.boolean().default(false),
-  clientApprovalReference: z.string().optional().default(''),
-})
+  clientApprovalReference: z.string().trim().optional().default(''),
+});
 
-type ConcessionFormData = z.infer<typeof concessionSchema>
+type ConcessionFormData = z.infer<typeof concessionSchema>;
 
 interface ConcessionModalProps {
-  isOpen: boolean
-  ncr: NCR | null
-  onClose: () => void
-  onSubmit: (ncrId: string, data: {
-    concessionJustification: string
-    concessionRiskAssessment: string
-    clientApprovalDocId?: string
-    verificationNotes?: string
-  }) => void
-  loading: boolean
+  isOpen: boolean;
+  ncr: NCR | null;
+  onClose: () => void;
+  onSubmit: (
+    ncrId: string,
+    data: {
+      concessionJustification: string;
+      concessionRiskAssessment: string;
+      clientApprovalDocId?: string;
+      verificationNotes?: string;
+    },
+  ) => void;
+  loading: boolean;
 }
 
-function ConcessionModalInner({
-  isOpen,
-  ncr,
-  onClose,
-  onSubmit,
-  loading,
-}: ConcessionModalProps) {
-  const isMajor = ncr?.severity === 'major'
-  const requiresClientApproval = isMajor
+function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: ConcessionModalProps) {
+  const isMajor = ncr?.severity === 'major';
+  const requiresClientApproval = isMajor;
 
   const {
     register,
@@ -58,33 +55,34 @@ function ConcessionModalInner({
       clientApprovalConfirmed: false,
       clientApprovalReference: '',
     },
-  })
+  });
 
-  const clientApprovalConfirmed = watch('clientApprovalConfirmed')
-  const justification = watch('justification')
-  const riskAssessment = watch('riskAssessment')
+  const clientApprovalConfirmed = watch('clientApprovalConfirmed');
+  const justification = watch('justification');
+  const riskAssessment = watch('riskAssessment');
 
   const onFormSubmit = (data: ConcessionFormData) => {
-    if (!ncr) return
+    if (!ncr) return;
     if (requiresClientApproval && !data.clientApprovalConfirmed) {
-      return
+      return;
     }
     onSubmit(ncr.id, {
-      concessionJustification: data.justification,
-      concessionRiskAssessment: data.riskAssessment,
-      verificationNotes: data.verificationNotes || undefined,
-      clientApprovalDocId: data.clientApprovalReference || undefined,
-    })
-  }
+      concessionJustification: data.justification.trim(),
+      concessionRiskAssessment: data.riskAssessment.trim(),
+      verificationNotes: data.verificationNotes?.trim() || undefined,
+      clientApprovalDocId: data.clientApprovalReference?.trim() || undefined,
+    });
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset();
+    onClose();
+  };
 
-  const isFormValid = justification && riskAssessment && (!requiresClientApproval || clientApprovalConfirmed)
+  const isFormValid =
+    justification && riskAssessment && (!requiresClientApproval || clientApprovalConfirmed);
 
-  if (!isOpen || !ncr) return null
+  if (!isOpen || !ncr) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-lg">
@@ -99,9 +97,13 @@ function ConcessionModalInner({
           <div className="font-medium">{ncr.ncrNumber}</div>
           <div className="text-muted-foreground">{ncr.description}</div>
           <div className="mt-1">
-            <span className={`px-2 py-0.5 rounded text-xs ${
-              ncr.severity === 'major' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-            }`}>
+            <span
+              className={`px-2 py-0.5 rounded text-xs ${
+                ncr.severity === 'major'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}
+            >
               {ncr.severity.toUpperCase()}
             </span>
           </div>
@@ -111,11 +113,17 @@ function ConcessionModalInner({
         {isMajor && (
           <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-lg text-sm flex items-start gap-2">
             <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              <path
+                fillRule="evenodd"
+                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                clipRule="evenodd"
+              />
             </svg>
             <div>
               <strong>Major NCR - Client Approval Required</strong>
-              <p className="mt-1">Closing a major NCR with concession requires documented client approval.</p>
+              <p className="mt-1">
+                Closing a major NCR with concession requires documented client approval.
+              </p>
             </div>
           </div>
         )}
@@ -134,7 +142,9 @@ function ConcessionModalInner({
               placeholder="Describe why the non-conformance cannot be fully rectified..."
             />
             {errors.justification && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.justification.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.justification.message}
+              </p>
             )}
           </div>
 
@@ -151,7 +161,9 @@ function ConcessionModalInner({
               placeholder="Describe the risk implications, mitigation measures, and impact on quality/safety..."
             />
             {errors.riskAssessment && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.riskAssessment.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.riskAssessment.message}
+              </p>
             )}
           </div>
 
@@ -182,7 +194,8 @@ function ConcessionModalInner({
                     className="mt-1 rounded border-amber-400"
                   />
                   <span className="text-sm text-amber-900">
-                    I confirm that the client has been notified of this concession and has provided documented approval to proceed.
+                    I confirm that the client has been notified of this concession and has provided
+                    documented approval to proceed.
                   </span>
                 </label>
               </div>
@@ -208,23 +221,15 @@ function ConcessionModalInner({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleClose}
-        >
+        <Button type="button" variant="outline" onClick={handleClose}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="concession-form"
-          disabled={loading || !isFormValid}
-        >
+        <Button type="submit" form="concession-form" disabled={loading || !isFormValid}>
           {loading ? 'Closing...' : 'Close with Concession'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
-export const ConcessionModal = memo(ConcessionModalInner)
+export const ConcessionModal = memo(ConcessionModalInner);

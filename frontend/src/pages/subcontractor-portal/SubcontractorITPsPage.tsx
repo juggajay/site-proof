@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
   ClipboardList,
@@ -6,45 +6,48 @@ import {
   CheckCircle2,
   Clock,
   ChevronRight,
-} from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { apiFetch } from '@/lib/api'
-import { extractErrorMessage } from '@/lib/errorHandling'
+} from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { PortalAccessDenied } from './portalAccess';
+import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 
 interface LotAssignment {
-  id: string
-  canCompleteITP: boolean
-  itpRequiresVerification: boolean
+  id: string;
+  canCompleteITP: boolean;
+  itpRequiresVerification: boolean;
 }
 
 interface ITPInstance {
-  id: string
-  status: string
+  id: string;
+  status: string;
   template: {
-    id: string
-    name: string
-    activityType: string
-  }
-  completionPercentage?: number
+    id: string;
+    name: string;
+    activityType: string;
+  };
+  completionPercentage?: number;
 }
 
 interface Lot {
-  id: string
-  lotNumber: string
-  description?: string
-  status: string
-  activityType?: string
-  itpInstances?: ITPInstance[]
-  subcontractorAssignments?: LotAssignment[]
+  id: string;
+  lotNumber: string;
+  description?: string;
+  status: string;
+  activityType?: string;
+  itpInstances?: ITPInstance[];
+  subcontractorAssignments?: LotAssignment[];
 }
 
 interface SubcontractorCompany {
-  id: string
-  companyName: string
-  projectId: string
-  projectName: string
+  id: string;
+  companyName: string;
+  projectId: string;
+  projectName: string;
+  portalAccess?: PortalAccess;
 }
 
 function getITPStatusBadge(status: string, percentage?: number) {
@@ -54,7 +57,7 @@ function getITPStatusBadge(status: string, percentage?: number) {
         <CheckCircle2 className="h-3 w-3" />
         Complete
       </span>
-    )
+    );
   }
   if (status === 'in_progress' || (percentage && percentage > 0)) {
     return (
@@ -62,49 +65,54 @@ function getITPStatusBadge(status: string, percentage?: number) {
         <Clock className="h-3 w-3" />
         {percentage ? `${percentage}%` : 'In Progress'}
       </span>
-    )
+    );
   }
   return (
     <span className="px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
       Not Started
     </span>
-  )
+  );
 }
 
 export function SubcontractorITPsPage() {
   const { data: company, isLoading: companyLoading } = useQuery({
     queryKey: queryKeys.portalCompanies,
     queryFn: async () => {
-      const res = await apiFetch<{ company: SubcontractorCompany }>('/api/subcontractors/my-company')
-      return res.company
+      const res = await apiFetch<{ company: SubcontractorCompany }>(
+        '/api/subcontractors/my-company',
+      );
+      return res.company;
     },
-  })
+  });
+  const canViewITPs = isPortalModuleEnabled(company, 'itps');
 
-  const { data: lots = [], isLoading: lotsLoading, error } = useQuery({
+  const {
+    data: lots = [],
+    isLoading: lotsLoading,
+    error,
+  } = useQuery({
     queryKey: queryKeys.portalITPs,
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${company!.projectId}&includeITP=true`
-      )
+        `/api/lots?projectId=${company!.projectId}&includeITP=true&portalModule=itps`,
+      );
       return (res.lots || []).filter((lot: Lot) => {
-        return lot.itpInstances && lot.itpInstances.length > 0
-      })
+        return lot.itpInstances && lot.itpInstances.length > 0;
+      });
     },
-    enabled: !!company?.projectId,
-  })
+    enabled: !!company?.projectId && canViewITPs,
+  });
 
-  const loading = companyLoading || lotsLoading
+  const loading = companyLoading || (canViewITPs && lotsLoading);
 
   // Group by ITP status
-  const inProgress = lots.filter(l =>
-    l.itpInstances?.some(itp => itp.status === 'in_progress')
-  )
-  const notStarted = lots.filter(l =>
-    l.itpInstances?.every(itp => itp.status === 'not_started')
-  )
-  const completed = lots.filter(l =>
-    l.itpInstances?.every(itp => itp.status === 'completed')
-  )
+  const inProgress = lots.filter((l) =>
+    l.itpInstances?.some((itp) => itp.status === 'in_progress'),
+  );
+  const notStarted = lots.filter((l) =>
+    l.itpInstances?.every((itp) => itp.status === 'not_started'),
+  );
+  const completed = lots.filter((l) => l.itpInstances?.every((itp) => itp.status === 'completed'));
 
   if (loading) {
     return (
@@ -117,7 +125,11 @@ export function SubcontractorITPsPage() {
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-24 w-full rounded-lg" />
       </div>
-    )
+    );
+  }
+
+  if (!canViewITPs) {
+    return <PortalAccessDenied moduleName="ITPs" />;
   }
 
   if (error) {
@@ -135,7 +147,7 @@ export function SubcontractorITPsPage() {
           Back to Portal
         </Link>
       </div>
-    )
+    );
   }
 
   return (
@@ -165,7 +177,9 @@ export function SubcontractorITPsPage() {
           <p className="text-xs text-muted-foreground">In Progress</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{completed.length}</p>
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+            {completed.length}
+          </p>
           <p className="text-xs text-muted-foreground">Completed</p>
         </div>
       </div>
@@ -226,12 +240,12 @@ export function SubcontractorITPsPage() {
         </>
       )}
     </div>
-  )
+  );
 }
 
 function ITPLotCard({ lot }: { lot: Lot }) {
-  const itp = lot.itpInstances?.[0]
-  const canComplete = lot.subcontractorAssignments?.some(a => a.canCompleteITP) ?? false
+  const itp = lot.itpInstances?.[0];
+  const canComplete = lot.subcontractorAssignments?.some((a) => a.canCompleteITP) ?? false;
 
   return (
     <Link
@@ -241,16 +255,20 @@ function ITPLotCard({ lot }: { lot: Lot }) {
       <div className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-start gap-3">
-            <div className={`p-2 rounded-lg ${canComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-muted'}`}>
-              <ClipboardList className={`h-4 w-4 ${canComplete ? 'text-green-600 dark:text-green-300' : 'text-muted-foreground'}`} />
+            <div
+              className={`p-2 rounded-lg ${canComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-muted'}`}
+            >
+              <ClipboardList
+                className={`h-4 w-4 ${canComplete ? 'text-green-600 dark:text-green-300' : 'text-muted-foreground'}`}
+              />
             </div>
             <div>
               <p className="font-medium text-foreground">{lot.lotNumber}</p>
-              {itp && (
-                <p className="text-sm text-muted-foreground">{itp.template.name}</p>
-              )}
+              {itp && <p className="text-sm text-muted-foreground">{itp.template.name}</p>}
               {!canComplete && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">View only - contact PM for completion access</p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  View only - contact PM for completion access
+                </p>
               )}
             </div>
           </div>
@@ -261,5 +279,5 @@ function ITPLotCard({ lot }: { lot: Lot }) {
         </div>
       </div>
     </Link>
-  )
+  );
 }

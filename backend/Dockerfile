@@ -1,29 +1,49 @@
-# Stage 1: Install dependencies
-FROM node:20-slim AS deps
-RUN corepack enable && corepack prepare pnpm@9 --activate
+# syntax=docker/dockerfile:1.7
+
+# Stage 0: Shared runtime dependencies
+FROM node:20-slim AS base
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+RUN apt-get update -y \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+# Stage 1: Install dependencies
+FROM base AS deps
+COPY package.json package-lock.json ./
 COPY prisma ./prisma/
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=secret,id=npm_extra_ca,target=/tmp/npm_extra_ca.pem,required=false \
+  if [ -s /tmp/npm_extra_ca.pem ]; then export NODE_EXTRA_CA_CERTS=/tmp/npm_extra_ca.pem; fi \
+  && npm ci --no-audit --no-fund \
+  && node -e "require.resolve('prisma/package.json'); require.resolve('typescript/package.json'); require.resolve('@prisma/client/package.json')"
 
 # Stage 2: Build TypeScript
 FROM deps AS build
 COPY . .
-RUN pnpm build
+RUN ./node_modules/.bin/prisma generate && npm run build
 
 # Stage 3: Production runtime
-FROM node:20-slim AS runtime
-RUN corepack enable && corepack prepare pnpm@9 --activate
-WORKDIR /app
+FROM base AS runtime
+ENV NODE_ENV=production
 
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+RUN --mount=type=secret,id=npm_extra_ca,target=/tmp/npm_extra_ca.pem,required=false \
+  if [ -s /tmp/npm_extra_ca.pem ]; then export NODE_EXTRA_CA_CERTS=/tmp/npm_extra_ca.pem; fi \
+  && npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+  && node -e "require.resolve('express/package.json'); require.resolve('@prisma/client/package.json')" \
+  && npm cache clean --force
+
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
-COPY package.json pnpm-lock.yaml ./
 
-RUN pnpm prune --prod && pnpm prisma generate
+RUN mkdir -p uploads/avatars uploads/comments uploads/company-logos uploads/documents uploads/drawings uploads/certificates logs \
+  && chown -R node:node /app
 
-ENV NODE_ENV=production
+USER node
+
 EXPOSE 3001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD node -e "const port = process.env.PORT || 3001; fetch('http://127.0.0.1:' + port + '/ready').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["node", "dist/index.js"]

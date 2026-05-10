@@ -1,8 +1,8 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
 
 interface DiaryDesktopHeaderProps {
-  projectId: string
-  onNewEntry: () => void
+  projectId: string;
+  onNewEntry: () => void;
 }
 
 export function DiaryDesktopHeader({ projectId, onNewEntry }: DiaryDesktopHeaderProps) {
@@ -19,8 +19,18 @@ export function DiaryDesktopHeader({ projectId, onNewEntry }: DiaryDesktopHeader
           to={`/projects/${projectId}/delays`}
           className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-4 py-2 text-sm hover:bg-muted"
         >
-          <svg className="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="h-5 w-5 text-red-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           Delay Register
         </Link>
@@ -35,5 +45,5 @@ export function DiaryDesktopHeader({ projectId, onNewEntry }: DiaryDesktopHeader
         </button>
       </div>
     </div>
-  )
+  );
 }

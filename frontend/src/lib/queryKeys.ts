@@ -10,7 +10,7 @@ export const queryKeys = {
   lot: (id: string) => ['lot', id] as const,
 
   // NCRs
-  ncrs: (projectId?: string) => projectId ? ['ncrs', projectId] as const : ['ncrs'] as const,
+  ncrs: (projectId?: string) => (projectId ? (['ncrs', projectId] as const) : (['ncrs'] as const)),
   ncrRole: (projectId: string) => ['ncr-role', projectId] as const,
 
   // Hold Points
@@ -48,6 +48,8 @@ export const queryKeys = {
 
   // Search
   search: (term: string) => ['search', term] as const,
+  globalSearch: (projectId: string, term: string, scope: 'lots' | 'ncrs' | 'tests') =>
+    ['global-search', projectId, term, scope] as const,
 
   // Foreman
   foremanDashboard: (projectId: string) => ['foreman-dashboard', projectId] as const,
@@ -70,8 +72,10 @@ export const queryKeys = {
   reportSchedules: (projectId: string) => ['report-schedules', projectId] as const,
 
   // Dashboard
-  dashboard: (projectId?: string) => projectId ? ['dashboard', projectId] as const : ['dashboard'] as const,
-  dashboardStats: (startDate: string, endDate: string) => ['dashboard-stats', startDate, endDate] as const,
+  dashboard: (projectId?: string) =>
+    projectId ? (['dashboard', projectId] as const) : (['dashboard'] as const),
+  dashboardStats: (startDate: string, endDate: string) =>
+    ['dashboard-stats', startDate, endDate] as const,
   pmDashboard: ['pm-dashboard'] as const,
   qmDashboard: ['qm-dashboard'] as const,
 
@@ -84,4 +88,4 @@ export const queryKeys = {
   projectSettings: (projectId: string) => ['project-settings', projectId] as const,
   projectUsers: (projectId: string) => ['project-users', projectId] as const,
   projectAreas: (projectId: string) => ['project-areas', projectId] as const,
-} as const
+} as const;

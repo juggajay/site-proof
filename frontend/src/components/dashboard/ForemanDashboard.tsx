@@ -1,10 +1,11 @@
 // Feature #292: Foreman Dashboard - Simplified view for foreman role
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { apiFetch } from '@/lib/api'
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import {
   Sun,
   Cloud,
@@ -19,107 +20,150 @@ import {
   Users,
   RefreshCw,
   ChevronRight,
-  Plus
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+  Plus,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface ForemanDashboardData {
   // Today's diary
   todayDiary: {
-    exists: boolean
-    status: 'draft' | 'submitted' | null
-    id: string | null
-  }
+    exists: boolean;
+    status: 'draft' | 'submitted' | null;
+    id: string | null;
+  };
   // Pending dockets
   pendingDockets: {
-    count: number
-    totalLabourHours: number
-    totalPlantHours: number
-  }
+    count: number;
+    totalLabourHours: number;
+    totalPlantHours: number;
+  };
   // Inspections due today
   inspectionsDueToday: {
-    count: number
+    count: number;
     items: Array<{
-      id: string
-      type: string
-      description: string
-      lotNumber: string
-      link: string
-    }>
-  }
+      id: string;
+      type: string;
+      description: string;
+      lotNumber: string;
+      link: string;
+    }>;
+  };
   // Weather
   weather: {
-    conditions: string | null
-    temperatureMin: number | null
-    temperatureMax: number | null
-    rainfallMm: number | null
-  }
+    conditions: string | null;
+    temperatureMin: number | null;
+    temperatureMax: number | null;
+    rainfallMm: number | null;
+  };
   // Active project info
   project: {
-    id: string
-    name: string
-    projectNumber: string
-  } | null
+    id: string;
+    name: string;
+    projectNumber: string;
+  } | null;
 }
 
 const getWeatherIcon = (conditions: string | null) => {
-  if (!conditions) return <Sun className="h-8 w-8 text-yellow-500" />
-  const lower = conditions.toLowerCase()
+  if (!conditions) return <Sun className="h-8 w-8 text-yellow-500" />;
+  const lower = conditions.toLowerCase();
   if (lower.includes('rain') || lower.includes('shower')) {
-    return <CloudRain className="h-8 w-8 text-blue-500" />
+    return <CloudRain className="h-8 w-8 text-blue-500" />;
   }
   if (lower.includes('cloud') || lower.includes('overcast')) {
-    return <Cloud className="h-8 w-8 text-gray-500" />
+    return <Cloud className="h-8 w-8 text-gray-500" />;
   }
-  return <Sun className="h-8 w-8 text-yellow-500" />
-}
+  return <Sun className="h-8 w-8 text-yellow-500" />;
+};
 
 const defaultForemanData: ForemanDashboardData = {
   todayDiary: { exists: false, status: null, id: null },
   pendingDockets: { count: 0, totalLabourHours: 0, totalPlantHours: 0 },
   inspectionsDueToday: { count: 0, items: [] },
   weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
-  project: null
+  project: null,
+};
+
+function getSafeInternalLink(link: string | undefined, fallback: string): string {
+  if (link?.startsWith('/') && !link.startsWith('//')) {
+    return link;
+  }
+  return fallback;
 }
 
 export function ForemanDashboard() {
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [refreshing, setRefreshing] = useState(false)
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { data = defaultForemanData, isLoading: loading } = useQuery({
+  const {
+    data: dashboardData,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: queryKeys.foremanDashboard('current'),
     queryFn: () => apiFetch<ForemanDashboardData>('/api/dashboard/foreman'),
-  })
+  });
+  const data = dashboardData ?? defaultForemanData;
+  const errorMessage = error
+    ? extractErrorMessage(error, 'Failed to load foreman dashboard')
+    : null;
+  const hasHardError = Boolean(errorMessage && !dashboardData);
 
   const handleRefresh = () => {
-    setRefreshing(true)
-    queryClient.invalidateQueries({ queryKey: queryKeys.foremanDashboard('current') }).then(() => {
-      setRefreshing(false)
-    })
-  }
+    setRefreshing(true);
+    refetch().finally(() => {
+      setRefreshing(false);
+    });
+  };
 
   const today = new Date().toLocaleDateString('en-AU', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
-  })
+    day: 'numeric',
+  });
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
-    )
+    );
   }
 
-  const projectId = data.project?.id
+  const projectId = data.project?.id;
 
   // Helper to build project-scoped paths
   const getProjectPath = (path: string) => {
-    return projectId ? `/projects/${projectId}/${path}` : '/projects'
+    return projectId ? `/projects/${encodeURIComponent(projectId)}/${path}` : '/projects';
+  };
+
+  if (hasHardError) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Good {getTimeOfDay()},{' '}
+              {user?.fullName?.split(' ')[0] || user?.name?.split(' ')[0] || 'Foreman'}!
+            </h1>
+            <p className="text-muted-foreground flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              {today}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Try again
+          </Button>
+        </div>
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <p className="font-medium">Foreman dashboard could not be loaded.</p>
+          <p className="mt-1 text-sm">{errorMessage}</p>
+        </div>
+      </div>
+    );
   }
 
   // If no project is assigned, show a message
@@ -127,7 +171,10 @@ export function ForemanDashboard() {
     return (
       <div className="space-y-6 p-6">
         <div>
-          <h1 className="text-2xl font-bold">Good {getTimeOfDay()}, {user?.fullName?.split(' ')[0] || user?.name?.split(' ')[0] || 'Foreman'}!</h1>
+          <h1 className="text-2xl font-bold">
+            Good {getTimeOfDay()},{' '}
+            {user?.fullName?.split(' ')[0] || user?.name?.split(' ')[0] || 'Foreman'}!
+          </h1>
           <p className="text-muted-foreground flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             {today}
@@ -140,7 +187,8 @@ export function ForemanDashboard() {
           </div>
           <h2 className="text-lg font-semibold mb-2">No Project Assigned</h2>
           <p className="text-muted-foreground mb-4">
-            You need to be assigned to a project before you can access the foreman dashboard features.
+            You need to be assigned to a project before you can access the foreman dashboard
+            features.
           </p>
           <Link
             to="/projects"
@@ -151,7 +199,7 @@ export function ForemanDashboard() {
           </Link>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -159,22 +207,41 @@ export function ForemanDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Good {getTimeOfDay()}, {user?.fullName?.split(' ')[0] || user?.name?.split(' ')[0] || 'Foreman'}!</h1>
+          <h1 className="text-2xl font-bold">
+            Good {getTimeOfDay()},{' '}
+            {user?.fullName?.split(' ')[0] || user?.name?.split(' ')[0] || 'Foreman'}!
+          </h1>
           <p className="text-muted-foreground flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             {today}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
+
+      {errorMessage && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-medium">Foreman dashboard data could not be refreshed.</p>
+              <p className="mt-1 text-sm">{errorMessage}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Try again
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Project Context */}
       {data.project && (
@@ -243,9 +310,7 @@ export function ForemanDashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  No diary entry started for today
-                </p>
+                <p className="text-sm text-muted-foreground">No diary entry started for today</p>
                 <Link
                   to={getProjectPath(`diary?date=${formatDateForUrl(new Date())}`)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
@@ -319,7 +384,9 @@ export function ForemanDashboard() {
                 {data.inspectionsDueToday.items.slice(0, 5).map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => navigate(item.link)}
+                    onClick={() =>
+                      navigate(getSafeInternalLink(item.link, getProjectPath('hold-points')))
+                    }
                     className="w-full flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors text-left"
                   >
                     <div>
@@ -384,7 +451,7 @@ export function ForemanDashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // Helper components and functions
@@ -395,7 +462,7 @@ function DiaryStatusBadge({ status, exists }: { status: string | null; exists: b
       <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-medium px-2.5 py-0.5 rounded-full">
         Not Started
       </span>
-    )
+    );
   }
   if (status === 'submitted') {
     return (
@@ -403,22 +470,22 @@ function DiaryStatusBadge({ status, exists }: { status: string | null; exists: b
         <CheckCircle2 className="h-3 w-3" />
         Submitted
       </span>
-    )
+    );
   }
   return (
     <span className="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
       Draft
     </span>
-  )
+  );
 }
 
 function getTimeOfDay(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'morning'
-  if (hour < 17) return 'afternoon'
-  return 'evening'
+  const hour = new Date().getHours();
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
 }
 
 function formatDateForUrl(date: Date): string {
-  return date.toISOString().split('T')[0]
+  return date.toISOString().split('T')[0];
 }

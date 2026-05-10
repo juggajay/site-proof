@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { logError } from '@/lib/logger';
+import { cn } from '@/lib/utils';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -7,185 +8,183 @@ import { cn } from '@/lib/utils'
 
 export interface UsePullToRefreshOptions {
   /** Callback fired when pull threshold is exceeded and released */
-  onRefresh: () => Promise<void>
+  onRefresh: () => Promise<void>;
   /** Distance in pixels required to trigger refresh (default: 80) */
-  threshold?: number
+  threshold?: number;
   /** Resistance factor for natural pull feel - higher = more resistance (default: 2.5) */
-  resistanceFactor?: number
+  resistanceFactor?: number;
   /** Maximum pull distance allowed (default: 150) */
-  maxPullDistance?: number
+  maxPullDistance?: number;
   /** Whether pull to refresh is enabled (default: true) */
-  enabled?: boolean
+  enabled?: boolean;
 }
 
 export interface UsePullToRefreshReturn {
   /** Ref to attach to the scrollable container */
-  containerRef: React.RefObject<HTMLDivElement>
+  containerRef: React.RefObject<HTMLDivElement>;
   /** Current pull distance in pixels (with resistance applied) */
-  pullDistance: number
+  pullDistance: number;
   /** Whether a refresh is currently in progress */
-  isRefreshing: boolean
+  isRefreshing: boolean;
   /** Whether the user is currently pulling */
-  isPulling: boolean
+  isPulling: boolean;
   /** Progress towards threshold (0-1, can exceed 1) */
-  progress: number
+  progress: number;
 }
 
 // -----------------------------------------------------------------------------
 // Hook Implementation
 // -----------------------------------------------------------------------------
 
-export function usePullToRefresh(
-  options: UsePullToRefreshOptions
-): UsePullToRefreshReturn {
+export function usePullToRefresh(options: UsePullToRefreshOptions): UsePullToRefreshReturn {
   const {
     onRefresh,
     threshold = 80,
     resistanceFactor = 2.5,
     maxPullDistance = 150,
     enabled = true,
-  } = options
+  } = options;
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [pullDistance, setPullDistance] = useState(0)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [isPulling, setIsPulling] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
 
   // Track touch state without causing re-renders
   const touchState = useRef({
     startY: 0,
     currentY: 0,
     isTracking: false,
-  })
+  });
 
   // Calculate progress (0-1, can exceed 1 when past threshold)
-  const progress = threshold > 0 ? pullDistance / threshold : 0
+  const progress = threshold > 0 ? pullDistance / threshold : 0;
 
   // Apply resistance to raw pull distance for natural feel
   const applyResistance = useCallback(
     (rawDistance: number): number => {
-      if (rawDistance <= 0) return 0
+      if (rawDistance <= 0) return 0;
       // Logarithmic resistance for diminishing returns on pull
-      const resistedDistance = rawDistance / resistanceFactor
-      return Math.min(resistedDistance, maxPullDistance)
+      const resistedDistance = rawDistance / resistanceFactor;
+      return Math.min(resistedDistance, maxPullDistance);
     },
-    [resistanceFactor, maxPullDistance]
-  )
+    [resistanceFactor, maxPullDistance],
+  );
 
   // Check if container is scrolled to top
   const isScrolledToTop = useCallback((): boolean => {
-    const container = containerRef.current
-    if (!container) return false
-    return container.scrollTop <= 0
-  }, [])
+    const container = containerRef.current;
+    if (!container) return false;
+    return container.scrollTop <= 0;
+  }, []);
 
   // Handle refresh trigger
   const triggerRefresh = useCallback(async () => {
-    if (isRefreshing) return
+    if (isRefreshing) return;
 
-    setIsRefreshing(true)
+    setIsRefreshing(true);
     try {
-      await onRefresh()
+      await onRefresh();
     } catch (error) {
-      console.error('Pull to refresh error:', error)
+      logError('Pull to refresh error:', error);
     } finally {
-      setIsRefreshing(false)
-      setPullDistance(0)
+      setIsRefreshing(false);
+      setPullDistance(0);
     }
-  }, [onRefresh, isRefreshing])
+  }, [onRefresh, isRefreshing]);
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled) return;
 
-    const container = containerRef.current
-    if (!container) return
+    const container = containerRef.current;
+    if (!container) return;
 
     // Prevent default to avoid browser pull-to-refresh on mobile
     const preventDefaultHandler = (e: TouchEvent) => {
       if (touchState.current.isTracking && pullDistance > 0) {
-        e.preventDefault()
+        e.preventDefault();
       }
-    }
+    };
 
     const handleTouchStart = (e: TouchEvent) => {
       // Don't start tracking if already refreshing
-      if (isRefreshing) return
+      if (isRefreshing) return;
 
       // Only track if scrolled to top
-      if (!isScrolledToTop()) return
+      if (!isScrolledToTop()) return;
 
-      const touch = e.touches[0]
-      if (!touch) return
+      const touch = e.touches[0];
+      if (!touch) return;
 
       touchState.current = {
         startY: touch.clientY,
         currentY: touch.clientY,
         isTracking: true,
-      }
-      setIsPulling(true)
-    }
+      };
+      setIsPulling(true);
+    };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!touchState.current.isTracking || isRefreshing) return
+      if (!touchState.current.isTracking || isRefreshing) return;
 
-      const touch = e.touches[0]
-      if (!touch) return
+      const touch = e.touches[0];
+      if (!touch) return;
 
-      touchState.current.currentY = touch.clientY
-      const rawDistance = touchState.current.currentY - touchState.current.startY
+      touchState.current.currentY = touch.clientY;
+      const rawDistance = touchState.current.currentY - touchState.current.startY;
 
       // Only allow pulling down when at top
       if (rawDistance > 0 && isScrolledToTop()) {
-        const resistedDistance = applyResistance(rawDistance)
-        setPullDistance(resistedDistance)
+        const resistedDistance = applyResistance(rawDistance);
+        setPullDistance(resistedDistance);
 
         // Prevent scroll while pulling
         if (resistedDistance > 0) {
-          e.preventDefault()
+          e.preventDefault();
         }
       } else if (rawDistance <= 0) {
         // User is scrolling up, stop tracking
-        touchState.current.isTracking = false
-        setIsPulling(false)
-        setPullDistance(0)
+        touchState.current.isTracking = false;
+        setIsPulling(false);
+        setPullDistance(0);
       }
-    }
+    };
 
     const handleTouchEnd = () => {
-      if (!touchState.current.isTracking) return
+      if (!touchState.current.isTracking) return;
 
-      touchState.current.isTracking = false
-      setIsPulling(false)
+      touchState.current.isTracking = false;
+      setIsPulling(false);
 
       // Check if threshold was met
       if (pullDistance >= threshold && !isRefreshing) {
-        triggerRefresh()
+        triggerRefresh();
       } else {
         // Animate back to 0
-        setPullDistance(0)
+        setPullDistance(0);
       }
-    }
+    };
 
     const handleTouchCancel = () => {
-      touchState.current.isTracking = false
-      setIsPulling(false)
-      setPullDistance(0)
-    }
+      touchState.current.isTracking = false;
+      setIsPulling(false);
+      setPullDistance(0);
+    };
 
     // Add listeners with passive: false to allow preventDefault
-    container.addEventListener('touchstart', handleTouchStart, { passive: true })
-    container.addEventListener('touchmove', handleTouchMove, { passive: false })
-    container.addEventListener('touchend', handleTouchEnd, { passive: true })
-    container.addEventListener('touchcancel', handleTouchCancel, { passive: true })
-    document.addEventListener('touchmove', preventDefaultHandler, { passive: false })
+    container.addEventListener('touchstart', handleTouchStart, { passive: true });
+    container.addEventListener('touchmove', handleTouchMove, { passive: false });
+    container.addEventListener('touchend', handleTouchEnd, { passive: true });
+    container.addEventListener('touchcancel', handleTouchCancel, { passive: true });
+    document.addEventListener('touchmove', preventDefaultHandler, { passive: false });
 
     return () => {
-      container.removeEventListener('touchstart', handleTouchStart)
-      container.removeEventListener('touchmove', handleTouchMove)
-      container.removeEventListener('touchend', handleTouchEnd)
-      container.removeEventListener('touchcancel', handleTouchCancel)
-      document.removeEventListener('touchmove', preventDefaultHandler)
-    }
+      container.removeEventListener('touchstart', handleTouchStart);
+      container.removeEventListener('touchmove', handleTouchMove);
+      container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchCancel);
+      document.removeEventListener('touchmove', preventDefaultHandler);
+    };
   }, [
     enabled,
     isRefreshing,
@@ -194,7 +193,7 @@ export function usePullToRefresh(
     applyResistance,
     isScrolledToTop,
     triggerRefresh,
-  ])
+  ]);
 
   return {
     containerRef,
@@ -202,7 +201,7 @@ export function usePullToRefresh(
     isRefreshing,
     isPulling,
     progress,
-  }
+  };
 }
 
 // -----------------------------------------------------------------------------
@@ -211,13 +210,13 @@ export function usePullToRefresh(
 
 export interface PullToRefreshIndicatorProps {
   /** Current pull distance */
-  pullDistance: number
+  pullDistance: number;
   /** Whether refreshing is in progress */
-  isRefreshing: boolean
+  isRefreshing: boolean;
   /** Progress towards threshold (0-1) */
-  progress: number
+  progress: number;
   /** Additional CSS classes */
-  className?: string
+  className?: string;
 }
 
 export function PullToRefreshIndicator({
@@ -228,24 +227,24 @@ export function PullToRefreshIndicator({
 }: PullToRefreshIndicatorProps) {
   // Don't render if no pull and not refreshing
   if (pullDistance === 0 && !isRefreshing) {
-    return null
+    return null;
   }
 
   // Calculate rotation based on progress (0 to 180 degrees)
-  const rotation = Math.min(progress * 180, 180)
+  const rotation = Math.min(progress * 180, 180);
 
   // Scale based on progress for visual feedback
-  const scale = Math.min(0.5 + progress * 0.5, 1)
+  const scale = Math.min(0.5 + progress * 0.5, 1);
 
   // Opacity increases with pull
-  const opacity = Math.min(progress, 1)
+  const opacity = Math.min(progress, 1);
 
   return (
     <div
       className={cn(
         'absolute left-0 right-0 flex items-center justify-center pointer-events-none z-50',
         'transition-transform duration-200 ease-out',
-        className
+        className,
       )}
       style={{
         top: 0,
@@ -256,7 +255,7 @@ export function PullToRefreshIndicator({
         className={cn(
           'flex items-center justify-center w-10 h-10 rounded-full',
           'bg-card shadow-lg border border-border',
-          'transition-all duration-200 ease-out'
+          'transition-all duration-200 ease-out',
         )}
         style={{
           opacity,
@@ -290,7 +289,7 @@ export function PullToRefreshIndicator({
           <svg
             className={cn(
               'w-5 h-5 transition-transform duration-150',
-              progress >= 1 ? 'text-primary' : 'text-muted-foreground'
+              progress >= 1 ? 'text-primary' : 'text-muted-foreground',
             )}
             style={{
               transform: `rotate(${rotation}deg)`,
@@ -301,11 +300,7 @@ export function PullToRefreshIndicator({
             stroke="currentColor"
             strokeWidth={2}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M19 14l-7 7m0 0l-7-7m7 7V3"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
         )}
       </div>
@@ -317,11 +312,11 @@ export function PullToRefreshIndicator({
         </span>
       )}
     </div>
-  )
+  );
 }
 
 // -----------------------------------------------------------------------------
 // Default Export
 // -----------------------------------------------------------------------------
 
-export default usePullToRefresh
+export default usePullToRefresh;

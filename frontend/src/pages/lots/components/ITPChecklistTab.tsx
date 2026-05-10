@@ -4,31 +4,41 @@
  * Extracted from LotDetailPage.tsx for better maintainability.
  */
 
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { RefreshCw, WifiOff, CloudOff, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, Printer } from 'lucide-react'
-import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist'
-import type {
-  ITPInstance,
-  ITPTemplate,
-  ITPAttachment,
-  ITPCompletion,
-  Lot,
-} from '../types'
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  RefreshCw,
+  WifiOff,
+  CloudOff,
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Printer,
+} from 'lucide-react';
+import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
+import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
+import type { ITPInstance, ITPTemplate, ITPAttachment, ITPCompletion, Lot } from '../types';
+import { PhotoLocationMap } from './PhotoLocationMap';
 
 // Props for the ITP checklist item row
 interface ITPChecklistItemRowProps {
-  item: ITPInstance['template']['checklistItems'][0]
-  completion: ITPCompletion | undefined
-  projectId: string
-  updatingCompletion: string | null
-  onToggleCompletion: (checklistItemId: string, isCompleted: boolean, notes: string) => void
-  onUpdateNotes: (checklistItemId: string, notes: string) => void
-  onAddPhoto: (completionId: string, checklistItemId: string, event: React.ChangeEvent<HTMLInputElement>) => void
-  onMarkAsNA: (checklistItemId: string, itemDescription: string) => void
-  onMarkAsFailed: (checklistItemId: string, itemDescription: string) => void
-  onPhotoClick: (photo: ITPAttachment) => void
-  setItpInstance: React.Dispatch<React.SetStateAction<ITPInstance | null>>
+  item: ITPInstance['template']['checklistItems'][0];
+  completion: ITPCompletion | undefined;
+  projectId: string;
+  updatingCompletion: string | null;
+  onToggleCompletion: (checklistItemId: string, isCompleted: boolean, notes: string) => void;
+  onUpdateNotes: (checklistItemId: string, notes: string) => void;
+  onAddPhoto: (
+    completionId: string,
+    checklistItemId: string,
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => void;
+  onMarkAsNA: (checklistItemId: string, itemDescription: string) => void;
+  onMarkAsFailed: (checklistItemId: string, itemDescription: string) => void;
+  onPhotoClick: (photo: ITPAttachment) => void;
+  setItpInstance: React.Dispatch<React.SetStateAction<ITPInstance | null>>;
 }
 
 function ITPChecklistItemRow({
@@ -44,89 +54,166 @@ function ITPChecklistItemRow({
   onPhotoClick,
   setItpInstance,
 }: ITPChecklistItemRowProps) {
-  const isCompleted = completion?.isCompleted || false
-  const isNotApplicable = completion?.isNotApplicable || false
-  const isFailed = completion?.isFailed || false
-  const notes = completion?.notes || ''
+  const isCompleted = completion?.isCompleted || false;
+  const isNotApplicable = completion?.isNotApplicable || false;
+  const isFailed = completion?.isFailed || false;
+  const notes = completion?.notes || '';
 
   return (
-    <div className={`p-4 ${isNotApplicable ? 'bg-muted/50' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''}`}>
+    <div
+      className={`p-4 ${isNotApplicable ? 'bg-muted/50' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''}`}
+    >
       <div className="flex items-start gap-3">
         <button
-          onClick={() => !isNotApplicable && !isFailed && onToggleCompletion(item.id, isCompleted, notes)}
+          onClick={() =>
+            !isNotApplicable && !isFailed && onToggleCompletion(item.id, isCompleted, notes)
+          }
           disabled={updatingCompletion === item.id || isNotApplicable || isFailed}
-          aria-label={isFailed ? 'Failed' : isNotApplicable ? 'Not Applicable' : isCompleted ? `Mark "${item.description}" as incomplete` : `Mark "${item.description}" as complete`}
+          aria-label={
+            isFailed
+              ? 'Failed'
+              : isNotApplicable
+                ? 'Not Applicable'
+                : isCompleted
+                  ? `Mark "${item.description}" as incomplete`
+                  : `Mark "${item.description}" as complete`
+          }
           className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
             isFailed
               ? 'bg-red-500 border-red-500 text-white cursor-not-allowed'
               : isNotApplicable
-              ? 'bg-gray-400 dark:bg-gray-600 border-gray-400 dark:border-gray-600 text-white cursor-not-allowed'
-              : isCompleted
-              ? 'bg-green-500 border-green-500 text-white'
-              : 'border-border hover:border-primary'
+                ? 'bg-gray-400 dark:bg-gray-600 border-gray-400 dark:border-gray-600 text-white cursor-not-allowed'
+                : isCompleted
+                  ? 'bg-green-500 border-green-500 text-white'
+                  : 'border-border hover:border-primary'
           } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
         >
-          {isFailed ? <span className="text-[10px] font-bold" aria-hidden="true">X</span> : isNotApplicable ? <span className="text-[10px] font-bold" aria-hidden="true">-</span> : isCompleted && <span className="text-xs" aria-hidden="true">&#10003;</span>}
+          {isFailed ? (
+            <span className="text-[10px] font-bold" aria-hidden="true">
+              X
+            </span>
+          ) : isNotApplicable ? (
+            <span className="text-[10px] font-bold" aria-hidden="true">
+              -
+            </span>
+          ) : (
+            isCompleted && (
+              <span className="text-xs" aria-hidden="true">
+                &#10003;
+              </span>
+            )
+          )}
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             {/* Point type indicator: S=Standard, W=Witness, H=Hold */}
-            <span className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded ${
-              item.pointType === 'hold_point'
-                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                : item.pointType === 'witness'
-                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-                : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-            }`} title={item.pointType === 'hold_point' ? 'Hold Point' : item.pointType === 'witness' ? 'Witness Point' : 'Standard Point'}>
+            <span
+              className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded ${
+                item.pointType === 'hold_point'
+                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                  : item.pointType === 'witness'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+              }`}
+              title={
+                item.pointType === 'hold_point'
+                  ? 'Hold Point'
+                  : item.pointType === 'witness'
+                    ? 'Witness Point'
+                    : 'Standard Point'
+              }
+            >
               {item.pointType === 'hold_point' ? 'H' : item.pointType === 'witness' ? 'W' : 'S'}
             </span>
-            <span className={`font-medium ${isCompleted || isNotApplicable ? 'line-through text-muted-foreground' : ''}`}>
+            <span
+              className={`font-medium ${isCompleted || isNotApplicable ? 'line-through text-muted-foreground' : ''}`}
+            >
               {item.order}. {item.description}
             </span>
             {/* N/A Badge */}
             {isNotApplicable && (
-              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded font-medium">N/A</span>
+              <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded font-medium">
+                N/A
+              </span>
             )}
             {item.isHoldPoint && (
-              <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">Hold Point</span>
+              <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                Hold Point
+              </span>
             )}
             {/* Responsible party badge */}
-            <span className={`text-xs px-2 py-0.5 rounded ${
-              item.responsibleParty === 'superintendent'
-                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+            <span
+              className={`text-xs px-2 py-0.5 rounded ${
+                item.responsibleParty === 'superintendent'
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                  : item.responsibleParty === 'subcontractor'
+                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                    : item.responsibleParty === 'contractor'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                      : 'bg-muted'
+              }`}
+            >
+              {item.responsibleParty === 'superintendent'
+                ? 'Superintendent'
                 : item.responsibleParty === 'subcontractor'
-                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                : item.responsibleParty === 'contractor'
-                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                : 'bg-muted'
-            }`}>
-              {item.responsibleParty === 'superintendent' ? 'Superintendent' :
-               item.responsibleParty === 'subcontractor' ? 'Subcontractor' :
-               item.responsibleParty === 'contractor' ? 'Contractor' :
-               item.category || 'General'}
+                  ? 'Subcontractor'
+                  : item.responsibleParty === 'contractor'
+                    ? 'Contractor'
+                    : item.category || 'General'}
             </span>
             {/* Evidence required icons */}
             {item.evidenceRequired === 'photo' && (
-              <span className="inline-flex items-center text-green-600 dark:text-green-400" title="Photo required">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+              <span
+                className="inline-flex items-center text-green-600 dark:text-green-400"
+                title="Photo required"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </span>
             )}
             {(item.evidenceRequired === 'test' || item.testType) && (
-              <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400" title={item.testType ? `Test required: ${item.testType}` : 'Test required'}>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C.817 14.769 2.156 18 4.828 18h10.343c2.673 0 4.012-3.231 2.122-5.121l-4-4A1 1 0 0113 8.172V4.414l.707-.707A1 1 0 0013 2H7zm2 6.172V4h2v4.172a3 3 0 00.879 2.12l1.027 1.028a4 4 0 00-2.171.102l-.47.156a4 4 0 01-2.53 0l-.563-.187a1.993 1.993 0 00-.114-.035l1.063-1.063A3 3 0 009 8.172z" clipRule="evenodd" />
+              <span
+                className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400"
+                title={item.testType ? `Test required: ${item.testType}` : 'Test required'}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C.817 14.769 2.156 18 4.828 18h10.343c2.673 0 4.012-3.231 2.122-5.121l-4-4A1 1 0 0113 8.172V4.414l.707-.707A1 1 0 0013 2H7zm2 6.172V4h2v4.172a3 3 0 00.879 2.12l1.027 1.028a4 4 0 00-2.171.102l-.47.156a4 4 0 01-2.53 0l-.563-.187a1.993 1.993 0 00-.114-.035l1.063-1.063A3 3 0 009 8.172z"
+                    clipRule="evenodd"
+                  />
                 </svg>
-                {item.testType && (
-                  <span className="text-xs">{item.testType}</span>
-                )}
+                {item.testType && <span className="text-xs">{item.testType}</span>}
               </span>
             )}
             {item.evidenceRequired === 'document' && (
               <span className="inline-flex items-center text-primary" title="Document required">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </span>
             )}
@@ -145,12 +232,17 @@ function ITPChecklistItemRow({
               value={notes}
               onChange={(e) => {
                 // Optimistic update
-                setItpInstance(prev => {
-                  if (!prev) return prev
-                  const existingIndex = prev.completions.findIndex(c => c.checklistItemId === item.id)
-                  const newCompletions = [...prev.completions]
+                setItpInstance((prev) => {
+                  if (!prev) return prev;
+                  const existingIndex = prev.completions.findIndex(
+                    (c) => c.checklistItemId === item.id,
+                  );
+                  const newCompletions = [...prev.completions];
                   if (existingIndex >= 0) {
-                    newCompletions[existingIndex] = { ...newCompletions[existingIndex], notes: e.target.value }
+                    newCompletions[existingIndex] = {
+                      ...newCompletions[existingIndex],
+                      notes: e.target.value,
+                    };
                   } else {
                     newCompletions.push({
                       id: '',
@@ -162,11 +254,11 @@ function ITPChecklistItemRow({
                       isVerified: false,
                       verifiedAt: null,
                       verifiedBy: null,
-                      attachments: []
-                    })
+                      attachments: [],
+                    });
                   }
-                  return { ...prev, completions: newCompletions }
-                })
+                  return { ...prev, completions: newCompletions };
+                });
               }}
               onBlur={(e) => onUpdateNotes(item.id, e.target.value)}
               className="w-full px-2 py-1 text-sm border rounded bg-transparent"
@@ -175,28 +267,31 @@ function ITPChecklistItemRow({
           {completion?.completedBy && (
             <p className="text-xs text-muted-foreground mt-1">
               Completed by {completion.completedBy.fullName || completion.completedBy.email}
-              {completion.completedAt && ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
+              {completion.completedAt &&
+                ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
             </p>
           )}
 
           {/* Witness Point Details (if this is a witness point and has witness data) */}
-          {item.pointType === 'witness' && completion?.witnessPresent !== undefined && completion?.witnessPresent !== null && (
-            <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
-              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                Witness Details:
-              </p>
-              {completion.witnessPresent ? (
-                <p className="text-xs text-amber-600 dark:text-amber-500">
-                  Witness present: {completion.witnessName || 'Name not recorded'}
-                  {completion.witnessCompany && ` (${completion.witnessCompany})`}
+          {item.pointType === 'witness' &&
+            completion?.witnessPresent !== undefined &&
+            completion?.witnessPresent !== null && (
+              <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  Witness Details:
                 </p>
-              ) : (
-                <p className="text-xs text-amber-600 dark:text-amber-500">
-                  Witness not present (notification given)
-                </p>
-              )}
-            </div>
-          )}
+                {completion.witnessPresent ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                    Witness present: {completion.witnessName || 'Name not recorded'}
+                    {completion.witnessCompany && ` (${completion.witnessCompany})`}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                    Witness not present (notification given)
+                  </p>
+                )}
+              </div>
+            )}
 
           {/* Photo Attachments Section */}
           <div className="mt-3 pt-2 border-t border-border">
@@ -213,8 +308,9 @@ function ITPChecklistItemRow({
                       className="relative group cursor-pointer"
                       onClick={() => onPhotoClick(attachment)}
                     >
-                      <img
-                        src={attachment.document.fileUrl}
+                      <SecureDocumentImage
+                        documentId={attachment.document.id}
+                        fileUrl={attachment.document.fileUrl}
                         alt={attachment.document.caption || attachment.document.filename}
                         className="w-16 h-16 object-cover rounded border hover:border-primary transition-colors"
                       />
@@ -281,7 +377,7 @@ function ITPChecklistItemRow({
                 {notes && `: ${notes}`}
                 {completion?.linkedNcr && (
                   <a
-                    href={`/projects/${projectId}/ncr`}
+                    href={`/projects/${encodeURIComponent(projectId)}/ncr`}
                     className="ml-2 underline hover:text-red-800"
                   >
                     View NCR {completion.linkedNcr.ncrNumber}
@@ -293,21 +389,21 @@ function ITPChecklistItemRow({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // Photo Lightbox component
 interface PhotoLightboxProps {
-  selectedPhoto: ITPAttachment
-  allPhotos: ITPAttachment[]
-  itpInstance: ITPInstance | null
-  photoZoom: number
-  onClose: () => void
-  onPrev: () => void
-  onNext: () => void
-  onZoomIn: () => void
-  onZoomOut: () => void
-  onResetZoom: () => void
+  selectedPhoto: ITPAttachment;
+  allPhotos: ITPAttachment[];
+  itpInstance: ITPInstance | null;
+  photoZoom: number;
+  onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onResetZoom: () => void;
 }
 
 function PhotoLightbox({
@@ -322,21 +418,21 @@ function PhotoLightbox({
   onZoomOut,
   onResetZoom,
 }: PhotoLightboxProps) {
-  const currentIndex = allPhotos.findIndex(p => p.id === selectedPhoto.id)
-  const hasPrev = currentIndex > 0
-  const hasNext = currentIndex < allPhotos.length - 1
+  const currentIndex = allPhotos.findIndex((p) => p.id === selectedPhoto.id);
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < allPhotos.length - 1;
 
   return (
     <div
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
       onClick={onClose}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowLeft') onPrev()
-        else if (e.key === 'ArrowRight') onNext()
-        else if (e.key === 'Escape') onClose()
-        else if (e.key === '+' || e.key === '=') onZoomIn()
-        else if (e.key === '-') onZoomOut()
-        else if (e.key === '0') onResetZoom()
+        if (e.key === 'ArrowLeft') onPrev();
+        else if (e.key === 'ArrowRight') onNext();
+        else if (e.key === 'Escape') onClose();
+        else if (e.key === '+' || e.key === '=') onZoomIn();
+        else if (e.key === '-') onZoomOut();
+        else if (e.key === '0') onResetZoom();
       }}
       tabIndex={0}
       data-testid="photo-lightbox"
@@ -344,7 +440,10 @@ function PhotoLightbox({
       {/* Previous Button */}
       {hasPrev && (
         <button
-          onClick={(e) => { e.stopPropagation(); onPrev() }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
           className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full p-3 text-white transition-colors z-10"
           title="Previous photo"
           data-testid="photo-lightbox-prev"
@@ -356,7 +455,10 @@ function PhotoLightbox({
       {/* Next Button */}
       {hasNext && (
         <button
-          onClick={(e) => { e.stopPropagation(); onNext() }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
           className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/40 rounded-full p-3 text-white transition-colors z-10"
           title="Next photo"
           data-testid="photo-lightbox-next"
@@ -379,7 +481,10 @@ function PhotoLightbox({
         >
           <ZoomOut className="h-5 w-5" />
         </button>
-        <span className="text-white text-sm min-w-[60px] text-center" data-testid="photo-lightbox-zoom-level">
+        <span
+          className="text-white text-sm min-w-[60px] text-center"
+          data-testid="photo-lightbox-zoom-level"
+        >
           {Math.round(photoZoom * 100)}%
         </span>
         <button
@@ -403,7 +508,10 @@ function PhotoLightbox({
         )}
       </div>
 
-      <div className="relative max-w-4xl max-h-[90vh] p-4 overflow-auto" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="relative max-w-4xl max-h-[90vh] p-4 overflow-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={onClose}
           className="absolute top-2 right-2 bg-white/20 hover:bg-white/40 rounded-full p-2 text-white transition-colors z-10"
@@ -412,8 +520,9 @@ function PhotoLightbox({
           X
         </button>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <img
-            src={selectedPhoto.document.fileUrl}
+          <SecureDocumentImage
+            documentId={selectedPhoto.document.id}
+            fileUrl={selectedPhoto.document.fileUrl}
             alt={selectedPhoto.document.caption || selectedPhoto.document.filename}
             className="max-w-full max-h-[80vh] object-contain rounded-lg transition-transform duration-200"
             style={{ transform: `scale(${photoZoom})` }}
@@ -421,7 +530,9 @@ function PhotoLightbox({
           />
         </div>
         <div className="mt-3 text-white text-center">
-          <p className="font-medium">{selectedPhoto.document.caption || selectedPhoto.document.filename}</p>
+          <p className="font-medium">
+            {selectedPhoto.document.caption || selectedPhoto.document.filename}
+          </p>
           {allPhotos.length > 1 && (
             <p className="text-sm text-white/50 mt-1">
               {currentIndex + 1} of {allPhotos.length}
@@ -429,95 +540,81 @@ function PhotoLightbox({
           )}
           {selectedPhoto.document.uploadedBy && (
             <p className="text-sm text-white/70 mt-1">
-              Uploaded by {selectedPhoto.document.uploadedBy.fullName || selectedPhoto.document.uploadedBy.email}
-              {selectedPhoto.document.uploadedAt && ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
+              Uploaded by{' '}
+              {selectedPhoto.document.uploadedBy.fullName ||
+                selectedPhoto.document.uploadedBy.email}
+              {selectedPhoto.document.uploadedAt &&
+                ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
             </p>
           )}
           {/* Show ITP item reference */}
-          {itpInstance && (() => {
-            const completion = itpInstance.completions.find(c =>
-              c.attachments?.some(a => a.id === selectedPhoto.id)
-            )
-            if (completion) {
-              const checklistItem = itpInstance.template.checklistItems.find(
-                item => item.id === completion.checklistItemId
-              )
-              if (checklistItem) {
-                return (
-                  <p className="text-sm bg-primary/30 px-3 py-1 rounded mt-2 inline-block">
-                    ITP Item: {checklistItem.order}. {checklistItem.description}
-                  </p>
-                )
+          {itpInstance &&
+            (() => {
+              const completion = itpInstance.completions.find((c) =>
+                c.attachments?.some((a) => a.id === selectedPhoto.id),
+              );
+              if (completion) {
+                const checklistItem = itpInstance.template.checklistItems.find(
+                  (item) => item.id === completion.checklistItemId,
+                );
+                if (checklistItem) {
+                  return (
+                    <p className="text-sm bg-primary/30 px-3 py-1 rounded mt-2 inline-block">
+                      ITP Item: {checklistItem.order}. {checklistItem.description}
+                    </p>
+                  );
+                }
               }
-            }
-            return null
-          })()}
-          {/* GPS Location Map */}
-          {selectedPhoto.document.gpsLatitude && selectedPhoto.document.gpsLongitude && (
-            <div className="mt-4" data-testid="photo-gps-map">
-              <div className="flex items-center gap-2 text-white/70 text-sm mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                  <circle cx="12" cy="10" r="3"></circle>
-                </svg>
-                <span>Photo Location</span>
-                <span className="text-white/50">
-                  ({Number(selectedPhoto.document.gpsLatitude).toFixed(6)}, {Number(selectedPhoto.document.gpsLongitude).toFixed(6)})
-                </span>
-              </div>
-              <div className="rounded-lg overflow-hidden border border-white/20">
-                <iframe
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${Number(selectedPhoto.document.gpsLongitude) - 0.005}%2C${Number(selectedPhoto.document.gpsLatitude) - 0.003}%2C${Number(selectedPhoto.document.gpsLongitude) + 0.005}%2C${Number(selectedPhoto.document.gpsLatitude) + 0.003}&layer=mapnik&marker=${selectedPhoto.document.gpsLatitude}%2C${selectedPhoto.document.gpsLongitude}`}
-                  width="300"
-                  height="200"
-                  style={{ border: 0 }}
-                  title="Photo location map"
-                  loading="lazy"
-                />
-              </div>
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${selectedPhoto.document.gpsLatitude},${selectedPhoto.document.gpsLongitude}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-primary/70 hover:text-primary mt-1 inline-block"
-                onClick={(e) => e.stopPropagation()}
-              >
-                Open in Google Maps
-              </a>
-            </div>
-          )}
+              return null;
+            })()}
+          <PhotoLocationMap
+            gpsLatitude={selectedPhoto.document.gpsLatitude}
+            gpsLongitude={selectedPhoto.document.gpsLongitude}
+          />
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // Main ITPChecklistTab props
 export interface ITPChecklistTabProps {
-  lot: Lot
-  projectId: string
-  itpInstance: ITPInstance | null
-  setItpInstance: React.Dispatch<React.SetStateAction<ITPInstance | null>>
-  templates: ITPTemplate[]
-  loadingItp: boolean
-  isOnline: boolean
-  isOfflineData: boolean
-  offlinePendingCount: number
-  isMobile: boolean
-  updatingCompletion: string | null
-  canCompleteITPItems: boolean
+  lot: Lot;
+  projectId: string;
+  itpInstance: ITPInstance | null;
+  setItpInstance: React.Dispatch<React.SetStateAction<ITPInstance | null>>;
+  templates: ITPTemplate[];
+  loadingItp: boolean;
+  itpLoadError: string | null;
+  isOnline: boolean;
+  isOfflineData: boolean;
+  offlinePendingCount: number;
+  isMobile: boolean;
+  updatingCompletion: string | null;
+  canCompleteITPItems: boolean;
   // Handlers
-  onToggleCompletion: (checklistItemId: string, currentlyCompleted: boolean, existingNotes: string | null, forceComplete?: boolean, witnessData?: { witnessPresent: boolean; witnessName?: string; witnessCompany?: string }) => Promise<void>
-  onUpdateNotes: (checklistItemId: string, notes: string) => Promise<void>
-  onMarkAsNA: (checklistItemId: string, reason: string) => Promise<void>
-  onMarkAsFailed: (checklistItemId: string, reason: string) => Promise<void>
-  onAddPhoto: (checklistItemId: string, file: File) => Promise<void>
-  onAddPhotoDesktop: (completionId: string, checklistItemId: string, event: React.ChangeEvent<HTMLInputElement>) => void
-  onAssignTemplate: (templateId: string) => Promise<void>
-  assigningTemplate: boolean
+  onToggleCompletion: (
+    checklistItemId: string,
+    currentlyCompleted: boolean,
+    existingNotes: string | null,
+    forceComplete?: boolean,
+    witnessData?: { witnessPresent: boolean; witnessName?: string; witnessCompany?: string },
+  ) => Promise<void>;
+  onUpdateNotes: (checklistItemId: string, notes: string) => Promise<void>;
+  onMarkAsNA: (checklistItemId: string, reason: string) => Promise<void>;
+  onMarkAsFailed: (checklistItemId: string, reason: string) => Promise<void>;
+  onAddPhoto: (checklistItemId: string, file: File) => Promise<void>;
+  onAddPhotoDesktop: (
+    completionId: string,
+    checklistItemId: string,
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => void;
+  onAssignTemplate: (templateId: string) => Promise<boolean>;
+  onRetryItp: () => void;
+  assigningTemplate: boolean;
   // Modal state setters
-  onOpenNaModal: (data: { checklistItemId: string; itemDescription: string }) => void
-  onOpenFailedModal: (data: { checklistItemId: string; itemDescription: string }) => void
+  onOpenNaModal: (data: { checklistItemId: string; itemDescription: string }) => void;
+  onOpenFailedModal: (data: { checklistItemId: string; itemDescription: string }) => void;
 }
 
 export function ITPChecklistTab({
@@ -527,6 +624,7 @@ export function ITPChecklistTab({
   setItpInstance,
   templates,
   loadingItp,
+  itpLoadError,
   isOnline,
   isOfflineData,
   offlinePendingCount,
@@ -540,66 +638,85 @@ export function ITPChecklistTab({
   onAddPhoto,
   onAddPhotoDesktop,
   onAssignTemplate,
+  onRetryItp,
   assigningTemplate,
   onOpenNaModal,
   onOpenFailedModal,
 }: ITPChecklistTabProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   // Local state for ITP tab
-  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
-  const [itpStatusFilter, setItpStatusFilter] = useState<'all' | 'pending' | 'completed' | 'na' | 'failed'>('all')
-  const [expandedItpCategories, setExpandedItpCategories] = useState<Set<string>>(new Set())
-  const [showAssignModal, setShowAssignModal] = useState(false)
-  const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null)
-  const [photoZoom, setPhotoZoom] = useState(1)
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
+  const [itpStatusFilter, setItpStatusFilter] = useState<
+    'all' | 'pending' | 'completed' | 'na' | 'failed'
+  >('all');
+  const [expandedItpCategories, setExpandedItpCategories] = useState<Set<string>>(new Set());
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null);
+  const [photoZoom, setPhotoZoom] = useState(1);
 
   // Photo navigation handlers
   const getAllPhotos = (): ITPAttachment[] => {
-    const allPhotos: ITPAttachment[] = []
+    const allPhotos: ITPAttachment[] = [];
     if (itpInstance) {
-      itpInstance.completions.forEach(completion => {
+      itpInstance.completions.forEach((completion) => {
         if (completion.attachments && completion.attachments.length > 0) {
-          completion.attachments.forEach(attachment => {
-            allPhotos.push(attachment)
-          })
+          completion.attachments.forEach((attachment) => {
+            allPhotos.push(attachment);
+          });
         }
-      })
+      });
     }
-    return allPhotos
-  }
+    return allPhotos;
+  };
 
   const handlePrevPhoto = () => {
-    if (!selectedPhoto) return
-    const allPhotos = getAllPhotos()
-    const currentIndex = allPhotos.findIndex(p => p.id === selectedPhoto.id)
+    if (!selectedPhoto) return;
+    const allPhotos = getAllPhotos();
+    const currentIndex = allPhotos.findIndex((p) => p.id === selectedPhoto.id);
     if (currentIndex > 0) {
-      setSelectedPhoto(allPhotos[currentIndex - 1])
-      setPhotoZoom(1)
+      setSelectedPhoto(allPhotos[currentIndex - 1]);
+      setPhotoZoom(1);
     }
-  }
+  };
 
   const handleNextPhoto = () => {
-    if (!selectedPhoto) return
-    const allPhotos = getAllPhotos()
-    const currentIndex = allPhotos.findIndex(p => p.id === selectedPhoto.id)
+    if (!selectedPhoto) return;
+    const allPhotos = getAllPhotos();
+    const currentIndex = allPhotos.findIndex((p) => p.id === selectedPhoto.id);
     if (currentIndex < allPhotos.length - 1) {
-      setSelectedPhoto(allPhotos[currentIndex + 1])
-      setPhotoZoom(1)
+      setSelectedPhoto(allPhotos[currentIndex + 1]);
+      setPhotoZoom(1);
     }
-  }
+  };
 
   const handleClosePhoto = () => {
-    setSelectedPhoto(null)
-    setPhotoZoom(1)
-  }
+    setSelectedPhoto(null);
+    setPhotoZoom(1);
+  };
 
   if (loadingItp) {
     return (
-      <div className="flex justify-center p-8">
+      <div className="flex justify-center p-8" role="status" aria-label="Loading ITP checklist">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
-    )
+    );
+  }
+
+  if (itpLoadError) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6" role="alert">
+        <h3 className="font-semibold text-destructive">Could not load ITP checklist</h3>
+        <p className="mt-2 text-sm text-muted-foreground">{itpLoadError}</p>
+        <button
+          type="button"
+          onClick={onRetryItp}
+          className="mt-4 rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+        >
+          Try again
+        </button>
+      </div>
+    );
   }
 
   // Mobile ITP Checklist
@@ -611,7 +728,7 @@ export function ITPChecklistTab({
         checklistItems={itpInstance.template.checklistItems}
         completions={itpInstance.completions}
         onToggleCompletion={async (checklistItemId, isCompleted, notes) => {
-          await onToggleCompletion(checklistItemId, !isCompleted, notes)
+          await onToggleCompletion(checklistItemId, !isCompleted, notes);
         }}
         onMarkNotApplicable={onMarkAsNA}
         onMarkFailed={onMarkAsFailed}
@@ -620,36 +737,40 @@ export function ITPChecklistTab({
         updatingItem={updatingCompletion}
         canCompleteItems={canCompleteITPItems}
       />
-    )
+    );
   }
 
   // Desktop ITP Checklist
   if (itpInstance) {
-    const totalItems = itpInstance.template.checklistItems.length
-    const completedItems = itpInstance.completions.filter(c => c.isCompleted).length
-    const naItems = itpInstance.completions.filter(c => c.isNotApplicable).length
-    const finishedItems = completedItems + naItems
-    const percentage = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0
+    const totalItems = itpInstance.template.checklistItems.length;
+    const completedItems = itpInstance.completions.filter((c) => c.isCompleted).length;
+    const naItems = itpInstance.completions.filter((c) => c.isNotApplicable).length;
+    const finishedItems = completedItems + naItems;
+    const percentage = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0;
 
     // Group items by category
-    const categorizedItems: Record<string, typeof itpInstance.template.checklistItems> = {}
-    itpInstance.template.checklistItems.forEach(item => {
-      const category = item.category || 'General'
-      if (!categorizedItems[category]) categorizedItems[category] = []
-      categorizedItems[category].push(item)
-    })
-    const categories = Object.keys(categorizedItems)
+    const categorizedItems: Record<string, typeof itpInstance.template.checklistItems> = {};
+    itpInstance.template.checklistItems.forEach((item) => {
+      const category = item.category || 'General';
+      if (!categorizedItems[category]) categorizedItems[category] = [];
+      categorizedItems[category].push(item);
+    });
+    const categories = Object.keys(categorizedItems);
 
     return (
       <>
         <div className="rounded-lg border p-4">
           {/* Offline indicator */}
           {(isOfflineData || !isOnline || offlinePendingCount > 0) && (
-            <div className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
-              !isOnline ? 'bg-amber-50 text-amber-800 border border-amber-200' :
-              isOfflineData ? 'bg-blue-50 text-blue-800 border border-blue-200' :
-              'bg-green-50 text-green-800 border border-green-200'
-            }`}>
+            <div
+              className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+                !isOnline
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : isOfflineData
+                    ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                    : 'bg-green-50 text-green-800 border border-green-200'
+              }`}
+            >
               {!isOnline ? (
                 <>
                   <WifiOff className="h-4 w-4" />
@@ -688,7 +809,10 @@ export function ITPChecklistTab({
             </div>
           </div>
           <div className="w-full bg-muted rounded-full h-2.5">
-            <div className="bg-primary h-2.5 rounded-full transition-all" style={{ width: `${percentage}%` }}></div>
+            <div
+              className="bg-primary h-2.5 rounded-full transition-all"
+              style={{ width: `${percentage}%` }}
+            ></div>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
             {finishedItems} of {totalItems} checklist items completed ({percentage}%)
@@ -699,7 +823,10 @@ export function ITPChecklistTab({
         {/* Status filter dropdown */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <label htmlFor="itp-status-filter" className="text-sm font-medium text-muted-foreground">
+            <label
+              htmlFor="itp-status-filter"
+              className="text-sm font-medium text-muted-foreground"
+            >
               Filter by status:
             </label>
             <select
@@ -729,38 +856,42 @@ export function ITPChecklistTab({
         {/* Categorized checklist items */}
         <div className="rounded-lg border">
           <div className="divide-y">
-            {categories.map(category => {
-              const categoryItems = categorizedItems[category]
-              const isExpanded = expandedItpCategories.has(category)
+            {categories.map((category) => {
+              const categoryItems = categorizedItems[category];
+              const isExpanded = expandedItpCategories.has(category);
 
               // Filter items for display
               const filteredItems = categoryItems.filter((item) => {
-                const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
-                const isCompleted = completion?.isCompleted || false
-                const isNotApplicable = completion?.isNotApplicable || false
-                const isFailed = completion?.isFailed || false
-                const isPending = !isCompleted && !isNotApplicable && !isFailed
+                const completion = itpInstance.completions.find(
+                  (c) => c.checklistItemId === item.id,
+                );
+                const isCompleted = completion?.isCompleted || false;
+                const isNotApplicable = completion?.isNotApplicable || false;
+                const isFailed = completion?.isFailed || false;
+                const isPending = !isCompleted && !isNotApplicable && !isFailed;
 
-                if (itpStatusFilter === 'pending' && !isPending) return false
-                if (itpStatusFilter === 'completed' && !isCompleted) return false
-                if (itpStatusFilter === 'na' && !isNotApplicable) return false
-                if (itpStatusFilter === 'failed' && !isFailed) return false
-                if (showIncompleteOnly && !isPending) return false
+                if (itpStatusFilter === 'pending' && !isPending) return false;
+                if (itpStatusFilter === 'completed' && !isCompleted) return false;
+                if (itpStatusFilter === 'na' && !isNotApplicable) return false;
+                if (itpStatusFilter === 'failed' && !isFailed) return false;
+                if (showIncompleteOnly && !isPending) return false;
 
-                return true
-              })
+                return true;
+              });
 
               // Category stats
-              const completedInCategory = categoryItems.filter(item => {
-                const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
-                return completion?.isCompleted || completion?.isNotApplicable
-              }).length
-              const totalInCategory = categoryItems.length
-              const isCategoryComplete = completedInCategory === totalInCategory
+              const completedInCategory = categoryItems.filter((item) => {
+                const completion = itpInstance.completions.find(
+                  (c) => c.checklistItemId === item.id,
+                );
+                return completion?.isCompleted || completion?.isNotApplicable;
+              }).length;
+              const totalInCategory = categoryItems.length;
+              const isCategoryComplete = completedInCategory === totalInCategory;
 
               // Skip category if no items match filter
               if (filteredItems.length === 0 && (itpStatusFilter !== 'all' || showIncompleteOnly)) {
-                return null
+                return null;
               }
 
               return (
@@ -768,15 +899,15 @@ export function ITPChecklistTab({
                   {/* Category header - collapsible */}
                   <button
                     onClick={() => {
-                      setExpandedItpCategories(prev => {
-                        const next = new Set(prev)
+                      setExpandedItpCategories((prev) => {
+                        const next = new Set(prev);
                         if (next.has(category)) {
-                          next.delete(category)
+                          next.delete(category);
                         } else {
-                          next.add(category)
+                          next.add(category);
                         }
-                        return next
-                      })
+                        return next;
+                      });
                     }}
                     className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
                   >
@@ -787,41 +918,57 @@ export function ITPChecklistTab({
                         viewBox="0 0 24 24"
                         stroke="currentColor"
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
                       </svg>
                       <span className="font-semibold">{category}</span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      isCategoryComplete
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                        : 'bg-muted text-muted-foreground'
-                    }`}>
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full font-medium ${
+                        isCategoryComplete
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
                       {completedInCategory}/{totalInCategory}
                     </span>
                   </button>
 
                   {/* Category items - expandable */}
-                  {isExpanded && filteredItems.map((item) => {
-                    const completion = itpInstance.completions.find(c => c.checklistItemId === item.id)
-                    return (
-                      <ITPChecklistItemRow
-                        key={item.id}
-                        item={item}
-                        completion={completion}
-                        projectId={projectId}
-                        updatingCompletion={updatingCompletion}
-                        onToggleCompletion={(id, completed, notes) => onToggleCompletion(id, completed, notes)}
-                        onUpdateNotes={onUpdateNotes}
-                        onAddPhoto={onAddPhotoDesktop}
-                        onMarkAsNA={(id, desc) => onOpenNaModal({ checklistItemId: id, itemDescription: desc })}
-                        onMarkAsFailed={(id, desc) => onOpenFailedModal({ checklistItemId: id, itemDescription: desc })}
-                        onPhotoClick={setSelectedPhoto}
-                        setItpInstance={setItpInstance}
-                      />
-                    )
-                  })}
+                  {isExpanded &&
+                    filteredItems.map((item) => {
+                      const completion = itpInstance.completions.find(
+                        (c) => c.checklistItemId === item.id,
+                      );
+                      return (
+                        <ITPChecklistItemRow
+                          key={item.id}
+                          item={item}
+                          completion={completion}
+                          projectId={projectId}
+                          updatingCompletion={updatingCompletion}
+                          onToggleCompletion={(id, completed, notes) =>
+                            onToggleCompletion(id, completed, notes)
+                          }
+                          onUpdateNotes={onUpdateNotes}
+                          onAddPhoto={onAddPhotoDesktop}
+                          onMarkAsNA={(id, desc) =>
+                            onOpenNaModal({ checklistItemId: id, itemDescription: desc })
+                          }
+                          onMarkAsFailed={(id, desc) =>
+                            onOpenFailedModal({ checklistItemId: id, itemDescription: desc })
+                          }
+                          onPhotoClick={setSelectedPhoto}
+                          setItpInstance={setItpInstance}
+                        />
+                      );
+                    })}
                 </div>
-              )
+              );
             })}
           </div>
         </div>
@@ -836,13 +983,13 @@ export function ITPChecklistTab({
             onClose={handleClosePhoto}
             onPrev={handlePrevPhoto}
             onNext={handleNextPhoto}
-            onZoomIn={() => setPhotoZoom(prev => Math.min(prev + 0.5, 4))}
-            onZoomOut={() => setPhotoZoom(prev => Math.max(prev - 0.5, 0.5))}
+            onZoomIn={() => setPhotoZoom((prev) => Math.min(prev + 0.5, 4))}
+            onZoomOut={() => setPhotoZoom((prev) => Math.max(prev - 0.5, 0.5))}
             onResetZoom={() => setPhotoZoom(1)}
           />
         )}
       </>
-    )
+    );
   }
 
   // No ITP assigned - show assignment UI
@@ -852,7 +999,8 @@ export function ITPChecklistTab({
         <div className="text-4xl mb-2">ITP</div>
         <h3 className="text-lg font-semibold mb-2">ITP Checklist</h3>
         <p className="text-muted-foreground mb-4">
-          No ITP template assigned to this lot yet. Assign an ITP template to track quality checkpoints.
+          No ITP template assigned to this lot yet. Assign an ITP template to track quality
+          checkpoints.
         </p>
         {templates.length > 0 ? (
           <button
@@ -863,7 +1011,7 @@ export function ITPChecklistTab({
           </button>
         ) : (
           <button
-            onClick={() => navigate(`/projects/${projectId}/itp`)}
+            onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}/itp`)}
             className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
           >
             Create ITP Template First
@@ -878,27 +1026,36 @@ export function ITPChecklistTab({
             <h2 className="text-xl font-semibold mb-4">Assign ITP Template</h2>
             {lot.activityType && (
               <p className="text-sm text-muted-foreground mb-3">
-                Showing templates for <span className="font-medium text-foreground">{lot.activityType}</span> activity
+                Showing templates for{' '}
+                <span className="font-medium text-foreground">{lot.activityType}</span> activity
               </p>
             )}
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {/* Sort templates: matching activity type first, then others */}
               {[...templates]
                 .sort((a, b) => {
-                  const aMatches = lot.activityType && a.activityType?.toLowerCase() === lot.activityType.toLowerCase()
-                  const bMatches = lot.activityType && b.activityType?.toLowerCase() === lot.activityType.toLowerCase()
-                  if (aMatches && !bMatches) return -1
-                  if (!aMatches && bMatches) return 1
-                  return 0
+                  const aMatches =
+                    lot.activityType &&
+                    a.activityType?.toLowerCase() === lot.activityType.toLowerCase();
+                  const bMatches =
+                    lot.activityType &&
+                    b.activityType?.toLowerCase() === lot.activityType.toLowerCase();
+                  if (aMatches && !bMatches) return -1;
+                  if (!aMatches && bMatches) return 1;
+                  return 0;
                 })
                 .map((template) => {
-                  const isMatch = lot.activityType && template.activityType?.toLowerCase() === lot.activityType.toLowerCase()
+                  const isMatch =
+                    lot.activityType &&
+                    template.activityType?.toLowerCase() === lot.activityType.toLowerCase();
                   return (
                     <button
                       key={template.id}
-                      onClick={() => {
-                        onAssignTemplate(template.id)
-                        setShowAssignModal(false)
+                      onClick={async () => {
+                        const assigned = await onAssignTemplate(template.id);
+                        if (assigned) {
+                          setShowAssignModal(false);
+                        }
                       }}
                       disabled={assigningTemplate}
                       className={`w-full text-left p-3 border rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50 ${
@@ -917,7 +1074,7 @@ export function ITPChecklistTab({
                         {template.activityType} - {template.checklistItems.length} items
                       </div>
                     </button>
-                  )
+                  );
                 })}
             </div>
             <div className="flex justify-end mt-4">
@@ -933,5 +1090,5 @@ export function ITPChecklistTab({
         </div>
       )}
     </>
-  )
+  );
 }

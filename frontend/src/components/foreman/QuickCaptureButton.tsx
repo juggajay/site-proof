@@ -1,23 +1,23 @@
 // QuickCaptureButton - Floating Action Button for quick actions
-import { useState } from 'react'
-import { Camera, X, CloudRain, AlertTriangle, StickyNote, Clock } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useForemanMobileStore } from '@/stores/foremanMobileStore'
+import { useState } from 'react';
+import { Camera, X, CloudRain, AlertTriangle, StickyNote, Clock } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 
 interface QuickAction {
-  id: string
-  label: string
-  icon: typeof Camera
-  color: string
-  onClick: () => void
+  id: string;
+  label: string;
+  icon: typeof Camera;
+  color: string;
+  onClick: () => void;
 }
 
 interface QuickCaptureButtonProps {
-  onCapturePhoto: () => void
-  onAddDelay: () => void
-  onRaiseNCR: () => void
-  onAddNote: () => void
-  onRequestHoldPointRelease: () => void
+  onCapturePhoto: () => void;
+  onAddDelay: () => void;
+  onRaiseNCR: () => void;
+  onAddNote: () => void;
+  onRequestHoldPointRelease: () => void;
 }
 
 export function QuickCaptureButton({
@@ -27,8 +27,8 @@ export function QuickCaptureButton({
   onAddNote,
   onRequestHoldPointRelease,
 }: QuickCaptureButtonProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const { isCameraOpen } = useForemanMobileStore()
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { isCameraOpen } = useForemanMobileStore();
 
   const actions: QuickAction[] = [
     {
@@ -37,8 +37,8 @@ export function QuickCaptureButton({
       icon: Camera,
       color: 'bg-primary',
       onClick: () => {
-        setIsExpanded(false)
-        onCapturePhoto()
+        setIsExpanded(false);
+        onCapturePhoto();
       },
     },
     {
@@ -47,8 +47,8 @@ export function QuickCaptureButton({
       icon: CloudRain,
       color: 'bg-amber-500',
       onClick: () => {
-        setIsExpanded(false)
-        onAddDelay()
+        setIsExpanded(false);
+        onAddDelay();
       },
     },
     {
@@ -57,8 +57,8 @@ export function QuickCaptureButton({
       icon: AlertTriangle,
       color: 'bg-red-500',
       onClick: () => {
-        setIsExpanded(false)
-        onRaiseNCR()
+        setIsExpanded(false);
+        onRaiseNCR();
       },
     },
     {
@@ -67,8 +67,8 @@ export function QuickCaptureButton({
       icon: StickyNote,
       color: 'bg-green-500',
       onClick: () => {
-        setIsExpanded(false)
-        onAddNote()
+        setIsExpanded(false);
+        onAddNote();
       },
     },
     {
@@ -77,14 +77,14 @@ export function QuickCaptureButton({
       icon: Clock,
       color: 'bg-purple-500',
       onClick: () => {
-        setIsExpanded(false)
-        onRequestHoldPointRelease()
+        setIsExpanded(false);
+        onRequestHoldPointRelease();
       },
     },
-  ]
+  ];
 
   // Don't show if camera is already open
-  if (isCameraOpen) return null
+  if (isCameraOpen) return null;
 
   return (
     <>
@@ -101,7 +101,7 @@ export function QuickCaptureButton({
         {/* Action buttons (shown when expanded) */}
         {isExpanded &&
           actions.map((action, index) => {
-            const Icon = action.icon
+            const Icon = action.icon;
             return (
               <button
                 key={action.id}
@@ -111,7 +111,7 @@ export function QuickCaptureButton({
                   'transform transition-all duration-200',
                   'min-h-[48px] touch-manipulation',
                   action.color,
-                  'text-white'
+                  'text-white',
                 )}
                 style={{
                   animation: `slideInFab 0.2s ease-out ${index * 0.05}s both`,
@@ -122,7 +122,7 @@ export function QuickCaptureButton({
                 </div>
                 <span className="text-sm font-medium whitespace-nowrap">{action.label}</span>
               </button>
-            )
+            );
           })}
 
         {/* Main FAB */}
@@ -132,7 +132,7 @@ export function QuickCaptureButton({
             'w-14 h-14 rounded-full shadow-lg flex items-center justify-center',
             'transform transition-all duration-200 active:scale-95',
             'touch-manipulation',
-            isExpanded ? 'bg-muted-foreground rotate-45' : 'bg-primary'
+            isExpanded ? 'bg-muted-foreground rotate-45' : 'bg-primary',
           )}
         >
           {isExpanded ? (
@@ -157,5 +157,5 @@ export function QuickCaptureButton({
         }
       `}</style>
     </>
-  )
+  );
 }

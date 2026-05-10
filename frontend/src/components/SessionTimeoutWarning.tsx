@@ -1,128 +1,131 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { useAuth } from '@/lib/auth'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Clock, AlertTriangle } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useAuth } from '@/lib/auth';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Clock, AlertTriangle } from 'lucide-react';
 
 // Configuration
-const INACTIVITY_WARNING_TIME = 15 * 60 * 1000 // 15 minutes until warning
-const WARNING_COUNTDOWN_TIME = 60 * 1000 // 60 seconds to respond before auto-logout
+const INACTIVITY_WARNING_TIME = 15 * 60 * 1000; // 15 minutes until warning
+const WARNING_COUNTDOWN_TIME = 60 * 1000; // 60 seconds to respond before auto-logout
 
 // Test mode - shorter times for testing (use ?sessionTest=true in URL)
-const TEST_INACTIVITY_WARNING_TIME = 5 * 1000 // 5 seconds until warning
-const TEST_WARNING_COUNTDOWN_TIME = 10 * 1000 // 10 seconds countdown
+const TEST_INACTIVITY_WARNING_TIME = 5 * 1000; // 5 seconds until warning
+const TEST_WARNING_COUNTDOWN_TIME = 10 * 1000; // 10 seconds countdown
 
 // Events that count as activity
-const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']
+const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
 
 interface SessionTimeoutWarningProps {
-  enabled?: boolean
+  enabled?: boolean;
 }
 
 export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningProps) {
-  const { user, signOut } = useAuth()
-  const [showWarning, setShowWarning] = useState(false)
+  const { user, signOut } = useAuth();
+  const [showWarning, setShowWarning] = useState(false);
 
   // Check for test mode via URL parameter
-  const isTestMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sessionTest') === 'true'
+  const isTestMode =
+    import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('sessionTest') === 'true';
 
-  const inactivityTime = isTestMode ? TEST_INACTIVITY_WARNING_TIME : INACTIVITY_WARNING_TIME
-  const countdownTime = isTestMode ? TEST_WARNING_COUNTDOWN_TIME : WARNING_COUNTDOWN_TIME
+  const inactivityTime = isTestMode ? TEST_INACTIVITY_WARNING_TIME : INACTIVITY_WARNING_TIME;
+  const countdownTime = isTestMode ? TEST_WARNING_COUNTDOWN_TIME : WARNING_COUNTDOWN_TIME;
 
-  const [countdown, setCountdown] = useState(countdownTime / 1000)
+  const [countdown, setCountdown] = useState(countdownTime / 1000);
 
-  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const lastActivityRef = useRef<number>(Date.now())
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
 
   // Logout function
   const handleLogout = useCallback(async () => {
-    setShowWarning(false)
+    setShowWarning(false);
     if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current)
+      clearInterval(countdownTimerRef.current);
     }
     if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current)
+      clearTimeout(inactivityTimerRef.current);
     }
-    await signOut()
-  }, [signOut])
+    await signOut();
+  }, [signOut]);
 
   // Reset the inactivity timer
   const resetInactivityTimer = useCallback(() => {
-    lastActivityRef.current = Date.now()
+    lastActivityRef.current = Date.now();
 
     // Clear existing timers
     if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current)
+      clearTimeout(inactivityTimerRef.current);
     }
     if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current)
+      clearInterval(countdownTimerRef.current);
     }
 
     // Only set timer if user is logged in and feature is enabled
     if (user && enabled) {
       inactivityTimerRef.current = setTimeout(() => {
-        setShowWarning(true)
-        setCountdown(countdownTime / 1000)
+        setShowWarning(true);
+        setCountdown(countdownTime / 1000);
 
         // Start countdown
         countdownTimerRef.current = setInterval(() => {
-          setCountdown(prev => {
+          setCountdown((prev) => {
             if (prev <= 1) {
               // Time's up - auto logout
-              handleLogout()
-              return 0
+              handleLogout();
+              return 0;
             }
-            return prev - 1
-          })
-        }, 1000)
-      }, inactivityTime)
+            return prev - 1;
+          });
+        }, 1000);
+      }, inactivityTime);
     }
-  }, [user, enabled, inactivityTime, countdownTime, handleLogout])
+  }, [user, enabled, inactivityTime, countdownTime, handleLogout]);
 
   // Handle user activity
   const handleActivity = useCallback(() => {
     if (!showWarning) {
-      resetInactivityTimer()
+      resetInactivityTimer();
     }
-  }, [showWarning, resetInactivityTimer])
+  }, [showWarning, resetInactivityTimer]);
 
   // Extend session (user clicked "Stay Logged In")
   const handleExtendSession = useCallback(() => {
-    setShowWarning(false)
+    setShowWarning(false);
     if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current)
+      clearInterval(countdownTimerRef.current);
     }
-    resetInactivityTimer()
-  }, [resetInactivityTimer])
+    resetInactivityTimer();
+  }, [resetInactivityTimer]);
 
   // Set up activity listeners
   useEffect(() => {
-    if (!user || !enabled) return
+    if (!user || !enabled) return;
 
     // Add event listeners for activity tracking
-    ACTIVITY_EVENTS.forEach(event => {
-      window.addEventListener(event, handleActivity, { passive: true })
-    })
+    ACTIVITY_EVENTS.forEach((event) => {
+      window.addEventListener(event, handleActivity, { passive: true });
+    });
 
     // Initialize the timer
-    resetInactivityTimer()
+    resetInactivityTimer();
 
     // Cleanup
     return () => {
-      ACTIVITY_EVENTS.forEach(event => {
-        window.removeEventListener(event, handleActivity)
-      })
+      ACTIVITY_EVENTS.forEach((event) => {
+        window.removeEventListener(event, handleActivity);
+      });
       if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current)
+        clearTimeout(inactivityTimerRef.current);
       }
       if (countdownTimerRef.current) {
-        clearInterval(countdownTimerRef.current)
+        clearInterval(countdownTimerRef.current);
       }
-    }
-  }, [user, enabled, handleActivity, resetInactivityTimer])
+    };
+  }, [user, enabled, handleActivity, resetInactivityTimer]);
 
   // Don't render if no user or warning not shown
-  if (!user || !showWarning) return null
+  if (!user || !showWarning) return null;
 
   return (
     <Modal onClose={handleExtendSession} className="max-w-md w-full">
@@ -143,15 +146,14 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
             <Clock className="h-10 w-10 text-amber-600" />
           </div>
           <div className="text-center">
-            <p className="text-lg font-medium text-foreground">
-              You will be logged out in
-            </p>
+            <p className="text-lg font-medium text-foreground">You will be logged out in</p>
             <p className="text-4xl font-bold text-amber-600 mt-2" data-testid="session-countdown">
               {countdown} seconds
             </p>
           </div>
           <p className="text-sm text-muted-foreground text-center">
-            Click "Stay Logged In" to continue your session, or you will be automatically logged out.
+            Click "Stay Logged In" to continue your session, or you will be automatically logged
+            out.
           </p>
         </div>
       </ModalBody>
@@ -173,5 +175,5 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
         </button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

@@ -1,36 +1,37 @@
 // Feature #175 - Auto-notification before witness point
-import { prisma } from '../../../lib/prisma.js'
+import { prisma } from '../../../lib/prisma.js';
+import { logError } from '../../../lib/serverLogger.js';
 
 // Type for checklist items from snapshot or template
 export interface ChecklistItem {
-  id: string
-  description: string
-  sequenceNumber: number
-  pointType?: string | null
-  responsibleParty?: string | null
-  evidenceRequired?: string | null
-  acceptanceCriteria?: string | null
-  testType?: string | null
+  id: string;
+  description: string;
+  sequenceNumber: number;
+  pointType?: string | null;
+  responsibleParty?: string | null;
+  evidenceRequired?: string | null;
+  acceptanceCriteria?: string | null;
+  testType?: string | null;
 }
 
 // Type for template snapshot
 export interface TemplateSnapshot {
-  id: string
-  name: string
-  description?: string | null
-  activityType: string | null
-  checklistItems: ChecklistItem[]
+  id: string;
+  name: string;
+  description?: string | null;
+  activityType: string | null;
+  checklistItems: ChecklistItem[];
 }
 
 // Type for project settings
 export interface ProjectSettings {
-  witnessPointNotificationTrigger?: string
-  witnessPointNotificationEnabled?: boolean
-  witnessPointClientEmail?: string | null
-  witnessPointClientName?: string
-  requireSubcontractorVerification?: boolean
-  hpRecipients?: Array<{ email: string }>
-  hpApprovalRequirement?: string
+  witnessPointNotificationTrigger?: string;
+  witnessPointNotificationEnabled?: boolean;
+  witnessPointClientEmail?: string | null;
+  witnessPointClientName?: string;
+  requireSubcontractorVerification?: boolean;
+  hpRecipients?: Array<{ email: string }>;
+  hpApprovalRequirement?: string;
 }
 
 /**
@@ -40,7 +41,7 @@ export interface ProjectSettings {
 export async function checkAndNotifyWitnessPoint(
   itpInstanceId: string,
   completedItemId: string,
-  userId: string
+  userId: string,
 ) {
   try {
     // Get the ITP instance with template and lot info
@@ -49,88 +50,90 @@ export async function checkAndNotifyWitnessPoint(
       include: {
         lot: {
           include: {
-            project: true
-          }
+            project: true,
+          },
         },
         template: {
           include: {
             checklistItems: {
-              orderBy: { sequenceNumber: 'asc' }
-            }
-          }
+              orderBy: { sequenceNumber: 'asc' },
+            },
+          },
         },
-        completions: true
-      }
-    })
+        completions: true,
+      },
+    });
 
     if (!instance || !instance.lot || !instance.lot.project) {
-      return null
+      return null;
     }
 
     // Get checklist items from snapshot or template
-    let checklistItems: ChecklistItem[]
+    let checklistItems: ChecklistItem[];
     if (instance.templateSnapshot) {
-      const snapshot: TemplateSnapshot = JSON.parse(instance.templateSnapshot)
-      checklistItems = snapshot.checklistItems || []
+      const snapshot: TemplateSnapshot = JSON.parse(instance.templateSnapshot);
+      checklistItems = snapshot.checklistItems || [];
     } else {
-      checklistItems = instance.template.checklistItems
+      checklistItems = instance.template.checklistItems;
     }
 
     // Find the completed item's sequence number
-    const completedItem = checklistItems.find((item) => item.id === completedItemId)
+    const completedItem = checklistItems.find((item) => item.id === completedItemId);
     if (!completedItem) {
-      return null
+      return null;
     }
 
-    const completedSequence = completedItem.sequenceNumber
+    const completedSequence = completedItem.sequenceNumber;
 
     // Check project settings for witness point notification configuration
-    const project = instance.lot.project
-    let settings: ProjectSettings = {}
+    const project = instance.lot.project;
+    let settings: ProjectSettings = {};
     if (project.settings) {
       try {
-        settings = JSON.parse(project.settings) as ProjectSettings
-      } catch (e) {
+        settings = JSON.parse(project.settings) as ProjectSettings;
+      } catch (_e) {
         // Invalid JSON, use defaults
       }
     }
 
     // Default: notify when previous item is completed
-    const notificationTrigger = settings.witnessPointNotificationTrigger || 'previous_item'
-    const witnessNotificationEnabled = settings.witnessPointNotificationEnabled !== false // default true
-    const clientEmail = settings.witnessPointClientEmail || null
-    const clientName = settings.witnessPointClientName || 'Client Representative'
+    const notificationTrigger = settings.witnessPointNotificationTrigger || 'previous_item';
+    const witnessNotificationEnabled = settings.witnessPointNotificationEnabled !== false; // default true
+    const clientEmail = settings.witnessPointClientEmail || null;
+    const clientName = settings.witnessPointClientName || 'Client Representative';
 
     if (!witnessNotificationEnabled) {
-      return null
+      return null;
     }
 
     // Determine the sequence number to check for witness point
-    let targetSequence: number
+    let targetSequence: number;
     if (notificationTrigger === '2_items_before') {
-      targetSequence = completedSequence + 2
+      targetSequence = completedSequence + 2;
     } else {
       // previous_item (default)
-      targetSequence = completedSequence + 1
+      targetSequence = completedSequence + 1;
     }
 
     // Find the target item
-    const nextItem = checklistItems.find((item) => item.sequenceNumber === targetSequence)
+    const nextItem = checklistItems.find((item) => item.sequenceNumber === targetSequence);
     if (!nextItem) {
-      return null
+      return null;
     }
 
     // Check if it's a witness point (pointType can be 'witness' or 'witness_point')
     if (nextItem.pointType !== 'witness' && nextItem.pointType !== 'witness_point') {
-      return null
+      return null;
     }
 
     // Check if the witness point is already completed (no need to notify)
     const witnessPointCompletion = instance.completions.find(
-      (c) => c.checklistItemId === nextItem.id && (c.status === 'completed' || c.status === 'not_applicable')
-    )
+      (c) =>
+        c.checklistItemId === nextItem.id &&
+        (c.status === 'completed' || c.status === 'not_applicable'),
+    );
     if (witnessPointCompletion) {
-      return null // Witness point already passed
+      return null; // Witness point already passed
     }
 
     // Check if notification was already sent for this witness point
@@ -138,34 +141,35 @@ export async function checkAndNotifyWitnessPoint(
       where: {
         projectId: project.id,
         type: 'witness_point_approaching',
-        linkUrl: { contains: nextItem.id }
-      }
-    })
+        linkUrl: { contains: nextItem.id },
+      },
+    });
 
     if (existingNotification) {
-      return null // Already notified
+      return null; // Already notified
     }
 
     // Get the user who completed the item to attribute the notification
     const completingUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { fullName: true, email: true }
-    })
+      select: { fullName: true, email: true },
+    });
 
-    const userName = completingUser?.fullName || completingUser?.email || 'A team member'
+    const userName = completingUser?.fullName || completingUser?.email || 'A team member';
 
     // Create notifications for project managers and superintendents
     const projectUsers = await prisma.projectUser.findMany({
       where: {
         projectId: project.id,
-        role: { in: ['project_manager', 'admin', 'superintendent'] }
+        role: { in: ['project_manager', 'admin', 'superintendent'] },
+        status: 'active',
       },
       include: {
-        user: { select: { id: true, email: true, fullName: true } }
-      }
-    })
+        user: { select: { id: true, email: true, fullName: true } },
+      },
+    });
 
-    const notificationsCreated = []
+    const notificationsCreated = [];
 
     for (const pu of projectUsers) {
       const notification = await prisma.notification.create({
@@ -175,21 +179,21 @@ export async function checkAndNotifyWitnessPoint(
           type: 'witness_point_approaching',
           title: `Witness Point Approaching: ${nextItem.description}`,
           message: `${userName} completed "${completedItem.description}" on lot ${instance.lot.lotNumber}. The next item is a witness point that requires client notification.`,
-          linkUrl: `/projects/${project.id}/lots/${instance.lot.id}?tab=itp&highlight=${nextItem.id}`
-        }
-      })
-      notificationsCreated.push(notification)
+          linkUrl: `/projects/${project.id}/lots/${instance.lot.id}?tab=itp&highlight=${nextItem.id}`,
+        },
+      });
+      notificationsCreated.push(notification);
     }
 
     return {
       witnessPoint: nextItem,
       notificationsSent: notificationsCreated.length,
       clientEmail,
-      clientName
-    }
+      clientName,
+    };
   } catch (error) {
     // Note: This helper intentionally catches errors since notification is non-critical
-    console.error('Error checking witness point notification:', error)
-    return null
+    logError('Error checking witness point notification:', error);
+    return null;
   }
 }

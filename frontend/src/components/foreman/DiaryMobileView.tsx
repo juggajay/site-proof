@@ -1,64 +1,85 @@
-import { DiaryLotSelector } from './DiaryLotSelector'
-import { DiaryWeatherBar } from './DiaryWeatherBar'
-import { DiaryQuickAddBar, QuickAddType } from './DiaryQuickAddBar'
-import { DiaryTimelineEntry } from './DiaryTimelineEntry'
-import { DiaryDocketSummary } from './DiaryDocketSummary'
-import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
-import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard'
+import { DiaryLotSelector } from './DiaryLotSelector';
+import { DiaryWeatherBar } from './DiaryWeatherBar';
+import { DiaryQuickAddBar, QuickAddType } from './DiaryQuickAddBar';
+import { DiaryTimelineEntry } from './DiaryTimelineEntry';
+import type { TimelineEntry } from './DiaryTimelineEntry';
+import { DiaryDocketSummary } from './DiaryDocketSummary';
+import type { DocketSummaryData, ManualEntries } from './DiaryDocketSummary';
+import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
+import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard';
+import type { DailyDiary } from '@/pages/diary/types';
 
 interface DiaryMobileViewProps {
   // Date & lot
-  selectedDate: string
-  lots: Array<{ id: string; lotNumber: string }>
-  activeLotId: string | null
-  onLotChange: (lotId: string | null) => void
+  selectedDate: string;
+  lots: Array<{ id: string; lotNumber: string }>;
+  activeLotId: string | null;
+  onLotChange: (lotId: string | null) => void;
   // Weather
-  weather: { conditions: string; temperatureMin: string; temperatureMax: string; rainfallMm: string } | null
-  weatherSource: string | null
-  fetchingWeather: boolean
-  onEditWeather: () => void
+  weather: {
+    conditions: string;
+    temperatureMin: string;
+    temperatureMax: string;
+    rainfallMm: string;
+  } | null;
+  weatherSource: string | null;
+  fetchingWeather: boolean;
+  onEditWeather: () => void;
   // Diary state
-  diary: any | null
-  loading: boolean
+  diary: Pick<DailyDiary, 'status'> | null;
+  loading: boolean;
   // Docket summary
-  docketSummary: any | null
-  docketSummaryLoading: boolean
-  manualEntries?: { personnel: Array<{ id: string; name: string; hours?: number }>; plant: Array<{ id: string; description: string; hoursOperated?: number }> }
-  onTapPending?: (docketId: string) => void
-  onAddManual?: () => void
+  docketSummary: DocketSummaryData | null;
+  docketSummaryLoading: boolean;
+  manualEntries?: ManualEntries;
+  onTapPending?: (docketId: string) => void;
+  onAddManual?: () => void;
   // Timeline
-  timeline: any[]
+  timeline: TimelineEntry[];
   // Actions
-  onQuickAdd: (type: QuickAddType) => void
-  onRefresh: () => Promise<void>
-  onEditEntry: (entry: any) => void
-  onDeleteEntry: (entry: any) => void
+  onQuickAdd: (type: QuickAddType) => void;
+  onRefresh: () => Promise<void>;
+  onEditEntry: (entry: TimelineEntry) => void;
+  onDeleteEntry: (entry: TimelineEntry) => void;
 }
 
 export function DiaryMobileView(props: DiaryMobileViewProps) {
   const {
-    selectedDate, lots, activeLotId, onLotChange,
-    weather, weatherSource, fetchingWeather, onEditWeather,
-    diary, loading,
-    docketSummary, docketSummaryLoading,
-    manualEntries, onTapPending, onAddManual,
+    selectedDate,
+    lots,
+    activeLotId,
+    onLotChange,
+    weather,
+    weatherSource,
+    fetchingWeather,
+    onEditWeather,
+    diary,
+    loading,
+    docketSummary,
+    docketSummaryLoading,
+    manualEntries,
+    onTapPending,
+    onAddManual,
     timeline,
-    onQuickAdd, onRefresh, onEditEntry, onDeleteEntry,
-  } = props
+    onQuickAdd,
+    onRefresh,
+    onEditEntry,
+    onDeleteEntry,
+  } = props;
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({
     onRefresh,
-  })
+  });
 
-  const todayStr = new Date().toISOString().split('T')[0]
-  const isToday = selectedDate === todayStr
-  const isSubmitted = diary?.status === 'submitted'
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = selectedDate === todayStr;
+  const isSubmitted = diary?.status === 'submitted';
 
   const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
-  })
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -112,25 +133,33 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
               {!diary && isToday && (
                 <>
                   <p className="text-muted-foreground text-sm font-medium">Start your day</p>
-                  <p className="text-muted-foreground text-xs mt-1">Tap a chip below to add your first entry</p>
+                  <p className="text-muted-foreground text-xs mt-1">
+                    Tap a chip below to add your first entry
+                  </p>
                 </>
               )}
               {!diary && !isToday && (
                 <>
-                  <p className="text-muted-foreground text-sm font-medium">No diary for this date</p>
-                  <p className="text-muted-foreground text-xs mt-1">Switch to today to start recording</p>
+                  <p className="text-muted-foreground text-sm font-medium">
+                    No diary for this date
+                  </p>
+                  <p className="text-muted-foreground text-xs mt-1">
+                    Switch to today to start recording
+                  </p>
                 </>
               )}
               {diary && (
                 <>
                   <p className="text-muted-foreground text-sm font-medium">No entries yet</p>
-                  <p className="text-muted-foreground text-xs mt-1">Tap a chip below to add your first entry</p>
+                  <p className="text-muted-foreground text-xs mt-1">
+                    Tap a chip below to add your first entry
+                  </p>
                 </>
               )}
             </div>
           )}
 
-          {timeline.map(entry => (
+          {timeline.map((entry) => (
             <DiaryTimelineEntry
               key={`${entry.type}-${entry.id}`}
               entry={entry}
@@ -143,11 +172,7 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
       </div>
 
       {/* Quick-add chip bar */}
-      <DiaryQuickAddBar
-        onChipTap={onQuickAdd}
-        diaryExists={!!diary}
-        isSubmitted={isSubmitted}
-      />
+      <DiaryQuickAddBar onChipTap={onQuickAdd} diaryExists={!!diary} isSubmitted={isSubmitted} />
     </div>
-  )
+  );
 }

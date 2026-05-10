@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { NavLink, useParams } from 'react-router-dom'
+import { useState } from 'react';
+import { NavLink, useParams } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -19,37 +19,63 @@ import {
   X,
   Briefcase,
   Building2,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useAuth } from '@/lib/auth'
-import { ForemanBottomNavV2 } from '@/components/foreman'
-import { useForemanMobileStore } from '@/stores/foremanMobileStore'
-import { ROLE_GROUPS, hasRoleInGroup, isAdminRole, isSubcontractorRole, hasCommercialAccess } from '@/lib/roles'
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
+import { ForemanBottomNavV2 } from '@/components/foreman/ForemanBottomNavV2';
+import { useForemanMobileStore } from '@/stores/foremanMobileStore';
+import {
+  ROLE_GROUPS,
+  hasRoleInGroup,
+  isAdminRole,
+  isSubcontractorRole,
+  hasCommercialAccess,
+} from '@/lib/roles';
 
-const FOREMAN_MENU_ITEMS = ['Lots', 'ITPs', 'Hold Points', 'Test Results', 'NCRs', 'Daily Diary', 'Docket Approvals']
+const FOREMAN_MENU_ITEMS = [
+  'Lots',
+  'ITPs',
+  'Hold Points',
+  'Test Results',
+  'NCRs',
+  'Daily Diary',
+  'Docket Approvals',
+];
 
 // Subcontractor-specific navigation
 const subcontractorNavigation = [
   { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase },
   { name: 'My Company', href: '/my-company', icon: Building2 },
-]
+];
 
 interface NavigationItem {
-  name: string
-  href: string
-  icon: typeof LayoutDashboard
-  requiresProject?: boolean
-  requiresCommercialAccess?: boolean
-  requiresAdmin?: boolean
-  requiresManagement?: boolean
-  allowedRoles?: readonly string[]
-  excludeRoles?: readonly string[]
+  name: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  requiresProject?: boolean;
+  requiresCommercialAccess?: boolean;
+  requiresAdmin?: boolean;
+  requiresManagement?: boolean;
+  allowedRoles?: readonly string[];
+  excludeRoles?: readonly string[];
 }
 
 const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, requiresProject: false, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, requiresProject: false, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
-]
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard,
+    requiresProject: false,
+    excludeRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
+  {
+    name: 'Projects',
+    href: '/projects',
+    icon: FolderKanban,
+    requiresProject: false,
+    excludeRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
+];
 
 const projectNavigation: NavigationItem[] = [
   { name: 'Lots', href: 'lots', icon: MapPin },
@@ -65,55 +91,71 @@ const projectNavigation: NavigationItem[] = [
   { name: 'Subcontractors', href: 'subcontractors', icon: Users, requiresManagement: true },
   { name: 'Reports', href: 'reports', icon: BarChart3 },
   { name: 'Project Settings', href: 'settings', icon: Settings, requiresManagement: true },
-]
+];
 
 // Bottom nav - most important items for quick access
 const bottomNavItems: NavigationItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
-  { name: 'Projects', href: '/projects', icon: FolderKanban, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
-  { name: 'Lots', href: 'lots', icon: MapPin, requiresProject: true, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard,
+    excludeRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
+  {
+    name: 'Projects',
+    href: '/projects',
+    icon: FolderKanban,
+    excludeRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
+  {
+    name: 'Lots',
+    href: 'lots',
+    icon: MapPin,
+    requiresProject: true,
+    excludeRoles: ROLE_GROUPS.SUBCONTRACTOR,
+  },
   { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
-]
+];
 
 // Subcontractor bottom nav items
 const subcontractorBottomNavItems: NavigationItem[] = [
   { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase },
   { name: 'My Company', href: '/my-company', icon: Building2 },
-]
+];
 
 export function MobileNav() {
-  const [isOpen, setIsOpen] = useState(false)
-  const { projectId } = useParams()
-  const { user } = useAuth()
+  const [isOpen, setIsOpen] = useState(false);
+  const { projectId } = useParams();
+  const { user } = useAuth();
 
   // Use roleInCompany first (from backend), fallback to role
-  const userRole = (user as any)?.roleInCompany || user?.role || ''
-  const hasCommercial = hasCommercialAccess(userRole)
-  const hasAdmin = isAdminRole(userRole)
-  const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT)
-  const isForeman = userRole === 'foreman'
-  const isSubcontractor = isSubcontractorRole(userRole)
-  const { setIsCameraOpen } = useForemanMobileStore()
+  const userRole = user?.roleInCompany || user?.role || '';
+  const hasCommercial = hasCommercialAccess(userRole);
+  const hasAdmin = isAdminRole(userRole);
+  const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
+  const isForeman = userRole === 'foreman';
+  const isSubcontractor = isSubcontractorRole(userRole);
+  const { setIsCameraOpen } = useForemanMobileStore();
 
   const shouldShowItem = (item: NavigationItem): boolean => {
-    if (item.requiresCommercialAccess && !hasCommercial) return false
-    if (item.requiresAdmin && !hasAdmin) return false
-    if (item.requiresManagement && !hasManagement) return false
-    if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return false
-    if (item.excludeRoles && item.excludeRoles.includes(userRole)) return false
-    return true
-  }
+    if (item.requiresCommercialAccess && !hasCommercial) return false;
+    if (item.requiresAdmin && !hasAdmin) return false;
+    if (item.requiresManagement && !hasManagement) return false;
+    if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return false;
+    if (item.excludeRoles && item.excludeRoles.includes(userRole)) return false;
+    return true;
+  };
 
-  let filteredProjectNavigation = projectNavigation.filter(shouldShowItem)
+  let filteredProjectNavigation = projectNavigation.filter(shouldShowItem);
   if (isForeman) {
-    filteredProjectNavigation = filteredProjectNavigation.filter(
-      (item) => FOREMAN_MENU_ITEMS.includes(item.name)
-    )
+    filteredProjectNavigation = filteredProjectNavigation.filter((item) =>
+      FOREMAN_MENU_ITEMS.includes(item.name),
+    );
   }
 
   // Foreman uses research-backed 5-tab nav: Capture, Today, Approve, Diary, Lots
   if (isForeman) {
-    return <ForemanBottomNavV2 onCapturePress={() => setIsCameraOpen(true)} />
+    return <ForemanBottomNavV2 onCapturePress={() => setIsCameraOpen(true)} />;
   }
 
   return (
@@ -149,7 +191,7 @@ export function MobileNav() {
                       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                       isActive
                         ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                     )
                   }
                 >
@@ -176,7 +218,7 @@ export function MobileNav() {
                           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                           isActive
                             ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                         )
                       }
                     >
@@ -205,7 +247,7 @@ export function MobileNav() {
                           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                           isActive
                             ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                         )
                       }
                     >
@@ -227,7 +269,7 @@ export function MobileNav() {
                       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                       isActive
                         ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                     )
                   }
                 >
@@ -242,44 +284,41 @@ export function MobileNav() {
 
       {/* Bottom Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom">
-          <div className="flex justify-around items-center h-16">
-            {/* Use subcontractor nav items if subcontractor */}
-            {(isSubcontractor ? subcontractorBottomNavItems : bottomNavItems).map((item) => {
-              // Skip items excluded by role
-              if (!shouldShowItem(item)) return null
-              // Skip project-specific items if no project selected
-              if (item.requiresProject && !projectId) return null
+        <div className="flex justify-around items-center h-16">
+          {/* Use subcontractor nav items if subcontractor */}
+          {(isSubcontractor ? subcontractorBottomNavItems : bottomNavItems).map((item) => {
+            // Skip items excluded by role
+            if (!shouldShowItem(item)) return null;
+            // Skip project-specific items if no project selected
+            if (item.requiresProject && !projectId) return null;
 
-              const href = item.requiresProject && projectId
-                ? `/projects/${projectId}/${item.href}`
-                : item.href
+            const href =
+              item.requiresProject && projectId ? `/projects/${projectId}/${item.href}` : item.href;
 
-              return (
-                <NavLink
-                  key={item.name}
-                  to={href}
-                  className={({ isActive }) =>
-                    cn(
-                      'flex flex-col items-center justify-center w-full h-full gap-1 text-xs transition-colors',
-                      isActive
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                    )
-                  }
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span>{item.name}</span>
-                </NavLink>
-              )
-            })}
-          </div>
-        </nav>
+            return (
+              <NavLink
+                key={item.name}
+                to={href}
+                className={({ isActive }) =>
+                  cn(
+                    'flex flex-col items-center justify-center w-full h-full gap-1 text-xs transition-colors',
+                    isActive ? 'text-primary' : 'text-muted-foreground',
+                  )
+                }
+              >
+                <item.icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </NavLink>
+            );
+          })}
+        </div>
+      </nav>
     </>
-  )
+  );
 }
 
 export function MobileMenuButton() {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
     <button
@@ -289,5 +328,5 @@ export function MobileMenuButton() {
     >
       <Menu className="h-6 w-6" />
     </button>
-  )
+  );
 }

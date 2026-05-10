@@ -1,11 +1,311 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getPendingSyncCount, getPendingSyncItems, removeSyncQueueItem, markSyncItemError, markCompletionSynced, getOfflinePhoto, markPhotoSynced, markPhotoSyncError, offlineDb, markDiarySynced, markDiarySyncError, markDocketSynced, markDocketSyncError, getOfflineLot, detectLotSyncConflict, markLotSynced, markLotSyncError, getConflictedLotsCount } from './offlineDb';
-import { getAuthToken } from './auth';
+import {
+  getPendingSyncCount,
+  getPendingSyncItems,
+  removeSyncQueueItem,
+  markSyncItemError,
+  markCompletionSynced,
+  getOfflinePhoto,
+  markPhotoSynced,
+  markPhotoSyncError,
+  offlineDb,
+  markDiarySynced,
+  markDiarySyncError,
+  markDocketSynced,
+  markDocketServerId,
+  markDocketSyncError,
+  getOfflineLot,
+  detectLotSyncConflict,
+  markLotSynced,
+  markLotSyncError,
+  getConflictedLotsCount,
+} from './offlineDb';
+import type { OfflineDailyDiary, OfflineDocket } from './offlineDb';
+import { apiUrl, authFetch } from './api';
+import { devLog, devWarn } from './logger';
 
 // Type for sync notification callbacks
 export interface SyncCallbacks {
   onConflictDetected?: (lotId: string, lotNumber: string, message: string) => void;
   onSyncComplete?: (syncedCount: number) => void;
+}
+
+type ServerDiary = {
+  id: string;
+  activities?: Array<{ description: string; lotId?: string | null; notes?: string | null }>;
+  delays?: Array<{
+    delayType: string;
+    description: string;
+    durationHours?: number | string | null;
+    impact?: string | null;
+  }>;
+  plant?: Array<{
+    description: string;
+    hoursOperated?: number | string | null;
+    notes?: string | null;
+  }>;
+};
+
+function toFiniteNumber(value: number | string | null | undefined): number | undefined {
+  if (value === null || value === undefined || value === '') {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function compactText(value: string | null | undefined): string | undefined {
+  const text = value?.trim();
+  return text || undefined;
+}
+
+function syncKey(...parts: Array<string | number | null | undefined>): string {
+  return parts
+    .map((part) => (part === null || part === undefined ? '' : String(part).trim().toLowerCase()))
+    .join('|');
+}
+
+async function readResponseError(response: Response): Promise<string> {
+  const text = await response.text();
+  if (!text) {
+    return `Request failed with ${response.status}`;
+  }
+
+  try {
+    const parsed = JSON.parse(text) as { error?: { message?: string }; message?: string };
+    return parsed.error?.message || parsed.message || text;
+  } catch {
+    return text;
+  }
+}
+
+async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
+  const response = await authFetch(url, init);
+  if (!response.ok) {
+    throw new Error(await readResponseError(response));
+  }
+
+  return response.json() as Promise<T>;
+}
+
+function buildOfflineDiaryNotes(diary: OfflineDailyDiary): string | undefined {
+  const sections: string[] = [];
+
+  const notes = compactText(diary.notes);
+  if (notes) {
+    sections.push(notes);
+  }
+
+  const workforceParts = [
+    diary.workforce.contractors > 0 ? `${diary.workforce.contractors} contractors` : '',
+    diary.workforce.subcontractors > 0 ? `${diary.workforce.subcontractors} subcontractors` : '',
+    diary.workforce.visitors > 0 ? `${diary.workforce.visitors} visitors` : '',
+  ].filter(Boolean);
+  const workforceNotes = compactText(diary.workforce.notes);
+  if (workforceParts.length > 0 || workforceNotes) {
+    sections.push(
+      ['Offline workforce summary:', workforceParts.join(', '), workforceNotes]
+        .filter(Boolean)
+        .join('\n'),
+    );
+  }
+
+  return sections.join('\n\n') || undefined;
+}
+
+function buildOfflineDiaryPayload(diary: OfflineDailyDiary) {
+  const temperature = toFiniteNumber(diary.weather.temperature);
+
+  return {
+    projectId: diary.projectId,
+    date: diary.date,
+    weatherConditions: compactText(diary.weather.conditions),
+    temperatureMin: temperature,
+    temperatureMax: temperature,
+    rainfallMm: toFiniteNumber(diary.weather.rainfall),
+    weatherNotes: compactText(diary.weather.notes),
+    generalNotes: buildOfflineDiaryNotes(diary),
+  };
+}
+
+async function syncOfflineDiarySnapshot(diary: OfflineDailyDiary): Promise<string> {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  const serverDiary = await fetchJson<ServerDiary>(apiUrl('/api/diary'), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(buildOfflineDiaryPayload(diary)),
+  });
+
+  const activityKeys = new Set(
+    (serverDiary.activities || []).map((activity) =>
+      syncKey(activity.description, activity.lotId, activity.notes),
+    ),
+  );
+
+  for (const activity of diary.activities) {
+    const description = compactText(activity.description);
+    if (!description) continue;
+
+    const payload = {
+      description,
+      lotId: activity.lotIds?.[0],
+      notes: compactText(activity.progress),
+    };
+    const key = syncKey(payload.description, payload.lotId, payload.notes);
+    if (activityKeys.has(key)) continue;
+
+    await fetchJson<unknown>(apiUrl(`/api/diary/${serverDiary.id}/activities`), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    activityKeys.add(key);
+  }
+
+  const delayKeys = new Set(
+    (serverDiary.delays || []).map((delay) =>
+      syncKey(
+        delay.delayType,
+        delay.description,
+        toFiniteNumber(delay.durationHours),
+        delay.impact,
+      ),
+    ),
+  );
+
+  for (const delay of diary.delays) {
+    const description = compactText(delay.description);
+    if (!description) continue;
+
+    const payload = {
+      delayType: compactText(delay.type) || 'other',
+      description,
+      durationHours: toFiniteNumber(delay.duration),
+      impact: compactText(delay.impact),
+    };
+    const key = syncKey(
+      payload.delayType,
+      payload.description,
+      payload.durationHours,
+      payload.impact,
+    );
+    if (delayKeys.has(key)) continue;
+
+    await fetchJson<unknown>(apiUrl(`/api/diary/${serverDiary.id}/delays`), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    delayKeys.add(key);
+  }
+
+  const plantKeys = new Set(
+    (serverDiary.plant || []).map((plant) =>
+      syncKey(plant.description, toFiniteNumber(plant.hoursOperated), plant.notes),
+    ),
+  );
+
+  for (const equipment of diary.equipment) {
+    const description = compactText(equipment.name);
+    if (!description) continue;
+
+    const payload = {
+      description,
+      hoursOperated: toFiniteNumber(equipment.hours),
+      notes: compactText(equipment.status),
+    };
+    const key = syncKey(payload.description, payload.hoursOperated, payload.notes);
+    if (plantKeys.has(key)) continue;
+
+    await fetchJson<unknown>(apiUrl(`/api/diary/${serverDiary.id}/plant`), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    plantKeys.add(key);
+  }
+
+  return serverDiary.id;
+}
+
+function sumDocketLabourHours(docket: OfflineDocket): number {
+  return docket.labourEntries.reduce((total, entry) => {
+    const workers = toFiniteNumber(entry.numberOfWorkers) ?? 1;
+    const hours = toFiniteNumber(entry.hoursWorked) ?? 0;
+    return total + workers * hours;
+  }, 0);
+}
+
+function sumDocketPlantHours(docket: OfflineDocket): number {
+  return docket.plantEntries.reduce(
+    (total, entry) => total + (toFiniteNumber(entry.hoursUsed) ?? 0),
+    0,
+  );
+}
+
+function buildOfflineDocketNotes(docket: OfflineDocket): string | undefined {
+  const sections: string[] = [];
+  const notes = compactText(docket.notes);
+  if (notes) {
+    sections.push(notes);
+  }
+
+  if (docket.labourEntries.length > 0) {
+    sections.push(
+      [
+        'Offline labour summary:',
+        ...docket.labourEntries.map(
+          (entry) =>
+            `- ${entry.description}: ${entry.numberOfWorkers} worker(s) x ${entry.hoursWorked}h${entry.notes ? ` (${entry.notes})` : ''}`,
+        ),
+      ].join('\n'),
+    );
+  }
+
+  if (docket.plantEntries.length > 0) {
+    sections.push(
+      [
+        'Offline plant summary:',
+        ...docket.plantEntries.map(
+          (entry) =>
+            `- ${entry.equipmentType}: ${entry.hoursUsed}h${entry.notes ? ` (${entry.notes})` : ''}`,
+        ),
+      ].join('\n'),
+    );
+  }
+
+  return sections.join('\n\n') || undefined;
+}
+
+async function syncOfflineDocketDraft(docket: OfflineDocket): Promise<string> {
+  if (docket.serverId) {
+    return docket.serverId;
+  }
+
+  const result = await fetchJson<{ docket?: { id?: string } }>(apiUrl('/api/dockets'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      projectId: docket.projectId,
+      date: docket.date,
+      labourHours: sumDocketLabourHours(docket),
+      plantHours: sumDocketPlantHours(docket),
+      notes: buildOfflineDocketNotes(docket),
+    }),
+  });
+
+  const serverId = result.docket?.id;
+  if (!serverId) {
+    throw new Error('Docket sync did not return a server id');
+  }
+
+  return serverId;
 }
 
 export function useOfflineStatus(callbacks?: SyncCallbacks) {
@@ -48,8 +348,6 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
     if (!isOnline || isSyncing) return;
 
     setIsSyncing(true);
-    const token = getAuthToken();
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4006';
     let syncedCount = 0;
     const MAX_ATTEMPTS = 5;
 
@@ -59,7 +357,7 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
       for (const item of items) {
         // Skip and remove items that have failed too many times
         if (item.attempts >= MAX_ATTEMPTS && item.id) {
-          console.warn('[Sync] Removing item after max attempts:', item.type, item.id);
+          devWarn('[Sync] Removing item after max attempts:', item.type, item.id);
           await removeSyncQueueItem(item.id);
           continue;
         }
@@ -69,11 +367,9 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
             const completion = item.data;
 
             // First, get the ITP instance for this lot
-            const instanceResponse = await fetch(`${apiUrl}/api/itp/instances/lot/${completion.lotId}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
+            const instanceResponse = await authFetch(
+              apiUrl(`/api/itp/instances/lot/${completion.lotId}`),
+            );
 
             if (!instanceResponse.ok) {
               await markSyncItemError(item.id, 'Could not find ITP instance for lot');
@@ -90,24 +386,26 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
 
             // Convert status to backend expected format
             const isCompleted = completion.status === 'completed';
-            const directStatus = completion.status === 'na' ? 'not_applicable'
-              : completion.status === 'failed' ? 'failed'
-              : undefined;
+            const directStatus =
+              completion.status === 'na'
+                ? 'not_applicable'
+                : completion.status === 'failed'
+                  ? 'failed'
+                  : undefined;
 
             // Sync to server
-            const response = await fetch(`${apiUrl}/api/itp/completions`, {
+            const response = await authFetch(apiUrl('/api/itp/completions'), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify({
                 itpInstanceId,
                 checklistItemId: completion.checklistItemId,
                 isCompleted,
                 status: directStatus,
-                notes: completion.notes
-              })
+                notes: completion.notes,
+              }),
             });
 
             if (response.ok) {
@@ -122,7 +420,10 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
             }
           } catch (error) {
             if (item.id) {
-              await markSyncItemError(item.id, error instanceof Error ? error.message : 'Unknown error');
+              await markSyncItemError(
+                item.id,
+                error instanceof Error ? error.message : 'Unknown error',
+              );
             }
           }
         }
@@ -139,45 +440,38 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
               continue;
             }
 
-            // Determine endpoint based on action
-            const endpoint = item.type === 'diary_submit'
-              ? `${apiUrl}/api/diary/${diary.projectId}/submit`
-              : `${apiUrl}/api/diary/${diary.projectId}`;
+            const serverDiaryId = await syncOfflineDiarySnapshot(diary);
 
-            const method = item.type === 'diary_submit' ? 'POST' : 'PUT';
+            if (item.type === 'diary_submit') {
+              const response = await authFetch(apiUrl(`/api/diary/${serverDiaryId}/submit`), {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ acknowledgeWarnings: true }),
+              });
 
-            // Sync to server
-            const response = await fetch(endpoint, {
-              method,
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({
-                date: diary.date,
-                weather: diary.weather,
-                workforce: diary.workforce,
-                activities: diary.activities,
-                delays: diary.delays,
-                equipment: diary.equipment,
-                notes: diary.notes
-              })
-            });
-
-            if (response.ok) {
-              // Remove from sync queue
-              await removeSyncQueueItem(item.id);
-              // Mark diary as synced
-              await markDiarySynced(diaryId);
-              syncedCount++;
-            } else {
-              const errorText = await response.text();
-              await markSyncItemError(item.id, errorText);
-              await markDiarySyncError(diaryId);
+              if (!response.ok) {
+                const errorText = await readResponseError(response);
+                if (!errorText.includes('Diary already submitted')) {
+                  await markSyncItemError(item.id, errorText);
+                  await markDiarySyncError(diaryId);
+                  continue;
+                }
+              }
             }
+
+            // Remove from sync queue
+            await removeSyncQueueItem(item.id);
+            // Mark diary as synced
+            await markDiarySynced(diaryId);
+            syncedCount++;
           } catch (error) {
             if (item.id) {
-              await markSyncItemError(item.id, error instanceof Error ? error.message : 'Unknown error');
+              await markSyncItemError(
+                item.id,
+                error instanceof Error ? error.message : 'Unknown error',
+              );
             }
             if (item.data?.diaryId) {
               await markDiarySyncError(item.data.diaryId);
@@ -197,47 +491,37 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
               continue;
             }
 
-            // Determine endpoint based on action
-            const isSubmit = item.type === 'docket_submit';
-            const endpoint = isSubmit
-              ? `${apiUrl}/api/dockets/${docket.projectId}/submit`
-              : `${apiUrl}/api/dockets`;
+            if (item.type === 'docket_create' && docket.serverId) {
+              await markSyncItemError(
+                item.id,
+                'This offline docket is already synced. Open it online to make further changes.',
+              );
+              await markDocketSyncError(docketId);
+              continue;
+            }
 
-            const method = 'POST';
+            const serverId = await syncOfflineDocketDraft(docket);
 
-            // Sync to server
-            const response = await fetch(endpoint, {
-              method,
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({
-                projectId: docket.projectId,
-                subcontractorCompanyId: docket.subcontractorCompanyId,
-                date: docket.date,
-                labourEntries: docket.labourEntries,
-                plantEntries: docket.plantEntries,
-                notes: docket.notes,
-                status: isSubmit ? 'pending_approval' : 'draft'
-              })
-            });
-
-            if (response.ok) {
-              const result = await response.json();
+            if (item.type === 'docket_create') {
               // Remove from sync queue
               await removeSyncQueueItem(item.id);
               // Mark docket as synced
-              await markDocketSynced(docketId, result.docket?.id);
+              await markDocketSynced(docketId, serverId);
               syncedCount++;
             } else {
-              const errorText = await response.text();
-              await markSyncItemError(item.id, errorText);
+              await markDocketServerId(docketId, serverId);
+              await markSyncItemError(
+                item.id,
+                'Offline docket draft synced. Submission requires online review so labour, plant, and lot allocations can be validated before approval.',
+              );
               await markDocketSyncError(docketId);
             }
           } catch (error) {
             if (item.id) {
-              await markSyncItemError(item.id, error instanceof Error ? error.message : 'Unknown error');
+              await markSyncItemError(
+                item.id,
+                error instanceof Error ? error.message : 'Unknown error',
+              );
             }
             if (item.data?.docketId) {
               await markDocketSyncError(item.data.docketId);
@@ -275,12 +559,9 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
             formData.append('capturedAt', photo.capturedAt);
 
             // Upload to server
-            const uploadResponse = await fetch(`${apiUrl}/api/documents/upload`, {
+            const uploadResponse = await authFetch(apiUrl('/api/documents/upload'), {
               method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`
-              },
-              body: formData
+              body: formData,
             });
 
             if (uploadResponse.ok) {
@@ -297,7 +578,10 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
             }
           } catch (error) {
             if (item.id) {
-              await markSyncItemError(item.id, error instanceof Error ? error.message : 'Unknown error');
+              await markSyncItemError(
+                item.id,
+                error instanceof Error ? error.message : 'Unknown error',
+              );
             }
             if (item.data?.photoId) {
               await markPhotoSyncError(item.data.photoId);
@@ -317,12 +601,21 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
               continue;
             }
 
+            if (!forceOverwrite && lot.syncStatus === 'conflict') {
+              devWarn('[Sync] Removing stale lot edit queue item for conflicted lot:', lotId);
+              await removeSyncQueueItem(item.id);
+              continue;
+            }
+
+            if (!forceOverwrite && lot.syncStatus === 'synced') {
+              devLog('[Sync] Removing stale lot edit queue item for synced lot:', lotId);
+              await removeSyncQueueItem(item.id);
+              continue;
+            }
+
             // First, fetch current server state to check for conflicts
-            const serverCheckResponse = await fetch(`${apiUrl}/api/lots/${lotId}`, {
+            const serverCheckResponse = await authFetch(apiUrl(`/api/lots/${lotId}`), {
               method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
             });
 
             if (!serverCheckResponse.ok) {
@@ -351,19 +644,19 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
                 activityType: serverLot.lot?.activityType || serverLot.activityType,
                 status: serverLot.lot?.status || serverLot.status,
                 budget: serverLot.lot?.budget || serverLot.budget,
-                notes: serverLot.lot?.notes || serverLot.notes
+                notes: serverLot.lot?.notes || serverLot.notes,
               });
 
               if (conflictResult.hasConflict) {
                 // Conflict detected - notify and skip this sync item
-                console.log('[Sync] Conflict detected for lot:', lotId, lot.lotNumber);
+                devLog('[Sync] Conflict detected for lot:', lotId, lot.lotNumber);
 
                 // Call the conflict callback if provided
                 if (callbacks?.onConflictDetected) {
                   callbacks.onConflictDetected(
                     lotId,
                     lot.lotNumber,
-                    `Sync conflict detected for lot ${lot.lotNumber}. Another user edited this lot while you were offline.`
+                    `Sync conflict detected for lot ${lot.lotNumber}. Another user edited this lot while you were offline.`,
                   );
                 }
 
@@ -374,11 +667,10 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
             }
 
             // No conflict (or force overwrite) - proceed with sync
-            const syncResponse = await fetch(`${apiUrl}/api/lots/${lotId}`, {
+            const syncResponse = await authFetch(apiUrl(`/api/lots/${lotId}`), {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify({
                 lotNumber: lot.lotNumber,
@@ -394,8 +686,8 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
                 activityType: lot.activityType,
                 status: lot.status,
                 budget: lot.budget,
-                notes: lot.notes
-              })
+                notes: lot.notes,
+              }),
             });
 
             if (syncResponse.ok) {
@@ -404,7 +696,7 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
               await removeSyncQueueItem(item.id);
               // Mark lot as synced with new server timestamp
               await markLotSynced(lotId, result.lot?.updatedAt || new Date().toISOString());
-              console.log('[Sync] Lot synced successfully:', lotId);
+              devLog('[Sync] Lot synced successfully:', lotId);
               syncedCount++;
             } else {
               const errorText = await syncResponse.text();
@@ -413,7 +705,10 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
             }
           } catch (error) {
             if (item.id) {
-              await markSyncItemError(item.id, error instanceof Error ? error.message : 'Unknown error');
+              await markSyncItemError(
+                item.id,
+                error instanceof Error ? error.message : 'Unknown error',
+              );
             }
             if (item.data?.lotId) {
               await markLotSyncError(item.data.lotId);
@@ -429,9 +724,18 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
         }
 
         // Remove unrecognized item types to prevent queue buildup
-        const knownTypes = ['itp_completion', 'photo_upload', 'diary_save', 'diary_submit', 'docket_create', 'docket_submit', 'lot_edit', 'lot_conflict'];
+        const knownTypes = [
+          'itp_completion',
+          'photo_upload',
+          'diary_save',
+          'diary_submit',
+          'docket_create',
+          'docket_submit',
+          'lot_edit',
+          'lot_conflict',
+        ];
         if (!knownTypes.includes(item.type) && item.id) {
-          console.warn('[Sync] Removing unknown item type:', item.type);
+          devWarn('[Sync] Removing unknown item type:', item.type);
           await removeSyncQueueItem(item.id);
         }
       }
@@ -467,6 +771,6 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
     pendingSyncCount,
     isSyncing,
     syncPendingChanges,
-    conflictCount
+    conflictCount,
   };
 }

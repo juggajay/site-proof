@@ -1,29 +1,33 @@
-import { useState, memo } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { getAuthToken } from '@/lib/auth'
-import { apiFetch, apiUrl } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { handleApiError } from '@/lib/errorHandling'
-import type { NCR } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { useRef, useState, memo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { apiFetch, authFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import { handleApiError } from '@/lib/errorHandling';
+import type { NCR } from '../types';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const rectifyNCRSchema = z.object({
-  rectificationNotes: z.string().optional().default(''),
-})
+  rectificationNotes: z.string().trim().optional().default(''),
+});
 
-type RectifyNCRFormData = z.infer<typeof rectifyNCRSchema>
+type RectifyNCRFormData = z.infer<typeof rectifyNCRSchema>;
 
 interface RectifyNCRModalProps {
-  isOpen: boolean
-  ncr: NCR | null
-  projectId?: string
-  onClose: () => void
-  onSuccess: () => void
+  isOpen: boolean;
+  ncr: NCR | null;
+  projectId?: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+interface UploadedEvidenceDocument {
+  id: string;
+  filename: string;
 }
 
 function RectifyNCRModalInner({
@@ -33,10 +37,10 @@ function RectifyNCRModalInner({
   onClose,
   onSuccess,
 }: RectifyNCRModalProps) {
-  const token = getAuthToken()
-  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([])
-  const [uploadingEvidence, setUploadingEvidence] = useState(false)
-  const [submittingRectification, setSubmittingRectification] = useState(false)
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [submittingRectification, setSubmittingRectification] = useState(false);
+  const submittingRectificationRef = useRef(false);
 
   const {
     register,
@@ -49,86 +53,89 @@ function RectifyNCRModalInner({
     defaultValues: {
       rectificationNotes: '',
     },
-  })
+  });
 
   const handleEvidenceUpload = async (file: File, evidenceType: string) => {
-    if (!ncr) return
+    if (!ncr) return;
 
-    setUploadingEvidence(true)
+    setUploadingEvidence(true);
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('projectId', ncr.project?.id || projectId || '')
-
-      const uploadResponse = await fetch(apiUrl('/api/documents/upload'), {
-        method: 'POST',
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-        body: formData,
-      })
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file')
+      const uploadProjectId = ncr.project?.id || projectId;
+      if (!uploadProjectId) {
+        throw new Error('Project is required to upload evidence');
       }
 
-      const uploadData = await uploadResponse.json()
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('projectId', uploadProjectId);
+      formData.append('documentType', evidenceType === 'photo' ? 'photo' : 'ncr_evidence');
+      formData.append('category', 'ncr_evidence');
+      formData.append('caption', `NCR evidence for ${ncr.ncrNumber}`);
 
-      await apiFetch(`/api/ncrs/${ncr.id}/evidence`, {
+      const uploadResponse = await authFetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file');
+      }
+
+      const uploadData = (await uploadResponse.json()) as UploadedEvidenceDocument;
+
+      await apiFetch(`/api/ncrs/${encodeURIComponent(ncr.id)}/evidence`, {
         method: 'POST',
         body: JSON.stringify({
-          documentId: uploadData.document?.id,
+          documentId: uploadData.id,
           evidenceType,
-          filename: file.name,
-          fileSize: file.size,
-          mimeType: file.type,
-          projectId: ncr.project?.id || projectId,
         }),
-      })
+      });
 
       toast({
         title: 'Evidence Uploaded',
         description: `${file.name} has been added as ${evidenceType} evidence`,
-      })
+      });
 
-      setEvidenceFiles(prev => [...prev, file])
+      setEvidenceFiles((prev) => [...prev, file]);
     } catch (err) {
-      handleApiError(err, 'Failed to upload evidence')
+      handleApiError(err, 'Failed to upload evidence');
     } finally {
-      setUploadingEvidence(false)
+      setUploadingEvidence(false);
     }
-  }
+  };
 
   const handleSubmitRectification = async (data: RectifyNCRFormData) => {
-    if (!ncr) return
+    if (!ncr || submittingRectificationRef.current) return;
 
-    setSubmittingRectification(true)
+    submittingRectificationRef.current = true;
+    setSubmittingRectification(true);
     try {
-      await apiFetch(`/api/ncrs/${ncr.id}/submit-for-verification`, {
+      await apiFetch(`/api/ncrs/${encodeURIComponent(ncr.id)}/submit-for-verification`, {
         method: 'POST',
-        body: JSON.stringify({ rectificationNotes: data.rectificationNotes }),
-      })
+        body: JSON.stringify({ rectificationNotes: data.rectificationNotes?.trim() || undefined }),
+      });
 
       toast({
         title: 'Rectification Submitted',
         description: 'NCR has been submitted for verification',
-      })
-      handleClose()
-      onSuccess()
+      });
+      handleClose();
+      onSuccess();
     } catch (err) {
-      handleApiError(err, 'Failed to submit rectification')
+      handleApiError(err, 'Failed to submit rectification');
     } finally {
-      setSubmittingRectification(false)
+      submittingRectificationRef.current = false;
+      setSubmittingRectification(false);
     }
-  }
+  };
 
   const handleClose = () => {
-    reset()
-    setEvidenceFiles([])
-    onClose()
-  }
+    reset();
+    setEvidenceFiles([]);
+    onClose();
+  };
 
-  if (!isOpen || !ncr) return null
+  if (!isOpen || !ncr) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-lg">
@@ -151,9 +158,9 @@ function RectifyNCRModalInner({
               accept="image/*"
               multiple
               onChange={(e) => {
-                const files = e.target.files
+                const files = e.target.files;
                 if (files) {
-                  Array.from(files).forEach(file => handleEvidenceUpload(file, 'photo'))
+                  Array.from(files).forEach((file) => handleEvidenceUpload(file, 'photo'));
                 }
               }}
               disabled={uploadingEvidence}
@@ -169,9 +176,11 @@ function RectifyNCRModalInner({
               accept=".pdf"
               multiple
               onChange={(e) => {
-                const files = e.target.files
+                const files = e.target.files;
                 if (files) {
-                  Array.from(files).forEach(file => handleEvidenceUpload(file, 'retest_certificate'))
+                  Array.from(files).forEach((file) =>
+                    handleEvidenceUpload(file, 'retest_certificate'),
+                  );
                 }
               }}
               disabled={uploadingEvidence}
@@ -179,16 +188,16 @@ function RectifyNCRModalInner({
             />
           </div>
 
-          {uploadingEvidence && (
-            <p className="text-sm text-amber-600">Uploading evidence...</p>
-          )}
+          {uploadingEvidence && <p className="text-sm text-amber-600">Uploading evidence...</p>}
 
           {/* Uploaded files list */}
           {evidenceFiles.length > 0 && (
             <div className="mt-2 space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Uploaded Evidence:</p>
               {evidenceFiles.map((file, index) => (
-                <p key={index} className="text-xs text-green-600">&#10003; {file.name}</p>
+                <p key={index} className="text-xs text-green-600">
+                  &#10003; {file.name}
+                </p>
               ))}
             </div>
           )}
@@ -205,13 +214,16 @@ function RectifyNCRModalInner({
               className={errors.rectificationNotes ? 'border-destructive mt-1' : 'mt-1'}
             />
             {errors.rectificationNotes && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.rectificationNotes.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.rectificationNotes.message}
+              </p>
             )}
           </div>
 
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
             <p className="text-sm text-amber-800">
-              <strong>Note:</strong> Please upload at least one piece of evidence (photo or re-test certificate) before submitting for verification.
+              <strong>Note:</strong> Please upload at least one piece of evidence (photo or re-test
+              certificate) before submitting for verification.
             </p>
           </div>
         </form>
@@ -229,13 +241,17 @@ function RectifyNCRModalInner({
           type="submit"
           form="rectify-ncr-form"
           disabled={submittingRectification || evidenceFiles.length === 0}
-          title={evidenceFiles.length === 0 ? 'Please upload at least one piece of evidence' : 'Submit for verification'}
+          title={
+            evidenceFiles.length === 0
+              ? 'Please upload at least one piece of evidence'
+              : 'Submit for verification'
+          }
         >
           {submittingRectification ? 'Submitting...' : 'Submit for Verification'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
-export const RectifyNCRModal = memo(RectifyNCRModalInner)
+export const RectifyNCRModal = memo(RectifyNCRModalInner);

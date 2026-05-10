@@ -1,19 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react';
 
 export interface ClassificationModalData {
-  documentId: string
-  filename: string
-  suggestedClassification: string
-  confidence: number
-  categories: string[]
+  documentId: string;
+  filename: string;
+  suggestedClassification: string;
+  confidence: number;
+  categories: string[];
 }
 
 interface AIClassificationModalProps {
-  isOpen: boolean
-  data: ClassificationModalData | null
-  onSave: (classification: string) => Promise<void>
-  onSkip: () => void
-  isSaving: boolean
+  isOpen: boolean;
+  data: ClassificationModalData | null;
+  onSave: (classification: string) => Promise<void>;
+  onSkip: () => void;
+  isSaving: boolean;
 }
 
 export function AIClassificationModal({
@@ -21,34 +21,37 @@ export function AIClassificationModal({
   data,
   onSave,
   onSkip,
-  isSaving
+  isSaving,
 }: AIClassificationModalProps) {
-  const [selectedClassification, setSelectedClassification] = useState<string>('')
+  const [selectedClassification, setSelectedClassification] = useState<string>('');
 
   // Reset selection when modal opens with new data
   useEffect(() => {
     if (data) {
-      setSelectedClassification(data.suggestedClassification)
+      setSelectedClassification(data.suggestedClassification);
     } else {
-      setSelectedClassification('')
+      setSelectedClassification('');
     }
-  }, [data])
+  }, [data]);
 
   const handleSave = async () => {
-    if (!selectedClassification) return
-    await onSave(selectedClassification)
-    setSelectedClassification('')
-  }
+    if (!selectedClassification) return;
+    await onSave(selectedClassification);
+    setSelectedClassification('');
+  };
 
   const handleSkip = () => {
-    setSelectedClassification('')
-    onSkip()
-  }
+    setSelectedClassification('');
+    onSkip();
+  };
 
-  if (!isOpen || !data) return null
+  if (!isOpen || !data) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" data-testid="ai-classification-modal">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      data-testid="ai-classification-modal"
+    >
       <div className="bg-background rounded-lg p-6 w-full max-w-lg shadow-xl">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400">
@@ -64,12 +67,17 @@ export function AIClassificationModal({
           {/* AI Suggestion */}
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-blue-800 dark:text-blue-300">AI Suggested Classification</span>
+              <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                AI Suggested Classification
+              </span>
               <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300">
                 {data.confidence}% confidence
               </span>
             </div>
-            <p className="text-lg font-semibold text-blue-900 dark:text-blue-100" data-testid="ai-suggested-classification">
+            <p
+              className="text-lg font-semibold text-blue-900 dark:text-blue-100"
+              data-testid="ai-suggested-classification"
+            >
               {data.suggestedClassification}
             </p>
           </div>
@@ -79,7 +87,10 @@ export function AIClassificationModal({
             <label className="block text-sm font-medium mb-2">
               Select Classification <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto" data-testid="classification-options">
+            <div
+              className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto"
+              data-testid="classification-options"
+            >
               {data.categories.map((category) => (
                 <button
                   key={category}
@@ -89,11 +100,9 @@ export function AIClassificationModal({
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'border-border hover:bg-muted'
                   }`}
-                  data-testid={`classification-option-${category.toLowerCase().replace(/[\/\s]+/g, '-')}`}
+                  data-testid={`classification-option-${category.toLowerCase().replace(/[/\s]+/g, '-')}`}
                 >
-                  {category === data.suggestedClassification && (
-                    <span className="mr-1">✨</span>
-                  )}
+                  {category === data.suggestedClassification && <span className="mr-1">✨</span>}
                   {category}
                 </button>
               ))}
@@ -102,7 +111,8 @@ export function AIClassificationModal({
 
           {/* Info text */}
           <p className="text-xs text-muted-foreground">
-            The AI analyzes photos to suggest a classification. You can accept the suggestion or choose a different category.
+            The AI analyzes photos to suggest a classification. You can accept the suggestion or
+            choose a different category.
           </p>
         </div>
 
@@ -126,5 +136,5 @@ export function AIClassificationModal({
         </div>
       </div>
     </div>
-  )
+  );
 }

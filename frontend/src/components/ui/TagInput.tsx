@@ -1,12 +1,12 @@
-import { useState, useRef, KeyboardEvent } from 'react'
-import { X } from 'lucide-react'
+import { useState, useRef, KeyboardEvent } from 'react';
+import { X } from 'lucide-react';
 
 interface TagInputProps {
-  value: string[]
-  onChange: (tags: string[]) => void
-  placeholder?: string
-  className?: string
-  maxTags?: number
+  value: string[];
+  onChange: (tags: string[]) => void;
+  placeholder?: string;
+  className?: string;
+  maxTags?: number;
 }
 
 export function TagInput({
@@ -16,36 +16,36 @@ export function TagInput({
   className = '',
   maxTags = 10,
 }: TagInputProps) {
-  const [inputValue, setInputValue] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      e.preventDefault()
-      addTag()
+      e.preventDefault();
+      addTag();
     } else if (e.key === 'Backspace' && inputValue === '' && value.length > 0) {
       // Remove last tag when backspace on empty input
-      removeTag(value.length - 1)
+      removeTag(value.length - 1);
     }
-  }
+  };
 
   const addTag = () => {
-    const trimmedValue = inputValue.trim()
+    const trimmedValue = inputValue.trim();
     if (trimmedValue && !value.includes(trimmedValue) && value.length < maxTags) {
-      onChange([...value, trimmedValue])
-      setInputValue('')
+      onChange([...value, trimmedValue]);
+      setInputValue('');
     }
-  }
+  };
 
   const removeTag = (index: number) => {
-    const newTags = value.filter((_, i) => i !== index)
-    onChange(newTags)
-    inputRef.current?.focus()
-  }
+    const newTags = value.filter((_, i) => i !== index);
+    onChange(newTags);
+    inputRef.current?.focus();
+  };
 
   const handleContainerClick = () => {
-    inputRef.current?.focus()
-  }
+    inputRef.current?.focus();
+  };
 
   return (
     <div
@@ -63,8 +63,8 @@ export function TagInput({
           <button
             type="button"
             onClick={(e) => {
-              e.stopPropagation()
-              removeTag(index)
+              e.stopPropagation();
+              removeTag(index);
             }}
             className="ml-0.5 rounded-full p-0.5 hover:bg-primary/20 transition-colors"
             title={`Remove ${tag}`}
@@ -83,7 +83,7 @@ export function TagInput({
         onBlur={() => {
           // Optionally add tag on blur
           if (inputValue.trim()) {
-            addTag()
+            addTag();
           }
         }}
         placeholder={value.length === 0 ? placeholder : ''}
@@ -95,5 +95,5 @@ export function TagInput({
         <span className="text-xs text-muted-foreground">Max tags reached</span>
       )}
     </div>
-  )
+  );
 }

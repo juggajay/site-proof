@@ -1,26 +1,38 @@
-import React, { useRef } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { Plus, Users, Building2, CheckCircle, Clock, X, Truck, ChevronDown, ChevronUp, Settings2, Trash2 } from 'lucide-react'
-import type { Subcontractor } from '../types'
+import React, { useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import {
+  Plus,
+  Users,
+  Building2,
+  CheckCircle,
+  Clock,
+  X,
+  Truck,
+  ChevronDown,
+  ChevronUp,
+  Settings2,
+  Trash2,
+} from 'lucide-react';
+import type { Subcontractor } from '../types';
 
 export interface SubcontractorListProps {
-  subcontractors: Subcontractor[]
-  expandedId: string | null
-  onToggleExpand: (id: string) => void
-  onApproveSubcontractor: (id: string) => void
-  onSuspendSubcontractor: (id: string) => void
-  onRemoveSubcontractor: (id: string) => void
-  onReinstateSubcontractor: (id: string) => void
-  onDeleteSubcontractor: (sub: Subcontractor) => void
-  onApproveEmployee: (subId: string, empId: string) => void
-  onDeactivateEmployee: (subId: string, empId: string) => void
-  onApprovePlant: (subId: string, plantId: string) => void
-  onDeactivatePlant: (subId: string, plantId: string) => void
-  onShowAddEmployee: (subId: string) => void
-  onShowAddPlant: (subId: string) => void
-  onOpenPortalAccess: (sub: Subcontractor) => void
-  formatCurrency: (amount: number) => string
-  getStatusBadge: (status: string) => React.ReactNode
+  subcontractors: Subcontractor[];
+  expandedId: string | null;
+  onToggleExpand: (id: string) => void;
+  onApproveSubcontractor: (id: string) => void;
+  onSuspendSubcontractor: (id: string) => void;
+  onRemoveSubcontractor: (id: string) => void;
+  onReinstateSubcontractor: (id: string) => void;
+  onDeleteSubcontractor: (sub: Subcontractor) => void;
+  onApproveEmployee: (subId: string, empId: string) => void;
+  onDeactivateEmployee: (subId: string, empId: string) => void;
+  onApprovePlant: (subId: string, plantId: string) => void;
+  onDeactivatePlant: (subId: string, plantId: string) => void;
+  onShowAddEmployee: (subId: string) => void;
+  onShowAddPlant: (subId: string) => void;
+  onOpenPortalAccess: (sub: Subcontractor) => void;
+  formatCurrency: (amount: number) => string;
+  getStatusBadge: (status: string) => React.ReactNode;
 }
 
 export const SubcontractorList = React.memo(function SubcontractorList({
@@ -42,20 +54,32 @@ export const SubcontractorList = React.memo(function SubcontractorList({
   formatCurrency,
   getStatusBadge,
 }: SubcontractorListProps) {
-  const parentRef = useRef<HTMLDivElement>(null)
+  const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
     count: subcontractors.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 80,
     overscan: 3,
-  })
+  });
+
+  if (subcontractors.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed bg-card p-8 text-center">
+        <Building2 className="mx-auto h-8 w-8 text-muted-foreground" />
+        <h3 className="mt-3 font-semibold">No subcontractors found</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Invite subcontractors to manage rates, portal access, and project dockets.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div ref={parentRef} style={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto' }}>
       <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
-          const sub = subcontractors[virtualRow.index]
+          const sub = subcontractors[virtualRow.index];
           return (
             <div
               key={virtualRow.key}
@@ -73,7 +97,17 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                 {/* Header */}
                 <div
                   className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expandedId === sub.id}
+                  aria-label={`Toggle ${sub.companyName} details`}
                   onClick={() => onToggleExpand(sub.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onToggleExpand(sub.id);
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-4">
                     <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -81,14 +115,21 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                     </div>
                     <div>
                       <h3 className="font-semibold">{sub.companyName}</h3>
-                      <p className="text-sm text-muted-foreground">{sub.primaryContact} • {sub.email}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {sub.primaryContact} • {sub.email}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
                     {getStatusBadge(sub.status)}
                     <button
-                      onClick={(e) => { e.stopPropagation(); onOpenPortalAccess(sub); }}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenPortalAccess(sub);
+                      }}
                       className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border hover:bg-muted transition-colors"
+                      aria-label={`Configure portal access for ${sub.companyName}`}
                       title="Configure Portal Access"
                     >
                       <Settings2 className="h-3.5 w-3.5" />
@@ -96,9 +137,15 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                     </button>
                     <div className="text-right">
                       <p className="font-semibold">{formatCurrency(sub.totalCost)}</p>
-                      <p className="text-xs text-muted-foreground">{sub.totalApprovedDockets} dockets</p>
+                      <p className="text-xs text-muted-foreground">
+                        {sub.totalApprovedDockets} dockets
+                      </p>
                     </div>
-                    {expandedId === sub.id ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                    {expandedId === sub.id ? (
+                      <ChevronUp className="h-5 w-5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5" />
+                    )}
                   </div>
                 </div>
 
@@ -110,14 +157,22 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                       {sub.status === 'pending_approval' && (
                         <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onApproveSubcontractor(sub.id); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onApproveSubcontractor(sub.id);
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
                           >
                             <CheckCircle className="h-4 w-4" />
                             Approve Company
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onRemoveSubcontractor(sub.id); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveSubcontractor(sub.id);
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
                           >
                             <X className="h-4 w-4" />
@@ -128,14 +183,22 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                       {sub.status === 'approved' && (
                         <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onSuspendSubcontractor(sub.id); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSuspendSubcontractor(sub.id);
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-white hover:bg-amber-600"
                           >
                             <Clock className="h-4 w-4" />
                             Suspend
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onRemoveSubcontractor(sub.id); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveSubcontractor(sub.id);
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
                           >
                             <X className="h-4 w-4" />
@@ -146,14 +209,22 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                       {sub.status === 'suspended' && (
                         <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onReinstateSubcontractor(sub.id); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onReinstateSubcontractor(sub.id);
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
                           >
                             <CheckCircle className="h-4 w-4" />
                             Reinstate
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onRemoveSubcontractor(sub.id); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveSubcontractor(sub.id);
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
                           >
                             <X className="h-4 w-4" />
@@ -164,14 +235,22 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                       {sub.status === 'removed' && (
                         <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onReinstateSubcontractor(sub.id); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onReinstateSubcontractor(sub.id);
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
                           >
                             <CheckCircle className="h-4 w-4" />
                             Reinstate
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); onDeleteSubcontractor(sub); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteSubcontractor(sub);
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-white hover:bg-red-900"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -189,7 +268,11 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                           Employee Roster ({sub.employees.length})
                         </h4>
                         <button
-                          onClick={(e) => { e.stopPropagation(); onShowAddEmployee(sub.id); }}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onShowAddEmployee(sub.id);
+                          }}
                           className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
                         >
                           <Plus className="h-3 w-3" />
@@ -212,12 +295,18 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               <tr key={emp.id} className="border-t">
                                 <td className="p-3">{emp.name}</td>
                                 <td className="p-3">{emp.role}</td>
-                                <td className="p-3 text-right font-semibold">{formatCurrency(emp.hourlyRate)}/hr</td>
+                                <td className="p-3 text-right font-semibold">
+                                  {formatCurrency(emp.hourlyRate)}/hr
+                                </td>
                                 <td className="p-3 text-center">{getStatusBadge(emp.status)}</td>
                                 <td className="p-3 text-right space-x-2">
                                   {emp.status === 'pending' && (
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); onApproveEmployee(sub.id, emp.id); }}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onApproveEmployee(sub.id, emp.id);
+                                      }}
                                       className="text-sm text-green-600 hover:text-green-700 font-medium"
                                     >
                                       Approve
@@ -225,7 +314,11 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                                   )}
                                   {emp.status === 'approved' && (
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); onDeactivateEmployee(sub.id, emp.id); }}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeactivateEmployee(sub.id, emp.id);
+                                      }}
                                       className="text-sm text-orange-600 hover:text-orange-700 font-medium"
                                     >
                                       Deactivate
@@ -257,7 +350,11 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                           Plant Register ({sub.plant.length})
                         </h4>
                         <button
-                          onClick={(e) => { e.stopPropagation(); onShowAddPlant(sub.id); }}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onShowAddPlant(sub.id);
+                          }}
                           className="text-sm text-primary hover:text-primary/80 font-medium flex items-center gap-1"
                         >
                           <Plus className="h-3 w-3" />
@@ -283,13 +380,21 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                                 <td className="p-3">{p.type}</td>
                                 <td className="p-3">{p.description}</td>
                                 <td className="p-3">{p.idRego}</td>
-                                <td className="p-3 text-right font-semibold">{formatCurrency(p.dryRate)}/hr</td>
-                                <td className="p-3 text-right font-semibold">{p.wetRate > 0 ? `${formatCurrency(p.wetRate)}/hr` : '-'}</td>
+                                <td className="p-3 text-right font-semibold">
+                                  {formatCurrency(p.dryRate)}/hr
+                                </td>
+                                <td className="p-3 text-right font-semibold">
+                                  {p.wetRate > 0 ? `${formatCurrency(p.wetRate)}/hr` : '-'}
+                                </td>
                                 <td className="p-3 text-center">{getStatusBadge(p.status)}</td>
                                 <td className="p-3 text-right space-x-2">
                                   {p.status === 'pending' && (
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); onApprovePlant(sub.id, p.id); }}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onApprovePlant(sub.id, p.id);
+                                      }}
                                       className="text-sm text-green-600 hover:text-green-700 font-medium"
                                     >
                                       Approve
@@ -297,7 +402,11 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                                   )}
                                   {p.status === 'approved' && (
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); onDeactivatePlant(sub.id, p.id); }}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeactivatePlant(sub.id, p.id);
+                                      }}
                                       className="text-sm text-orange-600 hover:text-orange-700 font-medium"
                                     >
                                       Deactivate
@@ -324,9 +433,9 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                 )}
               </div>
             </div>
-          )
+          );
         })}
       </div>
     </div>
-  )
-})
+  );
+});

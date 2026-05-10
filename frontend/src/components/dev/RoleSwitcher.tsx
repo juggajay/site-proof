@@ -1,11 +1,12 @@
 // RoleSwitcher - Dev tool to test different user roles
 // Only visible to admin/owner users
-import { useState } from 'react'
-import { UserCog, X, Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useAuth, getRoleOverride } from '@/lib/auth'
+import { useState } from 'react';
+import { UserCog, X, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAuth, getRoleOverride } from '@/lib/auth';
+import { removeLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 
-const ROLE_OVERRIDE_KEY = 'siteproof_role_override'
+const ROLE_OVERRIDE_KEY = 'siteproof_role_override';
 
 const AVAILABLE_ROLES = [
   { id: 'owner', label: 'Owner', description: 'Full system access' },
@@ -14,44 +15,44 @@ const AVAILABLE_ROLES = [
   { id: 'site_manager', label: 'Site Manager', description: 'Manage site operations' },
   { id: 'foreman', label: 'Foreman', description: 'Field supervision' },
   { id: 'subcontractor', label: 'Subcontractor', description: 'Subcontractor portal' },
-]
+];
 
 // Helper to set role override
 function setRoleOverride(role: string | null) {
   if (role) {
-    localStorage.setItem(ROLE_OVERRIDE_KEY, role)
+    writeLocalStorageItem(ROLE_OVERRIDE_KEY, role);
   } else {
-    localStorage.removeItem(ROLE_OVERRIDE_KEY)
+    removeLocalStorageItem(ROLE_OVERRIDE_KEY);
   }
   // Trigger a page reload to apply the change
-  window.location.reload()
+  window.location.reload();
 }
 
 export function RoleSwitcher() {
-  const { user, actualRole: authActualRole } = useAuth()
-  const [isOpen, setIsOpen] = useState(false)
+  const { user, actualRole: authActualRole } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
 
-  const actualRole = authActualRole || ''
-  const currentOverride = getRoleOverride()
-  const effectiveRole = user?.role || actualRole
+  const actualRole = authActualRole || '';
+  const currentOverride = getRoleOverride();
+  const effectiveRole = user?.role || actualRole;
 
   // Only show for admin/owner users (based on actual role, not override)
   if (!['admin', 'owner'].includes(actualRole)) {
-    return null
+    return null;
   }
 
   const handleRoleSelect = (roleId: string) => {
     if (roleId === actualRole) {
       // Selecting actual role clears the override
-      setRoleOverride(null)
+      setRoleOverride(null);
     } else {
-      setRoleOverride(roleId)
+      setRoleOverride(roleId);
     }
-  }
+  };
 
   const handleClearOverride = () => {
-    setRoleOverride(null)
-  }
+    setRoleOverride(null);
+  };
 
   return (
     <>
@@ -65,7 +66,7 @@ export function RoleSwitcher() {
           'touch-manipulation',
           currentOverride
             ? 'bg-amber-500 text-white hover:bg-amber-600'
-            : 'bg-card text-foreground hover:bg-muted'
+            : 'bg-card text-foreground hover:bg-muted',
         )}
       >
         <UserCog className="h-4 w-4" />
@@ -81,10 +82,7 @@ export function RoleSwitcher() {
       {isOpen && (
         <>
           {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/50 z-50"
-            onClick={() => setIsOpen(false)}
-          />
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setIsOpen(false)} />
 
           {/* Panel */}
           <div className="fixed inset-x-4 bottom-4 md:inset-auto md:right-4 md:bottom-4 md:w-80 bg-card rounded-xl shadow-2xl z-50 overflow-hidden">
@@ -94,10 +92,7 @@ export function RoleSwitcher() {
                 <h3 className="font-semibold">Role Switcher</h3>
                 <p className="text-xs text-muted-foreground">Test different user views</p>
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-2 rounded-lg hover:bg-muted"
-              >
+              <button onClick={() => setIsOpen(false)} className="p-2 rounded-lg hover:bg-muted">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -127,8 +122,8 @@ export function RoleSwitcher() {
             {/* Role list */}
             <div className="p-2 max-h-[50vh] overflow-y-auto">
               {AVAILABLE_ROLES.map((role) => {
-                const isActual = role.id === actualRole
-                const isSelected = role.id === effectiveRole
+                const isActual = role.id === actualRole;
+                const isSelected = role.id === effectiveRole;
 
                 return (
                   <button
@@ -138,35 +133,31 @@ export function RoleSwitcher() {
                       'w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors',
                       isSelected
                         ? 'bg-primary/10 border border-primary'
-                        : 'hover:bg-muted border border-transparent'
+                        : 'hover:bg-muted border border-transparent',
                     )}
                   >
-                    <div className={cn(
-                      'flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold',
-                      isSelected
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
-                    )}>
+                    <div
+                      className={cn(
+                        'flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold',
+                        isSelected
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground',
+                      )}
+                    >
                       {role.id.slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{role.label}</span>
                         {isActual && (
-                          <span className="text-xs px-1.5 py-0.5 bg-muted rounded">
-                            Your role
-                          </span>
+                          <span className="text-xs px-1.5 py-0.5 bg-muted rounded">Your role</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {role.description}
-                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{role.description}</p>
                     </div>
-                    {isSelected && (
-                      <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                    )}
+                    {isSelected && <Check className="h-5 w-5 text-primary flex-shrink-0" />}
                   </button>
-                )
+                );
               })}
             </div>
 
@@ -180,5 +171,5 @@ export function RoleSwitcher() {
         </>
       )}
     </>
-  )
+  );
 }

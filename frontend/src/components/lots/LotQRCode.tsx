@@ -1,101 +1,102 @@
-import { useState } from 'react'
-import DOMPurify from 'dompurify'
-import { QrCode, Download, Printer } from 'lucide-react'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
+import { useEffect, useState } from 'react';
+import DOMPurify from 'dompurify';
+import { QrCode, Download, Printer } from 'lucide-react';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toaster';
+import { downloadBlob } from '@/lib/downloads';
+import { escapeHtml, generateQrSvg } from '@/lib/qrCode';
 
 interface LotQRCodeProps {
-  lotId: string
-  lotNumber: string
-  projectId: string
-  size?: 'small' | 'medium' | 'large'
-}
-
-// Simple QR Code generator using SVG paths
-// This generates a deterministic pattern based on the URL
-function generateQRSVG(text: string, size: number = 100): string {
-  const hash = hashString(text)
-  const modules = 21
-  const moduleSize = size / modules
-
-  let paths = ''
-
-  for (let row = 0; row < modules; row++) {
-    for (let col = 0; col < modules; col++) {
-      // Always draw finder patterns (corners)
-      const isFinderPattern =
-        (row < 7 && col < 7) ||
-        (row < 7 && col >= modules - 7) ||
-        (row >= modules - 7 && col < 7)
-
-      if (isFinderPattern) {
-        const inOuter = (row < 7 && col < 7 && (row === 0 || row === 6 || col === 0 || col === 6)) ||
-                       (row < 7 && col >= modules - 7 && (row === 0 || row === 6 || col === modules - 7 || col === modules - 1)) ||
-                       (row >= modules - 7 && col < 7 && (row === modules - 7 || row === modules - 1 || col === 0 || col === 6))
-
-        const inInner = (row >= 2 && row <= 4 && col >= 2 && col <= 4) ||
-                       (row >= 2 && row <= 4 && col >= modules - 5 && col <= modules - 3) ||
-                       (row >= modules - 5 && row <= modules - 3 && col >= 2 && col <= 4)
-
-        if (inOuter || inInner) {
-          paths += `<rect x="${col * moduleSize}" y="${row * moduleSize}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`
-        }
-      } else if (row > 7 && col > 7) {
-        const index = row * modules + col
-        const bit = (hash >> (index % 32)) & 1
-        const textBit = (text.charCodeAt(index % text.length) + index) % 3
-        if ((bit === 1 && textBit !== 0) || (row + col) % 7 === 0) {
-          paths += `<rect x="${col * moduleSize}" y="${row * moduleSize}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`
-        }
-      } else if (row === 6 || col === 6) {
-        if ((row + col) % 2 === 0) {
-          paths += `<rect x="${col * moduleSize}" y="${row * moduleSize}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`
-        }
-      }
-    }
-  }
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-    <rect width="${size}" height="${size}" fill="white"/>
-    ${paths}
-  </svg>`
-}
-
-function hashString(str: string): number {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
-  }
-  return Math.abs(hash)
+  lotId: string;
+  lotNumber: string;
+  projectId: string;
+  size?: 'small' | 'medium' | 'large';
 }
 
 const sizeMap = {
   small: 32,
   medium: 64,
-  large: 120
+  large: 120,
+};
+const INVALID_DOWNLOAD_FILENAME_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*']);
+
+function sanitizeQrDownloadFilename(filename: string): string {
+  const sanitized = Array.from(filename)
+    .map((char) =>
+      INVALID_DOWNLOAD_FILENAME_CHARS.has(char) || char.charCodeAt(0) < 32 ? '-' : char,
+    )
+    .join('')
+    .replace(/\s+/g, ' ')
+    .replace(/^[.\-\s]+/, '')
+    .trim();
+
+  const fallback = sanitized || 'qr-code.svg';
+  return fallback.toLowerCase().endsWith('.svg') ? fallback : `${fallback}.svg`;
 }
 
 export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQRCodeProps) {
-  const [showModal, setShowModal] = useState(false)
-  const qrUrl = `${window.location.origin}/projects/${projectId}/lots/${lotId}`
-  const pixelSize = sizeMap[size]
+  const [showModal, setShowModal] = useState(false);
+  const [qrSvg, setQrSvg] = useState('');
+  const [modalQrSvg, setModalQrSvg] = useState('');
+  const [qrError, setQrError] = useState<string | null>(null);
+  const qrUrl = `${window.location.origin}/projects/${projectId}/lots/${lotId}`;
+  const pixelSize = sizeMap[size];
 
-  const handlePrint = () => {
-    const printWindow = window.open('', '_blank')
+  useEffect(() => {
+    let cancelled = false;
+
+    setQrSvg('');
+    setModalQrSvg('');
+    setQrError(null);
+
+    Promise.all([generateQrSvg(qrUrl, pixelSize), generateQrSvg(qrUrl, 200)])
+      .then(([inlineSvg, modalSvg]) => {
+        if (!cancelled) {
+          setQrSvg(inlineSvg);
+          setModalQrSvg(modalSvg);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setQrError('QR unavailable');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pixelSize, qrUrl]);
+
+  const handlePrint = async () => {
+    const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('Please allow popups to print')
-      return
+      toast({
+        title: 'Popup blocked',
+        description: 'Allow popups to print the QR code.',
+        variant: 'warning',
+      });
+      return;
     }
+    printWindow.opener = null;
 
-    const qrSvg = generateQRSVG(qrUrl, 200)
+    let printQrSvg: string;
+
+    try {
+      printQrSvg = await generateQrSvg(qrUrl, 200);
+    } catch {
+      toast({
+        title: 'Could not generate QR code',
+        description: 'Please try printing again.',
+        variant: 'error',
+      });
+      printWindow.close();
+      return;
+    }
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>QR Code - ${lotNumber}</title>
+          <title>QR Code - ${escapeHtml(lotNumber)}</title>
           <style>
             body {
               display: flex;
@@ -128,29 +129,35 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
         </head>
         <body>
           <div class="qr-container">
-            ${qrSvg}
-            <div class="lot-number">${lotNumber}</div>
-            <div class="url">${qrUrl}</div>
+            ${DOMPurify.sanitize(printQrSvg)}
+            <div class="lot-number">${escapeHtml(lotNumber)}</div>
+            <div class="url">${escapeHtml(qrUrl)}</div>
           </div>
         </body>
       </html>
-    `)
-    printWindow.document.close()
-    setTimeout(() => printWindow.print(), 250)
-  }
+    `);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 250);
+  };
 
-  const handleDownload = () => {
-    const qrSvg = generateQRSVG(qrUrl, 300)
-    const blob = new Blob([qrSvg], { type: 'image/svg+xml' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `qr-${lotNumber}.svg`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
+  const handleDownload = async () => {
+    let downloadQrSvg: string;
+
+    try {
+      downloadQrSvg = await generateQrSvg(qrUrl, 300);
+    } catch {
+      toast({
+        title: 'Could not generate QR code',
+        description: 'Please try the download again.',
+        variant: 'error',
+      });
+      return;
+    }
+
+    const safeDownloadQrSvg = DOMPurify.sanitize(downloadQrSvg);
+    const blob = new Blob([safeDownloadQrSvg], { type: 'image/svg+xml' });
+    downloadBlob(blob, sanitizeQrDownloadFilename(`qr-${lotNumber}.svg`), 'qr-code.svg');
+  };
 
   return (
     <>
@@ -159,10 +166,19 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
         className="flex items-center gap-1.5 p-1.5 rounded border hover:bg-muted/50 transition-colors"
         title="View QR Code"
       >
-        <div
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(generateQRSVG(qrUrl, pixelSize)) }}
-          style={{ width: pixelSize, height: pixelSize }}
-        />
+        {qrSvg ? (
+          <div
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(qrSvg) }}
+            style={{ width: pixelSize, height: pixelSize }}
+          />
+        ) : (
+          <div
+            className="flex items-center justify-center bg-white text-[8px] text-muted-foreground"
+            style={{ width: pixelSize, height: pixelSize }}
+          >
+            {qrError ? '!' : ''}
+          </div>
+        )}
       </button>
 
       {/* QR Code Modal */}
@@ -177,10 +193,18 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
 
           <ModalBody>
             <div className="flex flex-col items-center">
-              <div
-                className="p-4 border rounded-lg bg-white"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(generateQRSVG(qrUrl, 200)) }}
-              />
+              <div className="p-4 border rounded-lg bg-white">
+                {modalQrSvg ? (
+                  <div
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(modalQrSvg) }}
+                    style={{ width: 200, height: 200 }}
+                  />
+                ) : (
+                  <div className="flex h-[200px] w-[200px] items-center justify-center text-sm text-muted-foreground">
+                    {qrError ?? 'Generating QR'}
+                  </div>
+                )}
+              </div>
               <p className="mt-3 font-bold text-xl">{lotNumber}</p>
               <p className="mt-1 text-xs text-muted-foreground text-center break-all px-4">
                 {qrUrl}
@@ -189,11 +213,11 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
           </ModalBody>
 
           <ModalFooter>
-            <Button variant="outline" onClick={handleDownload} className="flex-1">
+            <Button variant="outline" onClick={handleDownload} disabled={!qrSvg} className="flex-1">
               <Download className="h-4 w-4" />
               Download
             </Button>
-            <Button onClick={handlePrint} className="flex-1">
+            <Button onClick={handlePrint} disabled={!qrSvg} className="flex-1">
               <Printer className="h-4 w-4" />
               Print
             </Button>
@@ -205,5 +229,5 @@ export function LotQRCode({ lotId, lotNumber, projectId, size = 'small' }: LotQR
         </Modal>
       )}
     </>
-  )
+  );
 }

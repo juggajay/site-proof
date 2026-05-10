@@ -1,21 +1,14 @@
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
 interface SkeletonProps {
-  className?: string
+  className?: string;
 }
 
 /**
  * Basic skeleton pulse animation element
  */
 export function Skeleton({ className }: SkeletonProps) {
-  return (
-    <div
-      className={cn(
-        'animate-pulse rounded-md bg-muted',
-        className
-      )}
-    />
-  )
+  return <div className={cn('animate-pulse rounded-md bg-muted', className)} />;
 }
 
 /**
@@ -30,7 +23,7 @@ export function TableRowSkeleton({ columns = 5 }: { columns?: number }) {
         </td>
       ))}
     </tr>
-  )
+  );
 }
 
 /**
@@ -49,7 +42,7 @@ export function CardSkeleton() {
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-5/6" />
     </div>
-  )
+  );
 }
 
 /**
@@ -65,7 +58,7 @@ export function ListItemSkeleton() {
       </div>
       <Skeleton className="h-6 w-16 rounded-full" />
     </div>
-  )
+  );
 }
 
 /**
@@ -99,7 +92,7 @@ export function LotsTableSkeleton({ rows = 5 }: { rows?: number }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 /**
@@ -123,7 +116,7 @@ export function ProjectsGridSkeleton({ count = 6 }: { count?: number }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 /**
@@ -144,7 +137,7 @@ export function StatCardsSkeleton({ count = 4 }: { count?: number }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 /**
@@ -171,7 +164,7 @@ export function PageSkeleton() {
       {/* Content skeleton */}
       <LotsTableSkeleton />
     </div>
-  )
+  );
 }
 
-export default Skeleton
+export default Skeleton;

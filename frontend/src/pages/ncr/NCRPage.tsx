@@ -1,74 +1,105 @@
-import { useState, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
-import { useAuth, getAuthToken } from '../../lib/auth'
-import { AlertTriangle, Plus } from 'lucide-react'
-import { useIsMobile } from '@/hooks/useMediaQuery'
-import { ContextFAB } from '@/components/mobile/ContextFAB'
-import { usePullToRefresh } from '@/hooks/usePullToRefresh'
-import { Button } from '@/components/ui/button'
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useAuth, getAuthToken } from '../../lib/auth';
+import { AlertTriangle, Plus } from 'lucide-react';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { ContextFAB } from '@/components/mobile/ContextFAB';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { Button } from '@/components/ui/button';
 
 // Types
-import type { NCR } from './types'
+import type { NCR } from './types';
 
 // Hooks
-import { useNCRData } from './hooks/useNCRData'
-import { useNCRActions } from './hooks/useNCRActions'
-import { useNCRModals } from './hooks/useNCRModals'
+import { useNCRData } from './hooks/useNCRData';
+import { useNCRActions } from './hooks/useNCRActions';
+import { useNCRModals } from './hooks/useNCRModals';
 
 // Extracted components
-import { NCRFilters } from './components/NCRFilters'
-import { NCRTable } from './components/NCRTable'
-import { NCRMobileList } from './components/NCRMobileList'
-import { CreateNCRModal } from './components/CreateNCRModal'
-import { RespondNCRModal } from './components/RespondNCRModal'
-import { RectifyNCRModal } from './components/RectifyNCRModal'
-import { QMReviewModal } from './components/QMReviewModal'
-import { NotifyClientModal } from './components/NotifyClientModal'
-import { RejectRectificationModal } from './components/RejectRectificationModal'
-import { CloseNCRModal } from './components/CloseNCRModal'
-import { ConcessionModal } from './components/ConcessionModal'
+import { NCRFilters } from './components/NCRFilters';
+import { NCRTable } from './components/NCRTable';
+import { NCRMobileList } from './components/NCRMobileList';
+import { CreateNCRModal } from './components/CreateNCRModal';
+import { RespondNCRModal } from './components/RespondNCRModal';
+import { RectifyNCRModal } from './components/RectifyNCRModal';
+import { QMReviewModal } from './components/QMReviewModal';
+import { NotifyClientModal } from './components/NotifyClientModal';
+import { RejectRectificationModal } from './components/RejectRectificationModal';
+import { CloseNCRModal } from './components/CloseNCRModal';
+import { ConcessionModal } from './components/ConcessionModal';
 
 export function NCRPage() {
-  const { projectId } = useParams()
-  useAuth()
-  const token = getAuthToken()
-  const isMobile = useIsMobile()
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  useAuth();
+  const token = getAuthToken();
+  const isMobile = useIsMobile();
 
   // Data fetching + polling
-  const { ncrs, loading, error, setError, userRole, fetchNcrs } = useNCRData({ projectId, token })
+  const { ncrs, loading, error, setError, userRole, fetchNcrs } = useNCRData({ projectId, token });
 
   // Modal state
-  const { activeModal, selectedNcr, openModal, closeModal, selectNcr } = useNCRModals()
+  const { activeModal, selectedNcr, openModal, closeModal, selectNcr } = useNCRModals();
+
+  useEffect(() => {
+    if (!projectId || searchParams.get('create') !== '1') return;
+
+    openModal('create');
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('create');
+    navigate(
+      {
+        search: nextSearchParams.toString(),
+      },
+      { replace: true },
+    );
+  }, [projectId, searchParams, openModal, navigate]);
 
   // Filter state
-  const [filteredNcrs, setFilteredNcrs] = useState<NCR[]>([])
+  const [filteredNcrs, setFilteredNcrs] = useState<NCR[] | null>(null);
 
   // Actions (API handlers)
   const {
-    actionLoading, successMessage, copiedNcrId,
-    handleCreateNcr, handleRespond, handleRequestQmApproval,
-    handleCloseNcr, handleCloseWithConcession, handleExportCSV,
+    actionLoading,
+    successMessage,
+    copiedNcrId,
+    handleCreateNcr,
+    handleRespond,
+    handleRequestQmApproval,
+    handleCloseNcr,
+    handleCloseWithConcession,
+    handleExportCSV,
     handleCopyNcrLink,
-  } = useNCRActions({ projectId, fetchNcrs, setError, closeModal })
+  } = useNCRActions({ projectId, fetchNcrs, setError, closeModal });
 
   // Pull-to-refresh for mobile
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({
-    onRefresh: async () => { await fetchNcrs() },
+    onRefresh: async () => {
+      await fetchNcrs();
+    },
     enabled: isMobile,
-  })
+  });
 
   const handleFilteredNcrsChange = useCallback((filtered: NCR[]) => {
-    setFilteredNcrs(filtered)
-  }, [])
+    setFilteredNcrs(filtered);
+  }, []);
+
+  const displayedNcrs = filteredNcrs ?? ncrs;
 
   // --- Render ---
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div
+        className="flex items-center justify-center h-64"
+        role="status"
+        aria-label="Loading NCRs"
+      >
+        <span className="sr-only">Loading NCRs...</span>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -82,19 +113,13 @@ export function NCRPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {!isMobile && filteredNcrs.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => handleExportCSV(filteredNcrs)}
-            >
+          {!isMobile && displayedNcrs.length > 0 && (
+            <Button variant="outline" onClick={() => handleExportCSV(displayedNcrs)}>
               Export CSV
             </Button>
           )}
           {projectId && !isMobile && (
-            <Button
-              variant="destructive"
-              onClick={() => openModal('create')}
-            >
+            <Button variant="destructive" onClick={() => openModal('create')}>
               <Plus className="h-4 w-4" />
               Raise NCR
             </Button>
@@ -104,14 +129,34 @@ export function NCRPage() {
 
       {/* Messages */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex justify-between items-center">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-700 hover:text-red-900">&times;</button>
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>{error}</span>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={fetchNcrs}>
+                Try again
+              </Button>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-red-700 hover:text-red-900"
+                aria-label="Dismiss NCR error"
+              >
+                &times;
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {successMessage && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+        <div
+          role="status"
+          className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg"
+        >
           {successMessage}
         </div>
       )}
@@ -127,28 +172,36 @@ export function NCRPage() {
       )}
 
       {/* Filters */}
-      <NCRFilters
-        ncrs={ncrs}
-        isMobile={isMobile}
-        onFilteredNcrsChange={handleFilteredNcrsChange}
-      />
+      <NCRFilters ncrs={ncrs} isMobile={isMobile} onFilteredNcrsChange={handleFilteredNcrsChange} />
 
       {/* NCR List */}
-      {filteredNcrs.length === 0 ? (
+      {!error && displayedNcrs.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg border">
-          <svg className="mx-auto h-12 w-12 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="mx-auto h-12 w-12 text-muted-foreground"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <h3 className="mt-2 text-lg font-medium">
             {ncrs.length === 0 ? 'No NCRs found' : 'No NCRs match your filters'}
           </h3>
           <p className="mt-1 text-muted-foreground">
-            {ncrs.length === 0 ? 'Great! No non-conformances have been raised.' : 'Try adjusting your filter criteria.'}
+            {ncrs.length === 0
+              ? 'Great! No non-conformances have been raised.'
+              : 'Try adjusting your filter criteria.'}
           </p>
         </div>
-      ) : isMobile ? (
+      ) : !error && isMobile ? (
         <NCRMobileList
-          ncrs={filteredNcrs}
+          ncrs={displayedNcrs}
           containerRef={containerRef}
           pullDistance={pullDistance}
           isRefreshing={isRefreshing}
@@ -156,9 +209,9 @@ export function NCRPage() {
           onSelectNcr={selectNcr}
           onCopyLink={handleCopyNcrLink}
         />
-      ) : (
+      ) : !error ? (
         <NCRTable
-          ncrs={filteredNcrs}
+          ncrs={displayedNcrs}
           userRole={userRole}
           actionLoading={actionLoading}
           copiedNcrId={copiedNcrId}
@@ -172,7 +225,7 @@ export function NCRPage() {
           onClose={(ncr) => openModal('close', ncr)}
           onConcession={(ncr) => openModal('concession', ncr)}
         />
-      )}
+      ) : null}
 
       {/* Modals */}
       <CreateNCRModal
@@ -252,5 +305,5 @@ export function NCRPage() {
         />
       )}
     </div>
-  )
+  );
 }

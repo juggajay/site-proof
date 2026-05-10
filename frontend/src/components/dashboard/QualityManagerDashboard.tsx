@@ -1,10 +1,11 @@
 // Feature #293: Quality Manager Dashboard
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { apiFetch } from '@/lib/api'
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -17,72 +18,72 @@ import {
   ChevronRight,
   Shield,
   BarChart3,
-  AlertCircle
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+  AlertCircle,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface QMDashboardData {
   // Lot conformance
   lotConformance: {
-    totalLots: number
-    conformingLots: number
-    nonConformingLots: number
-    rate: number // percentage
-  }
+    totalLots: number;
+    conformingLots: number;
+    nonConformingLots: number;
+    rate: number; // percentage
+  };
   // NCRs by category
   ncrsByCategory: {
-    major: number
-    minor: number
-    observation: number
-    total: number
-  }
+    major: number;
+    minor: number;
+    observation: number;
+    total: number;
+  };
   // Open NCRs breakdown
   openNCRs: Array<{
-    id: string
-    ncrNumber: string
-    description: string
-    category: string
-    status: string
-    dueDate: string | null
-    daysOpen: number
-    link: string
-  }>
+    id: string;
+    ncrNumber: string;
+    description: string;
+    category: string;
+    status: string;
+    dueDate: string | null;
+    daysOpen: number;
+    link: string;
+  }>;
   // Pending verifications (ITP items awaiting verification)
   pendingVerifications: {
-    count: number
+    count: number;
     items: Array<{
-      id: string
-      description: string
-      lotNumber: string
-      link: string
-    }>
-  }
+      id: string;
+      description: string;
+      lotNumber: string;
+      link: string;
+    }>;
+  };
   // Hold point release rate
   holdPointMetrics: {
-    totalReleased: number
-    totalPending: number
-    releaseRate: number // percentage
-    avgTimeToRelease: number // hours
-  }
+    totalReleased: number;
+    totalPending: number;
+    releaseRate: number; // percentage
+    avgTimeToRelease: number; // hours
+  };
   // ITP completion trends
   itpTrends: {
-    completedThisWeek: number
-    completedLastWeek: number
-    trend: 'up' | 'down' | 'stable'
-    completionRate: number // percentage
-  }
+    completedThisWeek: number;
+    completedLastWeek: number;
+    trend: 'up' | 'down' | 'stable';
+    completionRate: number; // percentage
+  };
   // Audit readiness
   auditReadiness: {
-    score: number // 0-100
-    status: 'ready' | 'needs_attention' | 'not_ready'
-    issues: string[]
-  }
+    score: number; // 0-100
+    status: 'ready' | 'needs_attention' | 'not_ready';
+    issues: string[];
+  };
   // Project context
   project: {
-    id: string
-    name: string
-    projectNumber: string
-  } | null
+    id: string;
+    name: string;
+    projectNumber: string;
+  } | null;
 }
 
 const defaultQMData: QMDashboardData = {
@@ -93,50 +94,98 @@ const defaultQMData: QMDashboardData = {
   holdPointMetrics: { totalReleased: 0, totalPending: 0, releaseRate: 0, avgTimeToRelease: 0 },
   itpTrends: { completedThisWeek: 0, completedLastWeek: 0, trend: 'stable', completionRate: 0 },
   auditReadiness: { score: 0, status: 'not_ready', issues: [] },
-  project: null
+  project: null,
+};
+
+function getProjectRoute(projectId: string | undefined, suffix: string): string {
+  return projectId ? `/projects/${encodeURIComponent(projectId)}${suffix}` : '/projects';
+}
+
+function getSafeInternalLink(link: string | undefined, fallback: string): string {
+  if (link?.startsWith('/') && !link.startsWith('//')) {
+    return link;
+  }
+  return fallback;
 }
 
 export function QualityManagerDashboard() {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { user: _user } = useAuth()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [refreshing, setRefreshing] = useState(false)
+  const { user: _user } = useAuth();
+  const navigate = useNavigate();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { data = defaultQMData, isLoading: loading } = useQuery({
+  const {
+    data: dashboardData,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: queryKeys.qmDashboard,
     queryFn: () => apiFetch<QMDashboardData>('/api/dashboard/quality-manager'),
-  })
+  });
+  const data = dashboardData ?? defaultQMData;
+  const errorMessage = error
+    ? extractErrorMessage(error, 'Failed to load quality manager dashboard')
+    : null;
+  const hasHardError = Boolean(errorMessage && !dashboardData);
 
   const handleRefresh = () => {
-    setRefreshing(true)
-    queryClient.invalidateQueries({ queryKey: queryKeys.qmDashboard }).then(() => {
-      setRefreshing(false)
-    })
-  }
+    setRefreshing(true);
+    refetch().finally(() => {
+      setRefreshing(false);
+    });
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
-    )
+    );
   }
 
   const getAuditStatusColor = (status: string) => {
     switch (status) {
-      case 'ready': return 'text-green-600 bg-green-100'
-      case 'needs_attention': return 'text-yellow-600 bg-yellow-100'
-      default: return 'text-red-600 bg-red-100'
+      case 'ready':
+        return 'text-green-600 bg-green-100';
+      case 'needs_attention':
+        return 'text-yellow-600 bg-yellow-100';
+      default:
+        return 'text-red-600 bg-red-100';
     }
-  }
+  };
 
   const getAuditStatusIcon = (status: string) => {
     switch (status) {
-      case 'ready': return <CheckCircle2 className="h-5 w-5" />
-      case 'needs_attention': return <AlertCircle className="h-5 w-5" />
-      default: return <XCircle className="h-5 w-5" />
+      case 'ready':
+        return <CheckCircle2 className="h-5 w-5" />;
+      case 'needs_attention':
+        return <AlertCircle className="h-5 w-5" />;
+      default:
+        return <XCircle className="h-5 w-5" />;
     }
+  };
+
+  const projectId = data.project?.id;
+
+  if (hasHardError) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Quality Dashboard</h1>
+            <p className="text-muted-foreground">Quality metrics and conformance overview</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Try again
+          </Button>
+        </div>
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <p className="font-medium">Quality manager dashboard could not be loaded.</p>
+          <p className="mt-1 text-sm">{errorMessage}</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -145,20 +194,34 @@ export function QualityManagerDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Quality Dashboard</h1>
-          <p className="text-muted-foreground">
-            Quality metrics and conformance overview
-          </p>
+          <p className="text-muted-foreground">Quality metrics and conformance overview</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
+
+      {errorMessage && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-medium">Quality manager dashboard data could not be refreshed.</p>
+              <p className="mt-1 text-sm">{errorMessage}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Try again
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Project Context */}
       {data.project && (
@@ -173,8 +236,12 @@ export function QualityManagerDashboard() {
         {/* Lot Conformance Rate */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${data.lotConformance.rate >= 90 ? 'bg-green-100' : data.lotConformance.rate >= 70 ? 'bg-yellow-100' : 'bg-red-100'}`}>
-              <CheckCircle2 className={`h-5 w-5 ${data.lotConformance.rate >= 90 ? 'text-green-600' : data.lotConformance.rate >= 70 ? 'text-yellow-600' : 'text-red-600'}`} />
+            <div
+              className={`p-2 rounded-lg ${data.lotConformance.rate >= 90 ? 'bg-green-100' : data.lotConformance.rate >= 70 ? 'bg-yellow-100' : 'bg-red-100'}`}
+            >
+              <CheckCircle2
+                className={`h-5 w-5 ${data.lotConformance.rate >= 90 ? 'text-green-600' : data.lotConformance.rate >= 70 ? 'text-yellow-600' : 'text-red-600'}`}
+              />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Lot Conformance</p>
@@ -198,7 +265,8 @@ export function QualityManagerDashboard() {
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
-            {data.holdPointMetrics.totalPending} pending • Avg {data.holdPointMetrics.avgTimeToRelease}h to release
+            {data.holdPointMetrics.totalPending} pending • Avg{' '}
+            {data.holdPointMetrics.avgTimeToRelease}h to release
           </div>
         </div>
 
@@ -233,7 +301,9 @@ export function QualityManagerDashboard() {
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
-            {data.auditReadiness.status === 'ready' ? 'Ready for audit' : `${data.auditReadiness.issues.length} issue(s) to address`}
+            {data.auditReadiness.status === 'ready'
+              ? 'Ready for audit'
+              : `${data.auditReadiness.issues.length} issue(s) to address`}
           </div>
         </div>
       </div>
@@ -282,20 +352,24 @@ export function QualityManagerDashboard() {
                 {data.openNCRs.slice(0, 3).map((ncr) => (
                   <button
                     key={ncr.id}
-                    onClick={() => navigate(ncr.link)}
+                    onClick={() =>
+                      navigate(getSafeInternalLink(ncr.link, getProjectRoute(projectId, '/ncr')))
+                    }
                     className="w-full flex items-center justify-between p-2 bg-muted/30 rounded hover:bg-muted/50 text-left"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{ncr.ncrNumber}</p>
                       <p className="text-xs text-muted-foreground truncate">{ncr.description}</p>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded ${ncr.category === 'major' ? 'bg-red-100 text-red-700' : ncr.category === 'minor' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${ncr.category === 'major' ? 'bg-red-100 text-red-700' : ncr.category === 'minor' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}
+                    >
                       {ncr.category}
                     </span>
                   </button>
                 ))}
                 <Link
-                  to="/ncr"
+                  to={getProjectRoute(projectId, '/ncr')}
                   className="block text-sm text-primary hover:underline pt-2"
                 >
                   View all NCRs →
@@ -324,7 +398,9 @@ export function QualityManagerDashboard() {
                 {data.pendingVerifications.items.slice(0, 5).map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => navigate(item.link)}
+                    onClick={() =>
+                      navigate(getSafeInternalLink(item.link, getProjectRoute(projectId, '/itp')))
+                    }
                     className="w-full flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 text-left"
                   >
                     <div>
@@ -359,7 +435,10 @@ export function QualityManagerDashboard() {
             <div className="p-4">
               <div className="grid gap-2 sm:grid-cols-2">
                 {data.auditReadiness.issues.map((issue, idx) => (
-                  <div key={idx} className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <div
+                    key={idx}
+                    className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200"
+                  >
                     <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
                     <span className="text-sm text-amber-800">{issue}</span>
                   </div>
@@ -377,28 +456,28 @@ export function QualityManagerDashboard() {
         </div>
         <div className="p-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <Link
-            to="/ncr"
+            to={getProjectRoute(projectId, '/ncr')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <AlertTriangle className="h-5 w-5 text-red-600" />
             <span className="font-medium">NCR Register</span>
           </Link>
           <Link
-            to="/itp"
+            to={getProjectRoute(projectId, '/itp')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <FileCheck className="h-5 w-5 text-purple-600" />
             <span className="font-medium">ITP Management</span>
           </Link>
           <Link
-            to="/holdpoints"
+            to={getProjectRoute(projectId, '/hold-points')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <ClipboardCheck className="h-5 w-5 text-blue-600" />
             <span className="font-medium">Hold Points</span>
           </Link>
           <Link
-            to="/reports"
+            to={getProjectRoute(projectId, '/reports')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
             <BarChart3 className="h-5 w-5 text-green-600" />
@@ -407,5 +486,5 @@ export function QualityManagerDashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }

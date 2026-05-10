@@ -1,10 +1,10 @@
-import React, { useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { AlertTriangle, MapPin, Eye } from 'lucide-react'
-import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh'
-import { SwipeableCard } from '@/components/foreman/SwipeableCard'
-import type { Lot } from '../lotsPageTypes'
+import React, { useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { AlertTriangle, MapPin, Eye } from 'lucide-react';
+import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
+import { SwipeableCard } from '@/components/foreman/SwipeableCard';
+import type { Lot } from '../lotsPageTypes';
 
 // Feature #438: Okabe-Ito color-blind safe palette
 const statusColors: Record<string, string> = {
@@ -13,7 +13,7 @@ const statusColors: Record<string, string> = {
   completed: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
   on_hold: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200',
   not_started: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
-}
+};
 
 // Status border colors for mobile cards
 const statusBorderColors: Record<string, string> = {
@@ -25,32 +25,32 @@ const statusBorderColors: Record<string, string> = {
   completed: 'border-l-emerald-500',
   conformed: 'border-l-green-600',
   claimed: 'border-l-teal-500',
-}
+};
 
 // Format chainage for display
 function formatChainage(lot: Lot) {
   if (lot.chainageStart != null && lot.chainageEnd != null) {
     return lot.chainageStart === lot.chainageEnd
       ? `${lot.chainageStart}`
-      : `${lot.chainageStart}-${lot.chainageEnd}`
+      : `${lot.chainageStart}-${lot.chainageEnd}`;
   }
-  return lot.chainageStart ?? lot.chainageEnd ?? '\u2014'
+  return lot.chainageStart ?? lot.chainageEnd ?? '\u2014';
 }
 
 interface LotMobileListProps {
-  displayedLots: Lot[]
-  filteredLots: Lot[]
-  allLots: Lot[]
-  isMobile: boolean
-  isSubcontractor: boolean
-  canCreate: boolean
-  projectId: string
-  onContextMenu: (e: React.MouseEvent, lot: Lot) => void
-  onRefresh: () => Promise<void>
+  displayedLots: Lot[];
+  filteredLots: Lot[];
+  allLots: Lot[];
+  isMobile: boolean;
+  isSubcontractor: boolean;
+  canCreate: boolean;
+  projectId: string;
+  onContextMenu: (e: React.MouseEvent, lot: Lot) => void;
+  onRefresh: () => Promise<void>;
   // Infinite scroll
-  loadMoreRef: React.RefObject<HTMLDivElement | null>
-  loadingMore: boolean
-  hasMore: boolean
+  loadMoreRef: React.RefObject<HTMLDivElement | null>;
+  loadingMore: boolean;
+  hasMore: boolean;
 }
 
 export const LotMobileList = React.memo(function LotMobileList({
@@ -67,7 +67,7 @@ export const LotMobileList = React.memo(function LotMobileList({
   loadingMore,
   hasMore,
 }: LotMobileListProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
   // Pull-to-refresh for mobile card view
   const {
@@ -78,17 +78,18 @@ export const LotMobileList = React.memo(function LotMobileList({
   } = usePullToRefresh({
     onRefresh,
     enabled: isMobile,
-  })
+  });
 
   // Scroll container ref for virtualizer (uses pull-to-refresh ref on mobile)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
     count: displayedLots.length,
-    getScrollElement: () => (isMobile ? (pullToRefreshRef.current as HTMLDivElement | null) : scrollContainerRef.current),
+    getScrollElement: () =>
+      isMobile ? (pullToRefreshRef.current as HTMLDivElement | null) : scrollContainerRef.current,
     estimateSize: () => 180, // estimated card height in px
     overscan: 5,
-  })
+  });
 
   return (
     <div
@@ -130,13 +131,15 @@ export const LotMobileList = React.memo(function LotMobileList({
           data-testid="card-grid"
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const lot = displayedLots[virtualRow.index]
-            if (!lot) return null
+            const lot = displayedLots[virtualRow.index];
+            if (!lot) return null;
 
             const cardContent = (
               <div
                 className={`rounded-lg border bg-card p-4 hover:shadow-md transition-shadow cursor-pointer ${
-                  isMobile ? `border-l-4 ${statusBorderColors[lot.status] || 'border-l-gray-400'}` : ''
+                  isMobile
+                    ? `border-l-4 ${statusBorderColors[lot.status] || 'border-l-gray-400'}`
+                    : ''
                 }`}
                 onClick={() => !isMobile && navigate(`/projects/${projectId}/lots/${lot.id}`)}
                 onContextMenu={(e) => onContextMenu(e, lot)}
@@ -144,7 +147,9 @@ export const LotMobileList = React.memo(function LotMobileList({
               >
                 <div className="flex items-start justify-between mb-2">
                   <h3 className="font-semibold text-lg">{lot.lotNumber}</h3>
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}>
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
+                  >
                     {lot.status.replace('_', ' ')}
                   </span>
                 </div>
@@ -164,9 +169,7 @@ export const LotMobileList = React.memo(function LotMobileList({
                     </span>
                   )}
                   {lot.areaZone && (
-                    <span className="bg-muted px-2 py-0.5 rounded">
-                      {lot.areaZone}
-                    </span>
+                    <span className="bg-muted px-2 py-0.5 rounded">{lot.areaZone}</span>
                   )}
                 </div>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t text-xs text-muted-foreground">
@@ -183,7 +186,7 @@ export const LotMobileList = React.memo(function LotMobileList({
                   <span>{lot.createdAt ? new Date(lot.createdAt).toLocaleDateString() : ''}</span>
                 </div>
               </div>
-            )
+            );
 
             // On mobile, wrap in SwipeableCard for swipe gestures
             const cardElement = isMobile ? (
@@ -199,7 +202,7 @@ export const LotMobileList = React.memo(function LotMobileList({
               </SwipeableCard>
             ) : (
               cardContent
-            )
+            );
 
             return (
               <div
@@ -217,7 +220,7 @@ export const LotMobileList = React.memo(function LotMobileList({
               >
                 {cardElement}
               </div>
-            )
+            );
           })}
         </div>
       )}
@@ -226,8 +229,19 @@ export const LotMobileList = React.memo(function LotMobileList({
         {loadingMore && (
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
             </svg>
             <span className="text-sm">Loading more lots...</span>
           </div>
@@ -244,5 +258,5 @@ export const LotMobileList = React.memo(function LotMobileList({
         )}
       </div>
     </div>
-  )
-})
+  );
+});

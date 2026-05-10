@@ -1,15 +1,21 @@
-import { useState, useMemo, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { apiFetch } from '@/lib/api'
-import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard'
-import { ForemanMobileDashboard } from '@/components/foreman'
-import { useIsMobile } from '@/hooks/useMediaQuery'
-import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard'
-import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard'
-import { Button } from '@/components/ui/button'
+import { useState, useMemo, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import {
+  parseJsonPreference,
+  readLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
+import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard';
+import { ForemanMobileDashboard } from '@/components/foreman/ForemanMobileDashboard';
+import { useIsMobile } from '@/hooks/useMediaQuery';
+import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
+import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
+import { Button } from '@/components/ui/button';
 import {
   FolderKanban,
   AlertTriangle,
@@ -30,95 +36,107 @@ import {
   RefreshCw,
   Camera,
   Plus,
-  FlaskConical
-} from 'lucide-react'
+  FlaskConical,
+} from 'lucide-react';
 
 // Date range presets
-type DateRangePreset = 'today' | 'yesterday' | 'last7days' | 'last30days' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'custom'
+type DateRangePreset =
+  | 'today'
+  | 'yesterday'
+  | 'last7days'
+  | 'last30days'
+  | 'thisMonth'
+  | 'lastMonth'
+  | 'thisQuarter'
+  | 'custom';
 
-const DATE_RANGE_PRESETS: { value: DateRangePreset; label: string; getRange: () => { start: Date; end: Date } }[] = [
+const DATE_RANGE_PRESETS: {
+  value: DateRangePreset;
+  label: string;
+  getRange: () => { start: Date; end: Date };
+}[] = [
   {
     value: 'today',
     label: 'Today',
     getRange: () => {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const end = new Date()
-      end.setHours(23, 59, 59, 999)
-      return { start: today, end }
-    }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      return { start: today, end };
+    },
   },
   {
     value: 'yesterday',
     label: 'Yesterday',
     getRange: () => {
-      const yesterday = new Date()
-      yesterday.setDate(yesterday.getDate() - 1)
-      yesterday.setHours(0, 0, 0, 0)
-      const end = new Date(yesterday)
-      end.setHours(23, 59, 59, 999)
-      return { start: yesterday, end }
-    }
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0, 0, 0, 0);
+      const end = new Date(yesterday);
+      end.setHours(23, 59, 59, 999);
+      return { start: yesterday, end };
+    },
   },
   {
     value: 'last7days',
     label: 'Last 7 Days',
     getRange: () => {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - 6)
-      start.setHours(0, 0, 0, 0)
-      return { start, end }
-    }
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    },
   },
   {
     value: 'last30days',
     label: 'Last 30 Days',
     getRange: () => {
-      const end = new Date()
-      const start = new Date()
-      start.setDate(start.getDate() - 29)
-      start.setHours(0, 0, 0, 0)
-      return { start, end }
-    }
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+      return { start, end };
+    },
   },
   {
     value: 'thisMonth',
     label: 'This Month',
     getRange: () => {
-      const now = new Date()
-      const start = new Date(now.getFullYear(), now.getMonth(), 1)
-      const end = new Date()
-      return { start, end }
-    }
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date();
+      return { start, end };
+    },
   },
   {
     value: 'lastMonth',
     label: 'Last Month',
     getRange: () => {
-      const now = new Date()
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const end = new Date(now.getFullYear(), now.getMonth(), 0)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    },
   },
   {
     value: 'thisQuarter',
     label: 'This Quarter',
     getRange: () => {
-      const now = new Date()
-      const quarter = Math.floor(now.getMonth() / 3)
-      const start = new Date(now.getFullYear(), quarter * 3, 1)
-      const end = new Date()
-      return { start, end }
-    }
+      const now = new Date();
+      const quarter = Math.floor(now.getMonth() / 3);
+      const start = new Date(now.getFullYear(), quarter * 3, 1);
+      const end = new Date();
+      return { start, end };
+    },
   },
-]
+];
 
 const formatDateForApi = (date: Date): string => {
-  return date.toISOString().split('T')[0]
-}
+  return date.toISOString().split('T')[0];
+};
 
 // Widget configuration
 const WIDGET_CONFIG = [
@@ -129,113 +147,151 @@ const WIDGET_CONFIG = [
   { id: 'holdPoints', label: 'Hold Points', required: false },
   { id: 'ncrs', label: 'NCRs', required: false },
   { id: 'quickLinks', label: 'Quick Links', required: false },
-] as const
+] as const;
 
-type WidgetId = typeof WIDGET_CONFIG[number]['id']
+type WidgetId = (typeof WIDGET_CONFIG)[number]['id'];
 
-const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = ['attentionItems', 'projectSummary', 'recentActivity', 'lotStatus', 'holdPoints', 'ncrs', 'quickLinks']
+const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = [
+  'attentionItems',
+  'projectSummary',
+  'recentActivity',
+  'lotStatus',
+  'holdPoints',
+  'ncrs',
+  'quickLinks',
+];
 
-const WIDGET_STORAGE_KEY = 'siteproof_dashboard_widgets'
+const WIDGET_STORAGE_KEY = 'siteproof_dashboard_widgets';
+const VALID_WIDGET_IDS = new Set<WidgetId>(WIDGET_CONFIG.map((widget) => widget.id));
 
-interface Project {
-  id: string
-  name: string
-  projectNumber: string
-  status: string
+function getSafeInternalLink(link: string | undefined, fallback: string): string {
+  if (link?.startsWith('/') && !link.startsWith('//')) {
+    return link;
+  }
+  return fallback;
+}
+
+function formatActivityTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown time';
+  }
+  return date.toLocaleString();
+}
+
+function parseVisibleWidgetsPreference(raw: string | null): WidgetId[] {
+  return parseJsonPreference(raw, DEFAULT_VISIBLE_WIDGETS, (value) => {
+    if (!Array.isArray(value)) return null;
+
+    const widgets = value.filter(
+      (item): item is WidgetId =>
+        typeof item === 'string' && VALID_WIDGET_IDS.has(item as WidgetId),
+    );
+
+    return Array.from(new Set(widgets));
+  });
 }
 
 interface AttentionItem {
-  id: string
-  type: 'ncr' | 'holdpoint'
-  title: string
-  description: string
-  status: string
-  daysOverdue?: number
-  daysStale?: number
-  dueDate?: string
+  id: string;
+  type: 'ncr' | 'holdpoint';
+  title: string;
+  description: string;
+  status: string;
+  daysOverdue?: number;
+  daysStale?: number;
+  dueDate?: string;
   project: {
-    id: string
-    name: string
-    projectNumber: string
-  }
-  link: string
+    id: string;
+    name: string;
+    projectNumber: string;
+  };
+  link: string;
 }
 
 interface DashboardStats {
-  totalProjects: number
-  activeProjects: number
-  totalLots: number
-  openHoldPoints: number
-  openNCRs: number
+  totalProjects: number;
+  activeProjects: number;
+  totalLots: number;
+  openHoldPoints: number;
+  openNCRs: number;
   attentionItems: {
-    overdueNCRs: AttentionItem[]
-    staleHoldPoints: AttentionItem[]
-    total: number
-  }
+    overdueNCRs: AttentionItem[];
+    staleHoldPoints: AttentionItem[];
+    total: number;
+  };
   recentActivities: Array<{
-    id: string
-    type: string
-    description: string
-    timestamp: string
-    link?: string
-  }>
+    id: string;
+    type: string;
+    description: string;
+    timestamp: string;
+    link?: string;
+  }>;
 }
 
-export function DashboardPage() {
-  const { user } = useAuth()
-  const navigate = useNavigate()
+type DashboardUser = ReturnType<typeof useAuth>['user'];
+type DashboardRoleUser = NonNullable<DashboardUser> & {
+  roleInCompany?: string | null;
+};
 
-  // Call hooks before any early returns (React hook rules)
-  const isMobile = useIsMobile()
-  const queryClient = useQueryClient()
+export function DashboardPage() {
+  const { user } = useAuth();
+  const isMobile = useIsMobile();
 
   // Feature #292, #293, #294: Check user role for role-specific dashboards
-  const userRole = (user as any)?.roleInCompany || (user as any)?.role
-  const isForeman = userRole === 'foreman'
-  const isQualityManager = userRole === 'quality_manager'
-  const isProjectManager = userRole === 'project_manager'
+  const roleUser = user as DashboardRoleUser | null;
+  const userRole = roleUser?.roleInCompany || roleUser?.role;
+  const isForeman = userRole === 'foreman';
+  const isQualityManager = userRole === 'quality_manager';
+  const isProjectManager = userRole === 'project_manager';
 
   // Render mobile or desktop foreman dashboard based on screen size
   if (isForeman) {
-    return isMobile ? <ForemanMobileDashboard /> : <ForemanDashboard />
+    return isMobile ? <ForemanMobileDashboard /> : <ForemanDashboard />;
   }
 
   // Feature #293: Render quality manager dashboard for QM role
   if (isQualityManager) {
-    return <QualityManagerDashboard />
+    return <QualityManagerDashboard />;
   }
 
   // Feature #294: Render project manager dashboard for PM role
   if (isProjectManager) {
-    return <ProjectManagerDashboard />
+    return <ProjectManagerDashboard />;
   }
 
+  return <DefaultDashboard user={user} />;
+}
+
+function DefaultDashboard({ user }: { user: DashboardUser }) {
+  const navigate = useNavigate();
+
   // Date range filter state
-  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>('last30days')
-  const [showDateRangeDropdown, setShowDateRangeDropdown] = useState(false)
+  const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>('last30days');
+  const [showDateRangeDropdown, setShowDateRangeDropdown] = useState(false);
 
   // Get current date range based on preset
   const currentDateRange = useMemo(() => {
-    const preset = DATE_RANGE_PRESETS.find(p => p.value === dateRangePreset)
+    const preset = DATE_RANGE_PRESETS.find((p) => p.value === dateRangePreset);
     if (preset) {
-      const range = preset.getRange()
+      const range = preset.getRange();
       return {
         preset: dateRangePreset,
         startDate: formatDateForApi(range.start),
         endDate: formatDateForApi(range.end),
-        label: preset.label
-      }
+        label: preset.label,
+      };
     }
     // Default to last 30 days
-    const defaultPreset = DATE_RANGE_PRESETS.find(p => p.value === 'last30days')!
-    const range = defaultPreset.getRange()
+    const defaultPreset = DATE_RANGE_PRESETS.find((p) => p.value === 'last30days')!;
+    const range = defaultPreset.getRange();
     return {
       preset: 'last30days' as DateRangePreset,
       startDate: formatDateForApi(range.start),
       endDate: formatDateForApi(range.end),
-      label: defaultPreset.label
-    }
-  }, [dateRangePreset])
+      label: defaultPreset.label,
+    };
+  }, [dateRangePreset]);
 
   const defaultStats: DashboardStats = {
     totalProjects: 0,
@@ -246,102 +302,89 @@ export function DashboardPage() {
     attentionItems: {
       overdueNCRs: [],
       staleHoldPoints: [],
-      total: 0
+      total: 0,
     },
     recentActivities: [],
-  }
+  };
 
-  // Widget visibility state with localStorage persistence
+  // Widget visibility state with local storage persistence
   const [visibleWidgets, setVisibleWidgets] = useState<WidgetId[]>(() => {
-    try {
-      const stored = localStorage.getItem(WIDGET_STORAGE_KEY)
-      if (stored) {
-        return JSON.parse(stored) as WidgetId[]
-      }
-    } catch (e) {
-      console.error('Error loading widget preferences:', e)
-    }
-    return DEFAULT_VISIBLE_WIDGETS
-  })
+    return parseVisibleWidgetsPreference(readLocalStorageItem(WIDGET_STORAGE_KEY));
+  });
 
-  const [showWidgetSettings, setShowWidgetSettings] = useState(false)
+  const [showWidgetSettings, setShowWidgetSettings] = useState(false);
 
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Primary dashboard stats query
-  const { data: statsData, isLoading: statsLoading } = useQuery({
+  const {
+    data: statsData,
+    isLoading: statsLoading,
+    error: statsError,
+    refetch: refetchStats,
+  } = useQuery({
     queryKey: queryKeys.dashboardStats(currentDateRange.startDate, currentDateRange.endDate),
     queryFn: async () => {
       const params = new URLSearchParams({
         startDate: currentDateRange.startDate,
         endDate: currentDateRange.endDate,
-      })
-      try {
-        const result = await apiFetch<DashboardStats>(`/api/dashboard/stats?${params}`)
-        return {
-          totalProjects: result.totalProjects || 0,
-          activeProjects: result.activeProjects || 0,
-          totalLots: result.totalLots || 0,
-          openHoldPoints: result.openHoldPoints || 0,
-          openNCRs: result.openNCRs || 0,
-          attentionItems: result.attentionItems || { overdueNCRs: [], staleHoldPoints: [], total: 0 },
-          recentActivities: result.recentActivities || [],
-        } as DashboardStats
-      } catch {
-        // Fallback to projects endpoint if dashboard stats fails
-        const data = await apiFetch<{ projects: Project[] }>('/api/projects')
-        const projectList = data.projects || []
-        return {
-          totalProjects: projectList.length,
-          activeProjects: projectList.filter((p: Project) => p.status === 'active').length,
-          totalLots: 0,
-          openHoldPoints: 0,
-          openNCRs: 0,
-          attentionItems: { overdueNCRs: [], staleHoldPoints: [], total: 0 },
-          recentActivities: [
-            { id: '1', type: 'lot', description: 'Lot LOT-001 status changed to completed', timestamp: new Date().toISOString() },
-            { id: '2', type: 'ncr', description: 'New NCR raised: NCR-2024-001', timestamp: new Date(Date.now() - 3600000).toISOString() },
-            { id: '3', type: 'holdpoint', description: 'Hold point released for concrete pour', timestamp: new Date(Date.now() - 7200000).toISOString() },
-          ],
-        } as DashboardStats
-      }
+      });
+      const result = await apiFetch<DashboardStats>(`/api/dashboard/stats?${params}`);
+      return {
+        totalProjects: result.totalProjects || 0,
+        activeProjects: result.activeProjects || 0,
+        totalLots: result.totalLots || 0,
+        openHoldPoints: result.openHoldPoints || 0,
+        openNCRs: result.openNCRs || 0,
+        attentionItems: result.attentionItems || {
+          overdueNCRs: [],
+          staleHoldPoints: [],
+          total: 0,
+        },
+        recentActivities: result.recentActivities || [],
+      } as DashboardStats;
     },
-  })
+  });
 
-  const stats = statsData ?? defaultStats
-  const loading = statsLoading
+  const stats = statsData ?? defaultStats;
+  const loading = statsLoading;
+  const hasStatsData = Boolean(statsData);
+  const statsErrorMessage = statsError
+    ? extractErrorMessage(statsError, 'Failed to load dashboard data')
+    : null;
+  const hasHardStatsError = Boolean(statsErrorMessage && !hasStatsData);
 
   const handleRefresh = useCallback(() => {
-    setIsRefreshing(true)
-    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }).then(() => {
-      setIsRefreshing(false)
-    })
-  }, [queryClient])
+    setIsRefreshing(true);
+    refetchStats().finally(() => {
+      setIsRefreshing(false);
+    });
+  }, [refetchStats]);
 
-  const isWidgetVisible = (widgetId: WidgetId) => visibleWidgets.includes(widgetId)
+  const isWidgetVisible = (widgetId: WidgetId) => visibleWidgets.includes(widgetId);
 
   const toggleWidget = (widgetId: WidgetId) => {
-    setVisibleWidgets(prev => {
-      let newWidgets: WidgetId[]
+    setVisibleWidgets((prev) => {
+      let newWidgets: WidgetId[];
       if (prev.includes(widgetId)) {
-        newWidgets = prev.filter(w => w !== widgetId)
+        newWidgets = prev.filter((w) => w !== widgetId);
       } else {
-        newWidgets = [...prev, widgetId]
+        newWidgets = [...prev, widgetId];
       }
-      localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(newWidgets))
-      return newWidgets
-    })
-  }
+      writeLocalStorageItem(WIDGET_STORAGE_KEY, JSON.stringify(newWidgets));
+      return newWidgets;
+    });
+  };
 
   // Export dashboard to PDF using browser print
   const handleExportPDF = () => {
     // Add print class to body for styling
-    document.body.classList.add('printing-dashboard')
+    document.body.classList.add('printing-dashboard');
 
     // Create a style element for print-specific styles
-    const printStyles = document.createElement('style')
-    printStyles.id = 'dashboard-print-styles'
-    printStyles.innerHTML = `
+    const printStyles = document.createElement('style');
+    printStyles.id = 'dashboard-print-styles';
+    printStyles.textContent = `
       @media print {
         body.printing-dashboard * {
           visibility: hidden;
@@ -373,26 +416,30 @@ export function DashboardPage() {
           margin: 15mm;
         }
       }
-    `
-    document.head.appendChild(printStyles)
+    `;
+    document.head.appendChild(printStyles);
 
     // Trigger print dialog
-    window.print()
+    window.print();
 
     // Cleanup after print
     setTimeout(() => {
-      document.body.classList.remove('printing-dashboard')
-      const styleEl = document.getElementById('dashboard-print-styles')
-      if (styleEl) styleEl.remove()
-    }, 500)
-  }
+      document.body.classList.remove('printing-dashboard');
+      const styleEl = document.getElementById('dashboard-print-styles');
+      if (styleEl) styleEl.remove();
+    }, 500);
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div
+        className="flex items-center justify-center h-64"
+        role="status"
+        aria-label="Loading dashboard"
+      >
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -401,7 +448,8 @@ export function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back{user?.name ? `, ${user.name}` : user?.fullName ? `, ${user.fullName}` : ''}! Here's an overview of your projects.
+            Welcome back{user?.name ? `, ${user.name}` : user?.fullName ? `, ${user.fullName}` : ''}
+            ! Here's an overview of your projects.
           </p>
         </div>
 
@@ -433,8 +481,8 @@ export function DashboardPage() {
                     <button
                       key={preset.value}
                       onClick={() => {
-                        setDateRangePreset(preset.value)
-                        setShowDateRangeDropdown(false)
+                        setDateRangePreset(preset.value);
+                        setShowDateRangeDropdown(false);
                       }}
                       className={`w-full flex items-center justify-between px-2 py-1.5 text-sm hover:bg-muted rounded ${
                         dateRangePreset === preset.value ? 'bg-muted font-medium' : ''
@@ -463,11 +511,7 @@ export function DashboardPage() {
           </Button>
 
           {/* Export PDF Button */}
-          <Button
-            variant="outline"
-            onClick={handleExportPDF}
-            title="Export to PDF"
-          >
+          <Button variant="outline" onClick={handleExportPDF} title="Export to PDF">
             <Download className="h-4 w-4" />
             Export PDF
           </Button>
@@ -483,400 +527,424 @@ export function DashboardPage() {
               Customize
             </Button>
 
-          {showWidgetSettings && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowWidgetSettings(false)}
-              />
-              <div className="absolute right-0 top-full mt-2 w-64 bg-card border rounded-lg shadow-lg z-20 p-2">
-                <div className="px-2 py-1.5 text-sm font-medium border-b mb-2">
-                  Dashboard Widgets
+            {showWidgetSettings && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowWidgetSettings(false)} />
+                <div className="absolute right-0 top-full mt-2 w-64 bg-card border rounded-lg shadow-lg z-20 p-2">
+                  <div className="px-2 py-1.5 text-sm font-medium border-b mb-2">
+                    Dashboard Widgets
+                  </div>
+                  {WIDGET_CONFIG.map((widget) => (
+                    <button
+                      key={widget.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleWidget(widget.id);
+                      }}
+                      className="w-full flex items-center justify-between px-2 py-1.5 text-sm hover:bg-muted rounded"
+                    >
+                      <span>{widget.label}</span>
+                      {isWidgetVisible(widget.id) && <Check className="h-4 w-4 text-primary" />}
+                    </button>
+                  ))}
                 </div>
-                {WIDGET_CONFIG.map((widget) => (
-                  <button
-                    key={widget.id}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleWidget(widget.id)
-                    }}
-                    className="w-full flex items-center justify-between px-2 py-1.5 text-sm hover:bg-muted rounded"
-                  >
-                    <span>{widget.label}</span>
-                    {isWidgetVisible(widget.id) && (
-                      <Check className="h-4 w-4 text-primary" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Date Range Indicator */}
-      <div className="text-sm text-muted-foreground flex items-center gap-2">
-        <Calendar className="h-4 w-4" />
-        <span>Showing data from {currentDateRange.startDate} to {currentDateRange.endDate}</span>
-      </div>
+      {statsErrorMessage && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="font-medium">Dashboard data could not be loaded.</p>
+              <p className="text-sm mt-1">{statsErrorMessage}</p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="border-red-200 hover:bg-red-100 sm:shrink-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Try again
+            </Button>
+          </div>
+        </div>
+      )}
 
-      {/* Items Requiring Attention Widget */}
-      {isWidgetVisible('attentionItems') && stats.attentionItems.total > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg">
-          <div className="p-4 border-b border-red-200 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <h2 className="text-lg font-semibold text-red-700">Items Requiring Attention</h2>
-            <span className="ml-auto bg-red-100 text-red-700 text-sm font-medium px-2.5 py-0.5 rounded-full">
-              {stats.attentionItems.total}
+      {hasHardStatsError ? (
+        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+          Dashboard metrics are unavailable until the data loads successfully.
+        </div>
+      ) : (
+        <>
+          {/* Date Range Indicator */}
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            <span>
+              Showing data from {currentDateRange.startDate} to {currentDateRange.endDate}
             </span>
           </div>
-          <div className="divide-y divide-red-100">
-            {/* Overdue NCRs */}
-            {stats.attentionItems.overdueNCRs.length > 0 && (
-              <div className="p-4">
-                <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Overdue NCRs ({stats.attentionItems.overdueNCRs.length})
-                </h3>
-                <div className="space-y-2">
-                  {stats.attentionItems.overdueNCRs.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => navigate(item.link)}
-                      className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-red-100 hover:border-red-300 hover:bg-red-50 transition-colors text-left"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{item.title}</span>
-                          <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded">
-                            {item.daysOverdue} day{item.daysOverdue !== 1 ? 's' : ''} overdue
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate mt-1">
-                          {item.project.name} • {item.description}
-                        </p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {/* Stale Hold Points */}
-            {stats.attentionItems.staleHoldPoints.length > 0 && (
-              <div className="p-4">
-                <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Stale Hold Points ({stats.attentionItems.staleHoldPoints.length})
-                </h3>
-                <div className="space-y-2">
-                  {stats.attentionItems.staleHoldPoints.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => navigate(item.link)}
-                      className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-amber-100 hover:border-amber-300 hover:bg-amber-50 transition-colors text-left"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{item.title}</span>
-                          <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded">
-                            {item.daysStale} day{item.daysStale !== 1 ? 's' : ''} waiting
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate mt-1">
-                          {item.project.name} • {item.description}
-                        </p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
+          {/* Items Requiring Attention Widget */}
+          {isWidgetVisible('attentionItems') && stats.attentionItems.total > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg">
+              <div className="p-4 border-b border-red-200 flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <h2 className="text-lg font-semibold text-red-700">Items Requiring Attention</h2>
+                <span className="ml-auto bg-red-100 text-red-700 text-sm font-medium px-2.5 py-0.5 rounded-full">
+                  {stats.attentionItems.total}
+                </span>
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Project Summary Widget */}
-      {isWidgetVisible('projectSummary') && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <button
-            onClick={() => navigate('/projects')}
-            className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <FolderKanban className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Projects</p>
-                <p className="text-2xl font-bold">{stats.totalProjects}</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => navigate('/projects?status=active')}
-            className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Active Projects</p>
-                <p className="text-2xl font-bold">{stats.activeProjects}</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => navigate('/projects')}
-            className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-            title="View all lots in projects"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <ListChecks className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Lots</p>
-                <p className="text-2xl font-bold">{stats.totalLots}</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => navigate('/settings/team')}
-            className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-            title="Manage team members"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Users className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Team Members</p>
-                <p className="text-2xl font-bold">—</p>
-              </div>
-            </div>
-          </button>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Recent Activity Widget */}
-        {isWidgetVisible('recentActivity') && (
-          <div className="bg-card rounded-lg border">
-            <div className="p-4 border-b flex items-center gap-2">
-              <Activity className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Recent Activity</h2>
-            </div>
-            <div className="divide-y">
-              {stats.recentActivities.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">
-                  No recent activity
-                </div>
-              ) : (
-                stats.recentActivities.map((activity) => (
-                  <div key={activity.id} className="p-4">
-                    <p className="text-sm">{activity.description}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(activity.timestamp).toLocaleString()}
-                    </p>
+              <div className="divide-y divide-red-100">
+                {/* Overdue NCRs */}
+                {stats.attentionItems.overdueNCRs.length > 0 && (
+                  <div className="p-4">
+                    <h3 className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Overdue NCRs ({stats.attentionItems.overdueNCRs.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {stats.attentionItems.overdueNCRs.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => navigate(getSafeInternalLink(item.link, '/projects'))}
+                          className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-red-100 hover:border-red-300 hover:bg-red-50 transition-colors text-left"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{item.title}</span>
+                              <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded">
+                                {item.daysOverdue} day{item.daysOverdue !== 1 ? 's' : ''} overdue
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate mt-1">
+                              {item.project.name} • {item.description}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+                )}
 
-        {/* Lot Status Widget */}
-        {isWidgetVisible('lotStatus') && (
-          <div className="bg-card rounded-lg border">
-            <div className="p-4 border-b flex items-center gap-2">
-              <ListChecks className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Lot Status Overview</h2>
+                {/* Stale Hold Points */}
+                {stats.attentionItems.staleHoldPoints.length > 0 && (
+                  <div className="p-4">
+                    <h3 className="text-sm font-semibold text-amber-600 mb-2 flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Stale Hold Points ({stats.attentionItems.staleHoldPoints.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {stats.attentionItems.staleHoldPoints.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => navigate(getSafeInternalLink(item.link, '/projects'))}
+                          className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-amber-100 hover:border-amber-300 hover:bg-amber-50 transition-colors text-left"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{item.title}</span>
+                              <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded">
+                                {item.daysStale} day{item.daysStale !== 1 ? 's' : ''} waiting
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate mt-1">
+                              {item.project.name} • {item.description}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="p-4 space-y-1">
-              <button
-                onClick={() => navigate('/projects?lotStatus=draft')}
-                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                  <span className="text-sm">Draft</span>
-                </div>
-                <span className="font-medium">0</span>
-              </button>
-              <button
-                onClick={() => navigate('/projects?lotStatus=in_progress')}
-                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <span className="text-sm">In Progress</span>
-                </div>
-                <span className="font-medium">0</span>
-              </button>
-              <button
-                onClick={() => navigate('/projects?lotStatus=on_hold')}
-                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                  <span className="text-sm">On Hold</span>
-                </div>
-                <span className="font-medium">0</span>
-              </button>
-              <button
-                onClick={() => navigate('/projects?lotStatus=completed')}
-                className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                  <span className="text-sm">Completed</span>
-                </div>
-                <span className="font-medium">0</span>
-              </button>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* Hold Points Widget */}
-        {isWidgetVisible('holdPoints') && (
-          <div className="bg-card rounded-lg border">
-            <div className="p-4 border-b flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Hold Points</h2>
-            </div>
-            <div className="p-4">
+          {/* Project Summary Widget */}
+          {isWidgetVisible('projectSummary') && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <button
-                onClick={() => navigate('/projects?view=holdpoints')}
-                className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
+                onClick={() => navigate('/projects')}
+                className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
               >
-                <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-amber-500" />
-                  <span>Open Hold Points</span>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FolderKanban className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Projects</p>
+                    <p className="text-2xl font-bold">{stats.totalProjects}</p>
+                  </div>
                 </div>
-                <span className="text-2xl font-bold">{stats.openHoldPoints}</span>
               </button>
-              <Link
-                to="/projects?view=holdpoints"
-                className="text-sm text-primary hover:underline"
-              >
-                View all hold points →
-              </Link>
-            </div>
-          </div>
-        )}
 
-        {/* NCRs Widget */}
-        {isWidgetVisible('ncrs') && (
-          <div className="bg-card rounded-lg border">
-            <div className="p-4 border-b flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Non-Conformance Reports</h2>
-            </div>
-            <div className="p-4">
               <button
-                onClick={() => navigate('/projects?view=ncrs')}
-                className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
+                onClick={() => navigate('/projects?status=active')}
+                className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
               >
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-red-500" />
-                  <span>Open NCRs</span>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Active Projects</p>
+                    <p className="text-2xl font-bold">{stats.activeProjects}</p>
+                  </div>
                 </div>
-                <span className="text-2xl font-bold">{stats.openNCRs}</span>
               </button>
-              <Link
-                to="/projects?view=ncrs"
-                className="text-sm text-primary hover:underline"
-              >
-                View all NCRs →
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
 
-      {/* Quick Links Widget */}
-      {isWidgetVisible('quickLinks') && (
-        <div className="bg-card rounded-lg border">
-          <div className="p-4 border-b">
-            <h2 className="text-lg font-semibold">Quick Links</h2>
-          </div>
-          <div className="p-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-            <Link
-              to="/projects"
-              className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
-            >
-              <FolderKanban className="h-5 w-5 text-blue-600" />
-              <span className="font-medium">Projects</span>
-            </Link>
-            <Link
-              to="/portfolio"
-              className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
-            >
-              <FileText className="h-5 w-5 text-purple-600" />
-              <span className="font-medium">Portfolio</span>
-            </Link>
-            <Link
-              to="/reports"
-              className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
-            >
-              <FileText className="h-5 w-5 text-green-600" />
-              <span className="font-medium">Reports</span>
-            </Link>
-            <Link
-              to="/settings"
-              className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
-            >
-              <Settings2 className="h-5 w-5 text-muted-foreground" />
-              <span className="font-medium">Settings</span>
-            </Link>
-          </div>
-          {/* Feature #500: Quick Actions */}
-          <div className="px-4 pb-4">
-            <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Actions</h3>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Link
-                to="/projects?action=photo"
-                className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-colors"
+              <button
+                onClick={() => navigate('/projects')}
+                className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
+                title="View all lots in projects"
               >
-                <Camera className="h-5 w-5 text-orange-600" />
-                <span className="font-medium text-orange-700">Quick Photo</span>
-              </Link>
-              <Link
-                to="/projects?action=create-lot"
-                className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
-              >
-                <Plus className="h-5 w-5 text-blue-600" />
-                <span className="font-medium text-blue-700">Create Lot</span>
-              </Link>
-              <Link
-                to="/projects?action=add-test"
-                className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
-              >
-                <FlaskConical className="h-5 w-5 text-green-600" />
-                <span className="font-medium text-green-700">Add Test</span>
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <ListChecks className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Lots</p>
+                    <p className="text-2xl font-bold">{stats.totalLots}</p>
+                  </div>
+                </div>
+              </button>
 
-      {/* No widgets visible message */}
-      {visibleWidgets.length === 0 && (
-        <div className="bg-muted/50 rounded-lg border-2 border-dashed p-8 text-center">
-          <Settings2 className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-          <p className="text-muted-foreground">
-            No widgets visible. Click "Customize" above to add widgets to your dashboard.
-          </p>
-        </div>
+              <button
+                onClick={() => navigate('/company-settings')}
+                className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
+                title="Manage company settings"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg">
+                    <Users className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Team Members</p>
+                    <p className="text-2xl font-bold">—</p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Recent Activity Widget */}
+            {isWidgetVisible('recentActivity') && (
+              <div className="bg-card rounded-lg border">
+                <div className="p-4 border-b flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="text-lg font-semibold">Recent Activity</h2>
+                </div>
+                <div className="divide-y">
+                  {stats.recentActivities.length === 0 ? (
+                    <div className="p-4 text-center text-muted-foreground">No recent activity</div>
+                  ) : (
+                    stats.recentActivities.map((activity) => (
+                      <div key={activity.id} className="p-4">
+                        <p className="text-sm">{activity.description}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatActivityTimestamp(activity.timestamp)}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Lot Status Widget */}
+            {isWidgetVisible('lotStatus') && (
+              <div className="bg-card rounded-lg border">
+                <div className="p-4 border-b flex items-center gap-2">
+                  <ListChecks className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="text-lg font-semibold">Lot Status Overview</h2>
+                </div>
+                <div className="p-4 space-y-1">
+                  <button
+                    onClick={() => navigate('/projects?lotStatus=draft')}
+                    className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                      <span className="text-sm">Draft</span>
+                    </div>
+                    <span className="font-medium">0</span>
+                  </button>
+                  <button
+                    onClick={() => navigate('/projects?lotStatus=in_progress')}
+                    className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      <span className="text-sm">In Progress</span>
+                    </div>
+                    <span className="font-medium">0</span>
+                  </button>
+                  <button
+                    onClick={() => navigate('/projects?lotStatus=on_hold')}
+                    className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                      <span className="text-sm">On Hold</span>
+                    </div>
+                    <span className="font-medium">0</span>
+                  </button>
+                  <button
+                    onClick={() => navigate('/projects?lotStatus=completed')}
+                    className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      <span className="text-sm">Completed</span>
+                    </div>
+                    <span className="font-medium">0</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Hold Points Widget */}
+            {isWidgetVisible('holdPoints') && (
+              <div className="bg-card rounded-lg border">
+                <div className="p-4 border-b flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="text-lg font-semibold">Hold Points</h2>
+                </div>
+                <div className="p-4">
+                  <button
+                    onClick={() => navigate('/projects?view=holdpoints')}
+                    className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-amber-500" />
+                      <span>Open Hold Points</span>
+                    </div>
+                    <span className="text-2xl font-bold">{stats.openHoldPoints}</span>
+                  </button>
+                  <Link
+                    to="/projects?view=holdpoints"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    View all hold points →
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* NCRs Widget */}
+            {isWidgetVisible('ncrs') && (
+              <div className="bg-card rounded-lg border">
+                <div className="p-4 border-b flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                  <h2 className="text-lg font-semibold">Non-Conformance Reports</h2>
+                </div>
+                <div className="p-4">
+                  <button
+                    onClick={() => navigate('/projects?view=ncrs')}
+                    className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-red-500" />
+                      <span>Open NCRs</span>
+                    </div>
+                    <span className="text-2xl font-bold">{stats.openNCRs}</span>
+                  </button>
+                  <Link to="/projects?view=ncrs" className="text-sm text-primary hover:underline">
+                    View all NCRs →
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Links Widget */}
+          {isWidgetVisible('quickLinks') && (
+            <div className="bg-card rounded-lg border">
+              <div className="p-4 border-b">
+                <h2 className="text-lg font-semibold">Quick Links</h2>
+              </div>
+              <div className="p-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+                <Link
+                  to="/projects"
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
+                >
+                  <FolderKanban className="h-5 w-5 text-blue-600" />
+                  <span className="font-medium">Projects</span>
+                </Link>
+                <Link
+                  to="/portfolio"
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
+                >
+                  <FileText className="h-5 w-5 text-purple-600" />
+                  <span className="font-medium">Portfolio</span>
+                </Link>
+                <Link
+                  to="/projects"
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
+                >
+                  <FileText className="h-5 w-5 text-green-600" />
+                  <span className="font-medium">Reports</span>
+                </Link>
+                <Link
+                  to="/settings"
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
+                >
+                  <Settings2 className="h-5 w-5 text-muted-foreground" />
+                  <span className="font-medium">Settings</span>
+                </Link>
+              </div>
+              {/* Feature #500: Quick Actions */}
+              <div className="px-4 pb-4">
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Actions</h3>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Link
+                    to="/projects?action=photo"
+                    className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-colors"
+                  >
+                    <Camera className="h-5 w-5 text-orange-600" />
+                    <span className="font-medium text-orange-700">Quick Photo</span>
+                  </Link>
+                  <Link
+                    to="/projects?action=create-lot"
+                    className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
+                  >
+                    <Plus className="h-5 w-5 text-blue-600" />
+                    <span className="font-medium text-blue-700">Create Lot</span>
+                  </Link>
+                  <Link
+                    to="/projects?action=add-test"
+                    className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+                  >
+                    <FlaskConical className="h-5 w-5 text-green-600" />
+                    <span className="font-medium text-green-700">Add Test</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* No widgets visible message */}
+          {visibleWidgets.length === 0 && (
+            <div className="bg-muted/50 rounded-lg border-2 border-dashed p-8 text-center">
+              <Settings2 className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-muted-foreground">
+                No widgets visible. Click "Customize" above to add widgets to your dashboard.
+              </p>
+            </div>
+          )}
+        </>
       )}
     </div>
-  )
+  );
 }

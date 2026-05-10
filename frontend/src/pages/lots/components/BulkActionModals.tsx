@@ -1,34 +1,46 @@
-import { useState } from 'react'
-import { Modal, ModalHeader, ModalBody, ModalFooter, AlertModalHeader, AlertModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { NativeSelect } from '@/components/ui/native-select'
-import { Label } from '@/components/ui/label'
+import { useState } from 'react';
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  AlertModalHeader,
+  AlertModalFooter,
+} from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Label } from '@/components/ui/label';
 
 // =====================
 // Bulk Delete Modal
 // =====================
 
 interface BulkDeleteModalProps {
-  isOpen: boolean
-  selectedCount: number
-  onClose: () => void
-  onConfirm: () => Promise<void>
+  isOpen: boolean;
+  selectedCount: number;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
 }
 
-export function BulkDeleteModal({ isOpen, selectedCount, onClose, onConfirm }: BulkDeleteModalProps) {
-  const [deleting, setDeleting] = useState(false)
+export function BulkDeleteModal({
+  isOpen,
+  selectedCount,
+  onClose,
+  onConfirm,
+}: BulkDeleteModalProps) {
+  const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (deleting) return
-    setDeleting(true)
+    if (deleting) return;
+    setDeleting(true);
     try {
-      await onConfirm()
+      await onConfirm();
     } finally {
-      setDeleting(false)
+      setDeleting(false);
     }
-  }
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal alert onClose={onClose}>
@@ -43,23 +55,15 @@ export function BulkDeleteModal({ isOpen, selectedCount, onClose, onConfirm }: B
         </p>
       </ModalBody>
       <AlertModalFooter>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          disabled={deleting}
-        >
+        <Button variant="outline" onClick={onClose} disabled={deleting}>
           Cancel
         </Button>
-        <Button
-          variant="destructive"
-          onClick={handleDelete}
-          disabled={deleting}
-        >
+        <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
           {deleting ? 'Deleting...' : `Delete ${selectedCount} Lot(s)`}
         </Button>
       </AlertModalFooter>
     </Modal>
-  )
+  );
 }
 
 // =====================
@@ -67,27 +71,32 @@ export function BulkDeleteModal({ isOpen, selectedCount, onClose, onConfirm }: B
 // =====================
 
 interface BulkStatusModalProps {
-  isOpen: boolean
-  selectedCount: number
-  onClose: () => void
-  onConfirm: (status: string) => Promise<void>
+  isOpen: boolean;
+  selectedCount: number;
+  onClose: () => void;
+  onConfirm: (status: string) => Promise<void>;
 }
 
-export function BulkStatusModal({ isOpen, selectedCount, onClose, onConfirm }: BulkStatusModalProps) {
-  const [updating, setUpdating] = useState(false)
-  const [newStatus, setNewStatus] = useState('in_progress')
+export function BulkStatusModal({
+  isOpen,
+  selectedCount,
+  onClose,
+  onConfirm,
+}: BulkStatusModalProps) {
+  const [updating, setUpdating] = useState(false);
+  const [newStatus, setNewStatus] = useState('in_progress');
 
   const handleUpdate = async () => {
-    if (updating) return
-    setUpdating(true)
+    if (updating) return;
+    setUpdating(true);
     try {
-      await onConfirm(newStatus)
+      await onConfirm(newStatus);
     } finally {
-      setUpdating(false)
+      setUpdating(false);
     }
-  }
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={onClose}>
@@ -115,22 +124,15 @@ export function BulkStatusModal({ isOpen, selectedCount, onClose, onConfirm }: B
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          disabled={updating}
-        >
+        <Button variant="outline" onClick={onClose} disabled={updating}>
           Cancel
         </Button>
-        <Button
-          onClick={handleUpdate}
-          disabled={updating}
-        >
+        <Button onClick={handleUpdate} disabled={updating}>
           {updating ? 'Updating...' : 'Update Status'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
 // =====================
@@ -138,28 +140,34 @@ export function BulkStatusModal({ isOpen, selectedCount, onClose, onConfirm }: B
 // =====================
 
 interface BulkAssignModalProps {
-  isOpen: boolean
-  selectedCount: number
-  subcontractors: { id: string; companyName: string }[]
-  onClose: () => void
-  onConfirm: (subcontractorId: string) => Promise<void>
+  isOpen: boolean;
+  selectedCount: number;
+  subcontractors: { id: string; companyName: string }[];
+  onClose: () => void;
+  onConfirm: (subcontractorId: string) => Promise<void>;
 }
 
-export function BulkAssignModal({ isOpen, selectedCount, subcontractors, onClose, onConfirm }: BulkAssignModalProps) {
-  const [assigning, setAssigning] = useState(false)
-  const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>('')
+export function BulkAssignModal({
+  isOpen,
+  selectedCount,
+  subcontractors,
+  onClose,
+  onConfirm,
+}: BulkAssignModalProps) {
+  const [assigning, setAssigning] = useState(false);
+  const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>('');
 
   const handleAssign = async () => {
-    if (assigning) return
-    setAssigning(true)
+    if (assigning) return;
+    setAssigning(true);
     try {
-      await onConfirm(selectedSubcontractorId)
+      await onConfirm(selectedSubcontractorId);
     } finally {
-      setAssigning(false)
+      setAssigning(false);
     }
-  }
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={onClose}>
@@ -186,20 +194,13 @@ export function BulkAssignModal({ isOpen, selectedCount, subcontractors, onClose
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          disabled={assigning}
-        >
+        <Button variant="outline" onClick={onClose} disabled={assigning}>
           Cancel
         </Button>
-        <Button
-          onClick={handleAssign}
-          disabled={assigning}
-        >
+        <Button onClick={handleAssign} disabled={assigning}>
           {assigning ? 'Assigning...' : 'Assign'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

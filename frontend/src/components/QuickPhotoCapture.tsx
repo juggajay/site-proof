@@ -1,10 +1,13 @@
 // Feature #311: Quick Photo Capture Component for Offline Use
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Camera, X, Check, MapPin, Tag, Image, AlertTriangle } from 'lucide-react';
 import { capturePhotoOffline, OfflinePhoto } from '@/lib/offlineDb';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { SyncStatusBadge } from '@/components/OfflineIndicator';
 import { useAuth } from '@/lib/auth';
+import { toast } from '@/components/ui/toaster';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { logError } from '@/lib/logger';
 
 interface QuickPhotoCaptureProps {
   projectId: string;
@@ -21,11 +24,12 @@ export function QuickPhotoCapture({
   entityType,
   entityId,
   onPhotoCapture,
-  className = ''
+  className = '',
 }: QuickPhotoCaptureProps) {
   const { user } = useAuth();
   const { isOnline } = useOfflineStatus();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -35,11 +39,30 @@ export function QuickPhotoCapture({
   const [gpsPosition, setGpsPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [dimensionWarning, setDimensionWarning] = useState<string | null>(null);
-  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(
+    null,
+  );
 
   // Minimum recommended dimensions for construction photos
   const MIN_WIDTH = 100;
   const MIN_HEIGHT = 100;
+
+  const updatePreviewUrl = useCallback((nextUrl: string | null) => {
+    if (previewUrlRef.current && previewUrlRef.current !== nextUrl) {
+      URL.revokeObjectURL(previewUrlRef.current);
+    }
+    previewUrlRef.current = nextUrl;
+    setPreviewUrl(nextUrl);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
+    };
+  }, []);
 
   // Get GPS position
   const getGpsPosition = useCallback(() => {
@@ -50,14 +73,14 @@ export function QuickPhotoCapture({
       (position) => {
         setGpsPosition({
           lat: position.coords.latitude,
-          lng: position.coords.longitude
+          lng: position.coords.longitude,
         });
       },
       (error) => {
-        console.error('GPS error:', error);
+        logError('GPS error:', error);
         setGpsEnabled(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 },
     );
   }, []);
 
@@ -68,13 +91,26 @@ export function QuickPhotoCapture({
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+      toast({
+        title: 'Select an image file',
+        variant: 'warning',
+      });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
 
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      alert('Image must be smaller than 10MB');
+      toast({
+        title: 'Image too large',
+        description: 'Image must be smaller than 10MB.',
+        variant: 'warning',
+      });
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
 
@@ -91,22 +127,29 @@ export function QuickPhotoCapture({
       // Check minimum dimensions
       if (width < MIN_WIDTH || height < MIN_HEIGHT) {
         setDimensionWarning(
-          `Warning: Image dimensions (${width}x${height}) are below recommended minimum (${MIN_WIDTH}x${MIN_HEIGHT}). Photo may lack detail for documentation.`
+          `Warning: Image dimensions (${width}x${height}) are below recommended minimum (${MIN_WIDTH}x${MIN_HEIGHT}). Photo may lack detail for documentation.`,
         );
       } else {
         setDimensionWarning(null);
       }
 
       setSelectedFile(file);
-      setPreviewUrl(objectUrl);
+      updatePreviewUrl(objectUrl);
       setIsCapturing(true);
 
       // Auto-get GPS when capturing
       getGpsPosition();
     };
     img.onerror = () => {
-      alert('Failed to load image. Please try another file.');
+      toast({
+        title: 'Failed to load image',
+        description: 'Please try another file.',
+        variant: 'error',
+      });
       URL.revokeObjectURL(objectUrl);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     };
     img.src = objectUrl;
   };
@@ -121,7 +164,7 @@ export function QuickPhotoCapture({
   // Cancel capture
   const cancelCapture = () => {
     setIsCapturing(false);
-    setPreviewUrl(null);
+    updatePreviewUrl(null);
     setSelectedFile(null);
     setCaption('');
     setTags('');
@@ -141,8 +184,8 @@ export function QuickPhotoCapture({
     try {
       const tagArray = tags
         .split(',')
-        .map(t => t.trim())
-        .filter(t => t.length > 0);
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
 
       const photo = await capturePhotoOffline(projectId, selectedFile, {
         lotId,
@@ -152,14 +195,18 @@ export function QuickPhotoCapture({
         tags: tagArray.length > 0 ? tagArray : undefined,
         capturedBy: user.id,
         gpsLatitude: gpsPosition?.lat,
-        gpsLongitude: gpsPosition?.lng
+        gpsLongitude: gpsPosition?.lng,
       });
 
       onPhotoCapture?.(photo);
       cancelCapture();
     } catch (error) {
-      console.error('Error saving photo:', error);
-      alert('Failed to save photo. Please try again.');
+      logError('Error saving photo:', error);
+      toast({
+        title: 'Failed to save photo',
+        description: extractErrorMessage(error, 'Please try again.'),
+        variant: 'error',
+      });
     } finally {
       setIsSaving(false);
     }
@@ -185,9 +232,7 @@ export function QuickPhotoCapture({
         >
           <Camera className="h-5 w-5" />
           <span>Quick Photo</span>
-          {!isOnline && (
-            <span className="bg-amber-500 text-xs px-1.5 py-0.5 rounded">Offline</span>
-          )}
+          {!isOnline && <span className="bg-amber-500 text-xs px-1.5 py-0.5 rounded">Offline</span>}
         </button>
       )}
 
@@ -201,10 +246,7 @@ export function QuickPhotoCapture({
                 <Image className="h-5 w-5" />
                 Photo Preview
               </h3>
-              <button
-                onClick={cancelCapture}
-                className="p-1 hover:bg-muted rounded"
-              >
+              <button onClick={cancelCapture} className="p-1 hover:bg-muted rounded">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -335,7 +377,7 @@ export function QuickPhotoCaptureButton({
   entityType,
   entityId,
   onPhotoCapture,
-  variant = 'default'
+  variant = 'default',
 }: QuickPhotoCaptureProps & { variant?: 'default' | 'icon' | 'small' }) {
   const { user } = useAuth();
   const { isOnline: _isOnline } = useOfflineStatus();
@@ -350,12 +392,17 @@ export function QuickPhotoCaptureButton({
         lotId,
         entityType,
         entityId,
-        capturedBy: user.id
+        capturedBy: user.id,
       });
 
       onPhotoCapture?.(photo);
     } catch (error) {
-      console.error('Error capturing photo:', error);
+      logError('Error capturing photo:', error);
+      toast({
+        title: 'Failed to capture photo',
+        description: extractErrorMessage(error, 'Please try again.'),
+        variant: 'error',
+      });
     }
 
     // Reset input
@@ -408,13 +455,15 @@ export function QuickPhotoCaptureButton({
     );
   }
 
-  return <QuickPhotoCapture
-    projectId={projectId}
-    lotId={lotId}
-    entityType={entityType}
-    entityId={entityId}
-    onPhotoCapture={onPhotoCapture}
-  />;
+  return (
+    <QuickPhotoCapture
+      projectId={projectId}
+      lotId={lotId}
+      entityType={entityType}
+      entityId={entityId}
+      onPhotoCapture={onPhotoCapture}
+    />
+  );
 }
 
 export default QuickPhotoCapture;

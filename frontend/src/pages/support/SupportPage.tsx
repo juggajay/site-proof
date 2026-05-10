@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Link } from 'react-router-dom';
 import {
   HelpCircle,
   Mail,
@@ -16,28 +16,77 @@ import {
   ExternalLink,
   Clock,
   HeadphonesIcon,
-} from 'lucide-react'
-import { useAuth } from '@/lib/auth'
-import { apiFetch } from '@/lib/api'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { NativeSelect } from '@/components/ui/native-select'
-import { Textarea } from '@/components/ui/textarea'
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Textarea } from '@/components/ui/textarea';
+import { logError } from '@/lib/logger';
+import { DEFAULT_SUPPORT_EMAIL, supportMailtoHref, telHref } from '@/lib/contactLinks';
+
+const supportCategoryValues = ['general', 'technical', 'billing', 'feature', 'bug'] as const;
 
 const supportSchema = z.object({
-  subject: z.string().min(1, 'Subject is required'),
-  message: z.string().min(1, 'Message is required'),
-  category: z.string().min(1, 'Category is required'),
-})
+  subject: z
+    .string()
+    .trim()
+    .min(1, 'Subject is required')
+    .max(160, 'Subject must be 160 characters or less'),
+  message: z
+    .string()
+    .trim()
+    .min(1, 'Message is required')
+    .max(5000, 'Message must be 5000 characters or less'),
+  category: z.enum(supportCategoryValues),
+});
 
-type SupportFormData = z.infer<typeof supportSchema>
+type SupportFormData = z.infer<typeof supportSchema>;
+
+interface SupportRequestResponse {
+  success: boolean;
+  message: string;
+  ticketId: string;
+}
+
+interface SupportContactInfo {
+  email: string;
+  phone: string | null;
+  phoneLabel: string | null;
+  emergencyPhone: string | null;
+  address: string | null;
+  hours: string;
+  responseTime: {
+    critical: string;
+    standard: string;
+    general: string;
+  };
+}
+
+const DEFAULT_SUPPORT_CONTACT: SupportContactInfo = {
+  email: DEFAULT_SUPPORT_EMAIL,
+  phone: null,
+  phoneLabel: null,
+  emergencyPhone: null,
+  address: null,
+  hours: 'Mon-Fri, 8am-6pm AEST',
+  responseTime: {
+    critical: 'Within 2 hours',
+    standard: 'Within 24 hours',
+    general: 'Within 48 hours',
+  },
+};
 
 export function SupportPage() {
-  const { user } = useAuth()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const { user } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
+  const [contactInfo, setContactInfo] = useState<SupportContactInfo>(DEFAULT_SUPPORT_CONTACT);
 
   const {
     register,
@@ -53,48 +102,79 @@ export function SupportPage() {
       message: '',
       category: 'general',
     },
-  })
+  });
 
-  const subject = watch('subject')
-  const message = watch('message')
+  const subject = watch('subject');
+  const message = watch('message');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    apiFetch<SupportContactInfo>('/api/support/contact')
+      .then((data) => {
+        if (!cancelled) {
+          setContactInfo({ ...DEFAULT_SUPPORT_CONTACT, ...data });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setContactInfo(DEFAULT_SUPPORT_CONTACT);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onSubmit = async (data: SupportFormData) => {
-    setIsSubmitting(true)
-    setSubmitError(null)
-    setSubmitSuccess(false)
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
+    setSubmittedTicketId(null);
 
     try {
-      await apiFetch('/api/support/request', {
+      const response = await apiFetch<SupportRequestResponse>('/api/support/request', {
         method: 'POST',
         body: JSON.stringify({
           subject: data.subject,
           message: data.message,
           category: data.category,
           userEmail: user?.email,
-          userName: user?.name,
+          userName: user?.name || user?.fullName,
         }),
-      })
+      });
 
-      setSubmitSuccess(true)
-      reset()
+      setSubmitSuccess(true);
+      setSubmittedTicketId(response.ticketId);
+      reset();
 
-      // Clear success message after 5 seconds
-      setTimeout(() => setSubmitSuccess(false), 5000)
+      // Clear success message after 10 seconds
+      setTimeout(() => {
+        setSubmitSuccess(false);
+        setSubmittedTicketId(null);
+      }, 10000);
     } catch (error) {
-      console.error('Support request error:', error)
-      setSubmitError('Failed to submit request. Please try again or contact us directly.')
+      logError('Support request error:', error);
+      setSubmitError(
+        extractErrorMessage(
+          error,
+          'Failed to submit request. Please try again or contact us directly.',
+        ),
+      );
+      setSubmittedTicketId(null);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
-  const supportCategories = [
+  const supportCategories: Array<{ value: SupportFormData['category']; label: string }> = [
     { value: 'general', label: 'General Inquiry' },
     { value: 'technical', label: 'Technical Issue' },
     { value: 'billing', label: 'Billing & Account' },
     { value: 'feature', label: 'Feature Request' },
     { value: 'bug', label: 'Bug Report' },
-  ]
+  ];
 
   return (
     <div className="space-y-6">
@@ -179,10 +259,10 @@ export function SupportPage() {
               <div>
                 <h3 className="font-medium">Email Support</h3>
                 <a
-                  href="mailto:support@siteproof.com.au"
+                  href={supportMailtoHref(contactInfo.email)}
                   className="text-primary hover:underline"
                 >
-                  support@siteproof.com.au
+                  {contactInfo.email}
                 </a>
                 <p className="text-sm text-muted-foreground mt-1">
                   For general inquiries and technical issues
@@ -190,23 +270,20 @@ export function SupportPage() {
               </div>
             </div>
 
-            <div className="flex items-start gap-4">
-              <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
-                <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
+            {contactInfo.phone && (
+              <div className="flex items-start gap-4">
+                <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
+                  <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <h3 className="font-medium">Phone Support</h3>
+                  <a href={telHref(contactInfo.phone)} className="text-primary hover:underline">
+                    {contactInfo.phoneLabel || contactInfo.phone}
+                  </a>
+                  <p className="text-sm text-muted-foreground mt-1">{contactInfo.hours}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-medium">Phone Support</h3>
-                <a
-                  href="tel:1800748377"
-                  className="text-primary hover:underline"
-                >
-                  1800 SITE PROOF (1800 748 377)
-                </a>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Mon-Fri, 8am-6pm AEST
-                </p>
-              </div>
-            </div>
+            )}
 
             <div className="flex items-start gap-4">
               <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/30">
@@ -215,24 +292,36 @@ export function SupportPage() {
               <div>
                 <h3 className="font-medium">Response Times</h3>
                 <ul className="text-sm text-muted-foreground space-y-1 mt-1">
-                  <li>• Critical issues: Within 2 hours</li>
-                  <li>• Standard issues: Within 24 hours</li>
-                  <li>• General inquiries: Within 48 hours</li>
+                  <li>• Critical issues: {contactInfo.responseTime.critical}</li>
+                  <li>• Standard issues: {contactInfo.responseTime.standard}</li>
+                  <li>• General inquiries: {contactInfo.responseTime.general}</li>
                 </ul>
               </div>
             </div>
           </div>
 
-          <div className="border-t pt-4">
-            <h3 className="font-medium mb-2">Emergency Support</h3>
-            <p className="text-sm text-muted-foreground">
-              For critical production issues affecting your entire organization,
-              please call our emergency hotline:{' '}
-              <a href="tel:0419748377" className="text-primary hover:underline">
-                0419 748 377
-              </a>
-            </p>
-          </div>
+          {contactInfo.emergencyPhone && (
+            <div className="border-t pt-4">
+              <h3 className="font-medium mb-2">Emergency Support</h3>
+              <p className="text-sm text-muted-foreground">
+                For critical production issues affecting your entire organization, please call our
+                emergency hotline:{' '}
+                <a
+                  href={telHref(contactInfo.emergencyPhone)}
+                  className="text-primary hover:underline"
+                >
+                  {contactInfo.emergencyPhone}
+                </a>
+              </p>
+            </div>
+          )}
+
+          {contactInfo.address && (
+            <div className="border-t pt-4">
+              <h3 className="font-medium mb-2">Support Office</h3>
+              <p className="text-sm text-muted-foreground">{contactInfo.address}</p>
+            </div>
+          )}
         </div>
 
         {/* Support Request Form */}
@@ -248,7 +337,10 @@ export function SupportPage() {
           </div>
 
           {submitSuccess && (
-            <div className="flex items-center gap-2 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+            <div
+              role="status"
+              className="flex items-center gap-2 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+            >
               <Check className="h-5 w-5 text-green-600" />
               <div>
                 <p className="font-medium text-green-800 dark:text-green-200">
@@ -257,20 +349,31 @@ export function SupportPage() {
                 <p className="text-sm text-green-700 dark:text-green-300">
                   We'll respond to your request within 24-48 hours.
                 </p>
+                {submittedTicketId && (
+                  <p className="text-sm text-green-700 dark:text-green-300">
+                    Reference: <span className="font-medium">{submittedTicketId}</span>
+                  </p>
+                )}
               </div>
             </div>
           )}
 
           {submitError && (
-            <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <div
+              role="alert"
+              className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+            >
               <p className="text-sm text-red-800 dark:text-red-200">{submitError}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <Label className="mb-1">Category</Label>
+              <Label htmlFor="support-category" className="mb-1">
+                Category
+              </Label>
               <NativeSelect
+                id="support-category"
                 {...register('category')}
                 className={errors.category ? 'border-destructive' : ''}
               >
@@ -281,33 +384,47 @@ export function SupportPage() {
                 ))}
               </NativeSelect>
               {errors.category && (
-                <p className="mt-1 text-sm text-destructive" role="alert">{errors.category.message}</p>
+                <p className="mt-1 text-sm text-destructive" role="alert">
+                  {errors.category.message}
+                </p>
               )}
             </div>
 
             <div>
-              <Label className="mb-1">Subject</Label>
+              <Label htmlFor="support-subject" className="mb-1">
+                Subject
+              </Label>
               <Input
+                id="support-subject"
                 type="text"
+                maxLength={160}
                 {...register('subject')}
                 placeholder="Brief description of your issue"
                 className={errors.subject ? 'border-destructive' : ''}
               />
               {errors.subject && (
-                <p className="mt-1 text-sm text-destructive" role="alert">{errors.subject.message}</p>
+                <p className="mt-1 text-sm text-destructive" role="alert">
+                  {errors.subject.message}
+                </p>
               )}
             </div>
 
             <div>
-              <Label className="mb-1">Message</Label>
+              <Label htmlFor="support-message" className="mb-1">
+                Message
+              </Label>
               <Textarea
+                id="support-message"
+                maxLength={5000}
                 {...register('message')}
                 placeholder="Please describe your issue or question in detail..."
                 rows={5}
                 className={`resize-none ${errors.message ? 'border-destructive' : ''}`}
               />
               {errors.message && (
-                <p className="mt-1 text-sm text-destructive" role="alert">{errors.message.message}</p>
+                <p className="mt-1 text-sm text-destructive" role="alert">
+                  {errors.message.message}
+                </p>
               )}
             </div>
 
@@ -319,7 +436,7 @@ export function SupportPage() {
 
             <Button
               type="submit"
-              disabled={isSubmitting || !subject || !message}
+              disabled={isSubmitting || !subject?.trim() || !message?.trim()}
               className="w-full"
             >
               {isSubmitting ? (
@@ -352,8 +469,8 @@ export function SupportPage() {
           <div className="p-4 rounded-lg bg-muted/50">
             <h3 className="font-medium mb-1">How do I export my data?</h3>
             <p className="text-sm text-muted-foreground">
-              Go to Settings → Privacy & Data → Export My Data. Your data will be downloaded
-              as a JSON file containing all your records.
+              Go to Settings → Privacy & Data → Export My Data. Your data will be downloaded as a
+              JSON file containing all your records.
             </p>
           </div>
           <div className="p-4 rounded-lg bg-muted/50">
@@ -366,12 +483,12 @@ export function SupportPage() {
           <div className="p-4 rounded-lg bg-muted/50">
             <h3 className="font-medium mb-1">How do I invite team members?</h3>
             <p className="text-sm text-muted-foreground">
-              Go to Project Settings → Users and click "Invite User". Enter their email and
-              select their role. They'll receive an invitation email.
+              Go to Project Settings → Users and click "Invite User". Enter their email and select
+              their role. They'll receive an invitation email.
             </p>
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

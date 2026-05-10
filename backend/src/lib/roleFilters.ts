@@ -3,13 +3,14 @@
  * Centralizes common permission and filtering logic.
  */
 
-import { prisma } from './prisma.js'
-import { ROLE_GROUPS, hasRoleInGroup } from './roles.js'
+import { prisma } from './prisma.js';
+import { activeSubcontractorCompanyWhere } from './projectAccess.js';
+import { ROLE_GROUPS, hasRoleInGroup } from './roles.js';
 
 interface AuthUser {
-  id: string
-  roleInCompany: string
-  companyId?: string
+  id: string;
+  roleInCompany: string;
+  companyId?: string;
 }
 
 /**
@@ -30,50 +31,53 @@ interface AuthUser {
  */
 export async function getSubcontractorCompanyId(user: AuthUser): Promise<string | null> {
   if (!isSubcontractor(user)) {
-    return null
+    return null;
   }
 
   const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: { userId: user.id },
-    select: { subcontractorCompanyId: true }
-  })
+    where: {
+      userId: user.id,
+      subcontractorCompany: activeSubcontractorCompanyWhere(),
+    },
+    select: { subcontractorCompanyId: true },
+  });
 
-  return subcontractorUser?.subcontractorCompanyId || null
+  return subcontractorUser?.subcontractorCompanyId || null;
 }
 
 /**
  * Check if a user has a subcontractor role.
  */
 export function isSubcontractor(user: AuthUser): boolean {
-  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.SUBCONTRACTOR)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.SUBCONTRACTOR);
 }
 
 /**
  * Check if a user has commercial access (can view budgets, rates, claims).
  */
 export function hasCommercialAccess(user: AuthUser): boolean {
-  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.COMMERCIAL)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.COMMERCIAL);
 }
 
 /**
  * Check if a user has admin access.
  */
 export function hasAdminAccess(user: AuthUser): boolean {
-  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.ADMIN)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.ADMIN);
 }
 
 /**
  * Check if a user has quality management access.
  */
 export function hasQualityAccess(user: AuthUser): boolean {
-  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.QUALITY)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.QUALITY);
 }
 
 /**
  * Check if a user has management access (can manage subcontractors, site operations).
  */
 export function hasManagementAccess(user: AuthUser): boolean {
-  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.MANAGEMENT)
+  return hasRoleInGroup(user.roleInCompany, ROLE_GROUPS.MANAGEMENT);
 }
 
 /**
@@ -96,21 +100,21 @@ export function hasManagementAccess(user: AuthUser): boolean {
 export async function applySubcontractorFilter<T extends Record<string, unknown>>(
   user: AuthUser,
   whereClause: T,
-  fieldName: string = 'assignedSubcontractorId'
+  fieldName: string = 'assignedSubcontractorId',
 ): Promise<{ whereClause: T; returnEmpty: boolean }> {
   if (!isSubcontractor(user)) {
-    return { whereClause, returnEmpty: false }
+    return { whereClause, returnEmpty: false };
   }
 
-  const subcontractorId = await getSubcontractorCompanyId(user)
+  const subcontractorId = await getSubcontractorCompanyId(user);
 
   if (!subcontractorId) {
     // User is subcontractor but has no company - return empty
-    return { whereClause, returnEmpty: true }
+    return { whereClause, returnEmpty: true };
   }
 
   return {
     whereClause: { ...whereClause, [fieldName]: subcontractorId },
-    returnEmpty: false
-  }
+    returnEmpty: false,
+  };
 }

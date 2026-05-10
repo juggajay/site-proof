@@ -1,46 +1,47 @@
 // Feature #442: Zustand client state store
 // This store manages UI state that persists across navigation
 
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeLocalStateStorage } from '@/lib/storagePreferences';
 
 interface SidebarState {
-  isCollapsed: boolean
-  expandedSections: string[]
+  isCollapsed: boolean;
+  expandedSections: string[];
 }
 
 interface UIFilters {
-  lotsStatus: string | null
-  lotsSearch: string
-  ncrsStatus: string | null
-  ncrsSearch: string
-  documentsCategory: string | null
-  documentsSearch: string
+  lotsStatus: string | null;
+  lotsSearch: string;
+  ncrsStatus: string | null;
+  ncrsSearch: string;
+  documentsCategory: string | null;
+  documentsSearch: string;
 }
 
 interface UIState {
   // Sidebar state
-  sidebar: SidebarState
+  sidebar: SidebarState;
 
   // Current project (persists during navigation)
-  currentProjectId: string | null
+  currentProjectId: string | null;
 
   // UI filters (persist during navigation within project)
-  filters: UIFilters
+  filters: UIFilters;
 
   // Modal states
-  isCreateLotModalOpen: boolean
-  isCreateNCRModalOpen: boolean
+  isCreateLotModalOpen: boolean;
+  isCreateNCRModalOpen: boolean;
 
   // Actions
-  toggleSidebar: () => void
-  setSidebarCollapsed: (collapsed: boolean) => void
-  toggleSidebarSection: (section: string) => void
-  setCurrentProject: (projectId: string | null) => void
-  setFilter: <K extends keyof UIFilters>(key: K, value: UIFilters[K]) => void
-  resetFilters: () => void
-  setCreateLotModalOpen: (open: boolean) => void
-  setCreateNCRModalOpen: (open: boolean) => void
+  toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebarSection: (section: string) => void;
+  setCurrentProject: (projectId: string | null) => void;
+  setFilter: <K extends keyof UIFilters>(key: K, value: UIFilters[K]) => void;
+  resetFilters: () => void;
+  setCreateLotModalOpen: (open: boolean) => void;
+  setCreateNCRModalOpen: (open: boolean) => void;
 }
 
 const defaultFilters: UIFilters = {
@@ -50,7 +51,7 @@ const defaultFilters: UIFilters = {
   ncrsSearch: '',
   documentsCategory: null,
   documentsSearch: '',
-}
+};
 
 export const useUIStore = create<UIState>()(
   persist(
@@ -86,13 +87,13 @@ export const useUIStore = create<UIState>()(
         set((state) => {
           const expandedSections = state.sidebar.expandedSections.includes(section)
             ? state.sidebar.expandedSections.filter((s) => s !== section)
-            : [...state.sidebar.expandedSections, section]
+            : [...state.sidebar.expandedSections, section];
           return {
             sidebar: {
               ...state.sidebar,
               expandedSections,
             },
-          }
+          };
         }),
 
       setCurrentProject: (projectId) =>
@@ -110,35 +111,34 @@ export const useUIStore = create<UIState>()(
           },
         })),
 
-      resetFilters: () =>
-        set({ filters: { ...defaultFilters } }),
+      resetFilters: () => set({ filters: { ...defaultFilters } }),
 
-      setCreateLotModalOpen: (open) =>
-        set({ isCreateLotModalOpen: open }),
+      setCreateLotModalOpen: (open) => set({ isCreateLotModalOpen: open }),
 
-      setCreateNCRModalOpen: (open) =>
-        set({ isCreateNCRModalOpen: open }),
+      setCreateNCRModalOpen: (open) => set({ isCreateNCRModalOpen: open }),
     }),
     {
       name: 'siteproof-ui-store',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStateStorage),
       partialize: (state) => ({
-        // Only persist these fields to localStorage
+        // Only persist these fields to local storage
         sidebar: state.sidebar,
         currentProjectId: state.currentProjectId,
       }),
-    }
-  )
-)
+    },
+  ),
+);
 
 // Selector hooks for common use cases
-export const useSidebarState = () => useUIStore((state) => state.sidebar)
-export const useCurrentProjectId = () => useUIStore((state) => state.currentProjectId)
-export const useLotsFilters = () => useUIStore((state) => ({
-  status: state.filters.lotsStatus,
-  search: state.filters.lotsSearch,
-}))
-export const useNCRsFilters = () => useUIStore((state) => ({
-  status: state.filters.ncrsStatus,
-  search: state.filters.ncrsSearch,
-}))
+export const useSidebarState = () => useUIStore((state) => state.sidebar);
+export const useCurrentProjectId = () => useUIStore((state) => state.currentProjectId);
+export const useLotsFilters = () =>
+  useUIStore((state) => ({
+    status: state.filters.lotsStatus,
+    search: state.filters.lotsSearch,
+  }));
+export const useNCRsFilters = () =>
+  useUIStore((state) => ({
+    status: state.filters.ncrsStatus,
+    search: state.filters.ncrsSearch,
+  }));

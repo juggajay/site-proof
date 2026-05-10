@@ -1,13 +1,15 @@
-import React, { useState } from 'react'
-import { apiFetch } from '@/lib/api'
-import { DELAY_TYPES, validateHours } from '../constants'
-import type { DailyDiary, Delay, DelayFormState } from '../types'
+import React, { useState } from 'react';
+import { apiFetch } from '@/lib/api';
+import { logError } from '@/lib/logger';
+import { DELAY_TYPES, validateHours } from '../constants';
+import { parseOptionalDiaryHoursInput } from '../diaryNumericInput';
+import type { DailyDiary, Delay, DelayFormState } from '../types';
 
 interface DelaysTabProps {
-  diary: DailyDiary
-  saving: boolean
-  setSaving: (saving: boolean) => void
-  onDiaryUpdate: (diary: DailyDiary) => void
+  diary: DailyDiary;
+  saving: boolean;
+  setSaving: (saving: boolean) => void;
+  onDiaryUpdate: (diary: DailyDiary) => void;
 }
 
 export const DelaysTab = React.memo(function DelaysTab({
@@ -23,45 +25,57 @@ export const DelaysTab = React.memo(function DelaysTab({
     durationHours: '',
     description: '',
     impact: '',
-  })
+  });
 
-  const delayHoursValidation = validateHours(delayForm.durationHours)
+  const delayHoursValidation = validateHours(delayForm.durationHours);
 
   const addDelay = async () => {
-    if (!delayForm.delayType || !delayForm.description) return
-    setSaving(true)
+    const description = delayForm.description.trim();
+    if (!delayForm.delayType || !description || !delayHoursValidation.isValid || saving) return;
+    const durationHours = parseOptionalDiaryHoursInput(delayForm.durationHours);
+    setSaving(true);
     try {
-      const delay = await apiFetch<Delay>(`/api/diary/${diary.id}/delays`, {
+      const delay = await apiFetch<Delay>(`/api/diary/${encodeURIComponent(diary.id)}/delays`, {
         method: 'POST',
         body: JSON.stringify({
           delayType: delayForm.delayType,
           startTime: delayForm.startTime || undefined,
           endTime: delayForm.endTime || undefined,
-          durationHours: delayForm.durationHours ? parseFloat(delayForm.durationHours) : undefined,
-          description: delayForm.description,
-          impact: delayForm.impact || undefined,
+          durationHours: durationHours ?? undefined,
+          description,
+          impact: delayForm.impact.trim() || undefined,
         }),
-      })
+      });
 
-      onDiaryUpdate({ ...diary, delays: [...diary.delays, delay] })
-      setDelayForm({ delayType: '', startTime: '', endTime: '', durationHours: '', description: '', impact: '' })
+      onDiaryUpdate({ ...diary, delays: [...diary.delays, delay] });
+      setDelayForm({
+        delayType: '',
+        startTime: '',
+        endTime: '',
+        durationHours: '',
+        description: '',
+        impact: '',
+      });
     } catch (err) {
-      console.error('Error adding delay:', err)
+      logError('Error adding delay:', err);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const removeDelay = async (delayId: string) => {
     try {
-      await apiFetch(`/api/diary/${diary.id}/delays/${delayId}`, {
-        method: 'DELETE',
-      })
-      onDiaryUpdate({ ...diary, delays: diary.delays.filter(d => d.id !== delayId) })
+      await apiFetch(
+        `/api/diary/${encodeURIComponent(diary.id)}/delays/${encodeURIComponent(delayId)}`,
+        {
+          method: 'DELETE',
+        },
+      );
+      onDiaryUpdate({ ...diary, delays: diary.delays.filter((d) => d.id !== delayId) });
     } catch (err) {
-      console.error('Error removing delay:', err)
+      logError('Error removing delay:', err);
     }
-  }
+  };
 
   return (
     <div className="rounded-lg border bg-card p-6">
@@ -101,8 +115,18 @@ export const DelaysTab = React.memo(function DelaysTab({
                         onClick={() => removeDelay(d.id)}
                         className="text-red-600 hover:text-red-700"
                       >
-                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
                         </svg>
                       </button>
                     </td>
@@ -126,7 +150,9 @@ export const DelaysTab = React.memo(function DelaysTab({
             >
               <option value="">Delay Type *</option>
               {DELAY_TYPES.map((type) => (
-                <option key={type} value={type}>{type}</option>
+                <option key={type} value={type}>
+                  {type}
+                </option>
               ))}
             </select>
             <input
@@ -143,13 +169,22 @@ export const DelaysTab = React.memo(function DelaysTab({
                 onChange={(e) => setDelayForm({ ...delayForm, durationHours: e.target.value })}
                 placeholder="Duration (hours)"
                 className={`rounded-md border bg-background px-3 py-2 ${
-                  delayHoursValidation.warning ? 'border-amber-500' : 'border-input'
+                  delayHoursValidation.warning ? 'border-red-500' : 'border-input'
                 }`}
               />
               {delayHoursValidation.warning && (
-                <p className="mt-1 text-xs text-amber-600 flex items-center gap-1">
+                <p
+                  className="mt-1 text-xs text-red-600 flex items-center gap-1"
+                  role="alert"
+                  aria-live="assertive"
+                >
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
                   </svg>
                   {delayHoursValidation.warning}
                 </p>
@@ -171,7 +206,12 @@ export const DelaysTab = React.memo(function DelaysTab({
             />
             <button
               onClick={addDelay}
-              disabled={!delayForm.delayType || !delayForm.description || saving}
+              disabled={
+                !delayForm.delayType ||
+                !delayForm.description ||
+                !delayHoursValidation.isValid ||
+                saving
+              }
               className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               Add
@@ -180,5 +220,5 @@ export const DelaysTab = React.memo(function DelaysTab({
         </div>
       )}
     </div>
-  )
-})
+  );
+});

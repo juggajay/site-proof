@@ -1,37 +1,27 @@
 // Lazy load jsPDF for better bundle size
-let jsPDFModule: typeof import('jspdf') | null = null
+import { devLog } from './logger';
+
+let jsPDFModule: typeof import('jspdf') | null = null;
 
 async function getJsPDF(): Promise<typeof import('jspdf').jsPDF> {
   if (!jsPDFModule) {
-    jsPDFModule = await import('jspdf')
+    jsPDFModule = await import('jspdf');
   }
-  return jsPDFModule.jsPDF
+  return jsPDFModule.jsPDF;
 }
-
-// Synchronous helper for components that haven't migrated to async yet
-// This throws if jsPDF isn't loaded - use generateConformanceReportPDFAsync instead
-function getJsPDFSync(): typeof import('jspdf').jsPDF {
-  if (!jsPDFModule) {
-    throw new Error('jsPDF not loaded. Use async PDF generation functions.')
-  }
-  return jsPDFModule.jsPDF
-}
-
-// Pre-load jsPDF when the module is imported (non-blocking)
-getJsPDF().catch(() => {})
 
 // Conformance package format types for Australian road authorities
-export type ConformanceFormat = 'standard' | 'tmr' | 'tfnsw' | 'vicroads' | 'dit'
+export type ConformanceFormat = 'standard' | 'tmr' | 'tfnsw' | 'vicroads' | 'dit';
 
 export interface ConformanceFormatOptions {
-  format: ConformanceFormat
-  includeITPChecklist: boolean
-  includeTestResults: boolean
-  includeHoldPoints: boolean
-  includeNCRs: boolean
-  includePhotos: boolean
-  clientName?: string
-  contractNumber?: string
+  format: ConformanceFormat;
+  includeITPChecklist: boolean;
+  includeTestResults: boolean;
+  includeHoldPoints: boolean;
+  includeNCRs: boolean;
+  includePhotos: boolean;
+  clientName?: string;
+  contractNumber?: string;
 }
 
 // Default format options
@@ -42,17 +32,20 @@ export const defaultConformanceOptions: ConformanceFormatOptions = {
   includeHoldPoints: true,
   includeNCRs: true,
   includePhotos: true,
-}
+};
 
 // Format-specific configurations
-const FORMAT_CONFIGS: Record<ConformanceFormat, {
-  title: string
-  subtitle: string
-  headerColor: [number, number, number]
-  requiresSignature: boolean
-  includesSpecReference: boolean
-  specPrefix: string
-}> = {
+const FORMAT_CONFIGS: Record<
+  ConformanceFormat,
+  {
+    title: string;
+    subtitle: string;
+    headerColor: [number, number, number];
+    requiresSignature: boolean;
+    includesSpecReference: boolean;
+    specPrefix: string;
+  }
+> = {
   standard: {
     title: 'LOT CONFORMANCE REPORT',
     subtitle: 'Quality Conformance Documentation',
@@ -93,540 +86,583 @@ const FORMAT_CONFIGS: Record<ConformanceFormat, {
     includesSpecReference: true,
     specPrefix: 'RD/ST',
   },
-}
+};
 
 // Types for conformance report data
 interface ITPChecklistItem {
-  order: number
-  description: string
-  category: string
-  responsibleParty: string
-  pointType: string
-  isHoldPoint: boolean
-  evidenceRequired: string
+  order: number;
+  description: string;
+  category: string;
+  responsibleParty: string;
+  pointType: string;
+  isHoldPoint: boolean;
+  evidenceRequired: string;
 }
 
 interface ITPCompletion {
-  checklistItemId: string
-  isCompleted: boolean
-  notes: string | null
-  completedAt: string | null
-  completedBy: { fullName: string | null; email: string } | null
-  isVerified: boolean
-  verifiedAt: string | null
-  verifiedBy: { fullName: string | null; email: string } | null
+  checklistItemId: string;
+  isCompleted: boolean;
+  notes: string | null;
+  completedAt: string | null;
+  completedBy: { fullName: string | null; email: string } | null;
+  isVerified: boolean;
+  verifiedAt: string | null;
+  verifiedBy: { fullName: string | null; email: string } | null;
 }
 
 interface TestResult {
-  testType: string
-  testRequestNumber: string | null
-  laboratoryName: string | null
-  resultValue: number | null
-  resultUnit: string | null
-  passFail: string
-  status: string
-  sampleDate: string | null
-  resultDate: string | null
+  testType: string;
+  testRequestNumber: string | null;
+  laboratoryName: string | null;
+  resultValue: number | null;
+  resultUnit: string | null;
+  passFail: string;
+  status: string;
+  sampleDate: string | null;
+  resultDate: string | null;
 }
 
 interface NCR {
-  ncrNumber: string
-  description: string
-  category: string
-  severity: string
-  status: string
-  createdAt: string
-  closedAt: string | null
+  ncrNumber: string;
+  description: string;
+  category: string;
+  severity: string;
+  status: string;
+  createdAt: string;
+  closedAt: string | null;
 }
 
 interface HoldPointRelease {
-  checklistItemDescription: string
-  releasedAt: string
-  releasedBy: { fullName: string | null; email: string } | null
+  checklistItemDescription: string;
+  releasedAt: string;
+  releasedBy: { fullName: string | null; email: string } | null;
 }
 
 interface ConformanceReportData {
   lot: {
-    lotNumber: string
-    description: string | null
-    status: string
-    activityType: string | null
-    chainageStart: number | null
-    chainageEnd: number | null
-    layer: string | null
-    areaZone: string | null
-    conformedAt: string | null
-    conformedBy: { fullName: string | null; email: string } | null
-  }
+    lotNumber: string;
+    description: string | null;
+    status: string;
+    activityType: string | null;
+    chainageStart: number | null;
+    chainageEnd: number | null;
+    layer: string | null;
+    areaZone: string | null;
+    conformedAt: string | null;
+    conformedBy: { fullName: string | null; email: string } | null;
+  };
   project: {
-    name: string
-    projectNumber: string | null
-  }
+    name: string;
+    projectNumber: string | null;
+  };
   itp: {
-    templateName: string
-    checklistItems: ITPChecklistItem[]
-    completions: ITPCompletion[]
-  } | null
-  testResults: TestResult[]
-  ncrs: NCR[]
-  holdPointReleases: HoldPointRelease[]
-  photoCount: number
+    templateName: string;
+    checklistItems: ITPChecklistItem[];
+    completions: ITPCompletion[];
+  } | null;
+  testResults: TestResult[];
+  ncrs: NCR[];
+  holdPointReleases: HoldPointRelease[];
+  photoCount: number;
 }
 
 /**
  * Generate a PDF conformance report for a lot
  * Supports multiple formats: standard, TMR (Queensland), TfNSW (NSW), VicRoads
  */
-export function generateConformanceReportPDF(
+export async function generateConformanceReportPDF(
   data: ConformanceReportData,
-  options: ConformanceFormatOptions = defaultConformanceOptions
-): void {
-  const jsPDF = getJsPDFSync()
-  const doc = new jsPDF()
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 20
-  const contentWidth = pageWidth - margin * 2
-  let yPos = margin
+  options: ConformanceFormatOptions = defaultConformanceOptions,
+): Promise<void> {
+  const jsPDF = await getJsPDF();
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - margin * 2;
+  let yPos = margin;
 
   // Get format-specific configuration
-  const formatConfig = FORMAT_CONFIGS[options.format]
+  const formatConfig = FORMAT_CONFIGS[options.format];
 
   // Helper to add a new page if needed
   const checkPageBreak = (requiredSpace: number) => {
     if (yPos + requiredSpace > pageHeight - margin) {
-      doc.addPage()
-      yPos = margin
-      return true
+      doc.addPage();
+      yPos = margin;
+      return true;
     }
-    return false
-  }
+    return false;
+  };
 
   // Helper to draw a line
   const drawLine = () => {
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 5
-  }
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 5;
+  };
 
   // ========== HEADER (Format-specific) ==========
   // Colored header bar for road authority formats
   if (options.format !== 'standard') {
-    doc.setFillColor(...formatConfig.headerColor)
-    doc.rect(0, 0, pageWidth, 25, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text(formatConfig.title, pageWidth / 2, 15, { align: 'center' })
-    doc.setTextColor(0, 0, 0)
-    yPos = 35
+    doc.setFillColor(...formatConfig.headerColor);
+    doc.rect(0, 0, pageWidth, 25, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatConfig.title, pageWidth / 2, 15, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    yPos = 35;
   } else {
-    doc.setFontSize(20)
-    doc.setFont('helvetica', 'bold')
-    doc.text(formatConfig.title, pageWidth / 2, yPos, { align: 'center' })
-    yPos += 10
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatConfig.title, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 10;
   }
 
   // Subtitle for road authority formats
   if (options.format !== 'standard') {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'italic')
-    doc.text(formatConfig.subtitle, pageWidth / 2, yPos, { align: 'center' })
-    yPos += 8
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text(formatConfig.subtitle, pageWidth / 2, yPos, { align: 'center' });
+    yPos += 8;
   }
 
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'normal')
-  doc.text(data.lot.lotNumber, pageWidth / 2, yPos, { align: 'center' })
-  yPos += 15
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.lot.lotNumber, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 15;
 
-  drawLine()
+  drawLine();
 
   // ========== PROJECT & LOT INFO ==========
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Project Information', margin, yPos)
-  yPos += 7
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Project Information', margin, yPos);
+  yPos += 7;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Project: ${data.project.name}`, margin, yPos)
-  yPos += 5
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Project: ${data.project.name}`, margin, yPos);
+  yPos += 5;
   if (data.project.projectNumber) {
-    doc.text(`Project #: ${data.project.projectNumber}`, margin, yPos)
-    yPos += 5
+    doc.text(`Project #: ${data.project.projectNumber}`, margin, yPos);
+    yPos += 5;
   }
-  yPos += 5
+  yPos += 5;
 
-  doc.setFont('helvetica', 'bold')
-  doc.text('Lot Information', margin, yPos)
-  yPos += 7
+  doc.setFont('helvetica', 'bold');
+  doc.text('Lot Information', margin, yPos);
+  yPos += 7;
 
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Lot Number: ${data.lot.lotNumber}`, margin, yPos)
-  yPos += 5
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Lot Number: ${data.lot.lotNumber}`, margin, yPos);
+  yPos += 5;
   if (data.lot.description) {
-    doc.text(`Description: ${data.lot.description}`, margin, yPos)
-    yPos += 5
+    doc.text(`Description: ${data.lot.description}`, margin, yPos);
+    yPos += 5;
   }
-  doc.text(`Activity Type: ${data.lot.activityType || 'N/A'}`, margin, yPos)
-  yPos += 5
+  doc.text(`Activity Type: ${data.lot.activityType || 'N/A'}`, margin, yPos);
+  yPos += 5;
   if (data.lot.chainageStart != null && data.lot.chainageEnd != null) {
-    doc.text(`Chainage: ${data.lot.chainageStart} - ${data.lot.chainageEnd}`, margin, yPos)
-    yPos += 5
+    doc.text(`Chainage: ${data.lot.chainageStart} - ${data.lot.chainageEnd}`, margin, yPos);
+    yPos += 5;
   }
   if (data.lot.layer) {
-    doc.text(`Layer: ${data.lot.layer}`, margin, yPos)
-    yPos += 5
+    doc.text(`Layer: ${data.lot.layer}`, margin, yPos);
+    yPos += 5;
   }
   if (data.lot.areaZone) {
-    doc.text(`Area/Zone: ${data.lot.areaZone}`, margin, yPos)
-    yPos += 5
+    doc.text(`Area/Zone: ${data.lot.areaZone}`, margin, yPos);
+    yPos += 5;
   }
-  yPos += 5
+  yPos += 5;
 
   // ========== CONFORMANCE STATUS ==========
-  doc.setFont('helvetica', 'bold')
-  doc.setFillColor(34, 197, 94) // Green
-  doc.rect(margin, yPos, contentWidth, 15, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(12)
-  doc.text('STATUS: CONFORMED', pageWidth / 2, yPos + 10, { align: 'center' })
-  doc.setTextColor(0, 0, 0)
-  yPos += 20
+  doc.setFont('helvetica', 'bold');
+  doc.setFillColor(34, 197, 94); // Green
+  doc.rect(margin, yPos, contentWidth, 15, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.text('STATUS: CONFORMED', pageWidth / 2, yPos + 10, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  yPos += 20;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
   if (data.lot.conformedAt) {
     const conformedDate = new Date(data.lot.conformedAt).toLocaleString('en-AU', {
       dateStyle: 'medium',
       timeStyle: 'short',
-    })
-    doc.text(`Conformed on: ${conformedDate}`, margin, yPos)
-    yPos += 5
+    });
+    doc.text(`Conformed on: ${conformedDate}`, margin, yPos);
+    yPos += 5;
   }
   if (data.lot.conformedBy) {
-    doc.text(`Conformed by: ${data.lot.conformedBy.fullName || data.lot.conformedBy.email}`, margin, yPos)
-    yPos += 5
+    doc.text(
+      `Conformed by: ${data.lot.conformedBy.fullName || data.lot.conformedBy.email}`,
+      margin,
+      yPos,
+    );
+    yPos += 5;
   }
-  yPos += 10
+  yPos += 10;
 
-  drawLine()
+  drawLine();
 
   // ========== ITP CHECKLIST SUMMARY ==========
-  checkPageBreak(30)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('ITP Checklist Summary', margin, yPos)
-  yPos += 7
+  checkPageBreak(30);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ITP Checklist Summary', margin, yPos);
+  yPos += 7;
 
   if (data.itp) {
-    const totalItems = data.itp.checklistItems.length
-    const completedItems = data.itp.completions.filter(c => c.isCompleted).length
+    const totalItems = data.itp.checklistItems.length;
+    const completedItems = data.itp.completions.filter((c) => c.isCompleted).length;
 
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Template: ${data.itp.templateName}`, margin, yPos)
-    yPos += 5
-    doc.text(`Checklist Completion: ${completedItems} / ${totalItems} items (${Math.round((completedItems / totalItems) * 100)}%)`, margin, yPos)
-    yPos += 8
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Template: ${data.itp.templateName}`, margin, yPos);
+    yPos += 5;
+    doc.text(
+      `Checklist Completion: ${completedItems} / ${totalItems} items (${Math.round((completedItems / totalItems) * 100)}%)`,
+      margin,
+      yPos,
+    );
+    yPos += 8;
 
     // ITP Items table
-    const itemsPerColumn = ['#', 'Description', 'Type', 'Status', 'Completed By']
-    const colWidths = [10, 70, 25, 25, 40]
+    const itemsPerColumn = ['#', 'Description', 'Type', 'Status', 'Completed By'];
+    const colWidths = [10, 70, 25, 25, 40];
 
     // Table header
-    doc.setFillColor(240, 240, 240)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    let xPos = margin + 2
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let xPos = margin + 2;
     itemsPerColumn.forEach((header, i) => {
-      doc.text(header, xPos, yPos + 5)
-      xPos += colWidths[i]
-    })
-    yPos += 8
+      doc.text(header, xPos, yPos + 5);
+      xPos += colWidths[i];
+    });
+    yPos += 8;
 
     // Table rows
-    doc.setFont('helvetica', 'normal')
+    doc.setFont('helvetica', 'normal');
     data.itp.checklistItems.forEach((item) => {
-      checkPageBreak(8)
-      const completion = data.itp!.completions.find(c => c.checklistItemId === item.order.toString())
-      const isCompleted = completion?.isCompleted || false
+      checkPageBreak(8);
+      const completion = data.itp!.completions.find(
+        (c) => c.checklistItemId === item.order.toString(),
+      );
+      const isCompleted = completion?.isCompleted || false;
 
-      xPos = margin + 2
-      doc.text(item.order.toString(), xPos, yPos + 4)
-      xPos += colWidths[0]
+      xPos = margin + 2;
+      doc.text(item.order.toString(), xPos, yPos + 4);
+      xPos += colWidths[0];
 
       // Truncate description if too long
-      const desc = item.description.length > 40 ? item.description.slice(0, 37) + '...' : item.description
-      doc.text(desc, xPos, yPos + 4)
-      xPos += colWidths[1]
+      const desc =
+        item.description.length > 40 ? item.description.slice(0, 37) + '...' : item.description;
+      doc.text(desc, xPos, yPos + 4);
+      xPos += colWidths[1];
 
-      doc.text(item.pointType === 'hold_point' ? 'HP' : item.pointType === 'witness' ? 'W' : 'S', xPos, yPos + 4)
-      xPos += colWidths[2]
+      doc.text(
+        item.pointType === 'hold_point' ? 'HP' : item.pointType === 'witness' ? 'W' : 'S',
+        xPos,
+        yPos + 4,
+      );
+      xPos += colWidths[2];
 
-      doc.text(isCompleted ? 'Done' : 'Pending', xPos, yPos + 4)
-      xPos += colWidths[3]
+      doc.text(isCompleted ? 'Done' : 'Pending', xPos, yPos + 4);
+      xPos += colWidths[3];
 
       if (completion?.completedBy) {
-        const completedBy = completion.completedBy.fullName || completion.completedBy.email
-        const truncatedName = completedBy.length > 25 ? completedBy.slice(0, 22) + '...' : completedBy
-        doc.text(truncatedName, xPos, yPos + 4)
+        const completedBy = completion.completedBy.fullName || completion.completedBy.email;
+        const truncatedName =
+          completedBy.length > 25 ? completedBy.slice(0, 22) + '...' : completedBy;
+        doc.text(truncatedName, xPos, yPos + 4);
       }
 
-      yPos += 6
-    })
+      yPos += 6;
+    });
   } else {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'italic')
-    doc.text('No ITP assigned to this lot.', margin, yPos)
-    yPos += 5
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text('No ITP assigned to this lot.', margin, yPos);
+    yPos += 5;
   }
-  yPos += 10
+  yPos += 10;
 
-  drawLine()
+  drawLine();
 
   // ========== TEST RESULTS SUMMARY ==========
-  checkPageBreak(30)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Test Results Summary', margin, yPos)
-  yPos += 7
+  checkPageBreak(30);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Test Results Summary', margin, yPos);
+  yPos += 7;
 
   if (data.testResults.length > 0) {
-    const passedTests = data.testResults.filter(t => t.passFail === 'pass').length
-    const failedTests = data.testResults.filter(t => t.passFail === 'fail').length
+    const passedTests = data.testResults.filter((t) => t.passFail === 'pass').length;
+    const failedTests = data.testResults.filter((t) => t.passFail === 'fail').length;
 
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Total Tests: ${data.testResults.length}`, margin, yPos)
-    yPos += 5
-    doc.text(`Passed: ${passedTests} | Failed: ${failedTests}`, margin, yPos)
-    yPos += 8
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Total Tests: ${data.testResults.length}`, margin, yPos);
+    yPos += 5;
+    doc.text(`Passed: ${passedTests} | Failed: ${failedTests}`, margin, yPos);
+    yPos += 8;
 
     // Test results table header
-    doc.setFillColor(240, 240, 240)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    const testHeaders = ['Test Type', 'Lab', 'Result', 'Pass/Fail', 'Status']
-    const testColWidths = [40, 35, 35, 25, 35]
-    let txPos = margin + 2
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    const testHeaders = ['Test Type', 'Lab', 'Result', 'Pass/Fail', 'Status'];
+    const testColWidths = [40, 35, 35, 25, 35];
+    let txPos = margin + 2;
     testHeaders.forEach((header, i) => {
-      doc.text(header, txPos, yPos + 5)
-      txPos += testColWidths[i]
-    })
-    yPos += 8
+      doc.text(header, txPos, yPos + 5);
+      txPos += testColWidths[i];
+    });
+    yPos += 8;
 
     // Test rows
-    doc.setFont('helvetica', 'normal')
-    data.testResults.slice(0, 10).forEach((test) => { // Limit to 10 for brevity
-      checkPageBreak(8)
-      txPos = margin + 2
-      doc.text(test.testType.slice(0, 20), txPos, yPos + 4)
-      txPos += testColWidths[0]
-      doc.text((test.laboratoryName || 'N/A').slice(0, 18), txPos, yPos + 4)
-      txPos += testColWidths[1]
-      const result = test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : 'N/A'
-      doc.text(result.slice(0, 18), txPos, yPos + 4)
-      txPos += testColWidths[2]
-      doc.text(test.passFail || 'Pending', txPos, yPos + 4)
-      txPos += testColWidths[3]
-      doc.text(test.status, txPos, yPos + 4)
-      yPos += 6
-    })
+    doc.setFont('helvetica', 'normal');
+    data.testResults.slice(0, 10).forEach((test) => {
+      // Limit to 10 for brevity
+      checkPageBreak(8);
+      txPos = margin + 2;
+      doc.text(test.testType.slice(0, 20), txPos, yPos + 4);
+      txPos += testColWidths[0];
+      doc.text((test.laboratoryName || 'N/A').slice(0, 18), txPos, yPos + 4);
+      txPos += testColWidths[1];
+      const result =
+        test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : 'N/A';
+      doc.text(result.slice(0, 18), txPos, yPos + 4);
+      txPos += testColWidths[2];
+      doc.text(test.passFail || 'Pending', txPos, yPos + 4);
+      txPos += testColWidths[3];
+      doc.text(test.status, txPos, yPos + 4);
+      yPos += 6;
+    });
 
     if (data.testResults.length > 10) {
-      doc.setFont('helvetica', 'italic')
-      doc.text(`... and ${data.testResults.length - 10} more test results`, margin, yPos + 4)
-      yPos += 6
+      doc.setFont('helvetica', 'italic');
+      doc.text(`... and ${data.testResults.length - 10} more test results`, margin, yPos + 4);
+      yPos += 6;
     }
   } else {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'italic')
-    doc.text('No test results recorded for this lot.', margin, yPos)
-    yPos += 5
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text('No test results recorded for this lot.', margin, yPos);
+    yPos += 5;
   }
-  yPos += 10
+  yPos += 10;
 
-  drawLine()
+  drawLine();
 
   // ========== HOLD POINT RELEASES ==========
-  checkPageBreak(20)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Hold Point Releases', margin, yPos)
-  yPos += 7
+  checkPageBreak(20);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Hold Point Releases', margin, yPos);
+  yPos += 7;
 
   if (data.holdPointReleases.length > 0) {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
     data.holdPointReleases.forEach((hp) => {
-      checkPageBreak(12)
-      doc.text(`- ${hp.checklistItemDescription}`, margin, yPos)
-      yPos += 5
+      checkPageBreak(12);
+      doc.text(`- ${hp.checklistItemDescription}`, margin, yPos);
+      yPos += 5;
       const releasedDate = new Date(hp.releasedAt).toLocaleString('en-AU', {
         dateStyle: 'short',
         timeStyle: 'short',
-      })
-      const releasedBy = hp.releasedBy ? (hp.releasedBy.fullName || hp.releasedBy.email) : 'Unknown'
-      doc.setFont('helvetica', 'italic')
-      doc.text(`  Released: ${releasedDate} by ${releasedBy}`, margin + 5, yPos)
-      doc.setFont('helvetica', 'normal')
-      yPos += 6
-    })
+      });
+      const releasedBy = hp.releasedBy ? hp.releasedBy.fullName || hp.releasedBy.email : 'Unknown';
+      doc.setFont('helvetica', 'italic');
+      doc.text(`  Released: ${releasedDate} by ${releasedBy}`, margin + 5, yPos);
+      doc.setFont('helvetica', 'normal');
+      yPos += 6;
+    });
   } else {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'italic')
-    doc.text('No hold points on this lot, or all hold points released.', margin, yPos)
-    yPos += 5
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text('No hold points on this lot, or all hold points released.', margin, yPos);
+    yPos += 5;
   }
-  yPos += 10
+  yPos += 10;
 
-  drawLine()
+  drawLine();
 
   // ========== NCR SUMMARY ==========
-  checkPageBreak(20)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('NCR Summary', margin, yPos)
-  yPos += 7
+  checkPageBreak(20);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('NCR Summary', margin, yPos);
+  yPos += 7;
 
   if (data.ncrs.length > 0) {
-    const openNcrs = data.ncrs.filter(n => !['closed', 'closed_concession'].includes(n.status)).length
-    const closedNcrs = data.ncrs.filter(n => ['closed', 'closed_concession'].includes(n.status)).length
+    const openNcrs = data.ncrs.filter(
+      (n) => !['closed', 'closed_concession'].includes(n.status),
+    ).length;
+    const closedNcrs = data.ncrs.filter((n) =>
+      ['closed', 'closed_concession'].includes(n.status),
+    ).length;
 
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Total NCRs: ${data.ncrs.length} (Open: ${openNcrs}, Closed: ${closedNcrs})`, margin, yPos)
-    yPos += 8
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `Total NCRs: ${data.ncrs.length} (Open: ${openNcrs}, Closed: ${closedNcrs})`,
+      margin,
+      yPos,
+    );
+    yPos += 8;
 
     data.ncrs.forEach((ncr) => {
-      checkPageBreak(12)
-      doc.setFont('helvetica', 'bold')
-      doc.text(`${ncr.ncrNumber} - ${ncr.severity.toUpperCase()}`, margin, yPos)
-      yPos += 5
-      doc.setFont('helvetica', 'normal')
-      const desc = ncr.description.length > 80 ? ncr.description.slice(0, 77) + '...' : ncr.description
-      doc.text(`  ${desc}`, margin, yPos)
-      yPos += 5
-      doc.text(`  Status: ${ncr.status.replace('_', ' ')} | Category: ${ncr.category}`, margin, yPos)
-      yPos += 6
-    })
+      checkPageBreak(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${ncr.ncrNumber} - ${ncr.severity.toUpperCase()}`, margin, yPos);
+      yPos += 5;
+      doc.setFont('helvetica', 'normal');
+      const desc =
+        ncr.description.length > 80 ? ncr.description.slice(0, 77) + '...' : ncr.description;
+      doc.text(`  ${desc}`, margin, yPos);
+      yPos += 5;
+      doc.text(
+        `  Status: ${ncr.status.replace('_', ' ')} | Category: ${ncr.category}`,
+        margin,
+        yPos,
+      );
+      yPos += 6;
+    });
   } else {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'italic')
-    doc.text('No NCRs raised for this lot.', margin, yPos)
-    yPos += 5
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text('No NCRs raised for this lot.', margin, yPos);
+    yPos += 5;
   }
-  yPos += 10
+  yPos += 10;
 
-  drawLine()
+  drawLine();
 
   // ========== PHOTOS ==========
-  checkPageBreak(15)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Photo Evidence', margin, yPos)
-  yPos += 7
+  checkPageBreak(15);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Photo Evidence', margin, yPos);
+  yPos += 7;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`${data.photoCount} photos attached to ITP checklist items.`, margin, yPos)
-  yPos += 5
-  doc.setFont('helvetica', 'italic')
-  doc.text('(Photo images available in the SiteProof system)', margin, yPos)
-  yPos += 10
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${data.photoCount} photos attached to ITP checklist items.`, margin, yPos);
+  yPos += 5;
+  doc.setFont('helvetica', 'italic');
+  doc.text('(Photo images available in the SiteProof system)', margin, yPos);
+  yPos += 10;
 
   // ========== SIGNATURE BLOCK (Road Authority Formats) ==========
   if (formatConfig.requiresSignature) {
-    checkPageBreak(70)
-    drawLine()
-    yPos += 5
+    checkPageBreak(70);
+    drawLine();
+    yPos += 5;
 
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(0, 0, 0)
-    doc.text('CONFORMANCE CERTIFICATION', margin, yPos)
-    yPos += 10
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('CONFORMANCE CERTIFICATION', margin, yPos);
+    yPos += 10;
 
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text('I hereby certify that this lot has been constructed in accordance with the contract', margin, yPos)
-    yPos += 5
-    doc.text('documents and relevant specifications.', margin, yPos)
-    yPos += 15
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      'I hereby certify that this lot has been constructed in accordance with the contract',
+      margin,
+      yPos,
+    );
+    yPos += 5;
+    doc.text('documents and relevant specifications.', margin, yPos);
+    yPos += 15;
 
     // Contractor signature
-    doc.text('Contractor Representative:', margin, yPos)
-    yPos += 12
-    doc.line(margin, yPos, margin + 70, yPos)
-    yPos += 5
-    doc.setFontSize(8)
-    doc.text('Signature', margin, yPos)
-    doc.text('Date: _______________', margin + 80, yPos - 5)
-    yPos += 8
-    doc.line(margin, yPos, margin + 70, yPos)
-    yPos += 5
-    doc.text('Print Name', margin, yPos)
-    yPos += 15
+    doc.text('Contractor Representative:', margin, yPos);
+    yPos += 12;
+    doc.line(margin, yPos, margin + 70, yPos);
+    yPos += 5;
+    doc.setFontSize(8);
+    doc.text('Signature', margin, yPos);
+    doc.text('Date: _______________', margin + 80, yPos - 5);
+    yPos += 8;
+    doc.line(margin, yPos, margin + 70, yPos);
+    yPos += 5;
+    doc.text('Print Name', margin, yPos);
+    yPos += 15;
 
     // Superintendent signature (for TMR/TfNSW)
     if (options.format === 'tmr' || options.format === 'tfnsw') {
-      doc.setFontSize(10)
-      doc.text('Superintendent / Client Representative:', margin, yPos)
-      yPos += 12
-      doc.line(margin, yPos, margin + 70, yPos)
-      yPos += 5
-      doc.setFontSize(8)
-      doc.text('Signature', margin, yPos)
-      doc.text('Date: _______________', margin + 80, yPos - 5)
-      yPos += 8
-      doc.line(margin, yPos, margin + 70, yPos)
-      yPos += 5
-      doc.text('Print Name', margin, yPos)
-      yPos += 10
+      doc.setFontSize(10);
+      doc.text('Superintendent / Client Representative:', margin, yPos);
+      yPos += 12;
+      doc.line(margin, yPos, margin + 70, yPos);
+      yPos += 5;
+      doc.setFontSize(8);
+      doc.text('Signature', margin, yPos);
+      doc.text('Date: _______________', margin + 80, yPos - 5);
+      yPos += 8;
+      doc.line(margin, yPos, margin + 70, yPos);
+      yPos += 5;
+      doc.text('Print Name', margin, yPos);
+      yPos += 10;
     }
   }
 
   // ========== FOOTER ==========
-  checkPageBreak(20)
-  drawLine()
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(128, 128, 128)
+  checkPageBreak(20);
+  drawLine();
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(128, 128, 128);
   const generatedDate = new Date().toLocaleString('en-AU', {
     dateStyle: 'full',
     timeStyle: 'medium',
-  })
-  doc.text(`Generated: ${generatedDate}`, margin, yPos)
-  yPos += 4
+  });
+  doc.text(`Generated: ${generatedDate}`, margin, yPos);
+  yPos += 4;
 
   // Format-specific footer text
   if (options.format === 'tmr') {
-    doc.text('Prepared in accordance with TMR MRTS Standards - SiteProof v2', margin, yPos)
+    doc.text('Prepared in accordance with TMR MRTS Standards - SiteProof v2', margin, yPos);
   } else if (options.format === 'tfnsw') {
-    doc.text('Prepared in accordance with TfNSW QA Specifications - SiteProof v2', margin, yPos)
+    doc.text('Prepared in accordance with TfNSW QA Specifications - SiteProof v2', margin, yPos);
   } else if (options.format === 'vicroads') {
-    doc.text('Prepared in accordance with DOT Victoria Section Specifications - SiteProof v2', margin, yPos)
+    doc.text(
+      'Prepared in accordance with DOT Victoria Section Specifications - SiteProof v2',
+      margin,
+      yPos,
+    );
   } else {
-    doc.text('This report was generated by SiteProof v2 - Construction Quality Management System', margin, yPos)
+    doc.text(
+      'This report was generated by SiteProof v2 - Construction Quality Management System',
+      margin,
+      yPos,
+    );
   }
 
   // Save the PDF with format-specific filename
-  const formatSuffix = options.format !== 'standard' ? `-${options.format.toUpperCase()}` : ''
-  const filename = `Conformance-Report-${data.lot.lotNumber}${formatSuffix}-${new Date().toISOString().split('T')[0]}.pdf`
-  doc.save(filename)
+  const formatSuffix = options.format !== 'standard' ? `-${options.format.toUpperCase()}` : '';
+  const filename = `Conformance-Report-${data.lot.lotNumber}${formatSuffix}-${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(filename);
 }
 
 // Options for customizing the HP evidence package (Feature #466)
 export interface HPPackageOptions {
-  includeChecklistDetails: boolean
-  includeTestResults: boolean
-  includePhotos: boolean
-  includeReleaseDetails: boolean
-  includeSummary: boolean
+  includeChecklistDetails: boolean;
+  includeTestResults: boolean;
+  includePhotos: boolean;
+  includeReleaseDetails: boolean;
+  includeSummary: boolean;
 }
 
 export const defaultHPPackageOptions: HPPackageOptions = {
@@ -634,88 +670,88 @@ export const defaultHPPackageOptions: HPPackageOptions = {
   includeTestResults: true,
   includePhotos: true,
   includeReleaseDetails: true,
-  includeSummary: true
-}
+  includeSummary: true,
+};
 
 // Types for HP Evidence Package
 interface HPEvidencePackageData {
   holdPoint: {
-    id: string
-    description: string
-    status: string
-    notificationSentAt: string | null
-    scheduledDate: string | null
-    releasedAt: string | null
-    releasedByName: string | null
-    releaseNotes: string | null
-  }
+    id: string;
+    description: string;
+    status: string;
+    notificationSentAt: string | null;
+    scheduledDate: string | null;
+    releasedAt: string | null;
+    releasedByName: string | null;
+    releaseNotes: string | null;
+  };
   lot: {
-    id: string
-    lotNumber: string
-    description: string | null
-    activityType: string | null
-    chainageStart: number | null
-    chainageEnd: number | null
-  }
+    id: string;
+    lotNumber: string;
+    description: string | null;
+    activityType: string | null;
+    chainageStart: number | null;
+    chainageEnd: number | null;
+  };
   project: {
-    id: string
-    name: string
-    projectNumber: string | null
-  }
+    id: string;
+    name: string;
+    projectNumber: string | null;
+  };
   itpTemplate: {
-    id: string
-    name: string
-    activityType: string | null
-  }
+    id: string;
+    name: string;
+    activityType: string | null;
+  };
   checklist: {
-    sequenceNumber: number
-    description: string
-    pointType: string | null
-    responsibleParty: string | null
-    isCompleted: boolean
-    completedAt: string | null
-    completedBy: string | null
-    isVerified: boolean
-    verifiedAt: string | null
-    verifiedBy: string | null
-    notes: string | null
+    sequenceNumber: number;
+    description: string;
+    pointType: string | null;
+    responsibleParty: string | null;
+    isCompleted: boolean;
+    completedAt: string | null;
+    completedBy: string | null;
+    isVerified: boolean;
+    verifiedAt: string | null;
+    verifiedBy: string | null;
+    notes: string | null;
     attachments: {
-      id: string
-      filename: string
-      fileUrl: string | null
-      caption: string | null
-    }[]
-  }[]
+      id: string;
+      filename: string;
+      fileUrl: string | null;
+      caption: string | null;
+    }[];
+  }[];
   testResults: {
-    id: string
-    testType: string
-    testRequestNumber: string | null
-    laboratoryName: string | null
-    resultValue: number | null
-    resultUnit: string | null
-    passFail: string | null
-    status: string
-    isVerified: boolean
-    verifiedBy: string | null
-    createdAt: string
-  }[]
+    id: string;
+    testType: string;
+    testRequestNumber: string | null;
+    laboratoryName: string | null;
+    resultValue: number | null;
+    resultUnit: string | null;
+    passFail: string | null;
+    status: string;
+    isVerified: boolean;
+    verifiedBy: string | null;
+    createdAt: string;
+  }[];
   photos: {
-    id: string
-    filename: string
-    fileUrl: string | null
-    caption: string | null
-    uploadedAt: string | null
-  }[]
+    id: string;
+    filename: string;
+    fileUrl: string | null;
+    caption: string | null;
+    uploadedAt: string | null;
+  }[];
   summary: {
-    totalChecklistItems: number
-    completedItems: number
-    verifiedItems: number
-    totalTestResults: number
-    passingTests: number
-    totalPhotos: number
-    totalAttachments: number
-  }
-  generatedAt: string
+    totalChecklistItems: number;
+    completedItems: number;
+    verifiedItems: number;
+    totalTestResults: number;
+    passingTests: number;
+    totalPhotos: number;
+    totalAttachments: number;
+  };
+  generatedAt: string;
 }
 
 /**
@@ -723,438 +759,498 @@ interface HPEvidencePackageData {
  * @param data - The HP evidence package data
  * @param options - Customization options (Feature #466)
  */
-export function generateHPEvidencePackagePDF(data: HPEvidencePackageData, _options: HPPackageOptions = defaultHPPackageOptions): void {
-  const jsPDF = getJsPDFSync()
-  const doc = new jsPDF()
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 20
-  const contentWidth = pageWidth - margin * 2
-  let yPos = margin
+export async function generateHPEvidencePackagePDF(
+  data: HPEvidencePackageData,
+  _options: HPPackageOptions = defaultHPPackageOptions,
+): Promise<void> {
+  const jsPDF = await getJsPDF();
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - margin * 2;
+  let yPos = margin;
 
   // Helper to add a new page if needed
   const checkPageBreak = (requiredSpace: number) => {
     if (yPos + requiredSpace > pageHeight - margin) {
-      doc.addPage()
-      yPos = margin
-      return true
+      doc.addPage();
+      yPos = margin;
+      return true;
     }
-    return false
-  }
+    return false;
+  };
 
   // Helper to draw a line
   const drawLine = () => {
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 5
-  }
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 5;
+  };
 
   // ========== HEADER ==========
-  doc.setFontSize(20)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(0, 0, 0)
-  doc.text('HOLD POINT EVIDENCE PACKAGE', pageWidth / 2, yPos, { align: 'center' })
-  yPos += 12
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('HOLD POINT EVIDENCE PACKAGE', pageWidth / 2, yPos, { align: 'center' });
+  yPos += 12;
 
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Lot: ${data.lot.lotNumber}`, pageWidth / 2, yPos, { align: 'center' })
-  yPos += 15
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Lot: ${data.lot.lotNumber}`, pageWidth / 2, yPos, { align: 'center' });
+  yPos += 15;
 
-  drawLine()
+  drawLine();
 
   // ========== HOLD POINT IDENTIFICATION ==========
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('1. Hold Point Identification', margin, yPos)
-  yPos += 8
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('1. Hold Point Identification', margin, yPos);
+  yPos += 8;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
 
   // Hold Point Status Box
-  const statusColor = data.holdPoint.status === 'released'
-    ? [34, 197, 94] // Green
-    : data.holdPoint.status === 'notified'
-    ? [234, 179, 8] // Amber
-    : [156, 163, 175] // Gray
+  const statusColor =
+    data.holdPoint.status === 'released'
+      ? [34, 197, 94] // Green
+      : data.holdPoint.status === 'notified'
+        ? [234, 179, 8] // Amber
+        : [156, 163, 175]; // Gray
 
-  doc.setFillColor(statusColor[0], statusColor[1], statusColor[2])
-  doc.rect(margin, yPos, contentWidth, 12, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
-  const statusText = data.holdPoint.status === 'released' ? 'RELEASED' : data.holdPoint.status.toUpperCase()
-  doc.text(`STATUS: ${statusText}`, pageWidth / 2, yPos + 8, { align: 'center' })
-  doc.setTextColor(0, 0, 0)
-  yPos += 17
+  doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+  doc.rect(margin, yPos, contentWidth, 12, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  const statusText =
+    data.holdPoint.status === 'released' ? 'RELEASED' : data.holdPoint.status.toUpperCase();
+  doc.text(`STATUS: ${statusText}`, pageWidth / 2, yPos + 8, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
+  yPos += 17;
 
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Hold Point Description: ${data.holdPoint.description}`, margin, yPos)
-  yPos += 6
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Hold Point Description: ${data.holdPoint.description}`, margin, yPos);
+  yPos += 6;
 
   if (data.holdPoint.scheduledDate) {
     const scheduledDate = new Date(data.holdPoint.scheduledDate).toLocaleString('en-AU', {
       dateStyle: 'medium',
-      timeStyle: 'short'
-    })
-    doc.text(`Scheduled Date: ${scheduledDate}`, margin, yPos)
-    yPos += 6
+      timeStyle: 'short',
+    });
+    doc.text(`Scheduled Date: ${scheduledDate}`, margin, yPos);
+    yPos += 6;
   }
 
   if (data.holdPoint.releasedAt) {
     const releasedDate = new Date(data.holdPoint.releasedAt).toLocaleString('en-AU', {
       dateStyle: 'medium',
-      timeStyle: 'short'
-    })
-    doc.text(`Released: ${releasedDate}`, margin, yPos)
-    yPos += 6
+      timeStyle: 'short',
+    });
+    doc.text(`Released: ${releasedDate}`, margin, yPos);
+    yPos += 6;
   }
 
   if (data.holdPoint.releasedByName) {
-    doc.text(`Released By: ${data.holdPoint.releasedByName}`, margin, yPos)
-    yPos += 6
+    doc.text(`Released By: ${data.holdPoint.releasedByName}`, margin, yPos);
+    yPos += 6;
   }
 
   if (data.holdPoint.releaseNotes) {
-    doc.text(`Release Notes: ${data.holdPoint.releaseNotes}`, margin, yPos)
-    yPos += 6
+    doc.text(`Release Notes: ${data.holdPoint.releaseNotes}`, margin, yPos);
+    yPos += 6;
   }
-  yPos += 5
-  drawLine()
+  yPos += 5;
+  drawLine();
 
   // ========== LOT DETAILS ==========
-  checkPageBreak(50)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('2. Lot Details', margin, yPos)
-  yPos += 8
+  checkPageBreak(50);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('2. Lot Details', margin, yPos);
+  yPos += 8;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Project: ${data.project.name}`, margin, yPos)
-  yPos += 5
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Project: ${data.project.name}`, margin, yPos);
+  yPos += 5;
   if (data.project.projectNumber) {
-    doc.text(`Project Number: ${data.project.projectNumber}`, margin, yPos)
-    yPos += 5
+    doc.text(`Project Number: ${data.project.projectNumber}`, margin, yPos);
+    yPos += 5;
   }
-  doc.text(`Lot Number: ${data.lot.lotNumber}`, margin, yPos)
-  yPos += 5
+  doc.text(`Lot Number: ${data.lot.lotNumber}`, margin, yPos);
+  yPos += 5;
   if (data.lot.description) {
-    doc.text(`Description: ${data.lot.description}`, margin, yPos)
-    yPos += 5
+    doc.text(`Description: ${data.lot.description}`, margin, yPos);
+    yPos += 5;
   }
   if (data.lot.activityType) {
-    doc.text(`Activity Type: ${data.lot.activityType}`, margin, yPos)
-    yPos += 5
+    doc.text(`Activity Type: ${data.lot.activityType}`, margin, yPos);
+    yPos += 5;
   }
   if (data.lot.chainageStart != null && data.lot.chainageEnd != null) {
-    doc.text(`Chainage: ${data.lot.chainageStart} - ${data.lot.chainageEnd}`, margin, yPos)
-    yPos += 5
+    doc.text(`Chainage: ${data.lot.chainageStart} - ${data.lot.chainageEnd}`, margin, yPos);
+    yPos += 5;
   }
-  doc.text(`ITP Template: ${data.itpTemplate.name}`, margin, yPos)
-  yPos += 10
+  doc.text(`ITP Template: ${data.itpTemplate.name}`, margin, yPos);
+  yPos += 10;
 
-  drawLine()
+  drawLine();
 
   // ========== COMPLETED CHECKLIST ITEMS ==========
-  checkPageBreak(40)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('3. Completed Checklist Items', margin, yPos)
-  yPos += 8
+  checkPageBreak(40);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('3. Completed Checklist Items', margin, yPos);
+  yPos += 8;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Completion Status: ${data.summary.completedItems} / ${data.summary.totalChecklistItems} items completed`, margin, yPos)
-  yPos += 8
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(
+    `Completion Status: ${data.summary.completedItems} / ${data.summary.totalChecklistItems} items completed`,
+    margin,
+    yPos,
+  );
+  yPos += 8;
 
   // Checklist table header
-  const headers = ['#', 'Description', 'Type', 'Status', 'Completed By']
-  const colWidths = [10, 75, 20, 25, 40]
+  const headers = ['#', 'Description', 'Type', 'Status', 'Completed By'];
+  const colWidths = [10, 75, 20, 25, 40];
 
-  doc.setFillColor(240, 240, 240)
-  doc.rect(margin, yPos, contentWidth, 7, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  let xPos = margin + 2
+  doc.setFillColor(240, 240, 240);
+  doc.rect(margin, yPos, contentWidth, 7, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  let xPos = margin + 2;
   headers.forEach((header, i) => {
-    doc.text(header, xPos, yPos + 5)
-    xPos += colWidths[i]
-  })
-  yPos += 9
+    doc.text(header, xPos, yPos + 5);
+    xPos += colWidths[i];
+  });
+  yPos += 9;
 
   // Checklist rows
-  doc.setFont('helvetica', 'normal')
+  doc.setFont('helvetica', 'normal');
   data.checklist.forEach((item) => {
-    checkPageBreak(8)
-    xPos = margin + 2
+    checkPageBreak(8);
+    xPos = margin + 2;
 
-    doc.text(item.sequenceNumber.toString(), xPos, yPos + 4)
-    xPos += colWidths[0]
+    doc.text(item.sequenceNumber.toString(), xPos, yPos + 4);
+    xPos += colWidths[0];
 
-    const desc = item.description.length > 45 ? item.description.slice(0, 42) + '...' : item.description
-    doc.text(desc, xPos, yPos + 4)
-    xPos += colWidths[1]
+    const desc =
+      item.description.length > 45 ? item.description.slice(0, 42) + '...' : item.description;
+    doc.text(desc, xPos, yPos + 4);
+    xPos += colWidths[1];
 
-    const typeLabel = item.pointType === 'hold_point' ? 'HP' : item.pointType === 'witness' ? 'W' : 'S'
-    doc.text(typeLabel, xPos, yPos + 4)
-    xPos += colWidths[2]
+    const typeLabel =
+      item.pointType === 'hold_point' ? 'HP' : item.pointType === 'witness' ? 'W' : 'S';
+    doc.text(typeLabel, xPos, yPos + 4);
+    xPos += colWidths[2];
 
-    const statusLabel = item.isVerified ? 'Verified' : item.isCompleted ? 'Done' : 'Pending'
-    doc.text(statusLabel, xPos, yPos + 4)
-    xPos += colWidths[3]
+    const statusLabel = item.isVerified ? 'Verified' : item.isCompleted ? 'Done' : 'Pending';
+    doc.text(statusLabel, xPos, yPos + 4);
+    xPos += colWidths[3];
 
     if (item.completedBy) {
-      const completedBy = item.completedBy.length > 22 ? item.completedBy.slice(0, 19) + '...' : item.completedBy
-      doc.text(completedBy, xPos, yPos + 4)
+      const completedBy =
+        item.completedBy.length > 22 ? item.completedBy.slice(0, 19) + '...' : item.completedBy;
+      doc.text(completedBy, xPos, yPos + 4);
     }
 
-    yPos += 6
-  })
-  yPos += 8
+    yPos += 6;
+  });
+  yPos += 8;
 
-  drawLine()
+  drawLine();
 
   // ========== TEST RESULTS ==========
-  checkPageBreak(40)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('4. Test Results', margin, yPos)
-  yPos += 8
+  checkPageBreak(40);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('4. Test Results', margin, yPos);
+  yPos += 8;
 
   if (data.testResults.length > 0) {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Total Tests: ${data.summary.totalTestResults} | Passing: ${data.summary.passingTests}`, margin, yPos)
-    yPos += 8
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `Total Tests: ${data.summary.totalTestResults} | Passing: ${data.summary.passingTests}`,
+      margin,
+      yPos,
+    );
+    yPos += 8;
 
     // Test table header
-    const testHeaders = ['Test Type', 'Lab', 'Result', 'Pass/Fail', 'Verified']
-    const testColWidths = [40, 35, 35, 25, 35]
+    const testHeaders = ['Test Type', 'Lab', 'Result', 'Pass/Fail', 'Verified'];
+    const testColWidths = [40, 35, 35, 25, 35];
 
-    doc.setFillColor(240, 240, 240)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    xPos = margin + 2
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    xPos = margin + 2;
     testHeaders.forEach((header, i) => {
-      doc.text(header, xPos, yPos + 5)
-      xPos += testColWidths[i]
-    })
-    yPos += 9
+      doc.text(header, xPos, yPos + 5);
+      xPos += testColWidths[i];
+    });
+    yPos += 9;
 
     // Test rows
-    doc.setFont('helvetica', 'normal')
+    doc.setFont('helvetica', 'normal');
     data.testResults.forEach((test) => {
-      checkPageBreak(8)
-      xPos = margin + 2
+      checkPageBreak(8);
+      xPos = margin + 2;
 
-      doc.text(test.testType.slice(0, 22), xPos, yPos + 4)
-      xPos += testColWidths[0]
+      doc.text(test.testType.slice(0, 22), xPos, yPos + 4);
+      xPos += testColWidths[0];
 
-      doc.text((test.laboratoryName || 'N/A').slice(0, 18), xPos, yPos + 4)
-      xPos += testColWidths[1]
+      doc.text((test.laboratoryName || 'N/A').slice(0, 18), xPos, yPos + 4);
+      xPos += testColWidths[1];
 
-      const result = test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : 'N/A'
-      doc.text(result.slice(0, 18), xPos, yPos + 4)
-      xPos += testColWidths[2]
+      const result =
+        test.resultValue != null ? `${test.resultValue} ${test.resultUnit || ''}` : 'N/A';
+      doc.text(result.slice(0, 18), xPos, yPos + 4);
+      xPos += testColWidths[2];
 
-      doc.text(test.passFail || 'Pending', xPos, yPos + 4)
-      xPos += testColWidths[3]
+      doc.text(test.passFail || 'Pending', xPos, yPos + 4);
+      xPos += testColWidths[3];
 
-      doc.text(test.isVerified ? 'Yes' : 'No', xPos, yPos + 4)
-      yPos += 6
-    })
+      doc.text(test.isVerified ? 'Yes' : 'No', xPos, yPos + 4);
+      yPos += 6;
+    });
   } else {
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'italic')
-    doc.text('No test results recorded for this lot.', margin, yPos)
-    yPos += 5
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text('No test results recorded for this lot.', margin, yPos);
+    yPos += 5;
   }
-  yPos += 8
+  yPos += 8;
 
-  drawLine()
+  drawLine();
 
   // ========== PHOTOS & ATTACHMENTS ==========
-  checkPageBreak(30)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('5. Photos & Evidence', margin, yPos)
-  yPos += 8
+  checkPageBreak(30);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('5. Photos & Evidence', margin, yPos);
+  yPos += 8;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Photos: ${data.summary.totalPhotos}`, margin, yPos)
-  yPos += 5
-  doc.text(`Checklist Attachments: ${data.summary.totalAttachments}`, margin, yPos)
-  yPos += 5
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Photos: ${data.summary.totalPhotos}`, margin, yPos);
+  yPos += 5;
+  doc.text(`Checklist Attachments: ${data.summary.totalAttachments}`, margin, yPos);
+  yPos += 5;
 
   if (data.photos.length > 0) {
-    yPos += 3
-    doc.setFont('helvetica', 'bold')
-    doc.text('Photo List:', margin, yPos)
-    yPos += 5
-    doc.setFont('helvetica', 'normal')
+    yPos += 3;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Photo List:', margin, yPos);
+    yPos += 5;
+    doc.setFont('helvetica', 'normal');
     data.photos.slice(0, 10).forEach((photo) => {
-      checkPageBreak(6)
-      const uploadDate = photo.uploadedAt ? new Date(photo.uploadedAt).toLocaleDateString('en-AU') : ''
-      doc.text(`- ${photo.filename}${photo.caption ? ` (${photo.caption})` : ''} ${uploadDate}`, margin + 5, yPos)
-      yPos += 5
-    })
+      checkPageBreak(6);
+      const uploadDate = photo.uploadedAt
+        ? new Date(photo.uploadedAt).toLocaleDateString('en-AU')
+        : '';
+      doc.text(
+        `- ${photo.filename}${photo.caption ? ` (${photo.caption})` : ''} ${uploadDate}`,
+        margin + 5,
+        yPos,
+      );
+      yPos += 5;
+    });
     if (data.photos.length > 10) {
-      doc.setFont('helvetica', 'italic')
-      doc.text(`... and ${data.photos.length - 10} more photos`, margin + 5, yPos)
-      yPos += 5
+      doc.setFont('helvetica', 'italic');
+      doc.text(`... and ${data.photos.length - 10} more photos`, margin + 5, yPos);
+      yPos += 5;
     }
   }
 
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(9)
-  doc.text('(Full photo images available in SiteProof system)', margin, yPos)
-  yPos += 10
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(9);
+  doc.text('(Full photo images available in SiteProof system)', margin, yPos);
+  yPos += 10;
 
-  drawLine()
+  drawLine();
 
   // ========== SURVEY DATA ==========
-  checkPageBreak(20)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('6. Survey Data', margin, yPos)
-  yPos += 8
+  checkPageBreak(20);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('6. Survey Data', margin, yPos);
+  yPos += 8;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
   if (data.lot.chainageStart != null || data.lot.chainageEnd != null) {
-    doc.text(`Chainage Range: ${data.lot.chainageStart ?? 'N/A'} - ${data.lot.chainageEnd ?? 'N/A'}`, margin, yPos)
-    yPos += 5
+    doc.text(
+      `Chainage Range: ${data.lot.chainageStart ?? 'N/A'} - ${data.lot.chainageEnd ?? 'N/A'}`,
+      margin,
+      yPos,
+    );
+    yPos += 5;
   }
-  doc.setFont('helvetica', 'italic')
-  doc.text('(Survey coordinates and as-built data available in SiteProof system)', margin, yPos)
-  yPos += 10
+  doc.setFont('helvetica', 'italic');
+  doc.text('(Survey coordinates and as-built data available in SiteProof system)', margin, yPos);
+  yPos += 10;
 
-  drawLine()
+  drawLine();
 
   // ========== SUMMARY ==========
-  checkPageBreak(40)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text('7. Evidence Summary', margin, yPos)
-  yPos += 8
+  checkPageBreak(40);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('7. Evidence Summary', margin, yPos);
+  yPos += 8;
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
 
   // Summary box
-  doc.setFillColor(245, 245, 245)
-  doc.rect(margin, yPos, contentWidth, 35, 'F')
-  yPos += 6
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin, yPos, contentWidth, 35, 'F');
+  yPos += 6;
 
-  doc.text(`Checklist Items Completed: ${data.summary.completedItems} / ${data.summary.totalChecklistItems}`, margin + 5, yPos)
-  yPos += 5
-  doc.text(`Items Verified: ${data.summary.verifiedItems}`, margin + 5, yPos)
-  yPos += 5
-  doc.text(`Test Results: ${data.summary.totalTestResults} (${data.summary.passingTests} passing)`, margin + 5, yPos)
-  yPos += 5
-  doc.text(`Photos: ${data.summary.totalPhotos}`, margin + 5, yPos)
-  yPos += 5
-  doc.text(`Attachments: ${data.summary.totalAttachments}`, margin + 5, yPos)
-  yPos += 15
+  doc.text(
+    `Checklist Items Completed: ${data.summary.completedItems} / ${data.summary.totalChecklistItems}`,
+    margin + 5,
+    yPos,
+  );
+  yPos += 5;
+  doc.text(`Items Verified: ${data.summary.verifiedItems}`, margin + 5, yPos);
+  yPos += 5;
+  doc.text(
+    `Test Results: ${data.summary.totalTestResults} (${data.summary.passingTests} passing)`,
+    margin + 5,
+    yPos,
+  );
+  yPos += 5;
+  doc.text(`Photos: ${data.summary.totalPhotos}`, margin + 5, yPos);
+  yPos += 5;
+  doc.text(`Attachments: ${data.summary.totalAttachments}`, margin + 5, yPos);
+  yPos += 15;
 
   // ========== FOOTER ==========
-  drawLine()
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(128, 128, 128)
+  drawLine();
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(128, 128, 128);
   const generatedDate = new Date(data.generatedAt).toLocaleString('en-AU', {
     dateStyle: 'full',
-    timeStyle: 'medium'
-  })
-  doc.text(`Generated: ${generatedDate}`, margin, yPos)
-  yPos += 4
-  doc.text('This evidence package was generated by SiteProof v2 - Civil Execution and Conformance Platform', margin, yPos)
+    timeStyle: 'medium',
+  });
+  doc.text(`Generated: ${generatedDate}`, margin, yPos);
+  yPos += 4;
+  doc.text(
+    'This evidence package was generated by SiteProof v2 - Civil Execution and Conformance Platform',
+    margin,
+    yPos,
+  );
 
   // Save the PDF
-  const filename = `HP-Evidence-Package-${data.lot.lotNumber}-${new Date().toISOString().split('T')[0]}.pdf`
-  doc.save(filename)
+  const filename = `HP-Evidence-Package-${data.lot.lotNumber}-${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(filename);
 }
 
 // Types for Claim Evidence Package
+interface ClaimItpCompletion {
+  isCompleted?: boolean;
+}
+
+interface ClaimHoldPoint {
+  status?: string;
+}
+
+interface ClaimTestResult {
+  testType: string;
+  resultValue: number | string | null;
+  resultUnit?: string | null;
+  passFail?: string | null;
+}
+
+interface ClaimNcr {
+  ncrNumber: string;
+  severity: string;
+  status: string;
+}
+
 interface ClaimEvidencePackageData {
   claim: {
-    id: string
-    claimNumber: number
-    periodStart: string
-    periodEnd: string
-    status: string
-    totalClaimedAmount: number
-    certifiedAmount: number | null
-    submittedAt: string | null
-    preparedBy: { name: string; email: string } | null
-    preparedAt: string | null
-  }
+    id: string;
+    claimNumber: number;
+    periodStart: string;
+    periodEnd: string;
+    status: string;
+    totalClaimedAmount: number;
+    certifiedAmount: number | null;
+    submittedAt: string | null;
+    preparedBy: { name: string; email: string } | null;
+    preparedAt: string | null;
+  };
   project: {
-    id: string
-    name: string
-    projectNumber: string | null
-    clientName: string | null
-    state: string
-  }
+    id: string;
+    name: string;
+    projectNumber: string | null;
+    clientName: string | null;
+    state: string;
+  };
   lots: {
-    id: string
-    lotNumber: string
-    description: string | null
-    activityType: string | null
-    chainageStart: number | null
-    chainageEnd: number | null
-    layer: string | null
-    areaZone: string | null
-    status: string
-    conformedAt: string | null
-    conformedBy: { name: string; email: string } | null
-    claimAmount: number
-    percentComplete: number
+    id: string;
+    lotNumber: string;
+    description: string | null;
+    activityType: string | null;
+    chainageStart: number | null;
+    chainageEnd: number | null;
+    layer: string | null;
+    areaZone: string | null;
+    status: string;
+    conformedAt: string | null;
+    conformedBy: { name: string; email: string } | null;
+    claimAmount: number;
+    percentComplete: number;
     itp: {
-      templateName: string
-      checklistItems: any[]
-      completions: any[]
-      holdPoints: any[]
-    } | null
-    testResults: any[]
-    ncrs: any[]
-    documents: any[]
+      templateName: string;
+      checklistItems: unknown[];
+      completions: ClaimItpCompletion[];
+      holdPoints: ClaimHoldPoint[];
+    } | null;
+    testResults: ClaimTestResult[];
+    ncrs: ClaimNcr[];
+    documents: unknown[];
     summary: {
-      testResultCount: number
-      passedTestCount: number
-      ncrCount: number
-      openNcrCount: number
-      photoCount: number
-      itpCompletionPercentage: number
-    }
-  }[]
+      testResultCount: number;
+      passedTestCount: number;
+      ncrCount: number;
+      openNcrCount: number;
+      photoCount: number;
+      itpCompletionPercentage: number;
+    };
+  }[];
   summary: {
-    totalLots: number
-    totalClaimedAmount: number
-    totalTestResults: number
-    totalPassedTests: number
-    totalNCRs: number
-    totalOpenNCRs: number
-    totalPhotos: number
-    conformedLots: number
-  }
-  generatedAt: string
-  generationTimeMs: number
+    totalLots: number;
+    totalClaimedAmount: number;
+    totalTestResults: number;
+    totalPassedTests: number;
+    totalNCRs: number;
+    totalOpenNCRs: number;
+    totalPhotos: number;
+    conformedLots: number;
+  };
+  generatedAt: string;
+  generationTimeMs: number;
 }
 
 // Options for customizing the claim evidence package
 export interface ClaimPackageOptions {
-  includeLotSummary: boolean
-  includeLotDetails: boolean
-  includeITPChecklists: boolean
-  includeTestResults: boolean
-  includeNCRs: boolean
-  includeHoldPoints: boolean
-  includePhotos: boolean
-  includeDeclaration: boolean
+  includeLotSummary: boolean;
+  includeLotDetails: boolean;
+  includeITPChecklists: boolean;
+  includeTestResults: boolean;
+  includeNCRs: boolean;
+  includeHoldPoints: boolean;
+  includePhotos: boolean;
+  includeDeclaration: boolean;
 }
 
 const defaultPackageOptions: ClaimPackageOptions = {
@@ -1166,183 +1262,211 @@ const defaultPackageOptions: ClaimPackageOptions = {
   includeHoldPoints: true,
   includePhotos: true,
   includeDeclaration: true,
-}
+};
 
 /**
  * Generate a PDF evidence package for a Progress Claim (SOPA compliant)
  */
-export function generateClaimEvidencePackagePDF(data: ClaimEvidencePackageData, options: ClaimPackageOptions = defaultPackageOptions): void {
-  const jsPDF = getJsPDFSync()
-  const startTime = Date.now()
-  const doc = new jsPDF()
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 15
-  const contentWidth = pageWidth - margin * 2
-  let yPos = margin
+export async function generateClaimEvidencePackagePDF(
+  data: ClaimEvidencePackageData,
+  options: ClaimPackageOptions = defaultPackageOptions,
+): Promise<void> {
+  const jsPDF = await getJsPDF();
+  const startTime = Date.now();
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let yPos = margin;
 
   // Helper to add a new page if needed
   const checkPageBreak = (requiredSpace: number) => {
     if (yPos + requiredSpace > pageHeight - margin) {
-      doc.addPage()
-      yPos = margin
-      return true
+      doc.addPage();
+      yPos = margin;
+      return true;
     }
-    return false
-  }
+    return false;
+  };
 
   // Helper to draw a line
   const drawLine = () => {
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 3
-  }
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 3;
+  };
 
   // Helper to format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: 'AUD',
-      minimumFractionDigits: 0
-    }).format(amount)
-  }
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
   // ========== COVER PAGE ==========
-  doc.setFontSize(24)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(0, 0, 0)
-  doc.text('PROGRESS CLAIM', pageWidth / 2, 40, { align: 'center' })
-  doc.text('EVIDENCE PACKAGE', pageWidth / 2, 52, { align: 'center' })
+  doc.setFontSize(24);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('PROGRESS CLAIM', pageWidth / 2, 40, { align: 'center' });
+  doc.text('EVIDENCE PACKAGE', pageWidth / 2, 52, { align: 'center' });
 
-  doc.setFontSize(18)
-  doc.text(`Claim #${data.claim.claimNumber}`, pageWidth / 2, 70, { align: 'center' })
+  doc.setFontSize(18);
+  doc.text(`Claim #${data.claim.claimNumber}`, pageWidth / 2, 70, { align: 'center' });
 
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'normal')
-  doc.text(data.project.name, pageWidth / 2, 85, { align: 'center' })
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'normal');
+  doc.text(data.project.name, pageWidth / 2, 85, { align: 'center' });
   if (data.project.projectNumber) {
-    doc.text(`Project #: ${data.project.projectNumber}`, pageWidth / 2, 95, { align: 'center' })
+    doc.text(`Project #: ${data.project.projectNumber}`, pageWidth / 2, 95, { align: 'center' });
   }
 
   // Claim period
-  doc.setFontSize(12)
-  const periodStart = new Date(data.claim.periodStart).toLocaleDateString('en-AU')
-  const periodEnd = new Date(data.claim.periodEnd).toLocaleDateString('en-AU')
-  doc.text(`Claim Period: ${periodStart} - ${periodEnd}`, pageWidth / 2, 115, { align: 'center' })
+  doc.setFontSize(12);
+  const periodStart = new Date(data.claim.periodStart).toLocaleDateString('en-AU');
+  const periodEnd = new Date(data.claim.periodEnd).toLocaleDateString('en-AU');
+  doc.text(`Claim Period: ${periodStart} - ${periodEnd}`, pageWidth / 2, 115, { align: 'center' });
 
   // Summary box
-  doc.setFillColor(245, 245, 245)
-  doc.rect(margin, 130, contentWidth, 50, 'F')
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin, 130, contentWidth, 50, 'F');
 
-  doc.setFont('helvetica', 'bold')
-  doc.text('Claim Summary', margin + 5, 140)
+  doc.setFont('helvetica', 'bold');
+  doc.text('Claim Summary', margin + 5, 140);
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(11)
-  doc.text(`Total Lots: ${data.summary.totalLots}`, margin + 5, 150)
-  doc.text(`Claimed Amount: ${formatCurrency(data.summary.totalClaimedAmount)}`, margin + 5, 158)
-  doc.text(`Test Results: ${data.summary.totalTestResults} (${data.summary.totalPassedTests} passed)`, margin + 5, 166)
-  doc.text(`NCRs: ${data.summary.totalNCRs} (${data.summary.totalOpenNCRs} open)`, margin + 5, 174)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.text(`Total Lots: ${data.summary.totalLots}`, margin + 5, 150);
+  doc.text(`Claimed Amount: ${formatCurrency(data.summary.totalClaimedAmount)}`, margin + 5, 158);
+  doc.text(
+    `Test Results: ${data.summary.totalTestResults} (${data.summary.totalPassedTests} passed)`,
+    margin + 5,
+    166,
+  );
+  doc.text(`NCRs: ${data.summary.totalNCRs} (${data.summary.totalOpenNCRs} open)`, margin + 5, 174);
 
-  doc.text(`Photos: ${data.summary.totalPhotos}`, margin + contentWidth / 2, 150)
-  doc.text(`Conformed Lots: ${data.summary.conformedLots}`, margin + contentWidth / 2, 158)
-  doc.text(`Status: ${data.claim.status.toUpperCase()}`, margin + contentWidth / 2, 166)
+  doc.text(`Photos: ${data.summary.totalPhotos}`, margin + contentWidth / 2, 150);
+  doc.text(`Conformed Lots: ${data.summary.conformedLots}`, margin + contentWidth / 2, 158);
+  doc.text(`Status: ${data.claim.status.toUpperCase()}`, margin + contentWidth / 2, 166);
 
   // Prepared by
   if (data.claim.preparedBy) {
-    doc.setFontSize(10)
-    doc.text(`Prepared by: ${data.claim.preparedBy.name}`, margin, 195)
+    doc.setFontSize(10);
+    doc.text(`Prepared by: ${data.claim.preparedBy.name}`, margin, 195);
     if (data.claim.preparedAt) {
-      const preparedDate = new Date(data.claim.preparedAt).toLocaleDateString('en-AU')
-      doc.text(`Date: ${preparedDate}`, margin, 203)
+      const preparedDate = new Date(data.claim.preparedAt).toLocaleDateString('en-AU');
+      doc.text(`Date: ${preparedDate}`, margin, 203);
     }
   }
 
   // SOPA Compliance note
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'italic')
-  doc.text('This evidence package is prepared for Security of Payment Act compliance.', pageWidth / 2, 240, { align: 'center' })
-  doc.text(`State: ${data.project.state || 'NSW'}`, pageWidth / 2, 248, { align: 'center' })
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'italic');
+  doc.text(
+    'This evidence package is prepared for Security of Payment Act compliance.',
+    pageWidth / 2,
+    240,
+    { align: 'center' },
+  );
+  doc.text(`State: ${data.project.state || 'NSW'}`, pageWidth / 2, 248, { align: 'center' });
 
   // Footer
-  doc.setFontSize(8)
-  doc.setTextColor(128, 128, 128)
-  const generatedDate = new Date(data.generatedAt).toLocaleString('en-AU')
-  doc.text(`Generated: ${generatedDate}`, margin, pageHeight - 15)
-  doc.text('SiteProof v2 - Civil Execution and Conformance Platform', pageWidth - margin, pageHeight - 15, { align: 'right' })
+  doc.setFontSize(8);
+  doc.setTextColor(128, 128, 128);
+  const generatedDate = new Date(data.generatedAt).toLocaleString('en-AU');
+  doc.text(`Generated: ${generatedDate}`, margin, pageHeight - 15);
+  doc.text(
+    'SiteProof v2 - Civil Execution and Conformance Platform',
+    pageWidth - margin,
+    pageHeight - 15,
+    { align: 'right' },
+  );
 
   // ========== LOT SUMMARY TABLE (Page 2) ==========
   if (options.includeLotSummary) {
-    doc.addPage()
-    yPos = margin
+    doc.addPage();
+    yPos = margin;
 
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(0, 0, 0)
-    doc.text('LOT SUMMARY', margin, yPos)
-    yPos += 10
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text('LOT SUMMARY', margin, yPos);
+    yPos += 10;
 
     // Table header
-    const headers = ['Lot #', 'Activity', 'Status', 'ITP %', 'Tests', 'NCRs', 'Claim Amount']
-    const colWidths = [25, 45, 22, 18, 18, 18, 34]
+    const headers = ['Lot #', 'Activity', 'Status', 'ITP %', 'Tests', 'NCRs', 'Claim Amount'];
+    const colWidths = [25, 45, 22, 18, 18, 18, 34];
 
-    doc.setFillColor(240, 240, 240)
-    doc.rect(margin, yPos, contentWidth, 8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    let xPos = margin + 2
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let xPos = margin + 2;
     headers.forEach((header, i) => {
-      doc.text(header, xPos, yPos + 5.5)
-      xPos += colWidths[i]
-    })
-    yPos += 10
+      doc.text(header, xPos, yPos + 5.5);
+      xPos += colWidths[i];
+    });
+    yPos += 10;
 
     // Table rows
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
 
     data.lots.forEach((lot, idx) => {
-      checkPageBreak(8)
+      checkPageBreak(8);
 
       // Alternate row colors
       if (idx % 2 === 1) {
-        doc.setFillColor(250, 250, 250)
-        doc.rect(margin, yPos - 1, contentWidth, 7, 'F')
+        doc.setFillColor(250, 250, 250);
+        doc.rect(margin, yPos - 1, contentWidth, 7, 'F');
       }
 
-      xPos = margin + 2
-      doc.text(lot.lotNumber.slice(0, 12), xPos, yPos + 4)
-      xPos += colWidths[0]
+      xPos = margin + 2;
+      doc.text(lot.lotNumber.slice(0, 12), xPos, yPos + 4);
+      xPos += colWidths[0];
 
-      doc.text((lot.activityType || 'N/A').slice(0, 25), xPos, yPos + 4)
-      xPos += colWidths[1]
+      doc.text((lot.activityType || 'N/A').slice(0, 25), xPos, yPos + 4);
+      xPos += colWidths[1];
 
-      doc.text(lot.status.slice(0, 10), xPos, yPos + 4)
-      xPos += colWidths[2]
+      doc.text(lot.status.slice(0, 10), xPos, yPos + 4);
+      xPos += colWidths[2];
 
-      doc.text(`${lot.summary.itpCompletionPercentage}%`, xPos, yPos + 4)
-      xPos += colWidths[3]
+      doc.text(`${lot.summary.itpCompletionPercentage}%`, xPos, yPos + 4);
+      xPos += colWidths[3];
 
-      doc.text(`${lot.summary.passedTestCount}/${lot.summary.testResultCount}`, xPos, yPos + 4)
-      xPos += colWidths[4]
+      doc.text(`${lot.summary.passedTestCount}/${lot.summary.testResultCount}`, xPos, yPos + 4);
+      xPos += colWidths[4];
 
-      doc.text(`${lot.summary.ncrCount}`, xPos, yPos + 4)
-      xPos += colWidths[5]
+      doc.text(`${lot.summary.ncrCount}`, xPos, yPos + 4);
+      xPos += colWidths[5];
 
-      doc.text(formatCurrency(lot.claimAmount), xPos, yPos + 4)
+      doc.text(formatCurrency(lot.claimAmount), xPos, yPos + 4);
 
-      yPos += 7
-    })
+      yPos += 7;
+    });
 
     // Total row
-    yPos += 3
-    doc.setFillColor(220, 220, 220)
-    doc.rect(margin, yPos - 1, contentWidth, 8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.text('TOTAL', margin + 2, yPos + 5)
-    doc.text(`${data.lots.length} lots`, margin + colWidths[0] + colWidths[1] + 2, yPos + 5)
-    doc.text(formatCurrency(data.summary.totalClaimedAmount), margin + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + colWidths[5] + 2, yPos + 5)
-    yPos += 15
+    yPos += 3;
+    doc.setFillColor(220, 220, 220);
+    doc.rect(margin, yPos - 1, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL', margin + 2, yPos + 5);
+    doc.text(`${data.lots.length} lots`, margin + colWidths[0] + colWidths[1] + 2, yPos + 5);
+    doc.text(
+      formatCurrency(data.summary.totalClaimedAmount),
+      margin +
+        colWidths[0] +
+        colWidths[1] +
+        colWidths[2] +
+        colWidths[3] +
+        colWidths[4] +
+        colWidths[5] +
+        2,
+      yPos + 5,
+    );
+    yPos += 15;
   }
 
   // ========== INDIVIDUAL LOT DETAILS ==========
@@ -1350,212 +1474,253 @@ export function generateClaimEvidencePackagePDF(data: ClaimEvidencePackageData, 
     data.lots.forEach((lot, lotIdx) => {
       // Each lot starts on a new page (or at least has enough space)
       if (lotIdx > 0 || yPos > pageHeight - 100) {
-        doc.addPage()
-        yPos = margin
+        doc.addPage();
+        yPos = margin;
       } else {
-        checkPageBreak(80)
+        checkPageBreak(80);
       }
 
       // Lot header
-      doc.setFontSize(12)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(0, 0, 0)
-      doc.text(`LOT: ${lot.lotNumber}`, margin, yPos)
-      yPos += 6
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`LOT: ${lot.lotNumber}`, margin, yPos);
+      yPos += 6;
 
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
       if (lot.description) {
-        doc.text(lot.description.slice(0, 80), margin, yPos)
-        yPos += 5
+        doc.text(lot.description.slice(0, 80), margin, yPos);
+        yPos += 5;
       }
       if (lot.activityType) {
-        doc.text(`Activity: ${lot.activityType}`, margin, yPos)
-        yPos += 5
+        doc.text(`Activity: ${lot.activityType}`, margin, yPos);
+        yPos += 5;
       }
       if (lot.chainageStart !== null && lot.chainageEnd !== null) {
-        doc.text(`Chainage: ${lot.chainageStart} - ${lot.chainageEnd}`, margin, yPos)
-        yPos += 5
+        doc.text(`Chainage: ${lot.chainageStart} - ${lot.chainageEnd}`, margin, yPos);
+        yPos += 5;
       }
       if (lot.layer) {
-        doc.text(`Layer: ${lot.layer}`, margin, yPos)
-        yPos += 5
+        doc.text(`Layer: ${lot.layer}`, margin, yPos);
+        yPos += 5;
       }
 
       // Status badge
-      doc.text(`Status: ${lot.status} | Claim Amount: ${formatCurrency(lot.claimAmount)}`, margin, yPos)
-      yPos += 8
+      doc.text(
+        `Status: ${lot.status} | Claim Amount: ${formatCurrency(lot.claimAmount)}`,
+        margin,
+        yPos,
+      );
+      yPos += 8;
 
-      drawLine()
+      drawLine();
 
       // ITP Summary (conditional)
       if (options.includeITPChecklists && lot.itp) {
-        checkPageBreak(25)
-        doc.setFont('helvetica', 'bold')
-        doc.text('ITP Checklist', margin, yPos)
-        yPos += 5
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.text(`Template: ${lot.itp.templateName}`, margin, yPos)
-        yPos += 4
-        const completedItems = lot.itp.completions.filter((c: any) => c.isCompleted).length
-        const totalItems = lot.itp.checklistItems.length
-        doc.text(`Completion: ${completedItems}/${totalItems} items (${lot.summary.itpCompletionPercentage}%)`, margin, yPos)
-        yPos += 4
+        checkPageBreak(25);
+        doc.setFont('helvetica', 'bold');
+        doc.text('ITP Checklist', margin, yPos);
+        yPos += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`Template: ${lot.itp.templateName}`, margin, yPos);
+        yPos += 4;
+        const completedItems = lot.itp.completions.filter((c) => c.isCompleted).length;
+        const totalItems = lot.itp.checklistItems.length;
+        doc.text(
+          `Completion: ${completedItems}/${totalItems} items (${lot.summary.itpCompletionPercentage}%)`,
+          margin,
+          yPos,
+        );
+        yPos += 4;
 
         // Hold points (conditional)
         if (options.includeHoldPoints) {
-          const releasedHP = lot.itp.holdPoints.filter((hp: any) => hp.status === 'released').length
-          const totalHP = lot.itp.holdPoints.length
+          const releasedHP = lot.itp.holdPoints.filter((hp) => hp.status === 'released').length;
+          const totalHP = lot.itp.holdPoints.length;
           if (totalHP > 0) {
-            doc.text(`Hold Points: ${releasedHP}/${totalHP} released`, margin, yPos)
-            yPos += 4
+            doc.text(`Hold Points: ${releasedHP}/${totalHP} released`, margin, yPos);
+            yPos += 4;
           }
         }
-        yPos += 4
+        yPos += 4;
       }
 
       // Test Results Summary (conditional)
       if (options.includeTestResults && lot.testResults.length > 0) {
-        checkPageBreak(20)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text('Test Results', margin, yPos)
-        yPos += 5
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.text(`Total: ${lot.summary.testResultCount} | Passed: ${lot.summary.passedTestCount} | Failed: ${lot.summary.testResultCount - lot.summary.passedTestCount}`, margin, yPos)
-        yPos += 6
+        checkPageBreak(20);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('Test Results', margin, yPos);
+        yPos += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(
+          `Total: ${lot.summary.testResultCount} | Passed: ${lot.summary.passedTestCount} | Failed: ${lot.summary.testResultCount - lot.summary.passedTestCount}`,
+          margin,
+          yPos,
+        );
+        yPos += 6;
 
         // List first few test results
-        lot.testResults.slice(0, 5).forEach((test: any) => {
-          checkPageBreak(6)
-          const passFail = test.passFail === 'pass' ? '✓' : test.passFail === 'fail' ? '✗' : '-'
-          const result = test.resultValue !== null ? `${test.resultValue} ${test.resultUnit || ''}` : 'pending'
-          doc.text(`  ${passFail} ${test.testType}: ${result}`, margin, yPos)
-          yPos += 4
-        })
+        lot.testResults.slice(0, 5).forEach((test) => {
+          checkPageBreak(6);
+          const passFail = test.passFail === 'pass' ? '✓' : test.passFail === 'fail' ? '✗' : '-';
+          const result =
+            test.resultValue !== null ? `${test.resultValue} ${test.resultUnit || ''}` : 'pending';
+          doc.text(`  ${passFail} ${test.testType}: ${result}`, margin, yPos);
+          yPos += 4;
+        });
         if (lot.testResults.length > 5) {
-          doc.setFont('helvetica', 'italic')
-          doc.text(`  ... and ${lot.testResults.length - 5} more tests`, margin, yPos)
-          doc.setFont('helvetica', 'normal')
-          yPos += 4
+          doc.setFont('helvetica', 'italic');
+          doc.text(`  ... and ${lot.testResults.length - 5} more tests`, margin, yPos);
+          doc.setFont('helvetica', 'normal');
+          yPos += 4;
         }
-        yPos += 4
+        yPos += 4;
       }
 
       // NCR Summary (conditional)
       if (options.includeNCRs && lot.ncrs.length > 0) {
-        checkPageBreak(20)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text('Non-Conformance Reports', margin, yPos)
-        yPos += 5
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.text(`Total: ${lot.summary.ncrCount} | Open: ${lot.summary.openNcrCount} | Closed: ${lot.summary.ncrCount - lot.summary.openNcrCount}`, margin, yPos)
-        yPos += 6
+        checkPageBreak(20);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('Non-Conformance Reports', margin, yPos);
+        yPos += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(
+          `Total: ${lot.summary.ncrCount} | Open: ${lot.summary.openNcrCount} | Closed: ${lot.summary.ncrCount - lot.summary.openNcrCount}`,
+          margin,
+          yPos,
+        );
+        yPos += 6;
 
         // List NCRs
-        lot.ncrs.slice(0, 3).forEach((ncr: any) => {
-          checkPageBreak(6)
-          doc.text(`  ${ncr.ncrNumber} (${ncr.severity}): ${ncr.status}`, margin, yPos)
-          yPos += 4
-        })
+        lot.ncrs.slice(0, 3).forEach((ncr) => {
+          checkPageBreak(6);
+          doc.text(`  ${ncr.ncrNumber} (${ncr.severity}): ${ncr.status}`, margin, yPos);
+          yPos += 4;
+        });
         if (lot.ncrs.length > 3) {
-          doc.setFont('helvetica', 'italic')
-          doc.text(`  ... and ${lot.ncrs.length - 3} more NCRs`, margin, yPos)
-          doc.setFont('helvetica', 'normal')
-          yPos += 4
+          doc.setFont('helvetica', 'italic');
+          doc.text(`  ... and ${lot.ncrs.length - 3} more NCRs`, margin, yPos);
+          doc.setFont('helvetica', 'normal');
+          yPos += 4;
         }
-        yPos += 4
+        yPos += 4;
       }
 
       // Conformance
       if (lot.conformedAt) {
-        checkPageBreak(15)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text('Conformance', margin, yPos)
-        yPos += 5
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        const conformedDate = new Date(lot.conformedAt).toLocaleDateString('en-AU')
-        doc.text(`Conformed: ${conformedDate}`, margin, yPos)
-        yPos += 4
+        checkPageBreak(15);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text('Conformance', margin, yPos);
+        yPos += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const conformedDate = new Date(lot.conformedAt).toLocaleDateString('en-AU');
+        doc.text(`Conformed: ${conformedDate}`, margin, yPos);
+        yPos += 4;
         if (lot.conformedBy) {
-          doc.text(`By: ${lot.conformedBy.name}`, margin, yPos)
-          yPos += 4
+          doc.text(`By: ${lot.conformedBy.name}`, margin, yPos);
+          yPos += 4;
         }
-        yPos += 4
+        yPos += 4;
       }
 
       // Photo count (conditional)
       if (options.includePhotos && lot.summary.photoCount > 0) {
-        checkPageBreak(10)
-        doc.setFontSize(9)
-        doc.text(`Photos: ${lot.summary.photoCount} attached to lot`, margin, yPos)
-        yPos += 8
+        checkPageBreak(10);
+        doc.setFontSize(9);
+        doc.text(`Photos: ${lot.summary.photoCount} attached to lot`, margin, yPos);
+        yPos += 8;
       }
 
-      drawLine()
-      yPos += 5
-    })
+      drawLine();
+      yPos += 5;
+    });
   }
 
   // ========== FINAL PAGE - DECLARATION ==========
   if (options.includeDeclaration) {
-    doc.addPage()
-    yPos = margin
+    doc.addPage();
+    yPos = margin;
 
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('DECLARATION', margin, yPos)
-    yPos += 12
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DECLARATION', margin, yPos);
+    yPos += 12;
 
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text('This evidence package contains the supporting documentation for Progress Claim', margin, yPos)
-    yPos += 5
-    doc.text(`#${data.claim.claimNumber} in the amount of ${formatCurrency(data.summary.totalClaimedAmount)}.`, margin, yPos)
-    yPos += 12
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      'This evidence package contains the supporting documentation for Progress Claim',
+      margin,
+      yPos,
+    );
+    yPos += 5;
+    doc.text(
+      `#${data.claim.claimNumber} in the amount of ${formatCurrency(data.summary.totalClaimedAmount)}.`,
+      margin,
+      yPos,
+    );
+    yPos += 12;
 
-    doc.text('The information provided in this package is true and accurate to the best of our', margin, yPos)
-    yPos += 5
-    doc.text('knowledge. All lots included have been completed in accordance with the contract', margin, yPos)
-    yPos += 5
-    doc.text('requirements and applicable standards.', margin, yPos)
-    yPos += 20
+    doc.text(
+      'The information provided in this package is true and accurate to the best of our',
+      margin,
+      yPos,
+    );
+    yPos += 5;
+    doc.text(
+      'knowledge. All lots included have been completed in accordance with the contract',
+      margin,
+      yPos,
+    );
+    yPos += 5;
+    doc.text('requirements and applicable standards.', margin, yPos);
+    yPos += 20;
 
     // Signature lines
-    doc.line(margin, yPos, margin + 60, yPos)
-    yPos += 5
-    doc.text('Signature', margin, yPos)
-    yPos += 15
+    doc.line(margin, yPos, margin + 60, yPos);
+    yPos += 5;
+    doc.text('Signature', margin, yPos);
+    yPos += 15;
 
-    doc.line(margin, yPos, margin + 60, yPos)
-    yPos += 5
-    doc.text('Name', margin, yPos)
-    yPos += 15
+    doc.line(margin, yPos, margin + 60, yPos);
+    yPos += 5;
+    doc.text('Name', margin, yPos);
+    yPos += 15;
 
-    doc.line(margin, yPos, margin + 60, yPos)
-    yPos += 5
-    doc.text('Date', margin, yPos)
-    yPos += 25
+    doc.line(margin, yPos, margin + 60, yPos);
+    yPos += 5;
+    doc.text('Date', margin, yPos);
+    yPos += 25;
 
     // Footer with generation info
-    doc.setFontSize(8)
-    doc.setTextColor(128, 128, 128)
-    doc.text(`Evidence package generated: ${new Date(data.generatedAt).toLocaleString('en-AU')}`, margin, pageHeight - 25)
-    doc.text(`Generation time: ${data.generationTimeMs}ms (data fetch) + ${Date.now() - startTime}ms (PDF)`, margin, pageHeight - 20)
-    doc.text('SiteProof v2 - Civil Execution and Conformance Platform', margin, pageHeight - 15)
+    doc.setFontSize(8);
+    doc.setTextColor(128, 128, 128);
+    doc.text(
+      `Evidence package generated: ${new Date(data.generatedAt).toLocaleString('en-AU')}`,
+      margin,
+      pageHeight - 25,
+    );
+    doc.text(
+      `Generation time: ${data.generationTimeMs}ms (data fetch) + ${Date.now() - startTime}ms (PDF)`,
+      margin,
+      pageHeight - 20,
+    );
+    doc.text('SiteProof v2 - Civil Execution and Conformance Platform', margin, pageHeight - 15);
   }
 
   // Save the PDF
-  const filename = `Claim-${data.claim.claimNumber}-Evidence-Package-${new Date().toISOString().split('T')[0]}.pdf`
-  doc.save(filename)
+  const filename = `Claim-${data.claim.claimNumber}-Evidence-Package-${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(filename);
 
-  console.log(`Claim evidence package PDF generated in ${Date.now() - startTime}ms`)
+  devLog(`Claim evidence package PDF generated in ${Date.now() - startTime}ms`);
 }
 
 // ========================================
@@ -1564,311 +1729,329 @@ export function generateClaimEvidencePackagePDF(data: ClaimEvidencePackageData, 
 
 export interface NCRDetailData {
   ncr: {
-    ncrNumber: string
-    description: string
-    category: string
-    severity: 'minor' | 'major'
-    status: string
-    rootCause?: string | null
-    proposedAction?: string | null
-    actionTaken?: string | null
-    preventativeMeasures?: string | null
-    lessonsLearned?: string | null // Feature #474
-    qmApprovalRequired: boolean
-    qmApprovedAt: string | null
-    qmApprovedBy?: { fullName: string; email: string } | null
-    raisedBy: { fullName: string; email: string }
-    responsibleUser?: { fullName: string; email: string } | null
-    dueDate?: string | null
-    closedAt?: string | null
-    closedBy?: { fullName: string; email: string } | null
-    createdAt: string
-  }
+    ncrNumber: string;
+    description: string;
+    category: string;
+    severity: 'minor' | 'major';
+    status: string;
+    rootCause?: string | null;
+    proposedAction?: string | null;
+    actionTaken?: string | null;
+    preventativeMeasures?: string | null;
+    lessonsLearned?: string | null; // Feature #474
+    qmApprovalRequired: boolean;
+    qmApprovedAt: string | null;
+    qmApprovedBy?: { fullName: string; email: string } | null;
+    raisedBy: { fullName: string; email: string };
+    responsibleUser?: { fullName: string; email: string } | null;
+    dueDate?: string | null;
+    closedAt?: string | null;
+    closedBy?: { fullName: string; email: string } | null;
+    createdAt: string;
+  };
   project: {
-    name: string
-    projectNumber: string
-  }
+    name: string;
+    projectNumber: string;
+  };
   lots: Array<{
-    lotNumber: string
-    description: string | null
-  }>
+    lotNumber: string;
+    description: string | null;
+  }>;
   timeline?: Array<{
-    action: string
-    performedBy: string
-    performedAt: string
-    notes?: string
-  }>
+    action: string;
+    performedBy: string;
+    performedAt: string;
+    notes?: string;
+  }>;
 }
 
 /**
  * Generate a PDF detail report for a Non-Conformance Report (NCR)
  */
-export function generateNCRDetailPDF(data: NCRDetailData): void {
-  const jsPDF = getJsPDFSync()
-  const startTime = Date.now()
-  const doc = new jsPDF()
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 15
-  const contentWidth = pageWidth - (margin * 2)
-  let yPos = margin
+export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
+  const jsPDF = await getJsPDF();
+  const startTime = Date.now();
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let yPos = margin;
 
   // Helper functions
   const formatDate = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return 'Not set'
+    if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleDateString('en-AU', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
-    })
-  }
+      year: 'numeric',
+    });
+  };
 
   const formatDateTime = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return 'Not set'
+    if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleString('en-AU', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+      minute: '2-digit',
+    });
+  };
 
   const checkPageBreak = (neededHeight: number): void => {
     if (yPos + neededHeight > pageHeight - 20) {
-      doc.addPage()
-      yPos = margin
+      doc.addPage();
+      yPos = margin;
     }
-  }
+  };
 
   const drawSectionHeader = (title: string): void => {
-    checkPageBreak(15)
-    doc.setFillColor(240, 240, 240)
-    doc.rect(margin, yPos - 3, contentWidth, 8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.setTextColor(50, 50, 50)
-    doc.text(title, margin + 2, yPos + 2)
-    yPos += 10
-    doc.setTextColor(0, 0, 0)
-  }
+    checkPageBreak(15);
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 3, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(50, 50, 50);
+    doc.text(title, margin + 2, yPos + 2);
+    yPos += 10;
+    doc.setTextColor(0, 0, 0);
+  };
 
   const addField = (label: string, value: string | null | undefined, maxWidth?: number): void => {
-    checkPageBreak(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.text(`${label}:`, margin, yPos)
-    doc.setFont('helvetica', 'normal')
-    const labelWidth = doc.getTextWidth(`${label}: `)
-    const valueText = value || 'N/A'
-    const textMaxWidth = maxWidth || (contentWidth - labelWidth - 5)
-    const lines = doc.splitTextToSize(valueText, textMaxWidth)
-    doc.text(lines, margin + labelWidth + 2, yPos)
-    yPos += (lines.length * 4) + 2
-  }
+    checkPageBreak(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(`${label}:`, margin, yPos);
+    doc.setFont('helvetica', 'normal');
+    const labelWidth = doc.getTextWidth(`${label}: `);
+    const valueText = value || 'N/A';
+    const textMaxWidth = maxWidth || contentWidth - labelWidth - 5;
+    const lines = doc.splitTextToSize(valueText, textMaxWidth);
+    doc.text(lines, margin + labelWidth + 2, yPos);
+    yPos += lines.length * 4 + 2;
+  };
 
   // ========== HEADER ==========
   // Severity-based header color
   const severityColors: Record<string, [number, number, number]> = {
-    major: [220, 53, 69],   // Red for major
-    minor: [255, 193, 7]    // Amber for minor
-  }
-  const headerColor = severityColors[data.ncr.severity] || [100, 100, 100]
+    major: [220, 53, 69], // Red for major
+    minor: [255, 193, 7], // Amber for minor
+  };
+  const headerColor = severityColors[data.ncr.severity] || [100, 100, 100];
 
-  doc.setFillColor(...headerColor)
-  doc.rect(0, 0, pageWidth, 35, 'F')
+  doc.setFillColor(...headerColor);
+  doc.rect(0, 0, pageWidth, 35, 'F');
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(18)
-  doc.text('NON-CONFORMANCE REPORT', margin, 15)
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('NON-CONFORMANCE REPORT', margin, 15);
 
-  doc.setFontSize(12)
-  doc.text(data.ncr.ncrNumber, margin, 25)
+  doc.setFontSize(12);
+  doc.text(data.ncr.ncrNumber, margin, 25);
 
   // Severity badge in header
-  doc.setFontSize(10)
-  doc.text(`[${data.ncr.severity.toUpperCase()}]`, pageWidth - margin - 20, 25)
+  doc.setFontSize(10);
+  doc.text(`[${data.ncr.severity.toUpperCase()}]`, pageWidth - margin - 20, 25);
 
-  yPos = 45
-  doc.setTextColor(0, 0, 0)
+  yPos = 45;
+  doc.setTextColor(0, 0, 0);
 
   // ========== NCR IDENTIFICATION ==========
-  drawSectionHeader('NCR Identification')
+  drawSectionHeader('NCR Identification');
 
-  addField('NCR Number', data.ncr.ncrNumber)
-  addField('Status', data.ncr.status.replace(/_/g, ' ').toUpperCase())
-  addField('Category', data.ncr.category.replace(/_/g, ' '))
-  addField('Severity', data.ncr.severity.toUpperCase())
-  addField('Raised By', data.ncr.raisedBy?.fullName || data.ncr.raisedBy?.email || 'Unknown')
-  addField('Raised On', formatDateTime(data.ncr.createdAt))
-  addField('Due Date', formatDate(data.ncr.dueDate))
-  addField('Responsible', data.ncr.responsibleUser?.fullName || data.ncr.responsibleUser?.email || 'Unassigned')
+  addField('NCR Number', data.ncr.ncrNumber);
+  addField('Status', data.ncr.status.replace(/_/g, ' ').toUpperCase());
+  addField('Category', data.ncr.category.replace(/_/g, ' '));
+  addField('Severity', data.ncr.severity.toUpperCase());
+  addField('Raised By', data.ncr.raisedBy?.fullName || data.ncr.raisedBy?.email || 'Unknown');
+  addField('Raised On', formatDateTime(data.ncr.createdAt));
+  addField('Due Date', formatDate(data.ncr.dueDate));
+  addField(
+    'Responsible',
+    data.ncr.responsibleUser?.fullName || data.ncr.responsibleUser?.email || 'Unassigned',
+  );
 
-  yPos += 5
+  yPos += 5;
 
   // ========== PROJECT & LOTS ==========
-  drawSectionHeader('Project & Affected Lots')
+  drawSectionHeader('Project & Affected Lots');
 
-  addField('Project', `${data.project.name} (${data.project.projectNumber})`)
+  addField('Project', `${data.project.name} (${data.project.projectNumber})`);
 
   if (data.lots && data.lots.length > 0) {
-    checkPageBreak(10 + data.lots.length * 5)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.text('Affected Lots:', margin, yPos)
-    yPos += 5
-    doc.setFont('helvetica', 'normal')
-    data.lots.forEach(lot => {
-      const lotText = lot.description ? `${lot.lotNumber} - ${lot.description}` : lot.lotNumber
-      doc.text(`  • ${lotText}`, margin, yPos)
-      yPos += 4
-    })
+    checkPageBreak(10 + data.lots.length * 5);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('Affected Lots:', margin, yPos);
+    yPos += 5;
+    doc.setFont('helvetica', 'normal');
+    data.lots.forEach((lot) => {
+      const lotText = lot.description ? `${lot.lotNumber} - ${lot.description}` : lot.lotNumber;
+      doc.text(`  • ${lotText}`, margin, yPos);
+      yPos += 4;
+    });
   } else {
-    addField('Affected Lots', 'None specified')
+    addField('Affected Lots', 'None specified');
   }
 
-  yPos += 5
+  yPos += 5;
 
   // ========== DESCRIPTION ==========
-  drawSectionHeader('Non-Conformance Description')
+  drawSectionHeader('Non-Conformance Description');
 
-  checkPageBreak(20)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  const descLines = doc.splitTextToSize(data.ncr.description || 'No description provided', contentWidth - 5)
-  doc.text(descLines, margin, yPos)
-  yPos += (descLines.length * 4) + 5
+  checkPageBreak(20);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  const descLines = doc.splitTextToSize(
+    data.ncr.description || 'No description provided',
+    contentWidth - 5,
+  );
+  doc.text(descLines, margin, yPos);
+  yPos += descLines.length * 4 + 5;
 
   // ========== ROOT CAUSE & ACTIONS ==========
-  if (data.ncr.rootCause || data.ncr.proposedAction || data.ncr.actionTaken || data.ncr.preventativeMeasures || data.ncr.lessonsLearned) {
-    drawSectionHeader('Investigation & Resolution')
+  if (
+    data.ncr.rootCause ||
+    data.ncr.proposedAction ||
+    data.ncr.actionTaken ||
+    data.ncr.preventativeMeasures ||
+    data.ncr.lessonsLearned
+  ) {
+    drawSectionHeader('Investigation & Resolution');
 
     if (data.ncr.rootCause) {
-      checkPageBreak(15)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.text('Root Cause:', margin, yPos)
-      yPos += 4
-      doc.setFont('helvetica', 'normal')
-      const rootCauseLines = doc.splitTextToSize(data.ncr.rootCause, contentWidth - 5)
-      doc.text(rootCauseLines, margin + 3, yPos)
-      yPos += (rootCauseLines.length * 4) + 4
+      checkPageBreak(15);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('Root Cause:', margin, yPos);
+      yPos += 4;
+      doc.setFont('helvetica', 'normal');
+      const rootCauseLines = doc.splitTextToSize(data.ncr.rootCause, contentWidth - 5);
+      doc.text(rootCauseLines, margin + 3, yPos);
+      yPos += rootCauseLines.length * 4 + 4;
     }
 
     if (data.ncr.proposedAction) {
-      checkPageBreak(15)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.text('Proposed Action:', margin, yPos)
-      yPos += 4
-      doc.setFont('helvetica', 'normal')
-      const proposedLines = doc.splitTextToSize(data.ncr.proposedAction, contentWidth - 5)
-      doc.text(proposedLines, margin + 3, yPos)
-      yPos += (proposedLines.length * 4) + 4
+      checkPageBreak(15);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('Proposed Action:', margin, yPos);
+      yPos += 4;
+      doc.setFont('helvetica', 'normal');
+      const proposedLines = doc.splitTextToSize(data.ncr.proposedAction, contentWidth - 5);
+      doc.text(proposedLines, margin + 3, yPos);
+      yPos += proposedLines.length * 4 + 4;
     }
 
     if (data.ncr.actionTaken) {
-      checkPageBreak(15)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.text('Action Taken:', margin, yPos)
-      yPos += 4
-      doc.setFont('helvetica', 'normal')
-      const actionLines = doc.splitTextToSize(data.ncr.actionTaken, contentWidth - 5)
-      doc.text(actionLines, margin + 3, yPos)
-      yPos += (actionLines.length * 4) + 4
+      checkPageBreak(15);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('Action Taken:', margin, yPos);
+      yPos += 4;
+      doc.setFont('helvetica', 'normal');
+      const actionLines = doc.splitTextToSize(data.ncr.actionTaken, contentWidth - 5);
+      doc.text(actionLines, margin + 3, yPos);
+      yPos += actionLines.length * 4 + 4;
     }
 
     if (data.ncr.preventativeMeasures) {
-      checkPageBreak(15)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.text('Preventative Measures:', margin, yPos)
-      yPos += 4
-      doc.setFont('helvetica', 'normal')
-      const preventativeLines = doc.splitTextToSize(data.ncr.preventativeMeasures, contentWidth - 5)
-      doc.text(preventativeLines, margin + 3, yPos)
-      yPos += (preventativeLines.length * 4) + 4
+      checkPageBreak(15);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('Preventative Measures:', margin, yPos);
+      yPos += 4;
+      doc.setFont('helvetica', 'normal');
+      const preventativeLines = doc.splitTextToSize(
+        data.ncr.preventativeMeasures,
+        contentWidth - 5,
+      );
+      doc.text(preventativeLines, margin + 3, yPos);
+      yPos += preventativeLines.length * 4 + 4;
     }
 
     // Feature #474: Lessons Learned
     if (data.ncr.lessonsLearned) {
-      checkPageBreak(15)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.text('Lessons Learned:', margin, yPos)
-      yPos += 4
-      doc.setFont('helvetica', 'normal')
-      const lessonsLines = doc.splitTextToSize(data.ncr.lessonsLearned, contentWidth - 5)
-      doc.text(lessonsLines, margin + 3, yPos)
-      yPos += (lessonsLines.length * 4) + 4
+      checkPageBreak(15);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('Lessons Learned:', margin, yPos);
+      yPos += 4;
+      doc.setFont('helvetica', 'normal');
+      const lessonsLines = doc.splitTextToSize(data.ncr.lessonsLearned, contentWidth - 5);
+      doc.text(lessonsLines, margin + 3, yPos);
+      yPos += lessonsLines.length * 4 + 4;
     }
 
-    yPos += 3
+    yPos += 3;
   }
 
   // ========== QM APPROVAL (for major NCRs) ==========
   if (data.ncr.severity === 'major') {
-    drawSectionHeader('Quality Manager Approval')
+    drawSectionHeader('Quality Manager Approval');
 
-    addField('QM Approval Required', data.ncr.qmApprovalRequired ? 'Yes' : 'No')
+    addField('QM Approval Required', data.ncr.qmApprovalRequired ? 'Yes' : 'No');
     if (data.ncr.qmApprovedAt) {
-      addField('QM Approved', formatDateTime(data.ncr.qmApprovedAt))
-      addField('Approved By', data.ncr.qmApprovedBy?.fullName || data.ncr.qmApprovedBy?.email || 'Unknown')
+      addField('QM Approved', formatDateTime(data.ncr.qmApprovedAt));
+      addField(
+        'Approved By',
+        data.ncr.qmApprovedBy?.fullName || data.ncr.qmApprovedBy?.email || 'Unknown',
+      );
     } else if (data.ncr.qmApprovalRequired) {
-      addField('QM Approval Status', 'Pending')
+      addField('QM Approval Status', 'Pending');
     }
-    yPos += 3
+    yPos += 3;
   }
 
   // ========== CLOSURE DETAILS ==========
   if (data.ncr.closedAt) {
-    drawSectionHeader('Closure Details')
+    drawSectionHeader('Closure Details');
 
-    addField('Closed On', formatDateTime(data.ncr.closedAt))
-    addField('Closed By', data.ncr.closedBy?.fullName || data.ncr.closedBy?.email || 'Unknown')
-    yPos += 3
+    addField('Closed On', formatDateTime(data.ncr.closedAt));
+    addField('Closed By', data.ncr.closedBy?.fullName || data.ncr.closedBy?.email || 'Unknown');
+    yPos += 3;
   }
 
   // ========== TIMELINE ==========
   if (data.timeline && data.timeline.length > 0) {
-    drawSectionHeader('Activity Timeline')
+    drawSectionHeader('Activity Timeline');
 
     data.timeline.forEach((event, index) => {
-      checkPageBreak(15)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.text(`${index + 1}. ${event.action}`, margin, yPos)
-      yPos += 4
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      doc.text(`   By: ${event.performedBy} | ${formatDateTime(event.performedAt)}`, margin, yPos)
-      yPos += 4
+      checkPageBreak(15);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(`${index + 1}. ${event.action}`, margin, yPos);
+      yPos += 4;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(`   By: ${event.performedBy} | ${formatDateTime(event.performedAt)}`, margin, yPos);
+      yPos += 4;
       if (event.notes) {
-        const noteLines = doc.splitTextToSize(`   Notes: ${event.notes}`, contentWidth - 10)
-        doc.text(noteLines, margin, yPos)
-        yPos += (noteLines.length * 3) + 2
+        const noteLines = doc.splitTextToSize(`   Notes: ${event.notes}`, contentWidth - 10);
+        doc.text(noteLines, margin, yPos);
+        yPos += noteLines.length * 3 + 2;
       }
-    })
-    yPos += 3
+    });
+    yPos += 3;
   }
 
   // ========== FOOTER ==========
-  const footerY = pageHeight - 15
-  doc.setDrawColor(200, 200, 200)
-  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+  const footerY = pageHeight - 15;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
 
-  doc.setFontSize(7)
-  doc.setTextColor(128, 128, 128)
-  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY)
-  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY)
+  doc.setFontSize(7);
+  doc.setTextColor(128, 128, 128);
+  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY);
+  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
 
   // Save the PDF
-  const filename = `NCR-${data.ncr.ncrNumber}-${new Date().toISOString().split('T')[0]}.pdf`
-  doc.save(filename)
+  const filename = `NCR-${data.ncr.ncrNumber}-${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(filename);
 
-  console.log(`NCR detail PDF generated in ${Date.now() - startTime}ms`)
+  devLog(`NCR detail PDF generated in ${Date.now() - startTime}ms`);
 }
 
 // ========================================
@@ -1877,256 +2060,267 @@ export function generateNCRDetailPDF(data: NCRDetailData): void {
 
 export interface TestCertificateData {
   test: {
-    id: string
-    testType: string
-    testRequestNumber: string | null
-    laboratoryName: string | null
-    laboratoryReportNumber: string | null
-    sampleDate: string | null
-    sampleLocation: string | null
-    testDate: string | null
-    resultDate: string | null
-    resultValue: number | null
-    resultUnit: string | null
-    specificationMin: number | null
-    specificationMax: number | null
-    passFail: string
-    status: string
-    aiExtracted?: boolean
-    createdAt: string
-  }
+    id: string;
+    testType: string;
+    testRequestNumber: string | null;
+    laboratoryName: string | null;
+    laboratoryReportNumber: string | null;
+    sampleDate: string | null;
+    sampleLocation: string | null;
+    testDate: string | null;
+    resultDate: string | null;
+    resultValue: number | null;
+    resultUnit: string | null;
+    specificationMin: number | null;
+    specificationMax: number | null;
+    passFail: string;
+    status: string;
+    aiExtracted?: boolean;
+    createdAt: string;
+  };
   lot: {
-    lotNumber: string
-    description: string | null
-    activityType: string | null
-    chainageStart: number | null
-    chainageEnd: number | null
-  } | null
+    lotNumber: string;
+    description: string | null;
+    activityType: string | null;
+    chainageStart: number | null;
+    chainageEnd: number | null;
+  } | null;
   project: {
-    name: string
-    projectNumber: string
-  }
+    name: string;
+    projectNumber: string;
+  };
 }
 
 /**
  * Generate a PDF test certificate for a test result
  */
-export function generateTestCertificatePDF(data: TestCertificateData): void {
-  const jsPDF = getJsPDFSync()
-  const startTime = Date.now()
-  const doc = new jsPDF()
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 15
-  const contentWidth = pageWidth - (margin * 2)
-  let yPos = margin
+export async function generateTestCertificatePDF(data: TestCertificateData): Promise<void> {
+  const jsPDF = await getJsPDF();
+  const startTime = Date.now();
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let yPos = margin;
 
   // Helper functions
   const formatDate = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return 'Not recorded'
+    if (!dateStr) return 'Not recorded';
     return new Date(dateStr).toLocaleDateString('en-AU', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
-    })
-  }
+      year: 'numeric',
+    });
+  };
 
   const checkPageBreak = (neededHeight: number): void => {
     if (yPos + neededHeight > pageHeight - 20) {
-      doc.addPage()
-      yPos = margin
+      doc.addPage();
+      yPos = margin;
     }
-  }
+  };
 
   const drawSectionHeader = (title: string): void => {
-    checkPageBreak(15)
-    doc.setFillColor(240, 240, 240)
-    doc.rect(margin, yPos - 3, contentWidth, 8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.setTextColor(50, 50, 50)
-    doc.text(title, margin + 2, yPos + 2)
-    yPos += 10
-    doc.setTextColor(0, 0, 0)
-  }
+    checkPageBreak(15);
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 3, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(50, 50, 50);
+    doc.text(title, margin + 2, yPos + 2);
+    yPos += 10;
+    doc.setTextColor(0, 0, 0);
+  };
 
   const addField = (label: string, value: string | null | undefined): void => {
-    checkPageBreak(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.text(`${label}:`, margin, yPos)
-    doc.setFont('helvetica', 'normal')
-    const labelWidth = doc.getTextWidth(`${label}: `)
-    doc.text(value || 'N/A', margin + labelWidth + 2, yPos)
-    yPos += 6
-  }
+    checkPageBreak(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(`${label}:`, margin, yPos);
+    doc.setFont('helvetica', 'normal');
+    const labelWidth = doc.getTextWidth(`${label}: `);
+    doc.text(value || 'N/A', margin + labelWidth + 2, yPos);
+    yPos += 6;
+  };
 
   // ========== HEADER ==========
   // Pass/Fail based header color
   const passFailColors: Record<string, [number, number, number]> = {
-    pass: [34, 197, 94],   // Green
-    fail: [239, 68, 68],    // Red
-    pending: [234, 179, 8]  // Amber
-  }
-  const headerColor = passFailColors[data.test.passFail.toLowerCase()] || [100, 100, 100]
+    pass: [34, 197, 94], // Green
+    fail: [239, 68, 68], // Red
+    pending: [234, 179, 8], // Amber
+  };
+  const headerColor = passFailColors[data.test.passFail.toLowerCase()] || [100, 100, 100];
 
-  doc.setFillColor(...headerColor)
-  doc.rect(0, 0, pageWidth, 40, 'F')
+  doc.setFillColor(...headerColor);
+  doc.rect(0, 0, pageWidth, 40, 'F');
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(18)
-  doc.text('TEST CERTIFICATE', margin, 15)
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('TEST CERTIFICATE', margin, 15);
 
-  doc.setFontSize(12)
-  doc.text(data.test.testType, margin, 27)
+  doc.setFontSize(12);
+  doc.text(data.test.testType, margin, 27);
 
   // Pass/Fail badge
-  const passFailText = data.test.passFail.toUpperCase()
-  doc.setFontSize(14)
-  const badgeX = pageWidth - margin - doc.getTextWidth(passFailText)
-  doc.text(passFailText, badgeX, 27)
+  const passFailText = data.test.passFail.toUpperCase();
+  doc.setFontSize(14);
+  const badgeX = pageWidth - margin - doc.getTextWidth(passFailText);
+  doc.text(passFailText, badgeX, 27);
 
-  yPos = 50
-  doc.setTextColor(0, 0, 0)
+  yPos = 50;
+  doc.setTextColor(0, 0, 0);
 
   // ========== TEST IDENTIFICATION ==========
-  drawSectionHeader('Test Identification')
+  drawSectionHeader('Test Identification');
 
-  addField('Test Type', data.test.testType)
-  addField('Request Number', data.test.testRequestNumber)
-  addField('Lab Report Number', data.test.laboratoryReportNumber)
-  addField('Laboratory', data.test.laboratoryName)
-  addField('Status', data.test.status.replace(/_/g, ' ').toUpperCase())
+  addField('Test Type', data.test.testType);
+  addField('Request Number', data.test.testRequestNumber);
+  addField('Lab Report Number', data.test.laboratoryReportNumber);
+  addField('Laboratory', data.test.laboratoryName);
+  addField('Status', data.test.status.replace(/_/g, ' ').toUpperCase());
   if (data.test.aiExtracted) {
-    addField('Data Source', 'AI Extracted from Certificate')
+    addField('Data Source', 'AI Extracted from Certificate');
   }
 
-  yPos += 5
+  yPos += 5;
 
   // ========== PROJECT & LOT ==========
-  drawSectionHeader('Project & Location')
+  drawSectionHeader('Project & Location');
 
-  addField('Project', `${data.project.name} (${data.project.projectNumber})`)
+  addField('Project', `${data.project.name} (${data.project.projectNumber})`);
   if (data.lot) {
-    addField('Lot Number', data.lot.lotNumber)
-    addField('Lot Description', data.lot.description)
-    addField('Activity Type', data.lot.activityType)
+    addField('Lot Number', data.lot.lotNumber);
+    addField('Lot Description', data.lot.description);
+    addField('Activity Type', data.lot.activityType);
     if (data.lot.chainageStart != null) {
-      const chainageText = data.lot.chainageEnd != null
-        ? `CH ${data.lot.chainageStart} - ${data.lot.chainageEnd}`
-        : `CH ${data.lot.chainageStart}`
-      addField('Chainage', chainageText)
+      const chainageText =
+        data.lot.chainageEnd != null
+          ? `CH ${data.lot.chainageStart} - ${data.lot.chainageEnd}`
+          : `CH ${data.lot.chainageStart}`;
+      addField('Chainage', chainageText);
     }
   } else {
-    addField('Lot', 'Not linked')
+    addField('Lot', 'Not linked');
   }
-  addField('Sample Location', data.test.sampleLocation)
+  addField('Sample Location', data.test.sampleLocation);
 
-  yPos += 5
+  yPos += 5;
 
   // ========== DATES ==========
-  drawSectionHeader('Test Dates')
+  drawSectionHeader('Test Dates');
 
-  addField('Sample Date', formatDate(data.test.sampleDate))
-  addField('Test Date', formatDate(data.test.testDate))
-  addField('Result Date', formatDate(data.test.resultDate))
-  addField('Record Created', formatDate(data.test.createdAt))
+  addField('Sample Date', formatDate(data.test.sampleDate));
+  addField('Test Date', formatDate(data.test.testDate));
+  addField('Result Date', formatDate(data.test.resultDate));
+  addField('Record Created', formatDate(data.test.createdAt));
 
-  yPos += 5
+  yPos += 5;
 
   // ========== TEST RESULTS ==========
-  drawSectionHeader('Test Results')
+  drawSectionHeader('Test Results');
 
   // Result value box
-  checkPageBreak(40)
-  doc.setFillColor(245, 245, 245)
-  doc.roundedRect(margin, yPos, contentWidth, 35, 3, 3, 'F')
+  checkPageBreak(40);
+  doc.setFillColor(245, 245, 245);
+  doc.roundedRect(margin, yPos, contentWidth, 35, 3, 3, 'F');
 
   // Result value
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(24)
-  const resultText = data.test.resultValue != null
-    ? `${data.test.resultValue}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
-    : 'Pending'
-  doc.text(resultText, margin + 10, yPos + 15)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(24);
+  const resultText =
+    data.test.resultValue != null
+      ? `${data.test.resultValue}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
+      : 'Pending';
+  doc.text(resultText, margin + 10, yPos + 15);
 
   // Specification range
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
   if (data.test.specificationMin != null || data.test.specificationMax != null) {
-    let specText = 'Specification: '
+    let specText = 'Specification: ';
     if (data.test.specificationMin != null && data.test.specificationMax != null) {
-      specText += `${data.test.specificationMin} - ${data.test.specificationMax}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
+      specText += `${data.test.specificationMin} - ${data.test.specificationMax}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`;
     } else if (data.test.specificationMin != null) {
-      specText += `≥ ${data.test.specificationMin}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
+      specText += `≥ ${data.test.specificationMin}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`;
     } else if (data.test.specificationMax != null) {
-      specText += `≤ ${data.test.specificationMax}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`
+      specText += `≤ ${data.test.specificationMax}${data.test.resultUnit ? ' ' + data.test.resultUnit : ''}`;
     }
-    doc.text(specText, margin + 10, yPos + 25)
+    doc.text(specText, margin + 10, yPos + 25);
   }
 
   // Pass/Fail indicator
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12)
-  const passFailIndicator = data.test.passFail.toUpperCase()
-  const indicatorColor = passFailColors[data.test.passFail.toLowerCase()] || [100, 100, 100]
-  doc.setTextColor(...indicatorColor)
-  doc.text(passFailIndicator, margin + contentWidth - 40, yPos + 20)
-  doc.setTextColor(0, 0, 0)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  const passFailIndicator = data.test.passFail.toUpperCase();
+  const indicatorColor = passFailColors[data.test.passFail.toLowerCase()] || [100, 100, 100];
+  doc.setTextColor(...indicatorColor);
+  doc.text(passFailIndicator, margin + contentWidth - 40, yPos + 20);
+  doc.setTextColor(0, 0, 0);
 
-  yPos += 45
+  yPos += 45;
 
   // ========== COMPLIANCE STATEMENT ==========
-  checkPageBreak(30)
-  doc.setFillColor(data.test.passFail.toLowerCase() === 'pass' ? 220 : 254, data.test.passFail.toLowerCase() === 'pass' ? 252 : 226, data.test.passFail.toLowerCase() === 'pass' ? 231 : 226)
-  doc.roundedRect(margin, yPos, contentWidth, 20, 3, 3, 'F')
+  checkPageBreak(30);
+  doc.setFillColor(
+    data.test.passFail.toLowerCase() === 'pass' ? 220 : 254,
+    data.test.passFail.toLowerCase() === 'pass' ? 252 : 226,
+    data.test.passFail.toLowerCase() === 'pass' ? 231 : 226,
+  );
+  doc.roundedRect(margin, yPos, contentWidth, 20, 3, 3, 'F');
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(data.test.passFail.toLowerCase() === 'pass' ? 22 : 153, data.test.passFail.toLowerCase() === 'pass' ? 163 : 27, data.test.passFail.toLowerCase() === 'pass' ? 74 : 27)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(
+    data.test.passFail.toLowerCase() === 'pass' ? 22 : 153,
+    data.test.passFail.toLowerCase() === 'pass' ? 163 : 27,
+    data.test.passFail.toLowerCase() === 'pass' ? 74 : 27,
+  );
 
-  const complianceText = data.test.passFail.toLowerCase() === 'pass'
-    ? '✓ This test result COMPLIES with the specified requirements.'
-    : data.test.passFail.toLowerCase() === 'fail'
-    ? '✗ This test result DOES NOT COMPLY with the specified requirements.'
-    : '⏳ Test result is pending evaluation.'
+  const complianceText =
+    data.test.passFail.toLowerCase() === 'pass'
+      ? '✓ This test result COMPLIES with the specified requirements.'
+      : data.test.passFail.toLowerCase() === 'fail'
+        ? '✗ This test result DOES NOT COMPLY with the specified requirements.'
+        : '⏳ Test result is pending evaluation.';
 
-  doc.text(complianceText, margin + 10, yPos + 12)
-  doc.setTextColor(0, 0, 0)
+  doc.text(complianceText, margin + 10, yPos + 12);
+  doc.setTextColor(0, 0, 0);
 
-  yPos += 30
+  yPos += 30;
 
   // ========== SIGNATURE AREA ==========
-  checkPageBreak(50)
-  yPos += 10
+  checkPageBreak(50);
+  yPos += 10;
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.text('Verified By:', margin, yPos)
-  yPos += 15
-  doc.line(margin, yPos, margin + 60, yPos)
-  yPos += 5
-  doc.text('Signature', margin, yPos)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('Verified By:', margin, yPos);
+  yPos += 15;
+  doc.line(margin, yPos, margin + 60, yPos);
+  yPos += 5;
+  doc.text('Signature', margin, yPos);
 
-  doc.text('Date:', margin + 100, yPos - 20)
-  doc.line(margin + 100, yPos - 5, margin + 160, yPos - 5)
+  doc.text('Date:', margin + 100, yPos - 20);
+  doc.line(margin + 100, yPos - 5, margin + 160, yPos - 5);
 
   // ========== FOOTER ==========
-  const footerY = pageHeight - 15
-  doc.setDrawColor(200, 200, 200)
-  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+  const footerY = pageHeight - 15;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
 
-  doc.setFontSize(7)
-  doc.setTextColor(128, 128, 128)
-  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY)
-  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY)
+  doc.setFontSize(7);
+  doc.setTextColor(128, 128, 128);
+  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY);
+  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
 
   // Save the PDF
-  const filename = `Test-Certificate-${data.test.testRequestNumber || data.test.id}-${new Date().toISOString().split('T')[0]}.pdf`
-  doc.save(filename)
+  const filename = `Test-Certificate-${data.test.testRequestNumber || data.test.id}-${new Date().toISOString().split('T')[0]}.pdf`;
+  doc.save(filename);
 
-  console.log(`Test certificate PDF generated in ${Date.now() - startTime}ms`)
+  devLog(`Test certificate PDF generated in ${Date.now() - startTime}ms`);
 }
 
 // ========================================
@@ -2135,509 +2329,534 @@ export function generateTestCertificatePDF(data: TestCertificateData): void {
 
 export interface DailyDiaryPDFData {
   diary: {
-    id: string
-    date: string
-    status: 'draft' | 'submitted'
-    weatherConditions?: string | null
-    temperatureMin?: number | null
-    temperatureMax?: number | null
-    rainfallMm?: number | null
-    weatherNotes?: string | null
-    generalNotes?: string | null
-    isLate?: boolean
-    submittedBy?: { fullName: string; email: string } | null
-    submittedAt?: string | null
-    createdAt: string
-    updatedAt: string
-  }
+    id: string;
+    date: string;
+    status: 'draft' | 'submitted';
+    weatherConditions?: string | null;
+    temperatureMin?: number | null;
+    temperatureMax?: number | null;
+    rainfallMm?: number | null;
+    weatherNotes?: string | null;
+    generalNotes?: string | null;
+    isLate?: boolean;
+    submittedBy?: { fullName: string; email: string } | null;
+    submittedAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
   project: {
-    name: string
-    projectNumber: string | null
-  }
+    name: string;
+    projectNumber: string | null;
+  };
   personnel: Array<{
-    id: string
-    name: string
-    company?: string | null
-    role?: string | null
-    startTime?: string | null
-    finishTime?: string | null
-    hours?: number | null
-  }>
+    id: string;
+    name: string;
+    company?: string | null;
+    role?: string | null;
+    startTime?: string | null;
+    finishTime?: string | null;
+    hours?: number | null;
+  }>;
   plant: Array<{
-    id: string
-    description: string
-    idRego?: string | null
-    company?: string | null
-    hoursOperated?: number | null
-    notes?: string | null
-  }>
+    id: string;
+    description: string;
+    idRego?: string | null;
+    company?: string | null;
+    hoursOperated?: number | null;
+    notes?: string | null;
+  }>;
   activities: Array<{
-    id: string
-    description: string
-    lot?: { lotNumber: string } | null
-    quantity?: number | null
-    unit?: string | null
-    notes?: string | null
-  }>
+    id: string;
+    description: string;
+    lot?: { lotNumber: string } | null;
+    quantity?: number | null;
+    unit?: string | null;
+    notes?: string | null;
+  }>;
   delays: Array<{
-    id: string
-    delayType: string
-    description: string
-    startTime?: string | null
-    endTime?: string | null
-    durationHours?: number | null
-    impact?: string | null
-  }>
+    id: string;
+    delayType: string;
+    description: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    durationHours?: number | null;
+    impact?: string | null;
+  }>;
   addendums?: Array<{
-    id: string
-    content: string
-    addedBy: { fullName: string; email: string }
-    addedAt: string
-  }>
+    id: string;
+    content: string;
+    addedBy: { fullName: string; email: string };
+    addedAt: string;
+  }>;
 }
 
 /**
  * Generate a PDF daily diary report
  */
-export function generateDailyDiaryPDF(data: DailyDiaryPDFData): void {
-  const jsPDF = getJsPDFSync()
-  const startTime = Date.now()
-  const doc = new jsPDF()
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 15
-  const contentWidth = pageWidth - (margin * 2)
-  let yPos = margin
+export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<void> {
+  const jsPDF = await getJsPDF();
+  const startTime = Date.now();
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let yPos = margin;
 
   // Helper functions
   const formatDate = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return 'Not set'
+    if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleDateString('en-AU', {
       weekday: 'long',
       day: '2-digit',
       month: 'long',
-      year: 'numeric'
-    })
-  }
+      year: 'numeric',
+    });
+  };
 
   const formatDateTime = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return 'Not set'
+    if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleString('en-AU', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+      minute: '2-digit',
+    });
+  };
 
   const checkPageBreak = (neededHeight: number): void => {
     if (yPos + neededHeight > pageHeight - 20) {
-      doc.addPage()
-      yPos = margin
+      doc.addPage();
+      yPos = margin;
     }
-  }
+  };
 
   const drawSectionHeader = (title: string): void => {
-    checkPageBreak(15)
-    doc.setFillColor(240, 240, 240)
-    doc.rect(margin, yPos - 3, contentWidth, 8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.setTextColor(50, 50, 50)
-    doc.text(title, margin + 2, yPos + 2)
-    yPos += 10
-    doc.setTextColor(0, 0, 0)
-  }
+    checkPageBreak(15);
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 3, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(50, 50, 50);
+    doc.text(title, margin + 2, yPos + 2);
+    yPos += 10;
+    doc.setTextColor(0, 0, 0);
+  };
 
   const addField = (label: string, value: string | null | undefined): void => {
-    checkPageBreak(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.text(`${label}:`, margin, yPos)
-    doc.setFont('helvetica', 'normal')
-    const labelWidth = doc.getTextWidth(`${label}: `)
-    doc.text(value || 'N/A', margin + labelWidth + 2, yPos)
-    yPos += 6
-  }
+    checkPageBreak(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(`${label}:`, margin, yPos);
+    doc.setFont('helvetica', 'normal');
+    const labelWidth = doc.getTextWidth(`${label}: `);
+    doc.text(value || 'N/A', margin + labelWidth + 2, yPos);
+    yPos += 6;
+  };
 
   // ========== HEADER ==========
   // Status-based header color
-  const isSubmitted = data.diary.status === 'submitted'
-  const headerColor: [number, number, number] = isSubmitted ? [34, 197, 94] : [234, 179, 8]
+  const isSubmitted = data.diary.status === 'submitted';
+  const headerColor: [number, number, number] = isSubmitted ? [34, 197, 94] : [234, 179, 8];
 
-  doc.setFillColor(...headerColor)
-  doc.rect(0, 0, pageWidth, 40, 'F')
+  doc.setFillColor(...headerColor);
+  doc.rect(0, 0, pageWidth, 40, 'F');
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(18)
-  doc.text('DAILY DIARY', margin, 15)
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('DAILY DIARY', margin, 15);
 
-  doc.setFontSize(12)
-  doc.text(formatDate(data.diary.date), margin, 27)
+  doc.setFontSize(12);
+  doc.text(formatDate(data.diary.date), margin, 27);
 
   // Status badge
-  doc.setFontSize(10)
-  const statusText = data.diary.status.toUpperCase() + (data.diary.isLate ? ' (LATE)' : '')
-  const badgeX = pageWidth - margin - doc.getTextWidth(statusText)
-  doc.text(statusText, badgeX, 27)
+  doc.setFontSize(10);
+  const statusText = data.diary.status.toUpperCase() + (data.diary.isLate ? ' (LATE)' : '');
+  const badgeX = pageWidth - margin - doc.getTextWidth(statusText);
+  doc.text(statusText, badgeX, 27);
 
-  yPos = 50
-  doc.setTextColor(0, 0, 0)
+  yPos = 50;
+  doc.setTextColor(0, 0, 0);
 
   // ========== PROJECT INFO ==========
-  drawSectionHeader('Project Information')
+  drawSectionHeader('Project Information');
 
-  addField('Project', data.project.name)
+  addField('Project', data.project.name);
   if (data.project.projectNumber) {
-    addField('Project Number', data.project.projectNumber)
+    addField('Project Number', data.project.projectNumber);
   }
-  addField('Diary Date', formatDate(data.diary.date))
-  addField('Status', data.diary.status === 'submitted' ? 'Submitted' : 'Draft')
+  addField('Diary Date', formatDate(data.diary.date));
+  addField('Status', data.diary.status === 'submitted' ? 'Submitted' : 'Draft');
 
   if (data.diary.submittedBy && data.diary.submittedAt) {
-    addField('Submitted By', data.diary.submittedBy.fullName || data.diary.submittedBy.email)
-    addField('Submitted At', formatDateTime(data.diary.submittedAt))
+    addField('Submitted By', data.diary.submittedBy.fullName || data.diary.submittedBy.email);
+    addField('Submitted At', formatDateTime(data.diary.submittedAt));
   }
 
-  yPos += 5
+  yPos += 5;
 
   // ========== WEATHER ==========
-  drawSectionHeader('Weather Conditions')
+  drawSectionHeader('Weather Conditions');
 
-  addField('Conditions', data.diary.weatherConditions)
+  addField('Conditions', data.diary.weatherConditions);
   if (data.diary.temperatureMin != null || data.diary.temperatureMax != null) {
-    const tempText = `${data.diary.temperatureMin ?? '-'}°C to ${data.diary.temperatureMax ?? '-'}°C`
-    addField('Temperature', tempText)
+    const tempText = `${data.diary.temperatureMin ?? '-'}°C to ${data.diary.temperatureMax ?? '-'}°C`;
+    addField('Temperature', tempText);
   }
   if (data.diary.rainfallMm != null) {
-    addField('Rainfall', `${data.diary.rainfallMm} mm`)
+    addField('Rainfall', `${data.diary.rainfallMm} mm`);
   }
   if (data.diary.weatherNotes) {
-    addField('Weather Notes', data.diary.weatherNotes)
+    addField('Weather Notes', data.diary.weatherNotes);
   }
 
-  yPos += 5
+  yPos += 5;
 
   // ========== GENERAL NOTES ==========
   if (data.diary.generalNotes) {
-    drawSectionHeader('General Notes')
+    drawSectionHeader('General Notes');
 
-    checkPageBreak(20)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
+    checkPageBreak(20);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
     // Strip HTML tags for plain text in PDF
-    const plainNotes = data.diary.generalNotes.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-    const noteLines = doc.splitTextToSize(plainNotes, contentWidth - 5)
-    doc.text(noteLines, margin, yPos)
-    yPos += (noteLines.length * 4) + 5
+    const plainNotes = data.diary.generalNotes
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const noteLines = doc.splitTextToSize(plainNotes, contentWidth - 5);
+    doc.text(noteLines, margin, yPos);
+    yPos += noteLines.length * 4 + 5;
   }
 
   // ========== PERSONNEL ==========
-  drawSectionHeader(`Personnel on Site (${data.personnel.length})`)
+  drawSectionHeader(`Personnel on Site (${data.personnel.length})`);
 
   if (data.personnel.length > 0) {
     // Table header
-    const personnelHeaders = ['Name', 'Company', 'Role', 'Start', 'Finish', 'Hours']
-    const personnelColWidths = [40, 35, 30, 20, 20, 20]
+    const personnelHeaders = ['Name', 'Company', 'Role', 'Start', 'Finish', 'Hours'];
+    const personnelColWidths = [40, 35, 30, 20, 20, 20];
 
-    checkPageBreak(10)
-    doc.setFillColor(245, 245, 245)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    let xPos = margin + 2
+    checkPageBreak(10);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let xPos = margin + 2;
     personnelHeaders.forEach((header, i) => {
-      doc.text(header, xPos, yPos + 5)
-      xPos += personnelColWidths[i]
-    })
-    yPos += 9
+      doc.text(header, xPos, yPos + 5);
+      xPos += personnelColWidths[i];
+    });
+    yPos += 9;
 
     // Table rows
-    doc.setFont('helvetica', 'normal')
+    doc.setFont('helvetica', 'normal');
     data.personnel.forEach((person) => {
-      checkPageBreak(7)
-      xPos = margin + 2
+      checkPageBreak(7);
+      xPos = margin + 2;
 
-      doc.text((person.name || 'N/A').slice(0, 22), xPos, yPos + 4)
-      xPos += personnelColWidths[0]
+      doc.text((person.name || 'N/A').slice(0, 22), xPos, yPos + 4);
+      xPos += personnelColWidths[0];
 
-      doc.text((person.company || '-').slice(0, 18), xPos, yPos + 4)
-      xPos += personnelColWidths[1]
+      doc.text((person.company || '-').slice(0, 18), xPos, yPos + 4);
+      xPos += personnelColWidths[1];
 
-      doc.text((person.role || '-').slice(0, 16), xPos, yPos + 4)
-      xPos += personnelColWidths[2]
+      doc.text((person.role || '-').slice(0, 16), xPos, yPos + 4);
+      xPos += personnelColWidths[2];
 
-      doc.text(person.startTime || '-', xPos, yPos + 4)
-      xPos += personnelColWidths[3]
+      doc.text(person.startTime || '-', xPos, yPos + 4);
+      xPos += personnelColWidths[3];
 
-      doc.text(person.finishTime || '-', xPos, yPos + 4)
-      xPos += personnelColWidths[4]
+      doc.text(person.finishTime || '-', xPos, yPos + 4);
+      xPos += personnelColWidths[4];
 
-      doc.text(person.hours != null ? person.hours.toString() : '-', xPos, yPos + 4)
+      doc.text(person.hours != null ? person.hours.toString() : '-', xPos, yPos + 4);
 
-      yPos += 6
-    })
+      yPos += 6;
+    });
 
     // Personnel subtotals by company
-    const companyTotals: Record<string, { count: number; hours: number }> = {}
-    data.personnel.forEach(p => {
-      const company = p.company || 'Unspecified'
+    const companyTotals: Record<string, { count: number; hours: number }> = {};
+    data.personnel.forEach((p) => {
+      const company = p.company || 'Unspecified';
       if (!companyTotals[company]) {
-        companyTotals[company] = { count: 0, hours: 0 }
+        companyTotals[company] = { count: 0, hours: 0 };
       }
-      companyTotals[company].count++
-      companyTotals[company].hours += (typeof p.hours === 'number' ? p.hours : 0)
-    })
+      companyTotals[company].count++;
+      companyTotals[company].hours += typeof p.hours === 'number' ? p.hours : 0;
+    });
 
-    checkPageBreak(15)
-    yPos += 3
-    doc.setFillColor(250, 250, 250)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
+    checkPageBreak(15);
+    yPos += 3;
+    doc.setFillColor(250, 250, 250);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
 
-    let subtotalText = 'Subtotals: '
+    let subtotalText = 'Subtotals: ';
     Object.entries(companyTotals).forEach(([company, data], idx) => {
-      if (idx > 0) subtotalText += ' | '
-      subtotalText += `${company}: ${data.count} (${data.hours.toFixed(1)}h)`
-    })
+      if (idx > 0) subtotalText += ' | ';
+      subtotalText += `${company}: ${data.count} (${data.hours.toFixed(1)}h)`;
+    });
 
-    const totalHours = data.personnel.reduce((sum, p) => sum + (typeof p.hours === 'number' ? p.hours : 0), 0)
-    doc.text(subtotalText.slice(0, 90), margin + 2, yPos + 5)
-    doc.text(`TOTAL: ${data.personnel.length} people, ${totalHours.toFixed(1)} hrs`, pageWidth - margin - 50, yPos + 5)
-    yPos += 12
+    const totalHours = data.personnel.reduce(
+      (sum, p) => sum + (typeof p.hours === 'number' ? p.hours : 0),
+      0,
+    );
+    doc.text(subtotalText.slice(0, 90), margin + 2, yPos + 5);
+    doc.text(
+      `TOTAL: ${data.personnel.length} people, ${totalHours.toFixed(1)} hrs`,
+      pageWidth - margin - 50,
+      yPos + 5,
+    );
+    yPos += 12;
   } else {
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(9)
-    doc.text('No personnel recorded.', margin, yPos)
-    yPos += 8
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.text('No personnel recorded.', margin, yPos);
+    yPos += 8;
   }
 
   // ========== PLANT & EQUIPMENT ==========
-  drawSectionHeader(`Plant & Equipment (${data.plant.length})`)
+  drawSectionHeader(`Plant & Equipment (${data.plant.length})`);
 
   if (data.plant.length > 0) {
     // Table header
-    const plantHeaders = ['Description', 'ID/Rego', 'Company', 'Hours', 'Notes']
-    const plantColWidths = [50, 25, 30, 20, 45]
+    const plantHeaders = ['Description', 'ID/Rego', 'Company', 'Hours', 'Notes'];
+    const plantColWidths = [50, 25, 30, 20, 45];
 
-    checkPageBreak(10)
-    doc.setFillColor(245, 245, 245)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    let xPos = margin + 2
+    checkPageBreak(10);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let xPos = margin + 2;
     plantHeaders.forEach((header, i) => {
-      doc.text(header, xPos, yPos + 5)
-      xPos += plantColWidths[i]
-    })
-    yPos += 9
+      doc.text(header, xPos, yPos + 5);
+      xPos += plantColWidths[i];
+    });
+    yPos += 9;
 
     // Table rows
-    doc.setFont('helvetica', 'normal')
+    doc.setFont('helvetica', 'normal');
     data.plant.forEach((item) => {
-      checkPageBreak(7)
-      xPos = margin + 2
+      checkPageBreak(7);
+      xPos = margin + 2;
 
-      doc.text((item.description || 'N/A').slice(0, 28), xPos, yPos + 4)
-      xPos += plantColWidths[0]
+      doc.text((item.description || 'N/A').slice(0, 28), xPos, yPos + 4);
+      xPos += plantColWidths[0];
 
-      doc.text((item.idRego || '-').slice(0, 12), xPos, yPos + 4)
-      xPos += plantColWidths[1]
+      doc.text((item.idRego || '-').slice(0, 12), xPos, yPos + 4);
+      xPos += plantColWidths[1];
 
-      doc.text((item.company || '-').slice(0, 16), xPos, yPos + 4)
-      xPos += plantColWidths[2]
+      doc.text((item.company || '-').slice(0, 16), xPos, yPos + 4);
+      xPos += plantColWidths[2];
 
-      doc.text(item.hoursOperated != null ? item.hoursOperated.toString() : '-', xPos, yPos + 4)
-      xPos += plantColWidths[3]
+      doc.text(item.hoursOperated != null ? item.hoursOperated.toString() : '-', xPos, yPos + 4);
+      xPos += plantColWidths[3];
 
-      doc.text((item.notes || '-').slice(0, 25), xPos, yPos + 4)
+      doc.text((item.notes || '-').slice(0, 25), xPos, yPos + 4);
 
-      yPos += 6
-    })
-    yPos += 5
+      yPos += 6;
+    });
+    yPos += 5;
   } else {
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(9)
-    doc.text('No plant or equipment recorded.', margin, yPos)
-    yPos += 8
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.text('No plant or equipment recorded.', margin, yPos);
+    yPos += 8;
   }
 
   // ========== ACTIVITIES ==========
-  drawSectionHeader(`Activities (${data.activities.length})`)
+  drawSectionHeader(`Activities (${data.activities.length})`);
 
   if (data.activities.length > 0) {
     // Table header
-    const actHeaders = ['Description', 'Lot', 'Qty', 'Unit', 'Notes']
-    const actColWidths = [60, 25, 20, 20, 45]
+    const actHeaders = ['Description', 'Lot', 'Qty', 'Unit', 'Notes'];
+    const actColWidths = [60, 25, 20, 20, 45];
 
-    checkPageBreak(10)
-    doc.setFillColor(245, 245, 245)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    let xPos = margin + 2
+    checkPageBreak(10);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let xPos = margin + 2;
     actHeaders.forEach((header, i) => {
-      doc.text(header, xPos, yPos + 5)
-      xPos += actColWidths[i]
-    })
-    yPos += 9
+      doc.text(header, xPos, yPos + 5);
+      xPos += actColWidths[i];
+    });
+    yPos += 9;
 
     // Table rows
-    doc.setFont('helvetica', 'normal')
+    doc.setFont('helvetica', 'normal');
     data.activities.forEach((activity) => {
-      checkPageBreak(7)
-      xPos = margin + 2
+      checkPageBreak(7);
+      xPos = margin + 2;
 
-      doc.text((activity.description || 'N/A').slice(0, 35), xPos, yPos + 4)
-      xPos += actColWidths[0]
+      doc.text((activity.description || 'N/A').slice(0, 35), xPos, yPos + 4);
+      xPos += actColWidths[0];
 
-      doc.text(activity.lot?.lotNumber?.slice(0, 12) || '-', xPos, yPos + 4)
-      xPos += actColWidths[1]
+      doc.text(activity.lot?.lotNumber?.slice(0, 12) || '-', xPos, yPos + 4);
+      xPos += actColWidths[1];
 
-      doc.text(activity.quantity != null ? activity.quantity.toString() : '-', xPos, yPos + 4)
-      xPos += actColWidths[2]
+      doc.text(activity.quantity != null ? activity.quantity.toString() : '-', xPos, yPos + 4);
+      xPos += actColWidths[2];
 
-      doc.text((activity.unit || '-').slice(0, 10), xPos, yPos + 4)
-      xPos += actColWidths[3]
+      doc.text((activity.unit || '-').slice(0, 10), xPos, yPos + 4);
+      xPos += actColWidths[3];
 
-      doc.text((activity.notes || '-').slice(0, 25), xPos, yPos + 4)
+      doc.text((activity.notes || '-').slice(0, 25), xPos, yPos + 4);
 
-      yPos += 6
-    })
-    yPos += 5
+      yPos += 6;
+    });
+    yPos += 5;
   } else {
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(9)
-    doc.text('No activities recorded.', margin, yPos)
-    yPos += 8
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.text('No activities recorded.', margin, yPos);
+    yPos += 8;
   }
 
   // ========== DELAYS ==========
-  drawSectionHeader(`Delays (${data.delays.length})`)
+  drawSectionHeader(`Delays (${data.delays.length})`);
 
   if (data.delays.length > 0) {
     // Table header
-    const delayHeaders = ['Type', 'Description', 'Start', 'End', 'Duration', 'Impact']
-    const delayColWidths = [25, 55, 20, 20, 20, 30]
+    const delayHeaders = ['Type', 'Description', 'Start', 'End', 'Duration', 'Impact'];
+    const delayColWidths = [25, 55, 20, 20, 20, 30];
 
-    checkPageBreak(10)
-    doc.setFillColor(245, 245, 245)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    let xPos = margin + 2
+    checkPageBreak(10);
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, yPos, contentWidth, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let xPos = margin + 2;
     delayHeaders.forEach((header, i) => {
-      doc.text(header, xPos, yPos + 5)
-      xPos += delayColWidths[i]
-    })
-    yPos += 9
+      doc.text(header, xPos, yPos + 5);
+      xPos += delayColWidths[i];
+    });
+    yPos += 9;
 
     // Table rows
-    doc.setFont('helvetica', 'normal')
+    doc.setFont('helvetica', 'normal');
     data.delays.forEach((delay) => {
-      checkPageBreak(7)
-      xPos = margin + 2
+      checkPageBreak(7);
+      xPos = margin + 2;
 
-      doc.text((delay.delayType || 'N/A').slice(0, 14), xPos, yPos + 4)
-      xPos += delayColWidths[0]
+      doc.text((delay.delayType || 'N/A').slice(0, 14), xPos, yPos + 4);
+      xPos += delayColWidths[0];
 
-      doc.text((delay.description || '-').slice(0, 32), xPos, yPos + 4)
-      xPos += delayColWidths[1]
+      doc.text((delay.description || '-').slice(0, 32), xPos, yPos + 4);
+      xPos += delayColWidths[1];
 
-      doc.text(delay.startTime || '-', xPos, yPos + 4)
-      xPos += delayColWidths[2]
+      doc.text(delay.startTime || '-', xPos, yPos + 4);
+      xPos += delayColWidths[2];
 
-      doc.text(delay.endTime || '-', xPos, yPos + 4)
-      xPos += delayColWidths[3]
+      doc.text(delay.endTime || '-', xPos, yPos + 4);
+      xPos += delayColWidths[3];
 
-      doc.text(delay.durationHours != null ? `${delay.durationHours}h` : '-', xPos, yPos + 4)
-      xPos += delayColWidths[4]
+      doc.text(delay.durationHours != null ? `${delay.durationHours}h` : '-', xPos, yPos + 4);
+      xPos += delayColWidths[4];
 
-      doc.text((delay.impact || '-').slice(0, 18), xPos, yPos + 4)
+      doc.text((delay.impact || '-').slice(0, 18), xPos, yPos + 4);
 
-      yPos += 6
-    })
+      yPos += 6;
+    });
 
     // Total delay hours
-    const totalDelayHours = data.delays.reduce((sum, d) => sum + (d.durationHours || 0), 0)
+    const totalDelayHours = data.delays.reduce((sum, d) => sum + (d.durationHours || 0), 0);
     if (totalDelayHours > 0) {
-      yPos += 2
-      doc.setFont('helvetica', 'bold')
-      doc.text(`Total Delay: ${totalDelayHours.toFixed(1)} hours`, margin, yPos + 4)
-      yPos += 8
+      yPos += 2;
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Total Delay: ${totalDelayHours.toFixed(1)} hours`, margin, yPos + 4);
+      yPos += 8;
     }
   } else {
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(9)
-    doc.text('No delays recorded.', margin, yPos)
-    yPos += 8
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.text('No delays recorded.', margin, yPos);
+    yPos += 8;
   }
 
   // ========== ADDENDUMS (for submitted diaries) ==========
   if (data.addendums && data.addendums.length > 0) {
-    drawSectionHeader(`Addendums (${data.addendums.length})`)
+    drawSectionHeader(`Addendums (${data.addendums.length})`);
 
     data.addendums.forEach((addendum, idx) => {
-      checkPageBreak(20)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.text(`Addendum ${idx + 1}`, margin, yPos)
-      yPos += 4
+      checkPageBreak(20);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text(`Addendum ${idx + 1}`, margin, yPos);
+      yPos += 4;
 
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      doc.text(`By: ${addendum.addedBy.fullName || addendum.addedBy.email} on ${formatDateTime(addendum.addedAt)}`, margin, yPos)
-      yPos += 4
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(
+        `By: ${addendum.addedBy.fullName || addendum.addedBy.email} on ${formatDateTime(addendum.addedAt)}`,
+        margin,
+        yPos,
+      );
+      yPos += 4;
 
-      doc.setFontSize(9)
-      const addendumLines = doc.splitTextToSize(addendum.content, contentWidth - 5)
-      doc.text(addendumLines, margin, yPos)
-      yPos += (addendumLines.length * 4) + 5
-    })
+      doc.setFontSize(9);
+      const addendumLines = doc.splitTextToSize(addendum.content, contentWidth - 5);
+      doc.text(addendumLines, margin, yPos);
+      yPos += addendumLines.length * 4 + 5;
+    });
   }
 
   // ========== SUMMARY BOX ==========
-  checkPageBreak(35)
-  yPos += 5
-  doc.setFillColor(240, 240, 240)
-  doc.rect(margin, yPos, contentWidth, 25, 'F')
+  checkPageBreak(35);
+  yPos += 5;
+  doc.setFillColor(240, 240, 240);
+  doc.rect(margin, yPos, contentWidth, 25, 'F');
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.text('Daily Summary', margin + 5, yPos + 7)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Daily Summary', margin + 5, yPos + 7);
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  const totalPersonnelHours = data.personnel.reduce((sum, p) => sum + (typeof p.hours === 'number' ? p.hours : 0), 0)
-  const totalPlantHours = data.plant.reduce((sum, p) => sum + (p.hoursOperated || 0), 0)
-  const totalDelays = data.delays.reduce((sum, d) => sum + (d.durationHours || 0), 0)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  const totalPersonnelHours = data.personnel.reduce(
+    (sum, p) => sum + (typeof p.hours === 'number' ? p.hours : 0),
+    0,
+  );
+  const totalPlantHours = data.plant.reduce((sum, p) => sum + (p.hoursOperated || 0), 0);
+  const totalDelays = data.delays.reduce((sum, d) => sum + (d.durationHours || 0), 0);
 
-  doc.text(`Personnel: ${data.personnel.length} (${totalPersonnelHours.toFixed(1)} hrs)`, margin + 5, yPos + 15)
-  doc.text(`Plant: ${data.plant.length} items (${totalPlantHours.toFixed(1)} hrs)`, margin + 60, yPos + 15)
-  doc.text(`Activities: ${data.activities.length}`, margin + 120, yPos + 15)
-  doc.text(`Delays: ${data.delays.length} (${totalDelays.toFixed(1)} hrs)`, margin + 5, yPos + 22)
+  doc.text(
+    `Personnel: ${data.personnel.length} (${totalPersonnelHours.toFixed(1)} hrs)`,
+    margin + 5,
+    yPos + 15,
+  );
+  doc.text(
+    `Plant: ${data.plant.length} items (${totalPlantHours.toFixed(1)} hrs)`,
+    margin + 60,
+    yPos + 15,
+  );
+  doc.text(`Activities: ${data.activities.length}`, margin + 120, yPos + 15);
+  doc.text(`Delays: ${data.delays.length} (${totalDelays.toFixed(1)} hrs)`, margin + 5, yPos + 22);
 
-  yPos += 35
+  yPos += 35;
 
   // ========== FOOTER ==========
-  const footerY = pageHeight - 15
-  doc.setDrawColor(200, 200, 200)
-  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+  const footerY = pageHeight - 15;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
 
-  doc.setFontSize(7)
-  doc.setTextColor(128, 128, 128)
-  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY)
-  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY)
+  doc.setFontSize(7);
+  doc.setTextColor(128, 128, 128);
+  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY);
+  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
 
   // Save the PDF
-  const diaryDate = data.diary.date.split('T')[0]
-  const filename = `Daily-Diary-${diaryDate}-${data.diary.status}.pdf`
-  doc.save(filename)
+  const diaryDate = data.diary.date.split('T')[0];
+  const filename = `Daily-Diary-${diaryDate}-${data.diary.status}.pdf`;
+  doc.save(filename);
 
-  console.log(`Daily diary PDF generated in ${Date.now() - startTime}ms`)
+  devLog(`Daily diary PDF generated in ${Date.now() - startTime}ms`);
 }
 
 // ========================================
@@ -2646,305 +2865,329 @@ export function generateDailyDiaryPDF(data: DailyDiaryPDFData): void {
 
 export interface DocketDetailPDFData {
   docket: {
-    id: string
-    docketNumber: string
-    date: string
-    status: 'draft' | 'pending_approval' | 'approved' | 'rejected'
-    notes: string | null
-    labourHours: number
-    plantHours: number
-    totalLabourSubmitted: number
-    totalLabourApproved: number
-    totalPlantSubmitted: number
-    totalPlantApproved: number
-    submittedAt: string | null
-    approvedAt: string | null
-    foremanNotes: string | null
-    rejectionReason?: string | null
-    adjustmentReason?: string | null
-  }
+    id: string;
+    docketNumber: string;
+    date: string;
+    status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
+    notes: string | null;
+    labourHours: number;
+    plantHours: number;
+    totalLabourSubmitted: number;
+    totalLabourApproved: number;
+    totalPlantSubmitted: number;
+    totalPlantApproved: number;
+    submittedAt: string | null;
+    approvedAt: string | null;
+    foremanNotes: string | null;
+    rejectionReason?: string | null;
+    adjustmentReason?: string | null;
+  };
   subcontractor: {
-    name: string
-    abn?: string | null
-  }
+    name: string;
+    abn?: string | null;
+  };
   project: {
-    name: string
-    projectNumber: string | null
-  }
+    name: string;
+    projectNumber: string | null;
+  };
 }
 
 /**
  * Generate a PDF detail report for a Docket
  */
-export function generateDocketDetailPDF(data: DocketDetailPDFData): void {
-  const jsPDF = getJsPDFSync()
-  const startTime = Date.now()
-  const doc = new jsPDF()
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 15
-  const contentWidth = pageWidth - (margin * 2)
-  let yPos = margin
+export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promise<void> {
+  const jsPDF = await getJsPDF();
+  const startTime = Date.now();
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+  let yPos = margin;
 
   // Helper functions
   const formatDate = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return 'Not set'
+    if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleDateString('en-AU', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
-    })
-  }
+      year: 'numeric',
+    });
+  };
 
   const formatDateTime = (dateStr: string | null | undefined): string => {
-    if (!dateStr) return 'Not set'
+    if (!dateStr) return 'Not set';
     return new Date(dateStr).toLocaleString('en-AU', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+      minute: '2-digit',
+    });
+  };
 
   const checkPageBreak = (neededHeight: number): void => {
     if (yPos + neededHeight > pageHeight - 20) {
-      doc.addPage()
-      yPos = margin
+      doc.addPage();
+      yPos = margin;
     }
-  }
+  };
 
   const drawSectionHeader = (title: string): void => {
-    checkPageBreak(15)
-    doc.setFillColor(240, 240, 240)
-    doc.rect(margin, yPos - 3, contentWidth, 8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.setTextColor(50, 50, 50)
-    doc.text(title, margin + 2, yPos + 2)
-    yPos += 10
-    doc.setTextColor(0, 0, 0)
-  }
+    checkPageBreak(15);
+    doc.setFillColor(240, 240, 240);
+    doc.rect(margin, yPos - 3, contentWidth, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(50, 50, 50);
+    doc.text(title, margin + 2, yPos + 2);
+    yPos += 10;
+    doc.setTextColor(0, 0, 0);
+  };
 
   const addField = (label: string, value: string | null | undefined): void => {
-    checkPageBreak(8)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.text(`${label}:`, margin, yPos)
-    doc.setFont('helvetica', 'normal')
-    const labelWidth = doc.getTextWidth(`${label}: `)
-    doc.text(value || 'N/A', margin + labelWidth + 2, yPos)
-    yPos += 6
-  }
+    checkPageBreak(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(`${label}:`, margin, yPos);
+    doc.setFont('helvetica', 'normal');
+    const labelWidth = doc.getTextWidth(`${label}: `);
+    doc.text(value || 'N/A', margin + labelWidth + 2, yPos);
+    yPos += 6;
+  };
 
   // ========== HEADER ==========
   // Status-based header color
   const statusColors: Record<string, [number, number, number]> = {
-    draft: [156, 163, 175],        // Gray
+    draft: [156, 163, 175], // Gray
     pending_approval: [234, 179, 8], // Amber
-    approved: [34, 197, 94],       // Green
-    rejected: [239, 68, 68]        // Red
-  }
-  const headerColor = statusColors[data.docket.status] || [100, 100, 100]
+    approved: [34, 197, 94], // Green
+    rejected: [239, 68, 68], // Red
+  };
+  const headerColor = statusColors[data.docket.status] || [100, 100, 100];
 
-  doc.setFillColor(...headerColor)
-  doc.rect(0, 0, pageWidth, 40, 'F')
+  doc.setFillColor(...headerColor);
+  doc.rect(0, 0, pageWidth, 40, 'F');
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(18)
-  doc.text('SUBCONTRACTOR DOCKET', margin, 15)
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('SUBCONTRACTOR DOCKET', margin, 15);
 
-  doc.setFontSize(12)
-  doc.text(data.docket.docketNumber, margin, 27)
+  doc.setFontSize(12);
+  doc.text(data.docket.docketNumber, margin, 27);
 
   // Status badge
-  doc.setFontSize(10)
+  doc.setFontSize(10);
   const statusLabels: Record<string, string> = {
     draft: 'DRAFT',
     pending_approval: 'PENDING APPROVAL',
     approved: 'APPROVED',
-    rejected: 'REJECTED'
-  }
-  const statusText = statusLabels[data.docket.status] || data.docket.status.toUpperCase()
-  const badgeX = pageWidth - margin - doc.getTextWidth(statusText)
-  doc.text(statusText, badgeX, 27)
+    rejected: 'REJECTED',
+  };
+  const statusText = statusLabels[data.docket.status] || data.docket.status.toUpperCase();
+  const badgeX = pageWidth - margin - doc.getTextWidth(statusText);
+  doc.text(statusText, badgeX, 27);
 
-  yPos = 50
-  doc.setTextColor(0, 0, 0)
+  yPos = 50;
+  doc.setTextColor(0, 0, 0);
 
   // ========== DOCKET DETAILS ==========
-  drawSectionHeader('Docket Details')
+  drawSectionHeader('Docket Details');
 
-  addField('Docket Number', data.docket.docketNumber)
-  addField('Date', formatDate(data.docket.date))
-  addField('Status', statusLabels[data.docket.status] || data.docket.status)
+  addField('Docket Number', data.docket.docketNumber);
+  addField('Date', formatDate(data.docket.date));
+  addField('Status', statusLabels[data.docket.status] || data.docket.status);
   if (data.docket.submittedAt) {
-    addField('Submitted', formatDateTime(data.docket.submittedAt))
+    addField('Submitted', formatDateTime(data.docket.submittedAt));
   }
   if (data.docket.approvedAt) {
-    addField('Approved', formatDateTime(data.docket.approvedAt))
+    addField('Approved', formatDateTime(data.docket.approvedAt));
   }
 
-  yPos += 5
+  yPos += 5;
 
   // ========== PROJECT & SUBCONTRACTOR ==========
-  drawSectionHeader('Project & Subcontractor')
+  drawSectionHeader('Project & Subcontractor');
 
-  addField('Project', data.project.name)
+  addField('Project', data.project.name);
   if (data.project.projectNumber) {
-    addField('Project Number', data.project.projectNumber)
+    addField('Project Number', data.project.projectNumber);
   }
-  addField('Subcontractor', data.subcontractor.name)
+  addField('Subcontractor', data.subcontractor.name);
   if (data.subcontractor.abn) {
-    addField('ABN', data.subcontractor.abn)
+    addField('ABN', data.subcontractor.abn);
   }
 
-  yPos += 5
+  yPos += 5;
 
   // ========== HOURS SUMMARY ==========
-  drawSectionHeader('Hours Summary')
+  drawSectionHeader('Hours Summary');
 
   // Create a mini table for hours
-  checkPageBreak(40)
+  checkPageBreak(40);
 
   // Table header
-  doc.setFillColor(245, 245, 245)
-  doc.rect(margin, yPos, contentWidth, 7, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.text('Category', margin + 5, yPos + 5)
-  doc.text('Submitted', margin + 70, yPos + 5)
-  doc.text('Approved', margin + 110, yPos + 5)
-  doc.text('Variance', margin + 150, yPos + 5)
-  yPos += 9
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin, yPos, contentWidth, 7, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('Category', margin + 5, yPos + 5);
+  doc.text('Submitted', margin + 70, yPos + 5);
+  doc.text('Approved', margin + 110, yPos + 5);
+  doc.text('Variance', margin + 150, yPos + 5);
+  yPos += 9;
 
   // Labour hours row
-  doc.setFont('helvetica', 'normal')
-  doc.text('Labour Hours', margin + 5, yPos + 5)
-  doc.text(`${data.docket.totalLabourSubmitted || data.docket.labourHours} hrs`, margin + 70, yPos + 5)
-  doc.text(`${data.docket.totalLabourApproved || '-'} hrs`, margin + 110, yPos + 5)
-  const labourVariance = (data.docket.totalLabourApproved || 0) - (data.docket.totalLabourSubmitted || data.docket.labourHours)
+  doc.setFont('helvetica', 'normal');
+  doc.text('Labour Hours', margin + 5, yPos + 5);
+  doc.text(
+    `${data.docket.totalLabourSubmitted || data.docket.labourHours} hrs`,
+    margin + 70,
+    yPos + 5,
+  );
+  doc.text(`${data.docket.totalLabourApproved || '-'} hrs`, margin + 110, yPos + 5);
+  const labourVariance =
+    (data.docket.totalLabourApproved || 0) -
+    (data.docket.totalLabourSubmitted || data.docket.labourHours);
   if (data.docket.status === 'approved' && labourVariance !== 0) {
-    doc.setTextColor(labourVariance < 0 ? 239 : 34, labourVariance < 0 ? 68 : 197, labourVariance < 0 ? 68 : 94)
-    doc.text(`${labourVariance > 0 ? '+' : ''}${labourVariance} hrs`, margin + 150, yPos + 5)
-    doc.setTextColor(0, 0, 0)
+    doc.setTextColor(
+      labourVariance < 0 ? 239 : 34,
+      labourVariance < 0 ? 68 : 197,
+      labourVariance < 0 ? 68 : 94,
+    );
+    doc.text(`${labourVariance > 0 ? '+' : ''}${labourVariance} hrs`, margin + 150, yPos + 5);
+    doc.setTextColor(0, 0, 0);
   } else {
-    doc.text('-', margin + 150, yPos + 5)
+    doc.text('-', margin + 150, yPos + 5);
   }
-  yPos += 7
+  yPos += 7;
 
   // Plant hours row
-  doc.text('Plant Hours', margin + 5, yPos + 5)
-  doc.text(`${data.docket.totalPlantSubmitted || data.docket.plantHours} hrs`, margin + 70, yPos + 5)
-  doc.text(`${data.docket.totalPlantApproved || '-'} hrs`, margin + 110, yPos + 5)
-  const plantVariance = (data.docket.totalPlantApproved || 0) - (data.docket.totalPlantSubmitted || data.docket.plantHours)
+  doc.text('Plant Hours', margin + 5, yPos + 5);
+  doc.text(
+    `${data.docket.totalPlantSubmitted || data.docket.plantHours} hrs`,
+    margin + 70,
+    yPos + 5,
+  );
+  doc.text(`${data.docket.totalPlantApproved || '-'} hrs`, margin + 110, yPos + 5);
+  const plantVariance =
+    (data.docket.totalPlantApproved || 0) -
+    (data.docket.totalPlantSubmitted || data.docket.plantHours);
   if (data.docket.status === 'approved' && plantVariance !== 0) {
-    doc.setTextColor(plantVariance < 0 ? 239 : 34, plantVariance < 0 ? 68 : 197, plantVariance < 0 ? 68 : 94)
-    doc.text(`${plantVariance > 0 ? '+' : ''}${plantVariance} hrs`, margin + 150, yPos + 5)
-    doc.setTextColor(0, 0, 0)
+    doc.setTextColor(
+      plantVariance < 0 ? 239 : 34,
+      plantVariance < 0 ? 68 : 197,
+      plantVariance < 0 ? 68 : 94,
+    );
+    doc.text(`${plantVariance > 0 ? '+' : ''}${plantVariance} hrs`, margin + 150, yPos + 5);
+    doc.setTextColor(0, 0, 0);
   } else {
-    doc.text('-', margin + 150, yPos + 5)
+    doc.text('-', margin + 150, yPos + 5);
   }
-  yPos += 12
+  yPos += 12;
 
   // ========== NOTES ==========
   if (data.docket.notes) {
-    drawSectionHeader('Docket Notes')
+    drawSectionHeader('Docket Notes');
 
-    checkPageBreak(20)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    const noteLines = doc.splitTextToSize(data.docket.notes, contentWidth - 5)
-    doc.text(noteLines, margin, yPos)
-    yPos += (noteLines.length * 4) + 5
+    checkPageBreak(20);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const noteLines = doc.splitTextToSize(data.docket.notes, contentWidth - 5);
+    doc.text(noteLines, margin, yPos);
+    yPos += noteLines.length * 4 + 5;
   }
 
   // ========== FOREMAN NOTES (for approved dockets) ==========
   if (data.docket.foremanNotes) {
-    drawSectionHeader('Foreman Notes')
+    drawSectionHeader('Foreman Notes');
 
-    checkPageBreak(20)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    const foremanLines = doc.splitTextToSize(data.docket.foremanNotes, contentWidth - 5)
-    doc.text(foremanLines, margin, yPos)
-    yPos += (foremanLines.length * 4) + 5
+    checkPageBreak(20);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const foremanLines = doc.splitTextToSize(data.docket.foremanNotes, contentWidth - 5);
+    doc.text(foremanLines, margin, yPos);
+    yPos += foremanLines.length * 4 + 5;
   }
 
   // ========== ADJUSTMENT REASON (if hours were adjusted) ==========
   if (data.docket.adjustmentReason) {
-    drawSectionHeader('Adjustment Reason')
+    drawSectionHeader('Adjustment Reason');
 
-    checkPageBreak(20)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    const adjustLines = doc.splitTextToSize(data.docket.adjustmentReason, contentWidth - 5)
-    doc.text(adjustLines, margin, yPos)
-    yPos += (adjustLines.length * 4) + 5
+    checkPageBreak(20);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const adjustLines = doc.splitTextToSize(data.docket.adjustmentReason, contentWidth - 5);
+    doc.text(adjustLines, margin, yPos);
+    yPos += adjustLines.length * 4 + 5;
   }
 
   // ========== REJECTION REASON (for rejected dockets) ==========
   if (data.docket.status === 'rejected' && data.docket.rejectionReason) {
-    drawSectionHeader('Rejection Reason')
+    drawSectionHeader('Rejection Reason');
 
-    checkPageBreak(20)
-    doc.setFillColor(254, 226, 226)
-    doc.rect(margin, yPos - 2, contentWidth, 20, 'F')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(153, 27, 27)
-    const rejectLines = doc.splitTextToSize(data.docket.rejectionReason, contentWidth - 10)
-    doc.text(rejectLines, margin + 5, yPos + 5)
-    doc.setTextColor(0, 0, 0)
-    yPos += 25
+    checkPageBreak(20);
+    doc.setFillColor(254, 226, 226);
+    doc.rect(margin, yPos - 2, contentWidth, 20, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(153, 27, 27);
+    const rejectLines = doc.splitTextToSize(data.docket.rejectionReason, contentWidth - 10);
+    doc.text(rejectLines, margin + 5, yPos + 5);
+    doc.setTextColor(0, 0, 0);
+    yPos += 25;
   }
 
   // ========== SIGNATURE AREA (for approved dockets) ==========
   if (data.docket.status === 'approved') {
-    checkPageBreak(60)
-    yPos += 10
+    checkPageBreak(60);
+    yPos += 10;
 
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
-    yPos += 10
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 10;
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.text('APPROVAL CERTIFICATION', margin, yPos)
-    yPos += 10
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('APPROVAL CERTIFICATION', margin, yPos);
+    yPos += 10;
 
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.text('I certify that the hours claimed in this docket have been verified and approved.', margin, yPos)
-    yPos += 15
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(
+      'I certify that the hours claimed in this docket have been verified and approved.',
+      margin,
+      yPos,
+    );
+    yPos += 15;
 
     // Foreman signature
-    doc.text('Approved By:', margin, yPos)
-    yPos += 12
-    doc.line(margin, yPos, margin + 60, yPos)
-    yPos += 5
-    doc.setFontSize(8)
-    doc.text('Signature', margin, yPos)
-    doc.text(`Date: ${formatDate(data.docket.approvedAt)}`, margin + 100, yPos)
-    yPos += 10
+    doc.text('Approved By:', margin, yPos);
+    yPos += 12;
+    doc.line(margin, yPos, margin + 60, yPos);
+    yPos += 5;
+    doc.setFontSize(8);
+    doc.text('Signature', margin, yPos);
+    doc.text(`Date: ${formatDate(data.docket.approvedAt)}`, margin + 100, yPos);
+    yPos += 10;
   }
 
   // ========== FOOTER ==========
-  const footerY = pageHeight - 15
-  doc.setDrawColor(200, 200, 200)
-  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5)
+  const footerY = pageHeight - 15;
+  doc.setDrawColor(200, 200, 200);
+  doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
 
-  doc.setFontSize(7)
-  doc.setTextColor(128, 128, 128)
-  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY)
-  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY)
+  doc.setFontSize(7);
+  doc.setTextColor(128, 128, 128);
+  doc.text(`Generated from SiteProof v2 on ${new Date().toLocaleString('en-AU')}`, margin, footerY);
+  doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
 
   // Save the PDF
-  const filename = `Docket-${data.docket.docketNumber}-${data.docket.status}.pdf`
-  doc.save(filename)
+  const filename = `Docket-${data.docket.docketNumber}-${data.docket.status}.pdf`;
+  doc.save(filename);
 
-  console.log(`Docket detail PDF generated in ${Date.now() - startTime}ms`)
+  devLog(`Docket detail PDF generated in ${Date.now() - startTime}ms`);
 }
 
-export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData }
+export type { ConformanceReportData, HPEvidencePackageData, ClaimEvidencePackageData };

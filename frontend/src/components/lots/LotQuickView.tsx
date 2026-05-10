@@ -1,7 +1,7 @@
-import { useNavigate } from 'react-router-dom'
-import { apiFetch } from '@/lib/api'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
+import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 import {
   MapPin,
   Layers,
@@ -11,35 +11,35 @@ import {
   FileText,
   Image,
   ExternalLink,
-  Clock
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+  Clock,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface LotQuickViewProps {
-  lotId: string
-  projectId: string
-  onClose: () => void
-  position: { x: number; y: number }
+  lotId: string;
+  projectId: string;
+  onClose: () => void;
+  position: { x: number; y: number };
 }
 
 interface LotDetails {
-  id: string
-  lotNumber: string
-  description: string | null
-  status: string
-  activityType: string | null
-  chainageStart: number | null
-  chainageEnd: number | null
-  layer: string | null
-  areaZone: string | null
-  createdAt: string
-  updatedAt: string
-  itpInstance?: { id: string } | null
+  id: string;
+  lotNumber: string;
+  description: string | null;
+  status: string;
+  activityType: string | null;
+  chainageStart: number | null;
+  chainageEnd: number | null;
+  layer: string | null;
+  areaZone: string | null;
+  createdAt: string;
+  updatedAt: string;
+  itpInstance?: { id: string } | null;
   _count?: {
-    testResults: number
-    ncrLots: number
-    documents: number
-  }
+    testResults: number;
+    ncrLots: number;
+    documents: number;
+  };
 }
 
 const statusColors: Record<string, string> = {
@@ -49,24 +49,28 @@ const statusColors: Record<string, string> = {
   conformed: 'bg-green-200 text-green-900',
   on_hold: 'bg-red-100 text-red-800',
   claimed: 'bg-purple-100 text-purple-800',
-}
+};
 
 export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickViewProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
-  const { data: lotData, isLoading: loading, error: queryError } = useQuery({
+  const {
+    data: lotData,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
     queryKey: queryKeys.lot(lotId),
     queryFn: () => apiFetch<{ lot: LotDetails }>(`/api/lots/${lotId}`),
     enabled: !!lotId,
-  })
+  });
 
-  const lot = lotData?.lot ?? null
-  const error = queryError ? 'Failed to load lot details' : null
+  const lot = lotData?.lot ?? null;
+  const error = queryError ? 'Failed to load lot details' : null;
 
   const handleViewDetails = () => {
-    navigate(`/projects/${projectId}/lots/${lotId}`)
-    onClose()
-  }
+    navigate(`/projects/${projectId}/lots/${lotId}`);
+    onClose();
+  };
 
   // Calculate position to keep popup in viewport
   const popupStyle: React.CSSProperties = {
@@ -74,27 +78,27 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
     left: Math.min(position.x, window.innerWidth - 320),
     top: Math.min(position.y + 10, window.innerHeight - 320),
     zIndex: 50,
-  }
+  };
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-AU', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
-    })
-  }
+    });
+  };
 
   const formatChainage = (start: number | string | null, end: number | string | null) => {
-    if (start === null && end === null) return '—'
-    const startNum = start !== null ? Number(start) : null
-    const endNum = end !== null ? Number(end) : null
+    if (start === null && end === null) return '—';
+    const startNum = start !== null ? Number(start) : null;
+    const endNum = end !== null ? Number(end) : null;
     if (startNum !== null && !isNaN(startNum) && endNum !== null && !isNaN(endNum)) {
-      return `${startNum.toFixed(3)} - ${endNum.toFixed(3)}`
+      return `${startNum.toFixed(3)} - ${endNum.toFixed(3)}`;
     }
-    if (startNum !== null && !isNaN(startNum)) return startNum.toFixed(3)
-    if (endNum !== null && !isNaN(endNum)) return endNum.toFixed(3)
-    return '—'
-  }
+    if (startNum !== null && !isNaN(startNum)) return startNum.toFixed(3);
+    if (endNum !== null && !isNaN(endNum)) return endNum.toFixed(3);
+    return '—';
+  };
 
   return (
     <div
@@ -121,7 +125,9 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
                   </p>
                 )}
               </div>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}>
+              <span
+                className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
+              >
                 {lot.status.replace('_', ' ')}
               </span>
             </div>
@@ -161,7 +167,9 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
             {(lot._count || lot.itpInstance) && (
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <div className="flex items-center gap-1 text-xs bg-muted/50 px-2 py-1 rounded">
-                  <CheckCircle2 className={`h-3 w-3 ${lot.itpInstance ? 'text-green-600' : 'text-muted-foreground'}`} />
+                  <CheckCircle2
+                    className={`h-3 w-3 ${lot.itpInstance ? 'text-green-600' : 'text-muted-foreground'}`}
+                  />
                   <span>{lot.itpInstance ? '1 ITP' : 'No ITP'}</span>
                 </div>
                 {lot._count && (
@@ -210,5 +218,5 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
         </>
       ) : null}
     </div>
-  )
+  );
 }

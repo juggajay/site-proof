@@ -1,38 +1,34 @@
-import { useState, memo } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { apiFetch } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { handleApiError } from '@/lib/errorHandling'
-import type { NCR } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { useRef, useState, memo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import { handleApiError } from '@/lib/errorHandling';
+import type { NCR } from '../types';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const notifyClientSchema = z.object({
-  recipientEmail: z.string().optional().default(''),
-  additionalMessage: z.string().optional().default(''),
-})
+  recipientEmail: z.string().trim().optional().default(''),
+  additionalMessage: z.string().trim().optional().default(''),
+});
 
-type NotifyClientFormData = z.infer<typeof notifyClientSchema>
+type NotifyClientFormData = z.infer<typeof notifyClientSchema>;
 
 interface NotifyClientModalProps {
-  isOpen: boolean
-  ncr: NCR | null
-  onClose: () => void
-  onSuccess: () => void
+  isOpen: boolean;
+  ncr: NCR | null;
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
-function NotifyClientModalInner({
-  isOpen,
-  ncr,
-  onClose,
-  onSuccess,
-}: NotifyClientModalProps) {
-  const [notifyingClient, setNotifyingClient] = useState(false)
+function NotifyClientModalInner({ isOpen, ncr, onClose, onSuccess }: NotifyClientModalProps) {
+  const [notifyingClient, setNotifyingClient] = useState(false);
+  const notifyingClientRef = useRef(false);
 
   const {
     register,
@@ -46,40 +42,42 @@ function NotifyClientModalInner({
       recipientEmail: '',
       additionalMessage: '',
     },
-  })
+  });
 
   const onFormSubmit = async (data: NotifyClientFormData) => {
-    if (!ncr) return
+    if (!ncr || notifyingClientRef.current) return;
 
-    setNotifyingClient(true)
+    notifyingClientRef.current = true;
+    setNotifyingClient(true);
     try {
-      await apiFetch(`/api/ncrs/${ncr.id}/notify-client`, {
+      await apiFetch(`/api/ncrs/${encodeURIComponent(ncr.id)}/notify-client`, {
         method: 'POST',
         body: JSON.stringify({
-          recipientEmail: data.recipientEmail || undefined,
-          additionalMessage: data.additionalMessage || undefined,
+          recipientEmail: data.recipientEmail?.trim() || undefined,
+          additionalMessage: data.additionalMessage?.trim() || undefined,
         }),
-      })
+      });
 
       toast({
         title: 'Client Notified',
         description: `Client notification sent for ${ncr.ncrNumber}`,
-      })
-      handleClose()
-      onSuccess()
+      });
+      handleClose();
+      onSuccess();
     } catch (err) {
-      handleApiError(err, 'Failed to notify client')
+      handleApiError(err, 'Failed to notify client');
     } finally {
-      setNotifyingClient(false)
+      notifyingClientRef.current = false;
+      setNotifyingClient(false);
     }
-  }
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset();
+    onClose();
+  };
 
-  if (!isOpen || !ncr) return null
+  if (!isOpen || !ncr) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-lg">
@@ -87,9 +85,12 @@ function NotifyClientModalInner({
       <ModalBody>
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-sm font-medium text-red-800">Major NCR: {ncr.ncrNumber}</p>
-          <p className="text-sm text-red-700 mt-1">{ncr.description.substring(0, 100)}{ncr.description.length > 100 ? '...' : ''}</p>
+          <p className="text-sm text-red-700 mt-1">
+            {ncr.description.substring(0, 100)}
+            {ncr.description.length > 100 ? '...' : ''}
+          </p>
           <p className="text-xs text-red-600 mt-2">
-            Affected Lots: {ncr.ncrLots.map(nl => nl.lot.lotNumber).join(', ') || 'None'}
+            Affected Lots: {ncr.ncrLots.map((nl) => nl.lot.lotNumber).join(', ') || 'None'}
           </p>
         </div>
 
@@ -104,9 +105,13 @@ function NotifyClientModalInner({
                 className={errors.recipientEmail ? 'border-destructive mt-1' : 'mt-1'}
               />
               {errors.recipientEmail && (
-                <p className="text-sm text-destructive mt-1" role="alert">{errors.recipientEmail.message}</p>
+                <p className="text-sm text-destructive mt-1" role="alert">
+                  {errors.recipientEmail.message}
+                </p>
               )}
-              <p className="text-xs text-muted-foreground mt-1">Leave blank to record notification without sending email</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Leave blank to record notification without sending email
+              </p>
             </div>
 
             <div>
@@ -118,7 +123,9 @@ function NotifyClientModalInner({
                 className={errors.additionalMessage ? 'border-destructive mt-1' : 'mt-1'}
               />
               {errors.additionalMessage && (
-                <p className="text-sm text-destructive mt-1" role="alert">{errors.additionalMessage.message}</p>
+                <p className="text-sm text-destructive mt-1" role="alert">
+                  {errors.additionalMessage.message}
+                </p>
               )}
             </div>
           </div>
@@ -136,24 +143,15 @@ function NotifyClientModalInner({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleClose}
-          disabled={notifyingClient}
-        >
+        <Button type="button" variant="outline" onClick={handleClose} disabled={notifyingClient}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="notify-client-form"
-          disabled={notifyingClient}
-        >
+        <Button type="submit" form="notify-client-form" disabled={notifyingClient}>
           {notifyingClient ? 'Sending...' : 'Send Notification'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
-export const NotifyClientModal = memo(NotifyClientModalInner)
+export const NotifyClientModal = memo(NotifyClientModalInner);

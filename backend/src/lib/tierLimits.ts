@@ -8,11 +8,11 @@ export const TIER_PROJECT_LIMITS: Record<string, number> = {
   professional: 10,
   enterprise: 50,
   unlimited: Infinity,
-}
+};
 
 export const TIER_USER_LIMITS: Record<string, number> = {
   basic: 5,
   professional: 25,
   enterprise: 100,
   unlimited: Infinity,
-}
+};

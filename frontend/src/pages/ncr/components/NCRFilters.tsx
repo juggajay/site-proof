@@ -1,168 +1,208 @@
-import { useState, useCallback, useMemo, memo } from 'react'
-import { Search } from 'lucide-react'
-import { FilterBottomSheet, FilterTriggerButton, type FilterConfig, type FilterValues } from '@/components/mobile/FilterBottomSheet'
-import type { NCR } from '../types'
+import { useState, useCallback, useMemo, useEffect, memo } from 'react';
+import { Search } from 'lucide-react';
+import {
+  FilterBottomSheet,
+  FilterTriggerButton,
+  type FilterConfig,
+  type FilterValues,
+} from '@/components/mobile/FilterBottomSheet';
+import type { NCR } from '../types';
 
 interface NCRFiltersProps {
-  ncrs: NCR[]
-  isMobile: boolean
-  onFilteredNcrsChange: (filtered: NCR[]) => void
+  ncrs: NCR[];
+  isMobile: boolean;
+  onFilteredNcrsChange: (filtered: NCR[]) => void;
 }
 
 function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersProps) {
   // Filter state
-  const [statusFilter, setStatusFilter] = useState<string>('')
-  const [categoryFilter, setCategoryFilter] = useState<string>('')
-  const [responsibleFilter, setResponsibleFilter] = useState<string>('')
-  const [dateFromFilter, setDateFromFilter] = useState<string>('')
-  const [dateToFilter, setDateToFilter] = useState<string>('')
-  const [mobileSearchQuery, setMobileSearchQuery] = useState('')
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [responsibleFilter, setResponsibleFilter] = useState<string>('');
+  const [dateFromFilter, setDateFromFilter] = useState<string>('');
+  const [dateToFilter, setDateToFilter] = useState<string>('');
+  const [mobileSearchQuery, setMobileSearchQuery] = useState('');
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
   // Get unique values for filter dropdowns
-  const uniqueStatuses = useMemo(() => [...new Set(ncrs.map(ncr => ncr.status))], [ncrs])
-  const uniqueCategories = useMemo(() => [...new Set(ncrs.map(ncr => ncr.category))], [ncrs])
-  const uniqueResponsible = useMemo(() => [...new Set(ncrs.map(ncr =>
-    ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned'
-  ))], [ncrs])
+  const uniqueStatuses = useMemo(() => [...new Set(ncrs.map((ncr) => ncr.status))], [ncrs]);
+  const uniqueCategories = useMemo(() => [...new Set(ncrs.map((ncr) => ncr.category))], [ncrs]);
+  const uniqueResponsible = useMemo(
+    () => [
+      ...new Set(
+        ncrs.map(
+          (ncr) => ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned',
+        ),
+      ),
+    ],
+    [ncrs],
+  );
 
   // Apply filters to NCRs
   const filteredNcrs = useMemo(() => {
-    const result = ncrs.filter(ncr => {
+    const result = ncrs.filter((ncr) => {
       // Mobile search query filter
       if (mobileSearchQuery) {
-        const query = mobileSearchQuery.toLowerCase()
+        const query = mobileSearchQuery.toLowerCase();
         const matchesSearch =
           ncr.ncrNumber.toLowerCase().includes(query) ||
           ncr.description.toLowerCase().includes(query) ||
           ncr.category.toLowerCase().includes(query) ||
-          (ncr.responsibleUser?.fullName?.toLowerCase().includes(query)) ||
-          (ncr.responsibleUser?.email?.toLowerCase().includes(query))
-        if (!matchesSearch) return false
+          ncr.responsibleUser?.fullName?.toLowerCase().includes(query) ||
+          ncr.responsibleUser?.email?.toLowerCase().includes(query);
+        if (!matchesSearch) return false;
       }
 
-      if (statusFilter && ncr.status !== statusFilter) return false
-      if (categoryFilter && ncr.category !== categoryFilter) return false
+      if (statusFilter && ncr.status !== statusFilter) return false;
+      if (categoryFilter && ncr.category !== categoryFilter) return false;
 
       if (responsibleFilter) {
-        const responsibleName = ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned'
-        if (responsibleName !== responsibleFilter) return false
+        const responsibleName =
+          ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned';
+        if (responsibleName !== responsibleFilter) return false;
       }
 
       if (dateFromFilter) {
-        const ncrDate = new Date(ncr.createdAt)
-        const fromDate = new Date(dateFromFilter)
-        if (ncrDate < fromDate) return false
+        const ncrDate = new Date(ncr.createdAt);
+        const fromDate = new Date(dateFromFilter);
+        if (ncrDate < fromDate) return false;
       }
 
       if (dateToFilter) {
-        const ncrDate = new Date(ncr.createdAt)
-        const toDate = new Date(dateToFilter)
-        toDate.setHours(23, 59, 59, 999)
-        if (ncrDate > toDate) return false
+        const ncrDate = new Date(ncr.createdAt);
+        const toDate = new Date(dateToFilter);
+        toDate.setHours(23, 59, 59, 999);
+        if (ncrDate > toDate) return false;
       }
 
-      return true
-    })
+      return true;
+    });
 
-    onFilteredNcrsChange(result)
-    return result
-  }, [ncrs, mobileSearchQuery, statusFilter, categoryFilter, responsibleFilter, dateFromFilter, dateToFilter, onFilteredNcrsChange])
+    return result;
+  }, [
+    ncrs,
+    mobileSearchQuery,
+    statusFilter,
+    categoryFilter,
+    responsibleFilter,
+    dateFromFilter,
+    dateToFilter,
+  ]);
+
+  useEffect(() => {
+    onFilteredNcrsChange(filteredNcrs);
+  }, [filteredNcrs, onFilteredNcrsChange]);
 
   // Mobile filter configuration
-  const mobileFilters: FilterConfig[] = useMemo(() => [
-    {
-      type: 'select',
-      id: 'status',
-      label: 'Status',
-      options: uniqueStatuses.map(status => ({
-        value: status,
-        label: status.replace(/_/g, ' '),
-      })),
-      value: statusFilter || null,
-    },
-    {
-      type: 'select',
-      id: 'category',
-      label: 'Category',
-      options: uniqueCategories.map(category => ({
-        value: category,
-        label: category.replace(/_/g, ' '),
-      })),
-      value: categoryFilter || null,
-    },
-    {
-      type: 'select',
-      id: 'responsible',
-      label: 'Responsible',
-      options: uniqueResponsible.map(responsible => ({
-        value: responsible,
-        label: responsible,
-      })),
-      value: responsibleFilter || null,
-    },
-    {
-      type: 'date',
-      id: 'dateRange',
-      label: 'Date Range',
-      value: { start: dateFromFilter || null, end: dateToFilter || null },
-    },
-  ], [uniqueStatuses, uniqueCategories, uniqueResponsible, statusFilter, categoryFilter, responsibleFilter, dateFromFilter, dateToFilter])
+  const mobileFilters: FilterConfig[] = useMemo(
+    () => [
+      {
+        type: 'select',
+        id: 'status',
+        label: 'Status',
+        options: uniqueStatuses.map((status) => ({
+          value: status,
+          label: status.replace(/_/g, ' '),
+        })),
+        value: statusFilter || null,
+      },
+      {
+        type: 'select',
+        id: 'category',
+        label: 'Category',
+        options: uniqueCategories.map((category) => ({
+          value: category,
+          label: category.replace(/_/g, ' '),
+        })),
+        value: categoryFilter || null,
+      },
+      {
+        type: 'select',
+        id: 'responsible',
+        label: 'Responsible',
+        options: uniqueResponsible.map((responsible) => ({
+          value: responsible,
+          label: responsible,
+        })),
+        value: responsibleFilter || null,
+      },
+      {
+        type: 'date',
+        id: 'dateRange',
+        label: 'Date Range',
+        value: { start: dateFromFilter || null, end: dateToFilter || null },
+      },
+    ],
+    [
+      uniqueStatuses,
+      uniqueCategories,
+      uniqueResponsible,
+      statusFilter,
+      categoryFilter,
+      responsibleFilter,
+      dateFromFilter,
+      dateToFilter,
+    ],
+  );
 
   // Mobile filter values for bottom sheet
-  const mobileFilterValues: FilterValues = useMemo(() => ({
-    status: statusFilter || null,
-    category: categoryFilter || null,
-    responsible: responsibleFilter || null,
-    dateRange: { start: dateFromFilter || null, end: dateToFilter || null },
-  }), [statusFilter, categoryFilter, responsibleFilter, dateFromFilter, dateToFilter])
+  const mobileFilterValues: FilterValues = useMemo(
+    () => ({
+      status: statusFilter || null,
+      category: categoryFilter || null,
+      responsible: responsibleFilter || null,
+      dateRange: { start: dateFromFilter || null, end: dateToFilter || null },
+    }),
+    [statusFilter, categoryFilter, responsibleFilter, dateFromFilter, dateToFilter],
+  );
 
   // Count active mobile filters
   const activeMobileFilterCount =
     (statusFilter ? 1 : 0) +
     (categoryFilter ? 1 : 0) +
     (responsibleFilter ? 1 : 0) +
-    (dateFromFilter || dateToFilter ? 1 : 0)
+    (dateFromFilter || dateToFilter ? 1 : 0);
 
-  const hasActiveFilters = statusFilter || categoryFilter || responsibleFilter || dateFromFilter || dateToFilter
+  const hasActiveFilters =
+    statusFilter || categoryFilter || responsibleFilter || dateFromFilter || dateToFilter;
 
   // Handle mobile filter apply
   const handleMobileFilterApply = useCallback((values: FilterValues) => {
-    setStatusFilter((values.status as string) || '')
-    setCategoryFilter((values.category as string) || '')
-    setResponsibleFilter((values.responsible as string) || '')
-    const dateRange = values.dateRange as { start: string | null; end: string | null }
-    setDateFromFilter(dateRange?.start || '')
-    setDateToFilter(dateRange?.end || '')
-    setFilterSheetOpen(false)
-  }, [])
+    setStatusFilter((values.status as string) || '');
+    setCategoryFilter((values.category as string) || '');
+    setResponsibleFilter((values.responsible as string) || '');
+    const dateRange = values.dateRange as { start: string | null; end: string | null };
+    setDateFromFilter(dateRange?.start || '');
+    setDateToFilter(dateRange?.end || '');
+    setFilterSheetOpen(false);
+  }, []);
 
   // Handle mobile filter clear
   const handleMobileFilterClear = useCallback(() => {
-    setStatusFilter('')
-    setCategoryFilter('')
-    setResponsibleFilter('')
-    setDateFromFilter('')
-    setDateToFilter('')
-  }, [])
+    setStatusFilter('');
+    setCategoryFilter('');
+    setResponsibleFilter('');
+    setDateFromFilter('');
+    setDateToFilter('');
+  }, []);
 
   // Handle mobile filter onChange
   const handleMobileFilterChange = useCallback((values: FilterValues) => {
-    setStatusFilter((values.status as string) || '')
-    setCategoryFilter((values.category as string) || '')
-    setResponsibleFilter((values.responsible as string) || '')
-    const dateRange = values.dateRange as { start: string | null; end: string | null }
-    setDateFromFilter(dateRange?.start || '')
-    setDateToFilter(dateRange?.end || '')
-  }, [])
+    setStatusFilter((values.status as string) || '');
+    setCategoryFilter((values.category as string) || '');
+    setResponsibleFilter((values.responsible as string) || '');
+    const dateRange = values.dateRange as { start: string | null; end: string | null };
+    setDateFromFilter(dateRange?.start || '');
+    setDateToFilter(dateRange?.end || '');
+  }, []);
 
   const clearAllFilters = useCallback(() => {
-    setStatusFilter('')
-    setCategoryFilter('')
-    setResponsibleFilter('')
-    setDateFromFilter('')
-    setDateToFilter('')
-  }, [])
+    setStatusFilter('');
+    setCategoryFilter('');
+    setResponsibleFilter('');
+    setDateFromFilter('');
+    setDateToFilter('');
+  }, []);
 
   return (
     <>
@@ -201,7 +241,10 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
           <div className="flex flex-wrap gap-4 items-end">
             {/* Status Filter */}
             <div className="flex flex-col min-w-[150px]">
-              <label htmlFor="status-filter" className="text-sm font-medium text-muted-foreground mb-1">
+              <label
+                htmlFor="status-filter"
+                className="text-sm font-medium text-muted-foreground mb-1"
+              >
                 Status
               </label>
               <select
@@ -211,7 +254,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 className="px-3 py-2 border rounded-lg bg-background text-sm"
               >
                 <option value="">All Statuses</option>
-                {uniqueStatuses.map(status => (
+                {uniqueStatuses.map((status) => (
                   <option key={status} value={status}>
                     {status.replace(/_/g, ' ')}
                   </option>
@@ -221,7 +264,10 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
 
             {/* Category Filter */}
             <div className="flex flex-col min-w-[150px]">
-              <label htmlFor="category-filter" className="text-sm font-medium text-muted-foreground mb-1">
+              <label
+                htmlFor="category-filter"
+                className="text-sm font-medium text-muted-foreground mb-1"
+              >
                 Category
               </label>
               <select
@@ -231,7 +277,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 className="px-3 py-2 border rounded-lg bg-background text-sm"
               >
                 <option value="">All Categories</option>
-                {uniqueCategories.map(category => (
+                {uniqueCategories.map((category) => (
                   <option key={category} value={category}>
                     {category.replace(/_/g, ' ')}
                   </option>
@@ -241,7 +287,10 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
 
             {/* Responsible Filter */}
             <div className="flex flex-col min-w-[150px]">
-              <label htmlFor="responsible-filter" className="text-sm font-medium text-muted-foreground mb-1">
+              <label
+                htmlFor="responsible-filter"
+                className="text-sm font-medium text-muted-foreground mb-1"
+              >
                 Responsible
               </label>
               <select
@@ -251,7 +300,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 className="px-3 py-2 border rounded-lg bg-background text-sm"
               >
                 <option value="">All Responsible</option>
-                {uniqueResponsible.map(responsible => (
+                {uniqueResponsible.map((responsible) => (
                   <option key={responsible} value={responsible}>
                     {responsible}
                   </option>
@@ -261,7 +310,10 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
 
             {/* Date From Filter */}
             <div className="flex flex-col min-w-[150px]">
-              <label htmlFor="date-from-filter" className="text-sm font-medium text-muted-foreground mb-1">
+              <label
+                htmlFor="date-from-filter"
+                className="text-sm font-medium text-muted-foreground mb-1"
+              >
                 Date From
               </label>
               <input
@@ -275,7 +327,10 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
 
             {/* Date To Filter */}
             <div className="flex flex-col min-w-[150px]">
-              <label htmlFor="date-to-filter" className="text-sm font-medium text-muted-foreground mb-1">
+              <label
+                htmlFor="date-to-filter"
+                className="text-sm font-medium text-muted-foreground mb-1"
+              >
                 Date To
               </label>
               <input
@@ -319,7 +374,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
         onClear={handleMobileFilterClear}
       />
     </>
-  )
+  );
 }
 
-export const NCRFilters = memo(NCRFiltersInner)
+export const NCRFilters = memo(NCRFiltersInner);

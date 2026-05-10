@@ -1,7 +1,7 @@
 // Feature #860: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
 
-const ABN_WEIGHTS = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
+const ABN_WEIGHTS = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
 
 /**
  * Validates an Australian Business Number (ABN)
@@ -10,27 +10,27 @@ const ABN_WEIGHTS = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]
  */
 export function isValidABN(abn: string): boolean {
   // Remove all non-digit characters
-  const cleanABN = abn.replace(/\D/g, '')
+  const cleanABN = abn.replace(/\D/g, '');
 
   // ABN must be exactly 11 digits
   if (cleanABN.length !== 11) {
-    return false
+    return false;
   }
 
   // Convert to array of digits
-  const digits = cleanABN.split('').map(Number)
+  const digits = cleanABN.split('').map(Number);
 
   // Subtract 1 from the first digit (per ABN algorithm)
-  digits[0] = digits[0] - 1
+  digits[0] = digits[0] - 1;
 
   // Calculate weighted sum
-  let sum = 0
+  let sum = 0;
   for (let i = 0; i < 11; i++) {
-    sum += digits[i] * ABN_WEIGHTS[i]
+    sum += digits[i] * ABN_WEIGHTS[i];
   }
 
   // Valid if sum is divisible by 89
-  return sum % 89 === 0
+  return sum % 89 === 0;
 }
 
 /**
@@ -39,14 +39,14 @@ export function isValidABN(abn: string): boolean {
  * @returns Formatted ABN string
  */
 export function formatABN(abn: string): string {
-  const cleanABN = abn.replace(/\D/g, '')
+  const cleanABN = abn.replace(/\D/g, '');
 
   if (cleanABN.length !== 11) {
-    return abn // Return original if not 11 digits
+    return abn; // Return original if not 11 digits
   }
 
   // Format as XX XXX XXX XXX
-  return `${cleanABN.slice(0, 2)} ${cleanABN.slice(2, 5)} ${cleanABN.slice(5, 8)} ${cleanABN.slice(8, 11)}`
+  return `${cleanABN.slice(0, 2)} ${cleanABN.slice(2, 5)} ${cleanABN.slice(5, 8)} ${cleanABN.slice(8, 11)}`;
 }
 
 /**
@@ -56,20 +56,20 @@ export function formatABN(abn: string): string {
  */
 export function validateABN(abn: string): string | null {
   if (!abn || abn.trim() === '') {
-    return null // Empty is OK (not required)
+    return null; // Empty is OK (not required)
   }
 
-  const cleanABN = abn.replace(/\D/g, '')
+  const cleanABN = abn.replace(/\D/g, '');
 
   if (cleanABN.length !== 11) {
-    return 'ABN must be 11 digits'
+    return 'ABN must be 11 digits';
   }
 
   if (!isValidABN(abn)) {
-    return 'Invalid ABN - please check the number'
+    return 'Invalid ABN - please check the number';
   }
 
-  return null // Valid
+  return null; // Valid
 }
 
 /**
@@ -86,5 +86,5 @@ export const TEST_ABNS = {
     '12 345 678 901', // Invalid checksum
     '00 000 000 000', // All zeros
     '99 999 999 999', // All nines
-  ]
-}
+  ],
+};

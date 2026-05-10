@@ -1,27 +1,27 @@
-import { useState, memo } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { apiFetch } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { handleApiError } from '@/lib/errorHandling'
-import type { NCR } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { useRef, useState, memo } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import { handleApiError } from '@/lib/errorHandling';
+import type { NCR } from '../types';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const rejectRectificationSchema = z.object({
-  feedback: z.string().min(1, 'Feedback is required'),
-})
+  feedback: z.string().trim().min(1, 'Feedback is required'),
+});
 
-type RejectRectificationFormData = z.infer<typeof rejectRectificationSchema>
+type RejectRectificationFormData = z.infer<typeof rejectRectificationSchema>;
 
 interface RejectRectificationModalProps {
-  isOpen: boolean
-  ncr: NCR | null
-  onClose: () => void
-  onSuccess: () => void
+  isOpen: boolean;
+  ncr: NCR | null;
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
 function RejectRectificationModalInner({
@@ -30,7 +30,8 @@ function RejectRectificationModalInner({
   onClose,
   onSuccess,
 }: RejectRectificationModalProps) {
-  const [rejectingRectification, setRejectingRectification] = useState(false)
+  const [rejectingRectification, setRejectingRectification] = useState(false);
+  const rejectingRectificationRef = useRef(false);
 
   const {
     register,
@@ -43,37 +44,39 @@ function RejectRectificationModalInner({
     defaultValues: {
       feedback: '',
     },
-  })
+  });
 
   const onFormSubmit = async (data: RejectRectificationFormData) => {
-    if (!ncr) return
+    if (!ncr || rejectingRectificationRef.current) return;
 
-    setRejectingRectification(true)
+    rejectingRectificationRef.current = true;
+    setRejectingRectification(true);
     try {
-      await apiFetch(`/api/ncrs/${ncr.id}/reject-rectification`, {
+      await apiFetch(`/api/ncrs/${encodeURIComponent(ncr.id)}/reject-rectification`, {
         method: 'POST',
-        body: JSON.stringify({ feedback: data.feedback }),
-      })
+        body: JSON.stringify({ feedback: data.feedback.trim() }),
+      });
 
       toast({
         title: 'Rectification Rejected',
         description: 'NCR has been returned to rectification status and responsible party notified',
-      })
-      handleClose()
-      onSuccess()
+      });
+      handleClose();
+      onSuccess();
     } catch (err) {
-      handleApiError(err, 'Failed to reject rectification')
+      handleApiError(err, 'Failed to reject rectification');
     } finally {
-      setRejectingRectification(false)
+      rejectingRectificationRef.current = false;
+      setRejectingRectification(false);
     }
-  }
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset();
+    onClose();
+  };
 
-  if (!isOpen || !ncr) return null
+  if (!isOpen || !ncr) return null;
 
   return (
     <Modal onClose={handleClose}>
@@ -87,8 +90,8 @@ function RejectRectificationModalInner({
         </div>
 
         <p className="text-sm text-muted-foreground mb-4">
-          The rectification will be rejected and returned to the responsible party for additional work.
-          Please provide feedback explaining what needs to be improved.
+          The rectification will be rejected and returned to the responsible party for additional
+          work. Please provide feedback explaining what needs to be improved.
         </p>
 
         <form id="reject-rectification-form" onSubmit={handleSubmit(onFormSubmit)}>
@@ -101,7 +104,9 @@ function RejectRectificationModalInner({
               className={errors.feedback ? 'border-destructive mt-1' : 'mt-1'}
             />
             {errors.feedback && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.feedback.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.feedback.message}
+              </p>
             )}
           </div>
         </form>
@@ -125,7 +130,7 @@ function RejectRectificationModalInner({
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }
 
-export const RejectRectificationModal = memo(RejectRectificationModalInner)
+export const RejectRectificationModal = memo(RejectRectificationModalInner);

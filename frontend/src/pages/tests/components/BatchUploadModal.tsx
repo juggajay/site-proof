@@ -1,18 +1,43 @@
-import React, { useState, useCallback } from 'react'
-import { getAuthToken } from '@/lib/auth'
-import { apiFetch, apiUrl } from '@/lib/api'
-import type { TestResult } from '../types'
-import { getBatchConfidenceIndicator } from '../constants'
-import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import React, { useState, useCallback } from 'react';
+import { apiFetch, authFetch } from '@/lib/api';
+import type { TestResult } from '../types';
+import { getBatchConfidenceIndicator } from '../constants';
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from '@/components/ui/toaster';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { getResponseErrorMessage } from '../utils';
 
 interface BatchUploadModalProps {
-  isOpen: boolean
-  onClose: () => void
-  projectId: string
-  onTestResultsUpdated: (testResults: TestResult[]) => void
+  isOpen: boolean;
+  onClose: () => void;
+  projectId: string;
+  onTestResultsUpdated: (testResults: TestResult[]) => void;
+}
+
+interface BatchExtractedField {
+  value?: string;
+}
+
+interface BatchUploadResult {
+  success: boolean;
+  filename: string;
+  extraction?: {
+    extractedFields?: Record<string, BatchExtractedField>;
+    confidence?: Record<string, number>;
+    needsReview?: boolean;
+  } | null;
+  testResult?: {
+    id: string;
+    testType: string;
+  };
+}
+
+interface BatchUploadResponse {
+  results?: BatchUploadResult[];
+  message?: string;
 }
 
 export const BatchUploadModal = React.memo(function BatchUploadModal({
@@ -21,64 +46,67 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
   projectId,
   onTestResultsUpdated,
 }: BatchUploadModalProps) {
-  const [batchUploading, setBatchUploading] = useState(false)
-  const [batchFiles, setBatchFiles] = useState<File[]>([])
-  const [batchResults, setBatchResults] = useState<any[]>([])
-  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null)
-  const [selectedBatchResult, setSelectedBatchResult] = useState<number | null>(null)
-  const [batchReviewData, setBatchReviewData] = useState<Record<string, Record<string, string>>>({})
-  const [batchConfirming, setBatchConfirming] = useState(false)
+  const [batchUploading, setBatchUploading] = useState(false);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [batchResults, setBatchResults] = useState<BatchUploadResult[]>([]);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
+  const [selectedBatchResult, setSelectedBatchResult] = useState<number | null>(null);
+  const [batchReviewData, setBatchReviewData] = useState<Record<string, Record<string, string>>>(
+    {},
+  );
+  const [batchConfirming, setBatchConfirming] = useState(false);
 
   const resetState = useCallback(() => {
-    setBatchFiles([])
-    setBatchResults([])
-    setBatchReviewData({})
-    setSelectedBatchResult(null)
-    setBatchProgress(null)
-  }, [])
+    setBatchFiles([]);
+    setBatchResults([]);
+    setBatchReviewData({});
+    setSelectedBatchResult(null);
+    setBatchProgress(null);
+  }, []);
 
   const handleClose = useCallback(() => {
-    resetState()
-    onClose()
-  }, [resetState, onClose])
+    resetState();
+    onClose();
+  }, [resetState, onClose]);
 
   // Feature #202: Batch upload handler (FormData - uses raw fetch)
   const handleBatchUpload = useCallback(async () => {
     if (batchFiles.length === 0) {
-      alert('Please select files first')
-      return
+      toast({
+        title: 'Select certificate files',
+        variant: 'warning',
+      });
+      return;
     }
 
-    setBatchUploading(true)
-    setBatchProgress({ current: 0, total: batchFiles.length })
-
-    const token = getAuthToken()
+    setBatchUploading(true);
+    setBatchProgress({ current: 0, total: batchFiles.length });
 
     try {
-      const formDataObj = new FormData()
+      const formDataObj = new FormData();
       for (const file of batchFiles) {
-        formDataObj.append('certificates', file)
+        formDataObj.append('certificates', file);
       }
-      formDataObj.append('projectId', projectId || '')
+      formDataObj.append('projectId', projectId || '');
 
-      const response = await fetch(apiUrl('/api/test-results/batch-upload'), {
+      const response = await authFetch('/api/test-results/batch-upload', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formDataObj,
-      })
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        setBatchResults(data.results)
-        setBatchProgress(null)
+        const data = (await response.json()) as BatchUploadResponse;
+        const results = data.results || [];
+        setBatchResults(results);
+        setBatchProgress(null);
 
         // Initialize review data for each result
-        const reviewData: Record<string, Record<string, string>> = {}
-        for (const result of data.results) {
-          if (result.success) {
-            const extracted = result.extraction.extractedFields
+        const reviewData: Record<string, Record<string, string>> = {};
+        for (const result of results) {
+          if (result.success && result.testResult) {
+            const extracted = result.extraction?.extractedFields || {};
             reviewData[result.testResult.id] = {
               testType: extracted.testType?.value || '',
               laboratoryName: extracted.laboratoryName?.value || '',
@@ -90,65 +118,94 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
               resultUnit: extracted.resultUnit?.value || '',
               specificationMin: extracted.specificationMin?.value || '',
               specificationMax: extracted.specificationMax?.value || '',
-            }
+            };
           }
         }
-        setBatchReviewData(reviewData)
+        setBatchReviewData(reviewData);
 
         // Refresh test results list
-        const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
-        onTestResultsUpdated(testsData.testResults || [])
+        const testsData = await apiFetch<{ testResults: TestResult[] }>(
+          `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
+        );
+        onTestResultsUpdated(testsData.testResults || []);
+        const successfulCount = results.filter((result) => result.success).length;
+        toast({
+          title:
+            successfulCount === results.length
+              ? 'Certificates processed'
+              : 'Some certificates need attention',
+          description: `${successfulCount} of ${results.length} certificates processed successfully.`,
+          variant: successfulCount === results.length ? 'success' : 'warning',
+        });
       } else {
-        const data = await response.json()
-        alert(data.message || 'Failed to upload certificates')
-        setBatchProgress(null)
+        toast({
+          title: 'Failed to upload certificates',
+          description: await getResponseErrorMessage(response, 'Please try again.'),
+          variant: 'error',
+        });
+        setBatchProgress(null);
       }
     } catch (err) {
-      alert('Failed to upload certificates')
-      setBatchProgress(null)
+      toast({
+        title: 'Failed to upload certificates',
+        description: extractErrorMessage(err, 'Please try again.'),
+        variant: 'error',
+      });
+      setBatchProgress(null);
     } finally {
-      setBatchUploading(false)
+      setBatchUploading(false);
     }
-  }, [batchFiles, projectId, onTestResultsUpdated])
+  }, [batchFiles, projectId, onTestResultsUpdated]);
 
   // Feature #202: Batch confirm all handler
   const handleBatchConfirmAll = useCallback(async () => {
-    setBatchConfirming(true)
+    setBatchConfirming(true);
 
     try {
       const confirmations = batchResults
-        .filter(r => r.success)
-        .map(r => ({
+        .filter(
+          (r): r is BatchUploadResult & { testResult: { id: string; testType: string } } =>
+            r.success && !!r.testResult,
+        )
+        .map((r) => ({
           testResultId: r.testResult.id,
-          corrections: batchReviewData[r.testResult.id] || {}
-        }))
+          corrections: batchReviewData[r.testResult.id] || {},
+        }));
 
       await apiFetch('/api/test-results/batch-confirm', {
         method: 'POST',
         body: JSON.stringify({ confirmations }),
-      })
+      });
 
       // Close modal and reset
-      resetState()
-      onClose()
+      resetState();
+      onClose();
 
       // Refresh test results
-      const testsData = await apiFetch<{ testResults: TestResult[] }>(`/api/test-results?projectId=${projectId}`)
-      onTestResultsUpdated(testsData.testResults || [])
+      const testsData = await apiFetch<{ testResults: TestResult[] }>(
+        `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
+      );
+      onTestResultsUpdated(testsData.testResults || []);
+      toast({
+        title: 'Extractions saved',
+        variant: 'success',
+      });
     } catch (err) {
-      alert('Failed to confirm extractions')
+      toast({
+        title: 'Failed to confirm extractions',
+        description: extractErrorMessage(err, 'Please try again.'),
+        variant: 'error',
+      });
     } finally {
-      setBatchConfirming(false)
+      setBatchConfirming(false);
     }
-  }, [batchResults, batchReviewData, resetState, onClose, projectId, onTestResultsUpdated])
+  }, [batchResults, batchReviewData, resetState, onClose, projectId, onTestResultsUpdated]);
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={handleClose} className="max-w-6xl">
-      <ModalHeader>
-        {'\uD83D\uDCC1'} Batch Upload Test Certificates
-      </ModalHeader>
+      <ModalHeader>{'\uD83D\uDCC1'} Batch Upload Test Certificates</ModalHeader>
       <ModalBody className="p-0">
         {/* Before processing - File selection */}
         {batchResults.length === 0 ? (
@@ -180,7 +237,9 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                     {batchFiles.map((file, i) => (
                       <div key={i} className="p-2 bg-muted rounded text-sm flex justify-between">
                         <span>{file.name}</span>
-                        <span className="text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                        <span className="text-muted-foreground">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -210,8 +269,8 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
               <Button
                 variant="outline"
                 onClick={() => {
-                  setBatchFiles([])
-                  onClose()
+                  setBatchFiles([]);
+                  onClose();
                 }}
               >
                 Cancel
@@ -240,7 +299,8 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
               <div className="p-3 bg-muted/50 border-b">
                 <h3 className="font-medium">Extraction Results</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {batchResults.filter(r => r.success).length} of {batchResults.length} processed successfully
+                  {batchResults.filter((r) => r.success).length} of {batchResults.length} processed
+                  successfully
                 </p>
               </div>
               <div className="flex-1 overflow-auto">
@@ -249,26 +309,32 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                     key={index}
                     onClick={() => result.success && setSelectedBatchResult(index)}
                     className={`p-3 border-b cursor-pointer hover:bg-muted/50 ${
-                      selectedBatchResult === index ? 'bg-purple-50 dark:bg-purple-900/20 border-l-4 border-l-purple-500' : ''
+                      selectedBatchResult === index
+                        ? 'bg-purple-50 dark:bg-purple-900/20 border-l-4 border-l-purple-500'
+                        : ''
                     } ${!result.success ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium truncate">
-                        {result.filename}
-                      </span>
+                      <span className="text-sm font-medium truncate">{result.filename}</span>
                       {result.success ? (
                         result.extraction?.needsReview ? (
-                          <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">Review</span>
+                          <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">
+                            Review
+                          </span>
                         ) : (
-                          <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-800 rounded">{'\u2713'} Good</span>
+                          <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-800 rounded">
+                            {'\u2713'} Good
+                          </span>
                         )
                       ) : (
-                        <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-800 rounded">Failed</span>
+                        <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-800 rounded">
+                          Failed
+                        </span>
                       )}
                     </div>
                     {result.success && (
                       <div className="text-xs text-muted-foreground mt-1">
-                        {result.testResult.testType}
+                        {result.testResult?.testType || 'Unknown test'}
                       </div>
                     )}
                   </div>
@@ -289,15 +355,16 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                   <div className="flex-1 overflow-auto p-4 space-y-3">
                     {/* Editable fields for selected result */}
                     {(() => {
-                      const result = batchResults[selectedBatchResult]
-                      const testId = result.testResult.id
-                      const formData = batchReviewData[testId] || {}
+                      const result = batchResults[selectedBatchResult];
+                      if (!result.testResult) return null;
+                      const testId = result.testResult.id;
+                      const formData = batchReviewData[testId] || {};
                       const updateField = (field: string, value: string) => {
-                        setBatchReviewData(prev => ({
+                        setBatchReviewData((prev) => ({
                           ...prev,
-                          [testId]: { ...prev[testId], [field]: value }
-                        }))
-                      }
+                          [testId]: { ...prev[testId], [field]: value },
+                        }));
+                      };
 
                       return (
                         <>
@@ -326,7 +393,9 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                             <Input
                               type="text"
                               value={formData.laboratoryReportNumber || ''}
-                              onChange={(e) => updateField('laboratoryReportNumber', e.target.value)}
+                              onChange={(e) =>
+                                updateField('laboratoryReportNumber', e.target.value)
+                              }
                               className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'laboratoryReportNumber').color}`}
                             />
                           </div>
@@ -403,7 +472,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                             </div>
                           </div>
                         </>
-                      )
+                      );
                     })()}
                   </div>
                 </>
@@ -423,7 +492,9 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                   disabled={batchConfirming}
                   className="bg-purple-600 hover:bg-purple-700"
                 >
-                  {batchConfirming ? 'Saving...' : `\u2713 Confirm All (${batchResults.filter(r => r.success).length})`}
+                  {batchConfirming
+                    ? 'Saving...'
+                    : `\u2713 Confirm All (${batchResults.filter((r) => r.success).length})`}
                 </Button>
               </div>
             </div>
@@ -431,5 +502,5 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
         )}
       </ModalBody>
     </Modal>
-  )
-})
+  );
+});

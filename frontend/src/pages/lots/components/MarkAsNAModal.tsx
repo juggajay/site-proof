@@ -1,24 +1,24 @@
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const markAsNASchema = z.object({
   reason: z.string().min(1, 'Reason is required'),
-})
+});
 
-type MarkAsNAFormData = z.infer<typeof markAsNASchema>
+type MarkAsNAFormData = z.infer<typeof markAsNASchema>;
 
 interface MarkAsNAModalProps {
-  isOpen: boolean
-  itemDescription: string
-  onClose: () => void
-  onSubmit: (reason: string) => Promise<void>
-  isSubmitting: boolean
+  isOpen: boolean;
+  itemDescription: string;
+  onClose: () => void;
+  onSubmit: (reason: string) => Promise<void>;
+  isSubmitting: boolean;
 }
 
 export function MarkAsNAModal({
@@ -26,7 +26,7 @@ export function MarkAsNAModal({
   itemDescription,
   onClose,
   onSubmit,
-  isSubmitting
+  isSubmitting,
 }: MarkAsNAModalProps) {
   const {
     register,
@@ -37,20 +37,22 @@ export function MarkAsNAModal({
     resolver: zodResolver(markAsNASchema),
     mode: 'onBlur',
     defaultValues: { reason: '' },
-  })
+  });
 
-  useEffect(() => { if (isOpen) reset() }, [isOpen, reset])
+  useEffect(() => {
+    if (isOpen) reset();
+  }, [isOpen, reset]);
 
   const onFormSubmit = (data: MarkAsNAFormData) => {
-    onSubmit(data.reason)
-  }
+    onSubmit(data.reason);
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset();
+    onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <Modal onClose={handleClose}>
@@ -83,7 +85,9 @@ export function MarkAsNAModal({
               autoFocus
             />
             {errors.reason && (
-              <p className="text-sm text-destructive mt-1" role="alert">{errors.reason.message}</p>
+              <p className="text-sm text-destructive mt-1" role="alert">
+                {errors.reason.message}
+              </p>
             )}
             <p className="text-xs text-muted-foreground mt-1">
               A reason is required to mark an item as N/A
@@ -92,22 +96,13 @@ export function MarkAsNAModal({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleClose}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="mark-na-form"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" form="mark-na-form" disabled={isSubmitting}>
           {isSubmitting ? 'Saving...' : 'Mark as N/A'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

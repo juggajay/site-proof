@@ -1,34 +1,115 @@
 // Feature #250: Drawing Register API routes
-import { Router, Request, Response } from 'express'
-import { prisma } from '../lib/prisma.js'
-import { requireAuth } from '../middleware/authMiddleware.js'
-import { checkProjectAccess } from '../lib/projectAccess.js'
-import { AppError } from '../lib/AppError.js'
-import { asyncHandler } from '../lib/asyncHandler.js'
-import multer from 'multer'
-import path from 'path'
-import fs from 'fs'
+import { Router, Request, Response, NextFunction } from 'express';
+import { prisma } from '../lib/prisma.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import { AppError } from '../lib/AppError.js';
+import { asyncHandler } from '../lib/asyncHandler.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
+import { z } from 'zod';
+import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.js';
+import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
+import { getPaginationMeta, getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
+import { logWarn } from '../lib/serverLogger.js';
 
-const router = Router()
+const router = Router();
+const DRAWING_STATUSES = ['preliminary', 'for_construction', 'as_built'] as const;
+const DRAWING_WRITE_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'quality_manager',
+  'site_manager',
+  'site_engineer',
+  'foreman',
+];
+const SUBCONTRACTOR_DRAWING_ROLES = ['subcontractor_admin', 'subcontractor'];
+const MAX_ID_LENGTH = 120;
+const MAX_DRAWING_NUMBER_LENGTH = 120;
+const MAX_TITLE_LENGTH = 240;
+const MAX_REVISION_LENGTH = 40;
+const MAX_DATE_LENGTH = 32;
+const MAX_FILENAME_LENGTH = 180;
+const MAX_SEARCH_LENGTH = 200;
+const MAX_CURRENT_SET_DOWNLOAD_DRAWINGS = 500;
+
+type AuthUser = NonNullable<Express.Request['user']>;
+
+const requiredFormStringSchema = (fieldName: string, maxLength = MAX_ID_LENGTH) =>
+  z.string().trim().min(1, `${fieldName} is required`).max(maxLength, `${fieldName} is too long`);
+
+const nullableFormStringSchema = (fieldName: string, maxLength: number) =>
+  z.preprocess(
+    (value) => {
+      if (value === undefined || value === null) {
+        return value;
+      }
+
+      if (typeof value !== 'string') {
+        return value;
+      }
+
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    },
+    z.string().max(maxLength, `${fieldName} is too long`).nullish(),
+  );
+
+const optionalDrawingStatusSchema = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.enum(DRAWING_STATUSES).optional());
+
+const createDrawingSchema = z.object({
+  projectId: requiredFormStringSchema('projectId'),
+  drawingNumber: requiredFormStringSchema('drawingNumber', MAX_DRAWING_NUMBER_LENGTH),
+  title: nullableFormStringSchema('title', MAX_TITLE_LENGTH),
+  revision: nullableFormStringSchema('revision', MAX_REVISION_LENGTH),
+  issueDate: nullableFormStringSchema('issueDate', MAX_DATE_LENGTH),
+  status: optionalDrawingStatusSchema,
+});
+
+const updateDrawingSchema = z.object({
+  title: nullableFormStringSchema('title', MAX_TITLE_LENGTH),
+  revision: nullableFormStringSchema('revision', MAX_REVISION_LENGTH),
+  issueDate: nullableFormStringSchema('issueDate', MAX_DATE_LENGTH),
+  status: optionalDrawingStatusSchema,
+  supersededById: nullableFormStringSchema('supersededById', MAX_ID_LENGTH),
+});
+
+const supersedeDrawingSchema = z.object({
+  title: nullableFormStringSchema('title', MAX_TITLE_LENGTH),
+  revision: requiredFormStringSchema('revision', MAX_REVISION_LENGTH),
+  issueDate: nullableFormStringSchema('issueDate', MAX_DATE_LENGTH),
+  status: optionalDrawingStatusSchema,
+});
 
 // Apply auth middleware
-router.use(requireAuth)
+router.use(requireAuth);
 
 // Configure multer for drawing file uploads
-const uploadDir = path.join(process.cwd(), 'uploads', 'drawings')
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true })
-}
-
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, uploadDir)
+    try {
+      cb(null, ensureUploadSubdirectory('drawings'));
+    } catch (error) {
+      cb(
+        error instanceof Error ? error : new Error('Failed to prepare drawing upload directory'),
+        '',
+      );
+    }
   },
   filename: (_req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, uniqueSuffix + '-' + file.originalname)
-  }
-})
+    cb(null, buildStoredFilename(file.originalname));
+  },
+});
 
 const upload = multer({
   storage,
@@ -43,385 +124,698 @@ const upload = multer({
       'application/dxf',
       'application/dwg',
       'application/vnd.dwg',
-    ]
+    ];
     // Also accept by extension for CAD files
-    const ext = path.extname(file.originalname).toLowerCase()
-    if (allowedTypes.includes(file.mimetype) || ['.pdf', '.dwg', '.dxf', '.jpg', '.jpeg', '.png', '.tiff', '.tif'].includes(ext)) {
-      cb(null, true)
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (
+      allowedTypes.includes(file.mimetype) ||
+      ['.pdf', '.dwg', '.dxf', '.jpg', '.jpeg', '.png', '.tiff', '.tif'].includes(ext)
+    ) {
+      cb(null, true);
     } else {
-      cb(new Error('Invalid file type'))
+      cb(new Error('Invalid file type'));
     }
+  },
+});
+
+function cleanupUploadedFile(file?: Express.Multer.File): void {
+  if (file?.path && fs.existsSync(file.path)) {
+    fs.unlinkSync(file.path);
   }
-})
+}
+
+function sanitizeUploadFilename(filename: string): string {
+  const basename = path.basename(filename.replace(/\\/g, '/'));
+  const sanitized = basename
+    .split('')
+    .map((char) => (char.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(char) ? '_' : char))
+    .join('')
+    .replace(/^\.+/, '')
+    .trim()
+    .slice(0, MAX_FILENAME_LENGTH);
+
+  return sanitized || 'upload';
+}
+
+function buildStoredFilename(originalName: string): string {
+  const uniqueSuffix = `${Date.now()}-${crypto.randomUUID()}`;
+  return `${uniqueSuffix}-${sanitizeUploadFilename(originalName)}`;
+}
+
+function getOptionalQueryString(
+  query: Request['query'],
+  fieldName: string,
+  maxLength: number,
+): string | undefined {
+  const value = query[fieldName];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw AppError.badRequest(`${fieldName} must be a single value`);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.length > maxLength) {
+    throw AppError.badRequest(`${fieldName} is too long`);
+  }
+
+  return trimmed;
+}
+
+function parseDrawingRouteParam(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string') {
+    throw AppError.badRequest(`${fieldName} must be a single value`);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw AppError.badRequest(`${fieldName} is required`);
+  }
+
+  if (trimmed.length > MAX_ID_LENGTH) {
+    throw AppError.badRequest(`${fieldName} is too long`);
+  }
+
+  return trimmed;
+}
+
+function requireValidDrawingRouteParam(fieldName: string) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    parseDrawingRouteParam(req.params[fieldName], fieldName);
+    next();
+  };
+}
+
+function getOptionalStatusQuery(
+  query: Request['query'],
+): (typeof DRAWING_STATUSES)[number] | undefined {
+  const status = getOptionalQueryString(query, 'status', MAX_REVISION_LENGTH);
+  if (!status) {
+    return undefined;
+  }
+
+  const parsed = z.enum(DRAWING_STATUSES).safeParse(status);
+  if (!parsed.success) {
+    throw AppError.badRequest('status must be a valid drawing status');
+  }
+
+  return parsed.data;
+}
+
+function containsInsensitive(value: string) {
+  return {
+    contains: value,
+    mode: 'insensitive' as const,
+  };
+}
+
+function parseDrawingDate(value: string | null | undefined, fieldName: string): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+
+  if (dateOnly) {
+    const year = Number(dateOnly[1]);
+    const month = Number(dateOnly[2]);
+    const day = Number(dateOnly[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
+      throw AppError.badRequest(`${fieldName} must be a valid date`);
+    }
+
+    return date;
+  }
+
+  const date = new Date(trimmed);
+  if (!Number.isFinite(date.getTime())) {
+    throw AppError.badRequest(`${fieldName} must be a valid date`);
+  }
+
+  return date;
+}
+
+function zodValidationMessage(error: z.ZodError): string {
+  const firstIssue = error.issues[0];
+  const fieldName = firstIssue?.path.join('.');
+  return fieldName ? `${fieldName}: ${firstIssue.message}` : 'Validation failed';
+}
+
+async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
+  const [project, projectUser] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: { companyId: true },
+    }),
+    prisma.projectUser.findFirst({
+      where: {
+        projectId,
+        userId: user.id,
+        status: 'active',
+      },
+      select: { role: true },
+    }),
+  ]);
+
+  if (
+    (user.roleInCompany === 'owner' || user.roleInCompany === 'admin') &&
+    project?.companyId === user.companyId
+  ) {
+    return user.roleInCompany;
+  }
+
+  if (projectUser) {
+    return projectUser.role;
+  }
+
+  return null;
+}
+
+async function requireDrawingReadAccess(user: AuthUser, projectId: string): Promise<string> {
+  if (SUBCONTRACTOR_DRAWING_ROLES.includes(user.roleInCompany || '')) {
+    throw AppError.forbidden('Internal drawing access required');
+  }
+
+  const effectiveRole = await getEffectiveProjectRole(user, projectId);
+  if (!effectiveRole || SUBCONTRACTOR_DRAWING_ROLES.includes(effectiveRole)) {
+    throw AppError.forbidden('Access denied');
+  }
+
+  return effectiveRole;
+}
+
+async function requireDrawingWriteAccess(user: AuthUser, projectId: string): Promise<void> {
+  const effectiveRole = await requireDrawingReadAccess(user, projectId);
+
+  if (!DRAWING_WRITE_ROLES.includes(effectiveRole)) {
+    throw AppError.forbidden('Drawing write access required');
+  }
+}
+
+async function requireSupersededByInProject(
+  projectId: string,
+  drawingId: string,
+  supersededById?: string | null,
+): Promise<void> {
+  if (!supersededById) return;
+
+  if (supersededById === drawingId) {
+    throw AppError.badRequest('supersededById must reference another drawing in the same project');
+  }
+
+  const supersedingDrawing = await prisma.drawing.findFirst({
+    where: { id: supersededById, projectId },
+    select: { id: true },
+  });
+
+  if (!supersedingDrawing) {
+    throw AppError.badRequest('supersededById must reference a drawing in the same project');
+  }
+}
 
 // GET /api/drawings/:projectId - List drawings for a project
-router.get('/:projectId', asyncHandler(async (req: Request, res: Response) => {
-  const { projectId } = req.params
-  const { status, search, revision } = req.query
-  const userId = req.user!.id
+router.get(
+  '/:projectId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = parseDrawingRouteParam(req.params.projectId, 'projectId');
+    const userId = req.user!.id;
 
-  if (!userId) {
-    throw AppError.unauthorized()
-  }
+    if (!userId) {
+      throw AppError.unauthorized();
+    }
 
-  const hasAccess = await checkProjectAccess(userId, projectId)
-  if (!hasAccess) {
-    throw AppError.forbidden('Access denied')
-  }
+    await requireDrawingReadAccess(req.user!, projectId);
 
-  const where: any = { projectId }
-  if (status) where.status = status
+    const { page, limit } = parsePagination(req.query);
+    const status = getOptionalStatusQuery(req.query);
+    const search = getOptionalQueryString(req.query, 'search', MAX_SEARCH_LENGTH);
+    const revision = getOptionalQueryString(req.query, 'revision', MAX_REVISION_LENGTH);
+    const where: Prisma.DrawingWhereInput = { projectId };
+    if (status) where.status = status;
+    if (revision) where.revision = revision;
+    if (search) {
+      where.OR = [
+        { drawingNumber: containsInsensitive(search) },
+        { title: containsInsensitive(search) },
+        { revision: containsInsensitive(search) },
+      ];
+    }
 
-  let drawings = await prisma.drawing.findMany({
-    where,
-    include: {
-      document: {
-        select: {
-          id: true,
-          filename: true,
-          fileUrl: true,
-          fileSize: true,
-          mimeType: true,
-          uploadedAt: true,
-          uploadedBy: { select: { id: true, fullName: true, email: true } },
-        }
-      },
-      supersededBy: { select: { id: true, drawingNumber: true, revision: true } },
-      supersedes: { select: { id: true, drawingNumber: true, revision: true } },
-    },
-    orderBy: [{ drawingNumber: 'asc' }, { revision: 'desc' }],
-  })
+    const statusCountWhere = (
+      drawingStatus: (typeof DRAWING_STATUSES)[number],
+    ): Prisma.DrawingWhereInput => ({
+      AND: [where, { status: drawingStatus }],
+    });
 
-  // Filter by search term if provided
-  if (search && typeof search === 'string' && search.trim()) {
-    const searchLower = search.toLowerCase().trim()
-    drawings = drawings.filter(drw =>
-      drw.drawingNumber.toLowerCase().includes(searchLower) ||
-      drw.title?.toLowerCase().includes(searchLower) ||
-      drw.revision?.toLowerCase().includes(searchLower)
-    )
-  }
+    const [drawings, total, preliminary, forConstruction, asBuilt] = await prisma.$transaction([
+      prisma.drawing.findMany({
+        where,
+        include: {
+          document: {
+            select: {
+              id: true,
+              filename: true,
+              fileUrl: true,
+              fileSize: true,
+              mimeType: true,
+              uploadedAt: true,
+              uploadedBy: { select: { id: true, fullName: true, email: true } },
+            },
+          },
+          supersededBy: { select: { id: true, drawingNumber: true, revision: true } },
+          supersedes: { select: { id: true, drawingNumber: true, revision: true } },
+        },
+        orderBy: [{ drawingNumber: 'asc' }, { revision: 'desc' }],
+        ...getPrismaSkipTake(page, limit),
+      }),
+      prisma.drawing.count({ where }),
+      prisma.drawing.count({ where: statusCountWhere('preliminary') }),
+      prisma.drawing.count({ where: statusCountWhere('for_construction') }),
+      prisma.drawing.count({ where: statusCountWhere('as_built') }),
+    ]);
 
-  // Filter by revision if provided
-  if (revision && typeof revision === 'string') {
-    drawings = drawings.filter(drw => drw.revision === revision)
-  }
+    const stats = {
+      total,
+      preliminary,
+      forConstruction,
+      asBuilt,
+    };
 
-  // Summary stats
-  const stats = {
-    total: drawings.length,
-    preliminary: drawings.filter(d => d.status === 'preliminary').length,
-    forConstruction: drawings.filter(d => d.status === 'for_construction').length,
-    asBuilt: drawings.filter(d => d.status === 'as_built').length,
-  }
-
-  res.json({
-    drawings,
-    stats,
-  })
-}))
+    res.json({
+      drawings,
+      stats,
+      pagination: getPaginationMeta(total, page, limit),
+    });
+  }),
+);
 
 // POST /api/drawings - Create a new drawing with file upload
-router.post('/', upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
-  const userId = req.user!.id
-  if (!userId) {
-    throw AppError.unauthorized()
-  }
-
-  if (!req.file) {
-    throw AppError.badRequest('No file uploaded')
-  }
-
-  const { projectId, drawingNumber, title, revision, issueDate, status } = req.body
-
-  if (!projectId || !drawingNumber) {
-    // Clean up uploaded file
-    fs.unlinkSync(req.file.path)
-    throw AppError.badRequest('projectId and drawingNumber are required')
-  }
-
-  const hasAccess = await checkProjectAccess(userId, projectId)
-  if (!hasAccess) {
-    fs.unlinkSync(req.file.path)
-    throw AppError.forbidden('Access denied')
-  }
-
-  // Check for duplicate drawing number + revision
-  const existing = await prisma.drawing.findFirst({
-    where: {
-      projectId,
-      drawingNumber,
-      revision: revision || null,
+router.post(
+  '/',
+  upload.single('file'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.id;
+    if (!userId) {
+      throw AppError.unauthorized();
     }
-  })
 
-  if (existing) {
-    fs.unlinkSync(req.file.path)
-    throw AppError.badRequest('Drawing with this number and revision already exists')
-  }
-
-  // Create the document first
-  const document = await prisma.document.create({
-    data: {
-      projectId,
-      documentType: 'drawing',
-      filename: req.file.originalname,
-      fileUrl: `/uploads/drawings/${req.file.filename}`,
-      fileSize: req.file.size,
-      mimeType: req.file.mimetype,
-      uploadedById: userId,
+    if (!req.file) {
+      throw AppError.badRequest('No file uploaded');
     }
-  })
+    const uploadedFile = req.file;
 
-  // Create the drawing record
-  const drawing = await prisma.drawing.create({
-    data: {
-      projectId,
-      documentId: document.id,
-      drawingNumber,
-      title: title || null,
-      revision: revision || null,
-      issueDate: issueDate ? new Date(issueDate) : null,
-      status: status || 'preliminary',
-    },
-    include: {
-      document: {
-        select: {
-          id: true,
-          filename: true,
-          fileUrl: true,
-          fileSize: true,
-          mimeType: true,
-          uploadedAt: true,
-          uploadedBy: { select: { id: true, fullName: true, email: true } },
-        }
+    const parseResult = createDrawingSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      cleanupUploadedFile(uploadedFile);
+      throw AppError.fromZodError(parseResult.error, zodValidationMessage(parseResult.error));
+    }
+
+    const { projectId, drawingNumber, title, revision, issueDate, status } = parseResult.data;
+    let issueDateValue: Date | null;
+    try {
+      issueDateValue = parseDrawingDate(issueDate, 'issueDate');
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+
+    try {
+      await requireDrawingWriteAccess(req.user!, projectId);
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+    try {
+      assertUploadedFileMatchesDeclaredType(uploadedFile);
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+
+    // Check for duplicate drawing number + revision
+    const existing = await prisma.drawing.findFirst({
+      where: {
+        projectId,
+        drawingNumber,
+        revision: revision || null,
       },
-    },
-  })
+    });
 
-  res.status(201).json(drawing)
-}))
+    if (existing) {
+      cleanupUploadedFile(uploadedFile);
+      throw AppError.badRequest('Drawing with this number and revision already exists');
+    }
+
+    let drawing;
+    try {
+      drawing = await prisma.$transaction(async (tx) => {
+        const document = await tx.document.create({
+          data: {
+            projectId,
+            documentType: 'drawing',
+            filename: sanitizeUploadFilename(uploadedFile.originalname),
+            fileUrl: `/uploads/drawings/${uploadedFile.filename}`,
+            fileSize: uploadedFile.size,
+            mimeType: uploadedFile.mimetype,
+            uploadedById: userId,
+          },
+        });
+
+        return tx.drawing.create({
+          data: {
+            projectId,
+            documentId: document.id,
+            drawingNumber,
+            title: title || null,
+            revision: revision || null,
+            issueDate: issueDateValue,
+            status: status || 'preliminary',
+          },
+          include: {
+            document: {
+              select: {
+                id: true,
+                filename: true,
+                fileUrl: true,
+                fileSize: true,
+                mimeType: true,
+                uploadedAt: true,
+                uploadedBy: { select: { id: true, fullName: true, email: true } },
+              },
+            },
+          },
+        });
+      });
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+
+    res.status(201).json(drawing);
+  }),
+);
 
 // PATCH /api/drawings/:drawingId - Update drawing metadata
-router.patch('/:drawingId', asyncHandler(async (req: Request, res: Response) => {
-  const { drawingId } = req.params
-  const { title, revision, issueDate, status, supersededById } = req.body
-  const userId = req.user!.id
+router.patch(
+  '/:drawingId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const drawingId = parseDrawingRouteParam(req.params.drawingId, 'drawingId');
+    const parseResult = updateDrawingSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw AppError.fromZodError(parseResult.error, zodValidationMessage(parseResult.error));
+    }
+    const { title, revision, issueDate, status, supersededById } = parseResult.data;
+    const userId = req.user!.id;
 
-  if (!userId) {
-    throw AppError.unauthorized()
-  }
+    if (!userId) {
+      throw AppError.unauthorized();
+    }
 
-  const drawing = await prisma.drawing.findUnique({
-    where: { id: drawingId },
-  })
+    const drawing = await prisma.drawing.findUnique({
+      where: { id: drawingId },
+    });
 
-  if (!drawing) {
-    throw AppError.notFound('Drawing')
-  }
+    if (!drawing) {
+      throw AppError.notFound('Drawing');
+    }
 
-  const hasAccess = await checkProjectAccess(userId, drawing.projectId)
-  if (!hasAccess) {
-    throw AppError.forbidden('Access denied')
-  }
+    await requireDrawingWriteAccess(req.user!, drawing.projectId);
+    await requireSupersededByInProject(drawing.projectId, drawingId, supersededById);
 
-  const updatedDrawing = await prisma.drawing.update({
-    where: { id: drawingId },
-    data: {
-      title: title !== undefined ? title : undefined,
-      revision: revision !== undefined ? revision : undefined,
-      issueDate: issueDate !== undefined ? (issueDate ? new Date(issueDate) : null) : undefined,
-      status: status !== undefined ? status : undefined,
-      supersededById: supersededById !== undefined ? (supersededById || null) : undefined,
-    },
-    include: {
-      document: {
-        select: {
-          id: true,
-          filename: true,
-          fileUrl: true,
-          fileSize: true,
-          mimeType: true,
-          uploadedAt: true,
-          uploadedBy: { select: { id: true, fullName: true, email: true } },
-        }
+    const issueDateValue =
+      issueDate !== undefined ? parseDrawingDate(issueDate, 'issueDate') : undefined;
+
+    const updatedDrawing = await prisma.drawing.update({
+      where: { id: drawingId },
+      data: {
+        title: title !== undefined ? title : undefined,
+        revision: revision !== undefined ? revision : undefined,
+        issueDate: issueDateValue,
+        status: status !== undefined ? status : undefined,
+        supersededById: supersededById !== undefined ? supersededById || null : undefined,
       },
-      supersededBy: { select: { id: true, drawingNumber: true, revision: true } },
-    },
-  })
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+            uploadedAt: true,
+            uploadedBy: { select: { id: true, fullName: true, email: true } },
+          },
+        },
+        supersededBy: { select: { id: true, drawingNumber: true, revision: true } },
+      },
+    });
 
-  res.json(updatedDrawing)
-}))
+    res.json(updatedDrawing);
+  }),
+);
 
 // DELETE /api/drawings/:drawingId - Delete a drawing
-router.delete('/:drawingId', asyncHandler(async (req: Request, res: Response) => {
-  const { drawingId } = req.params
-  const userId = req.user!.id
+router.delete(
+  '/:drawingId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const drawingId = parseDrawingRouteParam(req.params.drawingId, 'drawingId');
+    const userId = req.user!.id;
 
-  if (!userId) {
-    throw AppError.unauthorized()
-  }
+    if (!userId) {
+      throw AppError.unauthorized();
+    }
 
-  const drawing = await prisma.drawing.findUnique({
-    where: { id: drawingId },
-    include: { document: true }
-  })
+    const drawing = await prisma.drawing.findUnique({
+      where: { id: drawingId },
+      include: { document: true },
+    });
 
-  if (!drawing) {
-    throw AppError.notFound('Drawing')
-  }
+    if (!drawing) {
+      throw AppError.notFound('Drawing');
+    }
 
-  const hasAccess = await checkProjectAccess(userId, drawing.projectId)
-  if (!hasAccess) {
-    throw AppError.forbidden('Access denied')
-  }
+    await requireDrawingWriteAccess(req.user!, drawing.projectId);
 
-  // Delete file from disk
-  const filePath = path.join(process.cwd(), drawing.document.fileUrl)
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath)
-  }
+    let filePath: string | null = null;
+    try {
+      filePath = resolveUploadPath(drawing.document.fileUrl, 'drawings');
+    } catch (error) {
+      logWarn('Skipping drawing file cleanup for invalid file path:', error);
+    }
 
-  // Delete drawing record (document will remain for audit purposes, or delete it too)
-  await prisma.drawing.delete({ where: { id: drawingId } })
-  // Optionally delete the document as well
-  await prisma.document.delete({ where: { id: drawing.documentId } })
+    await prisma.$transaction([
+      prisma.drawing.delete({ where: { id: drawingId } }),
+      prisma.document.delete({ where: { id: drawing.documentId } }),
+    ]);
 
-  res.status(204).send()
-}))
+    if (filePath) {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (error) {
+        logWarn('Failed to delete drawing file after database delete:', error);
+      }
+    }
+
+    res.status(204).send();
+  }),
+);
 
 // POST /api/drawings/:drawingId/supersede - Create a new revision that supersedes this drawing
-router.post('/:drawingId/supersede', upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
-  const { drawingId } = req.params
-  const userId = req.user!.id
+router.post(
+  '/:drawingId/supersede',
+  requireValidDrawingRouteParam('drawingId'),
+  upload.single('file'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const drawingId = parseDrawingRouteParam(req.params.drawingId, 'drawingId');
+    const userId = req.user!.id;
 
-  if (!userId) {
-    throw AppError.unauthorized()
-  }
-
-  if (!req.file) {
-    throw AppError.badRequest('No file uploaded')
-  }
-
-  const oldDrawing = await prisma.drawing.findUnique({
-    where: { id: drawingId },
-  })
-
-  if (!oldDrawing) {
-    fs.unlinkSync(req.file.path)
-    throw AppError.notFound('Drawing')
-  }
-
-  const hasAccess = await checkProjectAccess(userId, oldDrawing.projectId)
-  if (!hasAccess) {
-    fs.unlinkSync(req.file.path)
-    throw AppError.forbidden('Access denied')
-  }
-
-  const { title, revision, issueDate, status } = req.body
-
-  if (!revision) {
-    fs.unlinkSync(req.file.path)
-    throw AppError.badRequest('New revision is required')
-  }
-
-  // Create document
-  const document = await prisma.document.create({
-    data: {
-      projectId: oldDrawing.projectId,
-      documentType: 'drawing',
-      filename: req.file.originalname,
-      fileUrl: `/uploads/drawings/${req.file.filename}`,
-      fileSize: req.file.size,
-      mimeType: req.file.mimetype,
-      uploadedById: userId,
+    if (!userId) {
+      throw AppError.unauthorized();
     }
-  })
 
-  // Create new drawing that supersedes the old one
-  const newDrawing = await prisma.drawing.create({
-    data: {
-      projectId: oldDrawing.projectId,
-      documentId: document.id,
-      drawingNumber: oldDrawing.drawingNumber,
-      title: title || oldDrawing.title,
-      revision: revision,
-      issueDate: issueDate ? new Date(issueDate) : null,
-      status: status || 'for_construction',
-    },
-    include: {
-      document: {
-        select: {
-          id: true,
-          filename: true,
-          fileUrl: true,
-          fileSize: true,
-          mimeType: true,
-          uploadedAt: true,
-          uploadedBy: { select: { id: true, fullName: true, email: true } },
-        }
+    if (!req.file) {
+      throw AppError.badRequest('No file uploaded');
+    }
+    const uploadedFile = req.file;
+
+    const parseResult = supersedeDrawingSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      cleanupUploadedFile(uploadedFile);
+      throw AppError.fromZodError(parseResult.error, zodValidationMessage(parseResult.error));
+    }
+    const { title, revision, issueDate, status } = parseResult.data;
+    let issueDateValue: Date | null;
+    try {
+      issueDateValue = parseDrawingDate(issueDate, 'issueDate');
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+
+    const oldDrawing = await prisma.drawing.findUnique({
+      where: { id: drawingId },
+    });
+
+    if (!oldDrawing) {
+      cleanupUploadedFile(uploadedFile);
+      throw AppError.notFound('Drawing');
+    }
+
+    try {
+      await requireDrawingWriteAccess(req.user!, oldDrawing.projectId);
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+
+    const existingRevision = await prisma.drawing.findFirst({
+      where: {
+        projectId: oldDrawing.projectId,
+        drawingNumber: oldDrawing.drawingNumber,
+        revision,
       },
-    },
-  })
+      select: { id: true },
+    });
 
-  // Update old drawing to mark it as superseded
-  await prisma.drawing.update({
-    where: { id: drawingId },
-    data: { supersededById: newDrawing.id }
-  })
+    if (existingRevision) {
+      cleanupUploadedFile(uploadedFile);
+      throw AppError.badRequest('Drawing with this number and revision already exists');
+    }
+    try {
+      assertUploadedFileMatchesDeclaredType(uploadedFile);
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
 
-  res.status(201).json(newDrawing)
-}))
+    let newDrawing;
+    try {
+      newDrawing = await prisma.$transaction(async (tx) => {
+        const document = await tx.document.create({
+          data: {
+            projectId: oldDrawing.projectId,
+            documentType: 'drawing',
+            filename: sanitizeUploadFilename(uploadedFile.originalname),
+            fileUrl: `/uploads/drawings/${uploadedFile.filename}`,
+            fileSize: uploadedFile.size,
+            mimeType: uploadedFile.mimetype,
+            uploadedById: userId,
+          },
+        });
+
+        const createdDrawing = await tx.drawing.create({
+          data: {
+            projectId: oldDrawing.projectId,
+            documentId: document.id,
+            drawingNumber: oldDrawing.drawingNumber,
+            title: title || oldDrawing.title,
+            revision,
+            issueDate: issueDateValue,
+            status: status || 'for_construction',
+          },
+          include: {
+            document: {
+              select: {
+                id: true,
+                filename: true,
+                fileUrl: true,
+                fileSize: true,
+                mimeType: true,
+                uploadedAt: true,
+                uploadedBy: { select: { id: true, fullName: true, email: true } },
+              },
+            },
+          },
+        });
+
+        await tx.drawing.update({
+          where: { id: drawingId },
+          data: { supersededById: createdDrawing.id },
+        });
+
+        return createdDrawing;
+      });
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+
+    res.status(201).json(newDrawing);
+  }),
+);
 
 // GET /api/drawings/:projectId/current-set - Get current (non-superseded) drawings for download
-router.get('/:projectId/current-set', asyncHandler(async (req: Request, res: Response) => {
-  const { projectId } = req.params
-  const userId = req.user!.id
+router.get(
+  '/:projectId/current-set',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = parseDrawingRouteParam(req.params.projectId, 'projectId');
+    const userId = req.user!.id;
 
-  if (!userId) {
-    throw AppError.unauthorized()
-  }
+    if (!userId) {
+      throw AppError.unauthorized();
+    }
 
-  const hasAccess = await checkProjectAccess(userId, projectId)
-  if (!hasAccess) {
-    throw AppError.forbidden('Access denied')
-  }
+    await requireDrawingReadAccess(req.user!, projectId);
 
-  // Get all current (non-superseded) drawings
-  const currentDrawings = await prisma.drawing.findMany({
-    where: {
+    const currentSetWhere: Prisma.DrawingWhereInput = {
       projectId,
       supersededById: null, // Only current versions (not superseded)
-    },
-    include: {
-      document: {
-        select: {
-          id: true,
-          filename: true,
-          fileUrl: true,
-          fileSize: true,
-          mimeType: true,
-        }
+    };
+    const currentDrawingCount = await prisma.drawing.count({ where: currentSetWhere });
+    if (currentDrawingCount > MAX_CURRENT_SET_DOWNLOAD_DRAWINGS) {
+      throw AppError.badRequest(
+        `Current drawing set exceeds the ${MAX_CURRENT_SET_DOWNLOAD_DRAWINGS} drawing download limit`,
+      );
+    }
+
+    const currentDrawings = await prisma.drawing.findMany({
+      where: currentSetWhere,
+      include: {
+        document: {
+          select: {
+            id: true,
+            filename: true,
+            fileUrl: true,
+            fileSize: true,
+            mimeType: true,
+          },
+        },
       },
-    },
-    orderBy: [{ drawingNumber: 'asc' }, { revision: 'desc' }],
-  })
+      orderBy: [{ drawingNumber: 'asc' }, { revision: 'desc' }],
+    });
 
-  // Return the list of current drawings with download info
-  res.json({
-    drawings: currentDrawings.map(d => ({
-      id: d.id,
-      drawingNumber: d.drawingNumber,
-      title: d.title,
-      revision: d.revision,
-      status: d.status,
-      fileUrl: d.document.fileUrl,
-      filename: d.document.filename,
-      fileSize: d.document.fileSize,
-    })),
-    totalCount: currentDrawings.length,
-    totalSize: currentDrawings.reduce((sum, d) => sum + (d.document.fileSize || 0), 0),
-  })
-}))
+    // Return the list of current drawings with download info
+    res.json({
+      drawings: currentDrawings.map((d) => ({
+        id: d.id,
+        documentId: d.document.id,
+        drawingNumber: d.drawingNumber,
+        title: d.title,
+        revision: d.revision,
+        status: d.status,
+        fileUrl: d.document.fileUrl,
+        filename: d.document.filename,
+        fileSize: d.document.fileSize,
+      })),
+      totalCount: currentDrawingCount,
+      totalSize: currentDrawings.reduce((sum, d) => sum + (d.document.fileSize || 0), 0),
+    });
+  }),
+);
 
-export const drawingsRouter = router
+export const drawingsRouter = router;

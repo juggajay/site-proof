@@ -1,117 +1,155 @@
-import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, AlertCircle } from 'lucide-react'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist'
-import { apiFetch, getAuthToken, apiUrl } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { extractErrorMessage, handleApiError } from '@/lib/errorHandling'
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
+import { ApiError, apiFetch, authFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
+import { logError } from '@/lib/logger';
 
 interface ITPChecklistItem {
-  id: string
-  description: string
-  category: string
-  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general'
-  isHoldPoint: boolean
-  pointType: 'standard' | 'witness' | 'hold_point'
-  evidenceRequired: 'none' | 'photo' | 'test' | 'document'
-  order: number
-  testType?: string | null
-  acceptanceCriteria?: string | null
+  id: string;
+  description: string;
+  category: string;
+  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general';
+  isHoldPoint: boolean;
+  pointType: 'standard' | 'witness' | 'hold_point';
+  evidenceRequired: 'none' | 'photo' | 'test' | 'document';
+  order: number;
+  testType?: string | null;
+  acceptanceCriteria?: string | null;
 }
 
 interface ITPAttachment {
-  id: string
-  documentId: string
+  id: string;
+  documentId: string;
   document: {
-    id: string
-    filename: string
-    fileUrl: string
-    caption: string | null
-  }
+    id: string;
+    filename: string;
+    fileUrl: string;
+    caption: string | null;
+  };
 }
 
 interface ITPCompletion {
-  id: string
-  checklistItemId: string
-  isCompleted: boolean
-  isNotApplicable?: boolean
-  isFailed?: boolean
-  isVerified?: boolean
-  notes: string | null
-  completedAt: string | null
-  completedBy: { id: string; fullName: string; email: string } | null
-  attachments: ITPAttachment[]
+  id: string;
+  checklistItemId: string;
+  isCompleted: boolean;
+  isNotApplicable?: boolean;
+  isFailed?: boolean;
+  isVerified?: boolean;
+  notes: string | null;
+  completedAt: string | null;
+  completedBy: { id: string; fullName: string; email: string } | null;
+  attachments: ITPAttachment[];
 }
 
 interface ITPInstance {
-  id: string
-  status: string
+  id: string;
+  status: string;
   template: {
-    id: string
-    name: string
-    activityType: string
-    checklistItems: ITPChecklistItem[]
-  }
-  completions: ITPCompletion[]
+    id: string;
+    name: string;
+    activityType: string;
+    checklistItems: ITPChecklistItem[];
+  };
+  completions: ITPCompletion[];
 }
 
 interface Lot {
-  id: string
-  lotNumber: string
-  description?: string
-  status: string
+  id: string;
+  projectId: string;
+  lotNumber: string;
+  description?: string;
+  status: string;
   subcontractorAssignments?: {
-    canCompleteITP: boolean
-    itpRequiresVerification: boolean
-  }[]
+    canCompleteITP: boolean;
+    itpRequiresVerification: boolean;
+  }[];
 }
 
-export function SubcontractorLotITPPage() {
-  const { lotId } = useParams<{ lotId: string }>()
-  const [lot, setLot] = useState<Lot | null>(null)
-  const [itpInstance, setItpInstance] = useState<ITPInstance | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [updatingItem, setUpdatingItem] = useState<string | null>(null)
-  const [canCompleteItems, setCanCompleteItems] = useState(false)
+const MAX_ITP_PHOTO_SIZE = 10 * 1024 * 1024;
+const ALLOWED_ITP_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-  const fetchData = async () => {
+const getItpPhotoValidationError = (file: File): string | null => {
+  if (file.size > MAX_ITP_PHOTO_SIZE) {
+    return `The file "${file.name}" exceeds the 10MB limit. Please select a smaller file.`;
+  }
+
+  if (!ALLOWED_ITP_PHOTO_TYPES.includes(file.type)) {
+    return `The file "${file.name}" is not a supported image format. Please use JPEG, PNG, GIF, or WebP.`;
+  }
+
+  return null;
+};
+
+export function SubcontractorLotITPPage() {
+  const { lotId } = useParams<{ lotId: string }>();
+  const [lot, setLot] = useState<Lot | null>(null);
+  const [itpInstance, setItpInstance] = useState<ITPInstance | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [updatingItem, setUpdatingItem] = useState<string | null>(null);
+  const [canCompleteItems, setCanCompleteItems] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    if (!lotId) return;
+
     try {
       // Fetch lot details
-      const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${lotId}`)
-      setLot(lotData.lot)
+      const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${lotId}?portalModule=itps`);
+      setLot(lotData.lot);
 
       // Check if subcontractor can complete items (check all assignments)
-      const canComplete = lotData.lot.subcontractorAssignments?.some(
-        (a: { canCompleteITP: boolean }) => a.canCompleteITP
-      ) ?? false
-      setCanCompleteItems(canComplete)
+      const canComplete =
+        lotData.lot.subcontractorAssignments?.some(
+          (a: { canCompleteITP: boolean }) => a.canCompleteITP,
+        ) ?? false;
+      setCanCompleteItems(canComplete);
 
       // Fetch ITP instance for this lot
       try {
-        const itpData = await apiFetch<{ instance: ITPInstance }>(`/api/itp/instances/lot/${lotId}`)
-        setItpInstance(itpData.instance)
+        const itpData = await apiFetch<{ instance: ITPInstance }>(
+          `/api/itp/instances/lot/${lotId}?subcontractorView=true`,
+        );
+        setItpInstance(itpData.instance);
       } catch {
         // No ITP instance for this lot
       }
     } catch (err) {
-      console.error('Error fetching data:', err)
-      setError(extractErrorMessage(err, 'Failed to load ITP data'))
+      logError('Error fetching data:', err);
+      setError(extractErrorMessage(err, 'Failed to load ITP data'));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  }, [lotId]);
 
   useEffect(() => {
     if (lotId) {
-      fetchData()
+      fetchData();
     }
-  }, [lotId])
+  }, [lotId, fetchData]);
 
-  const handleToggleCompletion = async (checklistItemId: string, isCompleted: boolean, notes: string | null) => {
-    if (!itpInstance) return
-    setUpdatingItem(checklistItemId)
+  const requireCompletionAccess = () => {
+    if (canCompleteItems) return true;
+
+    toast({
+      title: 'View only',
+      description: 'You do not have permission to complete ITP items for this lot.',
+      variant: 'error',
+    });
+    return false;
+  };
+
+  const handleToggleCompletion = async (
+    checklistItemId: string,
+    isCompleted: boolean,
+    notes: string | null,
+  ) => {
+    if (!itpInstance) return;
+    if (!requireCompletionAccess()) return;
+    setUpdatingItem(checklistItemId);
 
     try {
       await apiFetch(`/api/itp/completions`, {
@@ -122,20 +160,21 @@ export function SubcontractorLotITPPage() {
           isCompleted,
           notes,
         }),
-      })
+      });
 
-      await fetchData()
-      toast({ title: 'Success', description: 'Item updated', variant: 'success' })
+      await fetchData();
+      toast({ title: 'Success', description: 'Item updated', variant: 'success' });
     } catch (err) {
-      handleApiError(err, 'Failed to update item')
+      handleApiError(err, 'Failed to update item');
     } finally {
-      setUpdatingItem(null)
+      setUpdatingItem(null);
     }
-  }
+  };
 
   const handleMarkNotApplicable = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance) return
-    setUpdatingItem(checklistItemId)
+    if (!itpInstance) return;
+    if (!requireCompletionAccess()) return;
+    setUpdatingItem(checklistItemId);
 
     try {
       await apiFetch(`/api/itp/completions`, {
@@ -143,23 +182,24 @@ export function SubcontractorLotITPPage() {
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
-          isNotApplicable: true,
-          notes: reason,
+          status: 'not_applicable',
+          notes: reason.trim(),
         }),
-      })
+      });
 
-      await fetchData()
-      toast({ title: 'Success', description: 'Item marked as N/A', variant: 'success' })
+      await fetchData();
+      toast({ title: 'Success', description: 'Item marked as N/A', variant: 'success' });
     } catch (err) {
-      handleApiError(err, 'Failed to mark as N/A')
+      handleApiError(err, 'Failed to mark as N/A');
     } finally {
-      setUpdatingItem(null)
+      setUpdatingItem(null);
     }
-  }
+  };
 
   const handleMarkFailed = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance) return
-    setUpdatingItem(checklistItemId)
+    if (!itpInstance) return;
+    if (!requireCompletionAccess()) return;
+    setUpdatingItem(checklistItemId);
 
     try {
       await apiFetch(`/api/itp/completions`, {
@@ -167,83 +207,116 @@ export function SubcontractorLotITPPage() {
         body: JSON.stringify({
           itpInstanceId: itpInstance.id,
           checklistItemId,
-          isFailed: true,
-          notes: reason,
+          status: 'failed',
+          notes: `Failed: ${reason.trim() || 'Item failed inspection'}`,
+          ncrDescription: reason.trim() || 'Item failed ITP inspection',
+          ncrCategory: 'workmanship',
+          ncrSeverity: 'minor',
         }),
-      })
+      });
 
-      await fetchData()
-      toast({ title: 'Success', description: 'Item marked as failed', variant: 'success' })
+      await fetchData();
+      toast({ title: 'Success', description: 'Item marked as failed', variant: 'success' });
     } catch (err) {
-      handleApiError(err, 'Failed to mark as failed')
+      handleApiError(err, 'Failed to mark as failed');
     } finally {
-      setUpdatingItem(null)
+      setUpdatingItem(null);
     }
-  }
+  };
 
   const handleUpdateNotes = async (checklistItemId: string, notes: string) => {
-    if (!itpInstance) return
-    setUpdatingItem(checklistItemId)
+    if (!itpInstance) return;
+    if (!requireCompletionAccess()) return;
+    setUpdatingItem(checklistItemId);
 
     try {
-      const completion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
+      const completion = itpInstance.completions.find((c) => c.checklistItemId === checklistItemId);
 
       if (completion) {
         // Update existing completion
         await apiFetch(`/api/itp/completions/${completion.id}`, {
           method: 'PATCH',
           body: JSON.stringify({ notes }),
-        })
+        });
       }
 
-      await fetchData()
+      await fetchData();
     } catch (err) {
-      handleApiError(err, 'Failed to update notes')
+      handleApiError(err, 'Failed to update notes');
     } finally {
-      setUpdatingItem(null)
+      setUpdatingItem(null);
     }
-  }
+  };
 
   const handleAddPhoto = async (checklistItemId: string, file: File) => {
-    if (!itpInstance) return
-    setUpdatingItem(checklistItemId)
+    if (!itpInstance || !lot) return;
+    if (!requireCompletionAccess()) return;
+
+    const validationError = getItpPhotoValidationError(file);
+    if (validationError) {
+      toast({
+        title: validationError.includes('10MB') ? 'File too large' : 'Invalid file type',
+        description: validationError,
+        variant: 'error',
+      });
+      return;
+    }
+
+    setUpdatingItem(checklistItemId);
 
     try {
-      const completion = itpInstance.completions.find(c => c.checklistItemId === checklistItemId)
+      let completion = itpInstance.completions.find((c) => c.checklistItemId === checklistItemId);
 
-      if (!completion) {
-        // Create completion first
-        await handleToggleCompletion(checklistItemId, true, null)
-        await fetchData()
-        return
-      }
-
-      // Upload photo - uses FormData so we use raw fetch
-      const formData = new FormData()
-      formData.append('file', file)
-      const token = getAuthToken()
-
-      const response = await fetch(
-        apiUrl(`/api/itp/completions/${completion.id}/attachments`),
-        {
+      if (!completion?.id) {
+        const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error('Failed to upload photo')
+          body: JSON.stringify({
+            itpInstanceId: itpInstance.id,
+            checklistItemId,
+            status: 'pending',
+            notes: '',
+          }),
+        });
+        completion = data.completion;
       }
 
-      await fetchData()
-      toast({ title: 'Success', description: 'Photo uploaded', variant: 'success' })
+      const caption = `ITP Evidence Photo - ${new Date().toLocaleString()}`;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('projectId', lot.projectId);
+      formData.append('lotId', lot.id);
+      formData.append('documentType', 'photo');
+      formData.append('category', 'itp_evidence');
+      formData.append('caption', caption);
+
+      const uploadResponse = await authFetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        const body = await uploadResponse.text();
+        throw new ApiError(uploadResponse.status, body);
+      }
+
+      const document = (await uploadResponse.json()) as { id: string };
+
+      await apiFetch(`/api/itp/completions/${completion.id}/attachments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          documentId: document.id,
+          caption,
+        }),
+      });
+
+      await fetchData();
+      toast({ title: 'Success', description: 'Photo uploaded', variant: 'success' });
     } catch (err) {
-      handleApiError(err, 'Failed to upload photo')
+      handleApiError(err, 'Failed to upload photo');
     } finally {
-      setUpdatingItem(null)
+      setUpdatingItem(null);
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -254,7 +327,7 @@ export function SubcontractorLotITPPage() {
         </div>
         <Skeleton className="h-64 w-full rounded-lg" />
       </div>
-    )
+    );
   }
 
   if (error || !lot) {
@@ -272,7 +345,7 @@ export function SubcontractorLotITPPage() {
           Back to ITPs
         </Link>
       </div>
-    )
+    );
   }
 
   if (!itpInstance) {
@@ -294,7 +367,7 @@ export function SubcontractorLotITPPage() {
           <p className="text-muted-foreground">No ITP assigned to this lot</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -328,5 +401,5 @@ export function SubcontractorLotITPPage() {
         canCompleteItems={canCompleteItems}
       />
     </div>
-  )
+  );
 }

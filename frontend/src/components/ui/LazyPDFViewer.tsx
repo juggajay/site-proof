@@ -1,26 +1,24 @@
-import { lazy, Suspense } from 'react'
-import { Skeleton } from '@/components/ui/Skeleton'
+import { lazy, Suspense } from 'react';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 // Lazy load the PDF viewer component to reduce initial bundle size
 // react-pdf and pdfjs-dist are heavy (~500KB+ combined)
-const PDFViewerLazy = lazy(() =>
-  import('./PDFViewer').then(m => ({ default: m.PDFViewer }))
-)
+const PDFViewerLazy = lazy(() => import('./PDFViewer').then((m) => ({ default: m.PDFViewer })));
 
 const PDFViewerInlineLazy = lazy(() =>
-  import('./PDFViewer').then(m => ({ default: m.PDFViewerInline }))
-)
+  import('./PDFViewer').then((m) => ({ default: m.PDFViewerInline })),
+);
 
 interface PDFViewerProps {
-  url: string
-  filename?: string
-  onClose?: () => void
-  className?: string
+  url: string;
+  filename?: string;
+  onClose?: () => void;
+  className?: string;
 }
 
 interface PDFViewerInlineProps {
-  url: string
-  className?: string
+  url: string;
+  className?: string;
 }
 
 export function LazyPDFViewer(props: PDFViewerProps) {
@@ -43,19 +41,21 @@ export function LazyPDFViewer(props: PDFViewerProps) {
     >
       <PDFViewerLazy {...props} />
     </Suspense>
-  )
+  );
 }
 
 export function LazyPDFViewerInline(props: PDFViewerInlineProps) {
   return (
     <Suspense
       fallback={
-        <div className={`bg-muted rounded flex items-center justify-center p-4 ${props.className || ''}`}>
+        <div
+          className={`bg-muted rounded flex items-center justify-center p-4 ${props.className || ''}`}
+        >
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       }
     >
       <PDFViewerInlineLazy {...props} />
     </Suspense>
-  )
+  );
 }

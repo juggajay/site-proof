@@ -1,121 +1,122 @@
-import { useRef } from 'react'
-import DOMPurify from 'dompurify'
-import { Printer, QrCode, Download } from 'lucide-react'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
+import { useEffect, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
+import { Printer, QrCode, Download } from 'lucide-react';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toaster';
+import { downloadBlob, sanitizeDownloadFilename } from '@/lib/downloads';
+import { escapeHtml, generateQrSvg } from '@/lib/qrCode';
 
 interface Lot {
-  id: string
-  lotNumber: string
-  description: string | null
-  status: string
-  activityType?: string | null
-  chainageStart?: number | null
-  chainageEnd?: number | null
-  layer?: string | null
-  areaZone?: string | null
+  id: string;
+  lotNumber: string;
+  description: string | null;
+  status: string;
+  activityType?: string | null;
+  chainageStart?: number | null;
+  chainageEnd?: number | null;
+  layer?: string | null;
+  areaZone?: string | null;
 }
 
 interface PrintLabelsModalProps {
-  lots: Lot[]
-  projectId: string
-  projectName?: string
-  onClose: () => void
-}
-
-// Simple QR Code generator using SVG paths
-// This generates a basic QR code pattern - for production, use a proper library
-function generateQRSVG(text: string, size: number = 100): string {
-  // Simple hash-based pattern generator (not a real QR code, but visually similar)
-  // In production, replace with a proper QR code library like 'qrcode'
-  const hash = hashString(text)
-  const modules = 21 // 21x21 is version 1 QR code size
-  const moduleSize = size / modules
-
-  let paths = ''
-
-  // Generate a deterministic pattern based on the hash
-  for (let row = 0; row < modules; row++) {
-    for (let col = 0; col < modules; col++) {
-      // Always draw finder patterns (corners)
-      const isFinderPattern =
-        (row < 7 && col < 7) || // Top-left
-        (row < 7 && col >= modules - 7) || // Top-right
-        (row >= modules - 7 && col < 7) // Bottom-left
-
-      if (isFinderPattern) {
-        // Draw finder pattern
-        const inOuter = (row < 7 && col < 7 && (row === 0 || row === 6 || col === 0 || col === 6)) ||
-                       (row < 7 && col >= modules - 7 && (row === 0 || row === 6 || col === modules - 7 || col === modules - 1)) ||
-                       (row >= modules - 7 && col < 7 && (row === modules - 7 || row === modules - 1 || col === 0 || col === 6))
-
-        const inInner = (row >= 2 && row <= 4 && col >= 2 && col <= 4) ||
-                       (row >= 2 && row <= 4 && col >= modules - 5 && col <= modules - 3) ||
-                       (row >= modules - 5 && row <= modules - 3 && col >= 2 && col <= 4)
-
-        if (inOuter || inInner) {
-          paths += `<rect x="${col * moduleSize}" y="${row * moduleSize}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`
-        }
-      } else if (row > 7 && col > 7) {
-        // Data area - use hash to determine if module is dark
-        const index = row * modules + col
-        const bit = (hash >> (index % 32)) & 1
-        const textBit = (text.charCodeAt(index % text.length) + index) % 3
-        if ((bit === 1 && textBit !== 0) || (row + col) % 7 === 0) {
-          paths += `<rect x="${col * moduleSize}" y="${row * moduleSize}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`
-        }
-      } else if (row === 6 || col === 6) {
-        // Timing patterns
-        if ((row + col) % 2 === 0) {
-          paths += `<rect x="${col * moduleSize}" y="${row * moduleSize}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`
-        }
-      }
-    }
-  }
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-    <rect width="${size}" height="${size}" fill="white"/>
-    ${paths}
-  </svg>`
-}
-
-function hashString(str: string): number {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash = hash & hash
-  }
-  return Math.abs(hash)
+  lots: Lot[];
+  projectId: string;
+  projectName?: string;
+  onClose: () => void;
 }
 
 function formatChainage(start: number | null | undefined, end: number | null | undefined): string {
   if (start === null || start === undefined) {
-    if (end === null || end === undefined) return ''
-    return `CH ${end.toFixed(3)}`
+    if (end === null || end === undefined) return '';
+    return `CH ${end.toFixed(3)}`;
   }
-  if (end === null || end === undefined) return `CH ${start.toFixed(3)}`
-  return `CH ${start.toFixed(3)} - ${end.toFixed(3)}`
+  if (end === null || end === undefined) return `CH ${start.toFixed(3)}`;
+  return `CH ${start.toFixed(3)} - ${end.toFixed(3)}`;
+}
+
+function getLotQrUrl(projectId: string, lotId: string): string {
+  return `${window.location.origin}/projects/${projectId}/lots/${lotId}`;
+}
+
+async function generateLotQrSvgs(
+  lots: Lot[],
+  projectId: string,
+  size: number,
+): Promise<Record<string, string>> {
+  const entries = await Promise.all(
+    lots.map(
+      async (lot) => [lot.id, await generateQrSvg(getLotQrUrl(projectId, lot.id), size)] as const,
+    ),
+  );
+
+  return Object.fromEntries(entries);
 }
 
 export function PrintLabelsModal({ lots, projectId, projectName, onClose }: PrintLabelsModalProps) {
-  const printRef = useRef<HTMLDivElement>(null)
+  const printRef = useRef<HTMLDivElement>(null);
+  const [qrSvgs, setQrSvgs] = useState<Record<string, string>>({});
+  const [isGeneratingQrs, setIsGeneratingQrs] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
+
+  const allQrsReady = lots.length > 0 && lots.every((lot) => Boolean(qrSvgs[lot.id]));
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (lots.length === 0) {
+      setQrSvgs({});
+      setIsGeneratingQrs(false);
+      setQrError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsGeneratingQrs(true);
+    setQrError(null);
+
+    generateLotQrSvgs(lots, projectId, 80)
+      .then((generated) => {
+        if (!cancelled) setQrSvgs(generated);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrSvgs({});
+          setQrError('Could not generate QR codes');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsGeneratingQrs(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lots, projectId]);
 
   const handlePrint = () => {
-    const printContent = printRef.current
-    if (!printContent) return
+    const printContent = printRef.current;
+    if (!printContent || !allQrsReady) return;
 
-    const printWindow = window.open('', '_blank')
+    const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('Please allow popups to print labels')
-      return
+      toast({
+        title: 'Popup blocked',
+        description: 'Allow popups to print lot labels.',
+        variant: 'warning',
+      });
+      return;
     }
+    printWindow.opener = null;
+
+    const safePrintMarkup = DOMPurify.sanitize(printContent.innerHTML);
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Lot Labels - ${projectName || 'Project'}</title>
+          <title>Lot Labels - ${escapeHtml(projectName || 'Project')}</title>
           <style>
             * {
               box-sizing: border-box;
@@ -176,48 +177,62 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
           </style>
         </head>
         <body>
-          ${printContent.innerHTML}
+          ${safePrintMarkup}
         </body>
       </html>
-    `)
-    printWindow.document.close()
+    `);
+    printWindow.document.close();
 
     // Wait for content to load then print
     setTimeout(() => {
-      printWindow.print()
-    }, 250)
-  }
+      printWindow.print();
+    }, 250);
+  };
 
-  const handleDownloadSVGs = () => {
-    // Create a zip-like structure by downloading each SVG
-    // For simplicity, we'll create a single HTML file with all SVGs
-    const blob = new Blob([`
+  const handleDownloadSVGs = async () => {
+    let downloadQrSvgs: Record<string, string>;
+
+    try {
+      downloadQrSvgs = await generateLotQrSvgs(lots, projectId, 150);
+    } catch {
+      toast({
+        title: 'Could not generate QR codes',
+        description: 'Please try the download again.',
+        variant: 'error',
+      });
+      return;
+    }
+
+    const blob = new Blob(
+      [
+        `
       <!DOCTYPE html>
       <html>
-        <head><title>QR Codes - ${projectName || 'Project'}</title></head>
+        <head><title>QR Codes - ${escapeHtml(projectName || 'Project')}</title></head>
         <body style="display: flex; flex-wrap: wrap; gap: 20px; padding: 20px;">
-          ${lots.map((lot) => {
-            const qrUrl = `${window.location.origin}/projects/${projectId}/lots/${lot.id}`
-            return `
+          ${lots
+            .map((lot) => {
+              return `
               <div style="text-align: center; border: 1px solid #ccc; padding: 10px; border-radius: 8px;">
-                ${generateQRSVG(qrUrl, 150)}
-                <p style="font-weight: bold; margin-top: 10px;">${lot.lotNumber}</p>
+                ${DOMPurify.sanitize(downloadQrSvgs[lot.id] ?? '')}
+                <p style="font-weight: bold; margin-top: 10px;">${escapeHtml(lot.lotNumber)}</p>
               </div>
-            `
-          }).join('')}
+            `;
+            })
+            .join('')}
         </body>
       </html>
-    `], { type: 'text/html' })
+    `,
+      ],
+      { type: 'text/html' },
+    );
 
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `lot-labels-${projectId}.html`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
+    downloadBlob(
+      blob,
+      sanitizeDownloadFilename(`lot-labels-${projectId}.html`, 'lot-labels.html'),
+      'lot-labels.html',
+    );
+  };
 
   return (
     <Modal onClose={onClose} className="max-w-4xl">
@@ -241,12 +256,11 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
               gap: '12px',
               backgroundColor: 'white',
               padding: '16px',
-              borderRadius: '8px'
+              borderRadius: '8px',
             }}
           >
             {lots.map((lot) => {
-              const qrUrl = `${window.location.origin}/projects/${projectId}/lots/${lot.id}`
-              const qrSvg = generateQRSVG(qrUrl, 80)
+              const qrSvg = qrSvgs[lot.id];
 
               return (
                 <div
@@ -260,14 +274,32 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
                     flexDirection: 'column',
                     alignItems: 'center',
                     textAlign: 'center',
-                    backgroundColor: 'white'
+                    backgroundColor: 'white',
                   }}
                 >
                   <div
                     className="label-qr"
                     style={{ width: '80px', height: '80px', marginBottom: '8px' }}
-                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(qrSvg) }}
-                  />
+                  >
+                    {qrSvg ? (
+                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(qrSvg) }} />
+                    ) : (
+                      <div
+                        style={{
+                          width: '80px',
+                          height: '80px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '1px solid #e5e7eb',
+                          color: '#6b7280',
+                          fontSize: '10px',
+                        }}
+                      >
+                        QR
+                      </div>
+                    )}
+                  </div>
                   <div
                     className="label-lot-number"
                     style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '4px' }}
@@ -282,10 +314,7 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
                       {projectName}
                     </div>
                   )}
-                  <div
-                    className="label-details"
-                    style={{ fontSize: '9px', color: '#9ca3af' }}
-                  >
+                  <div className="label-details" style={{ fontSize: '9px', color: '#9ca3af' }}>
                     {lot.activityType && <div>{lot.activityType}</div>}
                     {formatChainage(lot.chainageStart, lot.chainageEnd) && (
                       <div>{formatChainage(lot.chainageStart, lot.chainageEnd)}</div>
@@ -293,7 +322,7 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
                     {lot.layer && <div>Layer: {lot.layer}</div>}
                   </div>
                 </div>
-              )
+              );
             })}
           </div>
         </div>
@@ -301,17 +330,21 @@ export function PrintLabelsModal({ lots, projectId, projectName, onClose }: Prin
 
       <ModalFooter>
         <p className="text-sm text-muted-foreground mr-auto">
-          Labels include QR codes that link to lot details
+          {qrError ?? 'Labels include QR codes that link to lot details'}
         </p>
-        <Button variant="outline" onClick={handleDownloadSVGs}>
+        <Button
+          variant="outline"
+          onClick={handleDownloadSVGs}
+          disabled={!allQrsReady || isGeneratingQrs}
+        >
           <Download className="h-4 w-4" />
           Download
         </Button>
-        <Button onClick={handlePrint}>
+        <Button onClick={handlePrint} disabled={!allQrsReady || isGeneratingQrs}>
           <Printer className="h-4 w-4" />
           Print Labels
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

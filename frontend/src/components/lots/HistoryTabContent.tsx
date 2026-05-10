@@ -3,11 +3,15 @@
  * Displays activity timeline for a lot.
  */
 
-import type { ActivityLog } from '@/pages/lots/types'
+import type { ActivityLog } from '@/pages/lots/types';
+
+function isChangeObject(value: unknown): value is { from?: unknown; to?: unknown } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 interface HistoryTabContentProps {
-  activityLogs: ActivityLog[]
-  loading: boolean
+  activityLogs: ActivityLog[];
+  loading: boolean;
 }
 
 export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentProps) {
@@ -16,7 +20,7 @@ export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentPr
       <div className="flex justify-center p-8">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
-    )
+    );
   }
 
   if (activityLogs.length === 0) {
@@ -24,11 +28,9 @@ export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentPr
       <div className="rounded-lg border p-6 text-center">
         <div className="text-4xl mb-2">📜</div>
         <h3 className="text-lg font-semibold mb-2">No Activity History</h3>
-        <p className="text-muted-foreground">
-          No activity has been recorded for this lot yet.
-        </p>
+        <p className="text-muted-foreground">No activity has been recorded for this lot yet.</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -37,29 +39,39 @@ export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentPr
       <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
       <div className="space-y-4">
         {activityLogs.map((log) => {
-          const isCreate = log.action.includes('create') || log.action.includes('add')
-          const isDelete = log.action.includes('delete') || log.action.includes('remove')
-          const isUpdate = log.action.includes('update') || log.action.includes('edit')
+          const isCreate = log.action.includes('create') || log.action.includes('add');
+          const isDelete = log.action.includes('delete') || log.action.includes('remove');
+          const isUpdate = log.action.includes('update') || log.action.includes('edit');
 
           return (
             <div key={log.id} className="relative pl-10">
               {/* Timeline dot */}
-              <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 bg-background ${
-                isCreate ? 'border-green-500' :
-                isDelete ? 'border-red-500' :
-                isUpdate ? 'border-primary' :
-                'border-muted-foreground'
-              }`} />
+              <div
+                className={`absolute left-2.5 w-3 h-3 rounded-full border-2 bg-background ${
+                  isCreate
+                    ? 'border-green-500'
+                    : isDelete
+                      ? 'border-red-500'
+                      : isUpdate
+                        ? 'border-primary'
+                        : 'border-muted-foreground'
+                }`}
+              />
 
               <div className="rounded-lg border bg-card p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
-                      isCreate ? 'bg-green-100 text-green-700' :
-                      isDelete ? 'bg-red-100 text-red-700' :
-                      isUpdate ? 'bg-primary/10 text-primary' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
+                    <span
+                      className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                        isCreate
+                          ? 'bg-green-100 text-green-700'
+                          : isDelete
+                            ? 'bg-red-100 text-red-700'
+                            : isUpdate
+                              ? 'bg-primary/10 text-primary'
+                              : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
                       {log.action}
                     </span>
                     <p className="mt-1 text-sm">
@@ -67,8 +79,7 @@ export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentPr
                         <span className="font-medium">{log.user.fullName || log.user.email}</span>
                       ) : (
                         <span className="text-muted-foreground">System</span>
-                      )}
-                      {' '}
+                      )}{' '}
                       <span className="text-muted-foreground">
                         {log.action.replace(/_/g, ' ')} {log.entityType.toLowerCase()}
                       </span>
@@ -90,27 +101,35 @@ export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentPr
                   <div className="mt-3 pt-3 border-t">
                     <p className="text-xs font-medium text-muted-foreground mb-2">Changes:</p>
                     <div className="space-y-1">
-                      {Object.entries(log.changes).map(([field, values]: [string, any]) => (
-                        <div key={field} className="text-xs">
-                          <span className="font-medium capitalize">{field.replace(/_/g, ' ')}:</span>
-                          {' '}
-                          {values.from !== undefined && (
-                            <>
-                              <span className="text-red-600 line-through">{String(values.from || '(empty)')}</span>
-                              {' → '}
-                            </>
-                          )}
-                          <span className="text-green-600">{String(values.to || values || '(empty)')}</span>
-                        </div>
-                      ))}
+                      {Object.entries(log.changes).map(([field, values]) => {
+                        const from = isChangeObject(values) ? values.from : undefined;
+                        const to = isChangeObject(values) && 'to' in values ? values.to : values;
+
+                        return (
+                          <div key={field} className="text-xs">
+                            <span className="font-medium capitalize">
+                              {field.replace(/_/g, ' ')}:
+                            </span>{' '}
+                            {from !== undefined && (
+                              <>
+                                <span className="text-red-600 line-through">
+                                  {String(from || '(empty)')}
+                                </span>
+                                {' → '}
+                              </>
+                            )}
+                            <span className="text-green-600">{String(to || '(empty)')}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
               </div>
             </div>
-          )
+          );
         })}
       </div>
     </div>
-  )
+  );
 }

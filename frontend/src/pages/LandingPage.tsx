@@ -1,15 +1,15 @@
-import { Header } from '@/components/landing/Header'
-import { Hero } from '@/components/landing/Hero'
-import { SocialProof } from '@/components/landing/SocialProof'
-import { ProblemSection } from '@/components/landing/ProblemSection'
-import { SolutionOverview } from '@/components/landing/SolutionOverview'
-import { RoleBasedBenefits } from '@/components/landing/RoleBasedBenefits'
-import { MobileShowcase } from '@/components/landing/MobileShowcase'
-import { ComplianceStandards } from '@/components/landing/ComplianceStandards'
-import { Pricing } from '@/components/landing/Pricing'
-import { FAQ } from '@/components/landing/FAQ'
-import { FinalCTA } from '@/components/landing/FinalCTA'
-import { Footer } from '@/components/landing/Footer'
+import { Header } from '@/components/landing/Header';
+import { Hero } from '@/components/landing/Hero';
+import { SocialProof } from '@/components/landing/SocialProof';
+import { ProblemSection } from '@/components/landing/ProblemSection';
+import { SolutionOverview } from '@/components/landing/SolutionOverview';
+import { RoleBasedBenefits } from '@/components/landing/RoleBasedBenefits';
+import { MobileShowcase } from '@/components/landing/MobileShowcase';
+import { ComplianceStandards } from '@/components/landing/ComplianceStandards';
+import { Pricing } from '@/components/landing/Pricing';
+import { FAQ } from '@/components/landing/FAQ';
+import { FinalCTA } from '@/components/landing/FinalCTA';
+import { Footer } from '@/components/landing/Footer';
 
 export function LandingPage() {
   return (
@@ -29,5 +29,5 @@ export function LandingPage() {
       </main>
       <Footer />
     </div>
-  )
+  );
 }

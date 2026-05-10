@@ -1,12 +1,12 @@
-import { useAuth } from '@/lib/auth'
-import { isViewerRole } from '@/lib/roles'
+import { useAuth } from '@/lib/auth';
+import { isViewerRole } from '@/lib/roles';
 
 interface ViewerAccessState {
-  isViewer: boolean
-  canCreate: boolean
-  canEdit: boolean
-  canDelete: boolean
-  loading: boolean
+  isViewer: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  loading: boolean;
 }
 
 /**
@@ -14,7 +14,7 @@ interface ViewerAccessState {
  * Viewers can see everything but cannot create, edit, or delete anything.
  */
 export function useViewerAccess(): ViewerAccessState {
-  const { user, loading } = useAuth()
+  const { user, loading } = useAuth();
 
   if (loading) {
     return {
@@ -23,7 +23,7 @@ export function useViewerAccess(): ViewerAccessState {
       canEdit: true,
       canDelete: true,
       loading: true,
-    }
+    };
   }
 
   if (!user) {
@@ -33,10 +33,10 @@ export function useViewerAccess(): ViewerAccessState {
       canEdit: false,
       canDelete: false,
       loading: false,
-    }
+    };
   }
 
-  const isViewer = isViewerRole(user.role)
+  const isViewer = isViewerRole(user.role);
 
   return {
     isViewer,
@@ -44,5 +44,5 @@ export function useViewerAccess(): ViewerAccessState {
     canEdit: !isViewer,
     canDelete: !isViewer,
     loading: false,
-  }
+  };
 }

@@ -1,10 +1,10 @@
-import React, { useRef } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { useNavigate } from 'react-router-dom'
-import { apiFetch } from '@/lib/api'
-import { generateTestCertificatePDF, TestCertificateData } from '@/lib/pdfGenerator'
-import { toast } from '@/components/ui/toaster'
-import type { TestResult } from '../types'
+import React, { useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '@/lib/api';
+import type { TestCertificateData } from '@/lib/pdfGenerator';
+import { toast } from '@/components/ui/toaster';
+import type { TestResult } from '../types';
 import {
   statusColors,
   testStatusColors,
@@ -13,18 +13,35 @@ import {
   nextStatusButtonLabels,
   isTestOverdue,
   getDaysSince,
-} from '../constants'
+} from '../constants';
+import { logError } from '@/lib/logger';
 
 interface TestResultsTableProps {
-  projectId: string
-  filteredTestResults: TestResult[]
-  hasActiveFilters: boolean
-  updatingStatusId: string | null
-  onUpdateStatus: (testId: string, newStatus: string) => void
-  onRejectTest: (testId: string) => void
-  onClearFilters: () => void
-  onOpenCreateModal: () => void
+  projectId: string;
+  filteredTestResults: TestResult[];
+  hasActiveFilters: boolean;
+  updatingStatusId: string | null;
+  onUpdateStatus: (testId: string, newStatus: string) => void;
+  onRejectTest: (testId: string) => void;
+  onClearFilters: () => void;
+  onOpenCreateModal: () => void;
 }
+
+interface ProjectCertificateResponse {
+  name?: string;
+  projectNumber?: string;
+  project?: {
+    name?: string;
+    projectNumber?: string;
+  };
+}
+
+type TestCertificateLot = NonNullable<TestResult['lot']> & {
+  description?: string | null;
+  activityType?: string | null;
+  chainageStart?: number | null;
+  chainageEnd?: number | null;
+};
 
 export const TestResultsTable = React.memo(function TestResultsTable({
   projectId,
@@ -36,7 +53,15 @@ export const TestResultsTable = React.memo(function TestResultsTable({
   onClearFilters,
   onOpenCreateModal,
 }: TestResultsTableProps) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: filteredTestResults.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 64,
+    overscan: 5,
+  });
 
   if (filteredTestResults.length === 0 && !hasActiveFilters) {
     return (
@@ -53,17 +78,8 @@ export const TestResultsTable = React.memo(function TestResultsTable({
           Add your first test result
         </button>
       </div>
-    )
+    );
   }
-
-  const parentRef = useRef<HTMLDivElement>(null)
-
-  const virtualizer = useVirtualizer({
-    count: filteredTestResults.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 64,
-    overscan: 5,
-  })
 
   return (
     <div className="rounded-lg border overflow-hidden">
@@ -85,10 +101,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
         <div className="px-4 py-8 text-center text-muted-foreground">
           <div className="text-3xl mb-2">{'\uD83D\uDD0D'}</div>
           <p>No test results match your filters.</p>
-          <button
-            onClick={onClearFilters}
-            className="mt-2 text-sm text-primary hover:underline"
-          >
+          <button onClick={onClearFilters} className="mt-2 text-sm text-primary hover:underline">
             Clear all filters
           </button>
         </div>
@@ -96,9 +109,9 @@ export const TestResultsTable = React.memo(function TestResultsTable({
         <div ref={parentRef} style={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto' }}>
           <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
-              const test = filteredTestResults[virtualRow.index]
-              const overdue = isTestOverdue(test)
-              const daysSince = getDaysSince(test.sampleDate, test.createdAt)
+              const test = filteredTestResults[virtualRow.index];
+              const overdue = isTestOverdue(test);
+              const daysSince = getDaysSince(test.sampleDate, test.createdAt);
               return (
                 <div
                   key={virtualRow.key}
@@ -122,7 +135,10 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             {test.testType}
                             {/* Feature #200: AI extracted indicator */}
                             {test.aiExtracted && (
-                              <span className="px-1.5 py-0.5 text-[10px] bg-purple-500 text-white rounded font-bold" title="AI Extracted from certificate">
+                              <span
+                                className="px-1.5 py-0.5 text-[10px] bg-purple-500 text-white rounded font-bold"
+                                title="AI Extracted from certificate"
+                              >
                                 AI
                               </span>
                             )}
@@ -133,7 +149,9 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             )}
                           </div>
                           {/* Feature #197: Show days since sample/created */}
-                          <div className={`text-xs mt-0.5 ${overdue ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+                          <div
+                            className={`text-xs mt-0.5 ${overdue ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}
+                          >
                             {daysSince} days since {test.sampleDate ? 'sample' : 'request'}
                           </div>
                         </td>
@@ -141,7 +159,11 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                         <td className="px-4 py-3 text-sm">
                           {test.lot ? (
                             <button
-                              onClick={() => navigate(`/projects/${projectId}/lots/${test.lotId}`)}
+                              onClick={() =>
+                                navigate(
+                                  `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(test.lot?.id || test.lotId || '')}`,
+                                )
+                              }
                               className="text-primary hover:underline"
                             >
                               {test.lot.lotNumber}
@@ -157,12 +179,16 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             : '\u2014'}
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-muted'}`}>
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${statusColors[test.passFail] || 'bg-muted'}`}
+                          >
                             {test.passFail}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-muted'}`}>
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-muted'}`}
+                          >
                             {testStatusLabels[test.status] || test.status}
                           </span>
                         </td>
@@ -173,21 +199,26 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                               onClick={async () => {
                                 try {
                                   // Fetch project info for the certificate
-                                  let projectData = null
+                                  let projectData: ProjectCertificateResponse | null = null;
                                   try {
-                                    projectData = await apiFetch<any>(`/api/projects/${projectId}`)
-                                  } catch (e) {
+                                    projectData = await apiFetch<ProjectCertificateResponse>(
+                                      `/api/projects/${encodeURIComponent(projectId)}`,
+                                    );
+                                  } catch {
                                     // ignore - projectData stays null
                                   }
 
                                   // Get lot info if test is linked to a lot
-                                  const lotInfo = test.lot ? {
-                                    lotNumber: test.lot.lotNumber,
-                                    description: (test.lot as any).description || null,
-                                    activityType: (test.lot as any).activityType || null,
-                                    chainageStart: (test.lot as any).chainageStart || null,
-                                    chainageEnd: (test.lot as any).chainageEnd || null,
-                                  } : null
+                                  const lot = test.lot as TestCertificateLot | null;
+                                  const lotInfo = lot
+                                    ? {
+                                        lotNumber: lot.lotNumber,
+                                        description: lot.description || null,
+                                        activityType: lot.activityType || null,
+                                        chainageStart: lot.chainageStart || null,
+                                        chainageEnd: lot.chainageEnd || null,
+                                      }
+                                    : null;
 
                                   const pdfData: TestCertificateData = {
                                     test: {
@@ -211,27 +242,37 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                                     },
                                     lot: lotInfo,
                                     project: {
-                                      name: projectData?.name || 'Unknown Project',
-                                      projectNumber: projectData?.projectNumber || projectId || 'N/A',
+                                      name:
+                                        projectData?.project?.name ||
+                                        projectData?.name ||
+                                        'Unknown Project',
+                                      projectNumber:
+                                        projectData?.project?.projectNumber ||
+                                        projectData?.projectNumber ||
+                                        projectId ||
+                                        'N/A',
                                     },
-                                  }
+                                  };
 
-                                  generateTestCertificatePDF(pdfData)
+                                  const { generateTestCertificatePDF } =
+                                    await import('@/lib/pdfGenerator');
+                                  await generateTestCertificatePDF(pdfData);
                                   toast({
                                     title: 'Certificate Generated',
                                     description: `Test certificate PDF downloaded successfully`,
-                                  })
+                                  });
                                 } catch (error) {
-                                  console.error('Error generating test certificate:', error)
+                                  logError('Error generating test certificate:', error);
                                   toast({
                                     title: 'Error',
                                     description: 'Failed to generate test certificate',
                                     variant: 'error',
-                                  })
+                                  });
                                 }
                               }}
                               className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
                               title="Print Test Certificate"
+                              aria-label={`Print test certificate for ${test.testType}`}
                             >
                               {'\uD83D\uDDA8\uFE0F'}
                             </button>
@@ -241,7 +282,9 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                                 disabled={updatingStatusId === test.id}
                                 className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                               >
-                                {updatingStatusId === test.id ? 'Updating...' : nextStatusButtonLabels[test.status]}
+                                {updatingStatusId === test.id
+                                  ? 'Updating...'
+                                  : nextStatusButtonLabels[test.status]}
                               </button>
                             )}
                             {/* Feature #204: Reject button for tests in "entered" status */}
@@ -254,7 +297,9 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                               </button>
                             )}
                             {test.status === 'verified' && (
-                              <span className="text-green-600 text-xs font-medium">{'\u2713'} Complete</span>
+                              <span className="text-green-600 text-xs font-medium">
+                                {'\u2713'} Complete
+                              </span>
                             )}
                           </div>
                         </td>
@@ -262,11 +307,11 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                     </tbody>
                   </table>
                 </div>
-              )
+              );
             })}
           </div>
         </div>
       )}
     </div>
-  )
-})
+  );
+});

@@ -1,33 +1,39 @@
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Check, AlertTriangle } from 'lucide-react'
-import { toast } from '@/components/ui/toaster'
-import { SignaturePad } from '@/components/ui/SignaturePad'
-import type { HoldPoint } from '../types'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Check, AlertTriangle } from 'lucide-react';
+import { toast } from '@/components/ui/toaster';
+import { SignaturePad } from '@/components/ui/SignaturePad';
+import type { HoldPoint } from '../types';
+import {
+  Modal,
+  ModalHeader,
+  ModalDescription,
+  ModalBody,
+  ModalFooter,
+} from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 const recordReleaseSchema = z.object({
-  releasedByName: z.string().min(1, 'Name of person releasing is required'),
-  releasedByOrg: z.string().optional().default(''),
-  releaseDate: z.string().min(1, 'Release date is required'),
-  releaseTime: z.string().min(1, 'Release time is required'),
-  releaseNotes: z.string().optional().default(''),
+  releasedByName: z.string().trim().min(1, 'Name of person releasing is required'),
+  releasedByOrg: z.string().trim().optional().default(''),
+  releaseDate: z.string().trim().min(1, 'Release date is required'),
+  releaseTime: z.string().trim().min(1, 'Release time is required'),
+  releaseNotes: z.string().trim().optional().default(''),
   releaseMethod: z.enum(['digital', 'email', 'paper']),
-})
+});
 
-type RecordReleaseFormData = z.infer<typeof recordReleaseSchema>
+type RecordReleaseFormData = z.infer<typeof recordReleaseSchema>;
 
 interface RecordReleaseModalProps {
-  holdPoint: HoldPoint
-  recording: boolean
-  approvalRequirement?: 'any' | 'superintendent'
-  onClose: () => void
+  holdPoint: HoldPoint;
+  recording: boolean;
+  approvalRequirement?: 'any' | 'superintendent';
+  onClose: () => void;
   onSubmit: (
     releasedByName: string,
     releasedByOrg: string,
@@ -35,8 +41,9 @@ interface RecordReleaseModalProps {
     releaseTime: string,
     releaseNotes: string,
     releaseMethod: string,
-    signatureDataUrl: string | null
-  ) => void
+    signatureDataUrl: string | null,
+    evidenceFile: File | null,
+  ) => void;
 }
 
 export function RecordReleaseModal({
@@ -46,9 +53,9 @@ export function RecordReleaseModal({
   onClose,
   onSubmit,
 }: RecordReleaseModalProps) {
-  const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   // Feature #884: Signature capture state
-  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null)
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
 
   const {
     register,
@@ -66,16 +73,16 @@ export function RecordReleaseModal({
       releaseNotes: '',
       releaseMethod: 'digital',
     },
-  })
+  });
 
-  const releaseMethod = watch('releaseMethod')
-  const releasedByName = watch('releasedByName')
+  const releaseMethod = watch('releaseMethod');
+  const releasedByName = watch('releasedByName');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setEvidenceFile(e.target.files[0])
+      setEvidenceFile(e.target.files[0]);
     }
-  }
+  };
 
   const onFormSubmit = (data: RecordReleaseFormData) => {
     // Feature #884: Require signature for digital release
@@ -84,21 +91,27 @@ export function RecordReleaseModal({
         title: 'Signature required',
         description: 'Please provide your signature to release the hold point',
         variant: 'error',
-      })
-      return
+      });
+      return;
     }
-    // Note: File upload would be handled separately in a production system
-    // For now, we'll include the filename in the notes if a file was selected
-    let notes = data.releaseNotes || ''
-    if ((data.releaseMethod === 'email' || data.releaseMethod === 'paper') && evidenceFile) {
-      notes = `${notes}\n[Evidence attached: ${evidenceFile.name}]`.trim()
-    }
-    onSubmit(data.releasedByName, data.releasedByOrg || '', data.releaseDate, data.releaseTime, notes, data.releaseMethod, signatureDataUrl)
-  }
+    onSubmit(
+      data.releasedByName.trim(),
+      data.releasedByOrg?.trim() || '',
+      data.releaseDate.trim(),
+      data.releaseTime.trim(),
+      data.releaseNotes?.trim() || '',
+      data.releaseMethod,
+      signatureDataUrl,
+      evidenceFile,
+    );
+  };
 
   return (
     <Modal onClose={onClose} className="max-w-lg">
       <ModalHeader>Record Hold Point Release</ModalHeader>
+      <ModalDescription>
+        Capture release method, releaser details, and supporting evidence for this hold point.
+      </ModalDescription>
       <ModalBody>
         <div className="mb-4 p-3 bg-muted rounded-lg">
           <div className="text-sm text-muted-foreground">Lot</div>
@@ -120,7 +133,11 @@ export function RecordReleaseModal({
           </div>
         )}
 
-        <form id="record-release-form" onSubmit={rhfHandleSubmit(onFormSubmit)} className="space-y-4">
+        <form
+          id="record-release-form"
+          onSubmit={rhfHandleSubmit(onFormSubmit)}
+          className="space-y-4"
+        >
           {/* Release Method Selection (Feature #185) */}
           <div>
             <Label>Release Method</Label>
@@ -166,7 +183,9 @@ export function RecordReleaseModal({
               placeholder="Enter name of person releasing"
             />
             {errors.releasedByName && (
-              <p className="mt-1 text-sm text-destructive" role="alert">{errors.releasedByName.message}</p>
+              <p className="mt-1 text-sm text-destructive" role="alert">
+                {errors.releasedByName.message}
+              </p>
             )}
           </div>
 
@@ -188,7 +207,9 @@ export function RecordReleaseModal({
                 className={errors.releaseDate ? 'border-destructive' : ''}
               />
               {errors.releaseDate && (
-                <p className="mt-1 text-sm text-destructive" role="alert">{errors.releaseDate.message}</p>
+                <p className="mt-1 text-sm text-destructive" role="alert">
+                  {errors.releaseDate.message}
+                </p>
               )}
             </div>
             <div>
@@ -199,7 +220,9 @@ export function RecordReleaseModal({
                 className={errors.releaseTime ? 'border-destructive' : ''}
               />
               {errors.releaseTime && (
-                <p className="mt-1 text-sm text-destructive" role="alert">{errors.releaseTime.message}</p>
+                <p className="mt-1 text-sm text-destructive" role="alert">
+                  {errors.releaseTime.message}
+                </p>
               )}
             </div>
           </div>
@@ -216,7 +239,9 @@ export function RecordReleaseModal({
           {/* Signature or Evidence based on method */}
           {releaseMethod === 'digital' ? (
             <div className="space-y-2">
-              <Label>Digital Signature <span className="text-red-500">*</span></Label>
+              <Label>
+                Digital Signature <span className="text-red-500">*</span>
+              </Label>
               <SignaturePad
                 onChange={setSignatureDataUrl}
                 width={380}
@@ -275,11 +300,7 @@ export function RecordReleaseModal({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          disabled={recording}
-        >
+        <Button variant="outline" onClick={onClose} disabled={recording}>
           Cancel
         </Button>
         <Button
@@ -292,5 +313,5 @@ export function RecordReleaseModal({
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

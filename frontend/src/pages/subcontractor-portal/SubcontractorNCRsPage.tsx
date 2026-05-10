@@ -1,69 +1,80 @@
-import { Link } from 'react-router-dom'
-import {
-  ArrowLeft,
-  AlertTriangle,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  XCircle,
-} from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { apiFetch } from '@/lib/api'
-import { extractErrorMessage } from '@/lib/errorHandling'
+import { Link } from 'react-router-dom';
+import { ArrowLeft, AlertTriangle, AlertCircle, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { PortalAccessDenied } from './portalAccess';
+import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 
 interface NCR {
-  id: string
-  ncrNumber: string
-  lotId?: string
-  lotNumber?: string
-  description: string
-  status: 'open' | 'in_progress' | 'closed' | 'rejected'
-  severity: 'minor' | 'major' | 'critical'
-  raisedAt: string
-  raisedBy?: { fullName: string }
-  closedAt?: string
+  id: string;
+  ncrNumber: string;
+  description: string;
+  status: string;
+  severity: 'minor' | 'major' | 'critical';
+  raisedAt: string;
+  raisedBy?: { fullName: string };
+  closedAt?: string;
+  ncrLots?: Array<{
+    lot?: {
+      lotNumber?: string;
+      description?: string | null;
+    };
+  }>;
 }
 
 interface SubcontractorCompany {
-  id: string
-  companyName: string
-  projectId: string
-  projectName: string
+  id: string;
+  companyName: string;
+  projectId: string;
+  projectName: string;
+  portalAccess?: PortalAccess;
 }
 
 function getStatusBadge(status: string) {
   switch (status) {
     case 'closed':
+    case 'closed_concession':
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
           <CheckCircle2 className="h-3 w-3" />
-          Closed
+          {status === 'closed_concession' ? 'Closed with Concession' : 'Closed'}
         </span>
-      )
-    case 'in_progress':
+      );
+    case 'investigating':
+    case 'rectification':
+    case 'verification':
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
           <Clock className="h-3 w-3" />
-          In Progress
+          {status.replace('_', ' ')}
         </span>
-      )
+      );
     case 'rejected':
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
           <XCircle className="h-3 w-3" />
           Rejected
         </span>
-      )
+      );
     default:
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
           <AlertTriangle className="h-3 w-3" />
           Open
         </span>
-      )
+      );
   }
+}
+
+function isClosedStatus(status: string) {
+  return status === 'closed' || status === 'closed_concession' || status === 'rejected';
+}
+
+function isOpenStatus(status: string) {
+  return status === 'open';
 }
 
 function getSeverityBadge(severity: string) {
@@ -73,19 +84,19 @@ function getSeverityBadge(severity: string) {
         <span className="px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
           Critical
         </span>
-      )
+      );
     case 'major':
       return (
         <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100">
           Major
         </span>
-      )
+      );
     default:
       return (
         <span className="px-2 py-0.5 text-xs font-medium rounded bg-muted text-foreground">
           Minor
         </span>
-      )
+      );
   }
 }
 
@@ -93,27 +104,34 @@ export function SubcontractorNCRsPage() {
   const { data: company, isLoading: companyLoading } = useQuery({
     queryKey: queryKeys.portalCompanies,
     queryFn: async () => {
-      const res = await apiFetch<{ company: SubcontractorCompany }>('/api/subcontractors/my-company')
-      return res.company
+      const res = await apiFetch<{ company: SubcontractorCompany }>(
+        '/api/subcontractors/my-company',
+      );
+      return res.company;
     },
-  })
+  });
+  const canViewNCRs = isPortalModuleEnabled(company, 'ncrs');
 
-  const { data: ncrs = [], isLoading: ncrsLoading, error } = useQuery({
+  const {
+    data: ncrs = [],
+    isLoading: ncrsLoading,
+    error,
+  } = useQuery({
     queryKey: queryKeys.portalNCRs,
     queryFn: async () => {
       const res = await apiFetch<{ ncrs: NCR[] }>(
-        `/api/ncrs?projectId=${company!.projectId}&subcontractorView=true`
-      )
-      return res.ncrs || []
+        `/api/ncrs?projectId=${company!.projectId}&subcontractorView=true`,
+      );
+      return res.ncrs || [];
     },
-    enabled: !!company?.projectId,
-  })
+    enabled: !!company?.projectId && canViewNCRs,
+  });
 
-  const loading = companyLoading || ncrsLoading
+  const loading = companyLoading || (canViewNCRs && ncrsLoading);
 
-  const open = ncrs.filter(n => n.status === 'open')
-  const inProgress = ncrs.filter(n => n.status === 'in_progress')
-  const closed = ncrs.filter(n => n.status === 'closed' || n.status === 'rejected')
+  const open = ncrs.filter((n) => isOpenStatus(n.status));
+  const inProgress = ncrs.filter((n) => !isOpenStatus(n.status) && !isClosedStatus(n.status));
+  const closed = ncrs.filter((n) => isClosedStatus(n.status));
 
   if (loading) {
     return (
@@ -125,7 +143,11 @@ export function SubcontractorNCRsPage() {
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-24 w-full rounded-lg" />
       </div>
-    )
+    );
+  }
+
+  if (!canViewNCRs) {
+    return <PortalAccessDenied moduleName="NCRs" />;
   }
 
   if (error) {
@@ -143,7 +165,7 @@ export function SubcontractorNCRsPage() {
           Back to Portal
         </Link>
       </div>
-    )
+    );
   }
 
   return (
@@ -234,10 +256,15 @@ export function SubcontractorNCRsPage() {
         </>
       )}
     </div>
-  )
+  );
 }
 
 function NCRCard({ ncr }: { ncr: NCR }) {
+  const lotNumbers = ncr.ncrLots
+    ?.map((ncrLot) => ncrLot.lot?.lotNumber)
+    .filter(Boolean)
+    .join(', ');
+
   return (
     <div className="border border-border rounded-lg bg-card">
       <div className="p-4">
@@ -251,12 +278,8 @@ function NCRCard({ ncr }: { ncr: NCR }) {
                 <p className="font-medium text-foreground">{ncr.ncrNumber}</p>
                 {getSeverityBadge(ncr.severity)}
               </div>
-              {ncr.lotNumber && (
-                <p className="text-sm text-muted-foreground">Lot: {ncr.lotNumber}</p>
-              )}
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                {ncr.description}
-              </p>
+              {lotNumbers && <p className="text-sm text-muted-foreground">Lot: {lotNumbers}</p>}
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{ncr.description}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Raised {new Date(ncr.raisedAt).toLocaleDateString()}
                 {ncr.raisedBy && ` by ${ncr.raisedBy.fullName}`}
@@ -267,5 +290,5 @@ function NCRCard({ ncr }: { ncr: NCR }) {
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,7 +1,7 @@
 // TodayWorklist - Unified "Today" view showing everything foreman needs to action
 // Research-backed: Foremen need to see "what needs attention NOW" in one place
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   CheckSquare,
@@ -11,43 +11,43 @@ import {
   CheckCircle2,
   Shield,
   ClipboardList,
-  Calendar
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { apiFetch } from '@/lib/api'
-import { useOnlineStatus } from '@/hooks/useOnlineStatus'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryKeys'
-import { Button } from '@/components/ui/button'
+  Calendar,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { apiFetch } from '@/lib/api';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+import { Button } from '@/components/ui/button';
 
-type WorklistItemType = 'hold_point' | 'itp_item' | 'inspection' | 'task'
-type UrgencyLevel = 'blocking' | 'due_today' | 'upcoming'
+type WorklistItemType = 'hold_point' | 'itp_item' | 'inspection' | 'task';
+type UrgencyLevel = 'blocking' | 'due_today' | 'upcoming';
 
 interface WorklistItem {
-  id: string
-  type: WorklistItemType
-  title: string
-  subtitle: string
-  urgency: UrgencyLevel
-  link: string
+  id: string;
+  type: WorklistItemType;
+  title: string;
+  subtitle: string;
+  urgency: UrgencyLevel;
+  link: string;
   metadata?: {
-    lotNumber?: string
-    lotId?: string
-    itpName?: string
-    dueTime?: string
-    status?: string
-  }
+    lotNumber?: string;
+    lotId?: string;
+    itpName?: string;
+    dueTime?: string;
+    status?: string;
+  };
 }
 
 interface TodayWorklistData {
-  blocking: WorklistItem[]
-  dueToday: WorklistItem[]
-  upcoming: WorklistItem[]
+  blocking: WorklistItem[];
+  dueToday: WorklistItem[];
+  upcoming: WorklistItem[];
   summary: {
-    totalBlocking: number
-    totalDueToday: number
-    totalUpcoming: number
-  }
+    totalBlocking: number;
+    totalDueToday: number;
+    totalUpcoming: number;
+  };
 }
 
 const urgencyConfig = {
@@ -78,59 +78,62 @@ const urgencyConfig = {
     borderColor: 'border-blue-200 dark:border-blue-800',
     icon: Calendar,
   },
-}
+};
 
 const typeIcons: Record<WorklistItemType, typeof Shield> = {
   hold_point: Shield,
   itp_item: ClipboardList,
   inspection: CheckSquare,
   task: CheckSquare,
-}
+};
 
 export function TodayWorklist() {
-  const { projectId } = useParams()
-  const navigate = useNavigate()
-  const { isOnline } = useOnlineStatus()
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const { isOnline } = useOnlineStatus();
 
-  const queryClient = useQueryClient()
-  const [refreshing, setRefreshing] = useState(false)
+  const queryClient = useQueryClient();
+  const [refreshing, setRefreshing] = useState(false);
 
   const defaultData: TodayWorklistData = {
     blocking: [],
     dueToday: [],
     upcoming: [],
-    summary: { totalBlocking: 0, totalDueToday: 0, totalUpcoming: 0 }
-  }
+    summary: { totalBlocking: 0, totalDueToday: 0, totalUpcoming: 0 },
+  };
 
-  const { data = defaultData, isLoading: loading, error: queryError } = useQuery({
+  const {
+    data = defaultData,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
     queryKey: queryKeys.foremanWorklist(projectId!),
-    queryFn: () => apiFetch<TodayWorklistData>(
-      `/api/dashboard/projects/${projectId}/foreman/today`
-    ),
+    queryFn: () =>
+      apiFetch<TodayWorklistData>(`/api/dashboard/projects/${projectId}/foreman/today`),
     enabled: !!projectId,
-  })
+  });
 
-  const error = queryError ? 'Unable to connect. Check your connection.' : null
+  const error = queryError ? 'Unable to connect. Check your connection.' : null;
 
   const handleRefresh = async () => {
-    setRefreshing(true)
-    await queryClient.invalidateQueries({ queryKey: queryKeys.foremanWorklist(projectId!) })
-    setRefreshing(false)
-  }
+    setRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.foremanWorklist(projectId!) });
+    setRefreshing(false);
+  };
 
   const handleItemClick = (item: WorklistItem) => {
-    navigate(item.link)
-  }
+    navigate(item.link);
+  };
 
-  const totalItems = data.blocking.length + data.dueToday.length + data.upcoming.length
-  const allClear = totalItems === 0 && !loading && !error
+  const totalItems = data.blocking.length + data.dueToday.length + data.upcoming.length;
+  const allClear = totalItems === 0 && !loading && !error;
 
   // Get today's date for header
   const today = new Date().toLocaleDateString('en-AU', {
     weekday: 'long',
     day: 'numeric',
     month: 'short',
-  })
+  });
 
   if (loading) {
     return (
@@ -138,7 +141,7 @@ export function TodayWorklist() {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         <p className="text-sm text-muted-foreground">Loading your worklist...</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -168,28 +171,34 @@ export function TodayWorklist() {
         {!allClear && !error && (
           <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
             {data.blocking.length > 0 && (
-              <span className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
-                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-              )}>
+              <span
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
+                  'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                )}
+              >
                 <AlertCircle className="h-3 w-3" />
                 {data.blocking.length} blocking
               </span>
             )}
             {data.dueToday.length > 0 && (
-              <span className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
-                'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-              )}>
+              <span
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
+                  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                )}
+              >
                 <Clock className="h-3 w-3" />
                 {data.dueToday.length} due today
               </span>
             )}
             {data.upcoming.length > 0 && (
-              <span className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
-                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-              )}>
+              <span
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
+                  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                )}
+              >
                 <Calendar className="h-3 w-3" />
                 {data.upcoming.length} upcoming
               </span>
@@ -234,11 +243,7 @@ export function TodayWorklist() {
           <p className="text-sm text-muted-foreground text-center max-w-xs">
             No hold points, inspections, or ITP items need your attention right now.
           </p>
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            className="mt-6 touch-manipulation"
-          >
+          <Button variant="outline" onClick={handleRefresh} className="mt-6 touch-manipulation">
             Check again
           </Button>
         </div>
@@ -282,19 +287,19 @@ export function TodayWorklist() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 interface WorklistSectionProps {
-  title: string
-  subtitle: string
-  items: WorklistItem[]
-  urgency: UrgencyLevel
-  onItemClick: (item: WorklistItem) => void
+  title: string;
+  subtitle: string;
+  items: WorklistItem[];
+  urgency: UrgencyLevel;
+  onItemClick: (item: WorklistItem) => void;
 }
 
 function WorklistSection({ title, subtitle, items, urgency, onItemClick }: WorklistSectionProps) {
-  const config = urgencyConfig[urgency]
+  const config = urgencyConfig[urgency];
 
   return (
     <div>
@@ -305,10 +310,13 @@ function WorklistSection({ title, subtitle, items, urgency, onItemClick }: Workl
           <h2 className="font-semibold">{title}</h2>
           <p className="text-xs text-muted-foreground">{subtitle}</p>
         </div>
-        <span className={cn(
-          'text-xs font-medium px-2 py-0.5 rounded-full',
-          config.bgColor, config.textColor
-        )}>
+        <span
+          className={cn(
+            'text-xs font-medium px-2 py-0.5 rounded-full',
+            config.bgColor,
+            config.textColor,
+          )}
+        >
           {items.length}
         </span>
       </div>
@@ -325,18 +333,18 @@ function WorklistSection({ title, subtitle, items, urgency, onItemClick }: Workl
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 interface WorklistItemCardProps {
-  item: WorklistItem
-  urgency: UrgencyLevel
-  onClick: () => void
+  item: WorklistItem;
+  urgency: UrgencyLevel;
+  onClick: () => void;
 }
 
 function WorklistItemCard({ item, urgency, onClick }: WorklistItemCardProps) {
-  const config = urgencyConfig[urgency]
-  const TypeIcon = typeIcons[item.type] || CheckSquare
+  const config = urgencyConfig[urgency];
+  const TypeIcon = typeIcons[item.type] || CheckSquare;
 
   return (
     <button
@@ -346,14 +354,16 @@ function WorklistItemCard({ item, urgency, onClick }: WorklistItemCardProps) {
         'text-left transition-colors',
         'active:bg-muted/50 touch-manipulation min-h-[72px]',
         config.bgColor,
-        config.borderColor
+        config.borderColor,
       )}
     >
       {/* Icon */}
-      <div className={cn(
-        'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0',
-        'bg-card shadow-sm'
-      )}>
+      <div
+        className={cn(
+          'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0',
+          'bg-card shadow-sm',
+        )}
+      >
         <TypeIcon className={cn('h-5 w-5', config.textColor)} />
       </div>
 
@@ -362,16 +372,14 @@ function WorklistItemCard({ item, urgency, onClick }: WorklistItemCardProps) {
         <p className="font-medium truncate">{item.title}</p>
         <p className="text-sm text-muted-foreground truncate">{item.subtitle}</p>
         {item.metadata?.lotNumber && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Lot {item.metadata.lotNumber}
-          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">Lot {item.metadata.lotNumber}</p>
         )}
       </div>
 
       {/* Chevron */}
       <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
     </button>
-  )
+  );
 }
 
-export default TodayWorklist
+export default TodayWorklist;

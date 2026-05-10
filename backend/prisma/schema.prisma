@@ -27,98 +27,122 @@ model Company {
   users                User[]
   projects             Project[]
   globalSubcontractors GlobalSubcontractor[]
+  webhookConfigs       WebhookConfig[]
 
   @@map("companies")
 }
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String?  @map("password_hash")
-  fullName      String?  @map("full_name")
-  phone         String?
-  avatarUrl     String?  @map("avatar_url")
-  companyId     String?  @map("company_id")
-  roleInCompany String   @default("member") @map("role_in_company")
-  emailVerified Boolean  @default(false) @map("email_verified")
-  emailVerifiedAt DateTime? @map("email_verified_at")
-  tosAcceptedAt DateTime? @map("tos_accepted_at")
-  tosVersion    String?  @map("tos_version")
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String?   @map("password_hash")
+  fullName           String?   @map("full_name")
+  phone              String?
+  avatarUrl          String?   @map("avatar_url")
+  companyId          String?   @map("company_id")
+  roleInCompany      String    @default("member") @map("role_in_company")
+  emailVerified      Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt    DateTime? @map("email_verified_at")
+  tosAcceptedAt      DateTime? @map("tos_accepted_at")
+  tosVersion         String?   @map("tos_version")
   // MFA fields (Feature #22, #420, #421)
-  twoFactorEnabled Boolean @default(false) @map("two_factor_enabled")
-  twoFactorSecret  String? @map("two_factor_secret")
+  twoFactorEnabled   Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret    String?   @map("two_factor_secret")
   // OAuth fields (Feature #414, #1004)
-  oauthProvider    String? @map("oauth_provider")
-  oauthProviderId  String? @map("oauth_provider_id")
+  oauthProvider      String?   @map("oauth_provider")
+  oauthProviderId    String?   @map("oauth_provider_id")
   // Token invalidation for logout-all-devices feature
   tokenInvalidatedAt DateTime? @map("token_invalidated_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  company         Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  projectUsers    ProjectUser[]
-  createdLots     Lot[]             @relation("CreatedByUser")
-  conformedLots   Lot[]             @relation("ConformedByUser")
-  raisedNCRs      NCR[]             @relation("RaisedByUser")
-  responsibleNCRs NCR[]             @relation("ResponsibleUser")
-  verifiedNCRs    NCR[]             @relation("VerifiedByUser")
-  closedNCRs      NCR[]             @relation("ClosedByUser")
-  qmApprovedNCRs  NCR[]             @relation("QMApprovedByUser")
-  respondedNCRs   NCR[]             @relation("RespondedByUser")
-  qmReviewedNCRs  NCR[]             @relation("QMReviewedByUser")
-  escalatedNCRs   NCR[]             @relation("EscalatedByUser")
-  submittedDiaries DailyDiary[]
-  diaryAddendums  DiaryAddendum[]
-  itpCompletions  ITPCompletion[]   @relation("CompletedByUser")
-  itpVerifications ITPCompletion[]  @relation("VerifiedByUser")
-  testEntries     TestResult[]      @relation("EnteredByUser")
-  testVerifications TestResult[]    @relation("VerifiedByTestUser")
-  testRejections  TestResult[]      @relation("RejectedByTestUser")
-  uploadedDocs    Document[]
-  notifications   Notification[]
-  auditLogs       AuditLog[]
-  syncQueues      SyncQueue[]
-  preparedClaims  ProgressClaim[]
-  passwordResetTokens PasswordResetToken[]
-  emailVerificationTokens EmailVerificationToken[]
-  comments             Comment[]
-  apiKeys              ApiKey[]   // Feature #747: External API access
-  consentRecords       ConsentRecord[]  // Feature #776: Privacy consent tracking
-  assignedLotSubcontractors LotSubcontractorAssignment[] @relation("AssignedByUser")
-  subcontractorUsers   SubcontractorUser[]
-  scheduledReports     ScheduledReport[]
+  company                     Company?                     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  projectUsers                ProjectUser[]
+  createdLots                 Lot[]                        @relation("CreatedByUser")
+  conformedLots               Lot[]                        @relation("ConformedByUser")
+  raisedNCRs                  NCR[]                        @relation("RaisedByUser")
+  responsibleNCRs             NCR[]                        @relation("ResponsibleUser")
+  verifiedNCRs                NCR[]                        @relation("VerifiedByUser")
+  closedNCRs                  NCR[]                        @relation("ClosedByUser")
+  qmApprovedNCRs              NCR[]                        @relation("QMApprovedByUser")
+  respondedNCRs               NCR[]                        @relation("RespondedByUser")
+  qmReviewedNCRs              NCR[]                        @relation("QMReviewedByUser")
+  escalatedNCRs               NCR[]                        @relation("EscalatedByUser")
+  submittedDiaries            DailyDiary[]
+  diaryAddendums              DiaryAddendum[]
+  itpCompletions              ITPCompletion[]              @relation("CompletedByUser")
+  itpVerifications            ITPCompletion[]              @relation("VerifiedByUser")
+  testEntries                 TestResult[]                 @relation("EnteredByUser")
+  testVerifications           TestResult[]                 @relation("VerifiedByTestUser")
+  testRejections              TestResult[]                 @relation("RejectedByTestUser")
+  uploadedDocs                Document[]
+  documentSignedUrlTokens     DocumentSignedUrlToken[]
+  notifications               Notification[]
+  auditLogs                   AuditLog[]
+  syncQueues                  SyncQueue[]
+  preparedClaims              ProgressClaim[]
+  passwordResetTokens         PasswordResetToken[]
+  emailVerificationTokens     EmailVerificationToken[]
+  comments                    Comment[]
+  apiKeys                     ApiKey[] // Feature #747: External API access
+  consentRecords              ConsentRecord[] // Feature #776: Privacy consent tracking
+  assignedLotSubcontractors   LotSubcontractorAssignment[] @relation("AssignedByUser")
+  subcontractorUsers          SubcontractorUser[]
+  scheduledReports            ScheduledReport[]
+  mfaBackupCodes              MfaBackupCode[]
+  createdWebhooks             WebhookConfig[]              @relation("CreatedWebhookConfigs")
+  pushSubscriptions           PushSubscription[]
+  oauthCallbackCodes          OauthCallbackCode[]
+  notificationEmailPreference NotificationEmailPreference?
+  notificationDigestItems     NotificationDigestItem[]
+  assignedNotificationAlerts  NotificationAlert[]          @relation("AssignedNotificationAlerts")
 
+  @@index([companyId])
   @@map("users")
+}
+
+model MfaBackupCode {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  codeHash  String    @unique @map("code_hash")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@map("mfa_backup_codes")
 }
 
 // Feature #747: API Keys for external REST access
 model ApiKey {
-  id          String    @id @default(uuid())
-  userId      String    @map("user_id")
-  name        String    // Descriptive name for the key
-  keyHash     String    @map("key_hash") // Hashed API key (never store plain)
-  keyPrefix   String    @map("key_prefix") // First 8 chars for identification
-  scopes      String    @default("read") // Comma-separated: read,write,admin
-  lastUsedAt  DateTime? @map("last_used_at")
-  expiresAt   DateTime? @map("expires_at")
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  name       String // Descriptive name for the key
+  keyHash    String    @unique @map("key_hash") // Hashed API key (never store plain)
+  keyPrefix  String    @map("key_prefix") // First 8 chars for identification
+  scopes     String    @default("read") // Comma-separated: read,write,admin
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  isActive   Boolean   @default(true) @map("is_active")
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, createdAt])
   @@map("api_keys")
 }
 
 // Feature #776: Privacy Consent Tracking
 model ConsentRecord {
-  id          String    @id @default(uuid())
-  userId      String    @map("user_id")
-  consentType String    @map("consent_type") // marketing, analytics, data_processing, terms_of_service
-  version     String    // Version of the consent/policy
-  granted     Boolean   // true = granted, false = withdrawn
-  ipAddress   String?   @map("ip_address")
-  userAgent   String?   @map("user_agent")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  consentType String   @map("consent_type") // marketing, analytics, data_processing, terms_of_service
+  version     String // Version of the consent/policy
+  granted     Boolean // true = granted, false = withdrawn
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -126,54 +150,229 @@ model ConsentRecord {
   @@map("consent_records")
 }
 
+model WebhookConfig {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  url         String
+  secret      String
+  events      String   @default("[\"*\"]")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdById String?  @map("created_by_id")
+
+  company    Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy  User?             @relation("CreatedWebhookConfigs", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveries WebhookDelivery[]
+
+  @@index([companyId, enabled])
+  @@map("webhook_configs")
+}
+
+model WebhookDelivery {
+  id             String   @id @default(uuid())
+  webhookId      String   @map("webhook_id")
+  event          String
+  payload        Json
+  responseStatus Int?     @map("response_status")
+  responseBody   String?  @map("response_body")
+  error          String?
+  deliveredAt    DateTime @default(now()) @map("delivered_at")
+  success        Boolean  @default(false)
+
+  webhook WebhookConfig @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, deliveredAt])
+  @@map("webhook_deliveries")
+}
+
+model PushSubscription {
+  id        String   @id
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model RateLimitBucket {
+  key         String   @id
+  count       Int
+  windowStart DateTime @map("window_start")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
+  @@map("rate_limit_buckets")
+}
+
+model AuthLockout {
+  key            String    @id
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lockedUntil    DateTime? @map("locked_until")
+  lastAttemptAt  DateTime  @map("last_attempt_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([lockedUntil])
+  @@index([lastAttemptAt])
+  @@map("auth_lockouts")
+}
+
+model OauthState {
+  id          String   @id @default(uuid())
+  stateHash   String   @unique @map("state_hash")
+  redirectUri String?  @map("redirect_uri")
+  createdAt   DateTime @default(now()) @map("created_at")
+  expiresAt   DateTime @map("expires_at")
+
+  @@index([expiresAt])
+  @@map("oauth_states")
+}
+
+model OauthCallbackCode {
+  id        String   @id @default(uuid())
+  codeHash  String   @unique @map("code_hash")
+  userId    String   @map("user_id")
+  provider  String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("oauth_callback_codes")
+}
+
+model NotificationEmailPreference {
+  userId                  String   @id @map("user_id")
+  enabled                 Boolean  @default(true)
+  mentions                Boolean  @default(true)
+  mentionsTiming          String   @default("immediate") @map("mentions_timing")
+  ncrAssigned             Boolean  @default(true) @map("ncr_assigned")
+  ncrAssignedTiming       String   @default("immediate") @map("ncr_assigned_timing")
+  ncrStatusChange         Boolean  @default(true) @map("ncr_status_change")
+  ncrStatusChangeTiming   String   @default("immediate") @map("ncr_status_change_timing")
+  holdPointReminder       Boolean  @default(true) @map("hold_point_reminder")
+  holdPointReminderTiming String   @default("immediate") @map("hold_point_reminder_timing")
+  holdPointRelease        Boolean  @default(true) @map("hold_point_release")
+  holdPointReleaseTiming  String   @default("immediate") @map("hold_point_release_timing")
+  commentReply            Boolean  @default(true) @map("comment_reply")
+  commentReplyTiming      String   @default("immediate") @map("comment_reply_timing")
+  scheduledReports        Boolean  @default(true) @map("scheduled_reports")
+  scheduledReportsTiming  String   @default("immediate") @map("scheduled_reports_timing")
+  dailyDigest             Boolean  @default(false) @map("daily_digest")
+  diaryReminder           Boolean  @default(true) @map("diary_reminder")
+  diaryReminderTiming     String   @default("immediate") @map("diary_reminder_timing")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_email_preferences")
+}
+
+model NotificationDigestItem {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  type        String
+  title       String
+  message     String
+  projectName String?  @map("project_name")
+  linkUrl     String?  @map("link_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notification_digest_items")
+}
+
+model NotificationAlert {
+  id              String    @id
+  type            String
+  severity        String
+  title           String
+  message         String
+  entityId        String    @map("entity_id")
+  entityType      String    @map("entity_type")
+  projectId       String?   @map("project_id")
+  assignedToId    String    @map("assigned_to_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  resolvedAt      DateTime? @map("resolved_at")
+  escalatedAt     DateTime? @map("escalated_at")
+  escalationLevel Int       @default(0) @map("escalation_level")
+  escalatedTo     Json?     @map("escalated_to")
+
+  assignedTo User     @relation("AssignedNotificationAlerts", fields: [assignedToId], references: [id], onDelete: Cascade)
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, resolvedAt])
+  @@index([assignedToId, resolvedAt])
+  @@index([type, resolvedAt])
+  @@map("notification_alerts")
+}
+
 model Project {
-  id                String   @id @default(uuid())
-  companyId         String   @map("company_id")
+  id                String    @id @default(uuid())
+  companyId         String    @map("company_id")
   name              String
-  projectNumber     String   @map("project_number")
-  clientName        String?  @map("client_name")
-  contractValue     Decimal? @map("contract_value")
+  projectNumber     String    @map("project_number")
+  clientName        String?   @map("client_name")
+  contractValue     Decimal?  @map("contract_value")
   startDate         DateTime? @map("start_date")
   targetCompletion  DateTime? @map("target_completion")
-  status            String   @default("active")
+  status            String    @default("active")
   state             String
-  specificationSet  String   @map("specification_set")
-  chainageStart     Decimal? @map("chainage_start")
-  chainageEnd       Decimal? @map("chainage_end")
-  lotPrefix         String?  @default("LOT-") @map("lot_prefix")
-  lotStartingNumber Int?     @default(1) @map("lot_starting_number")
-  ncrPrefix         String?  @default("NCR-") @map("ncr_prefix")
-  ncrStartingNumber Int?     @default(1) @map("ncr_starting_number")
-  settings          String?   // Stored as JSON string for SQLite
+  specificationSet  String    @map("specification_set")
+  chainageStart     Decimal?  @map("chainage_start")
+  chainageEnd       Decimal?  @map("chainage_end")
+  lotPrefix         String?   @default("LOT-") @map("lot_prefix")
+  lotStartingNumber Int?      @default(1) @map("lot_starting_number")
+  ncrPrefix         String?   @default("NCR-") @map("ncr_prefix")
+  ncrStartingNumber Int?      @default(1) @map("ncr_starting_number")
+  settings          String? // Stored as JSON string for SQLite
   // Location for weather API
-  latitude          Decimal? @map("latitude")
-  longitude         Decimal? @map("longitude")
+  latitude          Decimal?  @map("latitude")
+  longitude         Decimal?  @map("longitude")
   // Working hours for notification timing
-  workingHoursStart String?  @default("07:00") @map("working_hours_start") // Format: HH:mm
-  workingHoursEnd   String?  @default("17:00") @map("working_hours_end")   // Format: HH:mm
-  workingDays       String?  @default("1,2,3,4,5") @map("working_days")    // Comma-separated: 0=Sun, 1=Mon, etc.
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  workingHoursStart String?   @default("07:00") @map("working_hours_start") // Format: HH:mm
+  workingHoursEnd   String?   @default("17:00") @map("working_hours_end") // Format: HH:mm
+  workingDays       String?   @default("1,2,3,4,5") @map("working_days") // Comma-separated: 0=Sun, 1=Mon, etc.
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  company                    Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  projectUsers               ProjectUser[]
-  projectAreas               ProjectArea[]
-  lots                       Lot[]
-  itpTemplates               ITPTemplate[]
-  ncrs                       NCR[]
-  dailyDiaries               DailyDiary[]
-  subcontractorCompanies     SubcontractorCompany[]
-  dailyDockets               DailyDocket[]
-  progressClaims             ProgressClaim[]
-  documents                  Document[]
-  drawings                   Drawing[]
-  notifications              Notification[]
-  auditLogs                  AuditLog[]
-  testResults                TestResult[]
+  company                     Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  projectUsers                ProjectUser[]
+  projectAreas                ProjectArea[]
+  lots                        Lot[]
+  itpTemplates                ITPTemplate[]
+  ncrs                        NCR[]
+  dailyDiaries                DailyDiary[]
+  subcontractorCompanies      SubcontractorCompany[]
+  dailyDockets                DailyDocket[]
+  progressClaims              ProgressClaim[]
+  documents                   Document[]
+  drawings                    Drawing[]
+  notifications               Notification[]
+  notificationAlerts          NotificationAlert[]
+  auditLogs                   AuditLog[]
+  testResults                 TestResult[]
   lotSubcontractorAssignments LotSubcontractorAssignment[]
   scheduledReports            ScheduledReport[]
 
   @@unique([companyId, projectNumber])
+  @@index([companyId, status])
+  @@index([status, createdAt])
   @@map("projects")
 }
 
@@ -205,6 +404,7 @@ model ProjectArea {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@index([projectId, chainageStart])
   @@map("project_areas")
 }
 
@@ -286,7 +486,7 @@ model ITPTemplate {
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
-  project        Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   checklistItems ITPChecklistItem[]
   lots           Lot[]
   itpInstances   ITPInstance[]
@@ -409,9 +609,9 @@ model HoldPoint {
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  lot               Lot              @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  itpChecklistItem  ITPChecklistItem @relation(fields: [itpChecklistItemId], references: [id], onDelete: Restrict)
-  releaseTokens     HoldPointReleaseToken[]
+  lot              Lot                     @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  itpChecklistItem ITPChecklistItem        @relation(fields: [itpChecklistItemId], references: [id], onDelete: Restrict)
+  releaseTokens    HoldPointReleaseToken[]
 
   @@index([lotId])
   @@index([status, createdAt])
@@ -421,18 +621,18 @@ model HoldPoint {
 
 // Hold Point Release Tokens for external superintendent release (Feature #23)
 model HoldPointReleaseToken {
-  id                 String    @id @default(uuid())
-  holdPointId        String    @map("hold_point_id")
-  recipientEmail     String    @map("recipient_email")
-  recipientName      String?   @map("recipient_name")
-  token              String    @unique
-  expiresAt          DateTime  @map("expires_at")
-  usedAt             DateTime? @map("used_at")
-  releasedByName     String?   @map("released_by_name")
-  releasedByOrg      String?   @map("released_by_org")
-  releaseSignatureUrl String?  @map("release_signature_url")
-  releaseNotes       String?   @map("release_notes")
-  createdAt          DateTime  @default(now()) @map("created_at")
+  id                  String    @id @default(uuid())
+  holdPointId         String    @map("hold_point_id")
+  recipientEmail      String    @map("recipient_email")
+  recipientName       String?   @map("recipient_name")
+  token               String    @unique
+  expiresAt           DateTime  @map("expires_at")
+  usedAt              DateTime? @map("used_at")
+  releasedByName      String?   @map("released_by_name")
+  releasedByOrg       String?   @map("released_by_org")
+  releaseSignatureUrl String?   @map("release_signature_url")
+  releaseNotes        String?   @map("release_notes")
+  createdAt           DateTime  @default(now()) @map("created_at")
 
   holdPoint HoldPoint @relation(fields: [holdPointId], references: [id], onDelete: Cascade)
 
@@ -444,36 +644,36 @@ model HoldPointReleaseToken {
 // ============================================================================
 
 model TestResult {
-  id                    String    @id @default(uuid())
-  projectId             String    @map("project_id")
-  lotId                 String?   @map("lot_id")
-  itpChecklistItemId    String?   @map("itp_checklist_item_id")
-  testType              String    @map("test_type")
-  testRequestNumber     String?   @map("test_request_number")
-  laboratoryName        String?   @map("laboratory_name")
-  laboratoryReportNumber String?  @map("laboratory_report_number")
-  sampleDate            DateTime? @map("sample_date")
-  sampleLocation        String?   @map("sample_location")
-  testDate              DateTime? @map("test_date")
-  resultDate            DateTime? @map("result_date")
-  resultValue           Decimal?  @map("result_value")
-  resultUnit            String?   @map("result_unit")
-  specificationMin      Decimal?  @map("specification_min")
-  specificationMax      Decimal?  @map("specification_max")
-  passFail              String    @default("pending") @map("pass_fail")
-  certificateDocId      String?   @map("certificate_document_id")
-  status                String    @default("requested")
-  enteredById           String?   @map("entered_by")
-  enteredAt             DateTime? @map("entered_at")
-  verifiedById          String?   @map("verified_by")
-  verifiedAt            DateTime? @map("verified_at")
-  rejectedById          String?   @map("rejected_by")
-  rejectedAt            DateTime? @map("rejected_at")
-  rejectionReason       String?   @map("rejection_reason")
-  aiExtracted           Boolean   @default(false) @map("ai_extracted")
-  aiConfidence          String?   @map("ai_confidence")  // Stored as JSON string for SQLite
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  id                     String    @id @default(uuid())
+  projectId              String    @map("project_id")
+  lotId                  String?   @map("lot_id")
+  itpChecklistItemId     String?   @map("itp_checklist_item_id")
+  testType               String    @map("test_type")
+  testRequestNumber      String?   @map("test_request_number")
+  laboratoryName         String?   @map("laboratory_name")
+  laboratoryReportNumber String?   @map("laboratory_report_number")
+  sampleDate             DateTime? @map("sample_date")
+  sampleLocation         String?   @map("sample_location")
+  testDate               DateTime? @map("test_date")
+  resultDate             DateTime? @map("result_date")
+  resultValue            Decimal?  @map("result_value")
+  resultUnit             String?   @map("result_unit")
+  specificationMin       Decimal?  @map("specification_min")
+  specificationMax       Decimal?  @map("specification_max")
+  passFail               String    @default("pending") @map("pass_fail")
+  certificateDocId       String?   @map("certificate_document_id")
+  status                 String    @default("requested")
+  enteredById            String?   @map("entered_by")
+  enteredAt              DateTime? @map("entered_at")
+  verifiedById           String?   @map("verified_by")
+  verifiedAt             DateTime? @map("verified_at")
+  rejectedById           String?   @map("rejected_by")
+  rejectedAt             DateTime? @map("rejected_at")
+  rejectionReason        String?   @map("rejection_reason")
+  aiExtracted            Boolean   @default(false) @map("ai_extracted")
+  aiConfidence           String?   @map("ai_confidence") // Stored as JSON string for SQLite
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   lot              Lot?              @relation(fields: [lotId], references: [id], onDelete: SetNull)
@@ -495,61 +695,61 @@ model TestResult {
 // ============================================================================
 
 model NCR {
-  id                        String    @id @default(uuid())
-  projectId                 String    @map("project_id")
-  ncrNumber                 String    @map("ncr_number")
-  description               String
-  specificationReference    String?   @map("specification_reference")
-  category                  String
-  severity                  String    @default("minor") // minor, major
-  status                    String    @default("open")
-  qmApprovalRequired        Boolean   @default(false) @map("qm_approval_required")
-  qmApprovedById            String?   @map("qm_approved_by")
-  qmApprovedAt              DateTime? @map("qm_approved_at")
-  raisedById                String?   @map("raised_by")
-  raisedAt                  DateTime  @default(now()) @map("raised_at")
-  responsibleUserId         String?   @map("responsible_user_id")
-  responsibleSubcontractorId String?  @map("responsible_subcontractor_id")
-  dueDate                   DateTime? @map("due_date")
-  rootCauseCategory         String?   @map("root_cause_category")
-  rootCauseDescription      String?   @map("root_cause_description")
-  proposedCorrectiveAction  String?   @map("proposed_corrective_action")
-  responseSubmittedAt       DateTime? @map("response_submitted_at")
-  rectificationNotes        String?   @map("rectification_notes")
-  rectificationSubmittedAt  DateTime? @map("rectification_submitted_at")
-  verifiedById              String?   @map("verified_by")
-  verifiedAt                DateTime? @map("verified_at")
-  verificationNotes         String?   @map("verification_notes")
-  closedById                String?   @map("closed_by")
-  closedAt                  DateTime? @map("closed_at")
-  concessionJustification   String?   @map("concession_justification")
-  concessionRiskAssessment  String?   @map("concession_risk_assessment")
-  clientNotificationRequired Boolean  @default(false) @map("client_notification_required")
-  clientNotifiedAt          DateTime? @map("client_notified_at")
-  lessonsLearned            String?   @map("lessons_learned")
+  id                         String    @id @default(uuid())
+  projectId                  String    @map("project_id")
+  ncrNumber                  String    @map("ncr_number")
+  description                String
+  specificationReference     String?   @map("specification_reference")
+  category                   String
+  severity                   String    @default("minor") // minor, major
+  status                     String    @default("open")
+  qmApprovalRequired         Boolean   @default(false) @map("qm_approval_required")
+  qmApprovedById             String?   @map("qm_approved_by")
+  qmApprovedAt               DateTime? @map("qm_approved_at")
+  raisedById                 String?   @map("raised_by")
+  raisedAt                   DateTime  @default(now()) @map("raised_at")
+  responsibleUserId          String?   @map("responsible_user_id")
+  responsibleSubcontractorId String?   @map("responsible_subcontractor_id")
+  dueDate                    DateTime? @map("due_date")
+  rootCauseCategory          String?   @map("root_cause_category")
+  rootCauseDescription       String?   @map("root_cause_description")
+  proposedCorrectiveAction   String?   @map("proposed_corrective_action")
+  responseSubmittedAt        DateTime? @map("response_submitted_at")
+  rectificationNotes         String?   @map("rectification_notes")
+  rectificationSubmittedAt   DateTime? @map("rectification_submitted_at")
+  verifiedById               String?   @map("verified_by")
+  verifiedAt                 DateTime? @map("verified_at")
+  verificationNotes          String?   @map("verification_notes")
+  closedById                 String?   @map("closed_by")
+  closedAt                   DateTime? @map("closed_at")
+  concessionJustification    String?   @map("concession_justification")
+  concessionRiskAssessment   String?   @map("concession_risk_assessment")
+  clientNotificationRequired Boolean   @default(false) @map("client_notification_required")
+  clientNotifiedAt           DateTime? @map("client_notified_at")
+  lessonsLearned             String?   @map("lessons_learned")
 
   // Response fields
-  response                  String?   @map("response")
-  respondedAt               DateTime? @map("responded_at")
-  respondedById             String?   @map("responded_by")
+  response      String?   @map("response")
+  respondedAt   DateTime? @map("responded_at")
+  respondedById String?   @map("responded_by")
 
   // QM Review fields
-  qmReviewedAt              DateTime? @map("qm_reviewed_at")
-  qmReviewedById            String?   @map("qm_reviewed_by")
-  qmReviewComments          String?   @map("qm_review_comments")
+  qmReviewedAt     DateTime? @map("qm_reviewed_at")
+  qmReviewedById   String?   @map("qm_reviewed_by")
+  qmReviewComments String?   @map("qm_review_comments")
 
   // Revision request fields
-  revisionRequested         Boolean   @default(false) @map("revision_requested")
-  revisionRequestedAt       DateTime? @map("revision_requested_at")
-  revisionCount             Int       @default(0) @map("revision_count")
+  revisionRequested   Boolean   @default(false) @map("revision_requested")
+  revisionRequestedAt DateTime? @map("revision_requested_at")
+  revisionCount       Int       @default(0) @map("revision_count")
 
   // Escalation fields
-  escalatedAt               DateTime? @map("escalated_at")
-  escalatedById             String?   @map("escalated_by")
-  escalationReason          String?   @map("escalation_reason")
+  escalatedAt      DateTime? @map("escalated_at")
+  escalatedById    String?   @map("escalated_by")
+  escalationReason String?   @map("escalation_reason")
 
-  createdAt                 DateTime  @default(now()) @map("created_at")
-  updatedAt                 DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   project                  Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   respondedBy              User?                 @relation("RespondedByUser", fields: [respondedById], references: [id], onDelete: SetNull)
@@ -562,7 +762,7 @@ model NCR {
   closedBy                 User?                 @relation("ClosedByUser", fields: [closedById], references: [id], onDelete: SetNull)
   qmApprovedBy             User?                 @relation("QMApprovedByUser", fields: [qmApprovedById], references: [id], onDelete: SetNull)
 
-  ncrLots   NCRLot[]
+  ncrLots     NCRLot[]
   ncrEvidence NCREvidence[]
 
   @@unique([projectId, ncrNumber])
@@ -621,8 +821,8 @@ model DailyDiary {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  submittedBy User?           @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submittedBy User?   @relation(fields: [submittedById], references: [id], onDelete: SetNull)
 
   personnel  DiaryPersonnel[]
   plant      DiaryPlant[]
@@ -781,16 +981,16 @@ model DiaryAddendum {
 // Global subcontractor directory - stores company info at organization level
 // Subcontractors can be quickly invited to multiple projects without re-entering details
 model GlobalSubcontractor {
-  id                  String    @id @default(uuid())
-  organizationId      String    @map("organization_id")
-  companyName         String    @map("company_name")
+  id                  String   @id @default(uuid())
+  organizationId      String   @map("organization_id")
+  companyName         String   @map("company_name")
   abn                 String?
-  primaryContactName  String?   @map("primary_contact_name")
-  primaryContactEmail String?   @map("primary_contact_email")
-  primaryContactPhone String?   @map("primary_contact_phone")
-  status              String    @default("active")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  primaryContactName  String?  @map("primary_contact_name")
+  primaryContactEmail String?  @map("primary_contact_email")
+  primaryContactPhone String?  @map("primary_contact_phone")
+  status              String   @default("active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   organization          Company                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projectSubcontractors SubcontractorCompany[]
@@ -815,25 +1015,26 @@ model SubcontractorCompany {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  globalSubcontractor  GlobalSubcontractor? @relation(fields: [globalSubcontractorId], references: [id], onDelete: SetNull)
-  users                SubcontractorUser[]
-  employeeRoster       EmployeeRoster[]
-  plantRegister        PlantRegister[]
-  dailyDockets         DailyDocket[]
-  assignedLots         Lot[]
-  responsibleNCRs      NCR[]
-  lotAssignments       LotSubcontractorAssignment[]
+  project             Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  globalSubcontractor GlobalSubcontractor?         @relation(fields: [globalSubcontractorId], references: [id], onDelete: SetNull)
+  users               SubcontractorUser[]
+  employeeRoster      EmployeeRoster[]
+  plantRegister       PlantRegister[]
+  dailyDockets        DailyDocket[]
+  assignedLots        Lot[]
+  responsibleNCRs     NCR[]
+  lotAssignments      LotSubcontractorAssignment[]
 
+  @@index([projectId, status])
   @@map("subcontractor_companies")
 }
 
 model SubcontractorUser {
-  id                    String   @id @default(uuid())
-  subcontractorCompanyId String  @map("subcontractor_company_id")
-  userId                String   @map("user_id")
-  role                  String   @default("user")
-  createdAt             DateTime @default(now()) @map("created_at")
+  id                     String   @id @default(uuid())
+  subcontractorCompanyId String   @map("subcontractor_company_id")
+  userId                 String   @map("user_id")
+  role                   String   @default("user")
+  createdAt              DateTime @default(now()) @map("created_at")
 
   subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
   user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -845,25 +1046,25 @@ model SubcontractorUser {
 
 // Lot-level subcontractor assignment with ITP permissions
 model LotSubcontractorAssignment {
-  id                      String    @id @default(uuid())
-  lotId                   String    @map("lot_id")
-  subcontractorCompanyId  String    @map("subcontractor_company_id")
-  projectId               String    @map("project_id")
+  id                     String @id @default(uuid())
+  lotId                  String @map("lot_id")
+  subcontractorCompanyId String @map("subcontractor_company_id")
+  projectId              String @map("project_id")
 
   // ITP Permissions
-  canCompleteITP          Boolean   @default(false) @map("can_complete_itp")
-  itpRequiresVerification Boolean   @default(true) @map("itp_requires_verification")
+  canCompleteITP          Boolean @default(false) @map("can_complete_itp")
+  itpRequiresVerification Boolean @default(true) @map("itp_requires_verification")
 
   // Metadata
-  status                  String    @default("active")
-  assignedAt              DateTime  @default(now()) @map("assigned_at")
-  assignedById            String?   @map("assigned_by_id")
-  updatedAt               DateTime  @updatedAt @map("updated_at")
+  status       String   @default("active")
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+  assignedById String?  @map("assigned_by_id")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  lot                     Lot       @relation(fields: [lotId], references: [id], onDelete: Cascade)
-  subcontractorCompany    SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
-  project                 Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignedBy              User?     @relation("AssignedByUser", fields: [assignedById], references: [id], onDelete: SetNull)
+  lot                  Lot                  @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
+  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedBy           User?                @relation("AssignedByUser", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@unique([lotId, subcontractorCompanyId])
   @@index([projectId])
@@ -873,61 +1074,63 @@ model LotSubcontractorAssignment {
 }
 
 model EmployeeRoster {
-  id                    String    @id @default(uuid())
-  subcontractorCompanyId String   @map("subcontractor_company_id")
-  name                  String
-  phone                 String?
-  role                  String?
-  hourlyRate            Decimal   @map("hourly_rate")
-  status                String    @default("pending")
-  approvedById          String?   @map("approved_by")
-  approvedAt            DateTime? @map("approved_at")
-  createdAt             DateTime  @default(now()) @map("created_at")
+  id                     String    @id @default(uuid())
+  subcontractorCompanyId String    @map("subcontractor_company_id")
+  name                   String
+  phone                  String?
+  role                   String?
+  hourlyRate             Decimal   @map("hourly_rate")
+  status                 String    @default("pending")
+  approvedById           String?   @map("approved_by")
+  approvedAt             DateTime? @map("approved_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
 
   subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
   docketLabour         DocketLabour[]
 
+  @@index([subcontractorCompanyId, status])
   @@map("employee_roster")
 }
 
 model PlantRegister {
-  id                    String    @id @default(uuid())
-  subcontractorCompanyId String   @map("subcontractor_company_id")
-  type                  String
-  description           String?
-  idRego                String?   @map("id_rego")
-  dryRate               Decimal?  @map("dry_rate")
-  wetRate               Decimal?  @map("wet_rate")
-  status                String    @default("pending")
-  approvedById          String?   @map("approved_by")
-  approvedAt            DateTime? @map("approved_at")
-  createdAt             DateTime  @default(now()) @map("created_at")
+  id                     String    @id @default(uuid())
+  subcontractorCompanyId String    @map("subcontractor_company_id")
+  type                   String
+  description            String?
+  idRego                 String?   @map("id_rego")
+  dryRate                Decimal?  @map("dry_rate")
+  wetRate                Decimal?  @map("wet_rate")
+  status                 String    @default("pending")
+  approvedById           String?   @map("approved_by")
+  approvedAt             DateTime? @map("approved_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
 
   subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
   docketPlant          DocketPlant[]
 
+  @@index([subcontractorCompanyId, status])
   @@map("plant_register")
 }
 
 model DailyDocket {
-  id                    String    @id @default(uuid())
-  subcontractorCompanyId String   @map("subcontractor_company_id")
-  projectId             String    @map("project_id")
-  date                  DateTime
-  status                String    @default("draft")
-  submittedById         String?   @map("submitted_by")
-  submittedAt           DateTime? @map("submitted_at")
-  approvedById          String?   @map("approved_by")
-  approvedAt            DateTime? @map("approved_at")
-  foremanNotes          String?   @map("foreman_notes")
-  adjustmentReason      String?   @map("adjustment_reason")
-  notes                 String?
-  totalLabourSubmitted  Decimal?  @map("total_labour_submitted")
-  totalLabourApproved   Decimal?  @map("total_labour_approved")
-  totalPlantSubmitted   Decimal?  @map("total_plant_submitted")
-  totalPlantApproved    Decimal?  @map("total_plant_approved")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  id                     String    @id @default(uuid())
+  subcontractorCompanyId String    @map("subcontractor_company_id")
+  projectId              String    @map("project_id")
+  date                   DateTime
+  status                 String    @default("draft")
+  submittedById          String?   @map("submitted_by")
+  submittedAt            DateTime? @map("submitted_at")
+  approvedById           String?   @map("approved_by")
+  approvedAt             DateTime? @map("approved_at")
+  foremanNotes           String?   @map("foreman_notes")
+  adjustmentReason       String?   @map("adjustment_reason")
+  notes                  String?
+  totalLabourSubmitted   Decimal?  @map("total_labour_submitted")
+  totalLabourApproved    Decimal?  @map("total_labour_approved")
+  totalPlantSubmitted    Decimal?  @map("total_plant_submitted")
+  totalPlantApproved     Decimal?  @map("total_plant_approved")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
   project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -939,6 +1142,7 @@ model DailyDocket {
 
   @@index([projectId, date])
   @@index([projectId, status])
+  @@index([subcontractorCompanyId, date])
   @@map("daily_dockets")
 }
 
@@ -955,11 +1159,13 @@ model DocketLabour {
   approvedCost     Decimal? @map("approved_cost")
   adjustmentReason String?  @map("adjustment_reason")
 
-  docket   DailyDocket     @relation(fields: [docketId], references: [id], onDelete: Cascade)
-  employee EmployeeRoster  @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  docket   DailyDocket    @relation(fields: [docketId], references: [id], onDelete: Cascade)
+  employee EmployeeRoster @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
   lotAllocations DocketLabourLot[]
 
+  @@index([docketId])
+  @@index([employeeId])
   @@map("docket_labour")
 }
 
@@ -972,6 +1178,8 @@ model DocketLabourLot {
   docketLabour DocketLabour @relation(fields: [docketLabourId], references: [id], onDelete: Cascade)
   lot          Lot          @relation(fields: [lotId], references: [id], onDelete: Cascade)
 
+  @@index([docketLabourId])
+  @@index([lotId])
   @@map("docket_labour_lots")
 }
 
@@ -991,6 +1199,8 @@ model DocketPlant {
 
   lotAllocations DocketPlantLot[]
 
+  @@index([docketId])
+  @@index([plantId])
   @@map("docket_plant")
 }
 
@@ -1003,6 +1213,8 @@ model DocketPlantLot {
   docketPlant DocketPlant @relation(fields: [docketPlantId], references: [id], onDelete: Cascade)
   lot         Lot         @relation(fields: [lotId], references: [id], onDelete: Cascade)
 
+  @@index([docketPlantId])
+  @@index([lotId])
   @@map("docket_plant_lots")
 }
 
@@ -1011,31 +1223,31 @@ model DocketPlantLot {
 // ============================================================================
 
 model ProgressClaim {
-  id                    String    @id @default(uuid())
-  projectId             String    @map("project_id")
-  claimNumber           Int       @map("claim_number")
-  claimPeriodStart      DateTime  @map("claim_period_start")
-  claimPeriodEnd        DateTime  @map("claim_period_end")
-  status                String    @default("draft")
-  preparedById          String?   @map("prepared_by")
-  preparedAt            DateTime? @map("prepared_at")
-  submittedAt           DateTime? @map("submitted_at")
-  submittedTo           String?   @map("submitted_to")
-  totalClaimedAmount    Decimal?  @map("total_claimed_amount")
-  certifiedAmount       Decimal?  @map("certified_amount")
-  certifiedAt           DateTime? @map("certified_at")
-  paidAmount            Decimal?  @map("paid_amount")
-  paidAt                DateTime? @map("paid_at")
-  paymentReference      String?   @map("payment_reference")
-  evidencePackageUrl    String?   @map("evidence_package_url")
-  sopaStatementGenerated Boolean  @default(false) @map("sopa_statement_generated")
-  disputedAt            DateTime? @map("disputed_at")
-  disputeNotes          String?   @map("dispute_notes")
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  id                     String    @id @default(uuid())
+  projectId              String    @map("project_id")
+  claimNumber            Int       @map("claim_number")
+  claimPeriodStart       DateTime  @map("claim_period_start")
+  claimPeriodEnd         DateTime  @map("claim_period_end")
+  status                 String    @default("draft")
+  preparedById           String?   @map("prepared_by")
+  preparedAt             DateTime? @map("prepared_at")
+  submittedAt            DateTime? @map("submitted_at")
+  submittedTo            String?   @map("submitted_to")
+  totalClaimedAmount     Decimal?  @map("total_claimed_amount")
+  certifiedAmount        Decimal?  @map("certified_amount")
+  certifiedAt            DateTime? @map("certified_at")
+  paidAmount             Decimal?  @map("paid_amount")
+  paidAt                 DateTime? @map("paid_at")
+  paymentReference       String?   @map("payment_reference")
+  evidencePackageUrl     String?   @map("evidence_package_url")
+  sopaStatementGenerated Boolean   @default(false) @map("sopa_statement_generated")
+  disputedAt             DateTime? @map("disputed_at")
+  disputeNotes           String?   @map("dispute_notes")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
-  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  preparedBy User?        @relation(fields: [preparedById], references: [id], onDelete: SetNull)
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  preparedBy User?   @relation(fields: [preparedById], references: [id], onDelete: SetNull)
 
   claimedLots ClaimedLot[]
   lots        Lot[]
@@ -1084,7 +1296,7 @@ model Document {
   captureTimestamp DateTime? @map("capture_timestamp")
   aiClassification String?   @map("ai_classification")
   caption          String?
-  tags             String?   // Stored as JSON string for SQLite
+  tags             String? // Stored as JSON string for SQLite
   isFavourite      Boolean   @default(false) @map("is_favourite")
   createdAt        DateTime  @default(now()) @map("created_at")
   // Feature #481: Document version tracking
@@ -1092,20 +1304,41 @@ model Document {
   parentDocumentId String?   @map("parent_document_id")
   isLatestVersion  Boolean   @default(true) @map("is_latest_version")
 
-  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lot            Lot?      @relation(fields: [lotId], references: [id], onDelete: SetNull)
-  uploadedBy     User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
-  parentDocument Document? @relation("DocumentVersions", fields: [parentDocumentId], references: [id], onDelete: SetNull)
+  project        Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lot            Lot?       @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  uploadedBy     User?      @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  parentDocument Document?  @relation("DocumentVersions", fields: [parentDocumentId], references: [id], onDelete: SetNull)
   childVersions  Document[] @relation("DocumentVersions")
 
   itpCompletionAttachments ITPCompletionAttachment[]
   ncrEvidence              NCREvidence[]
   testCertificates         TestResult[]
   drawings                 Drawing[]
+  signedUrlTokens          DocumentSignedUrlToken[]
 
   @@index([projectId, documentType])
   @@index([projectId, lotId])
+  @@index([projectId, uploadedAt])
+  @@index([uploadedById, uploadedAt])
+  @@index([parentDocumentId])
   @@map("documents")
+}
+
+model DocumentSignedUrlToken {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique @map("token_hash")
+  documentId String   @map("document_id")
+  userId     String   @map("user_id")
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, expiresAt])
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("document_signed_url_tokens")
 }
 
 model Drawing {
@@ -1121,11 +1354,15 @@ model Drawing {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  document    Document  @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Restrict)
   supersededBy Drawing?  @relation("DrawingSupersedes", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes   Drawing[] @relation("DrawingSupersedes")
 
+  @@index([projectId, drawingNumber, revision])
+  @@index([projectId, status])
+  @@index([projectId, supersededById])
+  @@index([documentId])
   @@map("drawings")
 }
 
@@ -1134,15 +1371,15 @@ model Drawing {
 // ============================================================================
 
 model Notification {
-  id        String    @id @default(uuid())
-  userId    String    @map("user_id")
-  projectId String?   @map("project_id")
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  projectId String?  @map("project_id")
   type      String
   title     String
   message   String?
-  linkUrl   String?   @map("link_url")
-  isRead    Boolean   @default(false) @map("is_read")
-  createdAt DateTime  @default(now()) @map("created_at")
+  linkUrl   String?  @map("link_url")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
 
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1159,7 +1396,7 @@ model AuditLog {
   entityType String   @map("entity_type")
   entityId   String   @map("entity_id")
   action     String
-  changes    String?  // Stored as JSON string for SQLite
+  changes    String? // Stored as JSON string for SQLite
   ipAddress  String?  @map("ip_address")
   userAgent  String?  @map("user_agent")
   createdAt  DateTime @default(now()) @map("created_at")
@@ -1168,6 +1405,7 @@ model AuditLog {
   user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])
+  @@index([userId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
 }
@@ -1179,7 +1417,7 @@ model SyncQueue {
   entityType         String    @map("entity_type")
   entityId           String?   @map("entity_id")
   action             String
-  payload            String  // Stored as JSON string for SQLite
+  payload            String // Stored as JSON string for SQLite
   status             String    @default("pending")
   createdAt          DateTime  @default(now()) @map("created_at")
   syncedAt           DateTime? @map("synced_at")
@@ -1187,6 +1425,7 @@ model SyncQueue {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, createdAt])
   @@map("sync_queue")
 }
 
@@ -1195,15 +1434,17 @@ model SyncQueue {
 // ============================================================================
 
 model PasswordResetToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, usedAt, expiresAt])
+  @@index([expiresAt])
   @@map("password_reset_tokens")
 }
 
@@ -1212,15 +1453,17 @@ model PasswordResetToken {
 // ============================================================================
 
 model EmailVerificationToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  expiresAt DateTime @map("expires_at")
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, usedAt, expiresAt])
+  @@index([expiresAt])
   @@map("email_verification_tokens")
 }
 
@@ -1229,24 +1472,27 @@ model EmailVerificationToken {
 // ============================================================================
 
 model ScheduledReport {
-  id           String   @id @default(uuid())
-  projectId    String   @map("project_id")
-  reportType   String   @map("report_type") // lot-status, ncr, test, diary
-  frequency    String   // daily, weekly, monthly
-  dayOfWeek    Int?     @map("day_of_week") // 0-6 for weekly reports (0=Sunday)
-  dayOfMonth   Int?     @map("day_of_month") // 1-31 for monthly reports
-  timeOfDay    String   @default("09:00") @map("time_of_day") // HH:mm format
-  recipients   String   // Comma-separated email addresses
-  isActive     Boolean  @default(true) @map("is_active")
-  lastSentAt   DateTime? @map("last_sent_at")
-  nextRunAt    DateTime? @map("next_run_at")
-  createdById  String?  @map("created_by")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id          String    @id @default(uuid())
+  projectId   String    @map("project_id")
+  reportType  String    @map("report_type") // lot-status, ncr, test, diary
+  frequency   String // daily, weekly, monthly
+  dayOfWeek   Int?      @map("day_of_week") // 0-6 for weekly reports (0=Sunday)
+  dayOfMonth  Int?      @map("day_of_month") // 1-31 for monthly reports
+  timeOfDay   String    @default("09:00") @map("time_of_day") // HH:mm format
+  recipients  String // Comma-separated email addresses
+  isActive    Boolean   @default(true) @map("is_active")
+  lastSentAt  DateTime? @map("last_sent_at")
+  nextRunAt   DateTime? @map("next_run_at")
+  createdById String?   @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
+  @@index([isActive, nextRunAt, createdAt])
+  @@index([projectId, createdAt])
+  @@index([createdById, createdAt])
   @@map("scheduled_reports")
 }
 
@@ -1255,17 +1501,17 @@ model ScheduledReport {
 // ============================================================================
 
 model Comment {
-  id           String    @id @default(uuid())
-  entityType   String    @map("entity_type") // Lot, NCR, TestResult, etc.
-  entityId     String    @map("entity_id")
-  parentId     String?   @map("parent_id") // For reply threading
-  content      String
-  authorId     String?   @map("author_id")
-  isEdited     Boolean   @default(false) @map("is_edited")
-  editedAt     DateTime? @map("edited_at")
-  deletedAt    DateTime? @map("deleted_at") // Soft delete
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id         String    @id @default(uuid())
+  entityType String    @map("entity_type") // Lot, NCR, TestResult, etc.
+  entityId   String    @map("entity_id")
+  parentId   String?   @map("parent_id") // For reply threading
+  content    String
+  authorId   String?   @map("author_id")
+  isEdited   Boolean   @default(false) @map("is_edited")
+  editedAt   DateTime? @map("edited_at")
+  deletedAt  DateTime? @map("deleted_at") // Soft delete
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
   author      User?               @relation(fields: [authorId], references: [id], onDelete: SetNull)
   parent      Comment?            @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)

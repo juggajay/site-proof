@@ -1,111 +1,140 @@
-import { useState, useRef } from 'react'
-import { apiFetch } from '@/lib/api'
-import { toast } from '@/components/ui/toaster'
-import { Upload, FileText, AlertCircle, AlertTriangle, CheckCircle2, Loader2, Download } from 'lucide-react'
-import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
+import { useState, useRef } from 'react';
+import { apiFetch } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import {
+  Upload,
+  FileText,
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Download,
+} from 'lucide-react';
+import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { downloadCsv } from '@/lib/csv';
+import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 
 interface ImportLotsModalProps {
-  projectId: string
-  onClose: () => void
-  onSuccess: () => void
+  projectId: string;
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
 interface ValidationError {
-  row: number
-  field: string
-  message: string
-  type: 'error' | 'warning'
+  row: number;
+  field: string;
+  message: string;
+  type: 'error' | 'warning';
 }
 
 interface ParsedLot {
-  row: number
-  lotNumber: string
-  description: string
-  chainageStart: string
-  chainageEnd: string
-  activityType: string
-  status: string
+  row: number;
+  lotNumber: string;
+  description: string;
+  chainageStart: string;
+  chainageEnd: string;
+  activityType: string;
+  status: string;
 }
 
 interface ValidationResult {
-  lots: ParsedLot[]
-  errors: ValidationError[]
-  warnings: ValidationError[]
-  isValid: boolean
+  lots: ParsedLot[];
+  errors: ValidationError[];
+  warnings: ValidationError[];
+  isValid: boolean;
+}
+
+function parseChainageInput(value: string): number | null {
+  return parseOptionalNonNegativeDecimalInput(value);
 }
 
 export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsModalProps) {
-  const [step, setStep] = useState<'upload' | 'validation' | 'importing'>('upload')
-  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
-  const [, setImporting] = useState(false)
-  const [importProgress, setImportProgress] = useState(0)
-  const [strictMode, setStrictMode] = useState(true) // Default to strict mode for atomicity
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [step, setStep] = useState<'upload' | 'validation' | 'importing'>('upload');
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [strictMode, setStrictMode] = useState(true); // Default to strict mode for atomicity
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Parse CSV content
   const parseCSV = (content: string): ParsedLot[] => {
-    const lines = content.trim().split('\n')
-    if (lines.length < 2) return [] // Need header + at least one row
+    const lines = content.trim().split('\n');
+    if (lines.length < 2) return []; // Need header + at least one row
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''))
-    const lots: ParsedLot[] = []
+    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/['"]/g, ''));
+    const lots: ParsedLot[] = [];
 
     for (let i = 1; i < lines.length; i++) {
-      const values = parseCSVLine(lines[i])
+      const values = parseCSVLine(lines[i]);
 
       const lot: ParsedLot = {
         row: i + 1, // 1-indexed for user display
         lotNumber: getFieldValue(headers, values, ['lot_number', 'lotnumber', 'lot number', 'lot']),
         description: getFieldValue(headers, values, ['description', 'desc']),
-        chainageStart: getFieldValue(headers, values, ['chainage_start', 'chainagestart', 'start_chainage', 'start']),
-        chainageEnd: getFieldValue(headers, values, ['chainage_end', 'chainageend', 'end_chainage', 'end']),
-        activityType: getFieldValue(headers, values, ['activity_type', 'activitytype', 'activity', 'type']),
+        chainageStart: getFieldValue(headers, values, [
+          'chainage_start',
+          'chainagestart',
+          'start_chainage',
+          'start',
+        ]),
+        chainageEnd: getFieldValue(headers, values, [
+          'chainage_end',
+          'chainageend',
+          'end_chainage',
+          'end',
+        ]),
+        activityType: getFieldValue(headers, values, [
+          'activity_type',
+          'activitytype',
+          'activity',
+          'type',
+        ]),
         status: getFieldValue(headers, values, ['status']),
-      }
-      lots.push(lot)
+      };
+      lots.push(lot);
     }
 
-    return lots
-  }
+    return lots;
+  };
 
   // Parse a single CSV line, handling quoted values
   const parseCSVLine = (line: string): string[] => {
-    const result: string[] = []
-    let current = ''
-    let inQuotes = false
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
 
     for (let i = 0; i < line.length; i++) {
-      const char = line[i]
+      const char = line[i];
       if (char === '"') {
-        inQuotes = !inQuotes
+        inQuotes = !inQuotes;
       } else if (char === ',' && !inQuotes) {
-        result.push(current.trim())
-        current = ''
+        result.push(current.trim());
+        current = '';
       } else {
-        current += char
+        current += char;
       }
     }
-    result.push(current.trim())
-    return result
-  }
+    result.push(current.trim());
+    return result;
+  };
 
   // Get field value by trying multiple possible column names
   const getFieldValue = (headers: string[], values: string[], possibleNames: string[]): string => {
     for (const name of possibleNames) {
-      const index = headers.indexOf(name)
+      const index = headers.indexOf(name);
       if (index !== -1 && index < values.length) {
-        return values[index].replace(/^["']|["']$/g, '')
+        return values[index].replace(/^["']|["']$/g, '');
       }
     }
-    return ''
-  }
+    return '';
+  };
 
   // Validate parsed lots
   const validateLots = (lots: ParsedLot[]): ValidationResult => {
-    const errors: ValidationError[] = []
-    const warnings: ValidationError[] = []
-    const lotNumbers = new Set<string>()
+    const errors: ValidationError[] = [];
+    const warnings: ValidationError[] = [];
+    const lotNumbers = new Set<string>();
 
     for (const lot of lots) {
       // Required field validation - ERRORS
@@ -114,61 +143,59 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
           row: lot.row,
           field: 'Lot Number',
           message: 'Lot Number is required',
-          type: 'error'
-        })
+          type: 'error',
+        });
       } else if (lot.lotNumber.length < 3) {
         errors.push({
           row: lot.row,
           field: 'Lot Number',
           message: 'Lot Number must be at least 3 characters',
-          type: 'error'
-        })
+          type: 'error',
+        });
       } else if (lot.lotNumber.length > 50) {
         errors.push({
           row: lot.row,
           field: 'Lot Number',
           message: 'Lot Number must be at most 50 characters',
-          type: 'error'
-        })
+          type: 'error',
+        });
       } else if (lotNumbers.has(lot.lotNumber.toLowerCase())) {
         errors.push({
           row: lot.row,
           field: 'Lot Number',
           message: `Duplicate lot number "${lot.lotNumber}" in file`,
-          type: 'error'
-        })
+          type: 'error',
+        });
       } else {
-        lotNumbers.add(lot.lotNumber.toLowerCase())
+        lotNumbers.add(lot.lotNumber.toLowerCase());
       }
 
       // Chainage validation
-      if (lot.chainageStart && lot.chainageEnd) {
-        const start = parseFloat(lot.chainageStart)
-        const end = parseFloat(lot.chainageEnd)
-        if (isNaN(start)) {
-          errors.push({
-            row: lot.row,
-            field: 'Chainage Start',
-            message: 'Invalid chainage start value (must be a number)',
-            type: 'error'
-          })
-        }
-        if (isNaN(end)) {
-          errors.push({
-            row: lot.row,
-            field: 'Chainage End',
-            message: 'Invalid chainage end value (must be a number)',
-            type: 'error'
-          })
-        }
-        if (!isNaN(start) && !isNaN(end) && end <= start) {
-          errors.push({
-            row: lot.row,
-            field: 'Chainage',
-            message: 'End chainage must be greater than start chainage',
-            type: 'error'
-          })
-        }
+      const start = parseChainageInput(lot.chainageStart);
+      const end = parseChainageInput(lot.chainageEnd);
+      if (lot.chainageStart.trim() && start === null) {
+        errors.push({
+          row: lot.row,
+          field: 'Chainage Start',
+          message: 'Invalid chainage start value (must be a number)',
+          type: 'error',
+        });
+      }
+      if (lot.chainageEnd.trim() && end === null) {
+        errors.push({
+          row: lot.row,
+          field: 'Chainage End',
+          message: 'Invalid chainage end value (must be a number)',
+          type: 'error',
+        });
+      }
+      if (start !== null && end !== null && end <= start) {
+        errors.push({
+          row: lot.row,
+          field: 'Chainage',
+          message: 'End chainage must be greater than start chainage',
+          type: 'error',
+        });
       }
 
       // WARNINGS - non-blocking issues
@@ -177,8 +204,8 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
           row: lot.row,
           field: 'Description',
           message: 'Description is empty - lot will be created without description',
-          type: 'warning'
-        })
+          type: 'warning',
+        });
       }
 
       if (!lot.activityType.trim()) {
@@ -186,18 +213,21 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
           row: lot.row,
           field: 'Activity Type',
           message: 'Activity Type is empty - will default to "Earthworks"',
-          type: 'warning'
-        })
+          type: 'warning',
+        });
       }
 
-      const validActivityTypes = ['Earthworks', 'Pavement', 'Drainage', 'Concrete', 'Structures']
-      if (lot.activityType && !validActivityTypes.some(t => t.toLowerCase() === lot.activityType.toLowerCase())) {
+      const validActivityTypes = ['Earthworks', 'Pavement', 'Drainage', 'Concrete', 'Structures'];
+      if (
+        lot.activityType &&
+        !validActivityTypes.some((t) => t.toLowerCase() === lot.activityType.toLowerCase())
+      ) {
         warnings.push({
           row: lot.row,
           field: 'Activity Type',
           message: `Unknown activity type "${lot.activityType}" - will default to "Earthworks"`,
-          type: 'warning'
-        })
+          type: 'warning',
+        });
       }
     }
 
@@ -205,87 +235,82 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
       lots,
       errors,
       warnings,
-      isValid: errors.length === 0
-    }
-  }
+      isValid: errors.length === 0,
+    };
+  };
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     if (!file.name.endsWith('.csv')) {
-      toast({ variant: 'error', description: 'Please select a CSV file' })
-      return
+      toast({ variant: 'error', description: 'Please select a CSV file' });
+      return;
     }
 
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onload = (event) => {
-      const content = event.target?.result as string
-      const lots = parseCSV(content)
+      const content = event.target?.result as string;
+      const lots = parseCSV(content);
 
       if (lots.length === 0) {
-        toast({ variant: 'error', description: 'No valid data found in CSV file' })
-        return
+        toast({ variant: 'error', description: 'No valid data found in CSV file' });
+        return;
       }
 
-      const result = validateLots(lots)
-      setValidationResult(result)
-      setStep('validation')
-    }
-    reader.readAsText(file)
+      const result = validateLots(lots);
+      setValidationResult(result);
+      setStep('validation');
+    };
+    reader.readAsText(file);
 
     // Reset input so same file can be re-selected
-    e.target.value = ''
-  }
+    e.target.value = '';
+  };
 
   // Download CSV template
   const handleDownloadTemplate = () => {
-    const headers = ['lot_number', 'description', 'chainage_start', 'chainage_end', 'activity_type']
+    const headers = [
+      'lot_number',
+      'description',
+      'chainage_start',
+      'chainage_end',
+      'activity_type',
+    ];
     const exampleRows = [
       ['LOT-001', 'Example lot description', '0', '100', 'Earthworks'],
       ['LOT-002', 'Another lot with drainage', '100', '200', 'Drainage'],
       ['LOT-003', 'Pavement section', '200', '350', 'Pavement'],
-    ]
+    ];
 
-    const csvContent = [
-      headers.join(','),
-      ...exampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n')
+    downloadCsv('lot-import-template.csv', [headers, ...exampleRows]);
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'lot-import-template.csv'
-    link.click()
-    URL.revokeObjectURL(url)
-
-    toast({ variant: 'success', description: 'Template downloaded successfully' })
-  }
+    toast({ variant: 'success', description: 'Template downloaded successfully' });
+  };
 
   // Import lots via API
   const handleImport = async () => {
-    if (!validationResult || !validationResult.isValid) return
+    if (!validationResult || !validationResult.isValid) return;
 
-    setImporting(true)
-    setStep('importing')
-    setImportProgress(0)
+    setImporting(true);
+    setStep('importing');
+    setImportProgress(0);
 
-    const lotsToImport = validationResult.lots
+    const lotsToImport = validationResult.lots;
 
     // Strict mode: Use bulk endpoint with transaction (all or nothing)
     if (strictMode) {
       try {
-        setImportProgress(50) // Show progress
+        setImportProgress(50); // Show progress
 
-        const lotsData = lotsToImport.map(lot => ({
+        const lotsData = lotsToImport.map((lot) => ({
           lotNumber: lot.lotNumber,
           description: lot.description || null,
-          chainageStart: lot.chainageStart ? parseFloat(lot.chainageStart) : null,
-          chainageEnd: lot.chainageEnd ? parseFloat(lot.chainageEnd) : null,
+          chainageStart: parseChainageInput(lot.chainageStart),
+          chainageEnd: parseChainageInput(lot.chainageEnd),
           activityType: lot.activityType || 'Earthworks',
-        }))
+        }));
 
         const data = await apiFetch<{ count: number }>('/api/lots/bulk', {
           method: 'POST',
@@ -293,33 +318,36 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
             projectId,
             lots: lotsData,
           }),
-        })
+        });
 
-        setImportProgress(100)
-        setImporting(false)
+        setImportProgress(100);
+        setImporting(false);
 
-        toast({ variant: 'success', description: `Successfully imported ${data.count} lots (strict mode - all or nothing)` })
-        onSuccess()
-        onClose()
-      } catch (err) {
-        setImportProgress(100)
-        setImporting(false)
+        toast({
+          variant: 'success',
+          description: `Successfully imported ${data.count} lots (strict mode - all or nothing)`,
+        });
+        onSuccess();
+        onClose();
+      } catch {
+        setImportProgress(100);
+        setImporting(false);
         toast({
           variant: 'error',
-          description: 'Import failed - no lots were created (strict mode rollback)'
-        })
+          description: 'Import failed - no lots were created (strict mode rollback)',
+        });
         // Don't close - let user try again or use non-strict mode
-        setStep('validation')
+        setStep('validation');
       }
-      return
+      return;
     }
 
     // Non-strict mode: Import one at a time (partial success allowed)
-    let successCount = 0
-    let failCount = 0
+    let successCount = 0;
+    let failCount = 0;
 
     for (let i = 0; i < lotsToImport.length; i++) {
-      const lot = lotsToImport[i]
+      const lot = lotsToImport[i];
 
       try {
         await apiFetch('/api/lots', {
@@ -328,31 +356,34 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
             projectId,
             lotNumber: lot.lotNumber,
             description: lot.description || null,
-            chainageStart: lot.chainageStart ? parseFloat(lot.chainageStart) : null,
-            chainageEnd: lot.chainageEnd ? parseFloat(lot.chainageEnd) : null,
+            chainageStart: parseChainageInput(lot.chainageStart),
+            chainageEnd: parseChainageInput(lot.chainageEnd),
             activityType: lot.activityType || 'Earthworks',
             status: lot.status || 'pending',
           }),
-        })
-        successCount++
-      } catch (err) {
-        failCount++
+        });
+        successCount++;
+      } catch {
+        failCount++;
       }
 
-      setImportProgress(Math.round(((i + 1) / lotsToImport.length) * 100))
+      setImportProgress(Math.round(((i + 1) / lotsToImport.length) * 100));
     }
 
-    setImporting(false)
+    setImporting(false);
 
     if (failCount === 0) {
-      toast({ variant: 'success', description: `Successfully imported ${successCount} lots` })
-      onSuccess()
-      onClose()
+      toast({ variant: 'success', description: `Successfully imported ${successCount} lots` });
+      onSuccess();
+      onClose();
     } else {
-      toast({ variant: 'error', description: `Imported ${successCount} lots, ${failCount} failed` })
-      onClose()
+      toast({
+        variant: 'error',
+        description: `Imported ${successCount} lots, ${failCount} failed`,
+      });
+      onClose();
     }
-  }
+  };
 
   return (
     <Modal onClose={onClose} className="max-w-2xl">
@@ -371,7 +402,8 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
               <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-lg font-medium mb-2">Upload CSV File</p>
               <p className="text-sm text-muted-foreground mb-4">
-                CSV should contain columns: lot_number, description, chainage_start, chainage_end, activity_type
+                CSV should contain columns: lot_number, description, chainage_start, chainage_end,
+                activity_type
               </p>
               <input
                 ref={fileInputRef}
@@ -381,9 +413,7 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                 className="hidden"
               />
               <div className="flex gap-3 justify-center">
-                <Button onClick={() => fileInputRef.current?.click()}>
-                  Select CSV File
-                </Button>
+                <Button onClick={() => fileInputRef.current?.click()}>Select CSV File</Button>
                 <Button variant="outline" onClick={handleDownloadTemplate}>
                   <Download className="h-4 w-4" />
                   Download Template
@@ -394,13 +424,24 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
             <div className="text-sm text-muted-foreground">
               <p className="font-medium mb-1">Required columns:</p>
               <ul className="list-disc list-inside space-y-1">
-                <li><code className="bg-muted px-1 rounded">lot_number</code> - Unique identifier (required)</li>
+                <li>
+                  <code className="bg-muted px-1 rounded">lot_number</code> - Unique identifier
+                  (required)
+                </li>
               </ul>
               <p className="font-medium mt-3 mb-1">Optional columns:</p>
               <ul className="list-disc list-inside space-y-1">
-                <li><code className="bg-muted px-1 rounded">description</code></li>
-                <li><code className="bg-muted px-1 rounded">chainage_start</code>, <code className="bg-muted px-1 rounded">chainage_end</code></li>
-                <li><code className="bg-muted px-1 rounded">activity_type</code> (Earthworks, Pavement, Drainage, Concrete, Structures)</li>
+                <li>
+                  <code className="bg-muted px-1 rounded">description</code>
+                </li>
+                <li>
+                  <code className="bg-muted px-1 rounded">chainage_start</code>,{' '}
+                  <code className="bg-muted px-1 rounded">chainage_end</code>
+                </li>
+                <li>
+                  <code className="bg-muted px-1 rounded">activity_type</code> (Earthworks,
+                  Pavement, Drainage, Concrete, Structures)
+                </li>
               </ul>
             </div>
           </div>
@@ -415,19 +456,25 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                 <p className="text-sm text-muted-foreground">Total Rows</p>
                 <p className="text-2xl font-bold">{validationResult.lots.length}</p>
               </div>
-              <div className={`flex-1 p-3 rounded-lg ${validationResult.errors.length > 0 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+              <div
+                className={`flex-1 p-3 rounded-lg ${validationResult.errors.length > 0 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}
+              >
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
                   <AlertCircle className="h-4 w-4 text-red-600" />
                   Errors
                 </p>
                 <p className="text-2xl font-bold text-red-600">{validationResult.errors.length}</p>
               </div>
-              <div className={`flex-1 p-3 rounded-lg ${validationResult.warnings.length > 0 ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+              <div
+                className={`flex-1 p-3 rounded-lg ${validationResult.warnings.length > 0 ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}
+              >
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
                   Warnings
                 </p>
-                <p className="text-2xl font-bold text-amber-600">{validationResult.warnings.length}</p>
+                <p className="text-2xl font-bold text-amber-600">
+                  {validationResult.warnings.length}
+                </p>
               </div>
             </div>
 
@@ -479,7 +526,9 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
               {validationResult.isValid && (
                 <div className="border border-green-200 rounded-lg p-4 bg-green-50 dark:bg-green-900/30 flex items-center gap-2 text-green-800 dark:text-green-200">
                   <CheckCircle2 className="h-5 w-5" />
-                  <span>All {validationResult.lots.length} rows passed validation. Ready to import!</span>
+                  <span>
+                    All {validationResult.lots.length} rows passed validation. Ready to import!
+                  </span>
                 </div>
               )}
             </div>
@@ -508,8 +557,8 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setValidationResult(null)
-                    setStep('upload')
+                    setValidationResult(null);
+                    setStep('upload');
                   }}
                 >
                   Upload Different File
@@ -518,10 +567,7 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                 <Button variant="outline" onClick={onClose}>
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleImport}
-                  disabled={!validationResult.isValid}
-                >
+                <Button onClick={handleImport} disabled={!validationResult.isValid}>
                   Import {validationResult.lots.length} Lots
                 </Button>
               </div>
@@ -545,5 +591,5 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
         )}
       </ModalBody>
     </Modal>
-  )
+  );
 }

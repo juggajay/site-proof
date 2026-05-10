@@ -1,30 +1,9 @@
-import { Request, Response, NextFunction } from 'express'
-import { verifyToken } from '../lib/auth.js'
-import { AppError } from '../lib/AppError.js'
+import { Request, Response, NextFunction } from 'express';
+import { verifyToken } from '../lib/auth.js';
+import { AppError } from '../lib/AppError.js';
 
 // Type alias for requests that will have user populated
-export type AuthRequest = Request
-
-// Extend Express Request to include user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string
-        userId: string
-        email: string
-        fullName: string | null
-        roleInCompany: string
-        role: string
-        companyId: string | null
-      }
-      apiKey?: {
-        id: string
-        scopes: string[]
-      }
-    }
-  }
-}
+export type AuthRequest = Request;
 
 /**
  * Middleware to require authentication for API routes
@@ -32,17 +11,21 @@ declare global {
  */
 export async function requireAuth(req: Request, _res: Response, next: NextFunction) {
   try {
-    const authHeader = req.headers.authorization
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw AppError.unauthorized('Authentication required. Please provide a valid token.')
+    if (req.user) {
+      return next();
     }
 
-    const token = authHeader.substring(7) // Remove 'Bearer ' prefix
-    const user = await verifyToken(token)
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw AppError.unauthorized('Authentication required. Please provide a valid token.');
+    }
+
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    const user = await verifyToken(token);
 
     if (!user) {
-      throw AppError.unauthorized('Invalid or expired token. Please sign in again.')
+      throw AppError.unauthorized('Invalid or expired token. Please sign in again.');
     }
 
     // Attach user to request for use in route handlers
@@ -55,11 +38,11 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       roleInCompany: user.role,
       role: user.role,
       companyId: user.companyId || null,
-    }
+    };
 
-    next()
+    next();
   } catch (error) {
-    next(error instanceof AppError ? error : AppError.unauthorized('Authentication failed.'))
+    next(error instanceof AppError ? error : AppError.unauthorized('Authentication failed.'));
   }
 }
 
@@ -69,11 +52,11 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
  */
 export async function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   try {
-    const authHeader = req.headers.authorization
+    const authHeader = req.headers.authorization;
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7)
-      const user = await verifyToken(token)
+      const token = authHeader.substring(7);
+      const user = await verifyToken(token);
       if (user) {
         req.user = {
           id: user.userId,
@@ -83,14 +66,14 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
           roleInCompany: user.role,
           role: user.role,
           companyId: user.companyId || null,
-        }
+        };
       }
     }
 
-    next()
+    next();
   } catch {
     // Silently continue without auth
-    next()
+    next();
   }
 }
 
@@ -106,7 +89,7 @@ const ROLE_HIERARCHY: Record<string, number> = {
   subcontractor: 30,
   viewer: 20,
   member: 10,
-}
+};
 
 /**
  * Middleware factory that checks if user has required role level
@@ -115,17 +98,17 @@ const ROLE_HIERARCHY: Record<string, number> = {
 export function requireRole(allowedRoles: string[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) {
-      throw AppError.unauthorized('Authentication required.')
+      throw AppError.unauthorized('Authentication required.');
     }
 
-    const userRole = req.user.roleInCompany || 'member'
+    const userRole = req.user.roleInCompany || 'member';
 
     if (!allowedRoles.includes(userRole)) {
-      throw AppError.forbidden('You do not have permission to perform this action.')
+      throw AppError.forbidden('You do not have permission to perform this action.');
     }
 
-    next()
-  }
+    next();
+  };
 }
 
 /**
@@ -135,17 +118,17 @@ export function requireRole(allowedRoles: string[]) {
 export function requireMinRole(minRole: string) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) {
-      throw AppError.unauthorized('Authentication required.')
+      throw AppError.unauthorized('Authentication required.');
     }
 
-    const userRole = req.user.roleInCompany || 'member'
-    const userLevel = ROLE_HIERARCHY[userRole] || 0
-    const requiredLevel = ROLE_HIERARCHY[minRole] || 100
+    const userRole = req.user.roleInCompany || 'member';
+    const userLevel = ROLE_HIERARCHY[userRole] || 0;
+    const requiredLevel = ROLE_HIERARCHY[minRole] || 100;
 
     if (userLevel < requiredLevel) {
-      throw AppError.forbidden('You do not have permission to perform this action.')
+      throw AppError.forbidden('You do not have permission to perform this action.');
     }
 
-    next()
-  }
+    next();
+  };
 }

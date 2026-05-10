@@ -1,8 +1,8 @@
-import React from 'react'
-import type { NCRReport } from '../types'
+import React from 'react';
+import type { NCRReport } from '../types';
 
 export interface NCRReportTabProps {
-  report: NCRReport
+  report: NCRReport;
 }
 
 export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRReportTabProps) {
@@ -16,7 +16,10 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
         </div>
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="text-3xl font-bold text-red-600">
-            {report.summary.open + report.summary.investigating + report.summary.rectification + report.summary.verification}
+            {report.summary.open +
+              report.summary.investigating +
+              report.summary.rectification +
+              report.summary.verification}
           </div>
           <div className="text-sm text-red-500">Open NCRs</div>
         </div>
@@ -53,28 +56,36 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
           <h3 className="text-lg font-medium mb-4">NCRs by Category</h3>
           <div className="space-y-3">
             {Object.entries(report.categoryCounts).map(([category, count]) => {
-              const percentage = report.totalNCRs > 0 ? Math.round((count / report.totalNCRs) * 100) : 0
+              const percentage =
+                report.totalNCRs > 0 ? Math.round((count / report.totalNCRs) * 100) : 0;
               return (
                 <div key={category}>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="capitalize">{category.replace(/_/g, ' ')}</span>
-                    <span className="font-medium">{count} ({percentage}%)</span>
+                    <span className="font-medium">
+                      {count} ({percentage}%)
+                    </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className={`h-2 rounded-full ${
-                        category === 'workmanship' ? 'bg-amber-500' :
-                        category === 'materials' ? 'bg-blue-500' :
-                        category === 'documentation' ? 'bg-green-500' :
-                        category === 'process' ? 'bg-purple-500' :
-                        category === 'design' ? 'bg-red-500' :
-                        'bg-gray-500'
+                        category === 'workmanship'
+                          ? 'bg-amber-500'
+                          : category === 'materials'
+                            ? 'bg-blue-500'
+                            : category === 'documentation'
+                              ? 'bg-green-500'
+                              : category === 'process'
+                                ? 'bg-purple-500'
+                                : category === 'design'
+                                  ? 'bg-red-500'
+                                  : 'bg-gray-500'
                       }`}
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
                 </div>
-              )
+              );
             })}
             {Object.keys(report.categoryCounts).length === 0 && (
               <p className="text-sm text-muted-foreground">No data available</p>
@@ -87,28 +98,36 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
           <h3 className="text-lg font-medium mb-4">NCRs by Root Cause</h3>
           <div className="space-y-3">
             {Object.entries(report.rootCauseCounts).map(([rootCause, count]) => {
-              const percentage = report.totalNCRs > 0 ? Math.round((count / report.totalNCRs) * 100) : 0
+              const percentage =
+                report.totalNCRs > 0 ? Math.round((count / report.totalNCRs) * 100) : 0;
               return (
                 <div key={rootCause}>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="capitalize">{rootCause.replace(/_/g, ' ')}</span>
-                    <span className="font-medium">{count} ({percentage}%)</span>
+                    <span className="font-medium">
+                      {count} ({percentage}%)
+                    </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className={`h-2 rounded-full ${
-                        rootCause === 'human_error' ? 'bg-red-500' :
-                        rootCause === 'equipment_failure' ? 'bg-amber-500' :
-                        rootCause === 'material_defect' ? 'bg-blue-500' :
-                        rootCause === 'procedural' ? 'bg-purple-500' :
-                        rootCause === 'environmental' ? 'bg-green-500' :
-                        'bg-gray-500'
+                        rootCause === 'human_error'
+                          ? 'bg-red-500'
+                          : rootCause === 'equipment_failure'
+                            ? 'bg-amber-500'
+                            : rootCause === 'material_defect'
+                              ? 'bg-blue-500'
+                              : rootCause === 'procedural'
+                                ? 'bg-purple-500'
+                                : rootCause === 'environmental'
+                                  ? 'bg-green-500'
+                                  : 'bg-gray-500'
                       }`}
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
                 </div>
-              )
+              );
             })}
             {Object.keys(report.rootCauseCounts).length === 0 && (
               <p className="text-sm text-muted-foreground">No data available</p>
@@ -121,12 +140,15 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
           <h3 className="text-lg font-medium mb-4">NCRs by Responsible Party</h3>
           <div className="space-y-3">
             {Object.entries(report.responsiblePartyCounts).map(([party, count]) => {
-              const percentage = report.totalNCRs > 0 ? Math.round((count / report.totalNCRs) * 100) : 0
+              const percentage =
+                report.totalNCRs > 0 ? Math.round((count / report.totalNCRs) * 100) : 0;
               return (
                 <div key={party}>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="truncate max-w-[150px]">{party}</span>
-                    <span className="font-medium">{count} ({percentage}%)</span>
+                    <span className="font-medium">
+                      {count} ({percentage}%)
+                    </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
@@ -135,7 +157,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                     />
                   </div>
                 </div>
-              )
+              );
             })}
             {Object.keys(report.responsiblePartyCounts).length === 0 && (
               <p className="text-sm text-muted-foreground">No data available</p>
@@ -169,11 +191,21 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">NCR #</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Description</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Category</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Raised</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  NCR #
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Description
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Category
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Raised
+                </th>
               </tr>
             </thead>
             <tbody className="bg-card divide-y divide-border">
@@ -182,9 +214,13 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                   <td className="px-4 py-3 text-sm font-medium text-foreground">{ncr.ncrNumber}</td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{ncr.description}</td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs ${
-                      ncr.category === 'major' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                    }`}>
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        ncr.category === 'major'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
                       {ncr.category}
                     </span>
                   </td>
@@ -197,10 +233,12 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
             </tbody>
           </table>
           {report.ncrs.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">No NCRs found for this project.</div>
+            <div className="text-center py-8 text-muted-foreground">
+              No NCRs found for this project.
+            </div>
           )}
         </div>
       </div>
     </div>
-  )
-})
+  );
+});

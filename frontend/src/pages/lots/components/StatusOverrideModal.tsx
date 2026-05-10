@@ -1,34 +1,34 @@
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { RefreshCw } from 'lucide-react'
-import { lotStatusColors } from '../constants'
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { NativeSelect } from '@/components/ui/native-select'
-import { Label } from '@/components/ui/label'
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { RefreshCw } from 'lucide-react';
+import { lotStatusColors } from '../constants';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { NativeSelect } from '@/components/ui/native-select';
+import { Label } from '@/components/ui/label';
 
 export interface StatusOption {
-  value: string
-  label: string
+  value: string;
+  label: string;
 }
 
 const statusOverrideSchema = z.object({
   selectedStatus: z.string().min(1, 'Please select a new status'),
   reason: z.string().min(1, 'Reason for override is required'),
-})
+});
 
-type StatusOverrideFormData = z.infer<typeof statusOverrideSchema>
+type StatusOverrideFormData = z.infer<typeof statusOverrideSchema>;
 
 interface StatusOverrideModalProps {
-  isOpen: boolean
-  currentStatus: string
-  validStatuses: StatusOption[]
-  onClose: () => void
-  onSubmit: (newStatus: string, reason: string) => Promise<void>
-  isSubmitting: boolean
+  isOpen: boolean;
+  currentStatus: string;
+  validStatuses: StatusOption[];
+  onClose: () => void;
+  onSubmit: (newStatus: string, reason: string) => Promise<void>;
+  isSubmitting: boolean;
 }
 
 export function StatusOverrideModal({
@@ -37,7 +37,7 @@ export function StatusOverrideModal({
   validStatuses,
   onClose,
   onSubmit,
-  isSubmitting
+  isSubmitting,
 }: StatusOverrideModalProps) {
   const {
     register,
@@ -51,23 +51,25 @@ export function StatusOverrideModal({
       selectedStatus: '',
       reason: '',
     },
-  })
+  });
 
-  useEffect(() => { if (isOpen) reset() }, [isOpen, reset])
+  useEffect(() => {
+    if (isOpen) reset();
+  }, [isOpen, reset]);
 
   const onFormSubmit = (data: StatusOverrideFormData) => {
-    onSubmit(data.selectedStatus, data.reason)
-  }
+    onSubmit(data.selectedStatus, data.reason);
+  };
 
   const handleClose = () => {
-    reset()
-    onClose()
-  }
+    reset();
+    onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   // Filter out current status from options
-  const availableStatuses = validStatuses.filter(s => s.value !== currentStatus)
+  const availableStatuses = validStatuses.filter((s) => s.value !== currentStatus);
 
   return (
     <Modal onClose={handleClose}>
@@ -78,7 +80,9 @@ export function StatusOverrideModal({
           </div>
           <div>
             <div className="text-xl font-semibold">Override Status</div>
-            <p className="text-sm text-muted-foreground font-normal">Manually change the lot status</p>
+            <p className="text-sm text-muted-foreground font-normal">
+              Manually change the lot status
+            </p>
           </div>
         </div>
       </ModalHeader>
@@ -87,7 +91,9 @@ export function StatusOverrideModal({
           <div className="space-y-4">
             <div>
               <Label>Current Status</Label>
-              <div className={`mt-1 px-3 py-2 rounded border ${lotStatusColors[currentStatus] || 'bg-muted text-muted-foreground'}`}>
+              <div
+                className={`mt-1 px-3 py-2 rounded border ${lotStatusColors[currentStatus] || 'bg-muted text-muted-foreground'}`}
+              >
                 {currentStatus.replace('_', ' ')}
               </div>
             </div>
@@ -102,14 +108,16 @@ export function StatusOverrideModal({
                 className={errors.selectedStatus ? 'border-destructive mt-1' : 'mt-1'}
               >
                 <option value="">Select new status...</option>
-                {availableStatuses.map(status => (
+                {availableStatuses.map((status) => (
                   <option key={status.value} value={status.value}>
                     {status.label}
                   </option>
                 ))}
               </NativeSelect>
               {errors.selectedStatus && (
-                <p className="text-sm text-destructive mt-1" role="alert">{errors.selectedStatus.message}</p>
+                <p className="text-sm text-destructive mt-1" role="alert">
+                  {errors.selectedStatus.message}
+                </p>
               )}
             </div>
 
@@ -125,7 +133,9 @@ export function StatusOverrideModal({
                 className={errors.reason ? 'border-destructive mt-1' : 'mt-1'}
               />
               {errors.reason && (
-                <p className="text-sm text-destructive mt-1" role="alert">{errors.reason.message}</p>
+                <p className="text-sm text-destructive mt-1" role="alert">
+                  {errors.reason.message}
+                </p>
               )}
               <p className="text-xs text-muted-foreground mt-1">
                 This reason will be recorded in the lot history for audit purposes.
@@ -135,22 +145,13 @@ export function StatusOverrideModal({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleClose}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="status-override-form"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" form="status-override-form" disabled={isSubmitting}>
           {isSubmitting ? 'Overriding...' : 'Override Status'}
         </Button>
       </ModalFooter>
     </Modal>
-  )
+  );
 }

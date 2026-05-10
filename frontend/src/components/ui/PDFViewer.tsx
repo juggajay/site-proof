@@ -1,142 +1,160 @@
 // Feature #446: React-PDF document viewer component
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { Document, Page, pdfjs } from 'react-pdf'
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, Maximize2, Minimize2 } from 'lucide-react'
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css'
-import 'react-pdf/dist/esm/Page/TextLayer.css'
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Download,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+import { logError } from '@/lib/logger';
+import { sanitizeDownloadFilename } from '@/lib/downloads';
 
-// Set up the worker using CDN - most reliable for production builds
-// pdfjs.version gives us the exact version bundled with react-pdf
-// Note: File is .js not .mjs for pdfjs-dist 3.x
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+const PDFJS_ASSET_BASE_URL = `${import.meta.env.BASE_URL}pdfjs/`;
 
 interface PDFViewerProps {
-  url: string
-  filename?: string
-  onClose?: () => void
-  className?: string
+  url: string;
+  filename?: string;
+  onClose?: () => void;
+  className?: string;
 }
 
 export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: PDFViewerProps) {
-  const [numPages, setNumPages] = useState<number | null>(null)
-  const [pageNumber, setPageNumber] = useState(1)
-  const [scale, setScale] = useState(1.0)
-  const [rotation, setRotation] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isFitWidth, setIsFitWidth] = useState(true)
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [scale, setScale] = useState(1.0);
+  const [rotation, setRotation] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isFitWidth, setIsFitWidth] = useState(true);
+  const rawDownloadFilename = filename?.trim() || 'document.pdf';
+  const downloadFilename = sanitizeDownloadFilename(
+    /\.pdf$/i.test(rawDownloadFilename) ? rawDownloadFilename : `${rawDownloadFilename}.pdf`,
+    'document.pdf',
+  );
 
   // Touch gesture state for mobile pinch-to-zoom
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [touchStartDistance, setTouchStartDistance] = useState<number | null>(null)
-  const [touchStartScale, setTouchStartScale] = useState(1.0)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [touchStartDistance, setTouchStartDistance] = useState<number | null>(null);
+  const [touchStartScale, setTouchStartScale] = useState(1.0);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setNumPages(numPages)
-    setLoading(false)
-    setError(null)
-  }, [])
+    setNumPages(numPages);
+    setLoading(false);
+    setError(null);
+  }, []);
 
   const onDocumentLoadError = useCallback((error: Error) => {
-    console.error('Error loading PDF:', error)
-    setLoading(false)
-    setError('Unable to view PDF. The file may be loading - try again in a moment or download to view.')
-  }, [])
+    logError('Error loading PDF:', error);
+    setLoading(false);
+    setError(
+      'Unable to view PDF. The file may be loading - try again in a moment or download to view.',
+    );
+  }, []);
 
   // Touch handlers for pinch-to-zoom on mobile
   const getTouchDistance = (touches: React.TouchList) => {
-    if (touches.length < 2) return 0
-    const dx = touches[0].clientX - touches[1].clientX
-    const dy = touches[0].clientY - touches[1].clientY
-    return Math.sqrt(dx * dx + dy * dy)
-  }
+    if (touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      setTouchStartDistance(getTouchDistance(e.touches))
-      setTouchStartScale(scale)
+      setTouchStartDistance(getTouchDistance(e.touches));
+      setTouchStartScale(scale);
     }
-  }
+  };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 2 && touchStartDistance) {
-      const currentDistance = getTouchDistance(e.touches)
-      const scaleChange = currentDistance / touchStartDistance
-      const newScale = Math.min(Math.max(touchStartScale * scaleChange, 0.5), 3.0)
-      setScale(newScale)
-      setIsFitWidth(false)
+      const currentDistance = getTouchDistance(e.touches);
+      const scaleChange = currentDistance / touchStartDistance;
+      const newScale = Math.min(Math.max(touchStartScale * scaleChange, 0.5), 3.0);
+      setScale(newScale);
+      setIsFitWidth(false);
     }
-  }
+  };
 
   const handleTouchEnd = () => {
-    setTouchStartDistance(null)
-  }
+    setTouchStartDistance(null);
+  };
 
   // Double-tap to reset zoom
-  const lastTap = useRef<number>(0)
+  const lastTap = useRef<number>(0);
   const handleDoubleTap = () => {
-    const now = Date.now()
+    const now = Date.now();
     if (now - lastTap.current < 300) {
       // Double tap - toggle between fit width and 100%
       if (scale === 1.0) {
-        setIsFitWidth(true)
-        setScale(1.0)
+        setIsFitWidth(true);
+        setScale(1.0);
       } else {
-        setScale(1.0)
-        setIsFitWidth(false)
+        setScale(1.0);
+        setIsFitWidth(false);
       }
     }
-    lastTap.current = now
-  }
+    lastTap.current = now;
+  };
 
   // Track container width for fit-width mode
-  const [containerWidth, setContainerWidth] = useState(350)
+  const [containerWidth, setContainerWidth] = useState(350);
   useEffect(() => {
     const updateWidth = () => {
       if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth - 32)
+        setContainerWidth(containerRef.current.clientWidth - 32);
       }
-    }
-    updateWidth()
-    window.addEventListener('resize', updateWidth)
-    return () => window.removeEventListener('resize', updateWidth)
-  }, [])
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   const goToPrevPage = () => {
-    setPageNumber((prev) => Math.max(prev - 1, 1))
-  }
+    setPageNumber((prev) => Math.max(prev - 1, 1));
+  };
 
   const goToNextPage = () => {
-    setPageNumber((prev) => Math.min(prev + 1, numPages || 1))
-  }
+    setPageNumber((prev) => Math.min(prev + 1, numPages || 1));
+  };
 
   const zoomIn = () => {
-    setScale((prev) => Math.min(prev + 0.25, 3.0))
-    setIsFitWidth(false)
-  }
+    setScale((prev) => Math.min(prev + 0.25, 3.0));
+    setIsFitWidth(false);
+  };
 
   const zoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.25, 0.5))
-    setIsFitWidth(false)
-  }
+    setScale((prev) => Math.max(prev - 0.25, 0.5));
+    setIsFitWidth(false);
+  };
 
   const rotate = () => {
-    setRotation((prev) => (prev + 90) % 360)
-  }
+    setRotation((prev) => (prev + 90) % 360);
+  };
 
   const toggleFitWidth = () => {
-    setIsFitWidth(!isFitWidth)
+    setIsFitWidth(!isFitWidth);
     if (!isFitWidth) {
-      setScale(1.0)
+      setScale(1.0);
     }
-  }
+  };
 
   const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value, 10)
+    const value = parseInt(e.target.value, 10);
     if (!isNaN(value) && value >= 1 && value <= (numPages || 1)) {
-      setPageNumber(value)
+      setPageNumber(value);
     }
-  }
+  };
 
   return (
     <div className={`flex flex-col bg-background ${className}`} data-testid="pdf-viewer">
@@ -190,9 +208,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
             <ZoomOut className="h-5 w-5" />
           </button>
 
-          <span className="min-w-[50px] text-center text-sm">
-            {Math.round(scale * 100)}%
-          </span>
+          <span className="min-w-[50px] text-center text-sm">{Math.round(scale * 100)}%</span>
 
           <button
             onClick={zoomIn}
@@ -208,8 +224,8 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
           <button
             onClick={toggleFitWidth}
             className={`rounded p-1.5 hover:bg-muted ${isFitWidth ? 'bg-muted' : ''}`}
-            title={isFitWidth ? "Exit fit width" : "Fit to width"}
-            aria-label={isFitWidth ? "Exit fit width" : "Fit to width"}
+            title={isFitWidth ? 'Exit fit width' : 'Fit to width'}
+            aria-label={isFitWidth ? 'Exit fit width' : 'Fit to width'}
           >
             {isFitWidth ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
           </button>
@@ -227,7 +243,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
           {/* Download */}
           <a
             href={url}
-            download={filename || 'document.pdf'}
+            download={downloadFilename}
             className="rounded p-1.5 hover:bg-muted"
             title="Download PDF"
             aria-label="Download PDF"
@@ -263,17 +279,29 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
         {error && (
           <div className="flex flex-col items-center gap-4 text-center p-6 mt-10">
             <div className="rounded-full bg-red-100 p-4">
-              <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg
+                className="h-8 w-8 text-red-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
             </div>
             <div>
               <p className="text-red-600 font-medium">{error}</p>
-              <p className="text-muted-foreground text-sm mt-1">Double-tap to retry or download the file</p>
+              <p className="text-muted-foreground text-sm mt-1">
+                Double-tap to retry or download the file
+              </p>
             </div>
             <a
               href={url}
-              download={filename || 'document.pdf'}
+              download={downloadFilename}
               className="rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary/90 flex items-center gap-2"
             >
               <Download className="h-4 w-4" />
@@ -291,9 +319,9 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
             error=""
             className="flex justify-center"
             options={{
-              // Use standard fetch with CORS mode
-              cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+              cMapUrl: `${PDFJS_ASSET_BASE_URL}cmaps/`,
               cMapPacked: true,
+              standardFontDataUrl: `${PDFJS_ASSET_BASE_URL}standard_fonts/`,
             }}
           >
             <Page
@@ -307,7 +335,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
               renderTextLayer={true}
               renderAnnotationLayer={true}
               onRenderError={(error) => {
-                console.error('Page render error:', error)
+                logError('Page render error:', error);
                 // Don't crash - just log the error
               }}
             />
@@ -338,7 +366,9 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
                   file={url}
                   loading=""
                   error=""
-                  onLoadError={() => {/* Silently ignore thumbnail errors */}}
+                  onLoadError={() => {
+                    /* Silently ignore thumbnail errors */
+                  }}
                 >
                   <Page
                     pageNumber={page}
@@ -348,7 +378,9 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
                     error=""
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
-                    onRenderError={() => {/* Silently ignore thumbnail render errors */}}
+                    onRenderError={() => {
+                      /* Silently ignore thumbnail render errors */
+                    }}
                   />
                 </Document>
               </button>
@@ -362,20 +394,18 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // Simple inline viewer for embedding in other components
 export function PDFViewerInline({ url, className = '' }: { url: string; className?: string }) {
-  const [numPages, setNumPages] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className={`bg-muted rounded ${className}`}>
       {error ? (
-        <div className="flex items-center justify-center p-4 text-red-600">
-          Failed to load PDF
-        </div>
+        <div className="flex items-center justify-center p-4 text-red-600">Failed to load PDF</div>
       ) : (
         <Document
           file={url}
@@ -387,19 +417,12 @@ export function PDFViewerInline({ url, className = '' }: { url: string; classNam
             </div>
           }
         >
-          <Page
-            pageNumber={1}
-            width={300}
-            renderTextLayer={false}
-            renderAnnotationLayer={false}
-          />
+          <Page pageNumber={1} width={300} renderTextLayer={false} renderAnnotationLayer={false} />
         </Document>
       )}
       {numPages && numPages > 1 && (
-        <div className="text-center text-xs text-muted-foreground py-1">
-          {numPages} pages
-        </div>
+        <div className="text-center text-xs text-muted-foreground py-1">{numPages} pages</div>
       )}
     </div>
-  )
+  );
 }
