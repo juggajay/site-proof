@@ -11,9 +11,7 @@ RUN apt-get update -y \
 FROM base AS deps
 COPY package.json package-lock.json ./
 COPY prisma ./prisma/
-RUN --mount=type=secret,id=npm_extra_ca,target=/tmp/npm_extra_ca.pem,required=false \
-  if [ -s /tmp/npm_extra_ca.pem ]; then export NODE_EXTRA_CA_CERTS=/tmp/npm_extra_ca.pem; fi \
-  && npm ci --no-audit --no-fund \
+RUN npm ci --no-audit --no-fund \
   && node -e "require.resolve('prisma/package.json'); require.resolve('typescript/package.json'); require.resolve('@prisma/client/package.json')"
 
 # Stage 2: Build TypeScript
@@ -21,17 +19,18 @@ FROM deps AS build
 COPY . .
 RUN ./node_modules/.bin/prisma generate && npm run build
 
-# Stage 3: Production runtime
+# Stage 3: Prune development dependencies for production runtime
+FROM deps AS prod-deps
+RUN npm prune --omit=dev --ignore-scripts --no-audit --no-fund \
+  && node -e "require.resolve('express/package.json'); require.resolve('@prisma/client/package.json')" \
+  && npm cache clean --force
+
+# Stage 4: Production runtime
 FROM base AS runtime
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
-RUN --mount=type=secret,id=npm_extra_ca,target=/tmp/npm_extra_ca.pem,required=false \
-  if [ -s /tmp/npm_extra_ca.pem ]; then export NODE_EXTRA_CA_CERTS=/tmp/npm_extra_ca.pem; fi \
-  && npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
-  && node -e "require.resolve('express/package.json'); require.resolve('@prisma/client/package.json')" \
-  && npm cache clean --force
-
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=build /app/dist ./dist
