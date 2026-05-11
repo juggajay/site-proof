@@ -1364,6 +1364,7 @@ testResultsRouter.delete(
 
     const testResult = await prisma.testResult.findUnique({
       where: { id },
+      include: { certificateDoc: true },
     });
 
     if (!testResult) {
@@ -1388,9 +1389,37 @@ testResultsRouter.delete(
       req,
     });
 
-    await prisma.testResult.delete({
-      where: { id },
-    });
+    // Capture certificate doc info before the row is gone, so we can clean up
+    // the linked Document and Supabase object after the DB transaction.
+    const certificateDoc = testResult.certificateDoc;
+    const isSupabaseStored =
+      isSupabaseConfigured() &&
+      !!certificateDoc?.fileUrl &&
+      getSupabaseStoragePath(certificateDoc.fileUrl, DOCUMENTS_BUCKET) !== null;
+
+    // Atomic DB delete: testResult plus the linked Document row when present.
+    // The relation is `onDelete: SetNull`, so document deletion alone wouldn't
+    // remove the testResult — we have to delete both explicitly.
+    const operations: Prisma.PrismaPromise<unknown>[] = [
+      prisma.testResult.delete({ where: { id } }),
+    ];
+    if (certificateDoc) {
+      operations.push(prisma.document.delete({ where: { id: certificateDoc.id } }));
+    }
+    await prisma.$transaction(operations);
+
+    // Best-effort Supabase removal after the DB state is committed. A failure
+    // here leaves an orphan storage object but the DB is the source of truth.
+    if (isSupabaseStored && certificateDoc?.fileUrl) {
+      try {
+        await deleteCertificateFromSupabase(certificateDoc.fileUrl);
+      } catch (error) {
+        logWarn(
+          'Failed to delete test certificate file from Supabase after database delete:',
+          error,
+        );
+      }
+    }
 
     res.json({ message: 'Test result deleted successfully' });
   }),
