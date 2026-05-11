@@ -1,12 +1,29 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+
+// Mock Supabase helpers so individual logo tests can opt into the Supabase
+// branch by overriding the mock returns. By default `isSupabaseConfigured()`
+// returns false (matching vitest.config.ts, which blanks SUPABASE_URL).
+vi.mock('../lib/supabase.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => false),
+    getSupabaseClient: vi.fn(),
+  };
+});
+
+import * as supabaseLib from '../lib/supabase.js';
 import { companyRouter } from './company.js';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+
+const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
+const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 
 const app = express();
 app.use(express.json());
@@ -486,6 +503,113 @@ describe('Company API', () => {
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: regRes.body.user.id } });
       await prisma.user.delete({ where: { id: regRes.body.user.id } });
+    });
+
+    // Supabase storage path coverage. Because `isSupabaseConfigured()` is
+    // evaluated at module load to decide multer storage mode, the route file
+    // always uses disk storage in tests. These tests therefore exercise the
+    // *cleanup* path (replacement branch in POST /logo) which works regardless
+    // of multer mode — same approach PR #5 used for test certificates.
+    describe('Supabase-backed company-logo cleanup', () => {
+      const previousSupabaseUrl = process.env.SUPABASE_URL;
+
+      afterEach(() => {
+        if (previousSupabaseUrl === undefined) {
+          delete process.env.SUPABASE_URL;
+        } else {
+          process.env.SUPABASE_URL = previousSupabaseUrl;
+        }
+        mockIsSupabaseConfigured.mockReset();
+        mockIsSupabaseConfigured.mockReturnValue(false);
+        mockGetSupabaseClient.mockReset();
+      });
+
+      it('removes the previous Supabase object when a new logo replaces it', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from: () => ({ remove: mockRemove }) },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+        const oldSupabaseUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/company-logos/${companyId}/company-logo-${companyId}-oldfile.png`;
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: oldSupabaseUrl },
+        });
+
+        let uploadedFilename: string | undefined;
+        try {
+          const res = await request(app)
+            .post('/api/company/logo')
+            .set('Authorization', `Bearer ${authToken}`)
+            .attach('logo', tinyPngBytes, {
+              filename: 'replacement.png',
+              contentType: 'image/png',
+            });
+
+          uploadedFilename = res.body.logoUrl?.split('/').pop();
+
+          expect(res.status).toBe(201);
+
+          // Wait one tick for the awaited cleanup helper.
+          await new Promise((resolve) => setImmediate(resolve));
+
+          expect(mockRemove).toHaveBeenCalledTimes(1);
+          expect(mockRemove).toHaveBeenCalledWith([
+            `company-logos/${companyId}/company-logo-${companyId}-oldfile.png`,
+          ]);
+        } finally {
+          if (uploadedFilename) {
+            fs.rmSync(path.join(companyLogoUploadDir, uploadedFilename), { force: true });
+          }
+        }
+      });
+
+      it('does not call Supabase remove when the previous logo is a local /uploads path', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from: () => ({ remove: mockRemove }) },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: '/uploads/company-logos/local-noop.png' },
+        });
+
+        let uploadedFilename: string | undefined;
+        try {
+          const res = await request(app)
+            .post('/api/company/logo')
+            .set('Authorization', `Bearer ${authToken}`)
+            .attach('logo', tinyPngBytes, {
+              filename: 'replacement.png',
+              contentType: 'image/png',
+            });
+
+          uploadedFilename = res.body.logoUrl?.split('/').pop();
+          expect(res.status).toBe(201);
+          expect(mockRemove).not.toHaveBeenCalled();
+        } finally {
+          if (uploadedFilename) {
+            fs.rmSync(path.join(companyLogoUploadDir, uploadedFilename), { force: true });
+          }
+        }
+      });
+
+      it('accepts Supabase public URLs as logoUrl in PATCH /api/company', async () => {
+        // Sanity check that normalizeCompanyLogoUrl admits Supabase URLs.
+        const supabaseLogoUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/company-logos/${companyId}/company-logo-${companyId}-newfile.png`;
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ logoUrl: supabaseLogoUrl });
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.logoUrl).toBe(supabaseLogoUrl);
+      });
     });
   });
 

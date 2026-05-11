@@ -15,7 +15,16 @@ import {
 } from '../lib/imageValidation.js';
 import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../lib/uploadPaths.js';
 import { assertCanRemoveUserFromProjectAdminRoles } from '../lib/projectAdminInvariant.js';
-import { logWarn } from '../lib/serverLogger.js';
+import { logError, logWarn } from '../lib/serverLogger.js';
+import {
+  DOCUMENTS_BUCKET,
+  getSupabaseClient,
+  getSupabasePublicUrl,
+  getSupabaseStoragePath,
+  isSupabaseConfigured,
+} from '../lib/supabase.js';
+
+const COMPANY_LOGO_STORAGE_PREFIX = 'company-logos';
 
 export const companyRouter = Router();
 
@@ -28,7 +37,10 @@ const COMPANY_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_adm
 
 const companyLogoUploadDir = getUploadSubdirectoryPath('company-logos');
 
-const companyLogoStorage = multer.diskStorage({
+// Company logo uploads use Supabase Storage (memory-buffered) in production and
+// fall back to the local filesystem when Supabase is not configured. Path
+// inside the `documents` bucket: `company-logos/<companyId>/<unique>.<ext>`.
+const companyLogoDiskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     try {
       cb(null, ensureUploadSubdirectory('company-logos'));
@@ -52,8 +64,10 @@ const companyLogoStorage = multer.diskStorage({
   },
 });
 
+const companyLogoMemoryStorage = multer.memoryStorage();
+
 const companyLogoUpload = multer({
-  storage: companyLogoStorage,
+  storage: isSupabaseConfigured() ? companyLogoMemoryStorage : companyLogoDiskStorage,
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!getSafeImageExtensionForMimeType(file.mimetype)) {
@@ -75,6 +89,71 @@ function cleanupUploadedLogo(file?: Express.Multer.File): void {
   if (file?.path && fs.existsSync(file.path)) {
     fs.unlinkSync(file.path);
   }
+}
+
+function buildCompanyLogoStorageFilename(companyId: string, mimetype: string): string | null {
+  const ext = getSafeImageExtensionForMimeType(mimetype);
+  if (!ext) return null;
+  return `company-logo-${companyId}-${crypto.randomUUID()}${ext}`;
+}
+
+async function uploadCompanyLogoToSupabase(
+  file: Express.Multer.File,
+  companyId: string,
+): Promise<{ url: string; storagePath: string }> {
+  const filename = buildCompanyLogoStorageFilename(companyId, file.mimetype);
+  if (!filename) {
+    throw AppError.badRequest('Invalid file type');
+  }
+  const storagePath = `${COMPANY_LOGO_STORAGE_PREFIX}/${companyId}/${filename}`;
+
+  const { error } = await getSupabaseClient()
+    .storage.from(DOCUMENTS_BUCKET)
+    .upload(storagePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false,
+    });
+
+  if (error) {
+    logError('Supabase company logo upload failed:', error);
+    throw AppError.internal('Failed to upload company logo');
+  }
+
+  return {
+    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
+    storagePath,
+  };
+}
+
+async function deleteCompanyLogoFromSupabase(fileUrl: string): Promise<void> {
+  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+  if (!storagePath) return;
+
+  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
+
+  if (error) {
+    logError('Supabase company logo delete failed:', error);
+  }
+}
+
+async function cleanupStoredCompanyLogoUpload(
+  fileUrl: string | null,
+  file: Express.Multer.File,
+): Promise<void> {
+  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
+    await deleteCompanyLogoFromSupabase(fileUrl);
+    return;
+  }
+  cleanupUploadedLogo(file);
+}
+
+async function removeStoredCompanyLogo(logoUrl: string | null | undefined): Promise<void> {
+  if (!logoUrl) return;
+  if (isSupabaseConfigured() && getSupabaseStoragePath(logoUrl, DOCUMENTS_BUCKET) !== null) {
+    await deleteCompanyLogoFromSupabase(logoUrl);
+    return;
+  }
+  deleteLocalCompanyLogo(logoUrl);
 }
 
 function deleteLocalCompanyLogo(logoUrl: string | null | undefined): void {
@@ -422,29 +501,48 @@ companyRouter.post(
   companyLogoUpload.single('logo'),
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    const uploadedFile = req.file;
 
+    let companyId: string;
     try {
-      const companyId = requireCompanyAdmin(user);
+      companyId = requireCompanyAdmin(user);
 
-      if (!req.file) {
+      if (!uploadedFile) {
         throw AppError.badRequest('No logo uploaded');
       }
 
-      assertUploadedImageFile(req.file);
+      assertUploadedImageFile(uploadedFile);
+    } catch (error) {
+      cleanupUploadedLogo(uploadedFile);
+      throw error;
+    }
 
-      const currentCompany = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { logoUrl: true },
-      });
+    const currentCompany = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { logoUrl: true },
+    });
 
-      if (!currentCompany) {
-        cleanupUploadedLogo(req.file);
-        throw AppError.notFound('Company');
+    if (!currentCompany) {
+      cleanupUploadedLogo(uploadedFile);
+      throw AppError.notFound('Company');
+    }
+
+    let logoUrl: string;
+    try {
+      if (isSupabaseConfigured() && uploadedFile!.buffer) {
+        const uploaded = await uploadCompanyLogoToSupabase(uploadedFile!, companyId);
+        logoUrl = uploaded.url;
+      } else {
+        logoUrl = buildApiUrl(`/uploads/company-logos/${uploadedFile!.filename}`);
       }
+    } catch (error) {
+      cleanupUploadedLogo(uploadedFile);
+      throw error;
+    }
 
-      const logoUrl = buildApiUrl(`/uploads/company-logos/${req.file.filename}`);
-
-      const updatedCompany = await prisma.company.update({
+    let updatedCompany;
+    try {
+      updatedCompany = await prisma.company.update({
         where: { id: companyId },
         data: { logoUrl },
         select: {
@@ -458,21 +556,23 @@ companyRouter.post(
           updatedAt: true,
         },
       });
+    } catch (error) {
+      await cleanupStoredCompanyLogoUpload(logoUrl, uploadedFile!);
+      throw error;
+    }
 
+    if (currentCompany.logoUrl) {
       try {
-        deleteLocalCompanyLogo(currentCompany.logoUrl);
+        await removeStoredCompanyLogo(currentCompany.logoUrl);
       } catch (error) {
         logWarn('Failed to delete old company logo:', error);
       }
-
-      res.status(201).json({
-        logoUrl,
-        company: updatedCompany,
-      });
-    } catch (error) {
-      cleanupUploadedLogo(req.file);
-      throw error;
     }
+
+    res.status(201).json({
+      logoUrl,
+      company: updatedCompany,
+    });
   }),
 );
 

@@ -1,9 +1,34 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+
+vi.mock('otplib', async () => {
+  const actual = await vi.importActual<typeof import('otplib')>('otplib');
+  return {
+    ...actual,
+    verify: vi.fn(
+      async ({ token, secret }: { token: string; secret: string }) =>
+        token === '123456' && secret === 'TESTSECRET1234567890',
+    ),
+  };
+});
+
+// Mock Supabase helpers so individual avatar tests can opt into the Supabase
+// branch by overriding the mock returns. By default `isSupabaseConfigured()`
+// returns false (matching the vitest.config.ts env, which blanks SUPABASE_URL).
+vi.mock('../lib/supabase.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => false),
+    getSupabaseClient: vi.fn(),
+  };
+});
+
+import * as supabaseLib from '../lib/supabase.js';
 import { authRouter, getSafeDataExportFilename } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
@@ -16,16 +41,8 @@ import {
   isLockedOut,
 } from '../middleware/rateLimiter.js';
 
-vi.mock('otplib', async () => {
-  const actual = await vi.importActual<typeof import('otplib')>('otplib');
-  return {
-    ...actual,
-    verify: vi.fn(
-      async ({ token, secret }: { token: string; secret: string }) =>
-        token === '123456' && secret === 'TESTSECRET1234567890',
-    ),
-  };
-});
+const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
+const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 
 const app = express();
 app.use(express.json());
@@ -1219,6 +1236,182 @@ describe('Avatar Upload', () => {
         await prisma.user.delete({ where: { id: userId } }).catch(() => {});
       }
     }
+  });
+
+  // Supabase storage path coverage. Because `isSupabaseConfigured()` is
+  // evaluated at module load to decide multer storage mode, the route file
+  // always uses disk storage in tests. These tests therefore exercise the
+  // *cleanup* path (DELETE handler and the replacement branch in POST) which
+  // works regardless of multer mode — that is the same approach PR #5 used
+  // for test certificates.
+  describe('Supabase-backed avatar cleanup', () => {
+    const previousSupabaseUrl = process.env.SUPABASE_URL;
+
+    afterEach(() => {
+      if (previousSupabaseUrl === undefined) {
+        delete process.env.SUPABASE_URL;
+      } else {
+        process.env.SUPABASE_URL = previousSupabaseUrl;
+      }
+      mockIsSupabaseConfigured.mockReset();
+      mockIsSupabaseConfigured.mockReturnValue(false);
+      mockGetSupabaseClient.mockReset();
+    });
+
+    it('removes the Supabase object on DELETE when the avatarUrl points at the documents bucket', async () => {
+      const email = `avatar-supabase-delete-${Date.now()}@example.com`;
+      const password = 'SecureP@ssword123!';
+      let userId: string | undefined;
+
+      // Pretend Supabase is configured for this test only.
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const regRes = await request(app).post('/api/auth/register').send({
+          email,
+          password,
+          fullName: 'Avatar Supabase Delete User',
+          tosAccepted: true,
+        });
+        userId = regRes.body.user.id;
+        const supabaseAvatarUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/avatars/${userId}/avatar-${userId}-deadbeef.png`;
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { avatarUrl: supabaseAvatarUrl },
+        });
+
+        const res = await request(app)
+          .delete('/api/auth/avatar')
+          .set('Authorization', `Bearer ${regRes.body.token}`);
+
+        expect(res.status).toBe(200);
+
+        // Wait one tick for the awaited cleanup helper.
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(mockRemove).toHaveBeenCalledTimes(1);
+        expect(mockRemove).toHaveBeenCalledWith([
+          `avatars/${userId}/avatar-${userId}-deadbeef.png`,
+        ]);
+
+        const updated = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { avatarUrl: true },
+        });
+        expect(updated?.avatarUrl).toBeNull();
+      } finally {
+        if (userId) {
+          await prisma.auditLog.deleteMany({ where: { userId } });
+          await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+          await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+        }
+      }
+    });
+
+    it('does not call Supabase remove when the existing avatarUrl is a local /uploads path', async () => {
+      const email = `avatar-local-delete-${Date.now()}@example.com`;
+      const password = 'SecureP@ssword123!';
+      let userId: string | undefined;
+
+      // Even with Supabase "configured", a local avatarUrl must not hit the bucket.
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const regRes = await request(app).post('/api/auth/register').send({
+          email,
+          password,
+          fullName: 'Avatar Local Delete User',
+          tosAccepted: true,
+        });
+        userId = regRes.body.user.id;
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { avatarUrl: '/uploads/avatars/avatar-noop.png' },
+        });
+
+        const res = await request(app)
+          .delete('/api/auth/avatar')
+          .set('Authorization', `Bearer ${regRes.body.token}`);
+
+        expect(res.status).toBe(200);
+        expect(mockRemove).not.toHaveBeenCalled();
+      } finally {
+        if (userId) {
+          await prisma.auditLog.deleteMany({ where: { userId } });
+          await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+          await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+        }
+      }
+    });
+
+    it('removes the previous Supabase object when a new avatar replaces it', async () => {
+      const email = `avatar-supabase-replace-${Date.now()}@example.com`;
+      const password = 'SecureP@ssword123!';
+      let userId: string | undefined;
+      let uploadedFilename: string | undefined;
+
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const regRes = await request(app).post('/api/auth/register').send({
+          email,
+          password,
+          fullName: 'Avatar Supabase Replace User',
+          tosAccepted: true,
+        });
+        userId = regRes.body.user.id;
+        const oldSupabaseUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/avatars/${userId}/avatar-${userId}-oldfile.png`;
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { avatarUrl: oldSupabaseUrl },
+        });
+
+        const res = await request(app)
+          .post('/api/auth/avatar')
+          .set('Authorization', `Bearer ${regRes.body.token}`)
+          .attach('avatar', tinyPngBytes, {
+            filename: 'replacement.png',
+            contentType: 'image/png',
+          });
+
+        uploadedFilename = res.body.avatarUrl?.split('/').pop();
+
+        expect(res.status).toBe(200);
+
+        // Wait one tick for the awaited cleanup helper.
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(mockRemove).toHaveBeenCalledTimes(1);
+        expect(mockRemove).toHaveBeenCalledWith([`avatars/${userId}/avatar-${userId}-oldfile.png`]);
+      } finally {
+        if (uploadedFilename) {
+          fs.rmSync(path.join(avatarUploadDir, uploadedFilename), { force: true });
+        }
+        if (userId) {
+          await prisma.auditLog.deleteMany({ where: { userId } });
+          await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+          await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+        }
+      }
+    });
   });
 });
 
