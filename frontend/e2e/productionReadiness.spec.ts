@@ -1031,8 +1031,11 @@ test.describe('production readiness guardrails', () => {
     expect(dockerfile).toContain('HEALTHCHECK');
     expect(dockerfile).toContain('/ready');
     expect(dockerfile).toContain('# syntax=docker/dockerfile:1.7');
-    expect(dockerfile).toContain('id=npm_extra_ca');
-    expect(dockerfile).toContain('NODE_EXTRA_CA_CERTS=/tmp/npm_extra_ca.pem');
+    expect(dockerfile).not.toContain('id=npm_extra_ca');
+    expect(dockerfile).not.toContain('NODE_EXTRA_CA_CERTS=/tmp/npm_extra_ca.pem');
+    expect(dockerfile).toContain('FROM deps AS prod-deps');
+    expect(dockerfile).toContain('npm prune --omit=dev');
+    expect(dockerfile).toContain('COPY --from=prod-deps /app/node_modules ./node_modules');
     expect(dockerfile).toContain('openssl ca-certificates');
     expect(dockerfile).toContain('mkdir -p uploads/avatars');
     expect(dockerfile).toContain('chown -R node:node /app');
