@@ -207,9 +207,7 @@ async function deleteDrawingFromSupabase(fileUrl: string): Promise<void> {
     return;
   }
 
-  const { error } = await getSupabaseClient()
-    .storage.from(DOCUMENTS_BUCKET)
-    .remove([storagePath]);
+  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
 
   if (error) {
     logError('Supabase drawing delete failed:', error);
