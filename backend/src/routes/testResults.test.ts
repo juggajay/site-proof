@@ -13,8 +13,7 @@ import { errorHandler } from '../middleware/errorHandler.js';
 // by vitest.config.ts), and individual tests opt-in to the Supabase branch
 // by overriding the mock returns.
 vi.mock('../lib/supabase.js', async () => {
-  const actual =
-    await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
+  const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
   return {
     ...actual,
     isSupabaseConfigured: vi.fn(() => false),
