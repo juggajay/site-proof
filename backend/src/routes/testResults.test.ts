@@ -7,8 +7,28 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 
-// Import test results router
+// Mock the supabase helpers so we can drive the testResult DELETE handler
+// through both "local" (default) and "Supabase-stored" code paths. The real
+// `isSupabaseConfigured()` returns false in tests (SUPABASE_URL is blanked
+// by vitest.config.ts), and individual tests opt-in to the Supabase branch
+// by overriding the mock returns.
+vi.mock('../lib/supabase.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => false),
+    getSupabaseClient: vi.fn(),
+  };
+});
+
+import * as supabaseLib from '../lib/supabase.js';
+
+// Import test results router (after vi.mock so the router picks up the mocks)
 import { testResultsRouter } from './testResults.js';
+
+const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
+const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 
 const app = express();
 app.use(express.json());
@@ -1596,6 +1616,101 @@ describe('Test Results API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.message).toContain('deleted');
+    });
+
+    it('should delete the linked Document row when a local certificate is attached', async () => {
+      // Pre-seed a Document with a local-disk fileUrl + a TestResult that links to it
+      const doc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename: 'local-cert.pdf',
+          fileUrl: '/uploads/certificates/cert-local-fixture.pdf',
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const tr = await prisma.testResult.create({
+        data: {
+          projectId,
+          testType: 'CBR Test',
+          certificateDocId: doc.id,
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/test-results/${tr.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(await prisma.testResult.findUnique({ where: { id: tr.id } })).toBeNull();
+      expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+
+      // Supabase remove must not have been called for a local certificate.
+      expect(mockGetSupabaseClient).not.toHaveBeenCalled();
+    });
+
+    it('should remove the Supabase object when the certificate fileUrl is a Supabase URL', async () => {
+      // Drive the Supabase-stored code path by:
+      //   1. Pretending Supabase is configured.
+      //   2. Pretending SUPABASE_URL matches the fileUrl host so
+      //      getSupabaseStoragePath can extract a storage path.
+      //   3. Capturing the storage.remove() call.
+      const previousSupabaseUrl = process.env.SUPABASE_URL;
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const storagePath = `certificates/${projectId}/cert-supabase-fixture.pdf`;
+        const supabaseFileUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${storagePath}`;
+
+        const doc = await prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'test_certificate',
+            category: 'test_results',
+            filename: 'supabase-cert.pdf',
+            fileUrl: supabaseFileUrl,
+            fileSize: 100,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        });
+        const tr = await prisma.testResult.create({
+          data: {
+            projectId,
+            testType: 'CBR Test',
+            certificateDocId: doc.id,
+          },
+        });
+
+        const res = await request(app)
+          .delete(`/api/test-results/${tr.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(await prisma.testResult.findUnique({ where: { id: tr.id } })).toBeNull();
+        expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+
+        expect(mockRemove).toHaveBeenCalledOnce();
+        expect(mockRemove).toHaveBeenCalledWith([storagePath]);
+      } finally {
+        if (previousSupabaseUrl === undefined) {
+          delete process.env.SUPABASE_URL;
+        } else {
+          process.env.SUPABASE_URL = previousSupabaseUrl;
+        }
+        mockIsSupabaseConfigured.mockReset();
+        mockIsSupabaseConfigured.mockReturnValue(false);
+        mockGetSupabaseClient.mockReset();
+      }
     });
   });
 });
