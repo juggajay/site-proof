@@ -44,9 +44,9 @@ site-proofv3/
 | State | TanStack Query (server state) |
 | Forms | React Hook Form + Zod validation |
 | Backend | Express.js, tRPC v10 |
-| Database | PostgreSQL via Prisma ORM (Supabase hosted) |
-| Auth | JWT + Supabase Auth, MFA support |
-| Storage | Supabase Storage for documents |
+| Database | PostgreSQL via Prisma ORM, **hosted on Railway** (project `hearty-harmony`). Supabase is **not** the database. |
+| Auth | JWT, MFA support. Supabase Auth is **not** in use; the Supabase project is storage-only. |
+| Storage | Supabase Storage. Single public bucket `documents` in project `vhlvutvzdliwxorfhxxv`. Covers documents, comment attachments, drawings, and test result certificates. Avatars and company logos still write to ephemeral Railway disk (lower-priority follow-up). See [docs/supabase-storage-setup.md](docs/supabase-storage-setup.md). |
 | Email | Resend |
 
 ## Key Patterns
@@ -182,20 +182,40 @@ cd frontend && pnpm tsc --noEmit
 
 ### Backend (.env)
 ```
-DATABASE_URL=postgresql://...
-JWT_SECRET=...
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_KEY=...
+DATABASE_URL=postgresql://...                # Railway Postgres
+JWT_SECRET=...                               # >= 32 chars in production
+ENCRYPTION_KEY=...                           # 64-char hex; required in production
+SUPABASE_URL=https://xxx.supabase.co         # storage project; required in prod
+SUPABASE_SERVICE_ROLE_KEY=...                # required in prod for uploads
+SUPABASE_ANON_KEY=...                        # optional for server-side
+ALLOW_LOCAL_FILE_STORAGE=false               # explicit in prod
 RESEND_API_KEY=...
-FRONTEND_URL=http://localhost:5174
+EMAIL_FROM="..."
+FRONTEND_URL=https://...                     # https in prod, not localhost
+BACKEND_URL=https://...                      # or API_URL; https in prod, not localhost
+TRUST_PROXY=true                             # required behind Railway/CDN
 ```
 
 ### Frontend (.env)
 ```
 VITE_API_URL=http://localhost:3001
-VITE_SUPABASE_URL=https://xxx.supabase.co
-VITE_SUPABASE_ANON_KEY=...
+# Leave VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY blank in Vercel production
+# unless the frontend needs direct browser Supabase access — uploads go
+# through the backend with the service role key.
 ```
+
+## Operational Warnings
+
+### Production database (Railway Postgres)
+- **Never run `prisma db push` against production.** It does not record migrations and silently rewrites schema (and can drop data).
+- **Never use `--accept-data-loss`** with any Prisma command. If a migration appears destructive, stop and surface it rather than forcing it through.
+- **Railway deployments must not run `prisma db push` or `prisma migrate deploy` on startup or pre-deploy.** The Railway service's Custom Start Command and Pre-deploy Command for the backend must be blank (so the Dockerfile `CMD ["node", "dist/index.js"]` runs unchanged).
+- The live schema currently has drift from `prisma/schema.prisma` (a few unique constraints exist in the schema but not in the DB). Read-only duplicate checks have been run and the live data is compatible, but applying the constraints is a deliberate follow-up (backup → drift SQL → review → apply) — not a `db push`.
+
+### Production file storage (Supabase)
+- File uploads in production **require** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the backend env. Without them, `isSupabaseConfigured()` returns false and uploads fall back to local Railway disk, which is **ephemeral** — files vanish on the next redeploy.
+- The `documents` bucket must remain **public**. Stored URLs are public `/storage/v1/object/public/documents/...` paths.
+- Never commit Supabase keys, the Railway database URL, or any production secret to git. Local credential scratch (e.g. `.gstack/dev-browser/new-supabase-credentials.txt`) lives under git-ignored directories — keep it that way.
 
 ## Common Tasks
 
