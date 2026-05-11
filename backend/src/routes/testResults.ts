@@ -17,9 +17,18 @@ import {
   requireSubcontractorPortalModuleAccess,
 } from '../lib/projectAccess.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
-import { logWarn } from '../lib/serverLogger.js';
+import { logError, logWarn } from '../lib/serverLogger.js';
 import { ensureUploadSubdirectory } from '../lib/uploadPaths.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
+import {
+  DOCUMENTS_BUCKET,
+  getSupabaseClient,
+  getSupabasePublicUrl,
+  getSupabaseStoragePath,
+  isSupabaseConfigured,
+} from '../lib/supabase.js';
+
+const CERTIFICATES_STORAGE_PREFIX = 'certificates';
 
 export const testResultsRouter = Router();
 
@@ -40,7 +49,11 @@ const DECIMAL_NUMBER_PATTERN = /^[+-]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:[eE][+-]?\d+
 const PASS_FAIL_VALUES = ['pass', 'fail', 'pending'] as const;
 const REQUEST_FORM_FORMATS = ['html', 'json'] as const;
 
-const storage = multer.diskStorage({
+// When Supabase Storage is configured we keep certificate uploads in memory
+// and stream them to the `documents` bucket under a `certificates/<projectId>/...`
+// prefix. Otherwise we fall back to the local filesystem (dev only —
+// Railway's filesystem is ephemeral, so production must always have Supabase).
+const diskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     try {
       cb(null, ensureUploadSubdirectory('certificates'));
@@ -59,8 +72,10 @@ const storage = multer.diskStorage({
   },
 });
 
+const memoryStorage = multer.memoryStorage();
+
 const upload = multer({
-  storage,
+  storage: isSupabaseConfigured() ? memoryStorage : diskStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (_req, file, cb) => {
     // Accept only PDFs and images
@@ -72,6 +87,61 @@ const upload = multer({
     }
   },
 });
+
+function buildStoredCertificateFilename(originalName: string): string {
+  const uniqueSuffix = `${Date.now()}-${crypto.randomUUID()}`;
+  return `cert-${uniqueSuffix}${getSafeCertificateExtension(originalName)}`;
+}
+
+async function uploadCertificateToSupabase(
+  file: Express.Multer.File,
+  projectId: string,
+): Promise<{ url: string; storagePath: string }> {
+  const storagePath = `${CERTIFICATES_STORAGE_PREFIX}/${projectId}/${buildStoredCertificateFilename(file.originalname)}`;
+
+  const { error } = await getSupabaseClient()
+    .storage.from(DOCUMENTS_BUCKET)
+    .upload(storagePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false,
+    });
+
+  if (error) {
+    logError('Supabase certificate upload failed:', error);
+    throw AppError.internal('Failed to upload certificate');
+  }
+
+  return {
+    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
+    storagePath,
+  };
+}
+
+async function deleteCertificateFromSupabase(fileUrl: string): Promise<void> {
+  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+  if (!storagePath) {
+    return;
+  }
+
+  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
+
+  if (error) {
+    logError('Supabase certificate delete failed:', error);
+  }
+}
+
+// Best-effort cleanup after a failed certificate upload. Removes either the
+// Supabase object (if we already uploaded) or the local temp file.
+async function cleanupStoredCertificateUpload(
+  fileUrl: string | null,
+  file: Express.Multer.File,
+): Promise<void> {
+  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
+    await deleteCertificateFromSupabase(fileUrl);
+    return;
+  }
+  cleanupUploadedCertificateFile(file);
+}
 
 function cleanupUploadedCertificateFile(file?: Express.Multer.File): void {
   if (file?.path && fs.existsSync(file.path)) {
@@ -2518,7 +2588,9 @@ function extractJsonObject(text: string): unknown {
 }
 
 function getCertificateContentBlock(file: Express.Multer.File) {
-  const fileData = fs.readFileSync(file.path).toString('base64');
+  // multer.memoryStorage exposes file.buffer; diskStorage exposes file.path.
+  // Support both so this works regardless of which storage mode is active.
+  const fileData = (file.buffer ? file.buffer : fs.readFileSync(file.path)).toString('base64');
 
   if (file.mimetype === 'application/pdf') {
     return {
@@ -2847,6 +2919,19 @@ testResultsRouter.post(
     const confidenceObj = buildConfidenceObject(extractedData);
     const displayFilename = sanitizeUploadFilename(file.originalname);
 
+    let fileUrl: string | null = null;
+    try {
+      if (isSupabaseConfigured() && file.buffer) {
+        const uploaded = await uploadCertificateToSupabase(file, projectId);
+        fileUrl = uploaded.url;
+      } else {
+        fileUrl = `/uploads/certificates/${file.filename}`;
+      }
+    } catch (error) {
+      cleanupUploadedCertificateFile(file);
+      throw error;
+    }
+
     let testResult;
     try {
       testResult = await prisma.$transaction(async (tx) => {
@@ -2856,7 +2941,7 @@ testResultsRouter.post(
             documentType: 'test_certificate',
             category: 'test_results',
             filename: displayFilename,
-            fileUrl: `/uploads/certificates/${file.filename}`,
+            fileUrl: fileUrl!,
             fileSize: file.size,
             mimeType: file.mimetype,
             uploadedById: user.id,
@@ -2878,7 +2963,7 @@ testResultsRouter.post(
         });
       });
     } catch (error) {
-      cleanupUploadedCertificateFile(file);
+      await cleanupStoredCertificateUpload(fileUrl, file);
       throw error;
     }
 
@@ -3130,10 +3215,18 @@ testResultsRouter.post(
     const results: BatchUploadResult[] = [];
 
     for (const file of files) {
+      let fileUrl: string | null = null;
       try {
         const extractedData = await extractCertificateFields(file);
         const confidenceObj = buildConfidenceObject(extractedData);
         const displayFilename = sanitizeUploadFilename(file.originalname);
+
+        if (isSupabaseConfigured() && file.buffer) {
+          const uploaded = await uploadCertificateToSupabase(file, projectId);
+          fileUrl = uploaded.url;
+        } else {
+          fileUrl = `/uploads/certificates/${file.filename}`;
+        }
 
         const testResult = await prisma.$transaction(async (tx) => {
           const document = await tx.document.create({
@@ -3142,7 +3235,7 @@ testResultsRouter.post(
               documentType: 'test_certificate',
               category: 'test_results',
               filename: displayFilename,
-              fileUrl: `/uploads/certificates/${file.filename}`,
+              fileUrl: fileUrl!,
               fileSize: file.size,
               mimeType: file.mimetype,
               uploadedById: user.id,
@@ -3185,7 +3278,7 @@ testResultsRouter.post(
           },
         });
       } catch {
-        cleanupUploadedCertificateFile(file);
+        await cleanupStoredCertificateUpload(fileUrl, file);
         results.push({
           success: false,
           filename: sanitizeUploadFilename(file.originalname),

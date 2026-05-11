@@ -13,7 +13,16 @@ import { z } from 'zod';
 import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
 import { getPaginationMeta, getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
-import { logWarn } from '../lib/serverLogger.js';
+import { logError, logWarn } from '../lib/serverLogger.js';
+import {
+  DOCUMENTS_BUCKET,
+  getSupabaseClient,
+  getSupabasePublicUrl,
+  getSupabaseStoragePath,
+  isSupabaseConfigured,
+} from '../lib/supabase.js';
+
+const DRAWINGS_STORAGE_PREFIX = 'drawings';
 
 const router = Router();
 const DRAWING_STATUSES = ['preliminary', 'for_construction', 'as_built'] as const;
@@ -94,8 +103,12 @@ const supersedeDrawingSchema = z.object({
 // Apply auth middleware
 router.use(requireAuth);
 
-// Configure multer for drawing file uploads
-const storage = multer.diskStorage({
+// Configure multer for drawing file uploads.
+// When Supabase Storage is configured we keep uploads in memory and stream
+// them to the `documents` bucket under a `drawings/<projectId>/...` prefix.
+// Otherwise we fall back to the local filesystem (dev only — Railway's
+// filesystem is ephemeral).
+const diskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     try {
       cb(null, ensureUploadSubdirectory('drawings'));
@@ -111,8 +124,10 @@ const storage = multer.diskStorage({
   },
 });
 
+const memoryStorage = multer.memoryStorage();
+
 const upload = multer({
-  storage,
+  storage: isSupabaseConfigured() ? memoryStorage : diskStorage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit for drawings
   fileFilter: (_req, file, cb) => {
     // Accept common drawing types
@@ -160,6 +175,56 @@ function sanitizeUploadFilename(filename: string): string {
 function buildStoredFilename(originalName: string): string {
   const uniqueSuffix = `${Date.now()}-${crypto.randomUUID()}`;
   return `${uniqueSuffix}-${sanitizeUploadFilename(originalName)}`;
+}
+
+async function uploadDrawingToSupabase(
+  file: Express.Multer.File,
+  projectId: string,
+): Promise<{ url: string; storagePath: string }> {
+  const storagePath = `${DRAWINGS_STORAGE_PREFIX}/${projectId}/${buildStoredFilename(file.originalname)}`;
+
+  const { error } = await getSupabaseClient()
+    .storage.from(DOCUMENTS_BUCKET)
+    .upload(storagePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false,
+    });
+
+  if (error) {
+    logError('Supabase drawing upload failed:', error);
+    throw AppError.internal('Failed to upload drawing');
+  }
+
+  return {
+    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
+    storagePath,
+  };
+}
+
+async function deleteDrawingFromSupabase(fileUrl: string): Promise<void> {
+  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+  if (!storagePath) {
+    return;
+  }
+
+  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
+
+  if (error) {
+    logError('Supabase drawing delete failed:', error);
+  }
+}
+
+// Best-effort cleanup after a failed drawing upload. Removes either the
+// Supabase object (if we already uploaded) or the local temp file.
+async function cleanupStoredDrawingUpload(
+  fileUrl: string | null,
+  file: Express.Multer.File,
+): Promise<void> {
+  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
+    await deleteDrawingFromSupabase(fileUrl);
+    return;
+  }
+  cleanupUploadedFile(file);
 }
 
 function getOptionalQueryString(
@@ -479,6 +544,21 @@ router.post(
       throw AppError.badRequest('Drawing with this number and revision already exists');
     }
 
+    // Upload to Supabase if configured; otherwise the file is already on the
+    // local disk via multer.diskStorage and we just record its relative path.
+    let fileUrl: string | null = null;
+    try {
+      if (isSupabaseConfigured() && uploadedFile.buffer) {
+        const uploaded = await uploadDrawingToSupabase(uploadedFile, projectId);
+        fileUrl = uploaded.url;
+      } else {
+        fileUrl = `/uploads/drawings/${uploadedFile.filename}`;
+      }
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+
     let drawing;
     try {
       drawing = await prisma.$transaction(async (tx) => {
@@ -487,7 +567,7 @@ router.post(
             projectId,
             documentType: 'drawing',
             filename: sanitizeUploadFilename(uploadedFile.originalname),
-            fileUrl: `/uploads/drawings/${uploadedFile.filename}`,
+            fileUrl: fileUrl!,
             fileSize: uploadedFile.size,
             mimeType: uploadedFile.mimetype,
             uploadedById: userId,
@@ -520,7 +600,7 @@ router.post(
         });
       });
     } catch (error) {
-      cleanupUploadedFile(uploadedFile);
+      await cleanupStoredDrawingUpload(fileUrl, uploadedFile);
       throw error;
     }
 
@@ -609,11 +689,19 @@ router.delete(
 
     await requireDrawingWriteAccess(req.user!, drawing.projectId);
 
+    const existingFileUrl = drawing.document.fileUrl;
+    const isSupabaseStored =
+      isSupabaseConfigured() &&
+      typeof existingFileUrl === 'string' &&
+      getSupabaseStoragePath(existingFileUrl, DOCUMENTS_BUCKET) !== null;
+
     let filePath: string | null = null;
-    try {
-      filePath = resolveUploadPath(drawing.document.fileUrl, 'drawings');
-    } catch (error) {
-      logWarn('Skipping drawing file cleanup for invalid file path:', error);
+    if (!isSupabaseStored) {
+      try {
+        filePath = resolveUploadPath(existingFileUrl, 'drawings');
+      } catch (error) {
+        logWarn('Skipping drawing file cleanup for invalid file path:', error);
+      }
     }
 
     await prisma.$transaction([
@@ -621,7 +709,13 @@ router.delete(
       prisma.document.delete({ where: { id: drawing.documentId } }),
     ]);
 
-    if (filePath) {
+    if (isSupabaseStored) {
+      try {
+        await deleteDrawingFromSupabase(existingFileUrl);
+      } catch (error) {
+        logWarn('Failed to delete drawing file from Supabase after database delete:', error);
+      }
+    } else if (filePath) {
       try {
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
@@ -703,6 +797,19 @@ router.post(
       throw error;
     }
 
+    let fileUrl: string | null = null;
+    try {
+      if (isSupabaseConfigured() && uploadedFile.buffer) {
+        const uploaded = await uploadDrawingToSupabase(uploadedFile, oldDrawing.projectId);
+        fileUrl = uploaded.url;
+      } else {
+        fileUrl = `/uploads/drawings/${uploadedFile.filename}`;
+      }
+    } catch (error) {
+      cleanupUploadedFile(uploadedFile);
+      throw error;
+    }
+
     let newDrawing;
     try {
       newDrawing = await prisma.$transaction(async (tx) => {
@@ -711,7 +818,7 @@ router.post(
             projectId: oldDrawing.projectId,
             documentType: 'drawing',
             filename: sanitizeUploadFilename(uploadedFile.originalname),
-            fileUrl: `/uploads/drawings/${uploadedFile.filename}`,
+            fileUrl: fileUrl!,
             fileSize: uploadedFile.size,
             mimeType: uploadedFile.mimetype,
             uploadedById: userId,
@@ -751,7 +858,7 @@ router.post(
         return createdDrawing;
       });
     } catch (error) {
-      cleanupUploadedFile(uploadedFile);
+      await cleanupStoredDrawingUpload(fileUrl, uploadedFile);
       throw error;
     }
 
