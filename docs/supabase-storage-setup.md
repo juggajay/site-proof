@@ -1,27 +1,47 @@
-# Supabase Storage Setup for Document Uploads
+# Supabase Storage Setup
 
 ## Overview
 
-SiteProof uses **Supabase Storage** for persistent document storage in production. This was implemented to solve the issue where uploaded documents were lost when Railway redeployed the backend (Railway uses ephemeral filesystem storage).
+SiteProof uses **Supabase Storage** for durable file storage in production.
+**Supabase is not the database** — the production database is Postgres hosted
+on Railway. The Supabase project exists solely to hold uploaded files.
 
-## The Problem
+Railway's container filesystem is ephemeral: any files written to local
+disk are lost when the container redeploys, restarts, or is moved. Anything
+that needs to survive a redeploy must live in Supabase Storage (or be
+migrated there).
 
-Railway's filesystem is ephemeral - any files written to disk are lost when:
-- The app redeploys (on every git push)
-- The container restarts
-- Railway scales or moves the instance
+## Project / bucket
 
-Documents uploaded via the `/api/documents/upload` endpoint were being stored locally at `/uploads/documents/` which meant they disappeared after each deployment.
+- **Supabase project ref:** `vhlvutvzdliwxorfhxxv`
+- **Public URL host:** `https://vhlvutvzdliwxorfhxxv.supabase.co`
+- **Region:** Sydney (`ap-southeast-2`)
+- **Bucket:** `documents`
+- **Bucket visibility:** **public** (the app stores public
+  `/storage/v1/object/public/documents/...` URLs in DB rows; the bucket
+  must stay public for those links to resolve in browsers)
 
-## The Solution
+Previous project ref `dwumiirtsuqxratjjvhb` was deprovisioned by Supabase
+after the free-tier 90-day deletion window. URLs referencing that host no
+longer resolve and are unrecoverable.
 
-Documents are now uploaded to **Supabase Storage** when the backend detects Supabase credentials are configured. The flow is:
+## Storage prefixes (one bucket, four prefixes)
 
-1. User uploads file via frontend
-2. Backend receives file in memory (using multer's `memoryStorage`)
-3. Backend uploads file to Supabase Storage bucket
-4. Backend stores the Supabase public URL in the database
-5. Frontend fetches documents using Supabase URLs
+All four customer-facing upload surfaces share the `documents` bucket and
+differ only in the prefix they write under:
+
+| Feature | Storage path inside `documents` bucket | Backend route file |
+|---|---|---|
+| General documents | `<projectId>/<unique>-<filename>` | `backend/src/routes/documents.ts` |
+| Comment attachments | `comments/<projectId>/<unique>-<filename>` | `backend/src/routes/comments.ts` |
+| Drawings | `drawings/<projectId>/<unique>-<filename>` | `backend/src/routes/drawings.ts` |
+| Test result certificates | `certificates/<projectId>/cert-<unique>.<ext>` | `backend/src/routes/testResults.ts` |
+
+The full public URL for a stored object is:
+
+```
+https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/<prefix>/<projectId>/<filename>
+```
 
 ## Architecture
 
@@ -38,154 +58,177 @@ Documents are now uploaded to **Supabase Storage** when the backend detects Supa
                     └─────────────────┘
 ```
 
-## Files Modified
+The backend holds the Supabase **service role key** and writes/reads on
+the server side. The frontend renders public URLs directly (no Supabase
+SDK required in the browser).
 
-### Backend
+## Verified durable flows
 
-**`backend/src/lib/supabase.ts`** (NEW)
-- Supabase client initialization
-- Helper functions: `isSupabaseConfigured()`, `getSupabasePublicUrl()`
-- Exports `DOCUMENTS_BUCKET` constant
+End-to-end production smoke tests have verified the full lifecycle
+(upload → durable Supabase object → public download → delete →
+Supabase object removed → bucket prefix empty) for:
 
-**`backend/src/routes/documents.ts`**
-- Uses `memoryStorage` instead of `diskStorage` when Supabase is configured
-- `uploadToSupabase()` function handles file uploads to Supabase
-- `deleteFromSupabase()` function handles file deletion
-- Upload routes store Supabase URLs in database instead of local paths
+| Flow | Single upload | Batch upload | Download | Delete removes Supabase object |
+|---|---|---|---|---|
+| Documents | ✅ | n/a | ✅ | ✅ |
+| Comment attachments | ✅ | n/a | ✅ | ✅ |
+| Drawings | ✅ | n/a | ✅ | ✅ |
+| Test result certificates | ✅ | ✅ | ✅ | ✅ |
 
-### Frontend
+For each surface, deleting through the app:
+- Atomically deletes the linked `documents` row.
+- Best-effort removes the Supabase object (failure is logged via
+  `logWarn` so the DB remains the source of truth).
 
-**`frontend/.env.production`**
-- Added `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
-- These are used for direct Supabase access if needed in future
+The implementations all follow the same shape in their respective route
+files: a conditional `multer.memoryStorage()` when
+`isSupabaseConfigured()` is true (else local `diskStorage`), a private
+`upload*ToSupabase()` helper that builds the prefix path, and a
+`delete*FromSupabase()` helper used by DELETE handlers and
+transaction-failure rollback.
 
-## Environment Variables
+## Required production environment variables
 
-### Railway (Backend)
-
-These must be set in Railway's environment variables:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SUPABASE_URL` | Supabase project URL | `https://xxxxx.supabase.co` |
-| `SUPABASE_ANON_KEY` | Public anon key | `eyJhbGciOiJIUzI1NiIs...` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (secret) | `eyJhbGciOiJIUzI1NiIs...` |
-
-### Vercel (Frontend)
-
-Optional - only needed if frontend directly accesses Supabase:
+In the Railway backend service (`site-proof` in project
+`hearty-harmony`):
 
 | Variable | Description |
-|----------|-------------|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Public anon key |
+|---|---|
+| `SUPABASE_URL` | Project URL, e.g. `https://vhlvutvzdliwxorfhxxv.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key (server-only secret). Required for upload + delete to work. |
+| `SUPABASE_ANON_KEY` | Optional server-side. |
+| `ALLOW_LOCAL_FILE_STORAGE` | Set to `false` explicitly in production. |
 
-## Supabase Configuration
+When `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are missing,
+`isSupabaseConfigured()` returns false and upload routes silently fall
+back to writing to the container's local disk. **That filesystem is
+ephemeral.** Anything written there is lost on the next deploy. The
+production env must always have these set.
 
-### Project Details
-- **Organization:** juggajay's Org Site-Proof Development
-- **Project Name:** SiteProof
-- **Region:** (check Supabase dashboard)
-- **Project URL:** `https://dwumiirtsuqxratjjvhb.supabase.co`
+For the **frontend** (Vercel): `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY` should be left **blank** unless the frontend
+needs direct browser Supabase access. Uploads go through the Railway
+backend; the browser only needs the public file URL returned by the API.
 
-### Storage Bucket
-- **Bucket Name:** `documents`
-- **Public:** Yes (files are publicly accessible via URL)
-- **File Path Pattern:** `{projectId}/{timestamp}-{random}-{filename}`
+## Operational warnings
 
-## How It Works
+These apply regardless of which file you are editing:
 
-### Upload Flow
+- **Never run `prisma db push` against production.** It is non-replayable
+  schema-write that does not record migrations, can silently rewrite
+  columns, and may drop data.
+- **Never use `--accept-data-loss`** with any Prisma command. If a
+  command warns about data loss, stop and surface the diff rather than
+  forcing it through.
+- **Railway deployments must not run `prisma db push` or
+  `prisma migrate deploy` on startup or pre-deploy.** The Railway
+  service's Custom Start Command and Pre-deploy Command for the backend
+  must be blank, so the Dockerfile `CMD ["node", "dist/index.js"]` runs
+  unchanged. Earlier deploys ran `npx prisma db push` as a Pre-deploy
+  Command, which broke deploys and risked schema/data drift.
+- **File uploads in production require Supabase env vars to be present.**
+  See the table above. If those vars go missing, uploads silently fall
+  back to ephemeral disk.
+- **Never commit Supabase keys** (or the Railway database URL) to git.
+  Keep credential scratch files inside `.gstack/` or another
+  git-ignored directory.
 
-```typescript
-// 1. Check if Supabase is configured
-if (isSupabaseConfigured()) {
-  // 2. Upload to Supabase Storage
-  const { data, error } = await supabase.storage
-    .from('documents')
-    .upload(filePath, fileBuffer, {
-      contentType: file.mimetype,
-      upsert: false
-    });
+## Backend code references
 
-  // 3. Get public URL
-  const fileUrl = getSupabasePublicUrl('documents', filePath);
+- `backend/src/lib/supabase.ts` — module-level Supabase client,
+  `isSupabaseConfigured()`, `getSupabaseClient()`, `getSupabasePublicUrl()`,
+  `getSupabaseStoragePath()`, and the `DOCUMENTS_BUCKET` constant
+  (`'documents'`).
+- `backend/src/routes/documents.ts` — general documents (single +
+  versioning + delete).
+- `backend/src/routes/comments.ts` — comment attachments under the
+  `comments/` prefix.
+- `backend/src/routes/drawings.ts` — drawings under the `drawings/`
+  prefix (PR #4). DELETE removes the Supabase object.
+- `backend/src/routes/testResults.ts` — single + batch certificate
+  upload under the `certificates/` prefix (PR #4). DELETE handler in PR
+  #5 added removal of the linked `Document` row + Supabase object.
 
-  // 4. Store URL in database
-  await prisma.document.create({
-    data: {
-      fileUrl: fileUrl,  // Supabase URL
-      // ... other fields
-    }
-  });
-} else {
-  // Fallback to local storage (development only)
-}
-```
+## Known follow-ups (not solved by this doc)
 
-### Delete Flow
+These are separate from the cutover and are documented here so future
+sessions know they remain open:
 
-```typescript
-// 1. Check if file is in Supabase
-if (document.fileUrl.includes('supabase.co/storage')) {
-  // 2. Extract path from URL
-  const path = extractPathFromUrl(document.fileUrl);
+- **2 orphan `documents` rows** from the earlier post-cutover smoke
+  test still exist for the test project's `certificates/` prefix.
+  These point at Supabase object paths that no longer exist (the
+  storage objects were cleaned up manually after the leak was found).
+  No automated cleanup yet — leave them in place until the broader
+  orphan-audit follow-up decides on policy. Do not run a one-shot
+  `DELETE FROM documents` without explicit approval.
+- **Historic orphan-audit follow-up** covers the larger pre-cutover
+  residue: roughly 9 cert/drawing rows pointing at the deprovisioned
+  `dwumiirtsuqxratjjvhb` host, plus 11 comment_attachment rows with
+  bare `/uploads/...` paths from when comment attachments were on
+  Railway disk. Files are unrecoverable; what to do with the DB rows
+  (broken-link UI, admin restore, archive, hard-delete) is a product
+  decision.
+- **Avatars and company logos** still write to ephemeral Railway disk
+  (`/uploads/avatars/`, `/uploads/company-logos/`). Both tables are
+  currently empty in production so there is no live data loss, but the
+  moment a customer uploads via those features, files start dying on
+  every redeploy. Lower priority because they are non-customer-facing
+  and self-recoverable (a user can re-upload an avatar), but they
+  should follow the same migration shape as PR #4 and PR #5.
+- **Prisma migration drift / baseline** remains a separate workstream.
+  The live schema has a few unique constraints declared in
+  `prisma/schema.prisma` but not present in the database. Read-only
+  duplicate checks have run; the data is compatible. Applying the
+  constraints needs to be done deliberately (backup → drift SQL →
+  review → apply → baseline migration history) and **not** with
+  `prisma db push`.
 
-  // 3. Delete from Supabase
-  await supabase.storage.from('documents').remove([path]);
-}
+## Local development
 
-// 4. Delete database record
-await prisma.document.delete({ where: { id } });
-```
+For local development, set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+in `backend/.env` to either:
+- The same production project (acceptable for a solo developer; uploads
+  during dev will live in production storage), or
+- A separate Supabase project dedicated to local/dev (recommended once
+  there is real usage).
 
-## Local Development
+If both are blank, the backend falls back to writing to
+`backend/uploads/...` on the local filesystem. That is fine for local
+dev; it must not be relied on in production.
 
-For local development, the backend falls back to local filesystem storage when Supabase credentials are not configured. This is detected by `isSupabaseConfigured()`:
-
-```typescript
-export function isSupabaseConfigured(): boolean {
-  return !!(supabaseUrl && supabaseServiceKey && supabaseUrl !== 'http://localhost:54321')
-}
-```
-
-To test with Supabase locally, add the environment variables to your `.env` file.
-
-## Migration Notes
-
-### Orphaned Documents
-
-Documents uploaded before this change (stored on Railway's filesystem) are now orphaned - the database records exist but the files are gone. These records should be deleted manually or via a cleanup script.
-
-To identify orphaned documents:
-```sql
-SELECT * FROM "Document"
-WHERE "fileUrl" LIKE '%railway.app/uploads/%';
-```
-
-### Future Uploads
-
-All new uploads automatically go to Supabase Storage. No migration is needed for new documents.
+Tests are pinned to disk-storage mode via `vitest.config.ts`, which
+clears `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
+`SUPABASE_ANON_KEY` in the test env so upload tests never accidentally
+hit a real Supabase project.
 
 ## Troubleshooting
 
-### "Failed to fetch" on upload
-- Check Railway logs for Supabase errors
-- Verify `SUPABASE_SERVICE_ROLE_KEY` is set correctly
-- Check Supabase dashboard for storage quota
+### Upload returns 5xx with "Supabase upload failed"
+- Confirm `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set in the
+  Railway backend env (Variables tab).
+- Confirm the `documents` bucket exists in the Supabase project and is
+  public.
+- Check Railway logs for the error returned by `@supabase/supabase-js`.
 
-### PDF not loading
-- If URL contains `railway.app/uploads/` - file is orphaned (pre-migration)
-- If URL contains `supabase.co/storage/` - check Supabase bucket permissions
+### File link returns 404 / 400 from the public URL
+- If `file_url` host matches the current `SUPABASE_URL` and the path
+  starts with `/storage/v1/object/public/documents/`: confirm the
+  object exists via the Supabase dashboard's Storage browser or a
+  service-role list call. Could be a recent delete (cache may serve
+  stale 200 briefly via CloudFlare).
+- If `file_url` host is `dwumiirtsuqxratjjvhb.supabase.co`: that
+  project is deprovisioned; the file is gone (see historic
+  orphan-audit follow-up).
+- If `file_url` starts with `/uploads/...`: that file is on the
+  container's ephemeral disk and was wiped on a previous redeploy.
 
-### Supabase credentials not working
-- Ensure you're using the **Service Role Key** (not anon key) for backend
-- Service role key has full access to storage
-- Check key hasn't expired
+### After cutover, an old DB row references the dead project
+Do not "fix" by editing `file_url` to point at the new host — the
+file is not there. Leave the row as-is until the orphan-audit
+follow-up runs.
 
-## Related Documentation
+## Related documentation
 
 - [Supabase Storage Docs](https://supabase.com/docs/guides/storage)
 - [Railway Environment Variables](https://docs.railway.app/develop/variables)
-- Backend routes: `backend/src/routes/documents.ts`
-- Supabase client: `backend/src/lib/supabase.ts`
+- Top-level developer guide: [`CLAUDE.md`](../CLAUDE.md)
