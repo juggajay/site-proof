@@ -610,6 +610,24 @@ companyRouter.patch(
       updateData.logoUrl = logoUrl;
     }
 
+    // When logoUrl is being changed (replaced or cleared) we want to
+    // best-effort remove the previous storage object after the DB update
+    // succeeds. POST /api/company/logo already does this for the upload
+    // path; PATCH was the remaining gap. The DB row is the source of
+    // truth — Supabase cleanup never blocks or fails the response.
+    let previousLogoUrl: string | null = null;
+    let shouldCleanupPreviousLogo = false;
+    if (logoUrl !== undefined) {
+      const existing = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { logoUrl: true },
+      });
+      previousLogoUrl = existing?.logoUrl ?? null;
+      // Only clean up when the previous URL actually differs from the new
+      // one. A PATCH that resets logoUrl to its current value is a no-op.
+      shouldCleanupPreviousLogo = !!previousLogoUrl && previousLogoUrl !== logoUrl;
+    }
+
     const updatedCompany = await prisma.company.update({
       where: { id: companyId },
       data: updateData,
@@ -624,6 +642,14 @@ companyRouter.patch(
         updatedAt: true,
       },
     });
+
+    if (shouldCleanupPreviousLogo && previousLogoUrl) {
+      try {
+        await removeStoredCompanyLogo(previousLogoUrl);
+      } catch (error) {
+        logWarn('Failed to delete previous company logo after PATCH:', error);
+      }
+    }
 
     res.json({
       message: 'Company settings updated successfully',

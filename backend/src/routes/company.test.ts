@@ -610,6 +610,123 @@ describe('Company API', () => {
         expect(res.status).toBe(200);
         expect(res.body.company.logoUrl).toBe(supabaseLogoUrl);
       });
+
+      it('PATCH clearing logoUrl removes the previous Supabase object', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from: () => ({ remove: mockRemove }) },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+        const previousSupabasePath = `company-logos/${companyId}/company-logo-${companyId}-prev-clear.png`;
+        const previousLogoUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${previousSupabasePath}`;
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: previousLogoUrl },
+        });
+
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ logoUrl: '' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.logoUrl).toBeNull();
+
+        // Wait one tick for the awaited best-effort cleanup.
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(mockRemove).toHaveBeenCalledTimes(1);
+        expect(mockRemove).toHaveBeenCalledWith([previousSupabasePath]);
+      });
+
+      it('PATCH replacing logoUrl removes the previous Supabase object', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from: () => ({ remove: mockRemove }) },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+        const previousSupabasePath = `company-logos/${companyId}/company-logo-${companyId}-prev-replace.png`;
+        const previousLogoUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${previousSupabasePath}`;
+        const newLogoUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/company-logos/${companyId}/company-logo-${companyId}-new-replace.png`;
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: previousLogoUrl },
+        });
+
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ logoUrl: newLogoUrl });
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.logoUrl).toBe(newLogoUrl);
+
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(mockRemove).toHaveBeenCalledTimes(1);
+        expect(mockRemove).toHaveBeenCalledWith([previousSupabasePath]);
+      });
+
+      it('PATCH does not call Supabase remove when the previous logoUrl is a local /uploads path', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from: () => ({ remove: mockRemove }) },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: '/uploads/company-logos/local-prev.png' },
+        });
+
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ logoUrl: '' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.logoUrl).toBeNull();
+        expect(mockRemove).not.toHaveBeenCalled();
+      });
+
+      it('PATCH still returns 200 when Supabase cleanup throws (best-effort cleanup)', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        // Simulate Supabase being unreachable at delete time. The PATCH must
+        // still succeed because the DB row is the source of truth and cleanup
+        // is best-effort.
+        mockGetSupabaseClient.mockImplementation(() => {
+          throw new Error('simulated Supabase outage');
+        });
+
+        const previousLogoUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/company-logos/${companyId}/company-logo-${companyId}-prev-throw.png`;
+        const newLogoUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/company-logos/${companyId}/company-logo-${companyId}-new-throw.png`;
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: previousLogoUrl },
+        });
+
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ logoUrl: newLogoUrl });
+
+        // Response must succeed and DB must be updated even though
+        // best-effort cleanup blew up.
+        expect(res.status).toBe(200);
+        expect(res.body.company.logoUrl).toBe(newLogoUrl);
+
+        const persisted = await prisma.company.findUnique({
+          where: { id: companyId },
+          select: { logoUrl: true },
+        });
+        expect(persisted?.logoUrl).toBe(newLogoUrl);
+      });
     });
   });
 
