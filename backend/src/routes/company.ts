@@ -156,6 +156,31 @@ async function removeStoredCompanyLogo(logoUrl: string | null | undefined): Prom
   deleteLocalCompanyLogo(logoUrl);
 }
 
+// Decide whether a PATCH that changed `logoUrl` should trigger best-effort
+// cleanup of the previously-stored object. Raw string comparison alone is
+// unsafe because two URLs can point at the same Supabase object while
+// differing only in a query string (cache-buster, signed-URL variant, etc.)
+// — deleting on string-difference would yank the still-active file.
+//
+// When both URLs resolve inside the configured Supabase documents bucket we
+// compare their storage paths. Otherwise we fall back to raw URL comparison,
+// which is the right call for local `/uploads/...` paths and external URLs.
+function shouldRemovePreviousLogoOnPatch(
+  previousLogoUrl: string | null,
+  newLogoUrl: string | null,
+): boolean {
+  if (!previousLogoUrl) return false;
+
+  const previousStoragePath = getSupabaseStoragePath(previousLogoUrl, DOCUMENTS_BUCKET);
+  const newStoragePath = newLogoUrl ? getSupabaseStoragePath(newLogoUrl, DOCUMENTS_BUCKET) : null;
+
+  if (previousStoragePath !== null && newStoragePath !== null) {
+    return previousStoragePath !== newStoragePath;
+  }
+
+  return previousLogoUrl !== newLogoUrl;
+}
+
 function deleteLocalCompanyLogo(logoUrl: string | null | undefined): void {
   if (!logoUrl) return;
 
@@ -610,6 +635,22 @@ companyRouter.patch(
       updateData.logoUrl = logoUrl;
     }
 
+    // When logoUrl is being changed (replaced or cleared) we want to
+    // best-effort remove the previous storage object after the DB update
+    // succeeds. POST /api/company/logo already does this for the upload
+    // path; PATCH was the remaining gap. The DB row is the source of
+    // truth — Supabase cleanup never blocks or fails the response.
+    let previousLogoUrl: string | null = null;
+    let shouldCleanupPreviousLogo = false;
+    if (logoUrl !== undefined) {
+      const existing = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { logoUrl: true },
+      });
+      previousLogoUrl = existing?.logoUrl ?? null;
+      shouldCleanupPreviousLogo = shouldRemovePreviousLogoOnPatch(previousLogoUrl, logoUrl);
+    }
+
     const updatedCompany = await prisma.company.update({
       where: { id: companyId },
       data: updateData,
@@ -624,6 +665,14 @@ companyRouter.patch(
         updatedAt: true,
       },
     });
+
+    if (shouldCleanupPreviousLogo && previousLogoUrl) {
+      try {
+        await removeStoredCompanyLogo(previousLogoUrl);
+      } catch (error) {
+        logWarn('Failed to delete previous company logo after PATCH:', error);
+      }
+    }
 
     res.json({
       message: 'Company settings updated successfully',
