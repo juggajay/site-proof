@@ -9,11 +9,12 @@ import {
   getSupabaseClient,
   isSupabaseConfigured,
   getSupabasePublicUrl,
+  getSupabaseStoragePath,
   DOCUMENTS_BUCKET,
 } from '../lib/supabase.js';
 import { ensureUploadSubdirectoryAsync, resolveUploadPath } from '../lib/uploadPaths.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
-import { logError } from '../lib/serverLogger.js';
+import { logError, logWarn } from '../lib/serverLogger.js';
 import { getPaginationMeta, getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
 import multer from 'multer';
 import path from 'path';
@@ -418,6 +419,33 @@ async function deleteLocalCommentAttachmentFile(fileUrl: string): Promise<void> 
   }
 }
 
+async function deleteCommentAttachmentFromSupabase(fileUrl: string): Promise<void> {
+  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+  if (!storagePath) {
+    return;
+  }
+
+  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
+  if (error) {
+    logError('Supabase comment attachment delete failed:', error);
+  }
+}
+
+// Routes a comment-attachment fileUrl to the right cleanup mechanism.
+// Supabase URLs that resolve inside the configured documents bucket get a
+// best-effort `remove` call; everything else falls back to the legacy
+// local-disk cleanup. Throws on infrastructure errors (e.g. mocked
+// `getSupabaseClient` blowing up); call sites must wrap in try/catch and
+// log because storage cleanup is best-effort and the DB row is the source
+// of truth.
+async function removeStoredCommentAttachment(fileUrl: string): Promise<void> {
+  if (isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET) !== null) {
+    await deleteCommentAttachmentFromSupabase(fileUrl);
+    return;
+  }
+  await deleteLocalCommentAttachmentFile(fileUrl);
+}
+
 function isSafeAttachmentUrl(fileUrl: string): boolean {
   if (fileUrl.length > 2048) {
     return false;
@@ -702,8 +730,17 @@ commentsRouter.post(
         });
       }
     } catch (error) {
+      // Roll back every successfully-stored attachment from the same batch.
+      // Each cleanup is independent and best-effort so one failure does not
+      // mask the original upload error.
       await Promise.all(
-        attachments.map((attachment) => deleteLocalCommentAttachmentFile(attachment.fileUrl)),
+        attachments.map(async (attachment) => {
+          try {
+            await removeStoredCommentAttachment(attachment.fileUrl);
+          } catch (cleanupError) {
+            logWarn('Failed to remove comment attachment after upload rollback:', cleanupError);
+          }
+        }),
       );
       throw error;
     }
@@ -943,8 +980,17 @@ commentsRouter.delete(
       }),
     ]);
 
+    // Best-effort storage cleanup after the DB transaction commits. Each
+    // attachment is removed independently; failures are logged so the
+    // response still succeeds (DB is the source of truth).
     await Promise.all(
-      attachments.map((attachment) => deleteLocalCommentAttachmentFile(attachment.fileUrl)),
+      attachments.map(async (attachment) => {
+        try {
+          await removeStoredCommentAttachment(attachment.fileUrl);
+        } catch (cleanupError) {
+          logWarn('Failed to remove comment attachment file after comment delete:', cleanupError);
+        }
+      }),
     );
 
     res.json({ success: true });
@@ -1072,7 +1118,11 @@ commentsRouter.delete(
       where: { id: attachmentId },
     });
 
-    await deleteLocalCommentAttachmentFile(attachment.fileUrl);
+    try {
+      await removeStoredCommentAttachment(attachment.fileUrl);
+    } catch (cleanupError) {
+      logWarn('Failed to remove comment attachment file after attachment delete:', cleanupError);
+    }
 
     res.json({ success: true });
   }),
