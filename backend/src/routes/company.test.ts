@@ -727,6 +727,48 @@ describe('Company API', () => {
         });
         expect(persisted?.logoUrl).toBe(newLogoUrl);
       });
+
+      it('PATCH replacing logoUrl with the same Supabase object plus a query string does not remove it', async () => {
+        // Two URLs that resolve to the same Supabase storage path but differ
+        // in querystring (cache-buster, signed-URL variant, etc.). The raw
+        // string comparison would mark them as different and trigger a
+        // destructive cleanup; the path-aware comparison must recognise them
+        // as the same object and skip the remove call.
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from: () => ({ remove: mockRemove }) },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+        const sharedSupabasePath = `company-logos/${companyId}/company-logo-${companyId}-querystring.png`;
+        const previousLogoUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${sharedSupabasePath}`;
+        const newLogoUrl = `${previousLogoUrl}?v=2`;
+
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: previousLogoUrl },
+        });
+
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ logoUrl: newLogoUrl });
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.logoUrl).toBe(newLogoUrl);
+
+        // Give any awaited cleanup a tick to run before asserting.
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(mockRemove).not.toHaveBeenCalled();
+
+        const persisted = await prisma.company.findUnique({
+          where: { id: companyId },
+          select: { logoUrl: true },
+        });
+        expect(persisted?.logoUrl).toBe(newLogoUrl);
+      });
     });
   });
 

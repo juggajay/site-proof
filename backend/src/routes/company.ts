@@ -156,6 +156,31 @@ async function removeStoredCompanyLogo(logoUrl: string | null | undefined): Prom
   deleteLocalCompanyLogo(logoUrl);
 }
 
+// Decide whether a PATCH that changed `logoUrl` should trigger best-effort
+// cleanup of the previously-stored object. Raw string comparison alone is
+// unsafe because two URLs can point at the same Supabase object while
+// differing only in a query string (cache-buster, signed-URL variant, etc.)
+// — deleting on string-difference would yank the still-active file.
+//
+// When both URLs resolve inside the configured Supabase documents bucket we
+// compare their storage paths. Otherwise we fall back to raw URL comparison,
+// which is the right call for local `/uploads/...` paths and external URLs.
+function shouldRemovePreviousLogoOnPatch(
+  previousLogoUrl: string | null,
+  newLogoUrl: string | null,
+): boolean {
+  if (!previousLogoUrl) return false;
+
+  const previousStoragePath = getSupabaseStoragePath(previousLogoUrl, DOCUMENTS_BUCKET);
+  const newStoragePath = newLogoUrl ? getSupabaseStoragePath(newLogoUrl, DOCUMENTS_BUCKET) : null;
+
+  if (previousStoragePath !== null && newStoragePath !== null) {
+    return previousStoragePath !== newStoragePath;
+  }
+
+  return previousLogoUrl !== newLogoUrl;
+}
+
 function deleteLocalCompanyLogo(logoUrl: string | null | undefined): void {
   if (!logoUrl) return;
 
@@ -623,9 +648,7 @@ companyRouter.patch(
         select: { logoUrl: true },
       });
       previousLogoUrl = existing?.logoUrl ?? null;
-      // Only clean up when the previous URL actually differs from the new
-      // one. A PATCH that resets logoUrl to its current value is a no-op.
-      shouldCleanupPreviousLogo = !!previousLogoUrl && previousLogoUrl !== logoUrl;
+      shouldCleanupPreviousLogo = shouldRemovePreviousLogoOnPatch(previousLogoUrl, logoUrl);
     }
 
     const updatedCompany = await prisma.company.update({
