@@ -46,7 +46,7 @@ site-proofv3/
 | Backend | Express.js, tRPC v10 |
 | Database | PostgreSQL via Prisma ORM, **hosted on Railway** (project `hearty-harmony`). Supabase is **not** the database. |
 | Auth | JWT, MFA support. Supabase Auth is **not** in use; the Supabase project is storage-only. |
-| Storage | Supabase Storage. Single public bucket `documents` in project `vhlvutvzdliwxorfhxxv`. Covers all six customer-facing upload surfaces: documents, comment attachments, drawings, test result certificates, avatars, and company logos. Verified end-to-end in production (PR #7 smoke, 2026-05-12). See [docs/supabase-storage-setup.md](docs/supabase-storage-setup.md). |
+| Storage | Supabase Storage. Single public bucket `documents` in project `vhlvutvzdliwxorfhxxv`. Covers all six customer-facing upload surfaces: documents, comment attachments, drawings, test result certificates, avatars, and company logos. Upload + delete + replacement-cleanup verified end-to-end in production (PR #7 and PR #9 smokes, 2026-05-12). See [docs/supabase-storage-setup.md](docs/supabase-storage-setup.md). |
 | Email | Resend |
 
 ## Key Patterns

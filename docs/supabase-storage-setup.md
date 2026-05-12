@@ -82,7 +82,7 @@ PDF fixtures:
 | Drawings | ✅ | ✅ | ✅ (supersede creates a new object; old object retained until DELETE) | ✅ |
 | Test result certificates | ✅ (single + batch) | ✅ | n/a | ✅ |
 | Avatars | ✅ | ✅ | ✅ (POST `/api/auth/avatar` over an existing avatar) | ✅ (DELETE `/api/auth/avatar`) |
-| Company logos | ✅ | ✅ | ✅ (POST `/api/company/logo` over an existing logo) | n/a (no DELETE endpoint; cleared via PATCH — see follow-up) |
+| Company logos | ✅ | ✅ | ✅ (POST `/api/company/logo`, or PATCH `/api/company` with a different `logoUrl`) | ✅ (PATCH `/api/company` with `logoUrl: ""` removes the previous Supabase object — PR #9) |
 
 Smoke evidence:
 - Documents / comments / drawings / certificates — PR #4 + PR #5 smokes
@@ -92,6 +92,11 @@ Smoke evidence:
   URL after replacement, 4xx (Supabase storage 400) on the previous URL
   after replacement, and (for avatars) 4xx on the deleted URL after
   DELETE.
+- Company-logo PATCH cleanup — PR #9 production smoke on 2026-05-12.
+  Verified that PATCH `/api/company` with the same Supabase URL plus a
+  querystring leaves the object intact (path-based comparison), and
+  that PATCH `/api/company` with `logoUrl: ""` removes the previous
+  Supabase object (cache-busted public GET returned 400).
 
 For surfaces with a DELETE handler, deleting through the app:
 - Atomically deletes the linked `documents` row (where applicable).
@@ -172,23 +177,16 @@ These apply regardless of which file you are editing:
 - `backend/src/routes/company.ts` — company logos under the
   `company-logos/<companyId>/` prefix (PR #7). POST `/api/company/logo`
   replaces the previous logo's Supabase object. PATCH `/api/company`
-  with a `logoUrl` change does **not** clean up the previous object
-  (see follow-ups).
+  with a `logoUrl` change also removes the previous object best-effort
+  (PR #9). Cleanup compares Supabase storage paths (not raw URLs) so a
+  PATCH that saves the same object with a different querystring keeps
+  the active file intact.
 
 ## Known follow-ups (not solved by this doc)
 
 These are separate from the cutover and are documented here so future
 sessions know they remain open:
 
-- **PATCH `/api/company` logoUrl cleanup is missing.** POST
-  `/api/company/logo` correctly deletes the previously-stored Supabase
-  object on replacement, but PATCH `/api/company` with a `logoUrl`
-  change (including clearing it to `""`) does not call
-  `deleteCompanyLogoFromSupabase` on the prior URL. Verified in the
-  PR #7 production smoke (2026-05-12): after PATCHing `logoUrl` to
-  empty, the previously-active Supabase object remained publicly
-  reachable. Out of scope for PR #7. The same pattern would apply to
-  any future PATCH route that changes a Supabase-backed URL field.
 - **Orphan audit / cleanup** still open. This includes:
   - 2 orphan `documents` rows from the earlier post-cutover certificate
     smoke that point at Supabase object paths no longer present.
@@ -212,12 +210,6 @@ sessions know they remain open:
   constraints needs to be done deliberately (backup → drift SQL →
   review → apply → baseline migration history) and **not** with
   `prisma db push`.
-- **Pre-existing webhook-secret test failure.** `src/routes/webhooks.test.ts
-  > POST /api/webhooks/:id/regenerate-secret > should encrypt
-  regenerated webhook secrets at rest` returns 500 instead of 200.
-  Reproduces on clean `master` (1 failed / 69 in that file) — not
-  caused by the storage work. Tracked here so it does not get blamed
-  on a future storage PR.
 
 ## Local development
 
