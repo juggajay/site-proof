@@ -1049,6 +1049,27 @@ describe('Webhooks API', () => {
         expect(isEncrypted(record!.secret)).toBe(true);
       });
 
+      it('should regenerate the secret even when the stored ciphertext was encrypted with a different key', async () => {
+        // Webhook was created in beforeEach using whatever key happened to be
+        // in process.env. Switch to a fresh key that cannot decrypt the stored
+        // ciphertext, then confirm regenerate-secret still recovers the
+        // webhook (it must not try to decrypt the stale secret).
+        process.env.ENCRYPTION_KEY = 'b'.repeat(64);
+
+        const res = await request(app)
+          .post(`/api/webhooks/${webhookId}/regenerate-secret`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.secret).toMatch(/^[a-f0-9]{64}$/);
+
+        const record = await prisma.webhookConfig.findUnique({
+          where: { id: webhookId },
+        });
+        expect(record).toBeDefined();
+        expect(isEncrypted(record!.secret)).toBe(true);
+      });
+
       it('should return 404 for non-existent webhook', async () => {
         const res = await request(app)
           .post('/api/webhooks/non-existent-id/regenerate-secret')

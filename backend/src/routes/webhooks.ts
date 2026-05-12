@@ -642,6 +642,11 @@ router.delete(
 );
 
 // POST /api/webhooks/:id/regenerate-secret - Regenerate webhook secret
+//
+// Intentionally does NOT decrypt the existing secret: regenerating is the
+// recovery path when ENCRYPTION_KEY has been rotated and the stored
+// ciphertext can no longer be authenticated. We only need the row's
+// companyId for authorization before overwriting.
 router.post(
   '/:id/regenerate-secret',
   asyncHandler(async (req: Request, res: Response) => {
@@ -649,26 +654,27 @@ router.post(
     const user = req.user!;
     requireWebhookManager(user);
 
-    const config = await getWebhookConfig(id);
-    if (!config) {
+    const record = await prisma.webhookConfig.findUnique({
+      where: { id },
+      select: { id: true, companyId: true },
+    });
+    if (!record) {
       throw AppError.notFound('Webhook not found');
     }
 
-    if (config.companyId !== user.companyId) {
+    if (record.companyId !== user.companyId) {
       throw AppError.forbidden('Access denied');
     }
 
     const secret = crypto.randomBytes(32).toString('hex');
-    const configWithNewSecret = toWebhookConfig(
-      await prisma.webhookConfig.update({
-        where: { id },
-        data: { secret: encryptWebhookSecret(secret) },
-      }),
-    );
+    await prisma.webhookConfig.update({
+      where: { id },
+      data: { secret: encryptWebhookSecret(secret) },
+    });
 
     res.json({
-      id: configWithNewSecret.id,
-      secret: configWithNewSecret.secret,
+      id: record.id,
+      secret,
       message: 'Secret regenerated. Save the new secret - it will not be shown again.',
     });
   }),
