@@ -28,9 +28,18 @@ import {
   getClientIp,
   recordFailedAuthAttempt,
 } from '../middleware/rateLimiter.js';
-import { logError } from '../lib/serverLogger.js';
+import { logError, logWarn } from '../lib/serverLogger.js';
 import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../lib/uploadPaths.js';
 import { assertCanRemoveUserFromProjectAdminRoles } from '../lib/projectAdminInvariant.js';
+import {
+  DOCUMENTS_BUCKET,
+  getSupabaseClient,
+  getSupabasePublicUrl,
+  getSupabaseStoragePath,
+  isSupabaseConfigured,
+} from '../lib/supabase.js';
+
+const AVATAR_STORAGE_PREFIX = 'avatars';
 
 export const authRouter = Router();
 
@@ -97,7 +106,10 @@ export function getSafeDataExportFilename(email: string, date = new Date()): str
   return `${prefix}${safeEmail}${suffix}`;
 }
 
-const avatarStorage = multer.diskStorage({
+// Avatar uploads use Supabase Storage (memory-buffered) in production and fall
+// back to the local filesystem when Supabase is not configured. Path inside
+// the `documents` bucket: `avatars/<userId>/<unique>.<ext>`.
+const avatarDiskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     try {
       cb(null, ensureUploadSubdirectory('avatars'));
@@ -119,8 +131,10 @@ const avatarStorage = multer.diskStorage({
   },
 });
 
+const avatarMemoryStorage = multer.memoryStorage();
+
 const avatarUpload = multer({
-  storage: avatarStorage,
+  storage: isSupabaseConfigured() ? avatarMemoryStorage : avatarDiskStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (_req, file, cb) => {
     if (getSafeImageExtensionForMimeType(file.mimetype)) {
@@ -135,6 +149,71 @@ function cleanupUploadedAvatar(file?: Express.Multer.File): void {
   if (file?.path && fs.existsSync(file.path)) {
     fs.unlinkSync(file.path);
   }
+}
+
+function buildAvatarStorageFilename(userId: string, mimetype: string): string | null {
+  const ext = getSafeImageExtensionForMimeType(mimetype);
+  if (!ext) return null;
+  return `avatar-${userId}-${crypto.randomUUID()}${ext}`;
+}
+
+async function uploadAvatarToSupabase(
+  file: Express.Multer.File,
+  userId: string,
+): Promise<{ url: string; storagePath: string }> {
+  const filename = buildAvatarStorageFilename(userId, file.mimetype);
+  if (!filename) {
+    throw AppError.badRequest('Invalid file type. Only JPEG, PNG, GIF and WebP are allowed.');
+  }
+  const storagePath = `${AVATAR_STORAGE_PREFIX}/${userId}/${filename}`;
+
+  const { error } = await getSupabaseClient()
+    .storage.from(DOCUMENTS_BUCKET)
+    .upload(storagePath, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false,
+    });
+
+  if (error) {
+    logError('Supabase avatar upload failed:', error);
+    throw AppError.internal('Failed to upload avatar');
+  }
+
+  return {
+    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
+    storagePath,
+  };
+}
+
+async function deleteAvatarFromSupabase(fileUrl: string): Promise<void> {
+  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+  if (!storagePath) return;
+
+  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
+
+  if (error) {
+    logError('Supabase avatar delete failed:', error);
+  }
+}
+
+async function cleanupStoredAvatarUpload(
+  fileUrl: string | null,
+  file: Express.Multer.File,
+): Promise<void> {
+  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
+    await deleteAvatarFromSupabase(fileUrl);
+    return;
+  }
+  cleanupUploadedAvatar(file);
+}
+
+async function removeStoredAvatar(avatarUrl: string | null | undefined): Promise<void> {
+  if (!avatarUrl) return;
+  if (isSupabaseConfigured() && getSupabaseStoragePath(avatarUrl, DOCUMENTS_BUCKET) !== null) {
+    await deleteAvatarFromSupabase(avatarUrl);
+    return;
+  }
+  deleteLocalAvatarFile(avatarUrl);
 }
 
 function deleteLocalAvatarFile(avatarUrl: string | null | undefined): void {
@@ -1036,11 +1115,12 @@ authRouter.post(
     if (!req.file) {
       throw AppError.badRequest('No file uploaded');
     }
+    const uploadedFile = req.file;
 
     try {
-      assertUploadedImageFile(req.file);
+      assertUploadedImageFile(uploadedFile);
     } catch (error) {
-      cleanupUploadedAvatar(req.file);
+      cleanupUploadedAvatar(uploadedFile);
       throw error;
     }
 
@@ -1050,29 +1130,45 @@ authRouter.post(
       select: { avatarUrl: true },
     });
 
-    const avatarUrl = buildApiUrl(`/uploads/avatars/${req.file.filename}`);
+    let avatarUrl: string;
+    try {
+      if (isSupabaseConfigured() && uploadedFile.buffer) {
+        const uploaded = await uploadAvatarToSupabase(uploadedFile, userData.id);
+        avatarUrl = uploaded.url;
+      } else {
+        avatarUrl = buildApiUrl(`/uploads/avatars/${uploadedFile.filename}`);
+      }
+    } catch (error) {
+      cleanupUploadedAvatar(uploadedFile);
+      throw error;
+    }
 
-    // Update user with new avatar URL
-    const updatedUser = await prisma.user.update({
-      where: { id: userData.id },
-      data: { avatarUrl },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        avatarUrl: true,
-        phone: true,
-        roleInCompany: true,
-        companyId: true,
-      },
-    });
+    let updatedUser;
+    try {
+      updatedUser = await prisma.user.update({
+        where: { id: userData.id },
+        data: { avatarUrl },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          avatarUrl: true,
+          phone: true,
+          roleInCompany: true,
+          companyId: true,
+        },
+      });
+    } catch (error) {
+      await cleanupStoredAvatarUpload(avatarUrl, uploadedFile);
+      throw error;
+    }
 
-    // Delete old avatar file if it exists
+    // Delete old avatar file if it exists (best-effort; never blocks the response)
     if (oldUser?.avatarUrl) {
       try {
-        deleteLocalAvatarFile(oldUser.avatarUrl);
+        await removeStoredAvatar(oldUser.avatarUrl);
       } catch (err) {
-        logError('Failed to delete old avatar:', err);
+        logWarn('Failed to delete old avatar:', err);
       }
     }
 
@@ -1113,9 +1209,9 @@ authRouter.delete(
 
     if (user?.avatarUrl) {
       try {
-        deleteLocalAvatarFile(user.avatarUrl);
+        await removeStoredAvatar(user.avatarUrl);
       } catch (err) {
-        logError('Failed to delete avatar file:', err);
+        logWarn('Failed to delete avatar file:', err);
       }
     }
 
