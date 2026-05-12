@@ -187,22 +187,25 @@ These apply regardless of which file you are editing:
 These are separate from the cutover and are documented here so future
 sessions know they remain open:
 
-- **Orphan audit / cleanup** still open. This includes:
-  - 2 orphan `documents` rows from the earlier post-cutover certificate
-    smoke that point at Supabase object paths no longer present.
-  - Historical pre-cutover residue: ~9 cert/drawing rows pointing at
-    the deprovisioned `dwumiirtsuqxratjjvhb` host, plus ~11
-    `comment_attachment` rows with bare `/uploads/...` paths from when
-    comment attachments were on Railway disk.
-  - 1 orphan `company-logos/...` storage object left behind by the
-    PR #7 smoke when PATCH `logoUrl=""` did not clean up. Path:
-    `company-logos/1dec45a3-2a6d-4233-bee3-9f2b823b5738/...
-    -93be0b20-...png`. Do not delete manually — let this roll into the
-    same audit workstream.
-  - Files for the historical orphans are unrecoverable; what to do
-    with the DB rows (broken-link UI, admin restore, archive,
-    hard-delete) is a product decision. Do not run a one-shot
-    `DELETE FROM documents` without explicit approval.
+- **Orphan audit / cleanup is COMPLETE (2026-05-12).** PR #12 fixed the
+  remaining comment-attachment Supabase-cleanup leak so new orphans do
+  not accrue from that code path. The 24 operator-owned orphan DB rows
+  surfaced by the audit were deleted in a single read-write
+  SERIALIZABLE transaction:
+  - 11 `documents` rows (5 dead-Supabase drawings + 4 local `/uploads/`
+    documents + 2 current-Supabase certificate rows whose objects were
+    already missing).
+  - 13 `comment_attachments` rows (11 local `/uploads/` + 2
+    `example.com` test fixtures).
+
+  Post-cleanup verification returned **0 rows** for every DB orphan
+  check (existence-by-ID for both tables, plus re-runs of Q5 / Q6 / Q7
+  / Q10 / Q15). The single PR #7 storage-only `company-logos/...`
+  object was deleted via the Supabase Storage dashboard; the
+  post-delete unauthenticated public GET against its path returns
+  HTTP 400 with the Supabase "object missing" envelope. Backup of all
+  24 deleted rows (sha256-hashed) was captured before deletion and
+  retained for emergency restore.
 - **Prisma migration drift / baseline** remains a separate workstream.
   The live schema has a few unique constraints declared in
   `prisma/schema.prisma` but not present in the database. Read-only
@@ -245,15 +248,19 @@ hit a real Supabase project.
   service-role list call. Could be a recent delete (cache may serve
   stale 200 briefly via CloudFlare).
 - If `file_url` host is `dwumiirtsuqxratjjvhb.supabase.co`: that
-  project is deprovisioned; the file is gone (see historic
-  orphan-audit follow-up).
-- If `file_url` starts with `/uploads/...`: that file is on the
-  container's ephemeral disk and was wiped on a previous redeploy.
+  project is deprovisioned and every row of this shape was deleted by
+  the 2026-05-12 orphan cleanup. A row matching this pattern in
+  production now is **unexpected** — investigate how it got there
+  (recent migration import? data restore?) before touching it.
+- If `file_url` starts with `/uploads/...`: same as above — every such
+  row was deleted on 2026-05-12. A new one is unexpected and worth
+  investigating, not silently tolerated.
 
 ### After cutover, an old DB row references the dead project
 Do not "fix" by editing `file_url` to point at the new host — the
-file is not there. Leave the row as-is until the orphan-audit
-follow-up runs.
+file is not there. The 2026-05-12 orphan cleanup removed every such
+row that existed at that time; if one reappears, investigate how it
+got there before taking any action.
 
 ## Related documentation
 
