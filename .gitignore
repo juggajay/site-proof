@@ -83,6 +83,7 @@ nul
 .turbo/
 .vercel/
 .worktrees/
+.gstack/
 
 # Production env (should use CI/CD environment variables)
 frontend/.env.production
