@@ -25,10 +25,12 @@ Previous project ref `dwumiirtsuqxratjjvhb` was deprovisioned by Supabase
 after the free-tier 90-day deletion window. URLs referencing that host no
 longer resolve and are unrecoverable.
 
-## Storage prefixes (one bucket, four prefixes)
+## Storage prefixes (one bucket, six prefixes)
 
-All four customer-facing upload surfaces share the `documents` bucket and
-differ only in the prefix they write under:
+All six customer-facing upload surfaces share the `documents` bucket and
+differ only in the prefix they write under. Project-scoped surfaces nest
+under `<projectId>`; per-user / per-company surfaces nest under
+`<userId>` / `<companyId>`.
 
 | Feature | Storage path inside `documents` bucket | Backend route file |
 |---|---|---|
@@ -36,12 +38,17 @@ differ only in the prefix they write under:
 | Comment attachments | `comments/<projectId>/<unique>-<filename>` | `backend/src/routes/comments.ts` |
 | Drawings | `drawings/<projectId>/<unique>-<filename>` | `backend/src/routes/drawings.ts` |
 | Test result certificates | `certificates/<projectId>/cert-<unique>.<ext>` | `backend/src/routes/testResults.ts` |
+| Avatars | `avatars/<userId>/avatar-<userId>-<uuid>.<ext>` | `backend/src/routes/auth.ts` |
+| Company logos | `company-logos/<companyId>/company-logo-<companyId>-<uuid>.<ext>` | `backend/src/routes/company.ts` |
 
 The full public URL for a stored object is:
 
 ```
-https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/<prefix>/<projectId>/<filename>
+https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/<prefix>/<scope-id>/<filename>
 ```
+
+where `<scope-id>` is the `projectId` for the first four surfaces, the
+`userId` for avatars, or the `companyId` for company logos.
 
 ## Architecture
 
@@ -64,19 +71,30 @@ SDK required in the browser).
 
 ## Verified durable flows
 
-End-to-end production smoke tests have verified the full lifecycle
-(upload → durable Supabase object → public download → delete →
-Supabase object removed → bucket prefix empty) for:
+All six customer-facing upload surfaces have been verified end-to-end
+against production with a real owner account and throwaway 1×1 PNG /
+PDF fixtures:
 
-| Flow | Single upload | Batch upload | Download | Delete removes Supabase object |
+| Flow | Upload | Public download | Replacement removes old object | Delete removes Supabase object |
 |---|---|---|---|---|
-| Documents | ✅ | n/a | ✅ | ✅ |
-| Comment attachments | ✅ | n/a | ✅ | ✅ |
-| Drawings | ✅ | n/a | ✅ | ✅ |
-| Test result certificates | ✅ | ✅ | ✅ | ✅ |
+| Documents | ✅ | ✅ | n/a (new versions, prior objects retained by design) | ✅ |
+| Comment attachments | ✅ | ✅ | n/a | ✅ |
+| Drawings | ✅ | ✅ | ✅ (supersede creates a new object; old object retained until DELETE) | ✅ |
+| Test result certificates | ✅ (single + batch) | ✅ | n/a | ✅ |
+| Avatars | ✅ | ✅ | ✅ (POST `/api/auth/avatar` over an existing avatar) | ✅ (DELETE `/api/auth/avatar`) |
+| Company logos | ✅ | ✅ | ✅ (POST `/api/company/logo` over an existing logo) | n/a (no DELETE endpoint; cleared via PATCH — see follow-up) |
 
-For each surface, deleting through the app:
-- Atomically deletes the linked `documents` row.
+Smoke evidence:
+- Documents / comments / drawings / certificates — PR #4 + PR #5 smokes
+  (cert-DELETE leak found and fixed in PR #5; documented in PR #6).
+- Avatars / company logos — PR #7 production smoke on 2026-05-12.
+  Verified URL prefix, 200 on public GET after upload, 200 on the new
+  URL after replacement, 4xx (Supabase storage 400) on the previous URL
+  after replacement, and (for avatars) 4xx on the deleted URL after
+  DELETE.
+
+For surfaces with a DELETE handler, deleting through the app:
+- Atomically deletes the linked `documents` row (where applicable).
 - Best-effort removes the Supabase object (failure is logged via
   `logWarn` so the DB remains the source of truth).
 
@@ -148,33 +166,45 @@ These apply regardless of which file you are editing:
 - `backend/src/routes/testResults.ts` — single + batch certificate
   upload under the `certificates/` prefix (PR #4). DELETE handler in PR
   #5 added removal of the linked `Document` row + Supabase object.
+- `backend/src/routes/auth.ts` — avatars under the `avatars/<userId>/`
+  prefix (PR #7). POST replaces the previous avatar's Supabase object;
+  DELETE removes the current one.
+- `backend/src/routes/company.ts` — company logos under the
+  `company-logos/<companyId>/` prefix (PR #7). POST `/api/company/logo`
+  replaces the previous logo's Supabase object. PATCH `/api/company`
+  with a `logoUrl` change does **not** clean up the previous object
+  (see follow-ups).
 
 ## Known follow-ups (not solved by this doc)
 
 These are separate from the cutover and are documented here so future
 sessions know they remain open:
 
-- **2 orphan `documents` rows** from the earlier post-cutover smoke
-  test still exist for the test project's `certificates/` prefix.
-  These point at Supabase object paths that no longer exist (the
-  storage objects were cleaned up manually after the leak was found).
-  No automated cleanup yet — leave them in place until the broader
-  orphan-audit follow-up decides on policy. Do not run a one-shot
-  `DELETE FROM documents` without explicit approval.
-- **Historic orphan-audit follow-up** covers the larger pre-cutover
-  residue: roughly 9 cert/drawing rows pointing at the deprovisioned
-  `dwumiirtsuqxratjjvhb` host, plus 11 comment_attachment rows with
-  bare `/uploads/...` paths from when comment attachments were on
-  Railway disk. Files are unrecoverable; what to do with the DB rows
-  (broken-link UI, admin restore, archive, hard-delete) is a product
-  decision.
-- **Avatars and company logos** still write to ephemeral Railway disk
-  (`/uploads/avatars/`, `/uploads/company-logos/`). Both tables are
-  currently empty in production so there is no live data loss, but the
-  moment a customer uploads via those features, files start dying on
-  every redeploy. Lower priority because they are non-customer-facing
-  and self-recoverable (a user can re-upload an avatar), but they
-  should follow the same migration shape as PR #4 and PR #5.
+- **PATCH `/api/company` logoUrl cleanup is missing.** POST
+  `/api/company/logo` correctly deletes the previously-stored Supabase
+  object on replacement, but PATCH `/api/company` with a `logoUrl`
+  change (including clearing it to `""`) does not call
+  `deleteCompanyLogoFromSupabase` on the prior URL. Verified in the
+  PR #7 production smoke (2026-05-12): after PATCHing `logoUrl` to
+  empty, the previously-active Supabase object remained publicly
+  reachable. Out of scope for PR #7. The same pattern would apply to
+  any future PATCH route that changes a Supabase-backed URL field.
+- **Orphan audit / cleanup** still open. This includes:
+  - 2 orphan `documents` rows from the earlier post-cutover certificate
+    smoke that point at Supabase object paths no longer present.
+  - Historical pre-cutover residue: ~9 cert/drawing rows pointing at
+    the deprovisioned `dwumiirtsuqxratjjvhb` host, plus ~11
+    `comment_attachment` rows with bare `/uploads/...` paths from when
+    comment attachments were on Railway disk.
+  - 1 orphan `company-logos/...` storage object left behind by the
+    PR #7 smoke when PATCH `logoUrl=""` did not clean up. Path:
+    `company-logos/1dec45a3-2a6d-4233-bee3-9f2b823b5738/...
+    -93be0b20-...png`. Do not delete manually — let this roll into the
+    same audit workstream.
+  - Files for the historical orphans are unrecoverable; what to do
+    with the DB rows (broken-link UI, admin restore, archive,
+    hard-delete) is a product decision. Do not run a one-shot
+    `DELETE FROM documents` without explicit approval.
 - **Prisma migration drift / baseline** remains a separate workstream.
   The live schema has a few unique constraints declared in
   `prisma/schema.prisma` but not present in the database. Read-only
@@ -182,6 +212,12 @@ sessions know they remain open:
   constraints needs to be done deliberately (backup → drift SQL →
   review → apply → baseline migration history) and **not** with
   `prisma db push`.
+- **Pre-existing webhook-secret test failure.** `src/routes/webhooks.test.ts
+  > POST /api/webhooks/:id/regenerate-secret > should encrypt
+  regenerated webhook secrets at rest` returns 500 instead of 200.
+  Reproduces on clean `master` (1 failed / 69 in that file) — not
+  caused by the storage work. Tracked here so it does not get blamed
+  on a future storage PR.
 
 ## Local development
 
