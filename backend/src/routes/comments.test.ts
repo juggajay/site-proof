@@ -1,12 +1,44 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
-import { commentsRouter } from './comments.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import fs from 'fs';
 import path from 'path';
+
+// Mock supabase helpers so individual tests can opt into the Supabase code
+// path. The real `isSupabaseConfigured()` returns false in tests
+// (vitest.config.ts blanks SUPABASE_URL), and the default mock keeps that
+// behaviour so all pre-existing tests continue to exercise the local-disk
+// branch unchanged. `getSupabaseStoragePath` is passed through from the
+// real module. `getSupabasePublicUrl` is replaced with a non-gated mirror
+// of the real implementation: the real one calls its own module-local
+// `isSupabaseConfigured` (which is bound to the actual closure, not the
+// mock above) and would throw after a successful mocked upload, so we
+// rebuild the URL from `process.env.SUPABASE_URL` at call time.
+vi.mock('../lib/supabase.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => false),
+    getSupabaseClient: vi.fn(),
+    getSupabasePublicUrl: vi.fn((bucket: string, storagePath: string) => {
+      const base = (process.env.SUPABASE_URL?.trim() || '').replace(/\/+$/, '');
+      return `${base}/storage/v1/object/public/${bucket}/${storagePath}`;
+    }),
+  };
+});
+
+import * as supabaseLib from '../lib/supabase.js';
+
+// Import comments router AFTER vi.mock so it picks up the mocked helpers.
+import { commentsRouter } from './comments.js';
+
+const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
+const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
+
+const ORIGINAL_SUPABASE_URL = process.env.SUPABASE_URL;
 
 const app = express();
 app.use(express.json());
@@ -26,6 +58,19 @@ describe('Comments API', () => {
   let subcontractorToken: string;
   let subcontractorUserId: string;
   let subcontractorCompanyId: string;
+
+  // Reset Supabase mocks after every test so state never leaks across tests
+  // and the default (Supabase disabled) is restored.
+  afterEach(() => {
+    mockIsSupabaseConfigured.mockReset();
+    mockIsSupabaseConfigured.mockReturnValue(false);
+    mockGetSupabaseClient.mockReset();
+    if (ORIGINAL_SUPABASE_URL === undefined) {
+      delete process.env.SUPABASE_URL;
+    } else {
+      process.env.SUPABASE_URL = ORIGINAL_SUPABASE_URL;
+    }
+  });
 
   beforeAll(async () => {
     // Create test company
@@ -2203,6 +2248,170 @@ describe('Comments API', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.message).toContain('Unsupported');
+    });
+  });
+
+  describe('Supabase comment attachment cleanup', () => {
+    const SUPABASE_HOST = 'https://fixture-project.supabase.co';
+
+    function buildSupabaseAttachmentUrl(filename: string) {
+      return `${SUPABASE_HOST}/storage/v1/object/public/documents/comments/${projectId}/${filename}`;
+    }
+
+    async function insertSupabaseAttachmentComment(filename: string) {
+      const fileUrl = buildSupabaseAttachmentUrl(filename);
+      const comment = await prisma.comment.create({
+        data: {
+          entityType: 'Lot',
+          entityId: lotId,
+          content: `Supabase attachment comment ${filename}`,
+          authorId: userId,
+          attachments: {
+            create: [
+              {
+                filename,
+                fileUrl,
+                fileSize: 4,
+                mimeType: 'text/plain',
+              },
+            ],
+          },
+        },
+        include: { attachments: true },
+      });
+      return {
+        commentId: comment.id,
+        attachmentId: comment.attachments[0]!.id,
+        fileUrl,
+        storagePath: `comments/${projectId}/${filename}`,
+      };
+    }
+
+    it('removes the Supabase object on DELETE comment when an attachment URL points at the documents bucket', async () => {
+      process.env.SUPABASE_URL = SUPABASE_HOST;
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const filename = `supabase-comment-${Date.now()}.txt`;
+      const { commentId: targetCommentId, storagePath } =
+        await insertSupabaseAttachmentComment(filename);
+
+      const res = await request(app)
+        .delete(`/api/comments/${targetCommentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+
+      // Allow the awaited cleanup helpers to flush.
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockRemove).toHaveBeenCalledTimes(1);
+      expect(mockRemove).toHaveBeenCalledWith([storagePath]);
+    });
+
+    it('removes the Supabase object on DELETE single attachment when its URL points at the documents bucket', async () => {
+      process.env.SUPABASE_URL = SUPABASE_HOST;
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const filename = `supabase-attachment-${Date.now()}.txt`;
+      const {
+        commentId: targetCommentId,
+        attachmentId,
+        storagePath,
+      } = await insertSupabaseAttachmentComment(filename);
+
+      const res = await request(app)
+        .delete(`/api/comments/${targetCommentId}/attachments/${attachmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockRemove).toHaveBeenCalledTimes(1);
+      expect(mockRemove).toHaveBeenCalledWith([storagePath]);
+
+      // Cleanup the comment row for tidiness; attachment row is already gone.
+      await prisma.comment.delete({ where: { id: targetCommentId } }).catch(() => {});
+    });
+
+    it('removes already-uploaded Supabase comment objects when a later upload in the same batch fails', async () => {
+      process.env.SUPABASE_URL = SUPABASE_HOST;
+      let firstUploadedPath: string | undefined;
+      const mockUpload = vi
+        .fn()
+        .mockImplementationOnce((storagePath: string) => {
+          firstUploadedPath = storagePath;
+          return Promise.resolve({ data: { path: storagePath }, error: null });
+        })
+        .mockImplementationOnce(() =>
+          Promise.resolve({
+            data: null,
+            error: { message: 'simulated supabase upload failure' },
+          }),
+        );
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ upload: mockUpload, remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const res = await request(app)
+        .post('/api/comments/attachments/upload')
+        .set('Authorization', `Bearer ${authToken}`)
+        .field('entityType', 'Lot')
+        .field('entityId', lotId)
+        .attach('files', Buffer.from('rollback first ok'), {
+          filename: 'supabase-rollback-first.txt',
+          contentType: 'text/plain',
+        })
+        .attach('files', Buffer.from('rollback second fails'), {
+          filename: 'supabase-rollback-second.txt',
+          contentType: 'text/plain',
+        });
+
+      expect(res.status).toBeGreaterThanOrEqual(500);
+      expect(mockUpload).toHaveBeenCalledTimes(2);
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(firstUploadedPath).toBeDefined();
+      expect(mockRemove).toHaveBeenCalledTimes(1);
+      expect(mockRemove).toHaveBeenCalledWith([firstUploadedPath]);
+    });
+
+    it('still returns 200 from DELETE comment when Supabase cleanup throws (best-effort)', async () => {
+      process.env.SUPABASE_URL = SUPABASE_HOST;
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      // Simulate Supabase being unreachable at delete time. The DB delete
+      // must still succeed and the response must still be 200 because
+      // storage cleanup is best-effort.
+      mockGetSupabaseClient.mockImplementation(() => {
+        throw new Error('simulated Supabase outage');
+      });
+
+      const filename = `supabase-besteffort-${Date.now()}.txt`;
+      const { commentId: targetCommentId } = await insertSupabaseAttachmentComment(filename);
+
+      const res = await request(app)
+        .delete(`/api/comments/${targetCommentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+
+      const persisted = await prisma.comment.findUnique({
+        where: { id: targetCommentId },
+        select: { deletedAt: true },
+      });
+      // Soft-delete: row remains, deletedAt set.
+      expect(persisted?.deletedAt).not.toBeNull();
     });
   });
 });
