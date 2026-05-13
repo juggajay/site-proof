@@ -1,6 +1,0 @@
-Lot Number,Description,Chainage Start,Chainage End,Activity Type,Status,Budget,Subcontractor
-LOT-003,LOT-2200-2300 - Updated by User B (Last Save Wins),2200,2300,Earthworks,in_progress,10000,
-LOT-CIT-001,Commercial Isolation Test Lot,1000,1100,Earthworks,in_progress,25000,
-LOT-CIT-002,Commercial Isolation Test Lot 2,1100,1200,Pavement,in_progress,45000,
-LOT-CIT-003,Pagination Test Lot 3,1300,1400,Drainage,in_progress,,
-LOT-NCR-TEST-001,NCR Status Test Lot,,,Earthworks,in_progress,,
