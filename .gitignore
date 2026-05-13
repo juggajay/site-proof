@@ -33,13 +33,17 @@ npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+claude-progress.txt
 
 # Testing
 coverage/
 .nyc_output/
 .e2e-logs/
+evidence/
 
 # Prisma
+*.db
+*.db-journal
 backend/prisma/*.db
 backend/prisma/*.db-journal
 
@@ -87,6 +91,12 @@ nul
 .vite/
 .worktrees/
 .gstack/
+.agent.lock
+.claude_settings.json
+.claude_assistant_settings.json
+
+# Local/generated construction document fixtures
+C-*.pdf
 
 # Local upload scratch roots
 uploads/
