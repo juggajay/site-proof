@@ -56,6 +56,12 @@ temp/
 *.tmp
 tmpclaude-*
 
+# Legacy/local prompt bootstrap artifacts
+prompts/
+app_spec.txt
+CLAUDE_ASSISTANT.md
+init.sh
+
 # Backup files
 *.bak
 *.backup
@@ -81,6 +87,7 @@ backend/uploads/
 .playwright-mcp/
 playwright-report/
 test-results/
+test-images/
 
 # Windows artifacts
 nul
@@ -97,6 +104,9 @@ nul
 
 # Local/generated construction document fixtures
 C-*.pdf
+
+# Local backend scratch probes
+backend/scripts/dev-tests/
 
 # Local upload scratch roots
 uploads/
