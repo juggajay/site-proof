@@ -210,7 +210,7 @@ VITE_API_URL=http://localhost:3001
 - **Never run `prisma db push` against production.** It does not record migrations and silently rewrites schema (and can drop data).
 - **Never use `--accept-data-loss`** with any Prisma command. If a migration appears destructive, stop and surface it rather than forcing it through.
 - **Railway deployments must not run `prisma db push` or `prisma migrate deploy` on startup or pre-deploy.** The Railway service's Custom Start Command and Pre-deploy Command for the backend must be blank (so the Dockerfile `CMD ["node", "dist/index.js"]` runs unchanged).
-- The live schema currently has drift from `prisma/schema.prisma` (a few unique constraints exist in the schema but not in the DB). Read-only duplicate checks have been run and the live data is compatible, but applying the constraints is a deliberate follow-up (backup → drift SQL → review → apply) — not a `db push`.
+- Production Prisma migration drift was reconciled on 2026-05-13. The live database matches `backend/prisma/schema.prisma`, and the committed migrations are marked applied. Future schema changes must use reviewed Prisma migrations, not `prisma db push`.
 
 ### Production file storage (Supabase)
 - File uploads in production **require** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the backend env. Without them, `isSupabaseConfigured()` returns false and uploads fall back to local Railway disk, which is **ephemeral** — files vanish on the next redeploy.
