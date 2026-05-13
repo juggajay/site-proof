@@ -41,6 +41,11 @@ type PrismaKnownRequestErrorLike = {
   meta?: Record<string, unknown>;
 };
 
+function getPrismaForeignKeyField(meta: Record<string, unknown> | undefined): string | undefined {
+  const field = meta?.field_name ?? meta?.fieldName ?? meta?.field;
+  return typeof field === 'string' && field.trim() ? field : undefined;
+}
+
 function isPrismaKnownRequestError(err: unknown): err is PrismaKnownRequestErrorLike {
   if (!err || typeof err !== 'object') return false;
   const candidate = err as Record<string, unknown>;
@@ -242,6 +247,15 @@ function normalizeError(err: unknown): {
         statusCode: 404,
         message: 'Record not found',
         code: 'NOT_FOUND',
+      };
+    }
+    if (prismaErr.code === 'P2003') {
+      const field = getPrismaForeignKeyField(prismaErr.meta);
+      return {
+        statusCode: 422,
+        message: 'Invalid reference',
+        code: 'INVALID_REFERENCE',
+        details: field ? { field } : undefined,
       };
     }
     // Other Prisma errors → 500
