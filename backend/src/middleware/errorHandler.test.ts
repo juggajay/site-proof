@@ -148,6 +148,35 @@ describe('errorHandler', () => {
     });
   });
 
+  it('maps Prisma foreign key errors to invalid reference responses', () => {
+    process.env.NODE_ENV = 'production';
+    suppressErrorLogOutput();
+    const { res, status, json } = mockResponse();
+
+    errorHandler(
+      {
+        name: 'PrismaClientKnownRequestError',
+        code: 'P2003',
+        message: 'Foreign key constraint failed',
+        meta: { field_name: 'scheduled_reports_project_id_fkey' },
+      },
+      mockRequest(),
+      res,
+      vi.fn() as NextFunction,
+    );
+
+    expect(status).toHaveBeenCalledWith(422);
+    expect(json).toHaveBeenCalledWith({
+      error: {
+        message: 'Invalid reference',
+        code: 'INVALID_REFERENCE',
+        details: {
+          field: 'scheduled_reports_project_id_fkey',
+        },
+      },
+    });
+  });
+
   it('does not touch the local log directory when file logging is disabled', () => {
     process.env.ERROR_LOG_TO_FILE = 'false';
     suppressErrorLogOutput();
