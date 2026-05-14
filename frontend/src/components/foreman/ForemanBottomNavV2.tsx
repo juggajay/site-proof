@@ -1,7 +1,7 @@
 // ForemanBottomNavV2 - Research-backed mobile navigation for foreman role
 // 5 primary actions: Today, Approve, [Capture], Diary, Lots
 // Camera button centered between 4 nav tabs
-// Reference: docs/Foreman persona document (AU civil).md
+// Reference: docs/archive/2026-05-repo-hygiene/Foreman persona document (AU civil).md
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Camera, ListChecks, CheckSquare, BookOpen, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
