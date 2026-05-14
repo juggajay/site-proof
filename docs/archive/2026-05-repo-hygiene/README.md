@@ -40,7 +40,10 @@ Note: the consolidated research outputs that backed these briefs remain at `docs
 |------|---------|
 | `Foreman persona document (AU civil).md` | Foreman persona research |
 | `ITP-TEMPLATE-RESEARCH-PROMPT.md` | Research-prompt scratch |
+| `landing-page-spec.md` | Superseded landing page specification |
 | `Mobile App Development Best Practices.md` | Generic mobile dev write-up |
+| `test-execution-plan.md` | Superseded manual test execution plan |
+| `test-plan-full-regression.md` | Superseded full regression test plan |
 | `tmr-mrts-itp-raw.txt` | Raw TMR MRTS ITP source text (used by QLD research) |
 
 ## Internal cross-references
