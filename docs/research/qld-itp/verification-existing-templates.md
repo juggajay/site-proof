@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-10
 **Researcher:** Claude (AI-assisted research)
-**Methodology:** Cross-referenced our extracted ITP data (docs/tmr-mrts-itp-raw.txt) against current TMR published specifications via web research of the TMR website, amendment registers, and third-party specification archives.
+**Methodology:** Cross-referenced our extracted ITP data (docs/archive/2026-05-repo-hygiene/tmr-mrts-itp-raw.txt) against current TMR published specifications via web research of the TMR website, amendment registers, and third-party specification archives.
 
 ---
 

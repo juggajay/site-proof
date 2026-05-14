@@ -475,7 +475,7 @@ The **Superintendent** (equivalent to the Principal's Representative or Engineer
 
 ## 6. Correction Table for Research Brief
 
-The initial research brief (`docs/research-brief-vic-itp-templates.md`) contained several assumed specification numbers that are incorrect. This table provides corrections:
+The initial research brief (`docs/archive/2026-05-repo-hygiene/research-brief-vic-itp-templates.md`) contained several assumed specification numbers that are incorrect. This table provides corrections:
 
 | Brief's Assumed Section | Actual VicRoads Section | Activity |
 |------------------------|------------------------|----------|
