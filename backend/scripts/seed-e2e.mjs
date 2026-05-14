@@ -1,6 +1,41 @@
 import 'dotenv/config'
+import { URL } from 'node:url'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+
+// Guard: this script wipes/overwrites known test accounts (test@example.com,
+// subcontractor@example.com) with a hardcoded password. It must never run
+// against staging or production. Refuse unless we're in an explicit test
+// environment OR the operator has pasted the DATABASE_URL into a confirmation
+// variable as a deliberate acknowledgement.
+const NODE_ENV = process.env.NODE_ENV ?? ''
+const DATABASE_URL = process.env.DATABASE_URL ?? ''
+const SEED_E2E_CONFIRM_DESTROY = process.env.SEED_E2E_CONFIRM_DESTROY ?? ''
+
+const isTestEnv = NODE_ENV === 'test' || NODE_ENV === 'e2e'
+const dbHostnameLooksLocal = (() => {
+  if (!DATABASE_URL) return false
+  try {
+    const { hostname } = new URL(DATABASE_URL)
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+  } catch {
+    return false
+  }
+})()
+const hasExplicitConfirmation =
+  SEED_E2E_CONFIRM_DESTROY !== '' && SEED_E2E_CONFIRM_DESTROY === DATABASE_URL
+
+if (!isTestEnv && !dbHostnameLooksLocal && !hasExplicitConfirmation) {
+  console.error('seed-e2e refused to run.')
+  console.error('This script seeds known credentials (test@example.com / subcontractor@example.com)')
+  console.error('with a hardcoded password and is only safe against disposable test databases.')
+  console.error('')
+  console.error('Pass any one of:')
+  console.error('  - NODE_ENV=test or NODE_ENV=e2e')
+  console.error('  - DATABASE_URL pointing at localhost / 127.0.0.1 / ::1')
+  console.error('  - SEED_E2E_CONFIRM_DESTROY set to the exact DATABASE_URL value (explicit override)')
+  process.exit(1)
+}
 
 const prisma = new PrismaClient()
 
@@ -332,7 +367,7 @@ async function main() {
     },
   })
 
-  console.log(`Seeded E2E users: test@example.com and subcontractor@example.com (password: ${password})`)
+  console.log('Seeded E2E users: test@example.com and subcontractor@example.com')
 }
 
 main()
