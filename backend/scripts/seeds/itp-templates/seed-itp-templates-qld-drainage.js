@@ -5,7 +5,7 @@
  * Templates: Pipes (MRTS03), Pits (MRTS03/70), Box Culverts (MRTS03/24/70),
  *            Subsoil (MRTS03), Kerb & Channel (MRTS03/70)
  *
- * Run with: node scripts/seed-itp-templates-qld-drainage.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-qld-drainage.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

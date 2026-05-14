@@ -234,6 +234,16 @@ VITE_API_URL=http://localhost:3001
 2. Run `cd backend && pnpm prisma migrate dev --name description`
 3. Run `pnpm prisma generate`
 
+### Seed global ITP templates
+1. Review the seeder list without loading env or opening a DB connection:
+   `cd backend && pnpm seed:itp -- --list`
+2. Preview a filtered run, for example:
+   `cd backend && pnpm seed:itp -- --state=qld --activity=structures`
+3. Execute only with an approved target database:
+   `cd backend && pnpm seed:itp -- --state=qld --activity=structures --execute`
+
+The seeders are additive and idempotent, but production runs still require an operator-approved plan and a recent backup.
+
 ## Code Style
 
 - TypeScript strict mode

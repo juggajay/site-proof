@@ -5,7 +5,7 @@
  * Templates: Wire Rope (MRTS14), W-Beam (MRTS14), Concrete Barrier (MRTS14/70),
  *            Pavement Marking (MRTS45), Fencing (MRTS14/15)
  *
- * Run with: node scripts/seed-itp-templates-qld-road-furniture.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-qld-road-furniture.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

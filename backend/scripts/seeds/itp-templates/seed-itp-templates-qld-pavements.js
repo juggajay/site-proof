@@ -5,7 +5,7 @@
  * Templates: Unbound (MRTS05), Stabilised Lime (MRTS07A), Stabilised Cement (MRTS07B),
  *            Concrete Pavement (MRTS40), Plant-Mixed Stabilised (MRTS08)
  *
- * Run with: node scripts/seed-itp-templates-qld-pavements.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-qld-pavements.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

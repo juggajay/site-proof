@@ -8,7 +8,7 @@
  * Based on: MRTS04 General Earthworks (March 2025)
  * Verified against: TMR MRTS04 specification clauses, TN216 (Nov 2025)
  *
- * Run with: node scripts/seed-itp-templates-qld-earthworks.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-qld-earthworks.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

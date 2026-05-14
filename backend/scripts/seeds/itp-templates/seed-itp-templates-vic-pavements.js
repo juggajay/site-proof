@@ -10,7 +10,7 @@
  *   4. Stabilised Pavements In-Situ (VicRoads Sec 307)
  *  16. Concrete Pavement (VicRoads Sec 503)
  *
- * Run with: node scripts/seed-itp-templates-vic-pavements.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-pavements.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

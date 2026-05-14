@@ -7,7 +7,7 @@
  * - Lean Mix Concrete Subbase (R82)
  * - Concrete Pavement Base (R83)
  *
- * Run with: node scripts/seed-itp-templates-nsw-pavements.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-nsw-pavements.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

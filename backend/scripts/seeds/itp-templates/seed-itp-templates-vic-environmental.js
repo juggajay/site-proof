@@ -5,7 +5,7 @@
  * Templates: ESC (Sec 176/177), Landscaping (Sec 720), Geosynthetics (Sec 210),
  *            Reinforced Soil Structures (Sec 682)
  *
- * Run with: node scripts/seed-itp-templates-vic-environmental.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-environmental.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

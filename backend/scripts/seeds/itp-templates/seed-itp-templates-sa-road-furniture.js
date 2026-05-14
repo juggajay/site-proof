@@ -6,7 +6,7 @@
  *            Concrete Barrier (RD-BF-C3), Pavement Marking (RD-LM-C1/S1),
  *            Fencing (RD-BF-C4)
  *
- * Run with: node scripts/seed-itp-templates-sa-road-furniture.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-sa-road-furniture.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

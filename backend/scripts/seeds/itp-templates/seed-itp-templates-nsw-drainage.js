@@ -7,7 +7,7 @@
  * - Box Culverts
  * - Subsoil Drainage
  *
- * Run with: node scripts/seed-itp-templates-nsw-drainage.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-nsw-drainage.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

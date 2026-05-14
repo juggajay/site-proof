@@ -8,7 +8,7 @@
  * Based on: VicRoads Section 204 (Earthworks), Section 173 (Clearing and Grubbing)
  * References: RC 500.05 (Acceptance of Field Compaction), RC 316.00, RC 316.10
  *
- * Run with: node scripts/seed-itp-templates-vic-earthworks.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-earthworks.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

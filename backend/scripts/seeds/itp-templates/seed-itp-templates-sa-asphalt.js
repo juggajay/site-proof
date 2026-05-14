@@ -6,7 +6,7 @@
  *            Stone Mastic Asphalt (RD-BP-S2/C3), Sprayed Bituminous Surfacing (RD-BP-D2),
  *            Warm Mix / Recycled Asphalt (RD-BP-S2)
  *
- * Run with: node scripts/seed-itp-templates-sa-asphalt.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-sa-asphalt.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

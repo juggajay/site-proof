@@ -5,7 +5,7 @@
  * - Dense Graded Asphalt (DGA) - R116
  * - Prime & Primerseal
  *
- * Run with: node scripts/seed-itp-templates-nsw-asphalt.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-nsw-asphalt.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

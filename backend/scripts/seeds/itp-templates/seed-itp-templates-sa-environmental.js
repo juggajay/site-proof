@@ -5,7 +5,7 @@
  * Templates: ESC (EHTM / EPA SA / PR-LS-C5), Landscaping (PR-LS Series),
  *            Geosynthetics (RD-EW-S1), Reinforced Soil Structures (ST-RE-C1)
  *
- * Run with: node scripts/seed-itp-templates-sa-environmental.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-sa-environmental.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

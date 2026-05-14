@@ -6,7 +6,7 @@
  *            Culverts (Sec 610/BTN016), Subsoil/Subsurface (Sec 702),
  *            Kerb & Channel (Sec 703)
  *
- * Run with: node scripts/seed-itp-templates-vic-drainage.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-drainage.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

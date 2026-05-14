@@ -6,7 +6,7 @@
  * - Structural Concrete
  * - Reinforcement
  *
- * Run with: node scripts/seed-itp-templates-nsw-structures.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-nsw-structures.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

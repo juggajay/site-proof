@@ -5,7 +5,7 @@
  * Templates: DGA (Sec 407), OGA (Sec 417), SMA (Sec 404),
  *            Sprayed Bituminous Surfacing (Sec 408), Warm Mix Asphalt / Recycled (Sec 407/TN107)
  *
- * Run with: node scripts/seed-itp-templates-vic-asphalt.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-asphalt.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

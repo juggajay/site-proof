@@ -5,7 +5,7 @@
  * These templates have projectId = null and stateSpec = 'TfNSW' so they
  * appear for any project using TfNSW/RMS specification set.
  *
- * Run with: node scripts/seed-itp-templates-nsw.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-nsw.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'
