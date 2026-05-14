@@ -34,7 +34,7 @@ The reinforcement specification is **MRTS71** (not MRTS59). MRTS59 is "Manufactu
 - [MRTS70 PDF](https://www.tmr.qld.gov.au/-/media/busind/techstdpubs/Specifications-and-drawings/Specifications/2-Bridges-and-Structures/MRTS70.pdf)
 - [TMR Amendment Register](https://www.tmr.qld.gov.au/-/media/busind/techstdpubs/Specifications-and-drawings/Specifications/AmendmentRegister.pdf?la=en)
 - [AS 2159-2009 Piling Design and Installation](https://store.standards.org.au/product/as-2159-2009)
-- Existing project data: `docs/tmr-mrts-itp-raw.txt` (MRTS70 structural concrete hold points)
+- Existing project data: `docs/archive/2026-05-repo-hygiene/tmr-mrts-itp-raw.txt` (MRTS70 structural concrete hold points)
 
 ---
 
