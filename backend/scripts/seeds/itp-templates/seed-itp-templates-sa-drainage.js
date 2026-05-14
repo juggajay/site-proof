@@ -6,7 +6,7 @@
  *            Culverts (RD-DK-C1/S1), Subsoil/Subsurface (RD-DK-C1/D1),
  *            Kerb & Channel (RD-DK-C2)
  *
- * Run with: node scripts/seed-itp-templates-sa-drainage.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-sa-drainage.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

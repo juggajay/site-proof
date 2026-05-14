@@ -8,7 +8,7 @@
  * Based on: RD-EW-C1 Earthworks (formerly Part R10)
  * Verified against: DIT RD-EW-C1 specification clauses, RD-EW-D1, TP 320
  *
- * Run with: node scripts/seed-itp-templates-sa-earthworks.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-sa-earthworks.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

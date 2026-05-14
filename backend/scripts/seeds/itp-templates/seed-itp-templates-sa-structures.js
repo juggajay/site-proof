@@ -15,7 +15,7 @@
  *   7. Post-Tensioning (ST-SC-C2)
  *   8. Bridge Deck Waterproofing (ST-SD-D1 / Project Specific)
  *
- * Run with: node scripts/seed-itp-templates-sa-structures.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-sa-structures.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

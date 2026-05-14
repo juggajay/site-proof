@@ -5,7 +5,7 @@
  * Templates: DGA (MRTS30), Sprayed Seals (MRTS11), Priming (MRTS11),
  *            SMA (MRTS30), EME2 (MRTS32/102)
  *
- * Run with: node scripts/seed-itp-templates-qld-asphalt.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-qld-asphalt.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

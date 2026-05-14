@@ -5,7 +5,7 @@
  * Templates: Concrete (MRTS70), Piling (MRTS63-66), Reinforcement (MRTS71),
  *            Steelwork (MRTS78), Bearings (MRTS81), Precast (MRTS72), PT (MRTS89)
  *
- * Run with: node scripts/seed-itp-templates-qld-structures.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-qld-structures.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

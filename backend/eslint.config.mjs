@@ -38,6 +38,7 @@ export default tseslint.config(
       'scripts/preflight-production-integrations.ts',
       'scripts/check-migration-drift.mjs',
       'scripts/seed-e2e.mjs',
+      'scripts/seeds/itp-templates/index.mjs',
       'scripts/smoke-production.mjs',
     ],
     languageOptions: {

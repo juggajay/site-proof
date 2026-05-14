@@ -11,7 +11,7 @@
  *   3. Stabilised Pavements — In-situ (DIT RD-PV-C3)
  *   4. Concrete Pavement (DIT RD-PV-D3)
  *
- * Run with: node scripts/seed-itp-templates-sa-pavements.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-sa-pavements.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

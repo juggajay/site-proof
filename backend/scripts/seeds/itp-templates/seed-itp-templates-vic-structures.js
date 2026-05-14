@@ -6,7 +6,7 @@
  *            Piling (Sec 605-608), Steelwork (Sec 630), Bearings (Sec 656),
  *            Precast (Sec 620), Post-Tensioning (Sec 612), Waterproofing (Sec 691)
  *
- * Run with: node scripts/seed-itp-templates-vic-structures.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-structures.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

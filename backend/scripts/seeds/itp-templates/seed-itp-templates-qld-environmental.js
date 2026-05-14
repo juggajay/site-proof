@@ -5,7 +5,7 @@
  * Templates: ESC (MRTS52), Landscaping (MRTS16), Geosynthetics (MRTS27/58/100),
  *            Reinforced Soil Walls (MRTS06)
  *
- * Run with: node scripts/seed-itp-templates-qld-environmental.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-qld-environmental.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

@@ -6,7 +6,7 @@
  *            Concrete Barrier (Sec 610/BTN001), Pavement Marking (Sec 721/722),
  *            Fencing incl. Noise Walls (Sec 707/765)
  *
- * Run with: node scripts/seed-itp-templates-vic-road-furniture.js
+ * Run with: pnpm seed:itp -- --script=seed-itp-templates-vic-road-furniture.js --execute
  */
 
 import { PrismaClient } from '@prisma/client'

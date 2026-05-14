@@ -10,7 +10,7 @@
  * These templates serve as starting points for jurisdictions without specific specs.
  */
 
-const { PrismaClient } = require('@prisma/client');
+import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // =============================================================================
