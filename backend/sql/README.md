@@ -14,4 +14,8 @@ npx prisma db execute --file sql/script_name.sql
 
 ## Scripts
 
-- `migrate_existing_lot_assignments.sql` - Migrates existing lot.assignedSubcontractorId to the new LotSubcontractorAssignment table (2026-01-29)
+No active SQL scripts are currently maintained in this folder.
+
+## Archived Scripts
+
+- `archive/2026-05-repo-hygiene/migrate_existing_lot_assignments.sql` - Historical one-off helper for migrating `lot.assignedSubcontractorId` into `LotSubcontractorAssignment` (2026-01-29).
