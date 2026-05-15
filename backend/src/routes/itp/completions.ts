@@ -17,6 +17,7 @@ import {
   requireItpLotRole,
   requireItpProjectAccess,
   requireItpProjectRole,
+  requireItpSubcontractorCompletionPermission,
 } from './helpers/access.js';
 import { isStoredDocumentUploadPath } from '../../lib/uploadPaths.js';
 import { logError } from '../../lib/serverLogger.js';
@@ -303,6 +304,7 @@ completionsRouter.post(
       throw AppError.badRequest('Unable to determine project for ITP completion');
     }
 
+    let subcontractorCompletionAssignment: { itpRequiresVerification: boolean } | null = null;
     if (itpInstanceForAccess.lotId) {
       await requireItpLotRole(
         user,
@@ -310,6 +312,11 @@ completionsRouter.post(
         itpInstanceForAccess.lotId,
         ITP_WRITE_ROLES,
         'ITP completion write access required',
+      );
+      subcontractorCompletionAssignment = await requireItpSubcontractorCompletionPermission(
+        user,
+        completionProjectId,
+        itpInstanceForAccess.lotId,
       );
     } else {
       await requireItpProjectRole(
@@ -373,17 +380,7 @@ completionsRouter.post(
       });
 
       if (itpInstanceForPermCheck?.lotId && subcontractorUser) {
-        // Check if subcontractor has ITP completion permission for this lot
-        const assignment = await prisma.lotSubcontractorAssignment.findFirst({
-          where: {
-            lotId: itpInstanceForPermCheck.lotId,
-            subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
-            status: 'active',
-            canCompleteITP: true,
-          },
-        });
-
-        if (!assignment) {
+        if (!subcontractorCompletionAssignment) {
           throw AppError.forbidden('Not authorized to complete ITP items on this lot');
         }
 
@@ -406,7 +403,7 @@ completionsRouter.post(
         if (!projectRequiresVerification) {
           verificationStatus = 'verified';
         } else {
-          verificationStatus = assignment.itpRequiresVerification
+          verificationStatus = subcontractorCompletionAssignment.itpRequiresVerification
             ? 'pending_verification'
             : 'verified';
         }
@@ -712,6 +709,11 @@ completionsRouter.patch(
         completionForAccess.itpInstance.lotId,
         ITP_WRITE_ROLES,
         'ITP completion write access required',
+      );
+      await requireItpSubcontractorCompletionPermission(
+        user,
+        projectId,
+        completionForAccess.itpInstance.lotId,
       );
     } else {
       await requireItpProjectRole(
@@ -1129,6 +1131,11 @@ completionsRouter.post(
         ITP_WRITE_ROLES,
         'ITP attachment write access required',
       );
+      await requireItpSubcontractorCompletionPermission(
+        user,
+        documentProjectId,
+        itpInstance.lotId,
+      );
     } else {
       await requireItpProjectRole(
         user,
@@ -1379,6 +1386,11 @@ completionsRouter.delete(
         attachment.completion.itpInstance.lotId,
         ITP_WRITE_ROLES,
         'ITP attachment write access required',
+      );
+      await requireItpSubcontractorCompletionPermission(
+        user,
+        projectId,
+        attachment.completion.itpInstance.lotId,
       );
     } else {
       await requireItpProjectRole(
