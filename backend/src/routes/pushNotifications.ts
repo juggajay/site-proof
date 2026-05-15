@@ -177,7 +177,10 @@ function isPrivatePushEndpointHost(hostname: string): boolean {
 }
 
 function normalizeEndpointHostname(hostname: string): string {
-  return hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  return hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '');
 }
 
 function isAllowedPushEndpointHost(hostname: string): boolean {
