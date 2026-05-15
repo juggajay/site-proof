@@ -399,7 +399,6 @@ function isVerifiedEmail(value: boolean | string | undefined): boolean {
 
 function validateGoogleCredentialPayload(
   payload: GoogleCredentialPayload,
-  clientId?: string,
 ): Required<Pick<GoogleCredentialPayload, 'sub' | 'email'>> & GoogleCredentialPayload {
   const expectedClientId = process.env.GOOGLE_CLIENT_ID;
 
@@ -407,7 +406,7 @@ function validateGoogleCredentialPayload(
     throw AppError.internal('Google OAuth is not configured');
   }
 
-  if (payload.aud !== expectedClientId && payload.aud !== clientId) {
+  if (expectedClientId && payload.aud !== expectedClientId) {
     logWarn('[OAuth] Client ID mismatch:', payload.aud, 'vs', expectedClientId);
     if (process.env.NODE_ENV === 'production') {
       throw AppError.badRequest('Invalid client ID');
@@ -438,13 +437,13 @@ function validateGoogleCredentialPayload(
     GoogleCredentialPayload;
 }
 
-async function getGoogleCredentialPayload(credential: string, clientId?: string) {
+async function getGoogleCredentialPayload(credential: string) {
   const payload =
     process.env.NODE_ENV === 'production'
       ? await verifyProductionGoogleCredential(credential)
       : decodeJwtPayload(credential);
 
-  return validateGoogleCredentialPayload(payload, clientId);
+  return validateGoogleCredentialPayload(payload);
 }
 
 // POST /api/auth/google/token - Exchange Google ID token for app token (for frontend SDK)
@@ -452,16 +451,13 @@ oauthRouter.post(
   '/google/token',
   authRateLimiter,
   asyncHandler(async (req, res) => {
-    const { credential, clientId } = req.body;
+    const { credential } = req.body;
 
     if (!credential) {
       throw AppError.badRequest('Google credential is required');
     }
 
-    const payload = await getGoogleCredentialPayload(
-      String(credential),
-      typeof clientId === 'string' ? clientId : undefined,
-    );
+    const payload = await getGoogleCredentialPayload(String(credential));
 
     // Extract user info from the token
     const googleUser = {

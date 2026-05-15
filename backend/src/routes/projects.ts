@@ -19,7 +19,8 @@ type AuthenticatedUser = NonNullable<Request['user']>;
 const PROJECT_COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager'];
 const PROJECT_CREATOR_ROLES = new Set<string>([ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER]);
 const PROJECT_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
-const BLOCKED_SUBCONTRACTOR_STATUSES = new Set(['suspended', 'removed']);
+const BLOCKED_SUBCONTRACTOR_STATUSES = ['suspended', 'removed'] as const;
+const BLOCKED_SUBCONTRACTOR_STATUS_SET = new Set<string>(BLOCKED_SUBCONTRACTOR_STATUSES);
 const PROJECT_TEAM_ROLES = new Set<string>([
   ROLES.ADMIN,
   ROLES.PROJECT_MANAGER,
@@ -64,7 +65,21 @@ function canCreateProjectForCompany(user: AuthenticatedUser): boolean {
 }
 
 function isBlockedSubcontractorStatus(status: string | null | undefined): boolean {
-  return Boolean(status && BLOCKED_SUBCONTRACTOR_STATUSES.has(status));
+  return Boolean(status && BLOCKED_SUBCONTRACTOR_STATUS_SET.has(status));
+}
+
+async function hasActiveSubcontractorPortalLink(userId: string): Promise<boolean> {
+  const link = await prisma.subcontractorUser.findFirst({
+    where: {
+      userId,
+      subcontractorCompany: {
+        status: { notIn: [...BLOCKED_SUBCONTRACTOR_STATUSES] },
+      },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(link);
 }
 
 function normalizeProjectUserEmail(value: unknown): string {
@@ -1110,6 +1125,10 @@ projectsRouter.post(
     // Create company for user if they don't have one
     let companyId = user.companyId;
     if (!companyId) {
+      if (isSubcontractorUser(user) || (await hasActiveSubcontractorPortalLink(user.id))) {
+        throw AppError.forbidden('Subcontractor portal users cannot create company projects');
+      }
+
       const company = await prisma.company.create({
         data: {
           name: `${user.fullName || user.email}'s Company`,

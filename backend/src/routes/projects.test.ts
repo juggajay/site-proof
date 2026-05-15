@@ -198,6 +198,97 @@ describe('Projects API', () => {
       }
     });
 
+    it('should reject subcontractor-linked users without a company from bootstrapping a new company', async () => {
+      const suffix = Date.now();
+      const setupProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Subcontractor Bootstrap Setup ${suffix}`,
+          projectNumber: `SUB-BOOTSTRAP-SETUP-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: setupProject.id,
+          companyName: `Bootstrap Blocked Subcontractor ${suffix}`,
+          status: 'approved',
+        },
+      });
+      const subcontractorRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `project-bootstrap-sub-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Bootstrap Blocked Subcontractor',
+          tosAccepted: true,
+        });
+      const subcontractorToken = subcontractorRes.body.token;
+      const subcontractorId = subcontractorRes.body.user.id;
+      const blockedProjectNumber = `SUB-BOOTSTRAP-BLOCKED-${suffix}`;
+
+      await prisma.user.update({
+        where: { id: subcontractorId },
+        data: { companyId: null, roleInCompany: 'subcontractor_admin' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractorId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          role: 'admin',
+        },
+      });
+
+      let bootstrappedCompanyId: string | null = null;
+      let bootstrappedProjectId: string | null = null;
+
+      try {
+        const res = await request(app)
+          .post('/api/projects')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            name: 'Blocked Bootstrap Project',
+            projectNumber: blockedProjectNumber,
+            state: 'NSW',
+            specificationSet: 'TfNSW',
+          });
+
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: subcontractorId },
+          select: { companyId: true, roleInCompany: true },
+        });
+        bootstrappedCompanyId = updatedUser?.companyId ?? null;
+        const bootstrappedProject = await prisma.project.findFirst({
+          where: { projectNumber: blockedProjectNumber },
+          select: { id: true },
+        });
+        bootstrappedProjectId = bootstrappedProject?.id ?? null;
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('Subcontractor portal users');
+        expect(updatedUser?.companyId).toBeNull();
+        expect(updatedUser?.roleInCompany).toBe('subcontractor_admin');
+        expect(bootstrappedProject).toBeNull();
+      } finally {
+        if (bootstrappedProjectId) {
+          await prisma.projectUser.deleteMany({ where: { projectId: bootstrappedProjectId } });
+          await prisma.project.delete({ where: { id: bootstrappedProjectId } }).catch(() => {});
+        }
+        await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractorId } });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.project.delete({ where: { id: setupProject.id } }).catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorId } });
+        await prisma.user.delete({ where: { id: subcontractorId } }).catch(() => {});
+        if (bootstrappedCompanyId) {
+          await prisma.company.delete({ where: { id: bootstrappedCompanyId } }).catch(() => {});
+        }
+      }
+    });
+
     it('should auto-generate project number if not provided', async () => {
       const res = await request(app)
         .post('/api/projects')
