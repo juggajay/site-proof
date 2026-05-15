@@ -1087,6 +1087,10 @@ subcontractorsRouter.delete(
 
     await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
 
+    if (subcontractor.status !== 'removed') {
+      throw AppError.conflict('Subcontractor must be marked as removed before permanent deletion');
+    }
+
     const deletedCounts = {
       dockets: subcontractor.dailyDockets.length,
       employees: subcontractor.employeeRoster.length,

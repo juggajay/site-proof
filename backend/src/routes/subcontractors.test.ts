@@ -822,6 +822,39 @@ describe('Subcontractors API', () => {
     });
   });
 
+  describe('DELETE /api/subcontractors/:id', () => {
+    it('should reject permanent delete unless the subcontractor has been removed first', async () => {
+      const activeSubcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Active Delete Guard ${Date.now()}`,
+          primaryContactName: 'Active Delete Guard',
+          primaryContactEmail: `active-delete-guard-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/subcontractors/${activeSubcontractor.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('removed');
+
+        const stored = await prisma.subcontractorCompany.findUnique({
+          where: { id: activeSubcontractor.id },
+          select: { status: true },
+        });
+        expect(stored?.status).toBe('approved');
+      } finally {
+        await prisma.subcontractorCompany
+          .delete({ where: { id: activeSubcontractor.id } })
+          .catch(() => {});
+      }
+    });
+  });
+
   describe('Portal Access Management', () => {
     it('should get portal access settings', async () => {
       const res = await request(app)
