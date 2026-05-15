@@ -261,7 +261,7 @@ describe('Company API', () => {
 
       const filename = res.body.logoUrl.split('/').pop();
       const logoPath = path.join(process.cwd(), 'uploads', 'company-logos', filename);
-      expect(filename).toMatch(new RegExp(`^company-logo-${userId}-[0-9a-f-]{36}\\.png$`));
+      expect(filename).toMatch(new RegExp(`^company-logo-${companyId}-[0-9a-f-]{36}\\.png$`));
       expect(filename).not.toContain('.svg');
       expect(fs.existsSync(logoPath)).toBe(true);
       fs.unlinkSync(logoPath);
@@ -300,7 +300,7 @@ describe('Company API', () => {
     });
 
     it('should reject company logo files whose bytes do not match the declared type', async () => {
-      const beforeFiles = listCompanyLogoFiles(`company-logo-${userId}-`);
+      const beforeFiles = listCompanyLogoFiles(`company-logo-${companyId}-`);
 
       const res = await request(app)
         .post('/api/company/logo')
@@ -310,7 +310,7 @@ describe('Company API', () => {
           contentType: 'image/png',
         });
 
-      const afterFiles = listCompanyLogoFiles(`company-logo-${userId}-`);
+      const afterFiles = listCompanyLogoFiles(`company-logo-${companyId}-`);
       const newFiles = [...afterFiles].filter((name) => !beforeFiles.has(name));
 
       for (const file of newFiles) {
@@ -611,6 +611,21 @@ describe('Company API', () => {
         expect(res.body.company.logoUrl).toBe(supabaseLogoUrl);
       });
 
+      it('rejects Supabase logo URLs outside the current company prefix in PATCH /api/company', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        mockIsSupabaseConfigured.mockReturnValue(true);
+
+        const supabaseLogoUrl =
+          'https://fixture-project.supabase.co/storage/v1/object/public/documents/company-logos/other-company/company-logo-other-company.png';
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ logoUrl: supabaseLogoUrl });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('uploaded company logo');
+      });
+
       it('PATCH clearing logoUrl removes the previous Supabase object', async () => {
         process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
         const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
@@ -639,6 +654,34 @@ describe('Company API', () => {
 
         expect(mockRemove).toHaveBeenCalledTimes(1);
         expect(mockRemove).toHaveBeenCalledWith([previousSupabasePath]);
+      });
+
+      it('PATCH clearing logoUrl does not remove a Supabase object outside the current company prefix', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from: () => ({ remove: mockRemove }) },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+        const previousLogoUrl =
+          'https://fixture-project.supabase.co/storage/v1/object/public/documents/company-logos/other-company/company-logo-other-company-prev.png';
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: previousLogoUrl },
+        });
+
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ logoUrl: '' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.logoUrl).toBeNull();
+
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(mockRemove).not.toHaveBeenCalled();
       });
 
       it('PATCH replacing logoUrl removes the previous Supabase object', async () => {

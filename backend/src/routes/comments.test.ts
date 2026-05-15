@@ -708,6 +708,30 @@ describe('Comments API', () => {
       expect(res.body.error.message).toContain('No valid attachments');
     });
 
+    it('should reject Supabase attachment URLs outside the target project prefix', async () => {
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      mockIsSupabaseConfigured.mockReturnValue(true);
+
+      const res = await request(app)
+        .post('/api/comments')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          entityType: 'Lot',
+          entityId: lotId,
+          content: 'Comment with cross-project Supabase attachment',
+          attachments: [
+            {
+              filename: 'cross-project.pdf',
+              fileUrl:
+                'https://fixture-project.supabase.co/storage/v1/object/public/documents/comments/other-project/cross-project.pdf',
+            },
+          ],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('No valid attachments');
+    });
+
     it('should reject local attachment URLs that escape the comments upload directory', async () => {
       const res = await request(app)
         .post('/api/comments')
@@ -1646,6 +1670,27 @@ describe('Comments API', () => {
       expect(res.body.error.message).toContain('No valid attachments');
     });
 
+    it('should reject Supabase attachment URLs outside the comment project prefix', async () => {
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      mockIsSupabaseConfigured.mockReturnValue(true);
+
+      const res = await request(app)
+        .post(`/api/comments/${attachCommentId}/attachments`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          attachments: [
+            {
+              filename: 'cross-project.pdf',
+              fileUrl:
+                'https://fixture-project.supabase.co/storage/v1/object/public/documents/comments/other-project/cross-project.pdf',
+            },
+          ],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('No valid attachments');
+    });
+
     it('should not allow adding attachments to deleted comments', async () => {
       // Create and delete a comment
       const createRes = await request(app)
@@ -2254,12 +2299,12 @@ describe('Comments API', () => {
   describe('Supabase comment attachment cleanup', () => {
     const SUPABASE_HOST = 'https://fixture-project.supabase.co';
 
-    function buildSupabaseAttachmentUrl(filename: string) {
-      return `${SUPABASE_HOST}/storage/v1/object/public/documents/comments/${projectId}/${filename}`;
+    function buildSupabaseAttachmentUrl(filename: string, urlProjectId = projectId) {
+      return `${SUPABASE_HOST}/storage/v1/object/public/documents/comments/${urlProjectId}/${filename}`;
     }
 
-    async function insertSupabaseAttachmentComment(filename: string) {
-      const fileUrl = buildSupabaseAttachmentUrl(filename);
+    async function insertSupabaseAttachmentComment(filename: string, urlProjectId = projectId) {
+      const fileUrl = buildSupabaseAttachmentUrl(filename, urlProjectId);
       const comment = await prisma.comment.create({
         data: {
           entityType: 'Lot',
@@ -2283,7 +2328,7 @@ describe('Comments API', () => {
         commentId: comment.id,
         attachmentId: comment.attachments[0]!.id,
         fileUrl,
-        storagePath: `comments/${projectId}/${filename}`,
+        storagePath: `comments/${urlProjectId}/${filename}`,
       };
     }
 
@@ -2310,6 +2355,31 @@ describe('Comments API', () => {
 
       expect(mockRemove).toHaveBeenCalledTimes(1);
       expect(mockRemove).toHaveBeenCalledWith([storagePath]);
+    });
+
+    it('does not remove a Supabase object outside the comment project prefix on DELETE comment', async () => {
+      process.env.SUPABASE_URL = SUPABASE_HOST;
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const filename = `supabase-foreign-comment-${Date.now()}.txt`;
+      const { commentId: targetCommentId } = await insertSupabaseAttachmentComment(
+        filename,
+        'other-project',
+      );
+
+      const res = await request(app)
+        .delete(`/api/comments/${targetCommentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockRemove).not.toHaveBeenCalled();
     });
 
     it('removes the Supabase object on DELETE single attachment when its URL points at the documents bucket', async () => {
@@ -2339,6 +2409,33 @@ describe('Comments API', () => {
       expect(mockRemove).toHaveBeenCalledWith([storagePath]);
 
       // Cleanup the comment row for tidiness; attachment row is already gone.
+      await prisma.comment.delete({ where: { id: targetCommentId } }).catch(() => {});
+    });
+
+    it('does not remove a Supabase object outside the comment project prefix on DELETE single attachment', async () => {
+      process.env.SUPABASE_URL = SUPABASE_HOST;
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const filename = `supabase-foreign-attachment-${Date.now()}.txt`;
+      const { commentId: targetCommentId, attachmentId } = await insertSupabaseAttachmentComment(
+        filename,
+        'other-project',
+      );
+
+      const res = await request(app)
+        .delete(`/api/comments/${targetCommentId}/attachments/${attachmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockRemove).not.toHaveBeenCalled();
+
       await prisma.comment.delete({ where: { id: targetCommentId } }).catch(() => {});
     });
 

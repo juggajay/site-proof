@@ -54,13 +54,13 @@ const companyLogoDiskStorage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    const userId = req.user?.userId || 'unknown';
+    const companyId = req.user?.companyId || 'unknown';
     const ext = getSafeImageExtensionForMimeType(file.mimetype);
     if (!ext) {
       cb(new Error('Invalid file type'), '');
       return;
     }
-    cb(null, `company-logo-${userId}-${crypto.randomUUID()}${ext}`);
+    cb(null, `company-logo-${companyId}-${crypto.randomUUID()}${ext}`);
   },
 });
 
@@ -97,6 +97,10 @@ function buildCompanyLogoStorageFilename(companyId: string, mimetype: string): s
   return `company-logo-${companyId}-${crypto.randomUUID()}${ext}`;
 }
 
+function getCompanyLogoStoragePrefix(companyId: string): string {
+  return `${COMPANY_LOGO_STORAGE_PREFIX}/${companyId}/`;
+}
+
 async function uploadCompanyLogoToSupabase(
   file: Express.Multer.File,
   companyId: string,
@@ -105,7 +109,7 @@ async function uploadCompanyLogoToSupabase(
   if (!filename) {
     throw AppError.badRequest('Invalid file type');
   }
-  const storagePath = `${COMPANY_LOGO_STORAGE_PREFIX}/${companyId}/${filename}`;
+  const storagePath = `${getCompanyLogoStoragePrefix(companyId)}${filename}`;
 
   const { error } = await getSupabaseClient()
     .storage.from(DOCUMENTS_BUCKET)
@@ -125,8 +129,27 @@ async function uploadCompanyLogoToSupabase(
   };
 }
 
-async function deleteCompanyLogoFromSupabase(fileUrl: string): Promise<void> {
-  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+function getOwnedCompanyLogoStoragePath(fileUrl: string, companyId: string): string | null {
+  return getSupabaseStoragePath(fileUrl, {
+    bucket: DOCUMENTS_BUCKET,
+    expectedPrefix: getCompanyLogoStoragePrefix(companyId),
+  });
+}
+
+function assertCompanyLogoUrlOwnedByCompany(
+  logoUrl: string | null | undefined,
+  companyId: string,
+): void {
+  if (!logoUrl || !isSupabaseConfigured()) return;
+
+  const anyDocumentsStoragePath = getSupabaseStoragePath(logoUrl, DOCUMENTS_BUCKET);
+  if (anyDocumentsStoragePath !== null && !getOwnedCompanyLogoStoragePath(logoUrl, companyId)) {
+    throw AppError.badRequest('Company logo URL must reference an uploaded company logo');
+  }
+}
+
+async function deleteCompanyLogoFromSupabase(fileUrl: string, companyId: string): Promise<void> {
+  const storagePath = getOwnedCompanyLogoStoragePath(fileUrl, companyId);
   if (!storagePath) return;
 
   const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
@@ -139,21 +162,25 @@ async function deleteCompanyLogoFromSupabase(fileUrl: string): Promise<void> {
 async function cleanupStoredCompanyLogoUpload(
   fileUrl: string | null,
   file: Express.Multer.File,
+  companyId: string,
 ): Promise<void> {
-  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
-    await deleteCompanyLogoFromSupabase(fileUrl);
+  if (fileUrl && isSupabaseConfigured() && getOwnedCompanyLogoStoragePath(fileUrl, companyId)) {
+    await deleteCompanyLogoFromSupabase(fileUrl, companyId);
     return;
   }
   cleanupUploadedLogo(file);
 }
 
-async function removeStoredCompanyLogo(logoUrl: string | null | undefined): Promise<void> {
+async function removeStoredCompanyLogo(
+  logoUrl: string | null | undefined,
+  companyId: string,
+): Promise<void> {
   if (!logoUrl) return;
-  if (isSupabaseConfigured() && getSupabaseStoragePath(logoUrl, DOCUMENTS_BUCKET) !== null) {
-    await deleteCompanyLogoFromSupabase(logoUrl);
+  if (isSupabaseConfigured() && getOwnedCompanyLogoStoragePath(logoUrl, companyId) !== null) {
+    await deleteCompanyLogoFromSupabase(logoUrl, companyId);
     return;
   }
-  deleteLocalCompanyLogo(logoUrl);
+  deleteLocalCompanyLogo(logoUrl, companyId);
 }
 
 // Decide whether a PATCH that changed `logoUrl` should trigger best-effort
@@ -181,7 +208,7 @@ function shouldRemovePreviousLogoOnPatch(
   return previousLogoUrl !== newLogoUrl;
 }
 
-function deleteLocalCompanyLogo(logoUrl: string | null | undefined): void {
+function deleteLocalCompanyLogo(logoUrl: string | null | undefined, companyId: string): void {
   if (!logoUrl) return;
 
   let pathname: string;
@@ -213,6 +240,10 @@ function deleteLocalCompanyLogo(logoUrl: string | null | undefined): void {
   }
 
   if (filename !== path.basename(filename) || filename.includes('/') || filename.includes('\\')) {
+    return;
+  }
+
+  if (!filename.startsWith(`company-logo-${companyId}-`)) {
     return;
   }
 
@@ -582,13 +613,13 @@ companyRouter.post(
         },
       });
     } catch (error) {
-      await cleanupStoredCompanyLogoUpload(logoUrl, uploadedFile!);
+      await cleanupStoredCompanyLogoUpload(logoUrl, uploadedFile!, companyId);
       throw error;
     }
 
     if (currentCompany.logoUrl) {
       try {
-        await removeStoredCompanyLogo(currentCompany.logoUrl);
+        await removeStoredCompanyLogo(currentCompany.logoUrl, companyId);
       } catch (error) {
         logWarn('Failed to delete old company logo:', error);
       }
@@ -614,6 +645,7 @@ companyRouter.patch(
     const logoUrl = normalizeCompanyLogoUrl(req.body.logoUrl);
 
     const companyId = requireCompanyAdmin(user);
+    assertCompanyLogoUrlOwnedByCompany(logoUrl, companyId);
 
     // Build update data
     const updateData: {
@@ -668,7 +700,7 @@ companyRouter.patch(
 
     if (shouldCleanupPreviousLogo && previousLogoUrl) {
       try {
-        await removeStoredCompanyLogo(previousLogoUrl);
+        await removeStoredCompanyLogo(previousLogoUrl, companyId);
       } catch (error) {
         logWarn('Failed to delete previous company logo after PATCH:', error);
       }
