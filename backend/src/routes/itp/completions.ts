@@ -1131,11 +1131,7 @@ completionsRouter.post(
         ITP_WRITE_ROLES,
         'ITP attachment write access required',
       );
-      await requireItpSubcontractorCompletionPermission(
-        user,
-        documentProjectId,
-        itpInstance.lotId,
-      );
+      await requireItpSubcontractorCompletionPermission(user, documentProjectId, itpInstance.lotId);
     } else {
       await requireItpProjectRole(
         user,
