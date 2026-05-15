@@ -65,6 +65,7 @@ jobs:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
           ALLOW_LOCAL_FILE_STORAGE: "false"
+          REQUIRE_DURABLE_STORAGE: "true"
           ALLOW_MOCK_OAUTH: "false"
           ALLOW_TEST_AUTH_ENDPOINTS: "false"
           RATE_LIMIT_STORE: database

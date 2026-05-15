@@ -19,6 +19,10 @@ function readEnv(name: string): string {
   return process.env[name]?.trim() || '';
 }
 
+function isEnabled(value: string | undefined): boolean {
+  return ['1', 'true', 'yes'].includes(value?.trim().toLowerCase() ?? '');
+}
+
 function getJsonProperty(value: unknown, property: string): unknown {
   if (!value || typeof value !== 'object') {
     return undefined;
@@ -153,12 +157,16 @@ async function checkResend(): Promise<Omit<PreflightResult, 'name'>> {
 async function checkSupabaseStorage(): Promise<Omit<PreflightResult, 'name'>> {
   const supabaseUrl = readEnv('SUPABASE_URL');
   const serviceRoleKey = readEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const requireDurableStorage = isEnabled(process.env.REQUIRE_DURABLE_STORAGE);
 
-  // Production preflight always requires durable Supabase Storage. Local
-  // Railway disk is ephemeral — files vanish on redeploy — so the
-  // ALLOW_LOCAL_FILE_STORAGE escape hatch must not skip this check, even when
-  // SUPABASE_* env vars are missing. main() forces NODE_ENV=production, so
-  // reaching this script means we're validating a production-shaped deploy.
+  if (!supabaseUrl && !serviceRoleKey && isEnabled(process.env.ALLOW_LOCAL_FILE_STORAGE)) {
+    if (!requireDurableStorage) {
+      return skip('ALLOW_LOCAL_FILE_STORAGE=true; durable Supabase storage intentionally bypassed.');
+    }
+  }
+
+  // production-preflight.yml sets REQUIRE_DURABLE_STORAGE=true. In that mode
+  // local Railway disk is never acceptable because uploads vanish on redeploy.
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error(
       'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for production. ' +
