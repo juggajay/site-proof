@@ -1515,6 +1515,62 @@ describe('ITP Completion Attachments', () => {
     expect(repeatedProjectRes.body.error.message).toContain('projectId is required');
   });
 
+  it('should list pending verifications with assigned subcontractor details', async () => {
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `ITP Pending Verification Subcontractor ${Date.now()}`,
+        status: 'approved',
+      },
+    });
+
+    try {
+      await prisma.lot.update({
+        where: { id: lotId },
+        data: { assignedSubcontractorId: subcontractorCompany.id },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: userId,
+          completedAt: new Date(),
+          verificationStatus: 'pending_verification',
+        },
+      });
+
+      const res = await request(app)
+        .get('/api/itp/pending-verifications')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ projectId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.pendingVerifications).toHaveLength(1);
+      expect(res.body.pendingVerifications[0]).toMatchObject({
+        id: completionId,
+        subcontractor: {
+          id: subcontractorCompany.id,
+          companyName: subcontractorCompany.companyName,
+        },
+      });
+    } finally {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'pending',
+          completedById: null,
+          completedAt: null,
+          verificationStatus: 'none',
+        },
+      });
+      await prisma.lot.update({
+        where: { id: lotId },
+        data: { assignedSubcontractorId: null },
+      });
+      await prisma.subcontractorCompany.deleteMany({ where: { id: subcontractorCompany.id } });
+    }
+  });
+
   it('should reject oversized completion route ids before lookups', async () => {
     const longId = 'c'.repeat(129);
 

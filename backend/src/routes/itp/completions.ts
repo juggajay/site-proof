@@ -1025,8 +1025,6 @@ completionsRouter.get(
                 lotNumber: true,
                 description: true,
                 assignedSubcontractorId: true,
-              },
-              include: {
                 assignedSubcontractor: {
                   select: { id: true, companyName: true },
                 },
