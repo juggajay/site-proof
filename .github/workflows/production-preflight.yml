@@ -18,9 +18,9 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: "20"
           cache: npm
@@ -65,6 +65,7 @@ jobs:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
           ALLOW_LOCAL_FILE_STORAGE: "false"
+          REQUIRE_DURABLE_STORAGE: "true"
           ALLOW_MOCK_OAUTH: "false"
           ALLOW_TEST_AUTH_ENDPOINTS: "false"
           RATE_LIMIT_STORE: database

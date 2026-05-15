@@ -157,13 +157,21 @@ async function checkResend(): Promise<Omit<PreflightResult, 'name'>> {
 async function checkSupabaseStorage(): Promise<Omit<PreflightResult, 'name'>> {
   const supabaseUrl = readEnv('SUPABASE_URL');
   const serviceRoleKey = readEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const requireDurableStorage = isEnabled(process.env.REQUIRE_DURABLE_STORAGE);
 
   if (!supabaseUrl && !serviceRoleKey && isEnabled(process.env.ALLOW_LOCAL_FILE_STORAGE)) {
-    return skip('ALLOW_LOCAL_FILE_STORAGE=true; durable Supabase storage intentionally bypassed.');
+    if (!requireDurableStorage) {
+      return skip('ALLOW_LOCAL_FILE_STORAGE=true; durable Supabase storage intentionally bypassed.');
+    }
   }
 
+  // production-preflight.yml sets REQUIRE_DURABLE_STORAGE=true. In that mode
+  // local Railway disk is never acceptable because uploads vanish on redeploy.
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required together.');
+    throw new Error(
+      'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for production. ' +
+        'Ephemeral local file storage is not acceptable for production uploads.',
+    );
   }
 
   const { fetchWithTimeout } = await import('../src/lib/fetchWithTimeout.js');
