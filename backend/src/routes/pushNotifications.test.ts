@@ -18,6 +18,9 @@ app.use('/api/auth', authRouter);
 app.use('/api/push', pushNotificationsRouter);
 app.use(errorHandler);
 
+const getSubscriptionId = (endpoint: string) =>
+  crypto.createHash('sha256').update(endpoint).digest('hex');
+
 describe('Push Notifications API', () => {
   let authToken: string;
   let userId: string;
@@ -32,9 +35,6 @@ describe('Push Notifications API', () => {
       auth: 'tBHItJI5svbpez7KI4CCXg==',
     },
   };
-
-  const getSubscriptionId = (endpoint: string) =>
-    crypto.createHash('sha256').update(endpoint).digest('hex');
 
   beforeAll(async () => {
     // Create test user
@@ -148,6 +148,47 @@ describe('Push Notifications API', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.message).toContain('Endpoint host is not allowed');
+    });
+
+    it('should reject public HTTPS endpoints outside known browser push services', async () => {
+      const res = await request(app)
+        .post('/api/push/subscribe')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          subscription: {
+            endpoint: 'https://attacker.example/push/collect',
+            keys: mockSubscription.keys,
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Endpoint host is not allowed');
+    });
+
+    it('should allow Firefox and Safari browser push service endpoints', async () => {
+      const firefoxRes = await request(app)
+        .post('/api/push/subscribe')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          subscription: {
+            endpoint: `https://updates.push.services.mozilla.com/wpush/v2/${Date.now()}`,
+            keys: mockSubscription.keys,
+          },
+        });
+
+      expect(firefoxRes.status).toBe(200);
+
+      const safariRes = await request(app)
+        .post('/api/push/subscribe')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          subscription: {
+            endpoint: `https://web.push.apple.com/3/device/${Date.now()}`,
+            keys: mockSubscription.keys,
+          },
+        });
+
+      expect(safariRes.status).toBe(200);
     });
 
     it('should reject push endpoints with credentials or fragments', async () => {
@@ -1159,6 +1200,39 @@ describe('sendPushNotification helper function', () => {
     expect(result.success).toBe(true);
     expect(result.sent).toBeGreaterThan(0);
     expect(result.failed).toBe(0);
+  });
+
+  it('should delete stored subscriptions with untrusted push endpoint hosts before sending', async () => {
+    const invalidEndpoint = `https://attacker.example/push/${Date.now()}`;
+    const invalidSubscriptionId = getSubscriptionId(invalidEndpoint);
+    const sendNotificationMock = vi.mocked(webpush.sendNotification);
+    sendNotificationMock.mockClear();
+
+    await prisma.pushSubscription.create({
+      data: {
+        id: invalidSubscriptionId,
+        userId,
+        endpoint: invalidEndpoint,
+        p256dh: 'test-p256dh',
+        auth: 'test-auth',
+      },
+    });
+
+    const result = await sendPushNotification(userId, {
+      title: 'Test',
+      body: 'Test body',
+    });
+
+    expect(result.sent).toBeGreaterThan(0);
+    expect(result.failed).toBe(1);
+    expect(result.errors?.[0]).toContain('invalid endpoint');
+    expect(sendNotificationMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: invalidEndpoint }),
+      expect.any(String),
+    );
+    await expect(
+      prisma.pushSubscription.findUnique({ where: { id: invalidSubscriptionId } }),
+    ).resolves.toBeNull();
   });
 
   it('should return error for user without subscriptions', async () => {
