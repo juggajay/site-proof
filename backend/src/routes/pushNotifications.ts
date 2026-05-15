@@ -102,6 +102,11 @@ const PUSH_DATA_MAX_BYTES = 2048;
 const PUSH_DATA_MAX_DEPTH = 5;
 const PUSH_SUBSCRIPTION_ID_PATTERN = /^[a-f0-9]{64}$/i;
 const RESERVED_PUSH_DATA_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const ALLOWED_PUSH_ENDPOINT_HOSTS = new Set([
+  'fcm.googleapis.com',
+  'updates.push.services.mozilla.com',
+]);
+const ALLOWED_PUSH_ENDPOINT_SUFFIXES = ['.push.apple.com'];
 
 function getPushErrorDetails(error: unknown): { statusCode?: number; message: string } {
   if (error instanceof Error) {
@@ -171,6 +176,19 @@ function isPrivatePushEndpointHost(hostname: string): boolean {
   );
 }
 
+function normalizeEndpointHostname(hostname: string): string {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+}
+
+function isAllowedPushEndpointHost(hostname: string): boolean {
+  const host = normalizeEndpointHostname(hostname);
+
+  return (
+    ALLOWED_PUSH_ENDPOINT_HOSTS.has(host) ||
+    ALLOWED_PUSH_ENDPOINT_SUFFIXES.some((suffix) => host.endsWith(suffix))
+  );
+}
+
 function parseEndpoint(endpoint: unknown): string {
   if (typeof endpoint !== 'string' || !endpoint.trim()) {
     throw AppError.badRequest('Endpoint is required');
@@ -192,7 +210,10 @@ function parseEndpoint(endpoint: unknown): string {
     if (endpointUrl.hash) {
       throw AppError.badRequest('Endpoint must not include a URL fragment');
     }
-    if (isPrivatePushEndpointHost(endpointUrl.hostname)) {
+    if (endpointUrl.port || isPrivatePushEndpointHost(endpointUrl.hostname)) {
+      throw AppError.badRequest('Endpoint host is not allowed');
+    }
+    if (!isAllowedPushEndpointHost(endpointUrl.hostname)) {
       throw AppError.badRequest('Endpoint host is not allowed');
     }
   } catch (error) {
@@ -450,6 +471,21 @@ function toWebPushSubscription(subscription: PushSubscriptionRecord): PushSubscr
   };
 }
 
+async function removeInvalidStoredPushSubscription(
+  subscription: PushSubscriptionRecord,
+): Promise<string> {
+  await prisma.pushSubscription.deleteMany({ where: { id: subscription.id } });
+  return `Subscription ${subscription.id.slice(0, 8)}... invalid endpoint - removed`;
+}
+
+async function sendStoredPushSubscription(
+  subscription: PushSubscriptionRecord,
+  payload: string,
+): Promise<void> {
+  parseEndpoint(subscription.endpoint);
+  await webpush.sendNotification(toWebPushSubscription(subscription), payload);
+}
+
 // Apply authentication middleware to all routes
 pushNotificationsRouter.use(requireAuth);
 
@@ -636,9 +672,18 @@ pushNotificationsRouter.post(
 
     for (const subscription of userSubscriptions) {
       try {
-        await webpush.sendNotification(toWebPushSubscription(subscription), payload);
+        await sendStoredPushSubscription(subscription, payload);
         results.push({ subscriptionId: subscription.id, success: true });
       } catch (error: unknown) {
+        if (error instanceof AppError) {
+          results.push({
+            subscriptionId: subscription.id,
+            success: false,
+            error: await removeInvalidStoredPushSubscription(subscription),
+          });
+          continue;
+        }
+
         const pushError = getPushErrorDetails(error);
         // Handle expired subscriptions
         if (pushError.statusCode === 410 || pushError.statusCode === 404) {
@@ -810,9 +855,15 @@ export async function sendPushNotification(
 
   for (const subscription of userSubscriptions) {
     try {
-      await webpush.sendNotification(toWebPushSubscription(subscription), payload);
+      await sendStoredPushSubscription(subscription, payload);
       sent++;
     } catch (error: unknown) {
+      if (error instanceof AppError) {
+        failed++;
+        errors.push(await removeInvalidStoredPushSubscription(subscription));
+        continue;
+      }
+
       const pushError = getPushErrorDetails(error);
       failed++;
       // Remove expired subscriptions
