@@ -765,6 +765,40 @@ describe('OAuth Routes', () => {
       process.env.NODE_ENV = 'test';
     });
 
+    it('should reject a production token whose audience only matches the request client ID', async () => {
+      process.env.NODE_ENV = 'production';
+      const attackerClientId = 'attacker-client-id.apps.googleusercontent.com';
+      const attackerEmail = `oauth-attacker-aud-${Date.now()}@example.com`;
+
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: `google_${Date.now()}`,
+          email: attackerEmail,
+          email_verified: 'true',
+          iss: 'https://accounts.google.com',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+          aud: attackerClientId,
+        }),
+      } as Response);
+
+      try {
+        const res = await request(app)
+          .post('/api/auth/google/token')
+          .send({ credential: 'header.payload.signature', clientId: attackerClientId });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Invalid client ID');
+        await expect(
+          prisma.user.findUnique({ where: { email: attackerEmail } }),
+        ).resolves.toBeNull();
+      } finally {
+        await prisma.user.deleteMany({ where: { email: attackerEmail } });
+        vi.restoreAllMocks();
+        process.env.NODE_ENV = 'test';
+      }
+    });
+
     it('should reject Google credentials that fail production verification', async () => {
       process.env.NODE_ENV = 'production';
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
