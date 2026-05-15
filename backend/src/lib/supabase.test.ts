@@ -102,4 +102,31 @@ describe('supabase storage client', () => {
       ),
     ).toBeNull();
   });
+
+  it('can require a storage path to stay inside an expected owner prefix', async () => {
+    process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'prod-supabase-service-role-key-32-plus-chars';
+    delete process.env.SUPABASE_ANON_KEY;
+
+    const storage = await import('./supabase.js');
+
+    expect(
+      storage.getSupabaseStoragePath(
+        'https://siteproof.supabase.co/storage/v1/object/public/documents/comments/project-a/file.pdf',
+        { bucket: 'documents', expectedPrefix: 'comments/project-a/' },
+      ),
+    ).toBe('comments/project-a/file.pdf');
+    expect(
+      storage.getSupabaseStoragePath(
+        'https://siteproof.supabase.co/storage/v1/object/public/documents/comments/project-b/file.pdf',
+        { bucket: 'documents', expectedPrefix: 'comments/project-a/' },
+      ),
+    ).toBeNull();
+    expect(
+      storage.getSupabaseStoragePath(
+        'https://siteproof.supabase.co/storage/v1/object/public/documents/comments/project-a-file.pdf',
+        { bucket: 'documents', expectedPrefix: 'comments/project-a/' },
+      ),
+    ).toBeNull();
+  });
 });

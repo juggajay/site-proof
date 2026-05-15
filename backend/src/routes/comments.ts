@@ -374,7 +374,7 @@ async function uploadCommentAttachmentToSupabase(
   file: Express.Multer.File,
   projectId: string,
 ): Promise<string> {
-  const storagePath = `comments/${projectId}/${Date.now()}-${crypto.randomUUID()}-${sanitizeFilename(file.originalname)}`;
+  const storagePath = `${getCommentAttachmentStoragePrefix(projectId)}${Date.now()}-${crypto.randomUUID()}-${sanitizeFilename(file.originalname)}`;
 
   const { error } = await getSupabaseClient()
     .storage.from(DOCUMENTS_BUCKET)
@@ -398,6 +398,10 @@ async function uploadCommentAttachmentToDisk(file: Express.Multer.File): Promise
   return `/uploads/comments/${filename}`;
 }
 
+function getCommentAttachmentStoragePrefix(projectId: string): string {
+  return `comments/${projectId}/`;
+}
+
 async function deleteLocalCommentAttachmentFile(fileUrl: string): Promise<void> {
   if (!fileUrl.startsWith('/uploads/comments/')) {
     return;
@@ -419,8 +423,18 @@ async function deleteLocalCommentAttachmentFile(fileUrl: string): Promise<void> 
   }
 }
 
-async function deleteCommentAttachmentFromSupabase(fileUrl: string): Promise<void> {
-  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+function getOwnedCommentAttachmentStoragePath(fileUrl: string, projectId: string): string | null {
+  return getSupabaseStoragePath(fileUrl, {
+    bucket: DOCUMENTS_BUCKET,
+    expectedPrefix: getCommentAttachmentStoragePrefix(projectId),
+  });
+}
+
+async function deleteCommentAttachmentFromSupabase(
+  fileUrl: string,
+  projectId: string,
+): Promise<void> {
+  const storagePath = getOwnedCommentAttachmentStoragePath(fileUrl, projectId);
   if (!storagePath) {
     return;
   }
@@ -438,15 +452,15 @@ async function deleteCommentAttachmentFromSupabase(fileUrl: string): Promise<voi
 // `getSupabaseClient` blowing up); call sites must wrap in try/catch and
 // log because storage cleanup is best-effort and the DB row is the source
 // of truth.
-async function removeStoredCommentAttachment(fileUrl: string): Promise<void> {
-  if (isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET) !== null) {
-    await deleteCommentAttachmentFromSupabase(fileUrl);
+async function removeStoredCommentAttachment(fileUrl: string, projectId: string): Promise<void> {
+  if (isSupabaseConfigured() && getOwnedCommentAttachmentStoragePath(fileUrl, projectId) !== null) {
+    await deleteCommentAttachmentFromSupabase(fileUrl, projectId);
     return;
   }
   await deleteLocalCommentAttachmentFile(fileUrl);
 }
 
-function isSafeAttachmentUrl(fileUrl: string): boolean {
+function isSafeAttachmentUrl(fileUrl: string, projectId: string): boolean {
   if (fileUrl.length > 2048) {
     return false;
   }
@@ -465,19 +479,9 @@ function isSafeAttachmentUrl(fileUrl: string): boolean {
   }
 
   try {
-    const url = new URL(fileUrl);
-    const supabaseUrl = process.env.SUPABASE_URL?.trim();
-    if (!isSupabaseConfigured() || !supabaseUrl) {
-      return false;
-    }
-
-    const configuredSupabaseOrigin = new URL(supabaseUrl).origin;
-    if (url.origin !== configuredSupabaseOrigin) {
-      return false;
-    }
-
-    const pathname = decodeURIComponent(url.pathname);
-    return pathname.startsWith(`/storage/v1/object/public/${DOCUMENTS_BUCKET}/comments/`);
+    return (
+      isSupabaseConfigured() && getOwnedCommentAttachmentStoragePath(fileUrl, projectId) !== null
+    );
   } catch {
     return false;
   }
@@ -527,6 +531,7 @@ function parseAttachmentMimeType(value: unknown): string | null {
 
 function sendCommentAttachmentFile(
   attachment: { fileUrl: string; filename: string; mimeType: string | null },
+  projectId: string,
   res: {
     redirect: (url: string) => void;
     setHeader: (name: string, value: string) => void;
@@ -534,7 +539,7 @@ function sendCommentAttachmentFile(
   },
 ): void {
   if (isExternalAttachmentUrl(attachment.fileUrl)) {
-    if (!isSafeAttachmentUrl(attachment.fileUrl)) {
+    if (!isSafeAttachmentUrl(attachment.fileUrl, projectId)) {
       throw AppError.notFound('Attachment file');
     }
 
@@ -658,7 +663,7 @@ interface AttachmentInput {
   mimeType?: string | null;
 }
 
-function getValidAttachments(attachments: unknown): AttachmentInput[] {
+function getValidAttachments(attachments: unknown, projectId: string): AttachmentInput[] {
   const validAttachments: AttachmentInput[] = [];
 
   if (!Array.isArray(attachments)) {
@@ -671,7 +676,7 @@ function getValidAttachments(attachments: unknown): AttachmentInput[] {
     const filename = getSingleString(attachment.filename);
     const fileUrl = getSingleString(attachment.fileUrl);
 
-    if (filename && fileUrl && isSafeAttachmentUrl(fileUrl)) {
+    if (filename && fileUrl && isSafeAttachmentUrl(fileUrl, projectId)) {
       const fileSize = parseAttachmentFileSize(attachment.fileSize);
       const mimeType = parseAttachmentMimeType(attachment.mimeType);
 
@@ -736,7 +741,7 @@ commentsRouter.post(
       await Promise.all(
         attachments.map(async (attachment) => {
           try {
-            await removeStoredCommentAttachment(attachment.fileUrl);
+            await removeStoredCommentAttachment(attachment.fileUrl, projectId);
           } catch (cleanupError) {
             logWarn('Failed to remove comment attachment after upload rollback:', cleanupError);
           }
@@ -769,12 +774,12 @@ commentsRouter.get(
       throw AppError.notFound('Attachment');
     }
 
-    await requireCommentEntityAccess(
+    const projectId = await requireCommentEntityAccess(
       req.user!,
       attachment.comment.entityType,
       attachment.comment.entityId,
     );
-    sendCommentAttachmentFile(attachment, res);
+    sendCommentAttachmentFile(attachment, projectId, res);
   }),
 );
 
@@ -827,7 +832,7 @@ commentsRouter.post(
       );
     }
 
-    const validAttachments = getValidAttachments(attachments);
+    const validAttachments = getValidAttachments(attachments, projectId);
     if (Array.isArray(attachments) && attachments.length > 0 && validAttachments.length === 0) {
       throw AppError.badRequest('No valid attachments provided');
     }
@@ -956,7 +961,11 @@ commentsRouter.delete(
       throw AppError.notFound('Comment');
     }
 
-    await requireCommentEntityAccess(req.user!, existing.entityType, existing.entityId);
+    const projectId = await requireCommentEntityAccess(
+      req.user!,
+      existing.entityType,
+      existing.entityId,
+    );
 
     // Only author can delete
     if (existing.authorId !== userId) {
@@ -986,7 +995,7 @@ commentsRouter.delete(
     await Promise.all(
       attachments.map(async (attachment) => {
         try {
-          await removeStoredCommentAttachment(attachment.fileUrl);
+          await removeStoredCommentAttachment(attachment.fileUrl, projectId);
         } catch (cleanupError) {
           logWarn('Failed to remove comment attachment file after comment delete:', cleanupError);
         }
@@ -1018,7 +1027,11 @@ commentsRouter.post(
       throw AppError.notFound('Comment');
     }
 
-    await requireCommentEntityAccess(req.user!, comment.entityType, comment.entityId);
+    const projectId = await requireCommentEntityAccess(
+      req.user!,
+      comment.entityType,
+      comment.entityId,
+    );
 
     // Only author can add attachments
     if (comment.authorId !== userId) {
@@ -1036,7 +1049,7 @@ commentsRouter.post(
       );
     }
 
-    const validAttachments = getValidAttachments(attachments);
+    const validAttachments = getValidAttachments(attachments, projectId);
 
     if (validAttachments.length === 0) {
       throw AppError.badRequest('No valid attachments provided');
@@ -1095,7 +1108,11 @@ commentsRouter.delete(
       throw AppError.notFound('Comment');
     }
 
-    await requireCommentEntityAccess(req.user!, comment.entityType, comment.entityId);
+    const projectId = await requireCommentEntityAccess(
+      req.user!,
+      comment.entityType,
+      comment.entityId,
+    );
 
     // Only author can delete attachments
     if (comment.authorId !== userId) {
@@ -1119,7 +1136,7 @@ commentsRouter.delete(
     });
 
     try {
-      await removeStoredCommentAttachment(attachment.fileUrl);
+      await removeStoredCommentAttachment(attachment.fileUrl, projectId);
     } catch (cleanupError) {
       logWarn('Failed to remove comment attachment file after attachment delete:', cleanupError);
     }
