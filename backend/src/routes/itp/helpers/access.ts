@@ -198,3 +198,34 @@ export async function requireItpLotRole(
 
   return role;
 }
+
+export async function requireItpSubcontractorCompletionPermission(
+  user: AuthUser,
+  projectId: string,
+  lotId: string,
+  message = 'Not authorized to complete ITP items on this lot',
+): Promise<{ itpRequiresVerification: boolean } | null> {
+  if (!isItpSubcontractorUser(user)) {
+    return null;
+  }
+
+  const assignment = await prisma.lotSubcontractorAssignment.findFirst({
+    where: {
+      projectId,
+      lotId,
+      status: 'active',
+      canCompleteITP: true,
+      subcontractorCompany: activeSubcontractorCompanyWhere({
+        projectId,
+        users: { some: { userId: user.userId } },
+      }),
+    },
+    select: { itpRequiresVerification: true },
+  });
+
+  if (!assignment) {
+    throw AppError.forbidden(message);
+  }
+
+  return assignment;
+}
