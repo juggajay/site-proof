@@ -299,6 +299,23 @@ function isSubcontractorUser(user: AuthenticatedUser): boolean {
   return SUBCONTRACTOR_ROLES.includes(user.roleInCompany || '');
 }
 
+async function requireSubcontractorLotPortalModules(
+  user: AuthenticatedUser,
+  projectId: string,
+  modules: SubcontractorPortalAccessKey[] = [],
+): Promise<void> {
+  const modulesToEnforce = [...new Set<SubcontractorPortalAccessKey>(['lots', ...modules])];
+
+  for (const module of modulesToEnforce) {
+    await requireSubcontractorPortalModuleAccess({
+      userId: user.id,
+      role: user.roleInCompany,
+      projectId,
+      module,
+    });
+  }
+}
+
 async function getEffectiveProjectRole(
   projectId: string,
   user: AuthenticatedUser,
@@ -686,15 +703,11 @@ lotsRouter.get(
       throw AppError.forbidden('Access denied');
     }
 
-    const moduleToEnforce = portalModule ?? (includeITP === 'true' ? 'itps' : undefined);
-    if (moduleToEnforce) {
-      await requireSubcontractorPortalModuleAccess({
-        userId: user.id,
-        role: user.roleInCompany,
-        projectId,
-        module: moduleToEnforce,
-      });
-    }
+    await requireSubcontractorLotPortalModules(
+      user,
+      projectId,
+      portalModule === 'itps' || includeITP === 'true' ? ['itps'] : [],
+    );
 
     // Filter by status if provided
     if (status) {
@@ -995,14 +1008,11 @@ lotsRouter.get(
     }
 
     await requireLotReadAccess(lot, user);
-    if (portalModule) {
-      await requireSubcontractorPortalModuleAccess({
-        userId: user.id,
-        role: user.roleInCompany,
-        projectId: lot.projectId,
-        module: portalModule,
-      });
-    }
+    await requireSubcontractorLotPortalModules(
+      user,
+      lot.projectId,
+      portalModule === 'itps' ? ['itps'] : [],
+    );
 
     // Remove sensitive fields before sending response
     const {
@@ -2148,13 +2158,23 @@ lotsRouter.get(
     const id = parseLotRouteParam(req.params.id, 'id');
     const user = req.user!;
 
-    const result = await checkConformancePrerequisites(id);
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: { id: true, projectId: true },
+    });
 
-    if (result.error) {
+    if (!lot) {
       throw AppError.notFound('Lot');
     }
 
-    await requireLotReadAccess(result.lot!, user);
+    await requireLotReadAccess(lot, user);
+    await requireSubcontractorLotPortalModules(user, lot.projectId, [
+      'itps',
+      'testResults',
+      'ncrs',
+    ]);
+
+    const result = await checkConformancePrerequisites(id);
 
     res.json(result);
   }),

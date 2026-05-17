@@ -663,6 +663,14 @@ describe('Lots API', () => {
           primaryContactName: 'Lots Detail Subcontractor',
           primaryContactEmail: `lots-detail-sub-${Date.now()}@example.com`,
           status: 'approved',
+          portalAccess: {
+            lots: true,
+            itps: true,
+            holdPoints: false,
+            testResults: true,
+            ncrs: true,
+            documents: false,
+          },
         },
       });
 
@@ -896,30 +904,45 @@ describe('Lots API', () => {
           .set('Authorization', `Bearer ${subcontractorToken}`);
 
         expect(itpListRes.status).toBe(403);
-        expect(itpListRes.body.error.message).toContain('ITPs portal access is not enabled');
+        expect(itpListRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
 
         const itpDetailRes = await request(app)
           .get(`/api/lots/${assignedLot.id}?portalModule=itps`)
           .set('Authorization', `Bearer ${subcontractorToken}`);
 
         expect(itpDetailRes.status).toBe(403);
-        expect(itpDetailRes.body.error.message).toContain('ITPs portal access is not enabled');
+        expect(itpDetailRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
 
         const minimalListRes = await request(app)
           .get(`/api/lots?projectId=${projectId}`)
           .set('Authorization', `Bearer ${subcontractorToken}`);
 
-        expect(minimalListRes.status).toBe(200);
-        expect(minimalListRes.body.data.map((lot: { id: string }) => lot.id)).toEqual([
-          assignedLot.id,
-        ]);
+        expect(minimalListRes.status).toBe(403);
+        expect(minimalListRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
 
         const minimalDetailRes = await request(app)
           .get(`/api/lots/${assignedLot.id}`)
           .set('Authorization', `Bearer ${subcontractorToken}`);
 
-        expect(minimalDetailRes.status).toBe(200);
-        expect(minimalDetailRes.body.lot.id).toBe(assignedLot.id);
+        expect(minimalDetailRes.status).toBe(403);
+        expect(minimalDetailRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
+
+        const conformStatusNoLotsRes = await request(app)
+          .get(`/api/lots/${assignedLot.id}/conform-status`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(conformStatusNoLotsRes.status).toBe(403);
+        expect(conformStatusNoLotsRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
 
         await prisma.subcontractorCompany.update({
           where: { id: subcontractorCompany.id },
@@ -940,6 +963,21 @@ describe('Lots API', () => {
           .set('Authorization', `Bearer ${subcontractorToken}`);
 
         expect(enabledAssignedWorkRes.status).toBe(200);
+
+        const enabledMinimalDetailRes = await request(app)
+          .get(`/api/lots/${assignedLot.id}`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(enabledMinimalDetailRes.status).toBe(200);
+
+        const conformStatusNoItpsRes = await request(app)
+          .get(`/api/lots/${assignedLot.id}/conform-status`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(conformStatusNoItpsRes.status).toBe(403);
+        expect(conformStatusNoItpsRes.body.error.message).toContain(
+          'ITPs portal access is not enabled',
+        );
 
         const stillDisabledItpRes = await request(app)
           .get(`/api/lots?projectId=${projectId}&includeITP=true`)
@@ -968,16 +1006,54 @@ describe('Lots API', () => {
           .get(`/api/lots?projectId=${projectId}&includeITP=true`)
           .set('Authorization', `Bearer ${subcontractorToken}`);
 
-        expect(enabledItpListRes.status).toBe(200);
-        expect(enabledItpListRes.body.data.map((lot: { id: string }) => lot.id)).toEqual([
-          assignedLot.id,
-        ]);
+        expect(enabledItpListRes.status).toBe(403);
+        expect(enabledItpListRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
 
         const enabledItpDetailRes = await request(app)
           .get(`/api/lots/${assignedLot.id}?portalModule=itps`)
           .set('Authorization', `Bearer ${subcontractorToken}`);
 
-        expect(enabledItpDetailRes.status).toBe(200);
+        expect(enabledItpDetailRes.status).toBe(403);
+        expect(enabledItpDetailRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
+
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompany.id },
+          data: {
+            portalAccess: {
+              lots: true,
+              itps: true,
+              holdPoints: false,
+              testResults: true,
+              ncrs: true,
+              documents: false,
+            },
+          },
+        });
+
+        const enabledLotAndItpListRes = await request(app)
+          .get(`/api/lots?projectId=${projectId}&includeITP=true`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(enabledLotAndItpListRes.status).toBe(200);
+        expect(enabledLotAndItpListRes.body.data.map((lot: { id: string }) => lot.id)).toEqual([
+          assignedLot.id,
+        ]);
+
+        const enabledLotAndItpDetailRes = await request(app)
+          .get(`/api/lots/${assignedLot.id}?portalModule=itps`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(enabledLotAndItpDetailRes.status).toBe(200);
+
+        const enabledConformStatusRes = await request(app)
+          .get(`/api/lots/${assignedLot.id}/conform-status`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(enabledConformStatusRes.status).toBe(200);
       } finally {
         await prisma.lotSubcontractorAssignment.deleteMany({ where: { lotId: assignedLot.id } });
         await prisma.subcontractorUser.deleteMany({
@@ -990,7 +1066,7 @@ describe('Lots API', () => {
         await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorUserId } });
         await prisma.user.delete({ where: { id: subcontractorUserId } }).catch(() => {});
       }
-    });
+    }, 60000);
   });
 
   describe('PATCH /api/lots/:id', () => {
