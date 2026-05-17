@@ -6,7 +6,12 @@ import { type AuthUser } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { parseNcrRouteParam, requireActiveProjectUser } from './ncrAccess.js';
+import {
+  NCR_QUALITY_MANAGEMENT_ROLES,
+  parseNcrRouteParam,
+  requireActiveProjectUser,
+  requireNcrResponsibleOrProjectRole,
+} from './ncrAccess.js';
 
 const NCR_WORKFLOW_SHORT_TEXT_MAX_LENGTH = 160;
 const NCR_WORKFLOW_TEXT_MAX_LENGTH = 5000;
@@ -143,7 +148,11 @@ ncrWorkflowRouter.post(
       throw AppError.notFound('NCR not found');
     }
 
-    await requireActiveProjectUser(ncr.projectId, user);
+    await requireNcrResponsibleOrProjectRole(
+      ncr,
+      user,
+      'Only the responsible party or project quality roles can respond to NCRs',
+    );
 
     if (ncr.status !== 'open') {
       throw AppError.badRequest('NCR is not in open status');
@@ -311,7 +320,11 @@ ncrWorkflowRouter.post(
       throw AppError.notFound('NCR not found');
     }
 
-    await requireActiveProjectUser(ncr.projectId, user);
+    await requireNcrResponsibleOrProjectRole(
+      ncr,
+      user,
+      'Only the responsible party or project quality roles can submit NCR rectification',
+    );
 
     if (ncr.status !== 'investigating' && ncr.status !== 'rectification') {
       throw AppError.badRequest('NCR is not ready for rectification');
@@ -498,7 +511,12 @@ ncrWorkflowRouter.post(
       throw AppError.notFound('NCR not found');
     }
 
-    await requireActiveProjectUser(ncr.projectId, user);
+    await requireActiveProjectUser(
+      ncr.projectId,
+      user,
+      'Only Quality Managers, Project Managers, or Admins can close NCRs',
+      NCR_QUALITY_MANAGEMENT_ROLES,
+    );
 
     // Check if NCR is in a state that can be closed
     if (ncr.status !== 'verification' && ncr.status !== 'rectification') {
@@ -762,7 +780,11 @@ ncrWorkflowRouter.post(
       throw AppError.notFound('NCR not found');
     }
 
-    await requireActiveProjectUser(ncr.projectId, user);
+    await requireNcrResponsibleOrProjectRole(
+      ncr,
+      user,
+      'Only the responsible party or project quality roles can submit NCR rectification',
+    );
 
     // Check if NCR is in rectification status
     if (ncr.status !== 'rectification' && ncr.status !== 'investigating') {
