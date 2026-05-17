@@ -1111,18 +1111,22 @@ describe('Company API', () => {
       const apiKeyCompany = await prisma.company.create({
         data: { name: `Transfer API Key Company ${suffix}` },
       });
-      const ownerRes = await request(app).post('/api/auth/register').send({
-        email: `transfer-api-owner-${suffix}@example.com`,
-        password: 'SecureP@ssword123!',
-        fullName: 'Transfer API Owner',
-        tosAccepted: true,
-      });
-      const targetRes = await request(app).post('/api/auth/register').send({
-        email: `transfer-api-target-${suffix}@example.com`,
-        password: 'SecureP@ssword123!',
-        fullName: 'Transfer API Target',
-        tosAccepted: true,
-      });
+      const ownerRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `transfer-api-owner-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Transfer API Owner',
+          tosAccepted: true,
+        });
+      const targetRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `transfer-api-target-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Transfer API Target',
+          tosAccepted: true,
+        });
       const ownerId = ownerRes.body.user.id;
       const targetId = targetRes.body.user.id;
 
