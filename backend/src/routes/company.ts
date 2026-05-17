@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { type Request, Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { TIER_PROJECT_LIMITS, TIER_USER_LIMITS } from '../lib/tierLimits.js';
@@ -88,6 +88,12 @@ function serializeTierLimit(limit: number): number | null {
 function cleanupUploadedLogo(file?: Express.Multer.File): void {
   if (file?.path && fs.existsSync(file.path)) {
     fs.unlinkSync(file.path);
+  }
+}
+
+function requireBrowserSession(req: Request, action: string): void {
+  if (req.apiKey) {
+    throw AppError.forbidden(`${action} requires an authenticated browser session`);
   }
 }
 
@@ -497,6 +503,8 @@ companyRouter.post(
   '/transfer-ownership',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    requireBrowserSession(req, 'Ownership transfer');
+
     const newOwnerId = normalizeCompanyString(req.body.newOwnerId, 'New owner ID', 128, {
       required: true,
     });
