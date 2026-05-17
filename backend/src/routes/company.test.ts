@@ -17,6 +17,7 @@ vi.mock('../lib/supabase.js', async () => {
 });
 
 import * as supabaseLib from '../lib/supabase.js';
+import apiKeysRouter, { authenticateApiKey } from './apiKeys.js';
 import { companyRouter } from './company.js';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
@@ -27,7 +28,9 @@ const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
+app.use('/api/api-keys', apiKeysRouter);
 app.use('/api/company', companyRouter);
 app.use(errorHandler);
 
@@ -1101,6 +1104,73 @@ describe('Company API', () => {
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: adminRes.body.user.id } });
       await prisma.user.delete({ where: { id: adminRes.body.user.id } });
+    });
+
+    it('should reject ownership transfer with an owner write-scoped API key', async () => {
+      const suffix = Date.now();
+      const apiKeyCompany = await prisma.company.create({
+        data: { name: `Transfer API Key Company ${suffix}` },
+      });
+      const ownerRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `transfer-api-owner-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Transfer API Owner',
+          tosAccepted: true,
+        });
+      const targetRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `transfer-api-target-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Transfer API Target',
+          tosAccepted: true,
+        });
+      const ownerId = ownerRes.body.user.id;
+      const targetId = targetRes.body.user.id;
+
+      try {
+        await prisma.user.update({
+          where: { id: ownerId },
+          data: { companyId: apiKeyCompany.id, roleInCompany: 'owner' },
+        });
+        await prisma.user.update({
+          where: { id: targetId },
+          data: { companyId: apiKeyCompany.id, roleInCompany: 'admin' },
+        });
+
+        const apiKeyRes = await request(app)
+          .post('/api/api-keys')
+          .set('Authorization', `Bearer ${ownerRes.body.token}`)
+          .send({
+            name: 'Transfer Write Key',
+            scopes: 'write',
+          });
+        expect(apiKeyRes.status).toBe(201);
+
+        const res = await request(app)
+          .post('/api/company/transfer-ownership')
+          .set('Authorization', `ApiKey ${apiKeyRes.body.apiKey.key}`)
+          .send({ newOwnerId: targetId });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+
+        const [owner, target] = await Promise.all([
+          prisma.user.findUniqueOrThrow({ where: { id: ownerId } }),
+          prisma.user.findUniqueOrThrow({ where: { id: targetId } }),
+        ]);
+        expect(owner.roleInCompany).toBe('owner');
+        expect(target.roleInCompany).toBe('admin');
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { userId: ownerId } });
+        await prisma.emailVerificationToken.deleteMany({
+          where: { userId: { in: [ownerId, targetId] } },
+        });
+        await prisma.user.deleteMany({ where: { id: { in: [ownerId, targetId] } } });
+        await prisma.company.delete({ where: { id: apiKeyCompany.id } }).catch(() => {});
+      }
     });
 
     it('should require authentication', async () => {
