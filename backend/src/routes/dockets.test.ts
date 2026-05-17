@@ -629,6 +629,93 @@ describe('Dockets API', () => {
 
       expect(await prisma.docketLabour.count({ where: { docketId } })).toBe(beforeCount);
     });
+
+    it('should reject adding labour for a roster employee that is not approved', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(),
+          status: 'draft',
+        },
+      });
+      const pendingEmployee = await prisma.employeeRoster.create({
+        data: {
+          subcontractorCompanyId,
+          name: 'Pending Worker',
+          role: 'Operator',
+          hourlyRate: 999,
+          status: 'pending',
+        },
+      });
+      const beforeCount = await prisma.docketLabour.count({ where: { docketId: docket.id } });
+
+      const res = await request(app)
+        .post(`/api/dockets/${docket.id}/labour`)
+        .set('Authorization', `Bearer ${subcontractorToken}`)
+        .send({
+          employeeId: pendingEmployee.id,
+          startTime: '07:00',
+          finishTime: '15:00',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('approved');
+      expect(await prisma.docketLabour.count({ where: { docketId: docket.id } })).toBe(beforeCount);
+    });
+
+    it('should reject updating labour when the roster employee is no longer approved', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(),
+          status: 'draft',
+        },
+      });
+      const labourEntry = await prisma.docketLabour.create({
+        data: {
+          docketId: docket.id,
+          employeeId,
+          startTime: '07:00',
+          finishTime: '15:00',
+          submittedHours: 8,
+          hourlyRate: 45.5,
+          submittedCost: 364,
+        },
+      });
+      await prisma.employeeRoster.update({
+        where: { id: employeeId },
+        data: { status: 'pending' },
+      });
+
+      try {
+        const res = await request(app)
+          .put(`/api/dockets/${docket.id}/labour/${labourEntry.id}`)
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            startTime: '06:00',
+            finishTime: '18:00',
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('approved');
+        await expect(
+          prisma.docketLabour.findUnique({
+            where: { id: labourEntry.id },
+            select: { startTime: true, finishTime: true, submittedHours: true },
+          }),
+        ).resolves.toMatchObject({
+          startTime: '07:00',
+          finishTime: '15:00',
+        });
+      } finally {
+        await prisma.employeeRoster.update({
+          where: { id: employeeId },
+          data: { status: 'approved' },
+        });
+      }
+    });
   });
 
   describe('Plant Entry Management', () => {
@@ -720,6 +807,93 @@ describe('Dockets API', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.message).toContain('plantId');
       expect(await prisma.docketPlant.count({ where: { docketId } })).toBe(beforeCount);
+    });
+
+    it('should reject adding plant for register equipment that is not approved', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(),
+          status: 'draft',
+        },
+      });
+      const pendingPlant = await prisma.plantRegister.create({
+        data: {
+          subcontractorCompanyId,
+          type: 'Crane',
+          description: 'Pending high-rate crane',
+          idRego: 'PENDING-001',
+          dryRate: 1200,
+          wetRate: 1500,
+          status: 'pending',
+        },
+      });
+      const beforeCount = await prisma.docketPlant.count({ where: { docketId: docket.id } });
+
+      const res = await request(app)
+        .post(`/api/dockets/${docket.id}/plant`)
+        .set('Authorization', `Bearer ${subcontractorToken}`)
+        .send({
+          plantId: pendingPlant.id,
+          hoursOperated: 8,
+          wetOrDry: 'dry',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('approved');
+      expect(await prisma.docketPlant.count({ where: { docketId: docket.id } })).toBe(beforeCount);
+    });
+
+    it('should reject updating plant when the register equipment is no longer approved', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(),
+          status: 'draft',
+        },
+      });
+      const plantEntry = await prisma.docketPlant.create({
+        data: {
+          docketId: docket.id,
+          plantId,
+          hoursOperated: 8,
+          wetOrDry: 'dry',
+          hourlyRate: 150,
+          submittedCost: 1200,
+        },
+      });
+      await prisma.plantRegister.update({
+        where: { id: plantId },
+        data: { status: 'pending' },
+      });
+
+      try {
+        const res = await request(app)
+          .put(`/api/dockets/${docket.id}/plant/${plantEntry.id}`)
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            hoursOperated: 12,
+            wetOrDry: 'wet',
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('approved');
+        await expect(
+          prisma.docketPlant.findUnique({
+            where: { id: plantEntry.id },
+            select: { hoursOperated: true, wetOrDry: true, submittedCost: true },
+          }),
+        ).resolves.toMatchObject({
+          wetOrDry: 'dry',
+        });
+      } finally {
+        await prisma.plantRegister.update({
+          where: { id: plantId },
+          data: { status: 'approved' },
+        });
+      }
     });
   });
 
