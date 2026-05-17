@@ -1467,6 +1467,7 @@ describe('NCR Access Hardening', () => {
   let otherProjectId: string;
   let ncrId: string;
   let otherNcrId: string;
+  let lotId: string;
   let sameProjectDocumentId: string;
   let otherProjectDocumentId: string;
   let otherNcrEvidenceId: string;
@@ -1513,6 +1514,17 @@ describe('NCR Access Hardening', () => {
     await prisma.projectUser.create({
       data: { projectId, userId, role: 'quality_manager', status: 'active' },
     });
+
+    const lot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `NCR-ACCESS-LOT-${Date.now()}`,
+        status: 'in_progress',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+    lotId = lot.id;
 
     const [ncr, otherNcr] = await Promise.all([
       prisma.nCR.create({
@@ -1582,6 +1594,7 @@ describe('NCR Access Hardening', () => {
       where: { ncrId: { in: [ncrId, otherNcrId].filter(Boolean) } },
     });
     await prisma.nCR.deleteMany({ where: { projectId } });
+    await prisma.lot.deleteMany({ where: { projectId } });
     await prisma.document.deleteMany({
       where: { projectId: { in: [projectId, otherProjectId].filter(Boolean) } },
     });
@@ -1711,6 +1724,164 @@ describe('NCR Access Hardening', () => {
         .delete({ where: { id: subcontractorCompany.id } })
         .catch(() => {});
       await cleanupTestUser(subcontractor.userId);
+    }
+  });
+
+  it('should reject active viewers from creating NCRs or changing linked lot status', async () => {
+    const viewer = await registerTestUser('ncr-access-viewer-create', 'NCR Access Viewer Create');
+    await prisma.user.update({
+      where: { id: viewer.userId },
+      data: { companyId, roleInCompany: 'viewer' },
+    });
+    await prisma.projectUser.create({
+      data: { projectId, userId: viewer.userId, role: 'viewer', status: 'active' },
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/ncrs')
+        .set('Authorization', `Bearer ${viewer.token}`)
+        .send({
+          projectId,
+          description: 'Viewer should not create NCRs',
+          category: 'Workmanship',
+          severity: 'minor',
+          lotIds: [lotId],
+        });
+
+      expect(res.status).toBe(403);
+      expect(await prisma.nCR.count({ where: { projectId, raisedById: viewer.userId } })).toBe(0);
+      const lot = await prisma.lot.findUniqueOrThrow({ where: { id: lotId } });
+      expect(lot.status).toBe('in_progress');
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: viewer.userId } });
+      await cleanupTestUser(viewer.userId);
+    }
+  });
+
+  it('should reject active viewers from NCR workflow state transitions', async () => {
+    const viewer = await registerTestUser(
+      'ncr-access-viewer-workflow',
+      'NCR Access Viewer Workflow',
+    );
+    await prisma.user.update({
+      where: { id: viewer.userId },
+      data: { companyId, roleInCompany: 'viewer' },
+    });
+    await prisma.projectUser.create({
+      data: { projectId, userId: viewer.userId, role: 'viewer', status: 'active' },
+    });
+
+    try {
+      await prisma.nCR.update({
+        where: { id: ncrId },
+        data: {
+          status: 'open',
+          rootCauseDescription: null,
+          proposedCorrectiveAction: null,
+          responseSubmittedAt: null,
+        },
+      });
+      const respondRes = await request(app)
+        .post(`/api/ncrs/${ncrId}/respond`)
+        .set('Authorization', `Bearer ${viewer.token}`)
+        .send({
+          rootCauseCategory: 'Method',
+          rootCauseDescription: 'Viewer should not respond',
+          proposedCorrectiveAction: 'Do not mutate',
+        });
+      expect(respondRes.status).toBe(403);
+
+      await prisma.nCR.update({
+        where: { id: ncrId },
+        data: { status: 'verification', verifiedAt: null, closedAt: null, closedById: null },
+      });
+      const closeRes = await request(app)
+        .post(`/api/ncrs/${ncrId}/close`)
+        .set('Authorization', `Bearer ${viewer.token}`)
+        .send({
+          verificationNotes: 'Viewer should not close',
+          lessonsLearned: 'Do not mutate',
+        });
+      expect(closeRes.status).toBe(403);
+
+      const ncr = await prisma.nCR.findUniqueOrThrow({
+        where: { id: ncrId },
+        select: {
+          status: true,
+          rootCauseDescription: true,
+          proposedCorrectiveAction: true,
+          closedAt: true,
+          closedById: true,
+        },
+      });
+      expect(ncr.status).toBe('verification');
+      expect(ncr.rootCauseDescription).toBeNull();
+      expect(ncr.proposedCorrectiveAction).toBeNull();
+      expect(ncr.closedAt).toBeNull();
+      expect(ncr.closedById).toBeNull();
+    } finally {
+      await prisma.nCR.update({
+        where: { id: ncrId },
+        data: {
+          status: 'open',
+          rootCauseDescription: null,
+          proposedCorrectiveAction: null,
+          responseSubmittedAt: null,
+          verifiedAt: null,
+          closedAt: null,
+          closedById: null,
+        },
+      });
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: viewer.userId } });
+      await cleanupTestUser(viewer.userId);
+    }
+  });
+
+  it('should reject active viewers from adding or deleting NCR evidence', async () => {
+    const viewer = await registerTestUser(
+      'ncr-access-viewer-evidence',
+      'NCR Access Viewer Evidence',
+    );
+    await prisma.user.update({
+      where: { id: viewer.userId },
+      data: { companyId, roleInCompany: 'viewer' },
+    });
+    await prisma.projectUser.create({
+      data: { projectId, userId: viewer.userId, role: 'viewer', status: 'active' },
+    });
+    const evidence = await prisma.nCREvidence.create({
+      data: {
+        ncrId,
+        documentId: sameProjectDocumentId,
+        evidenceType: 'photo',
+      },
+    });
+
+    try {
+      const addRes = await request(app)
+        .post(`/api/ncrs/${ncrId}/evidence`)
+        .set('Authorization', `Bearer ${viewer.token}`)
+        .send({
+          evidenceType: 'photo',
+          filename: `viewer-evidence-${Date.now()}.jpg`,
+          fileUrl: `/uploads/documents/viewer-evidence-${Date.now()}.jpg`,
+          mimeType: 'image/jpeg',
+        });
+      expect(addRes.status).toBe(403);
+
+      const deleteRes = await request(app)
+        .delete(`/api/ncrs/${ncrId}/evidence/${evidence.id}`)
+        .set('Authorization', `Bearer ${viewer.token}`);
+      expect(deleteRes.status).toBe(403);
+
+      await expect(prisma.nCREvidence.findUnique({ where: { id: evidence.id } })).resolves.not.toBe(
+        null,
+      );
+    } finally {
+      await prisma.nCREvidence.deleteMany({ where: { id: evidence.id } });
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: viewer.userId } });
+      await cleanupTestUser(viewer.userId);
     }
   });
 

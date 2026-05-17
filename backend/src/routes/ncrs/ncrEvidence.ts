@@ -6,7 +6,13 @@ import { type AuthUser } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { parseNcrRouteParam, requireActiveProjectUser } from './ncrAccess.js';
+import {
+  NCR_EVIDENCE_MUTATION_ROLES,
+  parseNcrRouteParam,
+  requireActiveProjectUser,
+  requireNcrEvidenceMutationAccess,
+  requireNcrResponsibleOrProjectRole,
+} from './ncrAccess.js';
 import { isStoredDocumentUploadPath } from '../../lib/uploadPaths.js';
 
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 2_147_483_647;
@@ -111,7 +117,12 @@ ncrEvidenceRouter.post(
       throw AppError.notFound('NCR');
     }
 
-    await requireActiveProjectUser(ncr.projectId, user);
+    await requireNcrResponsibleOrProjectRole(
+      ncr,
+      user,
+      'Only responsible parties or project quality roles can add NCR evidence',
+      NCR_EVIDENCE_MUTATION_ROLES,
+    );
 
     // If documentId is provided, link existing document
     // Otherwise, create a new document first
@@ -282,20 +293,33 @@ ncrEvidenceRouter.delete(
       throw AppError.notFound('NCR');
     }
 
-    await requireActiveProjectUser(ncr.projectId, user);
-
     // Check if NCR is not closed
     if (ncr.status === 'closed' || ncr.status === 'closed_concession') {
       throw AppError.badRequest('Cannot remove evidence from a closed NCR');
     }
 
-    const deleteResult = await prisma.nCREvidence.deleteMany({
-      where: { id: evidenceId, ncrId: id },
+    const evidence = await prisma.nCREvidence.findUnique({
+      where: { id: evidenceId },
+      select: {
+        ncrId: true,
+        document: { select: { uploadedById: true } },
+      },
     });
 
-    if (deleteResult.count === 0) {
+    if (!evidence || evidence.ncrId !== id) {
       throw AppError.notFound('Evidence');
     }
+
+    await requireNcrEvidenceMutationAccess(
+      ncr,
+      user,
+      'Only responsible parties, evidence uploaders, or project quality roles can remove NCR evidence',
+      evidence.document.uploadedById,
+    );
+
+    await prisma.nCREvidence.delete({
+      where: { id: evidenceId },
+    });
 
     res.json({ message: 'Evidence removed successfully' });
   }),

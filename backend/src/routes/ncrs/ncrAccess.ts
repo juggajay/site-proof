@@ -22,6 +22,27 @@ type NcrReadAccessRecord = {
 const COMPANY_PROJECT_ROLES = new Set(['owner', 'admin']);
 const SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const MAX_NCR_ROUTE_PARAM_LENGTH = 120;
+export const NCR_CREATE_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'site_manager',
+  'quality_manager',
+  'site_engineer',
+  'foreman',
+];
+export const NCR_QUALITY_MANAGEMENT_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'site_manager',
+  'quality_manager',
+];
+export const NCR_EVIDENCE_MUTATION_ROLES = [
+  ...NCR_QUALITY_MANAGEMENT_ROLES,
+  'site_engineer',
+  'foreman',
+];
 
 export function parseNcrRouteParam(value: unknown, fieldName: string): string {
   if (typeof value !== 'string') {
@@ -105,6 +126,40 @@ export async function requireActiveProjectUser(
   }
 
   return projectUser;
+}
+
+export async function requireNcrResponsibleOrProjectRole(
+  ncr: { projectId: string; responsibleUserId: string | null },
+  user: AuthUser,
+  message: string,
+  roles = NCR_QUALITY_MANAGEMENT_ROLES,
+) {
+  const projectUser = await requireActiveProjectUser(ncr.projectId, user, message);
+
+  if (roles.includes(projectUser.role) || ncr.responsibleUserId === user.userId) {
+    return projectUser;
+  }
+
+  throw AppError.forbidden(message);
+}
+
+export async function requireNcrEvidenceMutationAccess(
+  ncr: { projectId: string; responsibleUserId: string | null },
+  user: AuthUser,
+  message: string,
+  uploadedById?: string | null,
+) {
+  const projectUser = await requireActiveProjectUser(ncr.projectId, user, message);
+
+  if (
+    NCR_EVIDENCE_MUTATION_ROLES.includes(projectUser.role) ||
+    ncr.responsibleUserId === user.userId ||
+    uploadedById === user.userId
+  ) {
+    return projectUser;
+  }
+
+  throw AppError.forbidden(message);
 }
 
 export async function canReadNcr(ncr: NcrReadAccessRecord, user: AuthUser): Promise<boolean> {

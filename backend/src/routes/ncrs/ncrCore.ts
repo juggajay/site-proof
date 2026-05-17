@@ -12,7 +12,12 @@ import {
   activeSubcontractorCompanyWhere,
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
-import { canReadNcr, parseNcrRouteParam, requireActiveProjectUser } from './ncrAccess.js';
+import {
+  canReadNcr,
+  NCR_CREATE_ROLES,
+  parseNcrRouteParam,
+  requireActiveProjectUser,
+} from './ncrAccess.js';
 import { logError } from '../../lib/serverLogger.js';
 
 const NCR_ID_MAX_LENGTH = 120;
@@ -21,7 +26,6 @@ const NCR_CATEGORY_MAX_LENGTH = 120;
 const NCR_SPECIFICATION_REFERENCE_MAX_LENGTH = 300;
 const NCR_COMMENT_MAX_LENGTH = 5000;
 const NCR_DATE_INPUT_MAX_LENGTH = 64;
-const NCR_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 
 function requiredTrimmedNcrString(fieldName: string, maxLength: number, requiredMessage: string) {
   return z
@@ -569,27 +573,12 @@ ncrCoreRouter.post(
       lotIds,
     } = validation.data;
 
-    // Check project access
-    const userDetails = await prisma.user.findUnique({
-      where: { id: user.userId },
-      select: { roleInCompany: true },
-    });
-
-    if (NCR_SUBCONTRACTOR_ROLES.has(userDetails?.roleInCompany || '')) {
-      throw AppError.forbidden('Access denied to this project');
-    }
-
-    const hasAccess = await prisma.projectUser.findFirst({
-      where: {
-        projectId,
-        userId: user.userId,
-        status: 'active',
-      },
-    });
-
-    if (!hasAccess) {
-      throw AppError.forbidden('Access denied to this project');
-    }
+    await requireActiveProjectUser(
+      projectId,
+      user,
+      'You do not have permission to create NCRs for this project',
+      NCR_CREATE_ROLES,
+    );
 
     const ncrLotIds = await requireNcrLotsInProject(projectId, lotIds || []);
     await requireActiveResponsibleUser(projectId, responsibleUserId);
