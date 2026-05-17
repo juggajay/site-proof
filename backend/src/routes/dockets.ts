@@ -200,6 +200,12 @@ function isDocketEntryEditable(status: string): boolean {
   return DOCKET_ENTRY_EDIT_STATUSES.has(status);
 }
 
+function requireApprovedDocketResource(status: string, resourceName: 'Employee' | 'Plant'): void {
+  if (status !== 'approved') {
+    throw AppError.badRequest(`${resourceName} must be approved before it can be used on a docket`);
+  }
+}
+
 async function hasLinkedSubcontractorCompany(
   userId: string,
   subcontractorCompanyId: string,
@@ -1642,6 +1648,7 @@ docketsRouter.post(
     if (!employee) {
       throw AppError.notFound('Employee in roster');
     }
+    requireApprovedDocketResource(employee.status, 'Employee');
 
     // Calculate hours from start/finish time
     let hours = 0;
@@ -1747,7 +1754,7 @@ docketsRouter.put(
     const entry = await prisma.docketLabour.findFirst({
       where: { id: entryId, docketId: id },
       include: {
-        employee: { select: { hourlyRate: true } },
+        employee: { select: { hourlyRate: true, status: true } },
       },
     });
 
@@ -1763,6 +1770,7 @@ docketsRouter.put(
     if (!isDocketEntryEditable(docket.status)) {
       throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
     }
+    requireApprovedDocketResource(entry.employee.status, 'Employee');
     await requireLotAllocationsInProject(
       docket.projectId,
       docket.subcontractorCompanyId,
@@ -2014,6 +2022,7 @@ docketsRouter.post(
     if (!plant) {
       throw AppError.notFound('Plant in register');
     }
+    requireApprovedDocketResource(plant.status, 'Plant');
 
     // Determine rate based on wet/dry
     const isWet = wetOrDry === 'wet';
@@ -2102,7 +2111,7 @@ docketsRouter.put(
     const entry = await prisma.docketPlant.findFirst({
       where: { id: entryId, docketId: id },
       include: {
-        plant: { select: { dryRate: true, wetRate: true } },
+        plant: { select: { dryRate: true, wetRate: true, status: true } },
       },
     });
 
@@ -2118,6 +2127,7 @@ docketsRouter.put(
     if (!isDocketEntryEditable(docket.status)) {
       throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
     }
+    requireApprovedDocketResource(entry.plant.status, 'Plant');
 
     // Recalculate cost
     const hours = hoursOperated !== undefined ? Number(hoursOperated) : Number(entry.hoursOperated);
