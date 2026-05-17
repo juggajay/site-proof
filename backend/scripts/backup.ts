@@ -27,7 +27,7 @@ import {
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 
 const BACKUP_DIR = resolve(process.env.BACKUP_DIR || join(process.cwd(), 'backups'));
-const MAX_BACKUP_AGE_DAYS = Number(process.env.BACKUP_RETENTION_DAYS || 30);
+const DEFAULT_BACKUP_RETENTION_DAYS = 30;
 
 type BackupInfo = {
   path: string;
@@ -126,6 +126,24 @@ function listBackups(): BackupInfo[] {
     .sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
+function getBackupRetentionDays(): number {
+  const rawRetentionDays = process.env.BACKUP_RETENTION_DAYS?.trim();
+  if (!rawRetentionDays) {
+    return DEFAULT_BACKUP_RETENTION_DAYS;
+  }
+
+  if (!/^\d+$/.test(rawRetentionDays)) {
+    throw new Error('BACKUP_RETENTION_DAYS must be a positive integer.');
+  }
+
+  const retentionDays = Number(rawRetentionDays);
+  if (!Number.isSafeInteger(retentionDays) || retentionDays < 1) {
+    throw new Error('BACKUP_RETENTION_DAYS must be a positive integer.');
+  }
+
+  return retentionDays;
+}
+
 function createBackup(): void {
   ensureBackupDir();
   const databaseUrl = requireDatabaseUrl();
@@ -205,7 +223,8 @@ function displayBackups(): void {
 }
 
 function cleanupOldBackups(): void {
-  const cutoff = Date.now() - MAX_BACKUP_AGE_DAYS * 24 * 60 * 60 * 1000;
+  const maxBackupAgeDays = getBackupRetentionDays();
+  const cutoff = Date.now() - maxBackupAgeDays * 24 * 60 * 60 * 1000;
   let deleted = 0;
 
   for (const backup of listBackups()) {
@@ -220,7 +239,7 @@ function cleanupOldBackups(): void {
     deleted += 1;
   }
 
-  console.log(`Deleted ${deleted} backup(s) older than ${MAX_BACKUP_AGE_DAYS} days.`);
+  console.log(`Deleted ${deleted} backup(s) older than ${maxBackupAgeDays} days.`);
 }
 
 function printHelp(): void {
