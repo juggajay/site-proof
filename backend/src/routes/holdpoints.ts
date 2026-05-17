@@ -105,6 +105,22 @@ function parseHPDefaultRecipients(settings: HPProjectSettings): string[] {
   ).filter(isValidEmailAddress);
 }
 
+function parseHPProjectSettings(rawSettings: string | null | undefined): HPProjectSettings {
+  if (!rawSettings) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(rawSettings) as HPProjectSettings;
+  } catch (_error) {
+    return {};
+  }
+}
+
+function requiresSuperintendentApproval(settings: HPProjectSettings): boolean {
+  return settings.hpApprovalRequirement === 'superintendent';
+}
+
 // =============================================================================
 // Zod Validation Schemas
 // =============================================================================
@@ -399,6 +415,85 @@ const HP_ESCALATION_ROLES = [
   'superintendent',
 ];
 const HP_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
+
+type HoldPointNotificationRecipient = {
+  email: string;
+  fullName: string | null;
+};
+
+async function getEligibleSuperintendentReleaseRecipients(projectId: string) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { companyId: true },
+  });
+
+  if (!project) {
+    throw AppError.notFound('Project');
+  }
+
+  const [projectUsers, companyAdmins] = await Promise.all([
+    prisma.projectUser.findMany({
+      where: {
+        projectId,
+        status: 'active',
+        role: { in: HP_SUPERINTENDENT_RELEASE_ROLES },
+      },
+      include: {
+        user: { select: { email: true, fullName: true } },
+      },
+    }),
+    prisma.user.findMany({
+      where: {
+        companyId: project.companyId,
+        roleInCompany: { in: ['owner', 'admin'] },
+      },
+      select: { email: true, fullName: true },
+    }),
+  ]);
+
+  const eligibleByEmail = new Map<string, HoldPointNotificationRecipient>();
+
+  for (const projectUser of projectUsers) {
+    eligibleByEmail.set(projectUser.user.email.toLowerCase(), {
+      email: projectUser.user.email,
+      fullName: projectUser.user.fullName,
+    });
+  }
+
+  for (const companyAdmin of companyAdmins) {
+    eligibleByEmail.set(companyAdmin.email.toLowerCase(), {
+      email: companyAdmin.email,
+      fullName: companyAdmin.fullName,
+    });
+  }
+
+  return eligibleByEmail;
+}
+
+async function requireSuperintendentApprovalRecipients(
+  projectId: string,
+  settings: HPProjectSettings,
+  recipients: HoldPointNotificationRecipient[],
+): Promise<HoldPointNotificationRecipient[]> {
+  if (!requiresSuperintendentApproval(settings) || recipients.length === 0) {
+    return recipients;
+  }
+
+  const eligibleByEmail = await getEligibleSuperintendentReleaseRecipients(projectId);
+
+  const resolvedRecipients = recipients.map((recipient) => {
+    const eligibleRecipient = eligibleByEmail.get(recipient.email.trim().toLowerCase());
+    if (!eligibleRecipient) {
+      throw AppError.forbidden(
+        'This project requires superintendent approval to release hold points.',
+      );
+    }
+
+    return eligibleRecipient;
+  });
+
+  return resolvedRecipients;
+}
 
 function parseHoldPointRouteParam(
   value: unknown,
@@ -1009,14 +1104,7 @@ holdpointsRouter.post(
     }
 
     // Check minimum notice period (Feature #180)
-    let projectSettings: HPProjectSettings = {};
-    if (lot.project.settings) {
-      try {
-        projectSettings = JSON.parse(lot.project.settings) as HPProjectSettings;
-      } catch (_e) {
-        // Invalid JSON, use defaults
-      }
-    }
+    const projectSettings = parseHPProjectSettings(lot.project.settings);
 
     // Default minimum notice period is 1 working day
     const minimumNoticeDays = projectSettings.holdPointMinimumNoticeDays ?? 1;
@@ -1102,6 +1190,12 @@ holdpointsRouter.post(
         fullName: recipient.user.fullName,
       }));
     }
+
+    recipientsToNotify = await requireSuperintendentApprovalRecipients(
+      lot.projectId,
+      projectSettings,
+      recipientsToNotify,
+    );
 
     const uniqueRecipients = new Map<string, HoldPointReleaseRecipient>();
     for (const recipient of recipientsToNotify) {
@@ -2537,6 +2631,18 @@ holdpointsRouter.post(
     if (releaseToken.holdPoint.status === 'released') {
       throw AppError.badRequest('This hold point has already been released.');
     }
+
+    const projectSettings = parseHPProjectSettings(releaseToken.holdPoint.lot.project.settings);
+    await requireSuperintendentApprovalRecipients(
+      releaseToken.holdPoint.lot.projectId,
+      projectSettings,
+      [
+        {
+          email: releaseToken.recipientEmail,
+          fullName: releaseToken.recipientName,
+        },
+      ],
+    );
 
     const releasedAt = new Date();
     const holdPoint = await prisma.$transaction(async (tx) => {

@@ -34,7 +34,7 @@ async function registerTestUser(fullName: string, roleInCompany: string, company
     data: { companyId, roleInCompany },
   });
 
-  return { token: res.body.token as string, userId: res.body.user.id as string };
+  return { token: res.body.token as string, userId: res.body.user.id as string, email };
 }
 
 async function cleanupTestUser(userId: string) {
@@ -721,6 +721,32 @@ describe('Hold Points API access control', () => {
     clearEmailQueue();
     await prisma.holdPointReleaseToken.deleteMany({ where: { holdPointId } });
     const staleToken = `stale-token-${Date.now()}`;
+    const qaReviewer = await registerTestUser('Hold Points QA Reviewer', 'viewer', companyId);
+    const inspectorReviewer = await registerTestUser(
+      'Hold Points Inspector Reviewer',
+      'viewer',
+      companyId,
+    );
+    createdUserIds.push(qaReviewer.userId, inspectorReviewer.userId);
+
+    await prisma.projectUser.createMany({
+      data: [
+        {
+          projectId,
+          userId: qaReviewer.userId,
+          role: 'superintendent',
+          status: 'active',
+        },
+        {
+          projectId,
+          userId: inspectorReviewer.userId,
+          role: 'project_manager',
+          status: 'active',
+        },
+      ],
+    });
+    clearEmailQueue();
+
     await prisma.holdPointReleaseToken.create({
       data: {
         holdPointId,
@@ -737,31 +763,31 @@ describe('Hold Points API access control', () => {
       .send({
         lotId,
         itpChecklistItemId: checklistItemId,
-        notificationSentTo: 'qa@example.com; inspector@example.com, qa@example.com',
+        notificationSentTo: `${qaReviewer.email}; ${inspectorReviewer.email}, ${qaReviewer.email}`,
       });
 
     expect(res.status).toBe(200);
-    expect(res.body.holdPoint.notificationSentTo).toBe('qa@example.com, inspector@example.com');
+    expect(res.body.holdPoint.notificationSentTo).toBe(
+      `${qaReviewer.email}, ${inspectorReviewer.email}`,
+    );
 
     const tokens = await prisma.holdPointReleaseToken.findMany({
       where: { holdPointId },
       select: { recipientEmail: true, token: true },
       orderBy: { recipientEmail: 'asc' },
     });
-    expect(tokens.map((token) => token.recipientEmail)).toEqual([
-      'inspector@example.com',
-      'qa@example.com',
-    ]);
+    expect(tokens.map((token) => token.recipientEmail)).toEqual(
+      [inspectorReviewer.email, qaReviewer.email].sort(),
+    );
     expect(tokens.every((token) => /^sha256:[a-f0-9]{64}$/.test(token.token))).toBe(true);
     expect(tokens.map((token) => token.token)).not.toContain(
       hashHoldPointReleaseTokenForTest(staleToken),
     );
 
     const queuedEmails = getQueuedEmails();
-    expect(queuedEmails.map((email) => email.to).sort()).toEqual([
-      'inspector@example.com',
-      'qa@example.com',
-    ]);
+    expect(queuedEmails.map((email) => email.to).sort()).toEqual(
+      [inspectorReviewer.email, qaReviewer.email].sort(),
+    );
 
     const rawToken = queuedEmails
       .map((email) => email.text?.match(/\/hp-release\/([a-f0-9]{64})/)?.[1])
@@ -776,6 +802,31 @@ describe('Hold Points API access control', () => {
       `/api/holdpoints/public/${encodeURIComponent(tokens[0].token)}`,
     );
     expect(storedHashRes.status).toBe(404);
+  });
+
+  it('rejects explicit release request recipients who cannot approve superintendent-only hold points', async () => {
+    clearEmailQueue();
+    await prisma.holdPointReleaseToken.deleteMany({ where: { holdPointId } });
+    const foreman = await registerTestUser('Hold Points Request Foreman', 'foreman', companyId);
+    createdUserIds.push(foreman.userId);
+    await prisma.projectUser.create({
+      data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+    });
+    clearEmailQueue();
+
+    const res = await request(app)
+      .post('/api/holdpoints/request-release')
+      .set('Authorization', `Bearer ${foreman.token}`)
+      .send({
+        lotId,
+        itpChecklistItemId: checklistItemId,
+        notificationSentTo: foreman.email,
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toContain('superintendent approval');
+    await expect(prisma.holdPointReleaseToken.count({ where: { holdPointId } })).resolves.toBe(0);
+    expect(getQueuedEmails()).toHaveLength(0);
   });
 
   it('rejects invalid notification recipient lists', async () => {
@@ -1088,6 +1139,77 @@ describe('Hold Point Token Release', () => {
       expect(res.body.evidencePackage).toBeDefined();
     } finally {
       await prisma.holdPointReleaseToken.delete({ where: { id: legacyRecord.id } }).catch(() => {});
+    }
+  });
+
+  it('should reject public release tokens for ineligible recipients on superintendent-only projects', async () => {
+    const originalProject = await prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { settings: true },
+    });
+
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { settings: JSON.stringify({ hpApprovalRequirement: 'superintendent' }) },
+    });
+
+    try {
+      const res = await request(app).post(`/api/holdpoints/public/${releaseToken}/release`).send({
+        releasedByName: 'External Reviewer',
+        releasedByOrg: 'Client Company',
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('superintendent approval');
+
+      const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPointId } });
+      expect(holdPoint.status).not.toBe('released');
+
+      const usedToken = await prisma.holdPointReleaseToken.findFirstOrThrow({
+        where: { holdPointId },
+      });
+      expect(usedToken.usedAt).toBeNull();
+
+      const completion = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: completionId },
+      });
+      expect(completion.verificationStatus).toBe('none');
+      expect(completion.verifiedAt).toBeNull();
+    } finally {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { settings: originalProject.settings },
+      });
+      await prisma.holdPoint.update({
+        where: { id: holdPointId },
+        data: {
+          status: 'pending',
+          releasedAt: null,
+          releasedByName: null,
+          releasedByOrg: null,
+          releaseMethod: null,
+          releaseSignatureUrl: null,
+          releaseNotes: null,
+        },
+      });
+      await prisma.holdPointReleaseToken.updateMany({
+        where: { holdPointId },
+        data: {
+          usedAt: null,
+          releasedByName: null,
+          releasedByOrg: null,
+          releaseSignatureUrl: null,
+          releaseNotes: null,
+        },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+        },
+      });
     }
   });
 
