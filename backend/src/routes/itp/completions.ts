@@ -349,14 +349,6 @@ completionsRouter.post(
     });
     const isSubcontractor = !!subcontractorUser;
 
-    // Check if completion already exists
-    const existingCompletion = await prisma.iTPCompletion.findFirst({
-      where: {
-        itpInstanceId,
-        checklistItemId,
-      },
-    });
-
     // Determine completedAt and completedById based on status
     const isFinished =
       newStatus === 'completed' || newStatus === 'not_applicable' || newStatus === 'failed';
@@ -425,36 +417,61 @@ completionsRouter.post(
       witnessData.witnessCompany = witnessCompany || null;
     }
 
-    let completion;
-    if (existingCompletion) {
-      // Update existing completion
-      completion = await prisma.iTPCompletion.update({
-        where: { id: existingCompletion.id },
-        data: {
-          status: newStatus,
-          notes: notes ?? existingCompletion.notes,
-          completedAt: isFinished ? new Date() : null,
-          completedById: isFinished ? user.userId : null,
-          // Feature #463: Signature capture
-          ...(signatureDataUrl !== undefined ? { signatureUrl: signatureDataUrl } : {}),
-          // Feature #271: Set pending_verification for subcontractor completions
-          ...(verificationStatus ? { verificationStatus } : {}),
-          ...witnessData,
-        },
-        include: {
-          completedBy: {
-            select: { id: true, fullName: true, email: true },
-          },
-          verifiedBy: {
-            select: { id: true, fullName: true, email: true },
-          },
-          attachments: true,
-          checklistItem: true,
+    const completionInclude = {
+      completedBy: {
+        select: { id: true, fullName: true, email: true },
+      },
+      verifiedBy: {
+        select: { id: true, fullName: true, email: true },
+      },
+      attachments: true,
+      checklistItem: true,
+    } as const;
+
+    const { completion, shouldCreateFailedNcr } = await prisma.$transaction(async (tx) => {
+      // Serialize find-or-create completion writes for an ITP instance without requiring a schema migration.
+      const lockedInstances = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id
+        FROM itp_instances
+        WHERE id = ${itpInstanceId}
+        FOR UPDATE
+      `;
+      if (lockedInstances.length !== 1) {
+        throw AppError.notFound('ITP instance');
+      }
+
+      const existingCompletion = await tx.iTPCompletion.findFirst({
+        where: {
+          itpInstanceId,
+          checklistItemId,
         },
       });
-    } else {
+      const shouldCreateFailedNcr =
+        newStatus === 'failed' && existingCompletion?.status !== 'failed';
+
+      if (existingCompletion) {
+        // Update existing completion
+        const completion = await tx.iTPCompletion.update({
+          where: { id: existingCompletion.id },
+          data: {
+            status: newStatus,
+            notes: notes ?? existingCompletion.notes,
+            completedAt: isFinished ? new Date() : null,
+            completedById: isFinished ? user.userId : null,
+            // Feature #463: Signature capture
+            ...(signatureDataUrl !== undefined ? { signatureUrl: signatureDataUrl } : {}),
+            // Feature #271: Set pending_verification for subcontractor completions
+            ...(verificationStatus ? { verificationStatus } : {}),
+            ...witnessData,
+          },
+          include: completionInclude,
+        });
+
+        return { completion, shouldCreateFailedNcr };
+      }
+
       // Create new completion
-      completion = await prisma.iTPCompletion.create({
+      const completion = await tx.iTPCompletion.create({
         data: {
           itpInstanceId,
           checklistItemId,
@@ -468,22 +485,15 @@ completionsRouter.post(
           ...(verificationStatus ? { verificationStatus } : {}),
           ...witnessData,
         },
-        include: {
-          completedBy: {
-            select: { id: true, fullName: true, email: true },
-          },
-          verifiedBy: {
-            select: { id: true, fullName: true, email: true },
-          },
-          attachments: true,
-          checklistItem: true,
-        },
+        include: completionInclude,
       });
-    }
+
+      return { completion, shouldCreateFailedNcr };
+    });
 
     // If status is 'failed', create an NCR linked to the lot
     let createdNcr = null;
-    if (newStatus === 'failed') {
+    if (shouldCreateFailedNcr) {
       // Get the ITP instance to find the lot and project
       const itpInstance = await prisma.iTPInstance.findUnique({
         where: { id: itpInstanceId },
