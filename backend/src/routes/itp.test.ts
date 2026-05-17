@@ -1702,6 +1702,164 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
+  it('should reject view-only subcontractor completion and attachment writes', async () => {
+    const suffix = Date.now();
+    const beforeCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
+      where: { id: completionId },
+    });
+    const subcontractor = await registerTestUser(
+      'itp-view-only-subcontractor',
+      'ITP View Only Subcontractor',
+    );
+
+    let subcontractorCompanyId: string | undefined;
+    let existingAttachmentDocumentId: string | undefined;
+    let newAttachmentDocumentId: string | undefined;
+    let attachmentId: string | undefined;
+
+    try {
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `ITP View Only Subcontractor ${suffix}`,
+          status: 'approved',
+          portalAccess: { itps: true },
+        },
+      });
+      subcontractorCompanyId = subcontractorCompany.id;
+
+      await prisma.user.update({
+        where: { id: subcontractor.userId },
+        data: { companyId, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractor.userId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          role: 'user',
+        },
+      });
+      await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          status: 'active',
+          canCompleteITP: false,
+        },
+      });
+
+      const existingAttachmentDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `view-only-existing-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/view-only-existing-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+      existingAttachmentDocumentId = existingAttachmentDocument.id;
+      const newAttachmentDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `view-only-new-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/view-only-new-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+      newAttachmentDocumentId = newAttachmentDocument.id;
+
+      const attachment = await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId,
+          documentId: existingAttachmentDocument.id,
+        },
+      });
+      attachmentId = attachment.id;
+
+      const patchRes = await request(app)
+        .patch(`/api/itp/completions/${completionId}`)
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({ notes: 'View-only subcontractor should not write notes' });
+      expect(patchRes.status).toBe(403);
+
+      for (const status of ['pending', 'completed', 'not_applicable', 'failed']) {
+        const createRes = await request(app)
+          .post('/api/itp/completions')
+          .set('Authorization', `Bearer ${subcontractor.token}`)
+          .send({
+            itpInstanceId: instanceId,
+            checklistItemId,
+            status,
+            notes: 'View-only subcontractor should not write completion state',
+            naReason: 'Not applicable is not authorized',
+            ncrDescription: 'Failed status is not authorized',
+          });
+        expect(createRes.status).toBe(403);
+      }
+
+      const attachRes = await request(app)
+        .post(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({ documentId: newAttachmentDocument.id });
+      expect(attachRes.status).toBe(403);
+
+      const deleteRes = await request(app)
+        .delete(`/api/itp/completions/${completionId}/attachments/${attachment.id}`)
+        .set('Authorization', `Bearer ${subcontractor.token}`);
+      expect(deleteRes.status).toBe(403);
+
+      const afterCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: completionId },
+      });
+      expect(afterCompletion.status).toBe(beforeCompletion.status);
+      expect(afterCompletion.notes).toBe(beforeCompletion.notes);
+    } finally {
+      await prisma.iTPCompletion
+        .update({
+          where: { id: completionId },
+          data: {
+            status: beforeCompletion.status,
+            notes: beforeCompletion.notes,
+            completedAt: beforeCompletion.completedAt,
+            completedById: beforeCompletion.completedById,
+            verificationStatus: beforeCompletion.verificationStatus,
+          },
+        })
+        .catch(() => {});
+      if (attachmentId) {
+        await prisma.iTPCompletionAttachment.deleteMany({ where: { id: attachmentId } });
+      }
+      const testDocumentIds = [existingAttachmentDocumentId, newAttachmentDocumentId].filter(
+        (id): id is string => Boolean(id),
+      );
+      if (testDocumentIds.length > 0) {
+        await prisma.document.deleteMany({ where: { id: { in: testDocumentIds } } });
+      }
+      if (subcontractorCompanyId) {
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId },
+        });
+      }
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      if (subcontractorCompanyId) {
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompanyId } })
+          .catch(() => {});
+      }
+      await cleanupTestUser(subcontractor.userId);
+    }
+  });
+
   it('should reject subcontractor ITP writes and attachments when portal access is disabled', async () => {
     const subcontractorCompany = await prisma.subcontractorCompany.create({
       data: {
