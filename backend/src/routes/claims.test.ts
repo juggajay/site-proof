@@ -1317,6 +1317,88 @@ describe('Progress Claims API', () => {
       expect(storedNotes.lastPaymentNotes).toBe('Final payment');
     });
 
+    it('should preserve concurrent partial payments and payment history', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'certified',
+          certifiedAmount: 1000,
+          certifiedAt: new Date(),
+          disputeNotes: JSON.stringify({ variationNotes: 'Existing concurrent variation' }),
+        },
+      });
+
+      let matchingReads = 0;
+      let releaseReads: () => void = () => {};
+      const bothRequestsHaveReadClaim = new Promise<void>((resolve) => {
+        releaseReads = resolve;
+      });
+
+      prisma.$use(async (params, next) => {
+        const result = await next(params);
+        const where = params.args?.where as { id?: string; projectId?: string } | undefined;
+
+        if (
+          params.model === 'ProgressClaim' &&
+          params.action === 'findFirst' &&
+          params.runInTransaction !== true &&
+          where?.id === claim.id &&
+          where?.projectId === projectId
+        ) {
+          matchingReads += 1;
+          if (matchingReads === 2) {
+            releaseReads();
+          }
+          await bothRequestsHaveReadClaim;
+        }
+
+        return result;
+      });
+
+      const [firstPaymentRes, secondPaymentRes] = await Promise.all([
+        request(app)
+          .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            paidAmount: 500,
+            paymentDate: '2025-06-01',
+            paymentReference: 'PAY-CONCURRENT-001',
+            paymentNotes: 'First concurrent payment',
+          }),
+        request(app)
+          .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            paidAmount: 500,
+            paymentDate: '2025-06-02',
+            paymentReference: 'PAY-CONCURRENT-002',
+            paymentNotes: 'Second concurrent payment',
+          }),
+      ]);
+
+      expect(firstPaymentRes.status).toBe(200);
+      expect(secondPaymentRes.status).toBe(200);
+
+      const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(updatedClaim?.status).toBe('paid');
+      expect(Number(updatedClaim?.paidAmount)).toBe(1000);
+
+      const storedNotes = JSON.parse(updatedClaim?.disputeNotes || '{}') as {
+        variationNotes?: string;
+        paymentHistory?: Array<{ amount: number; reference: string }>;
+      };
+      expect(storedNotes.variationNotes).toBe('Existing concurrent variation');
+      expect(storedNotes.paymentHistory).toHaveLength(2);
+      expect(storedNotes.paymentHistory?.map((payment) => payment.reference).sort()).toEqual([
+        'PAY-CONCURRENT-001',
+        'PAY-CONCURRENT-002',
+      ]);
+      expect(storedNotes.paymentHistory?.map((payment) => payment.amount).sort()).toEqual([
+        500, 500,
+      ]);
+    });
+
     it('should reject payments above the outstanding certified amount without mutating', async () => {
       const claim = await createSubmittedCertificationClaim(1000);
       await prisma.progressClaim.update({
