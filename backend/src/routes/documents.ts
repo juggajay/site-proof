@@ -647,6 +647,14 @@ type DocumentAccessRecord = {
   documentType?: string | null;
   category?: string | null;
 };
+const DOCUMENT_SPECIAL_PORTAL_CATEGORIES = ['itp_evidence', 'test_results'] as const;
+const DOCUMENT_CATEGORY_PORTAL_MODULES: Record<
+  (typeof DOCUMENT_SPECIAL_PORTAL_CATEGORIES)[number],
+  SubcontractorPortalAccessKey
+> = {
+  itp_evidence: 'itps',
+  test_results: 'testResults',
+};
 
 function cleanupUploadedFile(file?: Express.Multer.File): void {
   if (file?.path && fs.existsSync(file.path)) {
@@ -659,7 +667,20 @@ function isDocumentSubcontractorUser(user: AuthUser): boolean {
 }
 
 function getDocumentPortalModule(category?: string | null): SubcontractorPortalAccessKey {
-  return category === 'itp_evidence' ? 'itps' : 'documents';
+  if (category && Object.hasOwn(DOCUMENT_CATEGORY_PORTAL_MODULES, category)) {
+    return DOCUMENT_CATEGORY_PORTAL_MODULES[
+      category as (typeof DOCUMENT_SPECIAL_PORTAL_CATEGORIES)[number]
+    ];
+  }
+
+  return 'documents';
+}
+
+function appendDocumentWhereClause(
+  where: Prisma.DocumentWhereInput,
+  clause: Prisma.DocumentWhereInput,
+): void {
+  where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), clause];
 }
 
 async function hasSubcontractorDocumentPortalAccess(
@@ -765,10 +786,44 @@ async function applyDocumentReadScope(
     ],
   };
 
-  where.AND = [
-    ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-    scopedAccess,
-  ];
+  appendDocumentWhereClause(where, scopedAccess);
+}
+
+async function applyDocumentPortalCategoryScope(
+  user: AuthUser,
+  projectId: string,
+  where: Prisma.DocumentWhereInput,
+): Promise<void> {
+  if (!isDocumentSubcontractorUser(user)) {
+    return;
+  }
+
+  const [canReadGeneralDocuments, canReadItpEvidence, canReadTestResults] = await Promise.all([
+    hasSubcontractorDocumentPortalAccess(user, projectId, null),
+    hasSubcontractorDocumentPortalAccess(user, projectId, 'itp_evidence'),
+    hasSubcontractorDocumentPortalAccess(user, projectId, 'test_results'),
+  ]);
+
+  const categoryAccess: Prisma.DocumentWhereInput[] = [];
+  if (canReadGeneralDocuments) {
+    categoryAccess.push(
+      { category: null },
+      { category: { notIn: [...DOCUMENT_SPECIAL_PORTAL_CATEGORIES] } },
+    );
+  }
+  if (canReadItpEvidence) {
+    categoryAccess.push({ category: 'itp_evidence' });
+  }
+  if (canReadTestResults) {
+    categoryAccess.push({ category: 'test_results' });
+  }
+
+  if (categoryAccess.length === 0) {
+    where.id = '__no_subcontractor_document_portal_access__';
+    return;
+  }
+
+  appendDocumentWhereClause(where, { OR: categoryAccess });
 }
 
 async function canReadDocument(user: AuthUser, document: DocumentAccessRecord): Promise<boolean> {
@@ -1118,13 +1173,6 @@ router.get(
       throw AppError.forbidden('Access denied');
     }
 
-    await requireSubcontractorPortalModuleAccess({
-      userId,
-      role: user.roleInCompany,
-      projectId,
-      module: 'documents',
-    });
-
     const category = getOptionalQueryString(req.query, 'category', MAX_CATEGORY_LENGTH);
     const documentType = getOptionalQueryString(
       req.query,
@@ -1137,7 +1185,10 @@ router.get(
     const dateTo = getOptionalDateQuery(req.query, 'dateTo', true);
 
     const where: Prisma.DocumentWhereInput = { projectId };
-    if (category) where.category = category;
+    if (category) {
+      await requireSubcontractorDocumentPortalAccess(user, projectId, category);
+      where.category = category;
+    }
     if (documentType) where.documentType = documentType;
     if (lotId) where.lotId = lotId;
 
@@ -1163,6 +1214,9 @@ router.get(
     }
 
     await applyDocumentReadScope(user, projectId, where);
+    if (!category) {
+      await applyDocumentPortalCategoryScope(user, projectId, where);
+    }
 
     const pagination = parsePagination(req.query);
     const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit);

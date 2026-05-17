@@ -1385,6 +1385,155 @@ describe('Documents API', () => {
       }
     });
 
+    it('should filter subcontractor document lists by category portal modules', async () => {
+      const suffix = `${Date.now()}-${crypto.randomUUID()}`;
+      const subRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `doc-sub-list-portal-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Document List Portal Subcontractor',
+          tosAccepted: true,
+        });
+      const subToken = subRes.body.token;
+      const subUserId = subRes.body.user.id;
+
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Document List Portal Subcontractor ${suffix}`,
+          primaryContactName: 'Document List Portal Sub',
+          primaryContactEmail: `doc-sub-list-portal-contact-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: { documents: true, itps: false, testResults: false },
+        },
+      });
+
+      const generalDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'specification',
+          category: 'Specifications',
+          filename: 'portal-list-general.pdf',
+          fileUrl: '/uploads/documents/portal-list-general.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const itpEvidenceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: 'portal-list-itp-evidence.pdf',
+          fileUrl: '/uploads/documents/portal-list-itp-evidence.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const testResultDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'certificate',
+          category: 'test_results',
+          filename: 'portal-list-test-result.pdf',
+          fileUrl: '/uploads/documents/portal-list-test-result.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      try {
+        await prisma.user.update({
+          where: { id: subUserId },
+          data: { companyId, roleInCompany: 'subcontractor' },
+        });
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: subUserId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            role: 'user',
+          },
+        });
+
+        const documentsOnlyListRes = await request(app)
+          .get(`/api/documents/${projectId}`)
+          .set('Authorization', `Bearer ${subToken}`);
+
+        expect(documentsOnlyListRes.status).toBe(200);
+        const documentsOnlyIds = documentsOnlyListRes.body.documents.map(
+          (document: { id: string }) => document.id,
+        );
+        expect(documentsOnlyIds).toContain(generalDocument.id);
+        expect(documentsOnlyIds).not.toContain(itpEvidenceDocument.id);
+        expect(documentsOnlyIds).not.toContain(testResultDocument.id);
+
+        const blockedItpListRes = await request(app)
+          .get(`/api/documents/${projectId}?category=itp_evidence`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(blockedItpListRes.status).toBe(403);
+        expect(blockedItpListRes.body.error.message).toContain('ITPs portal access is not enabled');
+
+        const blockedTestResultsListRes = await request(app)
+          .get(`/api/documents/${projectId}?category=test_results`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(blockedTestResultsListRes.status).toBe(403);
+        expect(blockedTestResultsListRes.body.error.message).toContain(
+          'Test results portal access is not enabled',
+        );
+
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompany.id },
+          data: { portalAccess: { documents: false, itps: true, testResults: true } },
+        });
+
+        const specialOnlyListRes = await request(app)
+          .get(`/api/documents/${projectId}`)
+          .set('Authorization', `Bearer ${subToken}`);
+
+        expect(specialOnlyListRes.status).toBe(200);
+        const specialOnlyIds = specialOnlyListRes.body.documents.map(
+          (document: { id: string }) => document.id,
+        );
+        expect(specialOnlyIds).not.toContain(generalDocument.id);
+        expect(specialOnlyIds).toContain(itpEvidenceDocument.id);
+        expect(specialOnlyIds).toContain(testResultDocument.id);
+
+        const allowedItpListRes = await request(app)
+          .get(`/api/documents/${projectId}?category=itp_evidence`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(allowedItpListRes.status).toBe(200);
+        expect(allowedItpListRes.body.documents.map((doc: { id: string }) => doc.id)).toEqual([
+          itpEvidenceDocument.id,
+        ]);
+
+        const allowedTestResultsListRes = await request(app)
+          .get(`/api/documents/${projectId}?category=test_results`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(allowedTestResultsListRes.status).toBe(200);
+        expect(
+          allowedTestResultsListRes.body.documents.map((doc: { id: string }) => doc.id),
+        ).toEqual([testResultDocument.id]);
+      } finally {
+        await prisma.document.deleteMany({
+          where: {
+            id: { in: [generalDocument.id, itpEvidenceDocument.id, testResultDocument.id] },
+          },
+        });
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: subcontractorCompany.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subUserId } });
+        await prisma.user.delete({ where: { id: subUserId } }).catch(() => {});
+      }
+    }, 60000);
+
     it('should enforce subcontractor portal modules for document writes and direct reads', async () => {
       const suffix = `${Date.now()}-${crypto.randomUUID()}`;
       const subEmail = `doc-sub-portal-${suffix}@example.com`;
@@ -1429,6 +1578,18 @@ describe('Documents API', () => {
           category: 'itp_evidence',
           filename: 'portal-itp-evidence.pdf',
           fileUrl: '/uploads/documents/portal-itp-evidence.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const testResultDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'certificate',
+          category: 'test_results',
+          filename: 'portal-test-result.pdf',
+          fileUrl: '/uploads/documents/portal-test-result.pdf',
           fileSize: validPdfBytes.length,
           mimeType: 'application/pdf',
           uploadedById: userId,
@@ -1487,6 +1648,11 @@ describe('Documents API', () => {
           .set('Authorization', `Bearer ${subToken}`);
         expect(blockedItpReadRes.status).toBe(403);
 
+        const blockedTestResultReadRes = await request(app)
+          .post(`/api/documents/${testResultDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(blockedTestResultReadRes.status).toBe(403);
+
         const blockedGeneralUploadRes = await uploadAsSubcontractor('Site Photos');
         expect(blockedGeneralUploadRes.status).toBe(403);
         expect(blockedGeneralUploadRes.body.error.message).toContain(
@@ -1514,6 +1680,11 @@ describe('Documents API', () => {
           .set('Authorization', `Bearer ${subToken}`);
         expect(allowedItpReadRes.status).toBe(200);
 
+        const stillBlockedTestResultReadRes = await request(app)
+          .post(`/api/documents/${testResultDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(stillBlockedTestResultReadRes.status).toBe(403);
+
         const stillBlockedGeneralUploadRes = await uploadAsSubcontractor('Site Photos');
         expect(stillBlockedGeneralUploadRes.status).toBe(403);
         expect(stillBlockedGeneralUploadRes.body.error.message).toContain(
@@ -1524,6 +1695,16 @@ describe('Documents API', () => {
         expect(allowedItpUploadRes.status).toBe(201);
         const uploadedItpId = allowedItpUploadRes.body.id as string;
         uploadedItpDocumentId = uploadedItpId;
+
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompany.id },
+          data: { portalAccess: { documents: false, itps: true, testResults: true } },
+        });
+
+        const allowedTestResultReadRes = await request(app)
+          .post(`/api/documents/${testResultDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(allowedTestResultReadRes.status).toBe(200);
 
         const ownPatchRes = await request(app)
           .patch(`/api/documents/${uploadedItpId}`)
@@ -1566,10 +1747,14 @@ describe('Documents API', () => {
           await prisma.document.deleteMany({ where: { id: uploadedItpDocumentId } });
         }
         await prisma.documentSignedUrlToken.deleteMany({
-          where: { documentId: { in: [generalDocument.id, itpEvidenceDocument.id] } },
+          where: {
+            documentId: { in: [generalDocument.id, itpEvidenceDocument.id, testResultDocument.id] },
+          },
         });
         await prisma.document.deleteMany({
-          where: { id: { in: [generalDocument.id, itpEvidenceDocument.id] } },
+          where: {
+            id: { in: [generalDocument.id, itpEvidenceDocument.id, testResultDocument.id] },
+          },
         });
         await prisma.lotSubcontractorAssignment.deleteMany({
           where: { subcontractorCompanyId: subcontractorCompany.id },
@@ -1583,7 +1768,7 @@ describe('Documents API', () => {
         await prisma.emailVerificationToken.deleteMany({ where: { userId: subUserId } });
         await prisma.user.delete({ where: { id: subUserId } }).catch(() => {});
       }
-    });
+    }, 60000);
 
     afterAll(async () => {
       await prisma.projectUser.deleteMany({ where: { userId: viewerUserId } });
