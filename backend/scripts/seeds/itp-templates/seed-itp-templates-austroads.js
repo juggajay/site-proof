@@ -11,6 +11,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { withItpTemplateSeedLock } from './seed-lock.mjs';
 const prisma = new PrismaClient();
 
 // =============================================================================
@@ -1542,6 +1543,6 @@ async function main() {
   console.log(`Total Witness Points: ${totalWitnessPoints}`);
 }
 
-main()
+withItpTemplateSeedLock(prisma, main)
   .catch(console.error)
   .finally(() => prisma.$disconnect());
