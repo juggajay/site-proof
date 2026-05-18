@@ -348,6 +348,7 @@ instancesRouter.get(
     // Transform to frontend-friendly format
     const transformedInstance = {
       ...instance,
+      templateSnapshot: useSubcontractorView ? undefined : instance.templateSnapshot,
       template: templateData,
       completions: instance.completions
         .filter((c) => !useSubcontractorView || filteredItemIds.has(c.checklistItemId))
