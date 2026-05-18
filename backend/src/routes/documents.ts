@@ -67,6 +67,7 @@ const MAX_CAPTION_LENGTH = 2000;
 const MAX_TAGS_LENGTH = 2000;
 const MAX_FILENAME_LENGTH = 180;
 const MAX_SEARCH_LENGTH = 200;
+const MAX_CLASSIFICATION_IMAGE_BYTES = 50 * 1024 * 1024;
 const DATE_COMPONENT_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
 const GPS_COORDINATE_PATTERN = /^-?(?:\d+|\d+\.\d+|\.\d+)$/;
 const LOCAL_DOCUMENT_FILE_SUBDIRECTORIES = ['documents', 'certificates', 'drawings'] as const;
@@ -191,7 +192,40 @@ function photoClassificationUnavailable(
   return new AppError(503, message, ErrorCodes.EXTERNAL_SERVICE_ERROR);
 }
 
-function loadDocumentImageAsBase64(document: { fileUrl: string }, mimeType: string): string {
+async function loadSupabaseDocumentImageAsBase64(document: {
+  fileUrl: string;
+  projectId: string;
+  documentType?: string | null;
+}): Promise<string> {
+  const storagePath = getOwnedDocumentStoragePath(
+    document.fileUrl,
+    document.projectId,
+    document.documentType,
+  );
+  if (!storagePath) {
+    throw AppError.badRequest('Invalid Supabase document URL');
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .storage.from(DOCUMENTS_BUCKET)
+    .download(storagePath);
+
+  if (error || !data) {
+    logWarn('Supabase image download failed for classification:', error);
+    throw AppError.notFound('Image file');
+  }
+
+  if (data.size > MAX_CLASSIFICATION_IMAGE_BYTES) {
+    throw AppError.badRequest('Image file is too large to classify');
+  }
+
+  return Buffer.from(await data.arrayBuffer()).toString('base64');
+}
+
+async function loadDocumentImageAsBase64(
+  document: { fileUrl: string; projectId: string; documentType?: string | null },
+  mimeType: string,
+): Promise<string> {
   if (document.fileUrl.startsWith('data:')) {
     const base64Match = document.fileUrl.match(
       new RegExp(`^data:${mimeType.replace('/', '\\/')};base64,(.+)$`),
@@ -202,9 +236,21 @@ function loadDocumentImageAsBase64(document: { fileUrl: string }, mimeType: stri
     return base64Match[1];
   }
 
+  if (isExternalFileUrl(document.fileUrl)) {
+    if (!isSupabaseConfigured()) {
+      throw AppError.notFound('Image file');
+    }
+    return loadSupabaseDocumentImageAsBase64(document);
+  }
+
   const filePath = resolveLocalDocumentFilePath(document.fileUrl);
   if (!fs.existsSync(filePath)) {
     throw AppError.notFound('Image file');
+  }
+
+  const stats = fs.statSync(filePath);
+  if (stats.size > MAX_CLASSIFICATION_IMAGE_BYTES) {
+    throw AppError.badRequest('Image file is too large to classify');
   }
 
   return fs.readFileSync(filePath).toString('base64');
@@ -1788,7 +1834,7 @@ router.post(
     }
 
     const mediaType = mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
-    const base64Image = loadDocumentImageAsBase64(document, mimeType);
+    const base64Image = await loadDocumentImageAsBase64(document, mimeType);
 
     let suggestedClassifications: PhotoClassificationSuggestion[] = [];
 

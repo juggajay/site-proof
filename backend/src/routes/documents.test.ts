@@ -643,6 +643,69 @@ describe('Documents API', () => {
       }
     });
 
+    it('loads configured Supabase-backed images before classification', async () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      mockIsSupabaseConfigured.mockReturnValue(true);
+
+      const storagePath = `${projectId}/classify/supabase-photo.jpg`;
+      const supabaseDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'photo',
+          category: 'Site Photos',
+          filename: 'supabase-photo.jpg',
+          fileUrl: `${process.env.SUPABASE_URL}/storage/v1/object/public/documents/${storagePath}`,
+          fileSize: 16,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+
+      const download = vi.fn().mockResolvedValue({
+        data: new Blob([Buffer.from('supabase image bytes')], { type: 'image/jpeg' }),
+        error: null,
+      });
+      const from = vi.fn(() => ({ download }));
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            content: [{ type: 'text', text: 'Safety|88' }],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      );
+
+      try {
+        const res = await request(app)
+          .post(`/api/documents/${supabaseDocument.id}/classify`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.suggestedClassification).toBe('Safety');
+        expect(from).toHaveBeenCalledWith('documents');
+        expect(download).toHaveBeenCalledWith(storagePath);
+
+        const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+          messages: Array<{
+            content: Array<{ source?: { data?: string } }>;
+          }>;
+        };
+        expect(requestBody.messages[0].content[0].source?.data).toBe(
+          Buffer.from('supabase image bytes').toString('base64'),
+        );
+      } finally {
+        await prisma.document.deleteMany({ where: { id: supabaseDocument.id } });
+      }
+    });
+
     it('does not fall back to default labels when Anthropic returns no supported category', async () => {
       process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
 
