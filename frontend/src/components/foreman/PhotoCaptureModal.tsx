@@ -79,6 +79,7 @@ export function PhotoCaptureModal({
         lotId,
         entityType,
         entityId,
+        documentType: 'photo',
         caption: caption.trim() || undefined,
         capturedBy: user.id,
         gpsLatitude: latitude ?? undefined,

@@ -68,6 +68,7 @@ const MAX_TAGS_LENGTH = 2000;
 const MAX_FILENAME_LENGTH = 180;
 const MAX_SEARCH_LENGTH = 200;
 const DATE_COMPONENT_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
+const GPS_COORDINATE_PATTERN = /^-?(?:\d+|\d+\.\d+|\.\d+)$/;
 const LOCAL_DOCUMENT_FILE_SUBDIRECTORIES = ['documents', 'certificates', 'drawings'] as const;
 const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
   'application/pdf',
@@ -110,6 +111,33 @@ const optionalFormStringSchema = (fieldName: string, maxLength: number) =>
     z.string().max(maxLength, `${fieldName} is too long`).nullish(),
   );
 
+const optionalGpsCoordinateSchema = (fieldName: string, min: number, max: number) =>
+  z.preprocess(
+    (value) => {
+      if (value === undefined || value === null) {
+        return null;
+      }
+
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return null;
+        }
+        return GPS_COORDINATE_PATTERN.test(trimmed) ? Number(trimmed) : Number.NaN;
+      }
+
+      return value;
+    },
+    z
+      .number({ invalid_type_error: `${fieldName} must be a valid decimal coordinate` })
+      .refine(Number.isFinite, `${fieldName} must be a valid decimal coordinate`)
+      .refine(
+        (value) => value >= min && value <= max,
+        `${fieldName} must be between ${min} and ${max}`,
+      )
+      .nullish(),
+  );
+
 const uploadDocumentBodySchema = z.object({
   projectId: requiredFormStringSchema('projectId'),
   lotId: optionalFormStringSchema('lotId', MAX_DOCUMENT_ID_LENGTH),
@@ -117,6 +145,8 @@ const uploadDocumentBodySchema = z.object({
   category: optionalFormStringSchema('category', MAX_CATEGORY_LENGTH),
   caption: optionalFormStringSchema('caption', MAX_CAPTION_LENGTH),
   tags: optionalFormStringSchema('tags', MAX_TAGS_LENGTH),
+  gpsLatitude: optionalGpsCoordinateSchema('gpsLatitude', -90, 90),
+  gpsLongitude: optionalGpsCoordinateSchema('gpsLongitude', -180, 180),
 });
 
 const updateDocumentBodySchema = z.object({
@@ -1304,7 +1334,8 @@ router.post(
       throw AppError.fromZodError(bodyParse.error);
     }
 
-    const { projectId, lotId, documentType, category, caption, tags } = bodyParse.data;
+    const { projectId, lotId, documentType, category, caption, tags, gpsLatitude, gpsLongitude } =
+      bodyParse.data;
 
     const hasAccess = await checkProjectAccess(userId, projectId);
     if (!hasAccess) {
@@ -1361,8 +1392,8 @@ router.post(
           caption: caption || null,
           tags: tags || null,
           // Feature #479: Store extracted EXIF data
-          gpsLatitude: photoMetadata.gpsLatitude,
-          gpsLongitude: photoMetadata.gpsLongitude,
+          gpsLatitude: gpsLatitude ?? photoMetadata.gpsLatitude,
+          gpsLongitude: gpsLongitude ?? photoMetadata.gpsLongitude,
           captureTimestamp: photoMetadata.captureTimestamp,
           // Store device info in aiClassification field as metadata
           aiClassification: photoMetadata.deviceInfo

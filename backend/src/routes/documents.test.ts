@@ -904,6 +904,38 @@ describe('Documents API', () => {
       }
     });
 
+    it('stores browser-provided GPS coordinates from offline photo sync uploads', async () => {
+      const filename = `offline-photo-${Date.now()}.png`;
+      const validPngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+
+      const res = await request(app)
+        .post('/api/documents/upload')
+        .set('Authorization', `Bearer ${authToken}`)
+        .field('projectId', projectId)
+        .field('lotId', lotId)
+        .field('documentType', 'photo')
+        .field('gpsLatitude', '-33.865143')
+        .field('gpsLongitude', '151.2099')
+        .attach('file', validPngBytes, {
+          filename,
+          contentType: 'image/png',
+        });
+
+      expect(res.status).toBe(201);
+      expect(Number(res.body.gpsLatitude)).toBeCloseTo(-33.865143, 5);
+      expect(Number(res.body.gpsLongitude)).toBeCloseTo(151.2099, 5);
+
+      try {
+        const storedFilename = path.basename(res.body.fileUrl);
+        expect(fs.existsSync(path.join(uploadDir, storedFilename))).toBe(true);
+      } finally {
+        const storedFilename = path.basename(res.body.fileUrl);
+        await prisma.document.deleteMany({ where: { id: res.body.id } });
+        const storedPath = path.join(uploadDir, storedFilename);
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+    });
+
     it('cleans up the uploaded file when document creation fails', async () => {
       const filename = `db-fail-document-${Date.now()}.pdf`;
       const beforeFiles = new Set(fs.readdirSync(uploadDir));

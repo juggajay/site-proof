@@ -550,12 +550,18 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
             formData.append('file', blob, photo.fileName);
             formData.append('projectId', photo.projectId);
             if (photo.lotId) formData.append('lotId', photo.lotId);
+            formData.append('documentType', photo.documentType);
+            if (photo.category) formData.append('category', photo.category);
             formData.append('entityType', photo.entityType);
             if (photo.entityId) formData.append('entityId', photo.entityId);
             if (photo.caption) formData.append('caption', photo.caption);
             if (photo.tags) formData.append('tags', JSON.stringify(photo.tags));
-            if (photo.gpsLatitude) formData.append('gpsLatitude', String(photo.gpsLatitude));
-            if (photo.gpsLongitude) formData.append('gpsLongitude', String(photo.gpsLongitude));
+            if (photo.gpsLatitude !== undefined) {
+              formData.append('gpsLatitude', String(photo.gpsLatitude));
+            }
+            if (photo.gpsLongitude !== undefined) {
+              formData.append('gpsLongitude', String(photo.gpsLongitude));
+            }
             formData.append('capturedAt', photo.capturedAt);
 
             // Upload to server
