@@ -25,6 +25,8 @@ const MAX_DOCKET_REASON_LENGTH = 3000;
 const MAX_LOT_ALLOCATIONS_PER_ENTRY = 200;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+type DocketEntryMutationTx = Prisma.TransactionClient;
+
 const finiteNonNegativeNumber = (fieldName: string) =>
   z
     .number()
@@ -171,6 +173,66 @@ const updatePlantEntrySchema = z.object({
   hoursOperated: dailyHoursNumber('Hours operated').optional(),
   wetOrDry: z.enum(['wet', 'dry']).optional(),
 });
+
+async function lockDocketForEntryMutation(
+  tx: DocketEntryMutationTx,
+  docketId: string,
+): Promise<void> {
+  await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM daily_dockets
+    WHERE id = ${docketId}
+    FOR UPDATE
+  `;
+}
+
+async function refreshLabourSubmittedTotals(
+  tx: DocketEntryMutationTx,
+  docketId: string,
+): Promise<{ hours: number; cost: number }> {
+  const aggregate = await tx.docketLabour.aggregate({
+    where: { docketId },
+    _sum: {
+      submittedHours: true,
+      submittedCost: true,
+    },
+  });
+  const hours = Number(aggregate._sum.submittedHours) || 0;
+  const cost = Number(aggregate._sum.submittedCost) || 0;
+
+  await tx.dailyDocket.update({
+    where: { id: docketId },
+    data: {
+      totalLabourSubmitted: cost,
+    },
+  });
+
+  return { hours, cost };
+}
+
+async function refreshPlantSubmittedTotals(
+  tx: DocketEntryMutationTx,
+  docketId: string,
+): Promise<{ hours: number; cost: number }> {
+  const aggregate = await tx.docketPlant.aggregate({
+    where: { docketId },
+    _sum: {
+      hoursOperated: true,
+      submittedCost: true,
+    },
+  });
+  const hours = Number(aggregate._sum.hoursOperated) || 0;
+  const cost = Number(aggregate._sum.submittedCost) || 0;
+
+  await tx.dailyDocket.update({
+    where: { id: docketId },
+    data: {
+      totalPlantSubmitted: cost,
+    },
+  });
+
+  return { hours, cost };
+}
 
 export const docketsRouter = Router();
 
@@ -1715,49 +1777,43 @@ docketsRouter.post(
     const hourlyRate = Number(employee.hourlyRate) || 0;
     const cost = hours * hourlyRate;
 
-    // Create labour entry
-    const entry = await prisma.docketLabour.create({
-      data: {
-        docketId: id,
-        employeeId,
-        startTime,
-        finishTime,
-        submittedHours: hours,
-        hourlyRate,
-        submittedCost: cost,
-        lotAllocations: lotAllocations?.length
-          ? {
-              create: lotAllocations.map((alloc: { lotId: string; hours: number }) => ({
-                lotId: alloc.lotId,
-                hours: alloc.hours,
-              })),
-            }
-          : undefined,
-      },
-      include: {
-        employee: {
-          select: { id: true, name: true, role: true, hourlyRate: true },
+    const { entry, totals } = await prisma.$transaction(async (tx) => {
+      await lockDocketForEntryMutation(tx, id);
+
+      const created = await tx.docketLabour.create({
+        data: {
+          docketId: id,
+          employeeId,
+          startTime,
+          finishTime,
+          submittedHours: hours,
+          hourlyRate,
+          submittedCost: cost,
+          lotAllocations: lotAllocations?.length
+            ? {
+                create: lotAllocations.map((alloc: { lotId: string; hours: number }) => ({
+                  lotId: alloc.lotId,
+                  hours: alloc.hours,
+                })),
+              }
+            : undefined,
         },
-        lotAllocations: {
-          include: {
-            lot: { select: { id: true, lotNumber: true } },
+        include: {
+          employee: {
+            select: { id: true, name: true, role: true, hourlyRate: true },
+          },
+          lotAllocations: {
+            include: {
+              lot: { select: { id: true, lotNumber: true } },
+            },
           },
         },
-      },
-    });
+      });
 
-    // Update docket totals
-    const allEntries = await prisma.docketLabour.findMany({
-      where: { docketId: id },
-    });
-    const totalHours = allEntries.reduce((sum, e) => sum + (Number(e.submittedHours) || 0), 0);
-    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0);
-
-    await prisma.dailyDocket.update({
-      where: { id },
-      data: {
-        totalLabourSubmitted: totalCost,
-      },
+      return {
+        entry: created,
+        totals: await refreshLabourSubmittedTotals(tx, id),
+      };
     });
 
     res.status(201).json({
@@ -1781,8 +1837,8 @@ docketsRouter.post(
         })),
       },
       runningTotal: {
-        hours: totalHours,
-        cost: totalCost,
+        hours: totals.hours,
+        cost: totals.cost,
       },
     });
   }),
@@ -1842,6 +1898,8 @@ docketsRouter.put(
     const cost = hours * hourlyRate;
 
     const updated = await prisma.$transaction(async (tx) => {
+      await lockDocketForEntryMutation(tx, id);
+
       await tx.docketLabour.update({
         where: { id: entryId },
         data: {
@@ -1865,15 +1923,7 @@ docketsRouter.put(
         }
       }
 
-      const allEntries = await tx.docketLabour.findMany({
-        where: { docketId: id },
-      });
-      const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0);
-
-      await tx.dailyDocket.update({
-        where: { id },
-        data: { totalLabourSubmitted: totalCost },
-      });
+      await refreshLabourSubmittedTotals(tx, id);
 
       const refreshed = await tx.docketLabour.findUnique({
         where: { id: entryId },
@@ -1943,18 +1993,12 @@ docketsRouter.delete(
       throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
     }
 
-    // Delete entry (cascade deletes lot allocations)
-    await prisma.docketLabour.delete({ where: { id: entryId } });
+    await prisma.$transaction(async (tx) => {
+      await lockDocketForEntryMutation(tx, id);
 
-    // Update docket totals
-    const allEntries = await prisma.docketLabour.findMany({
-      where: { docketId: id },
-    });
-    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0);
-
-    await prisma.dailyDocket.update({
-      where: { id },
-      data: { totalLabourSubmitted: totalCost },
+      // Delete entry (cascade deletes lot allocations)
+      await tx.docketLabour.delete({ where: { id: entryId } });
+      await refreshLabourSubmittedTotals(tx, id);
     });
 
     res.json({ message: 'Labour entry deleted' });
@@ -2083,42 +2127,36 @@ docketsRouter.post(
       : Number(plant.dryRate) || 0;
     const cost = Number(hoursOperated) * hourlyRate;
 
-    // Create plant entry
-    const entry = await prisma.docketPlant.create({
-      data: {
-        docketId: id,
-        plantId,
-        hoursOperated,
-        wetOrDry: wetOrDry || 'dry',
-        hourlyRate,
-        submittedCost: cost,
-      },
-      include: {
-        plant: {
-          select: {
-            id: true,
-            type: true,
-            description: true,
-            idRego: true,
-            dryRate: true,
-            wetRate: true,
+    const { entry, totals } = await prisma.$transaction(async (tx) => {
+      await lockDocketForEntryMutation(tx, id);
+
+      const created = await tx.docketPlant.create({
+        data: {
+          docketId: id,
+          plantId,
+          hoursOperated,
+          wetOrDry: wetOrDry || 'dry',
+          hourlyRate,
+          submittedCost: cost,
+        },
+        include: {
+          plant: {
+            select: {
+              id: true,
+              type: true,
+              description: true,
+              idRego: true,
+              dryRate: true,
+              wetRate: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    // Update docket totals
-    const allEntries = await prisma.docketPlant.findMany({
-      where: { docketId: id },
-    });
-    const totalHours = allEntries.reduce((sum, e) => sum + (Number(e.hoursOperated) || 0), 0);
-    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0);
-
-    await prisma.dailyDocket.update({
-      where: { id },
-      data: {
-        totalPlantSubmitted: totalCost,
-      },
+      return {
+        entry: created,
+        totals: await refreshPlantSubmittedTotals(tx, id),
+      };
     });
 
     res.status(201).json({
@@ -2138,8 +2176,8 @@ docketsRouter.post(
         submittedCost: Number(entry.submittedCost) || 0,
       },
       runningTotal: {
-        hours: totalHours,
-        cost: totalCost,
+        hours: totals.hours,
+        cost: totals.cost,
       },
     });
   }),
@@ -2189,38 +2227,33 @@ docketsRouter.put(
       : Number(entry.plant.dryRate) || 0;
     const cost = hours * hourlyRate;
 
-    // Update entry
-    const updated = await prisma.docketPlant.update({
-      where: { id: entryId },
-      data: {
-        hoursOperated: hours,
-        wetOrDry: wetOrDry || entry.wetOrDry,
-        hourlyRate,
-        submittedCost: cost,
-      },
-      include: {
-        plant: {
-          select: {
-            id: true,
-            type: true,
-            description: true,
-            idRego: true,
-            dryRate: true,
-            wetRate: true,
+    const updated = await prisma.$transaction(async (tx) => {
+      await lockDocketForEntryMutation(tx, id);
+
+      const refreshed = await tx.docketPlant.update({
+        where: { id: entryId },
+        data: {
+          hoursOperated: hours,
+          wetOrDry: wetOrDry || entry.wetOrDry,
+          hourlyRate,
+          submittedCost: cost,
+        },
+        include: {
+          plant: {
+            select: {
+              id: true,
+              type: true,
+              description: true,
+              idRego: true,
+              dryRate: true,
+              wetRate: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    // Update docket totals
-    const allEntries = await prisma.docketPlant.findMany({
-      where: { docketId: id },
-    });
-    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0);
-
-    await prisma.dailyDocket.update({
-      where: { id },
-      data: { totalPlantSubmitted: totalCost },
+      await refreshPlantSubmittedTotals(tx, id);
+      return refreshed;
     });
 
     res.json({
@@ -2267,18 +2300,12 @@ docketsRouter.delete(
       throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
     }
 
-    // Delete entry
-    await prisma.docketPlant.delete({ where: { id: entryId } });
+    await prisma.$transaction(async (tx) => {
+      await lockDocketForEntryMutation(tx, id);
 
-    // Update docket totals
-    const allEntries = await prisma.docketPlant.findMany({
-      where: { docketId: id },
-    });
-    const totalCost = allEntries.reduce((sum, e) => sum + (Number(e.submittedCost) || 0), 0);
-
-    await prisma.dailyDocket.update({
-      where: { id },
-      data: { totalPlantSubmitted: totalCost },
+      // Delete entry
+      await tx.docketPlant.delete({ where: { id: entryId } });
+      await refreshPlantSubmittedTotals(tx, id);
     });
 
     res.json({ message: 'Plant entry deleted' });

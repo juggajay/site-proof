@@ -716,6 +716,119 @@ describe('Dockets API', () => {
         });
       }
     });
+
+    it('should preserve totals when labour entries are added concurrently', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(Date.now() + 950400000),
+          status: 'draft',
+        },
+      });
+
+      let middlewareActive = true;
+      let matchingTotalUpdates = 0;
+      let firstTotalUpdateReached: () => void = () => {};
+      let secondTotalUpdateFinished: () => void = () => {};
+      let releaseFirstTotalUpdate: () => void = () => {};
+      const firstTotalUpdateStarted = new Promise<void>((resolve) => {
+        firstTotalUpdateReached = resolve;
+      });
+      const secondTotalUpdateDone = new Promise<void>((resolve) => {
+        secondTotalUpdateFinished = resolve;
+      });
+      const releaseFirstUpdate = new Promise<void>((resolve) => {
+        releaseFirstTotalUpdate = resolve;
+      });
+
+      prisma.$use(async (params, next) => {
+        const data = params.args?.data as { totalLabourSubmitted?: number } | undefined;
+        const where = params.args?.where as { id?: string } | undefined;
+
+        if (
+          middlewareActive &&
+          params.model === 'DailyDocket' &&
+          params.action === 'update' &&
+          where?.id === docket.id &&
+          data?.totalLabourSubmitted !== undefined
+        ) {
+          matchingTotalUpdates += 1;
+
+          if (matchingTotalUpdates === 1) {
+            firstTotalUpdateReached();
+            await releaseFirstUpdate;
+            return next(params);
+          }
+
+          const result = await next(params);
+          secondTotalUpdateFinished();
+          return result;
+        }
+
+        return next(params);
+      });
+
+      try {
+        const firstRequest = request(app)
+          .post(`/api/dockets/${docket.id}/labour`)
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            employeeId,
+            startTime: '07:00',
+            finishTime: '08:00',
+          });
+        const firstResponsePromise = firstRequest.then((res) => res);
+
+        await firstTotalUpdateStarted;
+
+        const secondRequest = request(app)
+          .post(`/api/dockets/${docket.id}/labour`)
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            employeeId,
+            startTime: '08:00',
+            finishTime: '10:00',
+          });
+        const secondResponsePromise = secondRequest.then((res) => res);
+
+        await Promise.race([
+          secondTotalUpdateDone,
+          new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+        ]);
+        releaseFirstTotalUpdate();
+
+        const [firstRes, secondRes] = await Promise.all([
+          firstResponsePromise,
+          secondResponsePromise,
+        ]);
+
+        expect(firstRes.status).toBe(201);
+        expect(secondRes.status).toBe(201);
+
+        const storedDocket = await prisma.dailyDocket.findUniqueOrThrow({
+          where: { id: docket.id },
+          select: { totalLabourSubmitted: true },
+        });
+        const labourAggregate = await prisma.docketLabour.aggregate({
+          where: { docketId: docket.id },
+          _sum: { submittedCost: true },
+        });
+
+        expect(Number(storedDocket.totalLabourSubmitted)).toBe(
+          Number(labourAggregate._sum.submittedCost),
+        );
+        expect(Number(storedDocket.totalLabourSubmitted)).toBe(136.5);
+      } finally {
+        middlewareActive = false;
+        releaseFirstTotalUpdate();
+        await prisma.docketLabourLot.deleteMany({
+          where: { docketLabour: { docketId: docket.id } },
+        });
+        await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+      }
+    });
   });
 
   describe('Plant Entry Management', () => {
