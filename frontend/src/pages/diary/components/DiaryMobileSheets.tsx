@@ -63,7 +63,6 @@ interface DiaryMobileSheetsProps {
     notes?: string;
     lotId?: string;
   }) => Promise<void>;
-  onDeleteEntry: (entry: { id: string; type: string }) => Promise<void>;
   onSavePersonnel: (data: ManualPersonnelData) => Promise<void>;
   onSavePlant: (data: ManualPlantData) => Promise<void>;
   onSaveWeather: (data: {
@@ -95,7 +94,6 @@ export function DiaryMobileSheets({
   onAddDelay,
   onAddDelivery,
   onAddEvent,
-  onDeleteEntry,
   onSavePersonnel,
   onSavePlant,
   onSaveWeather,
@@ -107,11 +105,8 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            if (editingEntry) {
-              await onDeleteEntry(editingEntry);
-              setEditingEntry(null);
-            }
             await onAddActivity({ ...data, lotId: data.lotId || activeLotId || undefined });
+            if (editingEntry) setEditingEntry(null);
           }}
           defaultLotId={activeLotId}
           lots={lots}
@@ -133,11 +128,8 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            if (editingEntry) {
-              await onDeleteEntry(editingEntry);
-              setEditingEntry(null);
-            }
             await onAddDelay({ ...data, lotId: data.lotId || activeLotId || undefined });
+            if (editingEntry) setEditingEntry(null);
           }}
           defaultLotId={activeLotId}
           lots={lots}
@@ -159,11 +151,8 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            if (editingEntry) {
-              await onDeleteEntry(editingEntry);
-              setEditingEntry(null);
-            }
             await onAddDelivery({ ...data, lotId: data.lotId || activeLotId || undefined });
+            if (editingEntry) setEditingEntry(null);
           }}
           defaultLotId={activeLotId}
           lots={lots}
@@ -187,11 +176,8 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={async (data) => {
-            if (editingEntry) {
-              await onDeleteEntry(editingEntry);
-              setEditingEntry(null);
-            }
             await onAddEvent({ ...data, lotId: data.lotId || activeLotId || undefined });
+            if (editingEntry) setEditingEntry(null);
           }}
           defaultLotId={activeLotId}
           lots={lots}
@@ -215,6 +201,28 @@ export function DiaryMobileSheets({
           onSavePlant={onSavePlant}
           defaultLotId={activeLotId}
           lots={lots}
+          initialPersonnelData={
+            editingEntry?.type === 'personnel'
+              ? {
+                  name: editingEntry.description,
+                  company: editingEntry.data?.company,
+                  role: editingEntry.data?.role,
+                  hours: toOptionalNumber(editingEntry.data?.hours),
+                  lotId: editingEntry.data?.lotId,
+                }
+              : undefined
+          }
+          initialPlantData={
+            editingEntry?.type === 'plant'
+              ? {
+                  description: editingEntry.description,
+                  idRego: editingEntry.data?.idRego,
+                  company: editingEntry.data?.company,
+                  hoursOperated: toOptionalNumber(editingEntry.data?.hoursOperated),
+                  lotId: editingEntry.data?.lotId,
+                }
+              : undefined
+          }
         />
       )}
       {activeSheet === 'weather' && (

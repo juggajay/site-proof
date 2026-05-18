@@ -99,6 +99,27 @@ export function useDiaryMobileHandlers({
     await Promise.all([fetchDiaryForDate(selectedDate), fetchDocketSummary()]);
   };
 
+  const updateTimelineEntryFromSheet = async (
+    entry: TimelineEntry,
+    endpoint: string,
+    data: Record<string, unknown>,
+  ) => {
+    if (!diary) {
+      throw new Error('Diary is required to update timeline entries');
+    }
+
+    await apiFetch(
+      `/api/diary/${encodeURIComponent(diary.id)}/${endpoint}/${encodeURIComponent(entry.id)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      },
+    );
+    setEditingEntry(null);
+    await fetchTimeline(diary.id);
+    await fetchDiaryForDate(selectedDate);
+  };
+
   const addActivityFromSheet = async (data: {
     description: string;
     lotId?: string;
@@ -106,6 +127,12 @@ export function useDiaryMobileHandlers({
     unit?: string;
     notes?: string;
   }) => {
+    const payload = { ...data, lotId: data.lotId || activeLotId || undefined };
+    if (editingEntry?.type === 'activity') {
+      await updateTimelineEntryFromSheet(editingEntry, 'activities', payload);
+      return;
+    }
+
     let currentDiary = diary;
     if (!currentDiary) {
       currentDiary = await ensureDiaryExists();
@@ -113,7 +140,7 @@ export function useDiaryMobileHandlers({
     }
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/activities`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     await fetchTimeline(currentDiary.id);
     await fetchDiaryForDate(selectedDate);
@@ -126,6 +153,12 @@ export function useDiaryMobileHandlers({
     impact?: string;
     lotId?: string;
   }) => {
+    const payload = { ...data, lotId: data.lotId || activeLotId || undefined };
+    if (editingEntry?.type === 'delay') {
+      await updateTimelineEntryFromSheet(editingEntry, 'delays', payload);
+      return;
+    }
+
     let currentDiary = diary;
     if (!currentDiary) {
       currentDiary = await ensureDiaryExists();
@@ -133,7 +166,7 @@ export function useDiaryMobileHandlers({
     }
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/delays`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     await fetchTimeline(currentDiary.id);
     await fetchDiaryForDate(selectedDate);
@@ -148,6 +181,12 @@ export function useDiaryMobileHandlers({
     lotId?: string;
     notes?: string;
   }) => {
+    const payload = { ...data, lotId: data.lotId || activeLotId || undefined };
+    if (editingEntry?.type === 'delivery') {
+      await updateTimelineEntryFromSheet(editingEntry, 'deliveries', payload);
+      return;
+    }
+
     let currentDiary = diary;
     if (!currentDiary) {
       currentDiary = await ensureDiaryExists();
@@ -155,7 +194,7 @@ export function useDiaryMobileHandlers({
     }
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/deliveries`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     await fetchTimeline(currentDiary.id);
     await fetchDiaryForDate(selectedDate);
@@ -167,6 +206,12 @@ export function useDiaryMobileHandlers({
     notes?: string;
     lotId?: string;
   }) => {
+    const payload = { ...data, lotId: data.lotId || activeLotId || undefined };
+    if (editingEntry?.type === 'event') {
+      await updateTimelineEntryFromSheet(editingEntry, 'events', payload);
+      return;
+    }
+
     let currentDiary = diary;
     if (!currentDiary) {
       currentDiary = await ensureDiaryExists();
@@ -174,7 +219,7 @@ export function useDiaryMobileHandlers({
     }
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/events`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     await fetchTimeline(currentDiary.id);
     await fetchDiaryForDate(selectedDate);
@@ -191,9 +236,14 @@ export function useDiaryMobileHandlers({
   };
 
   const handleSavePersonnel = async (data: ManualPersonnelData) => {
+    const payload = {
+      ...data,
+      source: 'manual',
+      lotId: data.lotId || activeLotId || undefined,
+    };
     if (editingEntry?.type === 'personnel') {
-      await handleDeleteEntry(editingEntry);
-      setEditingEntry(null);
+      await updateTimelineEntryFromSheet(editingEntry, 'personnel', payload);
+      return;
     }
     let currentDiary = diary;
     if (!currentDiary) {
@@ -202,20 +252,21 @@ export function useDiaryMobileHandlers({
     }
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/personnel`, {
       method: 'POST',
-      body: JSON.stringify({
-        ...data,
-        source: 'manual',
-        lotId: data.lotId || activeLotId || undefined,
-      }),
+      body: JSON.stringify(payload),
     });
     await fetchTimeline(currentDiary.id);
     await fetchDiaryForDate(selectedDate);
   };
 
   const handleSavePlant = async (data: ManualPlantData) => {
+    const payload = {
+      ...data,
+      source: 'manual',
+      lotId: data.lotId || activeLotId || undefined,
+    };
     if (editingEntry?.type === 'plant') {
-      await handleDeleteEntry(editingEntry);
-      setEditingEntry(null);
+      await updateTimelineEntryFromSheet(editingEntry, 'plant', payload);
+      return;
     }
     let currentDiary = diary;
     if (!currentDiary) {
@@ -224,11 +275,7 @@ export function useDiaryMobileHandlers({
     }
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/plant`, {
       method: 'POST',
-      body: JSON.stringify({
-        ...data,
-        source: 'manual',
-        lotId: data.lotId || activeLotId || undefined,
-      }),
+      body: JSON.stringify(payload),
     });
     await fetchTimeline(currentDiary.id);
     await fetchDiaryForDate(selectedDate);

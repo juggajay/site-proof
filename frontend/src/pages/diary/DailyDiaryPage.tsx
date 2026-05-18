@@ -114,7 +114,6 @@ export function DailyDiaryPage() {
           onAddDelay={mobile.addDelayFromSheet}
           onAddDelivery={mobile.addDeliveryFromSheet}
           onAddEvent={mobile.addEventFromSheet}
-          onDeleteEntry={mobile.handleDeleteEntry}
           onSavePersonnel={mobile.handleSavePersonnel}
           onSavePlant={mobile.handleSavePlant}
           onSaveWeather={mobile.handleSaveWeather}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
@@ -27,6 +27,20 @@ interface AddManualLabourPlantSheetProps {
   }) => Promise<void>;
   defaultLotId: string | null;
   lots: Array<{ id: string; lotNumber: string }>;
+  initialPersonnelData?: {
+    name: string;
+    company?: string;
+    role?: string;
+    hours?: number;
+    lotId?: string;
+  };
+  initialPlantData?: {
+    description: string;
+    idRego?: string;
+    company?: string;
+    hoursOperated?: number;
+    lotId?: string;
+  };
 }
 
 export function AddManualLabourPlantSheet({
@@ -36,6 +50,8 @@ export function AddManualLabourPlantSheet({
   onSavePlant,
   defaultLotId,
   lots,
+  initialPersonnelData,
+  initialPlantData,
 }: AddManualLabourPlantSheetProps) {
   // Personnel fields
   const [personnelName, setPersonnelName] = useState('');
@@ -56,6 +72,29 @@ export function AddManualLabourPlantSheet({
   const { trigger } = useHaptics();
   const personnelHoursError = getOptionalDiaryHoursError(personnelHours);
   const plantHoursError = getOptionalDiaryHoursError(plantHours, 'Hours operated');
+  const editingMode = initialPersonnelData ? 'personnel' : initialPlantData ? 'plant' : null;
+  const title =
+    editingMode === 'personnel'
+      ? 'Edit Personnel'
+      : editingMode === 'plant'
+        ? 'Edit Plant'
+        : 'Add Labour / Plant';
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setPersonnelName(initialPersonnelData?.name || '');
+    setPersonnelCompany(initialPersonnelData?.company || '');
+    setPersonnelRole(initialPersonnelData?.role || '');
+    setPersonnelHours(initialPersonnelData?.hours?.toString() || '');
+    setPersonnelLotId(initialPersonnelData?.lotId || defaultLotId || '');
+
+    setPlantDescription(initialPlantData?.description || '');
+    setPlantIdRego(initialPlantData?.idRego || '');
+    setPlantCompany(initialPlantData?.company || '');
+    setPlantHours(initialPlantData?.hoursOperated?.toString() || '');
+    setPlantLotId(initialPlantData?.lotId || defaultLotId || '');
+  }, [defaultLotId, initialPersonnelData, initialPlantData, isOpen]);
 
   const handleSavePersonnel = async () => {
     if (!personnelName.trim() || personnelHoursError || savingPersonnel) return;
@@ -74,6 +113,7 @@ export function AddManualLabourPlantSheet({
       setPersonnelCompany('');
       setPersonnelRole('');
       setPersonnelHours('');
+      if (editingMode) onClose();
     } catch {
       trigger('error');
     } finally {
@@ -98,6 +138,7 @@ export function AddManualLabourPlantSheet({
       setPlantIdRego('');
       setPlantCompany('');
       setPlantHours('');
+      if (editingMode) onClose();
     } catch {
       trigger('error');
     } finally {
@@ -106,7 +147,7 @@ export function AddManualLabourPlantSheet({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Labour / Plant">
+    <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-6">
         {/* Tip banner */}
         <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -117,195 +158,199 @@ export function AddManualLabourPlantSheet({
         </div>
 
         {/* Personnel section */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
-            Personnel
-          </h3>
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Name *</label>
-            <input
-              type="text"
-              value={personnelName}
-              onChange={(e) => setPersonnelName(e.target.value)}
-              placeholder="Worker name"
-              className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+        {editingMode !== 'plant' && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+              Personnel
+            </h3>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Company</label>
+              <label className="text-sm font-medium text-muted-foreground">Name *</label>
               <input
                 type="text"
-                value={personnelCompany}
-                onChange={(e) => setPersonnelCompany(e.target.value)}
-                placeholder="Company"
+                value={personnelName}
+                onChange={(e) => setPersonnelName(e.target.value)}
+                placeholder="Worker name"
                 className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Role</label>
-              <input
-                type="text"
-                value={personnelRole}
-                onChange={(e) => setPersonnelRole(e.target.value)}
-                placeholder="Role"
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Company</label>
+                <input
+                  type="text"
+                  value={personnelCompany}
+                  onChange={(e) => setPersonnelCompany(e.target.value)}
+                  placeholder="Company"
+                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Role</label>
+                <input
+                  type="text"
+                  value={personnelRole}
+                  onChange={(e) => setPersonnelRole(e.target.value)}
+                  placeholder="Role"
+                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                />
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Hours</label>
-              <input
-                type="number"
-                value={personnelHours}
-                onChange={(e) => setPersonnelHours(e.target.value)}
-                placeholder="0"
-                step="0.5"
-                className={cn(
-                  'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
-                  personnelHoursError && 'border-red-500',
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Hours</label>
+                <input
+                  type="number"
+                  value={personnelHours}
+                  onChange={(e) => setPersonnelHours(e.target.value)}
+                  placeholder="0"
+                  step="0.5"
+                  className={cn(
+                    'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
+                    personnelHoursError && 'border-red-500',
+                  )}
+                />
+                {personnelHoursError && (
+                  <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
+                    {personnelHoursError}
+                  </p>
                 )}
-              />
-              {personnelHoursError && (
-                <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
-                  {personnelHoursError}
-                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Lot</label>
+                <select
+                  value={personnelLotId}
+                  onChange={(e) => setPersonnelLotId(e.target.value)}
+                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
+                >
+                  <option value="">No lot</option>
+                  {lots.map((lot) => (
+                    <option key={lot.id} value={lot.id}>
+                      Lot {lot.lotNumber}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <button
+              onClick={handleSavePersonnel}
+              disabled={!personnelName.trim() || Boolean(personnelHoursError) || savingPersonnel}
+              className={cn(
+                'w-full py-3 rounded-lg font-semibold text-white',
+                'bg-emerald-600 active:bg-emerald-700',
+                'touch-manipulation min-h-[48px]',
+                'flex items-center justify-center gap-2',
+                (!personnelName.trim() || personnelHoursError || savingPersonnel) && 'opacity-50',
               )}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Lot</label>
-              <select
-                value={personnelLotId}
-                onChange={(e) => setPersonnelLotId(e.target.value)}
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
-              >
-                <option value="">No lot</option>
-                {lots.map((lot) => (
-                  <option key={lot.id} value={lot.id}>
-                    Lot {lot.lotNumber}
-                  </option>
-                ))}
-              </select>
-            </div>
+            >
+              {savingPersonnel ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" /> Saving...
+                </>
+              ) : (
+                'Save Personnel'
+              )}
+            </button>
           </div>
-          <button
-            onClick={handleSavePersonnel}
-            disabled={!personnelName.trim() || Boolean(personnelHoursError) || savingPersonnel}
-            className={cn(
-              'w-full py-3 rounded-lg font-semibold text-white',
-              'bg-emerald-600 active:bg-emerald-700',
-              'touch-manipulation min-h-[48px]',
-              'flex items-center justify-center gap-2',
-              (!personnelName.trim() || personnelHoursError || savingPersonnel) && 'opacity-50',
-            )}
-          >
-            {savingPersonnel ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" /> Saving...
-              </>
-            ) : (
-              'Save Personnel'
-            )}
-          </button>
-        </div>
+        )}
 
         {/* Divider */}
-        <div className="border-t" />
+        {!editingMode && <div className="border-t" />}
 
         {/* Plant section */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
-            Plant / Equipment
-          </h3>
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Description *</label>
-            <input
-              type="text"
-              value={plantDescription}
-              onChange={(e) => setPlantDescription(e.target.value)}
-              placeholder="Plant / equipment description"
-              className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+        {editingMode !== 'personnel' && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+              Plant / Equipment
+            </h3>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">ID / Rego</label>
+              <label className="text-sm font-medium text-muted-foreground">Description *</label>
               <input
                 type="text"
-                value={plantIdRego}
-                onChange={(e) => setPlantIdRego(e.target.value)}
-                placeholder="ID or rego"
+                value={plantDescription}
+                onChange={(e) => setPlantDescription(e.target.value)}
+                placeholder="Plant / equipment description"
                 className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Company</label>
-              <input
-                type="text"
-                value={plantCompany}
-                onChange={(e) => setPlantCompany(e.target.value)}
-                placeholder="Company"
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">ID / Rego</label>
+                <input
+                  type="text"
+                  value={plantIdRego}
+                  onChange={(e) => setPlantIdRego(e.target.value)}
+                  placeholder="ID or rego"
+                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Company</label>
+                <input
+                  type="text"
+                  value={plantCompany}
+                  onChange={(e) => setPlantCompany(e.target.value)}
+                  placeholder="Company"
+                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                />
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Hours Operated</label>
-              <input
-                type="number"
-                value={plantHours}
-                onChange={(e) => setPlantHours(e.target.value)}
-                placeholder="0"
-                step="0.5"
-                className={cn(
-                  'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
-                  plantHoursError && 'border-red-500',
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Hours Operated</label>
+                <input
+                  type="number"
+                  value={plantHours}
+                  onChange={(e) => setPlantHours(e.target.value)}
+                  placeholder="0"
+                  step="0.5"
+                  className={cn(
+                    'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
+                    plantHoursError && 'border-red-500',
+                  )}
+                />
+                {plantHoursError && (
+                  <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
+                    {plantHoursError}
+                  </p>
                 )}
-              />
-              {plantHoursError && (
-                <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
-                  {plantHoursError}
-                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Lot</label>
+                <select
+                  value={plantLotId}
+                  onChange={(e) => setPlantLotId(e.target.value)}
+                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
+                >
+                  <option value="">No lot</option>
+                  {lots.map((lot) => (
+                    <option key={lot.id} value={lot.id}>
+                      Lot {lot.lotNumber}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <button
+              onClick={handleSavePlant}
+              disabled={!plantDescription.trim() || Boolean(plantHoursError) || savingPlant}
+              className={cn(
+                'w-full py-3 rounded-lg font-semibold text-white',
+                'bg-gray-600 dark:bg-gray-700 active:bg-gray-700 dark:active:bg-gray-600',
+                'touch-manipulation min-h-[48px]',
+                'flex items-center justify-center gap-2',
+                (!plantDescription.trim() || plantHoursError || savingPlant) && 'opacity-50',
               )}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Lot</label>
-              <select
-                value={plantLotId}
-                onChange={(e) => setPlantLotId(e.target.value)}
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
-              >
-                <option value="">No lot</option>
-                {lots.map((lot) => (
-                  <option key={lot.id} value={lot.id}>
-                    Lot {lot.lotNumber}
-                  </option>
-                ))}
-              </select>
-            </div>
+            >
+              {savingPlant ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" /> Saving...
+                </>
+              ) : (
+                'Save Plant'
+              )}
+            </button>
           </div>
-          <button
-            onClick={handleSavePlant}
-            disabled={!plantDescription.trim() || Boolean(plantHoursError) || savingPlant}
-            className={cn(
-              'w-full py-3 rounded-lg font-semibold text-white',
-              'bg-gray-600 dark:bg-gray-700 active:bg-gray-700 dark:active:bg-gray-600',
-              'touch-manipulation min-h-[48px]',
-              'flex items-center justify-center gap-2',
-              (!plantDescription.trim() || plantHoursError || savingPlant) && 'opacity-50',
-            )}
-          >
-            {savingPlant ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" /> Saving...
-              </>
-            ) : (
-              'Save Plant'
-            )}
-          </button>
-        </div>
+        )}
       </div>
     </BottomSheet>
   );

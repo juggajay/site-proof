@@ -14,6 +14,9 @@ export interface TimelineEntryData {
   lotId?: string;
   docketNumber?: string;
   notes?: string;
+  company?: string;
+  role?: string;
+  idRego?: string;
   hours?: number;
   hoursOperated?: number;
 }

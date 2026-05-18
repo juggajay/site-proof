@@ -163,6 +163,18 @@ type RecentPlantSuggestion = {
   usageCount: number;
 };
 
+type DiaryAuthUser = NonNullable<Request['user']>;
+
+async function requireEditableDiary(user: DiaryAuthUser, diaryId: string) {
+  const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
+  if (!diary) {
+    throw AppError.notFound('Diary not found');
+  }
+
+  await requireDraftDiaryWriteAccess(user, diary);
+  return diary;
+}
+
 // POST /api/diary/:diaryId/personnel - Add personnel to diary
 router.post(
   '/:diaryId/personnel',
@@ -191,6 +203,39 @@ router.post(
     });
 
     res.status(201).json(personnel);
+  }),
+);
+
+// PUT /api/diary/:diaryId/personnel/:personnelId - Update personnel in place
+router.put(
+  '/:diaryId/personnel/:personnelId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
+    const personnelId = parseDiaryRouteParam(req.params.personnelId, 'personnelId');
+    const userId = req.user!.id;
+
+    if (!userId) {
+      throw AppError.unauthorized('Unauthorized');
+    }
+
+    const data = addPersonnelSchema.parse(req.body);
+    const diary = await requireEditableDiary(req.user!, diaryId);
+    await requireLotInProject(data.lotId, diary.projectId);
+
+    const existing = await prisma.diaryPersonnel.findFirst({
+      where: { id: personnelId, diaryId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw AppError.notFound('Personnel entry');
+    }
+
+    const personnel = await prisma.diaryPersonnel.update({
+      where: { id: personnelId },
+      data,
+    });
+
+    res.json(personnel);
   }),
 );
 
@@ -250,6 +295,39 @@ router.post(
     });
 
     res.status(201).json(plant);
+  }),
+);
+
+// PUT /api/diary/:diaryId/plant/:plantId - Update plant in place
+router.put(
+  '/:diaryId/plant/:plantId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
+    const plantId = parseDiaryRouteParam(req.params.plantId, 'plantId');
+    const userId = req.user!.id;
+
+    if (!userId) {
+      throw AppError.unauthorized('Unauthorized');
+    }
+
+    const data = addPlantSchema.parse(req.body);
+    const diary = await requireEditableDiary(req.user!, diaryId);
+    await requireLotInProject(data.lotId, diary.projectId);
+
+    const existing = await prisma.diaryPlant.findFirst({
+      where: { id: plantId, diaryId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw AppError.notFound('Plant entry');
+    }
+
+    const plant = await prisma.diaryPlant.update({
+      where: { id: plantId },
+      data,
+    });
+
+    res.json(plant);
   }),
 );
 
@@ -580,6 +658,42 @@ router.post(
   }),
 );
 
+// PUT /api/diary/:diaryId/activities/:activityId - Update activity in place
+router.put(
+  '/:diaryId/activities/:activityId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
+    const activityId = parseDiaryRouteParam(req.params.activityId, 'activityId');
+    const userId = req.user!.id;
+
+    if (!userId) {
+      throw AppError.unauthorized('Unauthorized');
+    }
+
+    const data = addActivitySchema.parse(req.body);
+    const diary = await requireEditableDiary(req.user!, diaryId);
+    await requireLotInProject(data.lotId, diary.projectId);
+
+    const existing = await prisma.diaryActivity.findFirst({
+      where: { id: activityId, diaryId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw AppError.notFound('Activity entry');
+    }
+
+    const activity = await prisma.diaryActivity.update({
+      where: { id: activityId },
+      data,
+      include: {
+        lot: { select: { id: true, lotNumber: true } },
+      },
+    });
+
+    res.json(activity);
+  }),
+);
+
 // DELETE /api/diary/:diaryId/activities/:activityId - Remove activity
 router.delete(
   '/:diaryId/activities/:activityId',
@@ -636,6 +750,39 @@ router.post(
     });
 
     res.status(201).json(delay);
+  }),
+);
+
+// PUT /api/diary/:diaryId/delays/:delayId - Update delay in place
+router.put(
+  '/:diaryId/delays/:delayId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
+    const delayId = parseDiaryRouteParam(req.params.delayId, 'delayId');
+    const userId = req.user!.id;
+
+    if (!userId) {
+      throw AppError.unauthorized('Unauthorized');
+    }
+
+    const data = addDelaySchema.parse(req.body);
+    const diary = await requireEditableDiary(req.user!, diaryId);
+    await requireLotInProject(data.lotId, diary.projectId);
+
+    const existing = await prisma.diaryDelay.findFirst({
+      where: { id: delayId, diaryId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw AppError.notFound('Delay entry');
+    }
+
+    const delay = await prisma.diaryDelay.update({
+      where: { id: delayId },
+      data,
+    });
+
+    res.json(delay);
   }),
 );
 
@@ -699,6 +846,45 @@ router.post(
   }),
 );
 
+// PUT /api/diary/:diaryId/deliveries/:deliveryId - Update delivery in place
+router.put(
+  '/:diaryId/deliveries/:deliveryId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.id;
+    if (!userId) throw AppError.unauthorized('Unauthorized');
+    const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
+    const deliveryId = parseDiaryRouteParam(req.params.deliveryId, 'deliveryId');
+    const data = addDeliverySchema.parse(req.body);
+
+    const diary = await requireEditableDiary(req.user!, diaryId);
+    await requireLotInProject(data.lotId, diary.projectId);
+
+    const existing = await prisma.diaryDelivery.findFirst({
+      where: { id: deliveryId, diaryId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw AppError.notFound('Delivery entry');
+    }
+
+    const delivery = await prisma.diaryDelivery.update({
+      where: { id: deliveryId },
+      data: {
+        description: data.description,
+        supplier: data.supplier,
+        docketNumber: data.docketNumber,
+        quantity: data.quantity,
+        unit: data.unit,
+        lotId: data.lotId,
+        notes: data.notes,
+      },
+      include: { lot: { select: { id: true, lotNumber: true } } },
+    });
+
+    res.json(delivery);
+  }),
+);
+
 // DELETE /api/diary/:diaryId/deliveries/:deliveryId - Remove delivery
 router.delete(
   '/:diaryId/deliveries/:deliveryId',
@@ -747,6 +933,42 @@ router.post(
     });
 
     res.status(201).json(event);
+  }),
+);
+
+// PUT /api/diary/:diaryId/events/:eventId - Update event in place
+router.put(
+  '/:diaryId/events/:eventId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user!.id;
+    if (!userId) throw AppError.unauthorized('Unauthorized');
+    const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
+    const eventId = parseDiaryRouteParam(req.params.eventId, 'eventId');
+    const data = addEventSchema.parse(req.body);
+
+    const diary = await requireEditableDiary(req.user!, diaryId);
+    await requireLotInProject(data.lotId, diary.projectId);
+
+    const existing = await prisma.diaryEvent.findFirst({
+      where: { id: eventId, diaryId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw AppError.notFound('Event entry');
+    }
+
+    const event = await prisma.diaryEvent.update({
+      where: { id: eventId },
+      data: {
+        eventType: data.eventType,
+        description: data.description,
+        notes: data.notes,
+        lotId: data.lotId,
+      },
+      include: { lot: { select: { id: true, lotNumber: true } } },
+    });
+
+    res.json(event);
   }),
 );
 
