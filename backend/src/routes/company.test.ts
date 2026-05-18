@@ -1381,6 +1381,135 @@ describe('Company API', () => {
       }
     });
 
+    it('should keep one active project admin when two admins leave concurrently', async () => {
+      const raceCompany = await prisma.company.create({
+        data: { name: `Concurrent Leave Company ${Date.now()}` },
+      });
+      const firstAdminRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `leave-race-admin-a-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Leave Race Admin A',
+          tosAccepted: true,
+        });
+      const secondAdminRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `leave-race-admin-b-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Leave Race Admin B',
+          tosAccepted: true,
+        });
+      const firstAdminId = firstAdminRes.body.user.id as string;
+      const secondAdminId = secondAdminRes.body.user.id as string;
+      let raceProjectId: string | undefined;
+      let middlewareActive = true;
+      let matchingAdminCounts = 0;
+      let firstCountReached: () => void = () => {};
+      let secondCountFinished: () => void = () => {};
+      let releaseFirstCount: () => void = () => {};
+      const firstCountStarted = new Promise<void>((resolve) => {
+        firstCountReached = resolve;
+      });
+      const secondCountDone = new Promise<void>((resolve) => {
+        secondCountFinished = resolve;
+      });
+      const releaseFirst = new Promise<void>((resolve) => {
+        releaseFirstCount = resolve;
+      });
+
+      try {
+        await prisma.user.updateMany({
+          where: { id: { in: [firstAdminId, secondAdminId] } },
+          data: { companyId: raceCompany.id, roleInCompany: 'admin' },
+        });
+        const project = await prisma.project.create({
+          data: {
+            name: `Concurrent Leave Project ${Date.now()}`,
+            projectNumber: `LEAVE-RACE-${Date.now()}`,
+            companyId: raceCompany.id,
+            status: 'active',
+            state: 'NSW',
+            specificationSet: 'TfNSW',
+          },
+        });
+        raceProjectId = project.id;
+        await prisma.projectUser.createMany({
+          data: [
+            { projectId: raceProjectId, userId: firstAdminId, role: 'admin', status: 'active' },
+            { projectId: raceProjectId, userId: secondAdminId, role: 'admin', status: 'active' },
+          ],
+        });
+
+        prisma.$use(async (params, next) => {
+          const result = await next(params);
+          const where = JSON.stringify(params.args?.where ?? {});
+
+          if (
+            middlewareActive &&
+            params.model === 'ProjectUser' &&
+            params.action === 'groupBy' &&
+            where.includes(raceProjectId!)
+          ) {
+            matchingAdminCounts += 1;
+
+            if (matchingAdminCounts === 1) {
+              firstCountReached();
+              await releaseFirst;
+              return result;
+            }
+
+            secondCountFinished();
+          }
+
+          return result;
+        });
+
+        const firstLeave = request(app)
+          .post('/api/company/leave')
+          .set('Authorization', `Bearer ${firstAdminRes.body.token}`)
+          .then((res) => res);
+
+        await firstCountStarted;
+
+        const secondLeave = request(app)
+          .post('/api/company/leave')
+          .set('Authorization', `Bearer ${secondAdminRes.body.token}`)
+          .then((res) => res);
+
+        await Promise.race([
+          secondCountDone,
+          new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+        ]);
+        releaseFirstCount();
+
+        const responses = await Promise.all([firstLeave, secondLeave]);
+        expect(responses.map((res) => res.status).sort()).toEqual([200, 400]);
+
+        const activeAdminCount = await prisma.projectUser.count({
+          where: {
+            projectId: raceProjectId,
+            status: 'active',
+            role: { in: ['admin', 'project_manager'] },
+          },
+        });
+        expect(activeAdminCount).toBe(1);
+      } finally {
+        middlewareActive = false;
+        releaseFirstCount();
+        if (raceProjectId) {
+          await prisma.projectUser.deleteMany({ where: { projectId: raceProjectId } });
+          await prisma.project.delete({ where: { id: raceProjectId } }).catch(() => {});
+        }
+        for (const tempUserId of [firstAdminId, secondAdminId]) {
+          await prisma.emailVerificationToken.deleteMany({ where: { userId: tempUserId } });
+          await prisma.user.delete({ where: { id: tempUserId } }).catch(() => {});
+        }
+        await prisma.company.delete({ where: { id: raceCompany.id } }).catch(() => {});
+      }
+    });
+
     it('should reject if user has no company', async () => {
       // Create user without company
       const noCompanyEmail = `no-company-leave-${Date.now()}@example.com`;

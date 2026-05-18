@@ -2206,8 +2206,6 @@ authRouter.delete(
       );
     }
 
-    await assertCanRemoveUserFromProjectAdminRoles(user.id);
-
     // Verify password if the user has one set
     if (user.passwordHash && !password) {
       throw AppError.badRequest('Password is required to delete this account');
@@ -2222,6 +2220,8 @@ authRouter.delete(
     }
 
     await prisma.$transaction(async (tx) => {
+      await assertCanRemoveUserFromProjectAdminRoles(user.id, { client: tx });
+
       // Create an audit log entry before deletion (for compliance)
       await tx.auditLog.create({
         data: {

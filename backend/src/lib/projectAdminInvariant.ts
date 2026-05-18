@@ -1,7 +1,10 @@
 import { AppError } from './AppError.js';
 import { prisma } from './prisma.js';
+import { Prisma } from '@prisma/client';
 
 export const PROJECT_ADMIN_ROLES = ['admin', 'project_manager'];
+
+type ProjectAdminInvariantClient = typeof prisma | Prisma.TransactionClient;
 
 export async function assertCanRemoveUserFromProjectAdminRoles(
   userId: string,
@@ -9,9 +12,11 @@ export async function assertCanRemoveUserFromProjectAdminRoles(
     companyId?: string | null;
     actionDescription?: string;
     subjectDescription?: string;
+    client?: ProjectAdminInvariantClient;
   } = {},
 ): Promise<void> {
-  const adminMemberships = await prisma.projectUser.findMany({
+  const client = options.client ?? prisma;
+  const adminMemberships = await client.projectUser.findMany({
     where: {
       userId,
       status: 'active',
@@ -31,7 +36,16 @@ export async function assertCanRemoveUserFromProjectAdminRoles(
   }
 
   const projectIds = adminMemberships.map((membership) => membership.projectId);
-  const adminCounts = await prisma.projectUser.groupBy({
+  await client.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM project_users
+    WHERE project_id IN (${Prisma.join(projectIds)})
+      AND status = 'active'
+      AND role IN (${Prisma.join(PROJECT_ADMIN_ROLES)})
+    FOR UPDATE
+  `;
+
+  const adminCounts = await client.projectUser.groupBy({
     by: ['projectId'],
     where: {
       projectId: { in: projectIds },
