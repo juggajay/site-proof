@@ -714,6 +714,208 @@ describe('Daily Diary API', () => {
     });
   });
 
+  describe('Diary item updates', () => {
+    it('should update mobile-editable timeline entries in place', async () => {
+      const diaryRes = await request(app)
+        .post('/api/diary')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          date: new Date(Date.now() + 864000000).toISOString().split('T')[0],
+        });
+      expect(diaryRes.status).toBe(201);
+      const editableDiaryId = diaryRes.body.id;
+
+      const personnelRes = await request(app)
+        .post(`/api/diary/${editableDiaryId}/personnel`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Edit Worker',
+          company: 'Original Co',
+          role: 'Operator',
+          hours: 6,
+        });
+      expect(personnelRes.status).toBe(201);
+
+      const plantRes = await request(app)
+        .post(`/api/diary/${editableDiaryId}/plant`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          description: 'Edit Dozer',
+          idRego: 'DZ-1',
+          company: 'Original Plant',
+          hoursOperated: 4,
+        });
+      expect(plantRes.status).toBe(201);
+
+      const activityRes = await request(app)
+        .post(`/api/diary/${editableDiaryId}/activities`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          description: 'Original activity',
+          quantity: 10,
+          unit: 'm',
+        });
+      expect(activityRes.status).toBe(201);
+
+      const delayRes = await request(app)
+        .post(`/api/diary/${editableDiaryId}/delays`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          delayType: 'Weather',
+          description: 'Original delay',
+          durationHours: 1,
+        });
+      expect(delayRes.status).toBe(201);
+
+      const deliveryRes = await request(app)
+        .post(`/api/diary/${editableDiaryId}/deliveries`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          description: 'Original delivery',
+          supplier: 'Original Supplier',
+          quantity: 2,
+          unit: 'loads',
+        });
+      expect(deliveryRes.status).toBe(201);
+
+      const eventRes = await request(app)
+        .post(`/api/diary/${editableDiaryId}/events`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          eventType: 'safety',
+          description: 'Original event',
+          notes: 'Original notes',
+        });
+      expect(eventRes.status).toBe(201);
+
+      const beforeCounts = {
+        personnel: await prisma.diaryPersonnel.count({ where: { diaryId: editableDiaryId } }),
+        plant: await prisma.diaryPlant.count({ where: { diaryId: editableDiaryId } }),
+        activities: await prisma.diaryActivity.count({ where: { diaryId: editableDiaryId } }),
+        delays: await prisma.diaryDelay.count({ where: { diaryId: editableDiaryId } }),
+        deliveries: await prisma.diaryDelivery.count({ where: { diaryId: editableDiaryId } }),
+        events: await prisma.diaryEvent.count({ where: { diaryId: editableDiaryId } }),
+      };
+
+      const personnelUpdateRes = await request(app)
+        .put(`/api/diary/${editableDiaryId}/personnel/${personnelRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Edited Worker',
+          company: 'Edited Co',
+          role: 'Leading Hand',
+          hours: 7,
+        });
+      expect(personnelUpdateRes.status).toBe(200);
+      expect(personnelUpdateRes.body).toMatchObject({
+        id: personnelRes.body.id,
+        name: 'Edited Worker',
+        company: 'Edited Co',
+        role: 'Leading Hand',
+      });
+
+      const plantUpdateRes = await request(app)
+        .put(`/api/diary/${editableDiaryId}/plant/${plantRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          description: 'Edited Dozer',
+          idRego: 'DZ-2',
+          company: 'Edited Plant',
+          hoursOperated: 5,
+        });
+      expect(plantUpdateRes.status).toBe(200);
+      expect(plantUpdateRes.body).toMatchObject({
+        id: plantRes.body.id,
+        description: 'Edited Dozer',
+        idRego: 'DZ-2',
+      });
+
+      const activityUpdateRes = await request(app)
+        .put(`/api/diary/${editableDiaryId}/activities/${activityRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          description: 'Edited activity',
+          quantity: 12,
+          unit: 'm2',
+          notes: 'Edited notes',
+        });
+      expect(activityUpdateRes.status).toBe(200);
+      expect(activityUpdateRes.body).toMatchObject({
+        id: activityRes.body.id,
+        description: 'Edited activity',
+        unit: 'm2',
+      });
+
+      const delayUpdateRes = await request(app)
+        .put(`/api/diary/${editableDiaryId}/delays/${delayRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          delayType: 'Plant Breakdown',
+          description: 'Edited delay',
+          durationHours: 2,
+          impact: 'Resequenced crew',
+        });
+      expect(delayUpdateRes.status).toBe(200);
+      expect(delayUpdateRes.body).toMatchObject({
+        id: delayRes.body.id,
+        delayType: 'Plant Breakdown',
+        description: 'Edited delay',
+      });
+
+      const deliveryUpdateRes = await request(app)
+        .put(`/api/diary/${editableDiaryId}/deliveries/${deliveryRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          description: 'Edited delivery',
+          supplier: 'Edited Supplier',
+          quantity: 3,
+          unit: 'loads',
+          notes: 'Checked in',
+        });
+      expect(deliveryUpdateRes.status).toBe(200);
+      expect(deliveryUpdateRes.body).toMatchObject({
+        id: deliveryRes.body.id,
+        description: 'Edited delivery',
+        supplier: 'Edited Supplier',
+      });
+
+      const eventUpdateRes = await request(app)
+        .put(`/api/diary/${editableDiaryId}/events/${eventRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          eventType: 'instruction',
+          description: 'Edited event',
+          notes: 'Instruction recorded',
+        });
+      expect(eventUpdateRes.status).toBe(200);
+      expect(eventUpdateRes.body).toMatchObject({
+        id: eventRes.body.id,
+        eventType: 'instruction',
+        description: 'Edited event',
+      });
+
+      await expect(
+        prisma.diaryPersonnel.count({ where: { diaryId: editableDiaryId } }),
+      ).resolves.toBe(beforeCounts.personnel);
+      await expect(prisma.diaryPlant.count({ where: { diaryId: editableDiaryId } })).resolves.toBe(
+        beforeCounts.plant,
+      );
+      await expect(
+        prisma.diaryActivity.count({ where: { diaryId: editableDiaryId } }),
+      ).resolves.toBe(beforeCounts.activities);
+      await expect(prisma.diaryDelay.count({ where: { diaryId: editableDiaryId } })).resolves.toBe(
+        beforeCounts.delays,
+      );
+      await expect(
+        prisma.diaryDelivery.count({ where: { diaryId: editableDiaryId } }),
+      ).resolves.toBe(beforeCounts.deliveries);
+      await expect(prisma.diaryEvent.count({ where: { diaryId: editableDiaryId } })).resolves.toBe(
+        beforeCounts.events,
+      );
+    });
+  });
+
   describe('Diary Submission', () => {
     it('should reject active viewers from submitting diary entries', async () => {
       const draftRes = await request(app)
