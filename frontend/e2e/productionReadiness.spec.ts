@@ -49,6 +49,18 @@ test.describe('production readiness guardrails', () => {
     expect(source).not.toContain('catch(() => ({ ncrs: [] }))');
   });
 
+  test('foreman diary finish flow can acknowledge backend submission warnings', async () => {
+    const source = await readFile(
+      new URL('../src/components/foreman/DiaryFinishFlow.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(source).toContain('extractErrorDetails');
+    expect(source).toContain('requiresAcknowledgement');
+    expect(source).toContain('acknowledgeWarnings: true');
+    expect(source).toContain('Submit with warnings');
+  });
+
   test('paid-product actions do not expose known dead-end alerts', async () => {
     const companySettings = await readFile(
       new URL('../src/pages/company/CompanySettingsPage.tsx', import.meta.url),
