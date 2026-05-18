@@ -13,6 +13,7 @@ import {
 import { getPaginationMeta, getPrismaSkipTake } from '../lib/pagination.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { ROLE_GROUPS, hasRoleInGroup } from '../lib/roles.js';
 
 // ============================================================================
 // Zod Validation Schemas
@@ -298,6 +299,10 @@ function isCompanyAdmin(user: AuthenticatedUser): boolean {
 
 function isSubcontractorUser(user: AuthenticatedUser): boolean {
   return SUBCONTRACTOR_ROLES.includes(user.roleInCompany || '');
+}
+
+function canViewLotBudget(role: string | null): boolean {
+  return role !== null && hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL);
 }
 
 async function requireSubcontractorLotPortalModules(
@@ -704,6 +709,11 @@ lotsRouter.get(
       throw AppError.forbidden('Access denied');
     }
 
+    const effectiveProjectRole = isSubcontractorUser(user)
+      ? null
+      : await getEffectiveProjectRole(projectId, user);
+    const canViewBudgetAmount = canViewLotBudget(effectiveProjectRole);
+
     await requireSubcontractorLotPortalModules(
       user,
       projectId,
@@ -850,13 +860,18 @@ lotsRouter.get(
 
     // Transform response to match frontend expectations
     // Frontend expects itpInstances array, but we have singular itpInstance
+    const visibleLots = lots.map((lot) => ({
+      ...lot,
+      budgetAmount: canViewBudgetAmount ? lot.budgetAmount : null,
+    }));
+
     const transformedLots =
       includeITP === 'true'
-        ? lots.map((lot) => ({
+        ? visibleLots.map((lot) => ({
             ...lot,
             itpInstances: lot.itpInstance ? [lot.itpInstance] : [],
           }))
-        : lots;
+        : visibleLots;
 
     res.json({
       data: transformedLots,
@@ -1541,7 +1556,12 @@ lotsRouter.patch(
       return updated;
     });
 
-    res.json({ lot: updatedLot });
+    res.json({
+      lot: {
+        ...updatedLot,
+        budgetAmount: canViewLotBudget(userProjectRole) ? updatedLot.budgetAmount : null,
+      },
+    });
   }),
 );
 
