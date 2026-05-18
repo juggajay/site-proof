@@ -132,6 +132,21 @@ test.describe('Authentication', () => {
     ).toBeVisible({ timeout: 5000 });
   });
 
+  test('reset password checklist shows the special-character rule', async ({ page }) => {
+    await page.route('**/api/auth/validate-reset-token?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ valid: true }),
+      });
+    });
+
+    await page.goto('/reset-password?token=e2e-valid-token');
+    await page.getByLabel(/new password/i).fill('StrongPass123');
+
+    await expect(page.getByText(/one special character/i)).toBeVisible();
+  });
+
   test('should redirect unauthenticated users to login', async ({ page }) => {
     await page.goto('/projects');
 

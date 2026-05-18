@@ -44,6 +44,7 @@ export function ResetPasswordPage() {
       hasUppercase: /[A-Z]/.test(password),
       hasLowercase: /[a-z]/.test(password),
       hasNumber: /[0-9]/.test(password),
+      hasSpecial: /[^A-Za-z0-9]/.test(password),
     }),
     [password],
   );
@@ -152,7 +153,7 @@ export function ResetPasswordPage() {
       <h2 className="text-2xl font-bold">Create New Password</h2>
       <p className="text-sm text-muted-foreground">
         Enter your new password below. Password must be at least {MIN_PASSWORD_LENGTH} characters
-        with uppercase, lowercase, and a number.
+        with uppercase, lowercase, a number, and a special character.
       </p>
 
       {errors.root?.message && (
@@ -215,6 +216,16 @@ export function ResetPasswordPage() {
                 <X className="h-3 w-3" />
               )}
               One number
+            </div>
+            <div
+              className={`flex items-center gap-1 ${passwordValidation.hasSpecial ? 'text-green-600' : 'text-muted-foreground'}`}
+            >
+              {passwordValidation.hasSpecial ? (
+                <Check className="h-3 w-3" />
+              ) : (
+                <X className="h-3 w-3" />
+              )}
+              One special character
             </div>
           </div>
         )}
