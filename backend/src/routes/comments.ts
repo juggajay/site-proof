@@ -4,7 +4,12 @@ import { requireAuth, AuthRequest } from '../middleware/authMiddleware.js';
 import { createMentionNotifications } from './notifications.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { activeSubcontractorCompanyWhere, checkProjectAccess } from '../lib/projectAccess.js';
+import {
+  activeSubcontractorCompanyWhere,
+  checkProjectAccess,
+  requireSubcontractorPortalModuleAccess,
+  type SubcontractorPortalAccessKey,
+} from '../lib/projectAccess.js';
 import {
   getSupabaseClient,
   isSupabaseConfigured,
@@ -64,6 +69,7 @@ interface CommentEntityAccessTarget {
   projectId: string;
   lotId?: string | null;
   subcontractorLotScoped: boolean;
+  subcontractorPortalModule?: SubcontractorPortalAccessKey | null;
 }
 
 const allowedAttachmentTypes = [
@@ -232,7 +238,12 @@ async function getCommentEntityAccessTarget(
       select: { projectId: true },
     });
     if (!entity) throw AppError.notFound('Comment entity');
-    return { projectId: entity.projectId, lotId: entityId, subcontractorLotScoped: true };
+    return {
+      projectId: entity.projectId,
+      lotId: entityId,
+      subcontractorLotScoped: true,
+      subcontractorPortalModule: 'lots',
+    };
   }
 
   if (normalizedType === 'ncr') {
@@ -315,7 +326,12 @@ async function getCommentEntityAccessTarget(
       select: { projectId: true },
     });
     if (!lot) throw AppError.notFound('Comment entity');
-    return { projectId: lot.projectId, lotId: entityId, subcontractorLotScoped: true };
+    return {
+      projectId: lot.projectId,
+      lotId: entityId,
+      subcontractorLotScoped: true,
+      subcontractorPortalModule: 'itps',
+    };
   }
 
   if (['itp_completion', 'itpcompletion'].includes(normalizedType)) {
@@ -358,6 +374,17 @@ async function requireCommentEntityAccess(
     ) {
       throw AppError.forbidden('Access denied');
     }
+
+    if (!target.subcontractorPortalModule) {
+      throw AppError.forbidden('Access denied');
+    }
+
+    await requireSubcontractorPortalModuleAccess({
+      userId: user.id,
+      role: user.roleInCompany,
+      projectId: target.projectId,
+      module: target.subcontractorPortalModule,
+    });
 
     return target.projectId;
   }
