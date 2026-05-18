@@ -8,6 +8,7 @@ import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { ROLES } from '../lib/roles.js';
 import { PROJECT_ADMIN_ROLES } from '../lib/projectAdminInvariant.js';
+import { Prisma } from '@prisma/client';
 
 export const projectsRouter = Router();
 
@@ -15,6 +16,7 @@ export const projectsRouter = Router();
 projectsRouter.use(requireAuth);
 
 type AuthenticatedUser = NonNullable<Request['user']>;
+type ProjectTeamMutationClient = typeof prisma | Prisma.TransactionClient;
 
 const PROJECT_COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager'];
 const PROJECT_CREATOR_ROLES = new Set<string>([ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER]);
@@ -322,6 +324,7 @@ async function getProjectAccessContext(projectId: string, user: AuthenticatedUse
 }
 
 async function assertCanReduceProjectAdmin(
+  client: ProjectTeamMutationClient,
   projectId: string,
   targetProjectUser: { role: string; status: string },
 ): Promise<void> {
@@ -329,7 +332,16 @@ async function assertCanReduceProjectAdmin(
     return;
   }
 
-  const activeAdminCount = await prisma.projectUser.count({
+  await client.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM project_users
+    WHERE project_id = ${projectId}
+      AND status = 'active'
+      AND role IN (${Prisma.join(PROJECT_ADMIN_ROLES)})
+    FOR UPDATE
+  `;
+
+  const activeAdminCount = await client.projectUser.count({
     where: {
       projectId,
       status: 'active',
@@ -1612,28 +1624,39 @@ projectsRouter.patch(
       throw AppError.badRequest('You cannot change your own project role');
     }
 
-    // Find the target project user
-    const targetProjectUser = await prisma.projectUser.findFirst({
-      where: { projectId, userId: targetUserId },
-      include: {
-        user: { select: { email: true, fullName: true } },
-      },
-    });
+    const {
+      targetProjectUser: targetForAudit,
+      oldRole,
+      updated,
+    } = await prisma.$transaction(async (tx) => {
+      // Re-read inside the transaction so the invariant check sees the latest membership state.
+      const targetProjectUser = await tx.projectUser.findFirst({
+        where: { projectId, userId: targetUserId },
+        include: {
+          user: { select: { email: true, fullName: true } },
+        },
+      });
 
-    if (!targetProjectUser) {
-      throw AppError.notFound('User in project');
-    }
+      if (!targetProjectUser) {
+        throw AppError.notFound('User in project');
+      }
 
-    const oldRole = targetProjectUser.role;
+      const oldRole = targetProjectUser.role;
+      if (!isProjectAdminRole(role)) {
+        await assertCanReduceProjectAdmin(tx, projectId, targetProjectUser);
+      }
 
-    if (!isProjectAdminRole(role)) {
-      await assertCanReduceProjectAdmin(projectId, targetProjectUser);
-    }
+      // Update role while the project-admin rows are locked when this reduces admin coverage.
+      const updatedProjectUser = await tx.projectUser.update({
+        where: { id: targetProjectUser.id },
+        data: { role },
+      });
 
-    // Update role
-    const updated = await prisma.projectUser.update({
-      where: { id: targetProjectUser.id },
-      data: { role },
+      return {
+        targetProjectUser,
+        oldRole,
+        updated: updatedProjectUser,
+      };
     });
 
     // Audit log
@@ -1641,11 +1664,11 @@ projectsRouter.patch(
       projectId,
       userId: currentUser.id,
       entityType: 'project_user',
-      entityId: targetProjectUser.id,
+      entityId: targetForAudit.id,
       action: AuditAction.USER_ROLE_CHANGED,
       changes: {
         targetUserId,
-        targetUserEmail: targetProjectUser.user.email,
+        targetUserEmail: targetForAudit.user.email,
         oldRole,
         newRole: role,
       },
@@ -1698,7 +1721,7 @@ projectsRouter.patch(
       projectUser: {
         id: updated.id,
         userId: targetUserId,
-        email: targetProjectUser.user.email,
+        email: targetForAudit.user.email,
         role: updated.role,
       },
     });
@@ -1719,28 +1742,32 @@ projectsRouter.delete(
       throw AppError.forbidden('Only admins can remove users');
     }
 
-    // Find the target project user
-    const targetProjectUser = await prisma.projectUser.findFirst({
-      where: { projectId, userId: targetUserId },
-      include: {
-        user: { select: { email: true, fullName: true } },
-      },
-    });
-
-    if (!targetProjectUser) {
-      throw AppError.notFound('User in project');
-    }
-
     // Can't remove yourself
     if (targetUserId === currentUser.id) {
       throw AppError.badRequest('You cannot remove yourself from the project');
     }
 
-    await assertCanReduceProjectAdmin(projectId, targetProjectUser);
+    const removedProjectUser = await prisma.$transaction(async (tx) => {
+      // Re-read inside the transaction so concurrent role edits/removals cannot bypass the invariant.
+      const targetProjectUser = await tx.projectUser.findFirst({
+        where: { projectId, userId: targetUserId },
+        include: {
+          user: { select: { email: true, fullName: true } },
+        },
+      });
 
-    // Delete the project user
-    await prisma.projectUser.delete({
-      where: { id: targetProjectUser.id },
+      if (!targetProjectUser) {
+        throw AppError.notFound('User in project');
+      }
+
+      await assertCanReduceProjectAdmin(tx, projectId, targetProjectUser);
+
+      // Delete the project user while the active project-admin rows remain locked.
+      await tx.projectUser.delete({
+        where: { id: targetProjectUser.id },
+      });
+
+      return targetProjectUser;
     });
 
     // Audit log
@@ -1748,12 +1775,12 @@ projectsRouter.delete(
       projectId,
       userId: currentUser.id,
       entityType: 'project_user',
-      entityId: targetProjectUser.id,
+      entityId: removedProjectUser.id,
       action: AuditAction.USER_REMOVED,
       changes: {
         removedUserId: targetUserId,
-        removedUserEmail: targetProjectUser.user.email,
-        removedUserRole: targetProjectUser.role,
+        removedUserEmail: removedProjectUser.user.email,
+        removedUserRole: removedProjectUser.role,
       },
       req,
     });
@@ -1767,7 +1794,7 @@ projectsRouter.delete(
       });
 
       const removerName = currentUser.fullName || currentUser.email || 'An administrator';
-      const formattedRole = targetProjectUser.role.replace(/_/g, ' ');
+      const formattedRole = removedProjectUser.role.replace(/_/g, ' ');
 
       // Create in-app notification
       await prisma.notification.create({
@@ -1800,7 +1827,7 @@ projectsRouter.delete(
       message: 'User removed successfully',
       removedUser: {
         userId: targetUserId,
-        email: targetProjectUser.user.email,
+        email: removedProjectUser.user.email,
       },
     });
   }),
