@@ -7,12 +7,50 @@ on:
         description: GitHub environment containing staging or production secrets
         required: true
         default: production
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
 
 jobs:
+  validate-dispatch:
+    name: Validate preflight dispatch
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.validate.outputs.environment }}
+    steps:
+      - id: validate
+        name: Require protected branch for production
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          requested_environment="${{ github.event.inputs.environment }}"
+          case "$requested_environment" in
+            staging|production)
+              ;;
+            *)
+              echo "::error::Unsupported preflight environment '$requested_environment'."
+              exit 1
+              ;;
+          esac
+
+          if [[ "$requested_environment" == "production" && "${{ github.ref }}" != "refs/heads/master" ]]; then
+            echo "::error::Production preflight can only run from refs/heads/master."
+            exit 1
+          fi
+
+          echo "environment=$requested_environment" >> "$GITHUB_OUTPUT"
+
   preflight:
     name: Production integration preflight
+    needs: validate-dispatch
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment }}
+    environment:
+      name: ${{ needs.validate-dispatch.outputs.environment }}
     defaults:
       run:
         working-directory: backend
