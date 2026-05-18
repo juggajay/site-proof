@@ -519,6 +519,19 @@ async function requireAlertAccess(user: AuthUser, alert: Alert): Promise<void> {
   throw AppError.forbidden('Access denied');
 }
 
+async function requireAlertResolveAccess(user: AuthUser, alert: Alert): Promise<void> {
+  if (alert.assignedTo === user.id || alert.escalatedTo?.includes(user.id)) {
+    return;
+  }
+
+  if (alert.projectId) {
+    await requireProjectNotificationAdminAccess(user, alert.projectId);
+    return;
+  }
+
+  throw AppError.forbidden('Alert resolution access required');
+}
+
 // GET /api/notifications - Get notifications for current user
 notificationsRouter.get(
   '/',
@@ -1713,7 +1726,7 @@ notificationsRouter.put(
     if (alert.resolvedAt) {
       throw AppError.badRequest('Alert is already resolved');
     }
-    await requireAlertAccess(user, alert);
+    await requireAlertResolveAccess(user, alert);
 
     const updatedAlert = toAlert(
       await prisma.notificationAlert.update({

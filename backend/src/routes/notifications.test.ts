@@ -1485,6 +1485,86 @@ describe('Notifications API', () => {
         expect(res.status).toBe(403);
       });
 
+      it('should reject project readers resolving project alerts they do not own', async () => {
+        const createRes = await request(app)
+          .post('/api/notifications/alerts')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            type: 'overdue_ncr',
+            severity: 'medium',
+            title: 'Project Reader Resolve Denied',
+            message: 'Project read access alone should not resolve alerts',
+            entityId: `resolve-reader-denied-${Date.now()}`,
+            entityType: 'ncr',
+            projectId,
+            assignedTo: userId,
+          });
+        expect(createRes.status).toBe(200);
+
+        const res = await request(app)
+          .put(`/api/notifications/alerts/${createRes.body.alert.id}/resolve`)
+          .set('Authorization', `Bearer ${secondUserToken}`);
+
+        expect(res.status).toBe(403);
+      });
+
+      it('should allow project notification admins to resolve project alerts they do not own', async () => {
+        const createRes = await request(app)
+          .post('/api/notifications/alerts')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            type: 'overdue_ncr',
+            severity: 'medium',
+            title: 'Project Admin Resolve Allowed',
+            message: 'Project notification admins can resolve project alerts',
+            entityId: `resolve-admin-allowed-${Date.now()}`,
+            entityType: 'ncr',
+            projectId,
+            assignedTo: secondUserId,
+          });
+        expect(createRes.status).toBe(200);
+
+        const res = await request(app)
+          .put(`/api/notifications/alerts/${createRes.body.alert.id}/resolve`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.alert.resolvedAt).toBeDefined();
+      });
+
+      it('should allow escalated recipients to resolve project alerts', async () => {
+        const createRes = await request(app)
+          .post('/api/notifications/alerts')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            type: 'overdue_ncr',
+            severity: 'medium',
+            title: 'Escalated Resolve Allowed',
+            message: 'Escalated recipients can resolve alerts',
+            entityId: `resolve-escalated-allowed-${Date.now()}`,
+            entityType: 'ncr',
+            projectId,
+            assignedTo: userId,
+          });
+        expect(createRes.status).toBe(200);
+
+        await prisma.notificationAlert.update({
+          where: { id: createRes.body.alert.id },
+          data: {
+            escalationLevel: 1,
+            escalatedAt: new Date(),
+            escalatedTo: [secondUserId],
+          },
+        });
+
+        const res = await request(app)
+          .put(`/api/notifications/alerts/${createRes.body.alert.id}/resolve`)
+          .set('Authorization', `Bearer ${secondUserToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.alert.resolvedAt).toBeDefined();
+      });
+
       it('should allow subcontractors to resolve alerts assigned to them', async () => {
         const createRes = await request(app)
           .post('/api/notifications/alerts')
