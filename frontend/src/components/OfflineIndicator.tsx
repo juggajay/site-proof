@@ -36,6 +36,7 @@ export function OfflineIndicator() {
     useOfflineStatus({
       onConflictDetected: handleConflictDetected,
       onSyncComplete: handleSyncComplete,
+      enableSyncWorker: true,
     });
 
   // Don't show when online, synced, and no conflicts

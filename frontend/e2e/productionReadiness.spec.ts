@@ -1606,6 +1606,27 @@ test.describe('production readiness guardrails', () => {
     expect(quickPhotoCaptureSource).toContain("documentType: 'photo'");
   });
 
+  test('offline sync queue has a single opted-in worker with a shared lock', async () => {
+    const offlineStatusSource = await readFile(
+      new URL('../src/lib/useOfflineStatus.ts', import.meta.url),
+      'utf8',
+    );
+    const offlineIndicatorSource = await readFile(
+      new URL('../src/components/OfflineIndicator.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(offlineStatusSource).toContain('enableSyncWorker?: boolean');
+    expect(offlineStatusSource).toContain('enableSyncWorker = false');
+    expect(offlineStatusSource).toContain('activeOfflineSyncPromise');
+    expect(offlineStatusSource).toContain('siteproof-offline-sync');
+    expect(offlineStatusSource).toContain('getBrowserLockManager()');
+    expect(offlineStatusSource).toContain(
+      'if (!enableSyncWorker || !isOnline || isSyncing) return;',
+    );
+    expect(offlineIndicatorSource).toContain('enableSyncWorker: true');
+  });
+
   test('auth session storage is validated and accessed through safe helpers', async () => {
     const authSource = await readFile(new URL('../src/lib/auth.tsx', import.meta.url), 'utf8');
     const authStorageSource = await readFile(
