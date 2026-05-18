@@ -435,31 +435,35 @@ companyRouter.post(
       );
     }
 
-    await assertCanRemoveUserFromProjectAdminRoles(user.userId, {
-      companyId: user.companyId,
-      actionDescription: 'leave company',
-      subjectDescription: 'you are',
+    const companyId = user.companyId;
+    await prisma.$transaction(async (tx) => {
+      await assertCanRemoveUserFromProjectAdminRoles(user.userId, {
+        companyId,
+        actionDescription: 'leave company',
+        subjectDescription: 'you are',
+        client: tx,
+      });
+
+      // Remove user from all project memberships for this company
+      const companyProjects = await tx.project.findMany({
+        where: { companyId },
+        select: { id: true },
+      });
+
+      const projectIds = companyProjects.map((p) => p.id);
+
+      // Delete project user records
+      await tx.projectUser.deleteMany({
+        where: {
+          userId: user.userId,
+          projectId: { in: projectIds },
+        },
+      });
+
+      // Remove company association from user using raw SQL to avoid Prisma quirks
+      // Set role_in_company to 'member' (default) since it's NOT NULL
+      await tx.$executeRaw`UPDATE users SET company_id = NULL, role_in_company = 'member' WHERE id = ${user.userId}`;
     });
-
-    // Remove user from all project memberships for this company
-    const companyProjects = await prisma.project.findMany({
-      where: { companyId: user.companyId },
-      select: { id: true },
-    });
-
-    const projectIds = companyProjects.map((p) => p.id);
-
-    // Delete project user records
-    await prisma.projectUser.deleteMany({
-      where: {
-        userId: user.userId,
-        projectId: { in: projectIds },
-      },
-    });
-
-    // Remove company association from user using raw SQL to avoid Prisma quirks
-    // Set role_in_company to 'member' (default) since it's NOT NULL
-    await prisma.$executeRaw`UPDATE users SET company_id = NULL, role_in_company = 'member' WHERE id = ${user.userId}`;
 
     res.json({
       message: 'Successfully left the company',
