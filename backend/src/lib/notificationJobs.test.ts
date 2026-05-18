@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as email from './email.js';
 import { clearEmailQueue, getQueuedEmails } from './email.js';
 import { processDueNotificationDigests } from './notificationJobs.js';
 import { prisma } from './prisma.js';
@@ -152,6 +153,67 @@ describe('processDueNotificationDigests', () => {
       expect(result.results[0]!.error).toContain('disabled');
       expect(getQueuedEmails()).toHaveLength(0);
     } finally {
+      await cleanupDigestUser(user.id);
+    }
+  });
+
+  it('does not send duplicate digest emails when a concurrent worker starts mid-send', async () => {
+    const user = await createDigestUser(true);
+    const now = new Date(2026, 4, 10, 17, 30, 0, 0);
+    let releaseFirstSend: () => void = () => {};
+    let firstSendStarted: () => void = () => {};
+    const firstSendStartedPromise = new Promise<void>((resolve) => {
+      firstSendStarted = resolve;
+    });
+    const releaseFirstSendPromise = new Promise<void>((resolve) => {
+      releaseFirstSend = resolve;
+    });
+    let sendCalls = 0;
+    const digestSpy = vi.spyOn(email, 'sendDailyDigestEmail').mockImplementation(async () => {
+      sendCalls += 1;
+      if (sendCalls === 1) {
+        firstSendStarted();
+        await releaseFirstSendPromise;
+      }
+      return { success: true };
+    });
+
+    await prisma.notificationDigestItem.create({
+      data: {
+        userId: user.id,
+        type: 'mentions',
+        title: 'Queued mention',
+        message: 'This item should only be sent once',
+        createdAt: new Date(2026, 4, 10, 15, 0, 0, 0),
+      },
+    });
+
+    try {
+      const firstRun = processDueNotificationDigests({
+        now,
+        timeOfDay: '17:00',
+        userIds: [user.id],
+      });
+      await firstSendStartedPromise;
+
+      const secondRun = await processDueNotificationDigests({
+        now,
+        timeOfDay: '17:00',
+        userIds: [user.id],
+      });
+      releaseFirstSend();
+      const firstResult = await firstRun;
+
+      expect(firstResult.sent).toBe(1);
+      expect(secondRun.processed).toBe(0);
+      expect(secondRun.sent).toBe(0);
+      expect(digestSpy).toHaveBeenCalledTimes(1);
+      await expect(
+        prisma.notificationDigestItem.count({ where: { userId: user.id } }),
+      ).resolves.toBe(0);
+    } finally {
+      releaseFirstSend();
+      digestSpy.mockRestore();
       await cleanupDigestUser(user.id);
     }
   });
