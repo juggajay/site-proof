@@ -1091,6 +1091,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../.github/workflows/test.yml', import.meta.url),
       'utf8',
     );
+    const productionPreflightWorkflow = await readFile(
+      new URL('../../.github/workflows/production-preflight.yml', import.meta.url),
+      'utf8',
+    );
     const frontendPackage = JSON.parse(
       await readFile(new URL('../package.json', import.meta.url), 'utf8'),
     ) as { scripts: Record<string, string> };
@@ -1114,7 +1118,6 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).toContain('run: npm run build');
     expect(ciWorkflow).toContain('run: docker build -t siteproof-backend-ci .');
     expect(ciWorkflow).toContain('DOCKER_BUILDKIT: "1"');
-    expect(ciWorkflow).toContain('run: npm run preflight:integrations');
     expect(ciWorkflow).toContain('run: npm test');
 
     expect(testWorkflow).toContain('run: cd backend && npm audit --audit-level=moderate');
@@ -1126,11 +1129,19 @@ test.describe('production readiness guardrails', () => {
     expect(testWorkflow).toContain('run: cd backend && npm run build');
     expect(testWorkflow).toContain('run: cd backend && docker build -t siteproof-backend-ci .');
     expect(testWorkflow).toContain('DOCKER_BUILDKIT: "1"');
-    expect(testWorkflow).toContain('run: cd backend && npm run preflight:integrations');
     expect(testWorkflow).toContain('run: cd backend && npm run test:coverage');
     expect(testWorkflow).toContain('run: cd frontend && npm audit --audit-level=moderate');
     expect(testWorkflow).toContain('run: cd frontend && npm run format:check');
     expect(testWorkflow).not.toContain('run: cd backend && npm test');
+
+    expect(ciWorkflow).not.toContain('run: npm run preflight:integrations');
+    expect(testWorkflow).not.toContain('run: cd backend && npm run preflight:integrations');
+    expect(productionPreflightWorkflow).toContain('run: npm run preflight:integrations');
+    expect(productionPreflightWorkflow).toContain('SUPABASE_URL: ${{ secrets.SUPABASE_URL }}');
+    expect(productionPreflightWorkflow).toContain(
+      'SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}',
+    );
+    expect(productionPreflightWorkflow).toContain('ALLOW_LOCAL_FILE_STORAGE: "false"');
   });
 
   test('sensitive document and API errors use the production-safe logger', async () => {

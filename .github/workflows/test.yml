@@ -82,22 +82,6 @@ jobs:
         env:
           DOCKER_BUILDKIT: "1"
 
-      - name: Production integration preflight
-        run: cd backend && npm run preflight:integrations
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/siteproof_test
-          JWT_SECRET: production-preflight-secret-for-ci
-          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          FRONTEND_URL: https://app.siteproof.example
-          BACKEND_URL: https://api.siteproof.example
-          API_URL: https://api.siteproof.example
-          EMAIL_ENABLED: "false"
-          EMAIL_PROVIDER: resend
-          ALLOW_LOCAL_FILE_STORAGE: "true"
-          ALLOW_MOCK_OAUTH: "false"
-          ALLOW_TEST_AUTH_ENDPOINTS: "false"
-          RATE_LIMIT_STORE: database
-
       - name: Run tests with coverage
         run: cd backend && npm run test:coverage
         env:
