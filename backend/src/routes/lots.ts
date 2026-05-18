@@ -703,6 +703,7 @@ lotsRouter.get(
 
     // Build where clause based on user role
     const whereClause: Prisma.LotWhereInput = { projectId };
+    let subcontractorCompanyId: string | null = null;
 
     const hasProjectAccess = await checkProjectAccess(user.id, projectId);
     if (!hasProjectAccess) {
@@ -753,6 +754,7 @@ lotsRouter.get(
           },
           select: { lotId: true },
         });
+        subcontractorCompanyId = subCompanyId;
         const assignedLotIds = lotAssignments.map((a) => a.lotId);
 
         // Include lots from both legacy field AND new assignment model
@@ -863,6 +865,11 @@ lotsRouter.get(
     const visibleLots = lots.map((lot) => ({
       ...lot,
       budgetAmount: canViewBudgetAmount ? lot.budgetAmount : null,
+      subcontractorAssignments: subcontractorCompanyId
+        ? lot.subcontractorAssignments.filter(
+            (assignment) => assignment.subcontractorCompanyId === subcontractorCompanyId,
+          )
+        : lot.subcontractorAssignments,
     }));
 
     const transformedLots =

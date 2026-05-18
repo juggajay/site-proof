@@ -920,6 +920,23 @@ describe('Lots API', () => {
           },
         },
       });
+      const otherSubcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Other Lots Portal Subcontractor ${suffix}`,
+          primaryContactName: 'Other Lots Portal Subcontractor',
+          primaryContactEmail: `other-lots-portal-sub-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: {
+            lots: true,
+            itps: true,
+            holdPoints: false,
+            testResults: false,
+            ncrs: false,
+            documents: false,
+          },
+        },
+      });
 
       const subcontractorRes = await request(app)
         .post('/api/auth/register')
@@ -952,6 +969,17 @@ describe('Lots API', () => {
           subcontractorCompanyId: subcontractorCompany.id,
           canCompleteITP: true,
           itpRequiresVerification: true,
+          status: 'active',
+          assignedById: userId,
+        },
+      });
+      await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: assignedLot.id,
+          subcontractorCompanyId: otherSubcontractorCompany.id,
+          canCompleteITP: false,
+          itpRequiresVerification: false,
           status: 'active',
           assignedById: userId,
         },
@@ -1119,6 +1147,13 @@ describe('Lots API', () => {
         expect(enabledLotAndItpListRes.body.data.map((lot: { id: string }) => lot.id)).toEqual([
           assignedLot.id,
         ]);
+        expect(enabledLotAndItpListRes.body.data[0].subcontractorAssignments).toHaveLength(1);
+        expect(
+          enabledLotAndItpListRes.body.data[0].subcontractorAssignments[0].subcontractorCompanyId,
+        ).toBe(subcontractorCompany.id);
+        expect(JSON.stringify(enabledLotAndItpListRes.body.data[0])).not.toContain(
+          otherSubcontractorCompany.id,
+        );
 
         const enabledLotAndItpDetailRes = await request(app)
           .get(`/api/lots/${assignedLot.id}?portalModule=itps`)
@@ -1138,6 +1173,9 @@ describe('Lots API', () => {
         });
         await prisma.subcontractorCompany
           .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: otherSubcontractorCompany.id } })
           .catch(() => {});
         await prisma.lot.delete({ where: { id: assignedLot.id } }).catch(() => {});
         await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorUserId } });
