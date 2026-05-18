@@ -287,6 +287,7 @@ const LOT_CREATORS = ['owner', 'admin', 'project_manager', 'site_manager', 'fore
 const LOT_DELETERS = ['owner', 'admin', 'project_manager'];
 // Roles that can conform lots (quality management)
 const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager'];
+const LOT_FORCE_CONFORMERS = ['owner', 'admin'];
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
 
 type AuthenticatedUser = NonNullable<Request['user']>;
@@ -2203,12 +2204,16 @@ lotsRouter.post(
 
     const lot = conformStatus.lot!;
 
-    await requireProjectRole(
+    const role = await requireProjectRole(
       lot.projectId,
       user,
       LOT_CONFORMERS,
       'You do not have permission to conform lots. Required roles: Quality Manager, Project Manager, Admin, or Owner.',
     );
+
+    if (force && !LOT_FORCE_CONFORMERS.includes(role)) {
+      throw AppError.forbidden('Only project admins or owners can force lot conformance');
+    }
 
     // Check if lot is already conformed or claimed
     if (lot.status === 'conformed' || lot.status === 'claimed') {

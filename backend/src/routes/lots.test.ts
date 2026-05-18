@@ -1173,6 +1173,91 @@ describe('Lots API', () => {
     });
   });
 
+  describe('POST /api/lots/:id/conform', () => {
+    it('should reject forced conformance from non-admin conformers when prerequisites fail', async () => {
+      const projectManagerEmail = `lots-force-project-manager-${Date.now()}@example.com`;
+      const projectManagerRes = await request(app).post('/api/auth/register').send({
+        email: projectManagerEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Lots Force Project Manager',
+        tosAccepted: true,
+      });
+      const projectManagerToken = projectManagerRes.body.token;
+      const projectManagerUserId = projectManagerRes.body.user.id;
+      const forceDeniedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-FORCE-DENIED-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: projectManagerUserId },
+        data: { companyId, roleInCompany: 'viewer' },
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: projectManagerUserId,
+          role: 'project_manager',
+          status: 'active',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/lots/${forceDeniedLot.id}/conform`)
+          .set('Authorization', `Bearer ${projectManagerToken}`)
+          .send({ force: true });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('Only project admins or owners can force');
+
+        const unchangedLot = await prisma.lot.findUnique({
+          where: { id: forceDeniedLot.id },
+          select: { status: true, conformedAt: true, conformedById: true },
+        });
+        expect(unchangedLot).toMatchObject({
+          status: 'not_started',
+          conformedAt: null,
+          conformedById: null,
+        });
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: projectManagerUserId } });
+        await prisma.lot.delete({ where: { id: forceDeniedLot.id } }).catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: projectManagerUserId } });
+        await prisma.user.delete({ where: { id: projectManagerUserId } }).catch(() => {});
+      }
+    });
+
+    it('should allow project admins to force conformance when prerequisites fail', async () => {
+      const forceAllowedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-FORCE-ALLOWED-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/lots/${forceAllowedLot.id}/conform`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ force: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.lot.status).toBe('conformed');
+      } finally {
+        await prisma.lot.delete({ where: { id: forceAllowedLot.id } }).catch(() => {});
+      }
+    });
+  });
+
   describe('DELETE /api/lots/:id', () => {
     let deletableLotId: string;
 
