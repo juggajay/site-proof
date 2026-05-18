@@ -41,6 +41,8 @@ import {
 } from '../lib/supabase.js';
 
 const AVATAR_STORAGE_PREFIX = 'avatars';
+const GENERIC_RESEND_VERIFICATION_MESSAGE =
+  'If an account exists with this email, a new verification link has been sent.';
 
 export const authRouter = Router();
 
@@ -1460,17 +1462,16 @@ authRouter.post(
       select: { id: true, email: true, emailVerified: true, fullName: true },
     });
 
-    // Always return success (don't reveal if email exists)
+    // Always return success (don't reveal if email exists or is already verified)
     if (!user) {
       return res.json({
-        message: 'If an account exists with this email, a new verification link has been sent.',
+        message: GENERIC_RESEND_VERIFICATION_MESSAGE,
       });
     }
 
     if (user.emailVerified) {
       return res.json({
-        message: 'Email is already verified. You can log in.',
-        alreadyVerified: true,
+        message: GENERIC_RESEND_VERIFICATION_MESSAGE,
       });
     }
 
@@ -1510,7 +1511,7 @@ authRouter.post(
     });
 
     res.json({
-      message: 'If an account exists with this email, a new verification link has been sent.',
+      message: GENERIC_RESEND_VERIFICATION_MESSAGE,
     });
   }),
 );
