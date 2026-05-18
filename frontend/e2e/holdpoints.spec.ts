@@ -108,6 +108,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
   let notifiedReleaseRecorded = false;
   let releaseRequest: unknown;
   let recordReleaseRequest: unknown;
+  let evidenceUploadCount = 0;
   let chaseCount = 0;
   let holdPointLoadCount = 0;
 
@@ -265,6 +266,16 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
       return;
     }
 
+    if (url.pathname === '/api/documents/upload') {
+      evidenceUploadCount += 1;
+      await json({
+        id: `e2e-release-evidence-${evidenceUploadCount}`,
+        filename: `release-evidence-${evidenceUploadCount}.pdf`,
+        fileUrl: `/uploads/release-evidence-${evidenceUploadCount}.pdf`,
+      });
+      return;
+    }
+
     if (url.pathname === `/api/holdpoints/${E2E_NOTIFIED_HP_ID}/chase`) {
       chaseCount += 1;
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -280,6 +291,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
   return {
     getReleaseRequest: () => releaseRequest,
     getRecordReleaseRequest: () => recordReleaseRequest,
+    getEvidenceUploadCount: () => evidenceUploadCount,
     getChaseCount: () => chaseCount,
   };
 }
@@ -427,5 +439,45 @@ test.describe('Hold points seeded release contract', () => {
 
     await expect.poll(() => api.getChaseCount()).toBe(1);
     await expect(notifiedRow.getByRole('button', { name: 'Chase' })).toBeEnabled();
+  });
+
+  test('submits only evidence that belongs to the final release method', async ({ page }) => {
+    const api = await mockSeededHoldPointsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
+
+    const notifiedRow = page.getByRole('row').filter({ hasText: 'LOT-HP-002' });
+    await expect(notifiedRow).toBeVisible();
+    await notifiedRow.getByRole('button', { name: 'Record Release' }).click();
+
+    const recordModal = page.getByRole('dialog').filter({ hasText: 'Record Hold Point Release' });
+    await expect(
+      recordModal.getByRole('heading', { name: 'Record Hold Point Release' }),
+    ).toBeVisible();
+
+    await recordModal.getByLabel('Email Confirmation').check();
+    await recordModal.locator('#evidence-upload').setInputFiles({
+      name: 'release-email.eml',
+      mimeType: 'message/rfc822',
+      buffer: Buffer.from('Subject: Release approved\n\nApproved by email.'),
+    });
+    await expect(recordModal.getByText('Selected: release-email.eml')).toBeVisible();
+
+    await recordModal.getByLabel('Paper Form').check();
+    await expect(recordModal.getByText('Selected: release-email.eml')).toBeHidden();
+
+    await recordModal.getByPlaceholder('Enter name of person releasing').fill('E2E Paper Reviewer');
+    await recordModal.locator('input[type="date"]').fill('2026-02-03');
+    await recordModal.locator('input[type="time"]').fill('14:20');
+    await recordModal.getByRole('button', { name: 'Record Release' }).click();
+
+    await expect
+      .poll(() => api.getRecordReleaseRequest())
+      .toMatchObject({
+        releasedByName: 'E2E Paper Reviewer',
+        releaseMethod: 'paper',
+        signatureDataUrl: null,
+      });
+    expect(api.getEvidenceUploadCount()).toBe(0);
   });
 });
