@@ -7,6 +7,7 @@ const E2E_RELEASED_HP_ID = 'e2e-hp-released';
 
 interface MockHoldPointsOptions {
   failHoldPointLoadsUntil?: number;
+  paginatedHoldPoints?: ReturnType<typeof buildHoldPoints>;
 }
 
 function getFutureDateValue() {
@@ -80,6 +81,27 @@ function buildHoldPoints(
   ];
 }
 
+function buildManyHoldPoints(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `e2e-hp-page-${String(index + 1).padStart(2, '0')}`,
+    lotId: `e2e-lot-page-${String(index + 1).padStart(2, '0')}`,
+    lotNumber: `LOT-HP-${String(index + 1).padStart(3, '0')}`,
+    itpChecklistItemId: `e2e-item-page-${String(index + 1).padStart(2, '0')}`,
+    description: `Paginated hold point ${index + 1}`,
+    pointType: 'hold_point',
+    status: 'pending',
+    notificationSentAt: null,
+    scheduledDate: null,
+    releasedAt: null,
+    releasedByName: null,
+    releaseNotes: null,
+    sequenceNumber: index + 1,
+    isCompleted: false,
+    isVerified: false,
+    createdAt: '2026-01-15T00:00:00.000Z',
+  }));
+}
+
 async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOptions = {}) {
   let pendingReleaseRequested = false;
   let requestedScheduledDate: string | null = null;
@@ -140,12 +162,24 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
         return;
       }
 
+      const allHoldPoints =
+        options.paginatedHoldPoints ||
+        buildHoldPoints(pendingReleaseRequested, requestedScheduledDate, notifiedReleaseRecorded);
+      const pageNumber = Number(url.searchParams.get('page') || '1');
+      const limit = Number(url.searchParams.get('limit') || '20');
+      const start = (pageNumber - 1) * limit;
+      const holdPoints = allHoldPoints.slice(start, start + limit);
+
       await json({
-        holdPoints: buildHoldPoints(
-          pendingReleaseRequested,
-          requestedScheduledDate,
-          notifiedReleaseRecorded,
-        ),
+        holdPoints,
+        pagination: {
+          total: allHoldPoints.length,
+          page: pageNumber,
+          limit,
+          totalPages: Math.ceil(allHoldPoints.length / limit),
+          hasNextPage: pageNumber * limit < allHoldPoints.length,
+          hasPrevPage: pageNumber > 1,
+        },
       });
       return;
     }
@@ -369,6 +403,17 @@ test.describe('Hold points seeded release contract', () => {
     await expect(page.getByRole('alert')).toBeHidden();
     await expect(page.getByText('LOT-HP-001')).toBeVisible();
     await expect(page.getByText('Total HPs')).toBeVisible();
+  });
+
+  test('loads every backend page before treating the hold point register as complete', async ({
+    page,
+  }) => {
+    await mockSeededHoldPointsApi(page, { paginatedHoldPoints: buildManyHoldPoints(25) });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
+
+    await expect(page.getByText('LOT-HP-001')).toBeVisible();
+    await expect(page.getByText('Total HPs').locator('..').getByText('25')).toBeVisible();
   });
 
   test('guards duplicate chase notifications from rapid clicks', async ({ page }) => {
