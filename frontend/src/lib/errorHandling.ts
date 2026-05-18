@@ -14,6 +14,20 @@ type ErrorDataLike = {
   message?: unknown;
 };
 
+type NestedApiErrorPayload = {
+  code?: unknown;
+  details?: unknown;
+};
+
+function getNestedApiErrorPayload(error: unknown): NestedApiErrorPayload | null {
+  if (!(error instanceof ApiError) || !error.data) {
+    return null;
+  }
+
+  const payload = error.data.error;
+  return payload && typeof payload === 'object' ? (payload as NestedApiErrorPayload) : null;
+}
+
 function extractMessageFromErrorData(data: ErrorDataLike): string | null {
   const errorPayload = data.error;
   if (errorPayload && typeof errorPayload === 'object') {
@@ -85,8 +99,9 @@ export function extractErrorMessage(error: unknown, fallbackMessage: string): st
  * Returns the `details` field from `{ error: { details } }`, or null.
  */
 export function extractErrorDetails(error: unknown): Record<string, unknown> | null {
-  if (error instanceof ApiError && error.data) {
-    return typeof error.data.error === 'object' ? (error.data.error.details ?? null) : null;
+  const details = getNestedApiErrorPayload(error)?.details;
+  if (details && typeof details === 'object') {
+    return details as Record<string, unknown>;
   }
   return null;
 }
@@ -96,10 +111,8 @@ export function extractErrorDetails(error: unknown): Record<string, unknown> | n
  * Returns the `code` field from `{ error: { code } }`, or null.
  */
 export function extractErrorCode(error: unknown): string | null {
-  if (error instanceof ApiError && error.data) {
-    return typeof error.data.error === 'object' ? (error.data.error.code ?? null) : null;
-  }
-  return null;
+  const code = getNestedApiErrorPayload(error)?.code;
+  return typeof code === 'string' ? code : null;
 }
 
 /**
