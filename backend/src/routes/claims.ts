@@ -1913,89 +1913,111 @@ router.post(
     }
     const { paidAmount, paymentDate, paymentReference, paymentNotes } = validation.data;
     const paidAt = parseOptionalClaimDate(paymentDate, 'paymentDate') ?? new Date();
+    const paymentDateForHistory = paymentDate || paidAt.toISOString().split('T')[0];
+    const recordedAt = new Date().toISOString();
 
-    // Get the claim
-    const claim = await prisma.progressClaim.findFirst({
-      where: { id: claimId, projectId },
-      include: {
-        project: { select: { id: true, name: true } },
-      },
-    });
+    const paymentResult = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id
+        FROM progress_claims
+        WHERE id = ${claimId} AND project_id = ${projectId}
+        FOR UPDATE
+      `;
 
-    if (!claim) {
-      throw AppError.notFound('Claim');
-    }
+      const claim = await tx.progressClaim.findFirst({
+        where: { id: claimId, projectId },
+        include: {
+          project: { select: { id: true, name: true } },
+        },
+      });
 
-    // Only allow payment of certified or partially paid claims
-    if (claim.status !== 'certified' && claim.status !== 'partially_paid') {
-      throw AppError.badRequest(
-        `Can only record payment for certified or partially paid claims. Current status: ${claim.status}`,
-      );
-    }
-
-    const previousStatus = claim.status;
-    const certifiedAmount = claim.certifiedAmount ? Number(claim.certifiedAmount) : 0;
-    const previousPaidAmount = claim.paidAmount ? Number(claim.paidAmount) : 0;
-    const outstandingBeforePayment = certifiedAmount - previousPaidAmount;
-    if (paidAmount - outstandingBeforePayment > CLAIM_AMOUNT_EPSILON) {
-      throw AppError.badRequest('Payment amount cannot exceed the outstanding certified amount');
-    }
-
-    const totalPaid = previousPaidAmount + paidAmount;
-    const outstanding = certifiedAmount - totalPaid;
-
-    // Determine new status
-    let newStatus: string;
-    if (outstanding <= 0) {
-      newStatus = 'paid';
-    } else {
-      newStatus = 'partially_paid';
-    }
-
-    // Build notes with payment history using disputeNotes field
-    let existingDisputeNotes: Record<string, unknown> = {};
-    let paymentHistory: PaymentHistoryEntry[] = [];
-    if (claim.disputeNotes) {
-      try {
-        const existingNotes = JSON.parse(claim.disputeNotes) as {
-          paymentHistory?: PaymentHistoryEntry[];
-        } & Record<string, unknown>;
-        existingDisputeNotes = existingNotes;
-        paymentHistory = Array.isArray(existingNotes.paymentHistory)
-          ? existingNotes.paymentHistory
-          : [];
-      } catch (_e) {
-        // Not JSON, start fresh
+      if (!claim) {
+        throw AppError.notFound('Claim');
       }
-    }
 
-    paymentHistory.push({
-      amount: paidAmount,
-      date: paymentDate || new Date().toISOString().split('T')[0],
-      reference: paymentReference || null,
-      notes: paymentNotes || null,
-      recordedAt: new Date().toISOString(),
-      recordedBy: userId,
+      // Only allow payment of certified or partially paid claims
+      if (claim.status !== 'certified' && claim.status !== 'partially_paid') {
+        throw AppError.badRequest(
+          `Can only record payment for certified or partially paid claims. Current status: ${claim.status}`,
+        );
+      }
+
+      const previousStatus = claim.status;
+      const certifiedAmount = claim.certifiedAmount ? Number(claim.certifiedAmount) : 0;
+      const previousPaidAmount = claim.paidAmount ? Number(claim.paidAmount) : 0;
+      const outstandingBeforePayment = certifiedAmount - previousPaidAmount;
+      if (paidAmount - outstandingBeforePayment > CLAIM_AMOUNT_EPSILON) {
+        throw AppError.badRequest('Payment amount cannot exceed the outstanding certified amount');
+      }
+
+      const totalPaid = previousPaidAmount + paidAmount;
+      const outstanding = certifiedAmount - totalPaid;
+      const newStatus = outstanding <= 0 ? 'paid' : 'partially_paid';
+
+      // Build notes with payment history using disputeNotes field
+      let existingDisputeNotes: Record<string, unknown> = {};
+      const paymentHistory: PaymentHistoryEntry[] = [];
+      if (claim.disputeNotes) {
+        try {
+          const existingNotes = JSON.parse(claim.disputeNotes) as {
+            paymentHistory?: PaymentHistoryEntry[];
+          } & Record<string, unknown>;
+          existingDisputeNotes = existingNotes;
+          if (Array.isArray(existingNotes.paymentHistory)) {
+            paymentHistory.push(...existingNotes.paymentHistory);
+          }
+        } catch (_e) {
+          // Not JSON, start fresh
+        }
+      }
+
+      paymentHistory.push({
+        amount: paidAmount,
+        date: paymentDateForHistory,
+        reference: paymentReference || null,
+        notes: paymentNotes || null,
+        recordedAt,
+        recordedBy: userId,
+      });
+
+      const updatedClaim = await tx.progressClaim.update({
+        where: { id: claimId },
+        data: {
+          status: newStatus,
+          paidAmount: totalPaid,
+          paidAt,
+          paymentReference: paymentReference || claim.paymentReference,
+          disputeNotes: JSON.stringify({
+            ...existingDisputeNotes,
+            paymentHistory,
+            lastPaymentNotes: paymentNotes,
+          }),
+        },
+        include: {
+          claimedLots: true,
+        },
+      });
+
+      return {
+        claim,
+        updatedClaim,
+        previousStatus,
+        newStatus,
+        totalPaid,
+        outstanding,
+        paymentHistory,
+      };
     });
 
-    // Update the claim
-    const updatedClaim = await prisma.progressClaim.update({
-      where: { id: claimId },
-      data: {
-        status: newStatus,
-        paidAmount: totalPaid,
-        paidAt,
-        paymentReference: paymentReference || claim.paymentReference,
-        disputeNotes: JSON.stringify({
-          ...existingDisputeNotes,
-          paymentHistory,
-          lastPaymentNotes: paymentNotes,
-        }),
-      },
-      include: {
-        claimedLots: true,
-      },
-    });
+    const {
+      claim,
+      updatedClaim,
+      previousStatus,
+      newStatus,
+      totalPaid,
+      outstanding,
+      paymentHistory,
+    } = paymentResult;
 
     // Send notifications to project managers
     try {
@@ -2090,7 +2112,7 @@ router.post(
       },
       payment: {
         amount: paidAmount,
-        date: paymentDate || new Date().toISOString().split('T')[0],
+        date: paymentDateForHistory,
         reference: paymentReference || null,
         notes: paymentNotes || null,
       },
