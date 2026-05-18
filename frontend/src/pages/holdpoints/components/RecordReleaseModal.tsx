@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -53,7 +53,8 @@ export function RecordReleaseModal({
   onClose,
   onSubmit,
 }: RecordReleaseModalProps) {
-  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [emailEvidenceFile, setEmailEvidenceFile] = useState<File | null>(null);
+  const [paperEvidenceFile, setPaperEvidenceFile] = useState<File | null>(null);
   // Feature #884: Signature capture state
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
 
@@ -78,11 +79,29 @@ export function RecordReleaseModal({
   const releaseMethod = watch('releaseMethod');
   const releasedByName = watch('releasedByName');
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setEvidenceFile(e.target.files[0]);
+  useEffect(() => {
+    if (releaseMethod !== 'digital' && signatureDataUrl) {
+      setSignatureDataUrl(null);
     }
+  }, [releaseMethod, signatureDataUrl]);
+
+  const getEvidenceFileForMethod = (method: RecordReleaseFormData['releaseMethod']) => {
+    if (method === 'email') return emailEvidenceFile;
+    if (method === 'paper') return paperEvidenceFile;
+    return null;
   };
+
+  const handleFileChange =
+    (method: Extract<RecordReleaseFormData['releaseMethod'], 'email' | 'paper'>) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+        if (method === 'email') {
+          setEmailEvidenceFile(e.target.files[0]);
+        } else {
+          setPaperEvidenceFile(e.target.files[0]);
+        }
+      }
+    };
 
   const onFormSubmit = (data: RecordReleaseFormData) => {
     // Feature #884: Require signature for digital release
@@ -101,8 +120,8 @@ export function RecordReleaseModal({
       data.releaseTime.trim(),
       data.releaseNotes?.trim() || '',
       data.releaseMethod,
-      signatureDataUrl,
-      evidenceFile,
+      data.releaseMethod === 'digital' ? signatureDataUrl : null,
+      getEvidenceFileForMethod(data.releaseMethod),
     );
   };
 
@@ -259,17 +278,17 @@ export function RecordReleaseModal({
                 <input
                   type="file"
                   accept=".pdf,.eml,.msg,.png,.jpg,.jpeg"
-                  onChange={handleFileChange}
+                  onChange={handleFileChange('email')}
                   className="w-full text-sm"
                   id="evidence-upload"
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   Upload email or screenshot as evidence (PDF, EML, MSG, PNG, JPG)
                 </p>
-                {evidenceFile && (
+                {emailEvidenceFile && (
                   <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700 flex items-center gap-2">
                     <Check className="h-4 w-4" />
-                    <span>Selected: {evidenceFile.name}</span>
+                    <span>Selected: {emailEvidenceFile.name}</span>
                   </div>
                 )}
               </div>
@@ -281,17 +300,17 @@ export function RecordReleaseModal({
                 <input
                   type="file"
                   accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={handleFileChange}
+                  onChange={handleFileChange('paper')}
                   className="w-full text-sm"
                   id="paper-evidence-upload"
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   Upload photo or scan of signed release form (PDF, PNG, JPG)
                 </p>
-                {evidenceFile && (
+                {paperEvidenceFile && (
                   <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700 flex items-center gap-2">
                     <Check className="h-4 w-4" />
-                    <span>Selected: {evidenceFile.name}</span>
+                    <span>Selected: {paperEvidenceFile.name}</span>
                   </div>
                 )}
               </div>
