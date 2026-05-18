@@ -211,11 +211,7 @@ export function PhotosTab({
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              filename: photoDoc.attachment.document.filename,
-              fileUrl: photoDoc.attachment.document.fileUrl,
-              caption:
-                photoDoc.attachment.document.caption ||
-                `Evidence photo added ${new Date().toLocaleString()}`,
+              documentId: photoDoc.attachment.document.id,
             }),
           },
         );
