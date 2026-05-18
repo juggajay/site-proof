@@ -149,6 +149,19 @@ export function getExpressTrustProxySetting(
   return trimmedValue;
 }
 
+function assertProductionTrustProxyConfig(): void {
+  const normalizedValue = process.env.TRUST_PROXY?.trim().toLowerCase();
+  if (!normalizedValue) {
+    return;
+  }
+
+  if (['true', 'yes'].includes(normalizedValue)) {
+    throw new Error(
+      'FATAL: TRUST_PROXY=true is unsafe in production because it trusts every X-Forwarded-* hop. Use TRUST_PROXY=1 or a trusted proxy CIDR list instead.',
+    );
+  }
+}
+
 function assertProductionStorageConfig(): void {
   const supabaseUrl = process.env.SUPABASE_URL?.trim();
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -361,6 +374,7 @@ export function validateRuntimeConfig(): void {
   if (isExplicitlyEnabled(process.env.ALLOW_TEST_AUTH_ENDPOINTS)) {
     throw new Error('FATAL: ALLOW_TEST_AUTH_ENDPOINTS=true is not allowed in production');
   }
+  assertProductionTrustProxyConfig();
   assertOptionalPositiveInteger('API_RATE_LIMIT_MAX');
   assertOptionalPositiveInteger('AUTH_RATE_LIMIT_MAX');
   assertOptionalPositiveInteger('SUPPORT_RATE_LIMIT_MAX');
