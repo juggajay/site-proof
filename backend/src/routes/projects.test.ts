@@ -1498,6 +1498,68 @@ describe('Project Team Management', () => {
     }
   });
 
+  it('should keep one active project admin under concurrent removals', async () => {
+    const companyAdminEmail = `team-concurrent-admin-${Date.now()}@example.com`;
+    const companyAdminRes = await request(app).post('/api/auth/register').send({
+      email: companyAdminEmail,
+      password: 'SecureP@ssword123!',
+      fullName: 'Team Concurrent Admin',
+      tosAccepted: true,
+    });
+    const companyAdminToken = companyAdminRes.body.token;
+    const companyAdminId = companyAdminRes.body.user.id;
+
+    await prisma.user.update({
+      where: { id: companyAdminId },
+      data: { companyId, roleInCompany: 'admin' },
+    });
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId } },
+      update: { role: 'admin', status: 'active' },
+      create: { projectId, userId, role: 'admin', status: 'active' },
+    });
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: secondUserId } },
+      update: { role: 'admin', status: 'active' },
+      create: { projectId, userId: secondUserId, role: 'admin', status: 'active' },
+    });
+
+    try {
+      const responses = await Promise.all([
+        request(app)
+          .delete(`/api/projects/${projectId}/users/${userId}`)
+          .set('Authorization', `Bearer ${companyAdminToken}`),
+        request(app)
+          .delete(`/api/projects/${projectId}/users/${secondUserId}`)
+          .set('Authorization', `Bearer ${companyAdminToken}`),
+      ]);
+
+      expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([200, 400]);
+      await expect(
+        prisma.projectUser.count({
+          where: {
+            projectId,
+            status: 'active',
+            role: { in: ['admin', 'project_manager'] },
+          },
+        }),
+      ).resolves.toBe(1);
+    } finally {
+      await prisma.projectUser.upsert({
+        where: { projectId_userId: { projectId, userId } },
+        update: { role: 'admin', status: 'active' },
+        create: { projectId, userId, role: 'admin', status: 'active' },
+      });
+      await prisma.projectUser.upsert({
+        where: { projectId_userId: { projectId, userId: secondUserId } },
+        update: { role: 'viewer', status: 'active' },
+        create: { projectId, userId: secondUserId, role: 'viewer', status: 'active' },
+      });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: companyAdminId } });
+      await prisma.user.delete({ where: { id: companyAdminId } }).catch(() => {});
+    }
+  });
+
   it('should update user role in project', async () => {
     const res = await request(app)
       .patch(`/api/projects/${projectId}/users/${secondUserId}`)
