@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label';
 
 const resendSchema = z.object({ email: emailSchema });
 type ResendFormData = z.infer<typeof resendSchema>;
+const RESEND_VERIFICATION_SUCCESS_MESSAGE =
+  'If an account exists with this email, a new verification link has been sent.';
 
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
@@ -101,13 +103,13 @@ export function VerifyEmailPage() {
   const onResend = async (data: ResendFormData) => {
     setResendStatus('loading');
     try {
-      const result = await apiFetch<{ message: string }>('/api/auth/resend-verification', {
+      await apiFetch('/api/auth/resend-verification', {
         method: 'POST',
         body: JSON.stringify({ email: data.email }),
       });
 
       setResendStatus('success');
-      setResendMessage(result.message);
+      setResendMessage(RESEND_VERIFICATION_SUCCESS_MESSAGE);
     } catch {
       setResendStatus('error');
       setResendMessage('Failed to resend verification email. Please try again.');

@@ -338,6 +338,48 @@ describe('JWT invalidation precision', () => {
 });
 
 describe('Email verification tokens', () => {
+  it('returns the same resend response for verified and unknown emails', async () => {
+    const verifiedEmail = `verified-resend-${Date.now()}@example.com`;
+    const unknownEmail = `unknown-resend-${Date.now()}@example.com`;
+    let userId: string | undefined;
+
+    try {
+      const regRes = await request(app).post('/api/auth/register').send({
+        email: verifiedEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Verified Resend User',
+        tosAccepted: true,
+      });
+
+      expect(regRes.status).toBe(201);
+      userId = regRes.body.user.id as string;
+      await prisma.user.update({
+        where: { id: userId },
+        data: { emailVerified: true },
+      });
+
+      const verifiedRes = await request(app)
+        .post('/api/auth/resend-verification')
+        .send({ email: verifiedEmail });
+      const unknownRes = await request(app)
+        .post('/api/auth/resend-verification')
+        .send({ email: unknownEmail });
+
+      expect(verifiedRes.status).toBe(200);
+      expect(unknownRes.status).toBe(200);
+      expect(verifiedRes.body).toEqual(unknownRes.body);
+      expect(verifiedRes.body).toEqual({
+        message: 'If an account exists with this email, a new verification link has been sent.',
+      });
+      expect(verifiedRes.body).not.toHaveProperty('alreadyVerified');
+    } finally {
+      if (userId) {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+      }
+    }
+  });
+
   it('does not report replaced verification tokens as already verified', async () => {
     const email = `verify-replaced-${Date.now()}@example.com`;
     const password = 'SecureP@ssword123!';
