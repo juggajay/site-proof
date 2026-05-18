@@ -397,6 +397,111 @@ describe('Comments API', () => {
       expect(unassignedRes.status).toBe(403);
     });
 
+    it('should enforce subcontractor portal module gates for lot-scoped comments', async () => {
+      const lotContent = `Disabled lots portal comment ${Date.now()}`;
+      const itpContent = `Enabled ITP portal comment ${Date.now()}`;
+
+      await prisma.subcontractorCompany.update({
+        where: { id: subcontractorCompanyId },
+        data: {
+          portalAccess: {
+            lots: false,
+            itps: false,
+            holdPoints: false,
+            testResults: false,
+            ncrs: false,
+            documents: false,
+          },
+        },
+      });
+
+      try {
+        const readLotRes = await request(app)
+          .get('/api/comments')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .query({
+            entityType: 'Lot',
+            entityId: lotId,
+          });
+
+        expect(readLotRes.status).toBe(403);
+        expect(readLotRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
+
+        const createLotRes = await request(app)
+          .post('/api/comments')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            entityType: 'Lot',
+            entityId: lotId,
+            content: lotContent,
+          });
+
+        expect(createLotRes.status).toBe(403);
+        expect(createLotRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
+
+        const legacyItpRes = await request(app)
+          .get('/api/comments')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .query({
+            entityType: 'ITP',
+            entityId: lotId,
+          });
+
+        expect(legacyItpRes.status).toBe(403);
+        expect(legacyItpRes.body.error.message).toContain('ITPs portal access is not enabled');
+
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompanyId },
+          data: {
+            portalAccess: {
+              lots: true,
+              itps: true,
+              holdPoints: false,
+              testResults: false,
+              ncrs: false,
+              documents: false,
+            },
+          },
+        });
+
+        const createItpRes = await request(app)
+          .post('/api/comments')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            entityType: 'ITP',
+            entityId: lotId,
+            content: itpContent,
+          });
+
+        expect(createItpRes.status).toBe(201);
+        expect(createItpRes.body.comment.authorId).toBe(subcontractorUserId);
+      } finally {
+        await prisma.comment.deleteMany({
+          where: {
+            entityId: lotId,
+            content: { in: [lotContent, itpContent] },
+          },
+        });
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompanyId },
+          data: {
+            portalAccess: {
+              lots: true,
+              itps: false,
+              holdPoints: false,
+              testResults: false,
+              ncrs: false,
+              documents: false,
+            },
+          },
+        });
+      }
+    });
+
     it('should create a comment with attachments', async () => {
       const res = await request(app)
         .post('/api/comments')
