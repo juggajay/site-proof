@@ -40,13 +40,20 @@ export function getSupabaseClient() {
   return supabase;
 }
 
+function encodeStorageObjectPath(path: string): string {
+  return path
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
 // Get the public URL for a file in Supabase storage
 export function getSupabasePublicUrl(bucket: string, path: string): string {
   if (!isSupabaseConfigured()) {
     throw new Error('Supabase storage is not configured');
   }
 
-  return `${normalizedSupabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
+  return `${normalizedSupabaseUrl}/storage/v1/object/public/${bucket}/${encodeStorageObjectPath(path)}`;
 }
 
 // Documents bucket name

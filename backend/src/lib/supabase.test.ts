@@ -39,6 +39,16 @@ describe('supabase storage client', () => {
     expect(storage.getSupabasePublicUrl('documents', 'project/file.pdf')).toBe(
       'https://siteproof.supabase.co/storage/v1/object/public/documents/project/file.pdf',
     );
+    const publicUrlWithReservedChars = storage.getSupabasePublicUrl(
+      'documents',
+      'project qa/file #1%25?.pdf',
+    );
+    expect(publicUrlWithReservedChars).toBe(
+      'https://siteproof.supabase.co/storage/v1/object/public/documents/project%20qa/file%20%231%2525%3F.pdf',
+    );
+    expect(storage.getSupabaseStoragePath(publicUrlWithReservedChars)).toBe(
+      'project qa/file #1%25?.pdf',
+    );
     expect(
       storage.getSupabaseStoragePath(
         'https://siteproof.supabase.co/storage/v1/object/public/documents/project/file.pdf',
