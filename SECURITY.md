@@ -33,7 +33,7 @@ This document describes the security controls implemented in SiteProof and the d
 - Helmet is enabled with HSTS headers.
 - Production HTTP requests are redirected to HTTPS when `NODE_ENV=production`.
 - CORS is restricted to the configured `FRONTEND_URL` in production.
-- Set `TRUST_PROXY=true` only when Express is behind a trusted proxy or load balancer that owns `X-Forwarded-*` headers.
+- Set `TRUST_PROXY=1` when Express is behind Railway/CDN. Do not use `TRUST_PROXY=true` in production; startup rejects it because it trusts every `X-Forwarded-*` hop.
 
 ## Data Protection
 

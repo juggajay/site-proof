@@ -847,7 +847,7 @@ test.describe('production readiness guardrails', () => {
     expect(backendPackage).toContain('"smoke:production"');
     expect(smokeScript).toContain('../dist/index.js');
     expect(smokeScript).toContain("NODE_ENV: 'production'");
-    expect(smokeScript).toContain("TRUST_PROXY: 'true'");
+    expect(smokeScript).toContain("TRUST_PROXY: '1'");
     expect(smokeScript).toContain("SCHEDULED_REPORT_WORKER_ENABLED: 'false'");
     expect(smokeScript).toContain("NOTIFICATION_DIGEST_WORKER_ENABLED: 'false'");
     expect(smokeScript).toContain("NOTIFICATION_AUTOMATION_WORKER_ENABLED: 'false'");

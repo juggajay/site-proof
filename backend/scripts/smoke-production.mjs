@@ -19,7 +19,7 @@ const readyUrl = `${localBaseUrl}/ready`;
 const forcedSmokeEnv = {
   NODE_ENV: 'production',
   PORT: port,
-  TRUST_PROXY: 'true',
+  TRUST_PROXY: '1',
   EMAIL_ENABLED: 'false',
   SCHEDULED_REPORT_WORKER_ENABLED: 'false',
   NOTIFICATION_DIGEST_WORKER_ENABLED: 'false',

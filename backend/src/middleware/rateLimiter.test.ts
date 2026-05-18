@@ -41,7 +41,7 @@ describe('getClientIp', () => {
 
   it('does not trust raw forwarded headers in production', () => {
     process.env.NODE_ENV = 'production';
-    process.env.TRUST_PROXY = 'true';
+    process.env.TRUST_PROXY = '1';
 
     expect(
       getClientIp(

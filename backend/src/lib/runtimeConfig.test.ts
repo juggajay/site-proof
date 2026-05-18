@@ -94,6 +94,30 @@ describe('runtimeConfig', () => {
     expect(getExpressTrustProxySetting('loopback')).toBe('loopback');
   });
 
+  it('rejects unbounded trust proxy settings in production', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://app.siteproof.example';
+    process.env.BACKEND_URL = 'https://api.siteproof.example';
+
+    process.env.TRUST_PROXY = 'true';
+    expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY=true');
+
+    process.env.TRUST_PROXY = 'yes';
+    expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY=true');
+  });
+
+  it('accepts bounded trust proxy settings in production', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://app.siteproof.example';
+    process.env.BACKEND_URL = 'https://api.siteproof.example';
+
+    process.env.TRUST_PROXY = '1';
+    expect(() => validateRuntimeConfig()).not.toThrow();
+
+    process.env.TRUST_PROXY = 'loopback';
+    expect(() => validateRuntimeConfig()).not.toThrow();
+  });
+
   it('builds HTTPS redirect targets from configured backend URL, not request host input', () => {
     configureProductionBase();
     process.env.FRONTEND_URL = 'https://app.siteproof.example';

@@ -193,7 +193,7 @@ RESEND_API_KEY=...
 EMAIL_FROM="..."
 FRONTEND_URL=https://...                     # https in prod, not localhost
 BACKEND_URL=https://...                      # or API_URL; https in prod, not localhost
-TRUST_PROXY=true                             # required behind Railway/CDN
+TRUST_PROXY=1                                # required behind Railway/CDN; do not use true in prod
 ```
 
 ### Frontend (.env)
