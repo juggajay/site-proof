@@ -12,7 +12,7 @@
  * - Audit logs: Retain for 7 years
  * - Session tokens: Delete after 30 days
  * - Password reset tokens: Delete after 24 hours
- * - Notifications (read): Archive after 90 days
+ * - Notifications (read): Review after 90 days; retained until archive support exists
  *
  * Usage:
  *   npx ts-node scripts/data-retention.ts check    - Check what would be affected
@@ -71,7 +71,7 @@ async function checkRetentionPolicies(): Promise<RetentionReport> {
   const findings: RetentionReport['findings'] = [];
   let totalChecked = 0;
   let toRetain = 0;
-  let toArchive = 0;
+  const toArchive = 0;
   let toDelete = 0;
 
   // Check expired password reset tokens
@@ -108,7 +108,8 @@ async function checkRetentionPolicies(): Promise<RetentionReport> {
     });
   }
 
-  // Check old read notifications
+  // Check old read notifications. The Notification schema currently has no archive field/table, so
+  // these must be reported as retained rather than as a promised archive action.
   const notificationCutoff = new Date(
     now.getTime() - RETENTION_POLICIES.readNotifications * 24 * 60 * 60 * 1000,
   );
@@ -120,13 +121,13 @@ async function checkRetentionPolicies(): Promise<RetentionReport> {
   });
   totalChecked += oldNotifications;
   if (oldNotifications > 0) {
-    toArchive += oldNotifications;
+    toRetain += oldNotifications;
     findings.push({
       category: 'Read Notifications (90+ days old)',
       count: oldNotifications,
       oldestDate: notificationCutoff,
-      action: 'archive',
-      reason: `Read notifications older than ${RETENTION_POLICIES.readNotifications} days can be archived`,
+      action: 'retain',
+      reason: `Read notifications older than ${RETENTION_POLICIES.readNotifications} days are retained until notification archiving is implemented`,
     });
   }
 
@@ -209,7 +210,9 @@ function displayReport(report: RetentionReport): void {
   console.log('Retention Policies:');
   console.log(`  • Project Records: ${report.policies.projectRecords / 365} years`);
   console.log(`  • Audit Logs: ${report.policies.auditLogs / 365} years`);
-  console.log(`  • Read Notifications: ${report.policies.readNotifications} days`);
+  console.log(
+    `  • Read Notifications: ${report.policies.readNotifications} days (retained pending archive support)`,
+  );
   console.log(`  • Sync Queue: ${report.policies.processedSyncItems} days`);
   console.log('');
 
@@ -280,11 +283,13 @@ async function applyRetentionPolicies(): Promise<void> {
     totalDeleted += deletedSyncItems.count;
   }
 
-  // Note: Notifications are archived, not deleted
+  // Note: Notifications are retained until a real archive field/table exists
   // Note: Project data, NCRs, lots, test results are NEVER auto-deleted
 
   console.log(`\n✨ Retention policies applied. ${totalDeleted} records cleaned up.`);
-  console.log('\n⚠️  Note: Project records, NCRs, lots, and test results are retained per policy.');
+  console.log(
+    '\n⚠️  Note: Project records, notifications, NCRs, lots, and test results are retained per policy.',
+  );
 }
 
 async function saveReport(report: RetentionReport): Promise<void> {
@@ -334,13 +339,13 @@ Data Retention Policy Management
 
 Commands:
   check   - Check what data would be affected by policies
-  apply   - Apply retention policies (delete/archive old data)
+  apply   - Apply retention policies (delete eligible old data)
   report  - Generate and save a detailed retention report
 
 Retention Periods:
   • Project Records: 7 years (Australian construction compliance)
   • Audit Logs: 7 years
-  • Read Notifications: 90 days (archived)
+  • Read Notifications: 90 days (retained pending archive support)
   • Expired Tokens: Immediate deletion
   • Processed Sync Items: 7 days
 
