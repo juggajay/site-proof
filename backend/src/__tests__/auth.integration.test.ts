@@ -198,6 +198,26 @@ describe('Rate Limiting', () => {
 
       expect((await isLockedOut(testIp)).locked).toBe(false);
     });
+
+    it('should not clear source lockout state when clearing one principal', async () => {
+      const testIp = getUniqueIp();
+      const principal = `victim-${Date.now()}@example.com`;
+
+      // Lock out the source through one principal.
+      for (let i = 0; i < 5; i++) {
+        await recordFailedAuthAttempt(testIp, principal);
+      }
+      expect((await isLockedOut(testIp)).locked).toBe(true);
+
+      // A successful account login clears only that principal bucket.
+      await clearFailedAuthAttempts(testIp, principal);
+
+      // The source bucket remains locked until explicitly cleared.
+      expect((await isLockedOut(testIp)).locked).toBe(true);
+
+      await clearFailedAuthAttempts(testIp);
+      expect((await isLockedOut(testIp)).locked).toBe(false);
+    });
   });
 
   describe('lockout timing', () => {

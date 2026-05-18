@@ -480,6 +480,60 @@ describe('POST /api/auth/login', () => {
     expect((await isLockedOut(sourceIp)).locked).toBe(false);
   });
 
+  it('should not clear source-level auth failures after a successful account login', async () => {
+    const sourceIp = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
+    await clearFailedAuthAttempts(sourceIp);
+    await clearFailedAuthAttempts(sourceIp, loginEmail);
+
+    try {
+      for (let i = 0; i < 4; i++) {
+        const res = await request(rateLimitedApp)
+          .post('/api/auth/login')
+          .set('X-Forwarded-For', sourceIp)
+          .send({
+            email: loginEmail,
+            password: 'WrongPassword123!',
+          });
+
+        expect(res.status).toBe(401);
+      }
+
+      const successRes = await request(rateLimitedApp)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', sourceIp)
+        .send({
+          email: loginEmail,
+          password: loginPassword,
+        });
+
+      expect(successRes.status).toBe(200);
+
+      const fifthFailureRes = await request(rateLimitedApp)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', sourceIp)
+        .send({
+          email: loginEmail,
+          password: 'WrongPassword123!',
+        });
+
+      expect(fifthFailureRes.status).toBe(401);
+
+      const blockedRes = await request(rateLimitedApp)
+        .post('/api/auth/login')
+        .set('X-Forwarded-For', sourceIp)
+        .send({
+          email: loginEmail,
+          password: loginPassword,
+        });
+
+      expect(blockedRes.status).toBe(429);
+      expect(blockedRes.body.error.code).toBe('ACCOUNT_LOCKED');
+    } finally {
+      await clearFailedAuthAttempts(sourceIp);
+      await clearFailedAuthAttempts(sourceIp, loginEmail);
+    }
+  });
+
   it('should block login through auth rate limiter after the lockout threshold', async () => {
     const sourceIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
     await clearFailedAuthAttempts(sourceIp);

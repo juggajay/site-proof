@@ -218,8 +218,10 @@ describe('route authentication coverage', () => {
     ]);
 
     expect(unprotectedRouteDescriptors(mfaSource)).toEqual(['POST /verify']);
-    expect(mfaSource).toContain('recordFailedAuthAttempt(getClientIp(req))');
-    expect(mfaSource).toContain('clearFailedAuthAttempts(getClientIp(req))');
+    expect(mfaSource).toContain('authRateLimiter');
+    expect(mfaSource).toContain('isLockedOut(clientIp, normalizedUserId)');
+    expect(mfaSource).toContain('recordFailedAuthAttempt(clientIp, normalizedUserId)');
+    expect(mfaSource).toContain('clearFailedAuthAttempts(clientIp, normalizedUserId)');
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(subcontractorsSource)).toEqual([
       'GET /invitation/:id',

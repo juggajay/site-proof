@@ -14,6 +14,7 @@ import {
   authRateLimiter,
   clearFailedAuthAttempts,
   getClientIp,
+  isLockedOut,
   recordFailedAuthAttempt,
 } from '../middleware/rateLimiter.js';
 import {
@@ -305,9 +306,20 @@ mfaRouter.post(
     }
     const normalizedUserId = userId.trim();
     const normalizedCode = code.trim();
+    const clientIp = getClientIp(req);
 
     if (!TOTP_CODE_PATTERN.test(normalizedCode)) {
       throw AppError.unauthorized('Invalid verification code');
+    }
+
+    const accountLockout = await isLockedOut(clientIp, normalizedUserId);
+    if (accountLockout.locked) {
+      throw new AppError(
+        429,
+        `Too many failed attempts. Please try again in ${Math.ceil(accountLockout.remainingSeconds / 60)} minutes.`,
+        'ACCOUNT_LOCKED',
+        { retryAfter: accountLockout.remainingSeconds, locked: true },
+      );
     }
 
     // Get user's MFA secret
@@ -321,7 +333,7 @@ mfaRouter.post(
 
     const user = userResult[0];
     if (!user || !user.two_factor_enabled || !user.two_factor_secret) {
-      await recordFailedAuthAttempt(getClientIp(req));
+      await recordFailedAuthAttempt(clientIp, normalizedUserId);
       throw AppError.unauthorized('Invalid verification code');
     }
 
@@ -335,11 +347,11 @@ mfaRouter.post(
     });
 
     if (!isValid) {
-      await recordFailedAuthAttempt(getClientIp(req));
+      await recordFailedAuthAttempt(clientIp, normalizedUserId);
       throw AppError.unauthorized('Invalid verification code');
     }
 
-    await clearFailedAuthAttempts(getClientIp(req));
+    await clearFailedAuthAttempts(clientIp, normalizedUserId);
 
     res.json({
       valid: true,
