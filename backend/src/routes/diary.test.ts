@@ -963,6 +963,57 @@ describe('Daily Diary API', () => {
       expect(res.body.diary.status).toBe('submitted');
     });
 
+    it('should reject item writes that start before a concurrent submit commits', async () => {
+      const draftRes = await request(app)
+        .post('/api/diary')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          date: new Date(Date.now() + 518400000).toISOString().split('T')[0],
+        });
+      expect(draftRes.status).toBe(201);
+
+      let activityWrite: ReturnType<ReturnType<typeof request>['post']> | undefined;
+
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`
+            SELECT id
+            FROM daily_diaries
+            WHERE id = ${draftRes.body.id}
+            FOR UPDATE
+          `;
+
+          activityWrite = request(app)
+            .post(`/api/diary/${draftRes.body.id}/activities`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({ description: 'Started before submit committed' });
+
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          await tx.dailyDiary.update({
+            where: { id: draftRes.body.id },
+            data: {
+              status: 'submitted',
+              submittedById: userId,
+              submittedAt: new Date(),
+            },
+          });
+        },
+        { timeout: 10_000 },
+      );
+
+      if (!activityWrite) {
+        throw new Error('activity write request was not started');
+      }
+      const res = await activityWrite;
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('submitted');
+      await expect(
+        prisma.diaryActivity.count({ where: { diaryId: draftRes.body.id } }),
+      ).resolves.toBe(0);
+    });
+
     it('should reject malformed addendum content', async () => {
       const objectContentRes = await request(app)
         .post(`/api/diary/${diaryId}/addendum`)

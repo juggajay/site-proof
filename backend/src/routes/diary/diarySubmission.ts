@@ -6,6 +6,7 @@ import {
   parseDiaryRouteParam,
   requireDiaryReadAccess,
   requireDiaryWriteAccess,
+  requireEditableDiaryForWrite,
 } from './diaryAccess.js';
 
 const router = Router();
@@ -139,78 +140,80 @@ router.post(
       throw AppError.badRequest('acknowledgeWarnings must be a boolean');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({
-      where: { id: diaryId },
-      include: {
-        personnel: true,
-        plant: true,
-        activities: true,
-        delays: true,
-        deliveries: true,
-        events: true,
-      },
-    });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
+    const { updatedDiary, warnings } = await prisma.$transaction(async (tx) => {
+      await requireEditableDiaryForWrite(
+        tx,
+        req.user!,
+        diaryId,
+        'You do not have permission to submit this diary',
+      );
 
-    await requireDiaryWriteAccess(
-      req.user!,
-      diary.projectId,
-      'You do not have permission to submit this diary',
-    );
-
-    if (diary.status === 'submitted') {
-      throw AppError.badRequest('Diary already submitted');
-    }
-
-    if (diary.lockedAt) {
-      throw AppError.badRequest('Cannot submit locked diary');
-    }
-
-    // Check for warnings and require acknowledgement
-    const warnings: string[] = [];
-    if (!diary.weatherConditions && diary.temperatureMax === null) {
-      warnings.push('Weather information is not filled in');
-    }
-    if (diary.personnel.length === 0) {
-      warnings.push('No personnel entries recorded');
-    }
-    if (diary.activities.length === 0) {
-      warnings.push('No activities recorded');
-    }
-
-    // If there are warnings and user hasn't acknowledged them, return warnings
-    if (warnings.length > 0 && !acknowledgeWarnings) {
-      throw new AppError(422, 'Diary has warnings that need acknowledgement', 'VALIDATION_ERROR', {
-        warnings,
-        requiresAcknowledgement: true,
+      const diary = await tx.dailyDiary.findUnique({
+        where: { id: diaryId },
+        include: {
+          personnel: true,
+          plant: true,
+          activities: true,
+          delays: true,
+          deliveries: true,
+          events: true,
+        },
       });
-    }
+      if (!diary) {
+        throw AppError.notFound('Diary not found');
+      }
 
-    // Check if diary date is in the past (late submission)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isLate = diary.date < today;
+      // Check for warnings and require acknowledgement while the parent row is locked.
+      const warnings: string[] = [];
+      if (!diary.weatherConditions && diary.temperatureMax === null) {
+        warnings.push('Weather information is not filled in');
+      }
+      if (diary.personnel.length === 0) {
+        warnings.push('No personnel entries recorded');
+      }
+      if (diary.activities.length === 0) {
+        warnings.push('No activities recorded');
+      }
 
-    const updatedDiary = await prisma.dailyDiary.update({
-      where: { id: diaryId },
-      data: {
-        status: 'submitted',
-        submittedById: userId,
-        submittedAt: new Date(),
-        isLate,
-      },
-      include: {
-        submittedBy: { select: { id: true, fullName: true, email: true } },
-        personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        visitors: true,
-        delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        events: { include: { lot: { select: { id: true, lotNumber: true } } } },
-      },
+      // If there are warnings and user hasn't acknowledged them, return warnings
+      if (warnings.length > 0 && !acknowledgeWarnings) {
+        throw new AppError(
+          422,
+          'Diary has warnings that need acknowledgement',
+          'VALIDATION_ERROR',
+          {
+            warnings,
+            requiresAcknowledgement: true,
+          },
+        );
+      }
+
+      // Check if diary date is in the past (late submission)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isLate = diary.date < today;
+
+      const updatedDiary = await tx.dailyDiary.update({
+        where: { id: diaryId },
+        data: {
+          status: 'submitted',
+          submittedById: userId,
+          submittedAt: new Date(),
+          isLate,
+        },
+        include: {
+          submittedBy: { select: { id: true, fullName: true, email: true } },
+          personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          visitors: true,
+          delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          events: { include: { lot: { select: { id: true, lotNumber: true } } } },
+        },
+      });
+
+      return { updatedDiary, warnings };
     });
 
     res.json({
