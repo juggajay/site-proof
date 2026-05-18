@@ -82,5 +82,8 @@
     "typescript-eslint": "^8.55.0",
     "vite": "^8.0.11",
     "vite-plugin-pwa": "^1.3.0"
+  },
+  "overrides": {
+    "ws": "8.20.1"
   }
 }
