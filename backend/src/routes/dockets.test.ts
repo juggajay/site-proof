@@ -1494,6 +1494,90 @@ describe('Dockets API', () => {
       }
     });
 
+    it('should scope former subcontractor users to their linked company dockets', async () => {
+      const suffix = Date.now();
+      const promotedCompany = await prisma.company.create({
+        data: { name: `Former Subcontractor Promoted Company ${suffix}` },
+      });
+      const otherSubcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Other Former Scope Subcontractor ${suffix}`,
+          primaryContactName: 'Other Former Scope Contact',
+          primaryContactEmail: `other-former-scope-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      const regRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `former-docket-sub-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Former Docket Subcontractor',
+          tosAccepted: true,
+        });
+      const tempUserId = regRes.body.user.id;
+      const ownDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(Date.now() + 259200000),
+          status: 'draft',
+          notes: 'Linked subcontractor docket',
+        },
+      });
+      const otherDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: otherSubcontractorCompany.id,
+          date: new Date(Date.now() + 345600000),
+          status: 'draft',
+          notes: 'Other subcontractor docket',
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: tempUserId },
+        data: { companyId: promotedCompany.id, roleInCompany: 'owner' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: tempUserId,
+          subcontractorCompanyId,
+          role: 'admin',
+        },
+      });
+
+      try {
+        const listRes = await request(app)
+          .get(`/api/dockets?projectId=${projectId}&limit=50`)
+          .set('Authorization', `Bearer ${regRes.body.token}`);
+
+        expect(listRes.status).toBe(200);
+        const returnedIds = (listRes.body.dockets as Array<{ id: string }>).map(
+          (docket) => docket.id,
+        );
+        expect(returnedIds).toContain(ownDocket.id);
+        expect(returnedIds).not.toContain(otherDocket.id);
+
+        const readOtherRes = await request(app)
+          .get(`/api/dockets/${otherDocket.id}`)
+          .set('Authorization', `Bearer ${regRes.body.token}`);
+
+        expect(readOtherRes.status).toBe(403);
+      } finally {
+        await prisma.subcontractorUser.deleteMany({ where: { userId: tempUserId } });
+        await prisma.dailyDocket.delete({ where: { id: otherDocket.id } }).catch(() => {});
+        await prisma.dailyDocket.delete({ where: { id: ownDocket.id } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: otherSubcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: tempUserId } });
+        await prisma.user.delete({ where: { id: tempUserId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: promotedCompany.id } }).catch(() => {});
+      }
+    });
+
     it('should not grant subcontractors approver access through project memberships', async () => {
       const approvableDocket = await prisma.dailyDocket.create({
         data: {
