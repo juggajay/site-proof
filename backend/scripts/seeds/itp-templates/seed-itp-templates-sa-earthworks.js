@@ -11,7 +11,8 @@
  * Run with: pnpm seed:itp -- --script=seed-itp-templates-sa-earthworks.js --execute
  */
 
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '@prisma/client';
+import { withItpTemplateSeedLock } from './seed-lock.mjs';
 
 const prisma = new PrismaClient()
 
@@ -465,6 +466,6 @@ async function main() {
   }
 }
 
-main()
+withItpTemplateSeedLock(prisma, main)
   .catch((e) => { console.error(e); process.exit(1) })
   .finally(async () => { await prisma.$disconnect() })
