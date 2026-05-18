@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch, ApiError } from '@/lib/api';
+import { extractErrorDetails, extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 
@@ -112,6 +113,23 @@ function normalizeDiaryDraft(diary: ApiDiary): DiaryDraft {
   };
 }
 
+function extractSubmitWarnings(error: unknown): string[] | null {
+  if (!(error instanceof ApiError) || error.status !== 422) {
+    return null;
+  }
+
+  const details = extractErrorDetails(error);
+  if (details?.requiresAcknowledgement !== true || !Array.isArray(details.warnings)) {
+    return null;
+  }
+
+  const warnings = details.warnings.filter(
+    (warning): warning is string => typeof warning === 'string' && warning.trim().length > 0,
+  );
+
+  return warnings.length > 0 ? warnings : null;
+}
+
 export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowProps) {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -119,6 +137,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
   const [submitting, setSubmitting] = useState(false);
   const [diary, setDiary] = useState<DiaryDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitWarnings, setSubmitWarnings] = useState<string[]>([]);
 
   // Fetch today's diary draft with auto-filled data
   const fetchDiary = useCallback(async () => {
@@ -132,10 +151,12 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
       const today = getLocalDateString();
       const data = await apiFetch<ApiDiary>(`/api/diary/${projectId}/${today}`);
       setDiary(normalizeDiaryDraft(data));
+      setSubmitWarnings([]);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         // No diary for today - that's ok
         setDiary(null);
+        setSubmitWarnings([]);
       } else {
         logError('Error fetching diary:', err);
         setError('Unable to load diary');
@@ -157,14 +178,30 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
 
     setSubmitting(true);
     try {
-      await apiFetch(`/api/diary/${diary.id}/submit`, { method: 'POST' });
+      await apiFetch(`/api/diary/${encodeURIComponent(diary.id)}/submit`, {
+        method: 'POST',
+        body: submitWarnings.length > 0 ? JSON.stringify({ acknowledgeWarnings: true }) : undefined,
+      });
 
       toast({ description: 'Diary submitted', variant: 'success' });
       onSubmit?.();
       onClose();
     } catch (err) {
+      const backendWarnings = extractSubmitWarnings(err);
+      if (backendWarnings) {
+        setSubmitWarnings(backendWarnings);
+        toast({
+          description: 'Review the warnings before submitting the diary.',
+          variant: 'warning',
+        });
+        return;
+      }
+
       logError('Submit error:', err);
-      toast({ description: 'Failed to submit diary', variant: 'error' });
+      toast({
+        description: extractErrorMessage(err, 'Failed to submit diary'),
+        variant: 'error',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -172,6 +209,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
 
   const handleEditSection = (section: string) => {
     navigate(`/projects/${projectId}/diary?section=${section}`);
+    setSubmitWarnings([]);
     onClose();
   };
 
@@ -334,7 +372,25 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
 
         {/* Submit Button (fixed at bottom) */}
         {diary && !loading && !error && (
-          <div className="sticky bottom-0 p-4 bg-background border-t flex-shrink-0">
+          <div className="sticky bottom-0 p-4 bg-background border-t flex-shrink-0 space-y-3">
+            {submitWarnings.length > 0 && (
+              <div
+                role="alert"
+                className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">Review warnings</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                      {submitWarnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
             <button
               onClick={handleSubmit}
               disabled={submitting || diary.isComplete}
@@ -359,7 +415,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
               ) : (
                 <>
                   <Check className="h-5 w-5" />
-                  Submit Diary
+                  {submitWarnings.length > 0 ? 'Submit with warnings' : 'Submit Diary'}
                 </>
               )}
             </button>
