@@ -361,6 +361,83 @@ describe('Lots API', () => {
       expect(res.body.lots).toEqual(res.body.data);
     });
 
+    it('should filter budget amounts from non-commercial lot list and update responses', async () => {
+      const budgetLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-BUDGET-${Date.now()}`,
+          description: 'Budget visibility regression lot',
+          activityType: 'Earthworks',
+          lotType: 'chainage',
+          budgetAmount: 12345,
+        },
+      });
+      const foremanEmail = `lots-foreman-${Date.now()}@example.com`;
+      const foremanRes = await request(app).post('/api/auth/register').send({
+        email: foremanEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Lots Foreman',
+        tosAccepted: true,
+      });
+      const foremanToken = foremanRes.body.token;
+      const foremanUserId = foremanRes.body.user.id;
+
+      await prisma.user.update({
+        where: { id: foremanUserId },
+        data: { companyId, roleInCompany: 'foreman' },
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: foremanUserId,
+          role: 'foreman',
+          status: 'active',
+        },
+      });
+
+      try {
+        const commercialRes = await request(app)
+          .get(`/api/lots?projectId=${projectId}&limit=100`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(commercialRes.status).toBe(200);
+        const commercialLot = commercialRes.body.data.find(
+          (lot: { id: string }) => lot.id === budgetLot.id,
+        );
+        expect(Number(commercialLot.budgetAmount)).toBe(12345);
+
+        const foremanListRes = await request(app)
+          .get(`/api/lots?projectId=${projectId}&limit=100`)
+          .set('Authorization', `Bearer ${foremanToken}`);
+        expect(foremanListRes.status).toBe(200);
+        const foremanLot = foremanListRes.body.data.find(
+          (lot: { id: string }) => lot.id === budgetLot.id,
+        );
+        expect(foremanLot.budgetAmount).toBeNull();
+        expect(
+          foremanListRes.body.lots.find((lot: { id: string }) => lot.id === budgetLot.id),
+        ).toMatchObject({ budgetAmount: null });
+
+        const updateRes = await request(app)
+          .patch(`/api/lots/${budgetLot.id}`)
+          .set('Authorization', `Bearer ${foremanToken}`)
+          .send({ description: 'Foreman can edit non-commercial lot details' });
+        expect(updateRes.status).toBe(200);
+        expect(updateRes.body.lot.budgetAmount).toBeNull();
+
+        const dbLot = await prisma.lot.findUnique({
+          where: { id: budgetLot.id },
+          select: { budgetAmount: true, description: true },
+        });
+        expect(Number(dbLot?.budgetAmount)).toBe(12345);
+        expect(dbLot?.description).toBe('Foreman can edit non-commercial lot details');
+      } finally {
+        await prisma.lot.deleteMany({ where: { id: budgetLot.id } });
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: foremanUserId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: foremanUserId } });
+        await prisma.user.delete({ where: { id: foremanUserId } }).catch(() => {});
+      }
+    });
+
     it('should respect pagination parameters', async () => {
       const res = await request(app)
         .get(`/api/lots?projectId=${projectId}&page=1&limit=5`)
