@@ -989,8 +989,14 @@ test.describe('production readiness guardrails', () => {
     expect(integrationPreflightScript).toContain('request failed for');
     expect(integrationPreflightScript).toContain('setVapidDetails');
     expect(productionPreflightWorkflow).toContain('workflow_dispatch');
+    expect(productionPreflightWorkflow).toContain('permissions:\n  contents: read');
+    expect(productionPreflightWorkflow).toContain('validate-dispatch:');
     expect(productionPreflightWorkflow).toContain(
-      'environment: ${{ github.event.inputs.environment }}',
+      'Production preflight can only run from refs/heads/master.',
+    );
+    expect(productionPreflightWorkflow).toContain('needs: validate-dispatch');
+    expect(productionPreflightWorkflow).toContain(
+      'name: ${{ needs.validate-dispatch.outputs.environment }}',
     );
     expect(productionPreflightWorkflow).toContain('npm run migrate:status');
     expect(productionPreflightWorkflow).toContain('npm run preflight:integrations');
