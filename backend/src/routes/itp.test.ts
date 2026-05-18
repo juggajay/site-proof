@@ -456,6 +456,66 @@ describe('ITP Templates API', () => {
     });
   });
 
+  describe('GET /api/itp/templates/:id/lots', () => {
+    it('should reject global template lot enumeration across tenants', async () => {
+      const suffix = Date.now();
+      const globalTemplate = await prisma.iTPTemplate.create({
+        data: {
+          projectId: null,
+          name: `Global Leak Guard ${suffix}`,
+          activityType: 'Earthworks',
+          stateSpec: 'TfNSW',
+          isActive: true,
+        },
+      });
+      const otherCompany = await prisma.company.create({
+        data: { name: `Other ITP Tenant ${suffix}` },
+      });
+      const otherProject = await prisma.project.create({
+        data: {
+          name: `Other ITP Project ${suffix}`,
+          projectNumber: `OTHER-ITP-${suffix}`,
+          companyId: otherCompany.id,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const otherLot = await prisma.lot.create({
+        data: {
+          projectId: otherProject.id,
+          lotNumber: `OTHER-LOT-${suffix}`,
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          status: 'in_progress',
+          itpTemplateId: globalTemplate.id,
+        },
+      });
+      await prisma.iTPInstance.create({
+        data: {
+          lotId: otherLot.id,
+          templateId: globalTemplate.id,
+          status: 'in_progress',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/itp/templates/${globalTemplate.id}/lots`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(403);
+        expect(JSON.stringify(res.body)).not.toContain(otherLot.lotNumber);
+      } finally {
+        await prisma.iTPInstance.deleteMany({ where: { templateId: globalTemplate.id } });
+        await prisma.lot.delete({ where: { id: otherLot.id } }).catch(() => {});
+        await prisma.iTPTemplate.delete({ where: { id: globalTemplate.id } }).catch(() => {});
+        await prisma.project.delete({ where: { id: otherProject.id } }).catch(() => {});
+        await prisma.company.delete({ where: { id: otherCompany.id } }).catch(() => {});
+      }
+    });
+  });
+
   describe('PATCH /api/itp/templates/:id', () => {
     it('should update template metadata', async () => {
       const res = await request(app)

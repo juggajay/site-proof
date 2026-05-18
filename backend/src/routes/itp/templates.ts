@@ -685,10 +685,13 @@ templatesRouter.get(
     const user = req.user!;
     const id = parseTemplateRouteId(req.params.id, 'id');
 
-    await requireTemplateProjectAccess(id, user);
+    const template = await requireTemplateProjectAccess(id, user);
+    if (!template.projectId) {
+      throw AppError.forbidden('Global template lot usage requires a project-scoped template');
+    }
 
     const instances = await prisma.iTPInstance.findMany({
-      where: { templateId: id },
+      where: { templateId: id, lot: { projectId: template.projectId } },
       include: {
         lot: {
           select: {
