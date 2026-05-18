@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
@@ -89,28 +90,30 @@ function getDocketStatusBadge(status: string) {
 }
 
 export function DocketsListPage() {
+  const { user } = useAuth();
   const isMobile = useIsMobile();
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const { data: company } = useQuery({
-    queryKey: queryKeys.portalCompanies,
+    queryKey: queryKeys.portalCompanies(user?.id),
     queryFn: async () => {
       const res = await apiFetch<{ company: { projectId: string } }>(
         '/api/subcontractors/my-company',
       );
       return res.company;
     },
+    enabled: !!user?.id,
   });
 
   const { data: dockets = [], isLoading: loading } = useQuery({
-    queryKey: queryKeys.portalDockets,
+    queryKey: queryKeys.portalDockets(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(
         `/api/dockets?projectId=${company!.projectId}`,
       );
       return res.dockets || [];
     },
-    enabled: !!company?.projectId,
+    enabled: !!user?.id && !!company?.projectId,
   });
 
   // Filter dockets

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { openDocumentAccessUrl } from '@/lib/documentAccess';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
@@ -53,14 +54,16 @@ function getCategoryIcon(category: string) {
 }
 
 export function SubcontractorDocumentsPage() {
+  const { user } = useAuth();
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies,
+    queryKey: queryKeys.portalCompanies(user?.id),
     queryFn: async () => {
       const res = await apiFetch<{ company: SubcontractorCompany }>(
         '/api/subcontractors/my-company',
       );
       return res.company;
     },
+    enabled: !!user?.id,
   });
   const canViewDocuments = isPortalModuleEnabled(company, 'documents');
 
@@ -69,14 +72,14 @@ export function SubcontractorDocumentsPage() {
     isLoading: docsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalDocuments,
+    queryKey: queryKeys.portalDocuments(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ documents: Document[] }>(
         `/api/documents/${company!.projectId}?subcontractorView=true`,
       );
       return res.documents || [];
     },
-    enabled: !!company?.projectId && canViewDocuments,
+    enabled: !!user?.id && !!company?.projectId && canViewDocuments,
   });
 
   const loading = companyLoading || (canViewDocuments && docsLoading);

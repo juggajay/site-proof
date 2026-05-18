@@ -161,22 +161,23 @@ export function SubcontractorDashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies,
+    queryKey: queryKeys.portalCompanies(user?.id),
     queryFn: async () => {
       const res = await apiFetch<{ company: Company }>('/api/subcontractors/my-company');
       return res.company;
     },
+    enabled: !!user?.id,
   });
 
   const { data: docketsData } = useQuery({
-    queryKey: queryKeys.portalDockets,
+    queryKey: queryKeys.portalDockets(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(
         `/api/dockets?projectId=${company!.projectId}`,
       );
       return res.dockets || [];
     },
-    enabled: !!company?.projectId,
+    enabled: !!user?.id && !!company?.projectId,
   });
 
   const today = getToday();
@@ -185,23 +186,23 @@ export function SubcontractorDashboard() {
   const canViewAssignedLots = isPortalModuleEnabled(company, 'lots');
 
   const { data: assignedLots = [] } = useQuery({
-    queryKey: queryKeys.portalAssignedWork,
+    queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
         `/api/lots?projectId=${company!.projectId}&portalModule=lots`,
       );
       return res.lots.slice(0, 5);
     },
-    enabled: !!company?.projectId && canViewAssignedLots,
+    enabled: !!user?.id && !!company?.projectId && canViewAssignedLots,
   });
 
   const { data: notifData } = useQuery({
-    queryKey: queryKeys.portalDashboard,
+    queryKey: queryKeys.portalDashboard(user?.id),
     queryFn: () =>
       apiFetch<{ notifications: Notification[]; unreadCount: number }>(
         '/api/notifications?limit=10',
       ),
-    enabled: !!company,
+    enabled: !!user?.id && !!company,
   });
 
   const notifications = notifData?.notifications || [];
@@ -211,10 +212,14 @@ export function SubcontractorDashboard() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: queryKeys.portalCompanies });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDockets });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.portalAssignedWork });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDashboard });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalCompanies(user?.id) });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.portalDockets(user?.id, company?.projectId),
+    });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId),
+    });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.portalDashboard(user?.id) });
     setRefreshing(false);
   };
 

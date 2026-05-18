@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
@@ -75,14 +76,16 @@ function getITPStatusBadge(status: string, percentage?: number) {
 }
 
 export function SubcontractorITPsPage() {
+  const { user } = useAuth();
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies,
+    queryKey: queryKeys.portalCompanies(user?.id),
     queryFn: async () => {
       const res = await apiFetch<{ company: SubcontractorCompany }>(
         '/api/subcontractors/my-company',
       );
       return res.company;
     },
+    enabled: !!user?.id,
   });
   const canViewITPs = isPortalModuleEnabled(company, 'itps');
 
@@ -91,7 +94,7 @@ export function SubcontractorITPsPage() {
     isLoading: lotsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalITPs,
+    queryKey: queryKeys.portalITPs(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
         `/api/lots?projectId=${company!.projectId}&includeITP=true&portalModule=itps`,
@@ -100,7 +103,7 @@ export function SubcontractorITPsPage() {
         return lot.itpInstances && lot.itpInstances.length > 0;
       });
     },
-    enabled: !!company?.projectId && canViewITPs,
+    enabled: !!user?.id && !!company?.projectId && canViewITPs,
   });
 
   const loading = companyLoading || (canViewITPs && lotsLoading);
