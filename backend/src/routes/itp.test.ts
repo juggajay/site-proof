@@ -1072,6 +1072,18 @@ describe('ITP Instances', () => {
   });
 
   it('scopes subcontractor ITP instance reads to assigned lots and subcontractor items', async () => {
+    const existingInstance = await prisma.iTPInstance.findUnique({
+      where: { lotId },
+      select: { id: true },
+    });
+    if (!existingInstance) {
+      const createRes = await request(app)
+        .post('/api/itp/instances')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotId, templateId });
+      expect(createRes.status).toBe(201);
+    }
+
     const subcontractorCompany = await prisma.subcontractorCompany.create({
       data: {
         projectId,
@@ -1121,6 +1133,8 @@ describe('ITP Instances', () => {
       expect(allowedRes.body.instance.template.checklistItems[0].responsibleParty).toBe(
         'subcontractor',
       );
+      expect(allowedRes.body.instance.templateSnapshot).toBeUndefined();
+      expect(JSON.stringify(allowedRes.body.instance)).not.toContain('Contractor Test Item');
     } finally {
       await prisma.lotSubcontractorAssignment.deleteMany({
         where: { subcontractorCompanyId: subcontractorCompany.id },
