@@ -181,6 +181,8 @@ export interface OfflinePhoto {
   lotId?: string;
   entityType: 'lot' | 'ncr' | 'holdpoint' | 'itp' | 'test' | 'general';
   entityId?: string;
+  documentType: string;
+  category?: string;
   fileName: string;
   mimeType: string;
   dataUrl: string; // Base64 encoded image data (compressed)
@@ -605,6 +607,8 @@ export async function capturePhotoOffline(
     lotId?: string;
     entityType: OfflinePhoto['entityType'];
     entityId?: string;
+    documentType?: string;
+    category?: string;
     caption?: string;
     tags?: string[];
     capturedBy: string;
@@ -621,6 +625,8 @@ export async function capturePhotoOffline(
     lotId: options.lotId,
     entityType: options.entityType,
     entityId: options.entityId,
+    documentType: options.documentType ?? 'photo',
+    category: options.category,
     fileName: file.name,
     mimeType: file.type.startsWith('image/png') ? 'image/png' : 'image/jpeg',
     dataUrl,

@@ -1569,6 +1569,43 @@ test.describe('production readiness guardrails', () => {
     expect(conflictModalSource).not.toContain('setSelectedConflict(null);');
   });
 
+  test('offline photo sync sends the upload metadata required by the documents API', async () => {
+    const offlineDbSource = await readFile(
+      new URL('../src/lib/offlineDb.ts', import.meta.url),
+      'utf8',
+    );
+    const offlineStatusSource = await readFile(
+      new URL('../src/lib/useOfflineStatus.ts', import.meta.url),
+      'utf8',
+    );
+    const captureModalSource = await readFile(
+      new URL('../src/components/foreman/CaptureModal.tsx', import.meta.url),
+      'utf8',
+    );
+    const photoCaptureModalSource = await readFile(
+      new URL('../src/components/foreman/PhotoCaptureModal.tsx', import.meta.url),
+      'utf8',
+    );
+    const quickPhotoCaptureSource = await readFile(
+      new URL('../src/components/QuickPhotoCapture.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(offlineDbSource).toContain('documentType: string;');
+    expect(offlineDbSource).toContain('documentType?: string;');
+    expect(offlineDbSource).toContain("documentType: options.documentType ?? 'photo'");
+    expect(offlineDbSource).toContain('category?: string;');
+    expect(offlineStatusSource).toContain("formData.append('documentType', photo.documentType);");
+    expect(offlineStatusSource).toContain("formData.append('category', photo.category);");
+    expect(offlineStatusSource).toContain('photo.gpsLatitude !== undefined');
+    expect(offlineStatusSource).toContain('photo.gpsLongitude !== undefined');
+    expect(captureModalSource).toContain(
+      "documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo'",
+    );
+    expect(photoCaptureModalSource).toContain("documentType: 'photo'");
+    expect(quickPhotoCaptureSource).toContain("documentType: 'photo'");
+  });
+
   test('auth session storage is validated and accessed through safe helpers', async () => {
     const authSource = await readFile(new URL('../src/lib/auth.tsx', import.meta.url), 'utf8');
     const authStorageSource = await readFile(

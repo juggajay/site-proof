@@ -124,6 +124,7 @@ export function CaptureModal({
         lotId: linkedLot || undefined,
         entityType,
         entityId: linkedItp || undefined,
+        documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo',
         caption: description.trim() || undefined,
         capturedBy: user.id,
         gpsLatitude: latitude ?? undefined,
@@ -169,6 +170,7 @@ export function CaptureModal({
       const photo = await capturePhotoOffline(projectId, capturedFile, {
         lotId: defaultLotId || undefined,
         entityType: 'general',
+        documentType: 'photo',
         caption: undefined,
         capturedBy: user.id,
         gpsLatitude: latitude ?? undefined,

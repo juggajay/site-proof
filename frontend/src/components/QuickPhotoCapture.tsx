@@ -191,6 +191,7 @@ export function QuickPhotoCapture({
         lotId,
         entityType,
         entityId,
+        documentType: 'photo',
         caption: caption || undefined,
         tags: tagArray.length > 0 ? tagArray : undefined,
         capturedBy: user.id,
@@ -392,6 +393,7 @@ export function QuickPhotoCaptureButton({
         lotId,
         entityType,
         entityId,
+        documentType: 'photo',
         capturedBy: user.id,
       });
 
