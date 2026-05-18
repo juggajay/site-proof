@@ -1314,6 +1314,55 @@ describe('Avatar Upload', () => {
       }
     });
 
+    it('does not remove a Supabase avatar outside the current user prefix', async () => {
+      const email = `avatar-supabase-other-user-${Date.now()}@example.com`;
+      const password = 'SecureP@ssword123!';
+      let userId: string | undefined;
+
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const regRes = await request(app).post('/api/auth/register').send({
+          email,
+          password,
+          fullName: 'Avatar Supabase Other User',
+          tosAccepted: true,
+        });
+        userId = regRes.body.user.id;
+        const otherUserAvatarUrl =
+          'https://fixture-project.supabase.co/storage/v1/object/public/documents/avatars/other-user/avatar-other-user.png';
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { avatarUrl: otherUserAvatarUrl },
+        });
+
+        const res = await request(app)
+          .delete('/api/auth/avatar')
+          .set('Authorization', `Bearer ${regRes.body.token}`);
+
+        expect(res.status).toBe(200);
+        expect(mockRemove).not.toHaveBeenCalled();
+
+        const updated = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { avatarUrl: true },
+        });
+        expect(updated?.avatarUrl).toBeNull();
+      } finally {
+        if (userId) {
+          await prisma.auditLog.deleteMany({ where: { userId } });
+          await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+          await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+        }
+      }
+    });
+
     it('does not call Supabase remove when the existing avatarUrl is a local /uploads path', async () => {
       const email = `avatar-local-delete-${Date.now()}@example.com`;
       const password = 'SecureP@ssword123!';

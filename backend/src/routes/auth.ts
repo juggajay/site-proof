@@ -157,6 +157,17 @@ function buildAvatarStorageFilename(userId: string, mimetype: string): string | 
   return `avatar-${userId}-${crypto.randomUUID()}${ext}`;
 }
 
+function getAvatarStoragePrefix(userId: string): string {
+  return `${AVATAR_STORAGE_PREFIX}/${userId}/`;
+}
+
+function getOwnedAvatarStoragePath(fileUrl: string, userId: string): string | null {
+  return getSupabaseStoragePath(fileUrl, {
+    bucket: DOCUMENTS_BUCKET,
+    expectedPrefix: getAvatarStoragePrefix(userId),
+  });
+}
+
 async function uploadAvatarToSupabase(
   file: Express.Multer.File,
   userId: string,
@@ -185,8 +196,8 @@ async function uploadAvatarToSupabase(
   };
 }
 
-async function deleteAvatarFromSupabase(fileUrl: string): Promise<void> {
-  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+async function deleteAvatarFromSupabase(fileUrl: string, userId: string): Promise<void> {
+  const storagePath = getOwnedAvatarStoragePath(fileUrl, userId);
   if (!storagePath) return;
 
   const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
@@ -199,24 +210,28 @@ async function deleteAvatarFromSupabase(fileUrl: string): Promise<void> {
 async function cleanupStoredAvatarUpload(
   fileUrl: string | null,
   file: Express.Multer.File,
+  userId: string,
 ): Promise<void> {
-  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
-    await deleteAvatarFromSupabase(fileUrl);
+  if (fileUrl && isSupabaseConfigured() && getOwnedAvatarStoragePath(fileUrl, userId)) {
+    await deleteAvatarFromSupabase(fileUrl, userId);
     return;
   }
   cleanupUploadedAvatar(file);
 }
 
-async function removeStoredAvatar(avatarUrl: string | null | undefined): Promise<void> {
+async function removeStoredAvatar(
+  avatarUrl: string | null | undefined,
+  userId: string,
+): Promise<void> {
   if (!avatarUrl) return;
-  if (isSupabaseConfigured() && getSupabaseStoragePath(avatarUrl, DOCUMENTS_BUCKET) !== null) {
-    await deleteAvatarFromSupabase(avatarUrl);
+  if (isSupabaseConfigured() && getOwnedAvatarStoragePath(avatarUrl, userId) !== null) {
+    await deleteAvatarFromSupabase(avatarUrl, userId);
     return;
   }
-  deleteLocalAvatarFile(avatarUrl);
+  deleteLocalAvatarFile(avatarUrl, userId);
 }
 
-function deleteLocalAvatarFile(avatarUrl: string | null | undefined): void {
+function deleteLocalAvatarFile(avatarUrl: string | null | undefined, userId: string): void {
   if (!avatarUrl) return;
 
   let pathname: string;
@@ -248,6 +263,9 @@ function deleteLocalAvatarFile(avatarUrl: string | null | undefined): void {
   }
 
   if (filename !== path.basename(filename) || filename.includes('/') || filename.includes('\\')) {
+    return;
+  }
+  if (!filename.startsWith(`avatar-${userId}-`)) {
     return;
   }
 
@@ -1159,14 +1177,14 @@ authRouter.post(
         },
       });
     } catch (error) {
-      await cleanupStoredAvatarUpload(avatarUrl, uploadedFile);
+      await cleanupStoredAvatarUpload(avatarUrl, uploadedFile, userData.id);
       throw error;
     }
 
     // Delete old avatar file if it exists (best-effort; never blocks the response)
     if (oldUser?.avatarUrl) {
       try {
-        await removeStoredAvatar(oldUser.avatarUrl);
+        await removeStoredAvatar(oldUser.avatarUrl, userData.id);
       } catch (err) {
         logWarn('Failed to delete old avatar:', err);
       }
@@ -1209,7 +1227,7 @@ authRouter.delete(
 
     if (user?.avatarUrl) {
       try {
-        await removeStoredAvatar(user.avatarUrl);
+        await removeStoredAvatar(user.avatarUrl, userData.id);
       } catch (err) {
         logWarn('Failed to delete avatar file:', err);
       }
