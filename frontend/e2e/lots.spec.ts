@@ -362,6 +362,39 @@ test.describe('Lots seeded UI contract', () => {
     });
   });
 
+  test('rejects bulk lot previews above the backend bulk-create cap', async ({ page }) => {
+    const api = await mockSeededLotsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
+    await page.getByRole('button', { name: 'Bulk Create Lots' }).click();
+
+    await page.getByLabel('Start Chainage (m)').fill('0');
+    await page.getByLabel('End Chainage (m)').fill('501');
+    await page.getByLabel('Lot Interval (m)').fill('1');
+
+    await expect(page.getByText(/This will create approximately\s*501\s*lots/)).toBeVisible();
+    await expect(page.getByText(/Bulk create supports up to 500 lots/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(api.getBulkCreateRequest()).toBeUndefined();
+  });
+
+  test('rejects bulk lot intervals that do not advance after rounding', async ({ page }) => {
+    const api = await mockSeededLotsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
+    await page.getByRole('button', { name: 'Bulk Create Lots' }).click();
+
+    await page.getByLabel('Start Chainage (m)').fill('0');
+    await page.getByLabel('End Chainage (m)').fill('0.0000003');
+    await page.getByLabel('Lot Interval (m)').fill('0.0000001');
+
+    await expect(
+      page.getByText(/Lot interval is too small to create distinct chainage ranges/),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(api.getBulkCreateRequest()).toBeUndefined();
+  });
+
   test('imports CSV lots with strict chainage parsing', async ({ page }) => {
     const api = await mockSeededLotsApi(page);
 

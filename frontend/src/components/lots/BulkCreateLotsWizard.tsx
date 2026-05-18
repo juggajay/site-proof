@@ -23,6 +23,13 @@ type WizardStep = 'chainage' | 'parameters' | 'preview' | 'confirm';
 
 const ACTIVITY_TYPES = ['Earthworks', 'Pavement', 'Drainage', 'Concrete', 'Structures'];
 const LAYERS = ['Subgrade', 'Subbase', 'Base', 'Surface', 'Wearing Course'];
+const MAX_BULK_LOTS = 500;
+const INTERVAL_TOO_SMALL_MESSAGE = 'Lot interval is too small to create distinct chainage ranges.';
+
+interface BulkLotRangeValidation {
+  lotCount: number | null;
+  error: string | null;
+}
 
 function parseChainageInput(value: string): number | null {
   return parseOptionalNonNegativeDecimalInput(value);
@@ -30,6 +37,34 @@ function parseChainageInput(value: string): number | null {
 
 function roundChainage(value: number): number {
   return Number(value.toFixed(6));
+}
+
+function validateBulkLotRange(
+  start: number | null,
+  end: number | null,
+  interval: number | null,
+): BulkLotRangeValidation {
+  if (start === null || end === null || interval === null || interval <= 0 || end <= start) {
+    return { lotCount: null, error: null };
+  }
+
+  const lotCount = Math.ceil((end - start) / interval);
+  if (!Number.isFinite(lotCount) || lotCount <= 0) {
+    return { lotCount: null, error: 'Invalid chainage values' };
+  }
+
+  if (roundChainage(start + interval) <= roundChainage(start)) {
+    return { lotCount, error: INTERVAL_TOO_SMALL_MESSAGE };
+  }
+
+  if (lotCount > MAX_BULK_LOTS) {
+    return {
+      lotCount,
+      error: `Bulk create supports up to ${MAX_BULK_LOTS} lots. Increase the interval or narrow the chainage range.`,
+    };
+  }
+
+  return { lotCount, error: null };
 }
 
 export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCreateLotsWizardProps) {
@@ -66,10 +101,26 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
       return;
     }
 
+    const rangeValidation = validateBulkLotRange(start, end, interval);
+    if (rangeValidation.error) {
+      toast({ variant: 'error', description: rangeValidation.error });
+      return;
+    }
+    if (rangeValidation.lotCount === null) {
+      toast({ variant: 'error', description: 'Invalid chainage values' });
+      return;
+    }
+
     const lots: LotPreview[] = [];
-    let lotNum = 1;
-    for (let ch = start; ch < end; ch = roundChainage(ch + interval)) {
-      const lotEnd = roundChainage(Math.min(ch + interval, end));
+    for (let index = 0; index < rangeValidation.lotCount; index++) {
+      const lotNum = index + 1;
+      const ch = roundChainage(start + index * interval);
+      const lotEnd = roundChainage(Math.min(start + lotNum * interval, end));
+      if (lotEnd <= ch) {
+        toast({ variant: 'error', description: INTERVAL_TOO_SMALL_MESSAGE });
+        return;
+      }
+
       const lotNumber = `${lotPrefix}-${String(lotNum).padStart(3, '0')}`;
       const description = descriptionTemplate
         .replace('{prefix}', lotPrefix)
@@ -85,7 +136,6 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
         activityType,
         layer,
       });
-      lotNum++;
     }
 
     setLotsPreview(lots);
@@ -124,20 +174,19 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
   const parsedChainageStart = parseChainageInput(chainageStart);
   const parsedChainageEnd = parseChainageInput(chainageEnd);
   const parsedLotInterval = parseChainageInput(lotInterval);
-  const approximateLotCount =
-    parsedChainageStart !== null &&
-    parsedChainageEnd !== null &&
-    parsedLotInterval !== null &&
-    parsedLotInterval > 0 &&
-    parsedChainageEnd > parsedChainageStart
-      ? Math.ceil((parsedChainageEnd - parsedChainageStart) / parsedLotInterval)
-      : null;
+  const chainageRangeValidation = validateBulkLotRange(
+    parsedChainageStart,
+    parsedChainageEnd,
+    parsedLotInterval,
+  );
+  const approximateLotCount = chainageRangeValidation.lotCount;
   const canProceedFromChainage =
     parsedChainageStart !== null &&
     parsedChainageEnd !== null &&
     parsedLotInterval !== null &&
     parsedLotInterval > 0 &&
-    parsedChainageEnd > parsedChainageStart;
+    parsedChainageEnd > parsedChainageStart &&
+    chainageRangeValidation.error === null;
   const canProceedFromParameters = lotPrefix.trim() !== '';
 
   return (
@@ -265,6 +314,11 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                 <p className="text-sm text-muted-foreground">
                   This will create approximately{' '}
                   <span className="font-medium">{approximateLotCount ?? 0}</span> lots
+                </p>
+              )}
+              {chainageRangeValidation.error && (
+                <p className="text-sm text-destructive" role="alert">
+                  {chainageRangeValidation.error}
                 </p>
               )}
             </div>
