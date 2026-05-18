@@ -3,7 +3,9 @@ import request from 'supertest';
 import express from 'express';
 import { mfaRouter } from './mfa.js';
 import { authRouter } from './auth.js';
+import { authenticateApiKey } from './apiKeys.js';
 import { prisma } from '../lib/prisma.js';
+import crypto from 'crypto';
 import * as _otplib from 'otplib';
 import { encrypt, decrypt } from '../lib/encryption.js';
 import { errorHandler } from '../middleware/errorHandler.js';
@@ -28,9 +30,50 @@ vi.mock('otplib', async () => {
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
 app.use('/api/mfa', mfaRouter);
 app.use(errorHandler);
+
+function hashApiKey(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyBackedUser(options?: {
+  twoFactorEnabled?: boolean;
+  twoFactorSecret?: string | null;
+}) {
+  const user = await prisma.user.create({
+    data: {
+      email: `mfa-api-key-${crypto.randomUUID()}@example.com`,
+      fullName: 'MFA API Key User',
+      emailVerified: true,
+      tosAcceptedAt: new Date(),
+      twoFactorEnabled: options?.twoFactorEnabled ?? false,
+      twoFactorSecret: options?.twoFactorSecret,
+    },
+    select: { id: true },
+  });
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  await prisma.apiKey.create({
+    data: {
+      userId: user.id,
+      name: 'MFA management test key',
+      keyHash: hashApiKey(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes: 'write',
+    },
+  });
+
+  return { userId: user.id, apiKey };
+}
+
+async function deleteApiKeyBackedUser(userId: string) {
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  await prisma.apiKey.deleteMany({ where: { userId } });
+  await prisma.mfaBackupCode.deleteMany({ where: { userId } });
+  await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+}
 
 describe('MFA API', () => {
   let authToken: string;
@@ -105,6 +148,25 @@ describe('MFA API', () => {
       const res = await request(app).post('/api/mfa/setup');
 
       expect(res.status).toBe(401);
+    });
+
+    it('should reject setup authenticated by a write-scoped API key', async () => {
+      const { userId: apiKeyUserId, apiKey } = await createApiKeyBackedUser();
+
+      try {
+        const res = await request(app).post('/api/mfa/setup').set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('authenticated browser session');
+
+        const user = await prisma.user.findUnique({
+          where: { id: apiKeyUserId },
+          select: { twoFactorSecret: true },
+        });
+        expect(user?.twoFactorSecret).toBeNull();
+      } finally {
+        await deleteApiKeyBackedUser(apiKeyUserId);
+      }
     });
 
     it('should reject setup when MFA is already enabled', async () => {
@@ -282,6 +344,30 @@ describe('MFA API', () => {
 
       expect(res.status).toBe(401);
     });
+
+    it('should reject setup verification authenticated by a write-scoped API key', async () => {
+      const { userId: apiKeyUserId, apiKey } = await createApiKeyBackedUser({
+        twoFactorSecret: encrypt('TESTSECRET1234567890'),
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/mfa/verify-setup')
+          .set('x-api-key', apiKey)
+          .send({ code: '123456' });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('authenticated browser session');
+
+        const user = await prisma.user.findUnique({
+          where: { id: apiKeyUserId },
+          select: { twoFactorEnabled: true },
+        });
+        expect(user?.twoFactorEnabled).toBe(false);
+      } finally {
+        await deleteApiKeyBackedUser(apiKeyUserId);
+      }
+    });
   });
 
   describe('POST /api/mfa/disable', () => {
@@ -425,6 +511,31 @@ describe('MFA API', () => {
       const res = await request(app).post('/api/mfa/disable').send({ password: testPassword });
 
       expect(res.status).toBe(401);
+    });
+
+    it('should reject disable authenticated by a write-scoped API key', async () => {
+      const { userId: apiKeyUserId, apiKey } = await createApiKeyBackedUser({
+        twoFactorEnabled: true,
+        twoFactorSecret: encrypt('TESTSECRET1234567890'),
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/mfa/disable')
+          .set('x-api-key', apiKey)
+          .send({ code: '654321' });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('authenticated browser session');
+
+        const user = await prisma.user.findUnique({
+          where: { id: apiKeyUserId },
+          select: { twoFactorEnabled: true },
+        });
+        expect(user?.twoFactorEnabled).toBe(true);
+      } finally {
+        await deleteApiKeyBackedUser(apiKeyUserId);
+      }
     });
   });
 

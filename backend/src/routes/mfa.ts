@@ -36,6 +36,12 @@ function getAuthenticatedUser(req: Request) {
   return req.user;
 }
 
+function requireBrowserSession(req: Request, action: string): void {
+  if (req.apiKey) {
+    throw AppError.forbidden(`${action} requires an authenticated browser session`);
+  }
+}
+
 function normalizeTotpCode(value: unknown): string {
   if (value === undefined || value === null || value === '') {
     throw AppError.badRequest('Verification code is required');
@@ -112,6 +118,7 @@ mfaRouter.post(
   '/setup',
   requireAuth,
   asyncHandler(async (req, res) => {
+    requireBrowserSession(req, 'MFA setup');
     const authUser = getAuthenticatedUser(req);
     const userId = authUser.userId;
     const userEmail = authUser.email;
@@ -165,6 +172,7 @@ mfaRouter.post(
   '/verify-setup',
   requireAuth,
   asyncHandler(async (req, res) => {
+    requireBrowserSession(req, 'MFA setup verification');
     const userId = getAuthenticatedUser(req).userId;
     const code = normalizeTotpCode(req.body.code);
 
@@ -218,6 +226,7 @@ mfaRouter.post(
   '/disable',
   requireAuth,
   asyncHandler(async (req, res) => {
+    requireBrowserSession(req, 'MFA disable');
     const userId = getAuthenticatedUser(req).userId;
     const { password, code } = req.body;
     const normalizedPassword = normalizeDisablePassword(password);
