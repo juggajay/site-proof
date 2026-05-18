@@ -117,8 +117,19 @@ async function uploadCertificateToSupabase(
   };
 }
 
-async function deleteCertificateFromSupabase(fileUrl: string): Promise<void> {
-  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+function getCertificateStoragePrefix(projectId: string): string {
+  return `${CERTIFICATES_STORAGE_PREFIX}/${projectId}/`;
+}
+
+function getOwnedCertificateStoragePath(fileUrl: string, projectId: string): string | null {
+  return getSupabaseStoragePath(fileUrl, {
+    bucket: DOCUMENTS_BUCKET,
+    expectedPrefix: getCertificateStoragePrefix(projectId),
+  });
+}
+
+async function deleteCertificateFromSupabase(fileUrl: string, projectId: string): Promise<void> {
+  const storagePath = getOwnedCertificateStoragePath(fileUrl, projectId);
   if (!storagePath) {
     return;
   }
@@ -135,9 +146,10 @@ async function deleteCertificateFromSupabase(fileUrl: string): Promise<void> {
 async function cleanupStoredCertificateUpload(
   fileUrl: string | null,
   file: Express.Multer.File,
+  projectId: string,
 ): Promise<void> {
-  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
-    await deleteCertificateFromSupabase(fileUrl);
+  if (fileUrl && isSupabaseConfigured() && getOwnedCertificateStoragePath(fileUrl, projectId)) {
+    await deleteCertificateFromSupabase(fileUrl, projectId);
     return;
   }
   cleanupUploadedCertificateFile(file);
@@ -1395,7 +1407,7 @@ testResultsRouter.delete(
     const isSupabaseStored =
       isSupabaseConfigured() &&
       !!certificateDoc?.fileUrl &&
-      getSupabaseStoragePath(certificateDoc.fileUrl, DOCUMENTS_BUCKET) !== null;
+      getOwnedCertificateStoragePath(certificateDoc.fileUrl, testResult.projectId) !== null;
 
     // Atomic DB delete: testResult plus the linked Document row when present.
     // The relation is `onDelete: SetNull`, so document deletion alone wouldn't
@@ -1412,7 +1424,7 @@ testResultsRouter.delete(
     // here leaves an orphan storage object but the DB is the source of truth.
     if (isSupabaseStored && certificateDoc?.fileUrl) {
       try {
-        await deleteCertificateFromSupabase(certificateDoc.fileUrl);
+        await deleteCertificateFromSupabase(certificateDoc.fileUrl, testResult.projectId);
       } catch (error) {
         logWarn(
           'Failed to delete test certificate file from Supabase after database delete:',
@@ -2992,7 +3004,7 @@ testResultsRouter.post(
         });
       });
     } catch (error) {
-      await cleanupStoredCertificateUpload(fileUrl, file);
+      await cleanupStoredCertificateUpload(fileUrl, file, projectId);
       throw error;
     }
 
@@ -3307,7 +3319,7 @@ testResultsRouter.post(
           },
         });
       } catch {
-        await cleanupStoredCertificateUpload(fileUrl, file);
+        await cleanupStoredCertificateUpload(fileUrl, file, projectId);
         results.push({
           success: false,
           filename: sanitizeUploadFilename(file.originalname),

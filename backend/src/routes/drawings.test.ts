@@ -1,12 +1,28 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
-import { drawingsRouter } from './drawings.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+
+vi.mock('../lib/supabase.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => false),
+    getSupabaseClient: vi.fn(),
+  };
+});
+
+import * as supabaseLib from '../lib/supabase.js';
+
+import { drawingsRouter } from './drawings.js';
+
+const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
+const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
+const ORIGINAL_SUPABASE_URL = process.env.SUPABASE_URL;
 
 const app = express();
 app.use(express.json());
@@ -41,6 +57,14 @@ function isGeneratedDrawingFixture(filename: string): boolean {
 
 function hasUnsafeFilenameChar(filename: string): boolean {
   return filename.split('').some((char) => char.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(char));
+}
+
+function restoreOptionalEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
 }
 
 describe('Drawings API', () => {
@@ -144,6 +168,13 @@ describe('Drawings API', () => {
         // Ignore errors
       }
     });
+  });
+
+  afterEach(() => {
+    restoreOptionalEnv('SUPABASE_URL', ORIGINAL_SUPABASE_URL);
+    mockIsSupabaseConfigured.mockReset();
+    mockIsSupabaseConfigured.mockReturnValue(false);
+    mockGetSupabaseClient.mockReset();
   });
 
   describe('GET /api/drawings/:projectId', () => {
@@ -878,6 +909,97 @@ describe('Drawings API', () => {
       const res = await request(app).delete(`/api/drawings/${drawingId}`);
 
       expect(res.status).toBe(401);
+    });
+
+    it('does not remove a Supabase drawing outside the drawing project prefix', async () => {
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const externalProjectDrawingUrl =
+        'https://fixture-project.supabase.co/storage/v1/object/public/documents/drawings/other-project/not-owned.pdf';
+      const doc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'drawing',
+          filename: 'not-owned.pdf',
+          fileUrl: externalProjectDrawingUrl,
+          fileSize: 1024,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const drawing = await prisma.drawing.create({
+        data: {
+          projectId,
+          documentId: doc.id,
+          drawingNumber: `DRW-EXT-${Date.now()}`,
+          status: 'preliminary',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/drawings/${drawing.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(204);
+        expect(await prisma.drawing.findUnique({ where: { id: drawing.id } })).toBeNull();
+        expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+        expect(mockRemove).not.toHaveBeenCalled();
+      } finally {
+        await prisma.drawing.deleteMany({ where: { id: drawing.id } });
+        await prisma.document.deleteMany({ where: { id: doc.id } });
+      }
+    });
+
+    it('removes an owned Supabase drawing from the drawing project prefix', async () => {
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const ownedStoragePath = `drawings/${projectId}/owned-drawing.pdf`;
+      const ownedDrawingUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${ownedStoragePath}`;
+      const doc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'drawing',
+          filename: 'owned-drawing.pdf',
+          fileUrl: ownedDrawingUrl,
+          fileSize: 1024,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const drawing = await prisma.drawing.create({
+        data: {
+          projectId,
+          documentId: doc.id,
+          drawingNumber: `DRW-OWNED-${Date.now()}`,
+          status: 'preliminary',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/drawings/${drawing.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(204);
+        expect(await prisma.drawing.findUnique({ where: { id: drawing.id } })).toBeNull();
+        expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+        expect(mockRemove).toHaveBeenCalledOnce();
+        expect(mockRemove).toHaveBeenCalledWith([ownedStoragePath]);
+      } finally {
+        await prisma.drawing.deleteMany({ where: { id: drawing.id } });
+        await prisma.document.deleteMany({ where: { id: doc.id } });
+      }
     });
   });
 

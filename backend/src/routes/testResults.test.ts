@@ -1711,5 +1711,73 @@ describe('Test Results API', () => {
         mockGetSupabaseClient.mockReset();
       }
     });
+
+    it('does not remove a Supabase certificate outside the test result project prefix', async () => {
+      const previousSupabaseUrl = process.env.SUPABASE_URL;
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      let docId: string | undefined;
+      let testResultToDeleteId: string | undefined;
+
+      try {
+        const externalStoragePath = 'certificates/other-project/cert-not-owned.pdf';
+        const supabaseFileUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${externalStoragePath}`;
+
+        const doc = await prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'test_certificate',
+            category: 'test_results',
+            filename: 'not-owned-cert.pdf',
+            fileUrl: supabaseFileUrl,
+            fileSize: 100,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        });
+        docId = doc.id;
+
+        const tr = await prisma.testResult.create({
+          data: {
+            projectId,
+            testType: 'CBR Test',
+            certificateDocId: doc.id,
+          },
+        });
+        testResultToDeleteId = tr.id;
+
+        const res = await request(app)
+          .delete(`/api/test-results/${tr.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(await prisma.testResult.findUnique({ where: { id: tr.id } })).toBeNull();
+        expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+        expect(mockRemove).not.toHaveBeenCalled();
+        testResultToDeleteId = undefined;
+        docId = undefined;
+      } finally {
+        if (testResultToDeleteId) {
+          await prisma.testResult.deleteMany({ where: { id: testResultToDeleteId } });
+        }
+        if (docId) {
+          await prisma.document.deleteMany({ where: { id: docId } });
+        }
+        if (previousSupabaseUrl === undefined) {
+          delete process.env.SUPABASE_URL;
+        } else {
+          process.env.SUPABASE_URL = previousSupabaseUrl;
+        }
+        mockIsSupabaseConfigured.mockReset();
+        mockIsSupabaseConfigured.mockReturnValue(false);
+        mockGetSupabaseClient.mockReset();
+      }
+    });
   });
 });

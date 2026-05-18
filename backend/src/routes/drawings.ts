@@ -201,8 +201,19 @@ async function uploadDrawingToSupabase(
   };
 }
 
-async function deleteDrawingFromSupabase(fileUrl: string): Promise<void> {
-  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+function getDrawingStoragePrefix(projectId: string): string {
+  return `${DRAWINGS_STORAGE_PREFIX}/${projectId}/`;
+}
+
+function getOwnedDrawingStoragePath(fileUrl: string, projectId: string): string | null {
+  return getSupabaseStoragePath(fileUrl, {
+    bucket: DOCUMENTS_BUCKET,
+    expectedPrefix: getDrawingStoragePrefix(projectId),
+  });
+}
+
+async function deleteDrawingFromSupabase(fileUrl: string, projectId: string): Promise<void> {
+  const storagePath = getOwnedDrawingStoragePath(fileUrl, projectId);
   if (!storagePath) {
     return;
   }
@@ -219,9 +230,10 @@ async function deleteDrawingFromSupabase(fileUrl: string): Promise<void> {
 async function cleanupStoredDrawingUpload(
   fileUrl: string | null,
   file: Express.Multer.File,
+  projectId: string,
 ): Promise<void> {
-  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
-    await deleteDrawingFromSupabase(fileUrl);
+  if (fileUrl && isSupabaseConfigured() && getOwnedDrawingStoragePath(fileUrl, projectId)) {
+    await deleteDrawingFromSupabase(fileUrl, projectId);
     return;
   }
   cleanupUploadedFile(file);
@@ -600,7 +612,7 @@ router.post(
         });
       });
     } catch (error) {
-      await cleanupStoredDrawingUpload(fileUrl, uploadedFile);
+      await cleanupStoredDrawingUpload(fileUrl, uploadedFile, projectId);
       throw error;
     }
 
@@ -693,7 +705,7 @@ router.delete(
     const isSupabaseStored =
       isSupabaseConfigured() &&
       typeof existingFileUrl === 'string' &&
-      getSupabaseStoragePath(existingFileUrl, DOCUMENTS_BUCKET) !== null;
+      getOwnedDrawingStoragePath(existingFileUrl, drawing.projectId) !== null;
 
     let filePath: string | null = null;
     if (!isSupabaseStored) {
@@ -711,7 +723,7 @@ router.delete(
 
     if (isSupabaseStored) {
       try {
-        await deleteDrawingFromSupabase(existingFileUrl);
+        await deleteDrawingFromSupabase(existingFileUrl, drawing.projectId);
       } catch (error) {
         logWarn('Failed to delete drawing file from Supabase after database delete:', error);
       }
@@ -858,7 +870,7 @@ router.post(
         return createdDrawing;
       });
     } catch (error) {
-      await cleanupStoredDrawingUpload(fileUrl, uploadedFile);
+      await cleanupStoredDrawingUpload(fileUrl, uploadedFile, oldDrawing.projectId);
       throw error;
     }
 

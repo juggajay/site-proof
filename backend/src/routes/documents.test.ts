@@ -8,8 +8,22 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 
+vi.mock('../lib/supabase.js', async () => {
+  const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => false),
+    getSupabaseClient: vi.fn(),
+  };
+});
+
+import * as supabaseLib from '../lib/supabase.js';
+
 // Import documents router
 import documentsRouter from './documents.js';
+
+const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
+const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 
 const app = express();
 app.use(express.json());
@@ -147,6 +161,9 @@ describe('Documents API', () => {
     restoreOptionalEnv('ANTHROPIC_DOCUMENT_CLASS_MODEL', ORIGINAL_ANTHROPIC_DOCUMENT_CLASS_MODEL);
     restoreOptionalEnv('SUPABASE_URL', ORIGINAL_SUPABASE_URL);
     vi.restoreAllMocks();
+    mockIsSupabaseConfigured.mockReset();
+    mockIsSupabaseConfigured.mockReturnValue(false);
+    mockGetSupabaseClient.mockReset();
   });
 
   async function createDataImageDocument(filename: string) {
@@ -1934,6 +1951,79 @@ describe('Documents API', () => {
         for (const filePath of createdPaths) {
           if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
+      }
+    });
+
+    it('does not remove a Supabase object outside the document project prefix', async () => {
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const externalProjectDocumentUrl =
+        'https://fixture-project.supabase.co/storage/v1/object/public/documents/other-project/not-owned.pdf';
+      const doc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'certificate',
+          category: 'Quality',
+          filename: 'not-owned.pdf',
+          fileUrl: externalProjectDocumentUrl,
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/documents/${doc.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(204);
+        expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+        expect(mockRemove).not.toHaveBeenCalled();
+      } finally {
+        await prisma.document.deleteMany({ where: { id: doc.id } });
+      }
+    });
+
+    it('removes an owned Supabase document object from the document project prefix', async () => {
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const ownedStoragePath = `${projectId}/owned-document.pdf`;
+      const ownedDocumentUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${ownedStoragePath}`;
+      const doc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'certificate',
+          category: 'Quality',
+          filename: 'owned-document.pdf',
+          fileUrl: ownedDocumentUrl,
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/documents/${doc.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(204);
+        expect(await prisma.document.findUnique({ where: { id: doc.id } })).toBeNull();
+        expect(mockRemove).toHaveBeenCalledOnce();
+        expect(mockRemove).toHaveBeenCalledWith([ownedStoragePath]);
+      } finally {
+        await prisma.document.deleteMany({ where: { id: doc.id } });
       }
     });
   });
