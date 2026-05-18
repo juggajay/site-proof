@@ -1,8 +1,16 @@
 import type { Request } from 'express';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 
 type AuthUser = NonNullable<Request['user']>;
+type DiaryMutationClient = typeof prisma | Prisma.TransactionClient;
+type EditableDiary = {
+  id: string;
+  projectId: string;
+  status: string;
+  lockedAt: Date | null;
+};
 
 const DIARY_WRITE_ROLES = new Set([
   'owner',
@@ -33,16 +41,20 @@ export async function requireDiaryReadAccess(
   }
 }
 
-async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
+async function getEffectiveProjectRole(
+  user: AuthUser,
+  projectId: string,
+  client: DiaryMutationClient = prisma,
+): Promise<string | null> {
   const isSubcontractor = DIARY_SUBCONTRACTOR_ROLES.has(user.roleInCompany);
   const [project, projectUser] = await Promise.all([
-    prisma.project.findUnique({
+    client.project.findUnique({
       where: { id: projectId },
       select: { companyId: true },
     }),
     isSubcontractor
       ? null
-      : prisma.projectUser.findFirst({
+      : client.projectUser.findFirst({
           where: { projectId, userId: user.id, status: 'active' },
           select: { role: true },
         }),
@@ -67,8 +79,9 @@ export async function requireDiaryWriteAccess(
   user: AuthUser,
   projectId: string,
   message = 'You do not have permission to modify diaries for this project',
+  client: DiaryMutationClient = prisma,
 ) {
-  const role = await getEffectiveProjectRole(user, projectId);
+  const role = await getEffectiveProjectRole(user, projectId, client);
   if (!role || !DIARY_WRITE_ROLES.has(role)) {
     throw AppError.forbidden(message);
   }
@@ -77,8 +90,9 @@ export async function requireDiaryWriteAccess(
 export async function requireDraftDiaryWriteAccess(
   user: AuthUser,
   diary: { projectId: string; status: string; lockedAt?: Date | null },
+  client: DiaryMutationClient = prisma,
 ) {
-  await requireDiaryWriteAccess(user, diary.projectId);
+  await requireDiaryWriteAccess(user, diary.projectId, undefined, client);
 
   if (diary.status === 'submitted') {
     throw AppError.badRequest('Cannot modify submitted diary');
@@ -89,12 +103,49 @@ export async function requireDraftDiaryWriteAccess(
   }
 }
 
-export async function requireLotInProject(lotId: string | undefined, projectId: string) {
+export async function requireEditableDiaryForWrite(
+  client: DiaryMutationClient,
+  user: AuthUser,
+  diaryId: string,
+  message?: string,
+): Promise<EditableDiary> {
+  const rows = await client.$queryRaw<
+    Array<{ id: string; projectId: string; status: string; lockedAt: Date | null }>
+  >`
+    SELECT id, project_id AS "projectId", status, locked_at AS "lockedAt"
+    FROM daily_diaries
+    WHERE id = ${diaryId}
+    FOR UPDATE
+  `;
+  const diary = rows[0];
+
+  if (!diary) {
+    throw AppError.notFound('Diary not found');
+  }
+
+  await requireDiaryWriteAccess(user, diary.projectId, message, client);
+
+  if (diary.status === 'submitted') {
+    throw AppError.badRequest('Cannot modify submitted diary');
+  }
+
+  if (diary.lockedAt) {
+    throw AppError.badRequest('Cannot modify locked diary');
+  }
+
+  return diary;
+}
+
+export async function requireLotInProject(
+  lotId: string | undefined,
+  projectId: string,
+  client: DiaryMutationClient = prisma,
+) {
   if (!lotId) {
     return;
   }
 
-  const lot = await prisma.lot.findFirst({
+  const lot = await client.lot.findFirst({
     where: { id: lotId, projectId },
     select: { id: true },
   });

@@ -14,6 +14,7 @@ import {
   parseDiaryRouteParam,
   requireDiaryReadAccess,
   requireDiaryWriteAccess,
+  requireEditableDiaryForWrite,
 } from './diaryAccess.js';
 
 const router = Router();
@@ -256,48 +257,46 @@ router.post(
 
     const diaryDate = normalizeDiaryDate(data.date);
 
-    // Check if diary already exists for this date
-    const existing = await prisma.dailyDiary.findFirst({
-      where: {
-        projectId: data.projectId,
-        date: diaryDate,
-      },
-    });
-
-    let diary;
-    if (existing) {
-      if (existing.status === 'submitted') {
-        throw AppError.badRequest('Cannot modify submitted diary');
-      }
-
-      if (existing.lockedAt) {
-        throw AppError.badRequest('Cannot modify locked diary');
-      }
-
-      // Update existing diary
-      diary = await prisma.dailyDiary.update({
-        where: { id: existing.id },
-        data: {
-          weatherConditions: data.weatherConditions,
-          temperatureMin: data.temperatureMin,
-          temperatureMax: data.temperatureMax,
-          rainfallMm: data.rainfallMm,
-          weatherNotes: data.weatherNotes,
-          generalNotes: data.generalNotes,
+    const { diary, existing } = await prisma.$transaction(async (tx) => {
+      // Check if diary already exists for this date
+      const existing = await tx.dailyDiary.findFirst({
+        where: {
+          projectId: data.projectId,
+          date: diaryDate,
         },
-        include: {
-          personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          visitors: true,
-          delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          events: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        },
+        select: { id: true },
       });
-    } else {
+
+      if (existing) {
+        await requireEditableDiaryForWrite(tx, req.user!, existing.id);
+
+        // Update existing diary while the draft row is locked.
+        const diary = await tx.dailyDiary.update({
+          where: { id: existing.id },
+          data: {
+            weatherConditions: data.weatherConditions,
+            temperatureMin: data.temperatureMin,
+            temperatureMax: data.temperatureMax,
+            rainfallMm: data.rainfallMm,
+            weatherNotes: data.weatherNotes,
+            generalNotes: data.generalNotes,
+          },
+          include: {
+            personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+            plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
+            activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
+            visitors: true,
+            delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+            deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+            events: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          },
+        });
+
+        return { diary, existing: true };
+      }
+
       // Create new diary
-      diary = await prisma.dailyDiary.create({
+      const diary = await tx.dailyDiary.create({
         data: {
           projectId: data.projectId,
           date: diaryDate,
@@ -319,7 +318,9 @@ router.post(
           events: { include: { lot: { select: { id: true, lotNumber: true } } } },
         },
       });
-    }
+
+      return { diary, existing: false };
+    });
 
     res.status(existing ? 200 : 201).json(diary);
   }),

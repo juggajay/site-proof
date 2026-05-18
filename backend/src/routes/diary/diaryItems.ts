@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { z } from 'zod';
 import { AppError } from '../../lib/AppError.js';
@@ -7,7 +8,7 @@ import {
   parseDiaryRouteParam,
   parseOptionalDiaryQueryString,
   requireDiaryReadAccess,
-  requireDraftDiaryWriteAccess,
+  requireEditableDiaryForWrite,
   requireLotInProject,
 } from './diaryAccess.js';
 
@@ -164,15 +165,20 @@ type RecentPlantSuggestion = {
 };
 
 type DiaryAuthUser = NonNullable<Request['user']>;
+type DiaryMutationTx = Prisma.TransactionClient;
 
-async function requireEditableDiary(user: DiaryAuthUser, diaryId: string) {
-  const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-  if (!diary) {
-    throw AppError.notFound('Diary not found');
-  }
-
-  await requireDraftDiaryWriteAccess(user, diary);
-  return diary;
+async function withEditableDiary<T>(
+  user: DiaryAuthUser,
+  diaryId: string,
+  mutate: (
+    tx: DiaryMutationTx,
+    diary: Awaited<ReturnType<typeof requireEditableDiaryForWrite>>,
+  ) => Promise<T>,
+) {
+  return prisma.$transaction(async (tx) => {
+    const diary = await requireEditableDiaryForWrite(tx, user, diaryId);
+    return mutate(tx, diary);
+  });
 }
 
 // POST /api/diary/:diaryId/personnel - Add personnel to diary
@@ -186,20 +192,16 @@ router.post(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
     const data = addPersonnelSchema.parse(req.body);
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const personnel = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const personnel = await prisma.diaryPersonnel.create({
-      data: {
-        diaryId,
-        ...data,
-      },
+      return tx.diaryPersonnel.create({
+        data: {
+          diaryId,
+          ...data,
+        },
+      });
     });
 
     res.status(201).json(personnel);
@@ -219,20 +221,21 @@ router.put(
     }
 
     const data = addPersonnelSchema.parse(req.body);
-    const diary = await requireEditableDiary(req.user!, diaryId);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const personnel = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const existing = await prisma.diaryPersonnel.findFirst({
-      where: { id: personnelId, diaryId },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw AppError.notFound('Personnel entry');
-    }
+      const existing = await tx.diaryPersonnel.findFirst({
+        where: { id: personnelId, diaryId },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw AppError.notFound('Personnel entry');
+      }
 
-    const personnel = await prisma.diaryPersonnel.update({
-      where: { id: personnelId },
-      data,
+      return tx.diaryPersonnel.update({
+        where: { id: personnelId },
+        data,
+      });
     });
 
     res.json(personnel);
@@ -251,17 +254,12 @@ router.delete(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-
-    const result = await prisma.diaryPersonnel.deleteMany({ where: { id: personnelId, diaryId } });
-    if (result.count === 0) {
-      throw AppError.notFound('Personnel entry');
-    }
+    await withEditableDiary(req.user!, diaryId, async (tx) => {
+      const result = await tx.diaryPersonnel.deleteMany({ where: { id: personnelId, diaryId } });
+      if (result.count === 0) {
+        throw AppError.notFound('Personnel entry');
+      }
+    });
 
     res.status(204).send();
   }),
@@ -278,20 +276,16 @@ router.post(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
     const data = addPlantSchema.parse(req.body);
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const plant = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const plant = await prisma.diaryPlant.create({
-      data: {
-        diaryId,
-        ...data,
-      },
+      return tx.diaryPlant.create({
+        data: {
+          diaryId,
+          ...data,
+        },
+      });
     });
 
     res.status(201).json(plant);
@@ -311,20 +305,21 @@ router.put(
     }
 
     const data = addPlantSchema.parse(req.body);
-    const diary = await requireEditableDiary(req.user!, diaryId);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const plant = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const existing = await prisma.diaryPlant.findFirst({
-      where: { id: plantId, diaryId },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw AppError.notFound('Plant entry');
-    }
+      const existing = await tx.diaryPlant.findFirst({
+        where: { id: plantId, diaryId },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw AppError.notFound('Plant entry');
+      }
 
-    const plant = await prisma.diaryPlant.update({
-      where: { id: plantId },
-      data,
+      return tx.diaryPlant.update({
+        where: { id: plantId },
+        data,
+      });
     });
 
     res.json(plant);
@@ -343,17 +338,12 @@ router.delete(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-
-    const result = await prisma.diaryPlant.deleteMany({ where: { id: plantId, diaryId } });
-    if (result.count === 0) {
-      throw AppError.notFound('Plant entry');
-    }
+    await withEditableDiary(req.user!, diaryId, async (tx) => {
+      const result = await tx.diaryPlant.deleteMany({ where: { id: plantId, diaryId } });
+      if (result.count === 0) {
+        throw AppError.notFound('Plant entry');
+      }
+    });
 
     res.status(204).send();
   }),
@@ -370,19 +360,14 @@ router.post(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
     const data = addVisitorSchema.parse(req.body);
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-
-    const visitor = await prisma.diaryVisitor.create({
-      data: {
-        diaryId,
-        ...data,
-      },
+    const visitor = await withEditableDiary(req.user!, diaryId, async (tx) => {
+      return tx.diaryVisitor.create({
+        data: {
+          diaryId,
+          ...data,
+        },
+      });
     });
 
     res.status(201).json(visitor);
@@ -401,26 +386,21 @@ router.put(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
     const data = addVisitorSchema.partial().parse(req.body);
-    await requireDraftDiaryWriteAccess(req.user!, diary);
+    const visitor = await withEditableDiary(req.user!, diaryId, async (tx) => {
+      const existingVisitor = await tx.diaryVisitor.findFirst({
+        where: { id: visitorId, diaryId },
+        select: { id: true },
+      });
 
-    const existingVisitor = await prisma.diaryVisitor.findFirst({
-      where: { id: visitorId, diaryId },
-      select: { id: true },
-    });
+      if (!existingVisitor) {
+        throw AppError.notFound('Visitor entry');
+      }
 
-    if (!existingVisitor) {
-      throw AppError.notFound('Visitor entry');
-    }
-
-    const visitor = await prisma.diaryVisitor.update({
-      where: { id: visitorId },
-      data,
+      return tx.diaryVisitor.update({
+        where: { id: visitorId },
+        data,
+      });
     });
 
     res.json(visitor);
@@ -439,17 +419,12 @@ router.delete(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-
-    const result = await prisma.diaryVisitor.deleteMany({ where: { id: visitorId, diaryId } });
-    if (result.count === 0) {
-      throw AppError.notFound('Visitor entry');
-    }
+    await withEditableDiary(req.user!, diaryId, async (tx) => {
+      const result = await tx.diaryVisitor.deleteMany({ where: { id: visitorId, diaryId } });
+      if (result.count === 0) {
+        throw AppError.notFound('Visitor entry');
+      }
+    });
 
     res.status(204).send();
   }),
@@ -635,23 +610,19 @@ router.post(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
     const data = addActivitySchema.parse(req.body);
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const activity = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const activity = await prisma.diaryActivity.create({
-      data: {
-        diaryId,
-        ...data,
-      },
-      include: {
-        lot: { select: { id: true, lotNumber: true } },
-      },
+      return tx.diaryActivity.create({
+        data: {
+          diaryId,
+          ...data,
+        },
+        include: {
+          lot: { select: { id: true, lotNumber: true } },
+        },
+      });
     });
 
     res.status(201).json(activity);
@@ -671,23 +642,24 @@ router.put(
     }
 
     const data = addActivitySchema.parse(req.body);
-    const diary = await requireEditableDiary(req.user!, diaryId);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const activity = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const existing = await prisma.diaryActivity.findFirst({
-      where: { id: activityId, diaryId },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw AppError.notFound('Activity entry');
-    }
+      const existing = await tx.diaryActivity.findFirst({
+        where: { id: activityId, diaryId },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw AppError.notFound('Activity entry');
+      }
 
-    const activity = await prisma.diaryActivity.update({
-      where: { id: activityId },
-      data,
-      include: {
-        lot: { select: { id: true, lotNumber: true } },
-      },
+      return tx.diaryActivity.update({
+        where: { id: activityId },
+        data,
+        include: {
+          lot: { select: { id: true, lotNumber: true } },
+        },
+      });
     });
 
     res.json(activity);
@@ -706,17 +678,12 @@ router.delete(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-
-    const result = await prisma.diaryActivity.deleteMany({ where: { id: activityId, diaryId } });
-    if (result.count === 0) {
-      throw AppError.notFound('Activity entry');
-    }
+    await withEditableDiary(req.user!, diaryId, async (tx) => {
+      const result = await tx.diaryActivity.deleteMany({ where: { id: activityId, diaryId } });
+      if (result.count === 0) {
+        throw AppError.notFound('Activity entry');
+      }
+    });
 
     res.status(204).send();
   }),
@@ -733,20 +700,16 @@ router.post(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
     const data = addDelaySchema.parse(req.body);
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const delay = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const delay = await prisma.diaryDelay.create({
-      data: {
-        diaryId,
-        ...data,
-      },
+      return tx.diaryDelay.create({
+        data: {
+          diaryId,
+          ...data,
+        },
+      });
     });
 
     res.status(201).json(delay);
@@ -766,20 +729,21 @@ router.put(
     }
 
     const data = addDelaySchema.parse(req.body);
-    const diary = await requireEditableDiary(req.user!, diaryId);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const delay = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const existing = await prisma.diaryDelay.findFirst({
-      where: { id: delayId, diaryId },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw AppError.notFound('Delay entry');
-    }
+      const existing = await tx.diaryDelay.findFirst({
+        where: { id: delayId, diaryId },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw AppError.notFound('Delay entry');
+      }
 
-    const delay = await prisma.diaryDelay.update({
-      where: { id: delayId },
-      data,
+      return tx.diaryDelay.update({
+        where: { id: delayId },
+        data,
+      });
     });
 
     res.json(delay);
@@ -798,17 +762,12 @@ router.delete(
       throw AppError.unauthorized('Unauthorized');
     }
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) {
-      throw AppError.notFound('Diary not found');
-    }
-
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-
-    const result = await prisma.diaryDelay.deleteMany({ where: { id: delayId, diaryId } });
-    if (result.count === 0) {
-      throw AppError.notFound('Delay entry');
-    }
+    await withEditableDiary(req.user!, diaryId, async (tx) => {
+      const result = await tx.diaryDelay.deleteMany({ where: { id: delayId, diaryId } });
+      if (result.count === 0) {
+        throw AppError.notFound('Delay entry');
+      }
+    });
 
     res.status(204).send();
   }),
@@ -823,23 +782,22 @@ router.post(
     const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
     const data = addDeliverySchema.parse(req.body);
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) throw AppError.notFound('Diary not found');
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const delivery = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const delivery = await prisma.diaryDelivery.create({
-      data: {
-        diaryId,
-        description: data.description,
-        supplier: data.supplier,
-        docketNumber: data.docketNumber,
-        quantity: data.quantity,
-        unit: data.unit,
-        lotId: data.lotId,
-        notes: data.notes,
-      },
-      include: { lot: { select: { id: true, lotNumber: true } } },
+      return tx.diaryDelivery.create({
+        data: {
+          diaryId,
+          description: data.description,
+          supplier: data.supplier,
+          docketNumber: data.docketNumber,
+          quantity: data.quantity,
+          unit: data.unit,
+          lotId: data.lotId,
+          notes: data.notes,
+        },
+        include: { lot: { select: { id: true, lotNumber: true } } },
+      });
     });
 
     res.status(201).json(delivery);
@@ -856,29 +814,30 @@ router.put(
     const deliveryId = parseDiaryRouteParam(req.params.deliveryId, 'deliveryId');
     const data = addDeliverySchema.parse(req.body);
 
-    const diary = await requireEditableDiary(req.user!, diaryId);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const delivery = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const existing = await prisma.diaryDelivery.findFirst({
-      where: { id: deliveryId, diaryId },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw AppError.notFound('Delivery entry');
-    }
+      const existing = await tx.diaryDelivery.findFirst({
+        where: { id: deliveryId, diaryId },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw AppError.notFound('Delivery entry');
+      }
 
-    const delivery = await prisma.diaryDelivery.update({
-      where: { id: deliveryId },
-      data: {
-        description: data.description,
-        supplier: data.supplier,
-        docketNumber: data.docketNumber,
-        quantity: data.quantity,
-        unit: data.unit,
-        lotId: data.lotId,
-        notes: data.notes,
-      },
-      include: { lot: { select: { id: true, lotNumber: true } } },
+      return tx.diaryDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          description: data.description,
+          supplier: data.supplier,
+          docketNumber: data.docketNumber,
+          quantity: data.quantity,
+          unit: data.unit,
+          lotId: data.lotId,
+          notes: data.notes,
+        },
+        include: { lot: { select: { id: true, lotNumber: true } } },
+      });
     });
 
     res.json(delivery);
@@ -894,14 +853,12 @@ router.delete(
     const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
     const deliveryId = parseDiaryRouteParam(req.params.deliveryId, 'deliveryId');
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) throw AppError.notFound('Diary not found');
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-
-    const result = await prisma.diaryDelivery.deleteMany({ where: { id: deliveryId, diaryId } });
-    if (result.count === 0) {
-      throw AppError.notFound('Delivery entry');
-    }
+    await withEditableDiary(req.user!, diaryId, async (tx) => {
+      const result = await tx.diaryDelivery.deleteMany({ where: { id: deliveryId, diaryId } });
+      if (result.count === 0) {
+        throw AppError.notFound('Delivery entry');
+      }
+    });
 
     res.json({ message: 'Delivery removed' });
   }),
@@ -916,20 +873,19 @@ router.post(
     const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
     const data = addEventSchema.parse(req.body);
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) throw AppError.notFound('Diary not found');
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const event = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const event = await prisma.diaryEvent.create({
-      data: {
-        diaryId,
-        eventType: data.eventType,
-        description: data.description,
-        notes: data.notes,
-        lotId: data.lotId,
-      },
-      include: { lot: { select: { id: true, lotNumber: true } } },
+      return tx.diaryEvent.create({
+        data: {
+          diaryId,
+          eventType: data.eventType,
+          description: data.description,
+          notes: data.notes,
+          lotId: data.lotId,
+        },
+        include: { lot: { select: { id: true, lotNumber: true } } },
+      });
     });
 
     res.status(201).json(event);
@@ -946,26 +902,27 @@ router.put(
     const eventId = parseDiaryRouteParam(req.params.eventId, 'eventId');
     const data = addEventSchema.parse(req.body);
 
-    const diary = await requireEditableDiary(req.user!, diaryId);
-    await requireLotInProject(data.lotId, diary.projectId);
+    const event = await withEditableDiary(req.user!, diaryId, async (tx, diary) => {
+      await requireLotInProject(data.lotId, diary.projectId, tx);
 
-    const existing = await prisma.diaryEvent.findFirst({
-      where: { id: eventId, diaryId },
-      select: { id: true },
-    });
-    if (!existing) {
-      throw AppError.notFound('Event entry');
-    }
+      const existing = await tx.diaryEvent.findFirst({
+        where: { id: eventId, diaryId },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw AppError.notFound('Event entry');
+      }
 
-    const event = await prisma.diaryEvent.update({
-      where: { id: eventId },
-      data: {
-        eventType: data.eventType,
-        description: data.description,
-        notes: data.notes,
-        lotId: data.lotId,
-      },
-      include: { lot: { select: { id: true, lotNumber: true } } },
+      return tx.diaryEvent.update({
+        where: { id: eventId },
+        data: {
+          eventType: data.eventType,
+          description: data.description,
+          notes: data.notes,
+          lotId: data.lotId,
+        },
+        include: { lot: { select: { id: true, lotNumber: true } } },
+      });
     });
 
     res.json(event);
@@ -981,14 +938,12 @@ router.delete(
     const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
     const eventId = parseDiaryRouteParam(req.params.eventId, 'eventId');
 
-    const diary = await prisma.dailyDiary.findUnique({ where: { id: diaryId } });
-    if (!diary) throw AppError.notFound('Diary not found');
-    await requireDraftDiaryWriteAccess(req.user!, diary);
-
-    const result = await prisma.diaryEvent.deleteMany({ where: { id: eventId, diaryId } });
-    if (result.count === 0) {
-      throw AppError.notFound('Event entry');
-    }
+    await withEditableDiary(req.user!, diaryId, async (tx) => {
+      const result = await tx.diaryEvent.deleteMany({ where: { id: eventId, diaryId } });
+      if (result.count === 0) {
+        throw AppError.notFound('Event entry');
+      }
+    });
 
     res.json({ message: 'Event removed' });
   }),
