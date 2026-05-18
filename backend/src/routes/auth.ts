@@ -26,6 +26,7 @@ import {
 import {
   clearFailedAuthAttempts,
   getClientIp,
+  isLockedOut,
   recordFailedAuthAttempt,
 } from '../middleware/rateLimiter.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
@@ -586,6 +587,15 @@ authRouter.post(
     const normalizedPassword = normalizePasswordInput(password);
 
     const clientIp = getClientIp(req);
+    const accountLockout = await isLockedOut(clientIp, normalizedEmail);
+    if (accountLockout.locked) {
+      throw new AppError(
+        429,
+        `Too many failed attempts. Please try again in ${Math.ceil(accountLockout.remainingSeconds / 60)} minutes.`,
+        'ACCOUNT_LOCKED',
+        { retryAfter: accountLockout.remainingSeconds, locked: true },
+      );
+    }
 
     // Find user with MFA fields using raw SQL
     const userResult = await prisma.$queryRaw<
@@ -604,13 +614,13 @@ authRouter.post(
     const user = userResult[0];
 
     if (!user || !user.password_hash) {
-      await recordFailedAuthAttempt(clientIp);
+      await recordFailedAuthAttempt(clientIp, normalizedEmail);
       throw AppError.unauthorized('Invalid email or password');
     }
 
     // Verify password
     if (!verifyPassword(normalizedPassword, user.password_hash)) {
-      await recordFailedAuthAttempt(clientIp);
+      await recordFailedAuthAttempt(clientIp, normalizedEmail);
       throw AppError.unauthorized('Invalid email or password');
     }
 
@@ -636,7 +646,7 @@ authRouter.post(
             : false;
 
         if (!isValid && !backupCodeValid) {
-          await recordFailedAuthAttempt(clientIp);
+          await recordFailedAuthAttempt(clientIp, normalizedEmail);
           throw AppError.unauthorized('Invalid MFA code');
         }
         // MFA verified, continue to generate token
@@ -666,7 +676,7 @@ authRouter.post(
       role: user.role_in_company,
     });
 
-    await clearFailedAuthAttempts(clientIp);
+    await clearFailedAuthAttempts(clientIp, normalizedEmail);
 
     res.json({
       user: {

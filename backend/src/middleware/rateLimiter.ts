@@ -86,6 +86,24 @@ function hashStorageKey(scope: string, identifier: string): string {
   return `${scope}:${crypto.createHash('sha256').update(`${scope}:${identifier}:${salt}`).digest('hex')}`;
 }
 
+function normalizeAuthPrincipal(principal: string | null | undefined): string | null {
+  const normalized = principal?.trim().toLowerCase();
+  return normalized || null;
+}
+
+function getSourceLockoutKey(ip: string): string {
+  return hashStorageKey('auth-lockout', ip);
+}
+
+function getPrincipalLockoutKey(ip: string, principal: string | null | undefined): string | null {
+  const normalizedPrincipal = normalizeAuthPrincipal(principal);
+  if (!normalizedPrincipal) {
+    return null;
+  }
+
+  return hashStorageKey('auth-lockout-principal', `${ip}:${normalizedPrincipal}`);
+}
+
 function cleanupRateLimitMap(store: Map<string, RateLimitEntry>, windowMs: number) {
   const now = Date.now();
   for (const [key, entry] of store.entries()) {
@@ -273,12 +291,7 @@ function setRateLimitHeaders(
   res.setHeader('X-RateLimit-Reset', resetSeconds);
 }
 
-/**
- * Check if an IP is currently locked out.
- */
-export async function isLockedOut(ip: string): Promise<AuthLockoutResult> {
-  const key = hashStorageKey('auth-lockout', ip);
-
+async function getLockoutStateForKey(key: string): Promise<AuthLockoutResult> {
   if (!usesDatabaseRateLimitStore()) {
     const entry = lockoutStore.get(key);
     if (!entry?.lockedUntil) {
@@ -325,11 +338,30 @@ export async function isLockedOut(ip: string): Promise<AuthLockoutResult> {
 }
 
 /**
- * Record a failed auth attempt. Call this from auth routes on failed login/MFA.
+ * Check if a source IP or source/principal pair is currently locked out.
  */
-export async function recordFailedAuthAttempt(ip: string): Promise<void> {
+export async function isLockedOut(
+  ip: string,
+  principal?: string | null,
+): Promise<AuthLockoutResult> {
+  const sourceLockout = await getLockoutStateForKey(getSourceLockoutKey(ip));
+  if (sourceLockout.locked) {
+    return sourceLockout;
+  }
+
+  const principalKey = getPrincipalLockoutKey(ip, principal);
+  if (!principalKey) {
+    return sourceLockout;
+  }
+
+  return getLockoutStateForKey(principalKey);
+}
+
+async function recordFailedAuthAttemptForKey(
+  key: string,
+  lockoutLabel: 'source' | 'source/principal',
+): Promise<void> {
   const now = new Date();
-  const key = hashStorageKey('auth-lockout', ip);
 
   if (!usesDatabaseRateLimitStore()) {
     let entry = lockoutStore.get(key);
@@ -350,7 +382,7 @@ export async function recordFailedAuthAttempt(ip: string): Promise<void> {
     if (entry.failedAttempts >= LOCKOUT_THRESHOLD) {
       entry.lockedUntil = now.getTime() + LOCKOUT_DURATION;
       logInfo(
-        `[SECURITY] Authentication source locked for ${LOCKOUT_DURATION / 60000} minutes after ${entry.failedAttempts} failed attempts`,
+        `[SECURITY] Authentication ${lockoutLabel} locked for ${LOCKOUT_DURATION / 60000} minutes after ${entry.failedAttempts} failed attempts`,
       );
     }
     return;
@@ -386,16 +418,48 @@ export async function recordFailedAuthAttempt(ip: string): Promise<void> {
   const entry = rows[0];
   if (entry?.locked_until) {
     logInfo(
-      `[SECURITY] Authentication source locked for ${LOCKOUT_DURATION / 60000} minutes after ${Number(entry.failed_attempts)} failed attempts`,
+      `[SECURITY] Authentication ${lockoutLabel} locked for ${LOCKOUT_DURATION / 60000} minutes after ${Number(entry.failed_attempts)} failed attempts`,
     );
   }
 }
 
 /**
- * Clear failed attempts on successful login.
+ * Record a failed auth attempt. Call this from auth routes on failed login/MFA.
+ *
+ * Failures are recorded against both the source IP and, when available, the attempted
+ * account principal. A later successful login can clear the account bucket without
+ * clearing the source-IP abuse bucket for every other principal on that IP.
  */
-export async function clearFailedAuthAttempts(ip: string): Promise<void> {
-  const key = hashStorageKey('auth-lockout', ip);
+export async function recordFailedAuthAttempt(
+  ip: string,
+  principal?: string | null,
+): Promise<void> {
+  const sourceKey = getSourceLockoutKey(ip);
+  const principalKey = getPrincipalLockoutKey(ip, principal);
+  const entries: Array<{ key: string; lockoutLabel: 'source' | 'source/principal' }> = principalKey
+    ? [
+        { key: sourceKey, lockoutLabel: 'source' },
+        { key: principalKey, lockoutLabel: 'source/principal' },
+      ]
+    : [{ key: sourceKey, lockoutLabel: 'source' }];
+
+  await Promise.all(
+    entries.map(({ key, lockoutLabel }) => recordFailedAuthAttemptForKey(key, lockoutLabel)),
+  );
+}
+
+/**
+ * Clear failed attempts after a successful login.
+ *
+ * Passing a principal clears only that source/principal bucket. Omitting the principal
+ * clears the source bucket, which is reserved for tests and explicit administrative
+ * cleanup; successful authentication paths should pass the authenticated principal.
+ */
+export async function clearFailedAuthAttempts(
+  ip: string,
+  principal?: string | null,
+): Promise<void> {
+  const key = getPrincipalLockoutKey(ip, principal) ?? getSourceLockoutKey(ip);
 
   if (!usesDatabaseRateLimitStore()) {
     lockoutStore.delete(key);
