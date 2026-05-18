@@ -25,6 +25,11 @@ import type {
 
 interface HoldPointsResponse {
   holdPoints?: HoldPoint[];
+  pagination?: {
+    page: number;
+    totalPages: number;
+    hasNextPage: boolean;
+  };
 }
 
 interface EvidencePackageResponse {
@@ -43,6 +48,8 @@ interface UploadedEvidenceDocument {
   fileUrl: string;
 }
 
+const HOLD_POINTS_PAGE_LIMIT = 100;
+
 // Extracted components
 import { HoldPointStatusFilter, HoldPointSummaryCards } from './components/HoldPointStatusFilter';
 import { HoldPointsTable } from './components/HoldPointsTable';
@@ -50,6 +57,25 @@ import { formatHoldPointDate, getStatusLabel, isOverdue } from './components/hol
 import { RequestReleaseModal } from './components/RequestReleaseModal';
 import { RecordReleaseModal } from './components/RecordReleaseModal';
 import { downloadCsv } from '@/lib/csv';
+
+async function fetchAllProjectHoldPoints(projectId: string): Promise<HoldPoint[]> {
+  const allHoldPoints: HoldPoint[] = [];
+  let page = 1;
+
+  while (true) {
+    const data = await apiFetch<HoldPointsResponse>(
+      `/api/holdpoints/project/${encodeURIComponent(projectId)}?page=${page}&limit=${HOLD_POINTS_PAGE_LIMIT}`,
+    );
+
+    allHoldPoints.push(...(data.holdPoints || []));
+
+    if (!data.pagination?.hasNextPage || page >= data.pagination.totalPages) {
+      return allHoldPoints;
+    }
+
+    page += 1;
+  }
+}
 
 export function HoldPointsPage() {
   const { projectId } = useParams();
@@ -86,10 +112,7 @@ export function HoldPointsPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await apiFetch<HoldPointsResponse>(
-        `/api/holdpoints/project/${encodeURIComponent(projectId)}`,
-      );
-      setHoldPoints(data.holdPoints || []);
+      setHoldPoints(await fetchAllProjectHoldPoints(projectId));
     } catch (err) {
       logError('Failed to fetch hold points:', err);
       setHoldPoints([]);
@@ -106,10 +129,7 @@ export function HoldPointsPage() {
   const refreshHoldPoints = useCallback(async () => {
     if (!projectId) return;
     try {
-      const data = await apiFetch<HoldPointsResponse>(
-        `/api/holdpoints/project/${encodeURIComponent(projectId)}`,
-      );
-      setHoldPoints(data.holdPoints || []);
+      setHoldPoints(await fetchAllProjectHoldPoints(projectId));
       setLoadError(null);
     } catch (err) {
       logError('Failed to refresh hold points:', err);
