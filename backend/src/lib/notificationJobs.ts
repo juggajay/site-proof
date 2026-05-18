@@ -8,6 +8,7 @@ const DEFAULT_DIGEST_WORKER_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_DIGEST_USER_LIMIT = 100;
 const DEFAULT_DIGEST_ITEM_LIMIT = 200;
 const DEFAULT_DIGEST_RETENTION_DAYS = 30;
+const NOTIFICATION_DIGEST_WORKER_LOCK_ID = 731_452_020;
 
 type NotificationDigestItemRecord = {
   id: string;
@@ -46,6 +47,10 @@ export type ProcessDueNotificationDigestsOptions = {
   retentionDays?: number;
   userIds?: string[];
 };
+
+function emptyDigestResult(): ProcessDueNotificationDigestsResult {
+  return { processed: 0, sent: 0, failed: 0, skipped: 0, deletedExpiredItems: 0, results: [] };
+}
 
 function parsePositiveInteger(value: unknown, fallback: number): number {
   const parsed =
@@ -169,11 +174,11 @@ async function processUserDigest(
   };
 }
 
-export async function processDueNotificationDigests(
+async function processDueNotificationDigestsUnlocked(
   options: ProcessDueNotificationDigestsOptions = {},
 ): Promise<ProcessDueNotificationDigestsResult> {
   if (options.userIds && options.userIds.length === 0) {
-    return { processed: 0, sent: 0, failed: 0, skipped: 0, deletedExpiredItems: 0, results: [] };
+    return emptyDigestResult();
   }
 
   const now = options.now ?? new Date();
@@ -227,6 +232,27 @@ export async function processDueNotificationDigests(
     cutoffAt: cutoffAt.toISOString(),
     results,
   };
+}
+
+export async function processDueNotificationDigests(
+  options: ProcessDueNotificationDigestsOptions = {},
+): Promise<ProcessDueNotificationDigestsResult> {
+  return prisma.$transaction(
+    async (tx) => {
+      const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(${NOTIFICATION_DIGEST_WORKER_LOCK_ID}) AS locked
+      `;
+      if (lockRows[0]?.locked !== true) {
+        return emptyDigestResult();
+      }
+
+      return processDueNotificationDigestsUnlocked(options);
+    },
+    {
+      maxWait: 5_000,
+      timeout: 30 * 60 * 1_000,
+    },
+  );
 }
 
 function getNotificationDigestWorkerEnabled(): boolean {
