@@ -1365,6 +1365,77 @@ describe('Progress Claims API', () => {
       expect(storedNotes.paymentHistory).toHaveLength(1);
       expect(storedNotes.paymentHistory?.[0].reference).toBe('PAY-PART-EXISTING');
     });
+
+    it('should preserve both concurrent partial payments in paid amount and history', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'certified',
+          certifiedAmount: 1000,
+          certifiedAt: new Date(),
+        },
+      });
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_claim_payment_update()
+        RETURNS trigger AS $$
+        BEGIN
+          PERFORM pg_sleep(0.2);
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS test_delay_claim_payment_update_trigger ON progress_claims
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_claim_payment_update_trigger
+        BEFORE UPDATE ON progress_claims
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_claim_payment_update();
+      `;
+      try {
+        const responses = await Promise.all([
+          request(app)
+            .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({
+              paidAmount: 400,
+              paymentReference: 'PAY-CONCURRENT-001',
+            }),
+          request(app)
+            .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({
+              paidAmount: 500,
+              paymentReference: 'PAY-CONCURRENT-002',
+            }),
+        ]);
+
+        expect(responses.map((res) => res.status).sort()).toEqual([200, 200]);
+
+        const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+        expect(updatedClaim?.status).toBe('partially_paid');
+        expect(Number(updatedClaim?.paidAmount)).toBe(900);
+
+        const storedNotes = JSON.parse(updatedClaim?.disputeNotes || '{}') as {
+          paymentHistory?: Array<{ amount: number; reference: string }>;
+        };
+        expect(storedNotes.paymentHistory).toHaveLength(2);
+        expect(storedNotes.paymentHistory?.map((entry) => entry.reference).sort()).toEqual([
+          'PAY-CONCURRENT-001',
+          'PAY-CONCURRENT-002',
+        ]);
+      } finally {
+        await prisma.$executeRaw`
+          DROP TRIGGER IF EXISTS test_delay_claim_payment_update_trigger ON progress_claims
+        `;
+        await prisma.$executeRaw`
+          DROP FUNCTION IF EXISTS test_delay_claim_payment_update()
+        `;
+      }
+    });
   });
 
   describe('Claim Dispute Flow', () => {
