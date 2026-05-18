@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as email from './email.js';
 import { clearEmailQueue, getQueuedEmails } from './email.js';
 import {
+  processNotificationAutomation,
   processAlertEscalations,
   processDocketBacklogAlerts,
   processDueDiaryReminders,
@@ -130,6 +131,71 @@ describe('notification automation jobs', () => {
         }),
       ).resolves.toBe(2);
     } finally {
+      await cleanupAutomationFixture(fixture);
+    }
+  });
+
+  it('does not duplicate automation notifications when concurrent workers pass the same existence check', async () => {
+    const fixture = await createAutomationFixture([
+      { role: 'foreman', label: 'foreman' },
+      { role: 'project_manager', companyRole: 'admin', label: 'manager' },
+    ]);
+    const now = new Date(2026, 4, 11, 18, 0, 0, 0);
+
+    let releaseReads: () => void = () => {};
+    let matchingReads = 0;
+    let middlewareActive = true;
+    const bothWorkersHaveReadReminder = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    const releaseFallback = setTimeout(releaseReads, 500);
+
+    prisma.$use(async (params, next) => {
+      const result = await next(params);
+      const where = params.args?.where as { projectId?: string; type?: string } | undefined;
+
+      if (
+        middlewareActive &&
+        params.model === 'Notification' &&
+        params.action === 'findFirst' &&
+        where?.projectId === fixture.projectId &&
+        where?.type === 'diary_reminder'
+      ) {
+        matchingReads += 1;
+        if (matchingReads === 2) {
+          clearTimeout(releaseFallback);
+          releaseReads();
+        }
+        await bothWorkersHaveReadReminder;
+      }
+
+      return result;
+    });
+
+    try {
+      const results = await Promise.all([
+        processNotificationAutomation({ now, projectIds: [fixture.projectId] }),
+        processNotificationAutomation({ now, projectIds: [fixture.projectId] }),
+      ]);
+      const skippedRunner = results.find(
+        (result) =>
+          result.diaryReminders.projectsChecked === 0 &&
+          result.missingDiaryAlerts.projectsChecked === 0 &&
+          result.docketBacklogAlerts.projectsWithBacklog === 0 &&
+          result.systemAlerts.projectsChecked === 0 &&
+          result.alertEscalations.alertsChecked === 0,
+      );
+      expect(skippedRunner).toBeDefined();
+
+      const notifications = await prisma.notification.findMany({
+        where: { projectId: fixture.projectId, type: 'diary_reminder' },
+      });
+      expect(notifications).toHaveLength(2);
+      expect(getQueuedEmails()).toHaveLength(3);
+    } finally {
+      middlewareActive = false;
+      clearTimeout(releaseFallback);
+      releaseReads();
       await cleanupAutomationFixture(fixture);
     }
   });

@@ -9,6 +9,7 @@ const DEFAULT_JOB_LIMIT = 100;
 const DEFAULT_AUTOMATION_WORKER_INTERVAL_MS = 60 * 60 * 1000;
 const DEFAULT_TIME_OF_DAY = '17:00';
 const DEFAULT_WORKING_DAYS = new Set([1, 2, 3, 4, 5]);
+const NOTIFICATION_AUTOMATION_WORKER_LOCK_ID = 731_452_021;
 
 type NotificationTiming = 'immediate' | 'digest';
 type NotificationTypeWithTiming =
@@ -185,6 +186,55 @@ export type NotificationAutomationRunResult = {
   systemAlerts: SystemAlertJobResult;
   alertEscalations: AlertEscalationJobResult;
 };
+
+function emptyDeliverySummary(): NotificationDeliverySummary {
+  return { inAppCreated: 0, emailsSent: 0, emailsQueued: 0, emailsFailed: 0 };
+}
+
+function emptyNotificationAutomationResult(now: Date): NotificationAutomationRunResult {
+  const date = formatDateKey(now);
+  return {
+    diaryReminders: {
+      ...emptyDeliverySummary(),
+      projectsChecked: 0,
+      remindersCreated: 0,
+      skippedProjects: 0,
+      usersNotified: 0,
+      date,
+    },
+    missingDiaryAlerts: {
+      ...emptyDeliverySummary(),
+      projectsChecked: 0,
+      alertsCreated: 0,
+      skippedProjects: 0,
+      usersNotified: 0,
+    },
+    docketBacklogAlerts: {
+      ...emptyDeliverySummary(),
+      overdueDockets: 0,
+      projectsWithBacklog: 0,
+      alertsCreated: 0,
+      skippedProjects: 0,
+      usersNotified: 0,
+    },
+    systemAlerts: {
+      projectsChecked: 0,
+      alertsCreated: 0,
+      overdueNcrAlerts: 0,
+      staleHoldPointAlerts: 0,
+      missingDiaryAlerts: 0,
+      notificationsCreated: 0,
+      skippedAlerts: 0,
+    },
+    alertEscalations: {
+      ...emptyDeliverySummary(),
+      alertsChecked: 0,
+      escalated: 0,
+      skippedAlerts: 0,
+      usersNotified: 0,
+    },
+  };
+}
 
 function parsePositiveInteger(value: unknown, fallback: number): number {
   const parsed =
@@ -1356,7 +1406,7 @@ export async function processAlertEscalations(
   return result;
 }
 
-export async function processNotificationAutomation(
+async function processNotificationAutomationUnlocked(
   options: NotificationAutomationJobOptions = {},
 ): Promise<NotificationAutomationRunResult> {
   const now = options.now ?? new Date();
@@ -1369,6 +1419,28 @@ export async function processNotificationAutomation(
     systemAlerts: await processSystemAlerts(sharedOptions),
     alertEscalations: await processAlertEscalations(sharedOptions),
   };
+}
+
+export async function processNotificationAutomation(
+  options: NotificationAutomationJobOptions = {},
+): Promise<NotificationAutomationRunResult> {
+  const now = options.now ?? new Date();
+  return prisma.$transaction(
+    async (tx) => {
+      const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(${NOTIFICATION_AUTOMATION_WORKER_LOCK_ID}) AS locked
+      `;
+      if (lockRows[0]?.locked !== true) {
+        return emptyNotificationAutomationResult(now);
+      }
+
+      return processNotificationAutomationUnlocked({ ...options, now });
+    },
+    {
+      maxWait: 5_000,
+      timeout: 30 * 60 * 1_000,
+    },
+  );
 }
 
 function getNotificationAutomationWorkerEnabled(): boolean {
