@@ -187,6 +187,9 @@ type DocketAccess = {
   projectId: string;
   subcontractorCompanyId: string;
 };
+type DocketProjectReadScope = {
+  subcontractorCompanyId?: string;
+};
 
 function isSubcontractorUser(user: AuthUser): boolean {
   return SUBCONTRACTOR_ROLES.has(user.roleInCompany);
@@ -220,10 +223,65 @@ async function hasLinkedSubcontractorCompany(
   return count > 0;
 }
 
-async function requireProjectReadAccess(user: AuthUser, projectId: string): Promise<void> {
+async function getLinkedSubcontractorCompanyIdForProject(
+  userId: string,
+  projectId: string,
+): Promise<string | null> {
+  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+    where: {
+      userId,
+      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
+    },
+    select: { subcontractorCompanyId: true },
+  });
+  return subcontractorUser?.subcontractorCompanyId ?? null;
+}
+
+async function requireProjectReadAccess(
+  user: AuthUser,
+  projectId: string,
+): Promise<DocketProjectReadScope> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { companyId: true },
+  });
+
+  if (!project) {
+    throw AppError.forbidden('Access denied');
+  }
+
+  if (!isSubcontractorUser(user) && isCompanyAdmin(user) && project.companyId === user.companyId) {
+    return {};
+  }
+
+  if (!isSubcontractorUser(user)) {
+    const projectUser = await prisma.projectUser.findFirst({
+      where: {
+        projectId,
+        userId: user.id,
+        status: 'active',
+      },
+      select: { id: true },
+    });
+
+    if (projectUser) {
+      return {};
+    }
+  }
+
+  const subcontractorCompanyId = await getLinkedSubcontractorCompanyIdForProject(
+    user.id,
+    projectId,
+  );
+  if (subcontractorCompanyId) {
+    return { subcontractorCompanyId };
+  }
+
   if (!(await checkProjectAccess(user.id, projectId))) {
     throw AppError.forbidden('Access denied');
   }
+
+  return {};
 }
 
 async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
@@ -267,7 +325,13 @@ async function requireDocketReadAccess(user: AuthUser, docket: DocketAccess): Pr
     return;
   }
 
-  await requireProjectReadAccess(user, docket.projectId);
+  const scope = await requireProjectReadAccess(user, docket.projectId);
+  if (
+    scope.subcontractorCompanyId &&
+    scope.subcontractorCompanyId !== docket.subcontractorCompanyId
+  ) {
+    throw AppError.forbidden('Access denied');
+  }
 }
 
 async function requireDocketSubcontractorAccess(
@@ -411,7 +475,7 @@ docketsRouter.get(
     const projectId = parseRequiredQueryString(req.query.projectId, 'projectId');
     const status = parseOptionalDocketStatus(req.query.status);
 
-    await requireProjectReadAccess(user, projectId);
+    const projectReadScope = await requireProjectReadAccess(user, projectId);
 
     // Parse pagination parameters
     const { page, limit, sortBy, sortOrder } = parsePagination(req.query);
@@ -427,20 +491,8 @@ docketsRouter.get(
       whereClause.status = status;
     }
 
-    // Subcontractors can only see their own company's dockets
-    if (user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin') {
-      const subcontractorUser = await prisma.subcontractorUser.findFirst({
-        where: {
-          userId: user.id,
-          subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-        },
-      });
-
-      if (subcontractorUser) {
-        whereClause.subcontractorCompanyId = subcontractorUser.subcontractorCompanyId;
-      } else {
-        return res.json({ data: [], dockets: [], pagination: getPaginationMeta(0, page, limit) });
-      }
+    if (projectReadScope.subcontractorCompanyId) {
+      whereClause.subcontractorCompanyId = projectReadScope.subcontractorCompanyId;
     }
 
     const [dockets, total] = await Promise.all([
