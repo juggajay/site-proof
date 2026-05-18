@@ -47,6 +47,10 @@ async function cleanupDashboardUser(userId: string) {
   await prisma.user.delete({ where: { id: userId } }).catch(() => {});
 }
 
+function formatDateOnly(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
 describe('Dashboard Stats API', () => {
   let authToken: string;
   let userId: string;
@@ -312,6 +316,88 @@ describe('Dashboard Stats API', () => {
       const res = await request(app).get('/api/dashboard/stats');
 
       expect(res.status).toBe(401);
+    });
+
+    it('should apply startDate and endDate to date-sensitive dashboard stats', async () => {
+      const dateCompany = await prisma.company.create({
+        data: { name: `Dashboard Date Range Company ${Date.now()}` },
+      });
+      const dateUser = await registerDashboardUser(
+        'dashboard-date-range',
+        'Dashboard Date Range User',
+        dateCompany.id,
+        'admin',
+      );
+      const dateProject = await prisma.project.create({
+        data: {
+          name: 'Dashboard Date Range Project',
+          projectNumber: `DASH-DATE-${Date.now()}`,
+          companyId: dateCompany.id,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const inRangeDate = new Date(today);
+      inRangeDate.setUTCHours(12, 0, 0, 0);
+      const oldDate = new Date(today);
+      oldDate.setUTCDate(oldDate.getUTCDate() - 45);
+      const dueDate = new Date(today);
+      dueDate.setUTCDate(dueDate.getUTCDate() - 1);
+
+      try {
+        await prisma.nCR.createMany({
+          data: [
+            {
+              projectId: dateProject.id,
+              ncrNumber: 'NCR-RANGE-IN',
+              description: 'In range dashboard NCR',
+              category: 'major',
+              status: 'open',
+              dueDate,
+              raisedById: dateUser.userId,
+              createdAt: inRangeDate,
+              updatedAt: inRangeDate,
+            },
+            {
+              projectId: dateProject.id,
+              ncrNumber: 'NCR-RANGE-OLD',
+              description: 'Old dashboard NCR',
+              category: 'major',
+              status: 'open',
+              dueDate,
+              raisedById: dateUser.userId,
+              createdAt: oldDate,
+              updatedAt: oldDate,
+            },
+          ],
+        });
+
+        const res = await request(app)
+          .get('/api/dashboard/stats')
+          .set('Authorization', `Bearer ${dateUser.token}`)
+          .query({ startDate: formatDateOnly(today), endDate: formatDateOnly(today) });
+
+        expect(res.status).toBe(200);
+        expect(res.body.openNCRs).toBe(1);
+        expect(res.body.attentionItems.overdueNCRs).toHaveLength(1);
+        expect(res.body.attentionItems.overdueNCRs[0]).toMatchObject({
+          title: 'NCR NCR-RANGE-IN',
+        });
+        expect(
+          res.body.recentActivities.some((activity: { description: string }) =>
+            activity.description.includes('NCR-RANGE-OLD'),
+          ),
+        ).toBe(false);
+      } finally {
+        await prisma.nCR.deleteMany({ where: { projectId: dateProject.id } });
+        await prisma.project.delete({ where: { id: dateProject.id } }).catch(() => {});
+        await cleanupDashboardUser(dateUser.userId);
+        await prisma.company.delete({ where: { id: dateCompany.id } }).catch(() => {});
+      }
     });
   });
 
