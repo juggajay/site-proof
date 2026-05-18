@@ -4,6 +4,11 @@ import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './he
 const E2E_LOT_ID = 'e2e-lot-detail';
 const E2E_ITP_INSTANCE_ID = 'e2e-itp-instance';
 const E2E_CHECKLIST_ITEM_ID = 'e2e-checklist-item';
+const E2E_PHOTO_CHECKLIST_ITEM_ID = 'e2e-photo-checklist-item';
+const E2E_PHOTO_COMPLETION_ID = 'e2e-photo-completion';
+const E2E_PHOTO_ATTACHMENT_ID = 'e2e-photo-attachment';
+const E2E_PHOTO_DOCUMENT_ID = 'e2e-photo-document';
+const E2E_TARGET_COMPLETION_ID = 'e2e-target-completion';
 
 const E2E_LOT = {
   id: E2E_LOT_ID,
@@ -42,20 +47,92 @@ const E2E_ITP_INSTANCE = {
         acceptanceCriteria: 'Subgrade is proof rolled and accepted',
         testType: null,
       },
+      {
+        id: E2E_PHOTO_CHECKLIST_ITEM_ID,
+        description: 'Document compaction proof',
+        category: 'Evidence',
+        responsibleParty: 'contractor',
+        isHoldPoint: false,
+        pointType: 'standard',
+        evidenceRequired: 'photo',
+        order: 2,
+        acceptanceCriteria: 'Compaction evidence is attached',
+        testType: null,
+      },
     ],
   },
   completions: [],
 };
 
+const E2E_ITP_INSTANCE_WITH_PHOTO = {
+  ...E2E_ITP_INSTANCE,
+  completions: [
+    {
+      id: E2E_PHOTO_COMPLETION_ID,
+      checklistItemId: E2E_CHECKLIST_ITEM_ID,
+      isCompleted: true,
+      isNotApplicable: false,
+      isFailed: false,
+      notes: 'Photo captured on site',
+      completedAt: '2026-01-15T01:00:00.000Z',
+      completedBy: {
+        id: E2E_ADMIN_USER.id,
+        fullName: E2E_ADMIN_USER.fullName,
+        email: E2E_ADMIN_USER.email,
+      },
+      isVerified: false,
+      verifiedAt: null,
+      verifiedBy: null,
+      attachments: [
+        {
+          id: E2E_PHOTO_ATTACHMENT_ID,
+          documentId: E2E_PHOTO_DOCUMENT_ID,
+          document: {
+            id: E2E_PHOTO_DOCUMENT_ID,
+            filename: 'supabase-proof-photo.jpg',
+            fileUrl:
+              'https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/projects/e2e/supabase-proof-photo.jpg',
+            caption: 'Existing Supabase evidence photo',
+            uploadedAt: '2026-01-15T01:00:00.000Z',
+            uploadedBy: {
+              id: E2E_ADMIN_USER.id,
+              fullName: E2E_ADMIN_USER.fullName,
+              email: E2E_ADMIN_USER.email,
+            },
+            gpsLatitude: -33.8688,
+            gpsLongitude: 151.2093,
+          },
+        },
+      ],
+    },
+    {
+      id: E2E_TARGET_COMPLETION_ID,
+      checklistItemId: E2E_PHOTO_CHECKLIST_ITEM_ID,
+      isCompleted: false,
+      isNotApplicable: false,
+      isFailed: false,
+      notes: null,
+      completedAt: null,
+      completedBy: null,
+      isVerified: false,
+      verifiedAt: null,
+      verifiedBy: null,
+      attachments: [],
+    },
+  ],
+};
+
 interface MockLotDetailOptions {
   failLotLoadsUntil?: number;
   failItpLoadsUntil?: number;
+  withPhotoEvidence?: boolean;
 }
 
 async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) {
   let lotLoadAttempts = 0;
   let itpLoadAttempts = 0;
   let completionRequestCount = 0;
+  let attachmentRequest: unknown;
   let completion = null as null | {
     id: string;
     checklistItemId: string;
@@ -180,11 +257,24 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
         return;
       }
 
+      if (options.withPhotoEvidence) {
+        await json({ instance: E2E_ITP_INSTANCE_WITH_PHOTO });
+        return;
+      }
+
       await json({
         instance: {
           ...E2E_ITP_INSTANCE,
           completions: completion ? [completion] : [],
         },
+      });
+      return;
+    }
+
+    if (url.pathname === `/api/documents/${E2E_PHOTO_DOCUMENT_ID}/signed-url`) {
+      await json({
+        signedUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+        expiresAt: '2099-01-01T00:00:00.000Z',
       });
       return;
     }
@@ -221,6 +311,22 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       return;
     }
 
+    if (
+      url.pathname === `/api/itp/completions/${E2E_TARGET_COMPLETION_ID}/attachments` &&
+      route.request().method() === 'POST'
+    ) {
+      attachmentRequest = route.request().postDataJSON();
+      await json({
+        attachment: {
+          id: 'e2e-linked-photo-attachment',
+          completionId: E2E_TARGET_COMPLETION_ID,
+          documentId: E2E_PHOTO_DOCUMENT_ID,
+          document: E2E_ITP_INSTANCE_WITH_PHOTO.completions[0].attachments[0].document,
+        },
+      });
+      return;
+    }
+
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 
@@ -228,6 +334,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
 
   return {
     getCompletionRequestCount: () => completionRequestCount,
+    getAttachmentRequest: () => attachmentRequest,
     getItpLoadAttempts: () => itpLoadAttempts,
     getLotLoadAttempts: () => lotLoadAttempts,
   };
@@ -276,5 +383,34 @@ test.describe('Lot detail ITP workflow', () => {
 
     await expect(page.getByText('Completed by E2E Admin')).toBeVisible();
     expect(api.getCompletionRequestCount()).toBe(1);
+  });
+
+  test('links existing photo documents when adding photos to evidence', async ({ page }) => {
+    const api = await mockLotDetailApi(page, { withPhotoEvidence: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Photos' }).click();
+
+    await expect(page.getByText('1 photo attached to ITP checklist items')).toBeVisible();
+    await expect(page.getByText('Existing Supabase evidence photo')).toBeVisible();
+
+    await page.getByLabel('Select All').check();
+    await page.getByRole('button', { name: 'Add to Evidence (1)' }).click();
+
+    const modal = page.getByRole('dialog').filter({ hasText: 'Add Photos to Evidence' });
+    await modal.getByRole('button', { name: /Document compaction proof/ }).click();
+    await modal.getByRole('button', { name: 'Add to Evidence' }).click();
+
+    await expect
+      .poll(() => api.getAttachmentRequest())
+      .toMatchObject({
+        documentId: E2E_PHOTO_DOCUMENT_ID,
+      });
+    expect(api.getAttachmentRequest()).not.toMatchObject({
+      fileUrl:
+        'https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/projects/e2e/supabase-proof-photo.jpg',
+    });
   });
 });
