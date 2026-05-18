@@ -52,6 +52,11 @@ type DashboardProjectAccess = {
   role: string;
   project: DashboardProject;
 };
+type DashboardDateRange = {
+  start?: Date;
+  endInclusive?: Date;
+  endExclusive?: Date;
+};
 
 async function getDashboardProjectAccess(user: AuthUser): Promise<DashboardProjectAccess[]> {
   if (SUBCONTRACTOR_DASHBOARD_ROLES.has(user.roleInCompany || '')) {
@@ -203,6 +208,54 @@ function parseDashboardDays(value: unknown): number {
   return parsed;
 }
 
+function isDateOnlyDashboardValue(value: unknown): boolean {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+}
+
+function parseDashboardDateRange(
+  startDateValue: unknown,
+  endDateValue: unknown,
+): DashboardDateRange {
+  const start = parseOptionalDashboardDate(startDateValue, 'startDate');
+  const parsedEnd = parseOptionalDashboardDate(endDateValue, 'endDate');
+  let endInclusive: Date | undefined;
+  let endExclusive: Date | undefined;
+
+  if (parsedEnd) {
+    if (isDateOnlyDashboardValue(endDateValue)) {
+      endExclusive = new Date(parsedEnd);
+      endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+    } else {
+      endInclusive = parsedEnd;
+    }
+  }
+
+  if (start && endExclusive && start >= endExclusive) {
+    throw AppError.badRequest('startDate must be on or before endDate');
+  }
+
+  if (start && endInclusive && start > endInclusive) {
+    throw AppError.badRequest('startDate must be on or before endDate');
+  }
+
+  return { start, endInclusive, endExclusive };
+}
+
+function buildDashboardDateFilter(range: DashboardDateRange): Prisma.DateTimeFilter | undefined {
+  const filter: Prisma.DateTimeFilter = {};
+
+  if (range.start) {
+    filter.gte = range.start;
+  }
+  if (range.endExclusive) {
+    filter.lt = range.endExclusive;
+  } else if (range.endInclusive) {
+    filter.lte = range.endInclusive;
+  }
+
+  return Object.keys(filter).length > 0 ? filter : undefined;
+}
+
 // GET /api/dashboard/stats - Get dashboard statistics including attention items
 dashboardRouter.get(
   '/stats',
@@ -212,6 +265,10 @@ dashboardRouter.get(
     if (!userId) {
       throw AppError.unauthorized('User not found');
     }
+
+    const dashboardDateRange = parseDashboardDateRange(req.query.startDate, req.query.endDate);
+    const createdAtDateFilter = buildDashboardDateFilter(dashboardDateRange);
+    const updatedAtDateFilter = buildDashboardDateFilter(dashboardDateRange);
 
     // Get all projects the user has access to
     const projectAccess = await getDashboardProjectAccess(req.user!);
@@ -243,7 +300,10 @@ dashboardRouter.get(
     const [projects, totalLots, openHoldPoints, openNCRs, overdueNCRs, staleHoldPoints] =
       await Promise.all([
         prisma.project.findMany({
-          where: { id: { in: projectIds } },
+          where: {
+            id: { in: projectIds },
+            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
+          },
           select: {
             id: true,
             name: true,
@@ -252,18 +312,23 @@ dashboardRouter.get(
           },
         }),
         prisma.lot.count({
-          where: { projectId: { in: projectIds } },
+          where: {
+            projectId: { in: projectIds },
+            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
+          },
         }),
         prisma.holdPoint.count({
           where: {
             lot: { projectId: { in: projectIds } },
             status: { in: ['pending', 'scheduled', 'requested'] },
+            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
           },
         }),
         prisma.nCR.count({
           where: {
             projectId: { in: projectIds },
             status: { notIn: ['closed', 'closed_concession'] },
+            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
           },
         }),
         prisma.nCR.findMany({
@@ -271,6 +336,7 @@ dashboardRouter.get(
             projectId: { in: projectIds },
             status: { notIn: ['closed', 'closed_concession'] },
             dueDate: { lt: today },
+            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
           },
           select: {
             id: true,
@@ -294,7 +360,10 @@ dashboardRouter.get(
           where: {
             lot: { projectId: { in: projectIds } },
             status: { in: ['pending', 'scheduled', 'requested'] },
-            createdAt: { lt: staleHPThreshold },
+            AND: [
+              { createdAt: { lt: staleHPThreshold } },
+              ...(createdAtDateFilter ? [{ createdAt: createdAtDateFilter }] : []),
+            ],
           },
           select: {
             id: true,
@@ -368,7 +437,10 @@ dashboardRouter.get(
 
     const [recentNCRs, recentLots] = await Promise.all([
       prisma.nCR.findMany({
-        where: { projectId: { in: projectIds } },
+        where: {
+          projectId: { in: projectIds },
+          ...(updatedAtDateFilter && { updatedAt: updatedAtDateFilter }),
+        },
         orderBy: { updatedAt: 'desc' },
         take: 3,
         select: {
@@ -380,7 +452,10 @@ dashboardRouter.get(
         },
       }),
       prisma.lot.findMany({
-        where: { projectId: { in: projectIds } },
+        where: {
+          projectId: { in: projectIds },
+          ...(updatedAtDateFilter && { updatedAt: updatedAtDateFilter }),
+        },
         orderBy: { updatedAt: 'desc' },
         take: 3,
         select: {
