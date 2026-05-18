@@ -1326,6 +1326,93 @@ describe('ITP Completion Attachments', () => {
     expect(completion.status).toBe('pending');
   });
 
+  it('should not create duplicate completions for concurrent checklist item writes', async () => {
+    const concurrentChecklistItem = await prisma.iTPChecklistItem.create({
+      data: {
+        templateId,
+        description: `Concurrent completion item ${Date.now()}`,
+        pointType: 'verification',
+        sequenceNumber: 99,
+      },
+    });
+
+    let releaseReads: () => void = () => {};
+    let matchingReads = 0;
+    let middlewareActive = true;
+    const bothRequestsHaveReadCompletion = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    const releaseFallback = setTimeout(releaseReads, 2000);
+
+    prisma.$use(async (params, next) => {
+      const result = await next(params);
+      const where = params.args?.where as
+        | { itpInstanceId?: string; checklistItemId?: string }
+        | undefined;
+
+      if (
+        middlewareActive &&
+        params.model === 'ITPCompletion' &&
+        params.action === 'findFirst' &&
+        params.runInTransaction !== true &&
+        where?.itpInstanceId === instanceId &&
+        where?.checklistItemId === concurrentChecklistItem.id
+      ) {
+        matchingReads += 1;
+        if (matchingReads === 2) {
+          clearTimeout(releaseFallback);
+          releaseReads();
+        }
+        await bothRequestsHaveReadCompletion;
+      }
+
+      return result;
+    });
+
+    try {
+      const [firstRes, secondRes] = await Promise.all([
+        request(app).post('/api/itp/completions').set('Authorization', `Bearer ${authToken}`).send({
+          itpInstanceId: instanceId,
+          checklistItemId: concurrentChecklistItem.id,
+          status: 'completed',
+          notes: 'First concurrent completion',
+        }),
+        request(app).post('/api/itp/completions').set('Authorization', `Bearer ${authToken}`).send({
+          itpInstanceId: instanceId,
+          checklistItemId: concurrentChecklistItem.id,
+          status: 'completed',
+          notes: 'Second concurrent completion',
+        }),
+      ]);
+
+      expect(firstRes.status).toBe(200);
+      expect(secondRes.status).toBe(200);
+
+      const completions = await prisma.iTPCompletion.findMany({
+        where: {
+          itpInstanceId: instanceId,
+          checklistItemId: concurrentChecklistItem.id,
+        },
+      });
+
+      expect(completions).toHaveLength(1);
+      expect(completions[0].status).toBe('completed');
+      expect(['First concurrent completion', 'Second concurrent completion']).toContain(
+        completions[0].notes,
+      );
+    } finally {
+      middlewareActive = false;
+      clearTimeout(releaseFallback);
+      releaseReads();
+      await prisma.iTPCompletion.deleteMany({
+        where: { checklistItemId: concurrentChecklistItem.id },
+      });
+      await prisma.iTPChecklistItem
+        .delete({ where: { id: concurrentChecklistItem.id } })
+        .catch(() => {});
+    }
+  });
+
   it('should reject oversized completion workflow text without mutating the completion', async () => {
     const beforeCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
       where: { id: completionId },
