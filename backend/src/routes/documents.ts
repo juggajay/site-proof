@@ -1127,9 +1127,39 @@ async function uploadToSupabase(
   return { url, storagePath };
 }
 
+function getDocumentStoragePrefixes(projectId: string, documentType?: string | null): string[] {
+  const prefixes = [`${projectId}/`];
+  if (documentType === 'drawing') {
+    prefixes.push(`drawings/${projectId}/`);
+  }
+  if (documentType === 'test_certificate') {
+    prefixes.push(`certificates/${projectId}/`);
+  }
+  return prefixes;
+}
+
+function getOwnedDocumentStoragePath(
+  fileUrl: string,
+  projectId: string,
+  documentType?: string | null,
+): string | null {
+  for (const expectedPrefix of getDocumentStoragePrefixes(projectId, documentType)) {
+    const storagePath = getSupabaseStoragePath(fileUrl, {
+      bucket: DOCUMENTS_BUCKET,
+      expectedPrefix,
+    });
+    if (storagePath) return storagePath;
+  }
+  return null;
+}
+
 // Helper to delete file from Supabase Storage
-async function deleteFromSupabase(fileUrl: string): Promise<void> {
-  const storagePath = getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+async function deleteFromSupabase(
+  fileUrl: string,
+  projectId: string,
+  documentType?: string | null,
+): Promise<void> {
+  const storagePath = getOwnedDocumentStoragePath(fileUrl, projectId, documentType);
   if (!storagePath) {
     logWarn('Could not extract storage path from URL:', sanitizeUrlValueForLog(fileUrl));
     return;
@@ -1145,9 +1175,10 @@ async function deleteFromSupabase(fileUrl: string): Promise<void> {
 async function cleanupStoredDocumentUpload(
   fileUrl: string | null,
   file: Express.Multer.File,
+  projectId: string,
 ): Promise<void> {
-  if (fileUrl && isSupabaseConfigured() && getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET)) {
-    await deleteFromSupabase(fileUrl);
+  if (fileUrl && isSupabaseConfigured() && getOwnedDocumentStoragePath(fileUrl, projectId)) {
+    await deleteFromSupabase(fileUrl, projectId);
     return;
   }
 
@@ -1348,7 +1379,7 @@ router.post(
       res.status(201).json(document);
     } catch (error) {
       if (!documentCreated) {
-        await cleanupStoredDocumentUpload(fileUrl, uploadedFile);
+        await cleanupStoredDocumentUpload(fileUrl, uploadedFile, projectId);
       }
       throw error;
     }
@@ -1485,7 +1516,7 @@ router.post(
       res.status(201).json(newDocument);
     } catch (error) {
       if (!documentCreated) {
-        await cleanupStoredDocumentUpload(fileUrl, uploadedFile);
+        await cleanupStoredDocumentUpload(fileUrl, uploadedFile, originalDocument.projectId);
       }
       throw error;
     }
@@ -1653,8 +1684,11 @@ router.delete(
     await prisma.document.delete({ where: { id: documentId } });
 
     try {
-      if (isSupabaseConfigured() && getSupabaseStoragePath(document.fileUrl, DOCUMENTS_BUCKET)) {
-        await deleteFromSupabase(document.fileUrl);
+      if (
+        isSupabaseConfigured() &&
+        getOwnedDocumentStoragePath(document.fileUrl, document.projectId, document.documentType)
+      ) {
+        await deleteFromSupabase(document.fileUrl, document.projectId, document.documentType);
       } else if (isExternalFileUrl(document.fileUrl)) {
         logWarn(
           'Skipping delete for external document URL:',
