@@ -166,10 +166,16 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
     { key: 'lotNumber', label: 'Lot Number' },
     { key: 'description', label: 'Description' },
     { key: 'chainage', label: 'Chainage' },
+    { key: 'chainageStart', label: 'Chainage Start' },
+    { key: 'chainageEnd', label: 'Chainage End' },
+    { key: 'offset', label: 'Offset' },
+    { key: 'offsetLeft', label: 'Offset Left' },
+    { key: 'offsetRight', label: 'Offset Right' },
     { key: 'layer', label: 'Layer' },
     { key: 'areaZone', label: 'Area/Zone' },
     { key: 'activityType', label: 'Activity Type' },
     { key: 'status', label: 'Status' },
+    { key: 'budget', label: 'Budget' },
     { key: 'notes', label: 'Notes' },
   ];
 

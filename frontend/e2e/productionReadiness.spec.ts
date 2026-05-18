@@ -1566,6 +1566,12 @@ test.describe('production readiness guardrails', () => {
     expect(offlineStatusSource).toContain('Removing stale lot edit queue item for conflicted lot');
     expect(conflictModalSource).toContain('function pickConflictForReview');
     expect(conflictModalSource).toContain('formatConflictValue');
+    expect(conflictModalSource).toContain("key: 'chainageStart'");
+    expect(conflictModalSource).toContain("key: 'chainageEnd'");
+    expect(conflictModalSource).toContain("key: 'offset'");
+    expect(conflictModalSource).toContain("key: 'offsetLeft'");
+    expect(conflictModalSource).toContain("key: 'offsetRight'");
+    expect(conflictModalSource).toContain("key: 'budget'");
     expect(conflictModalSource).not.toContain('setSelectedConflict(null);');
   });
 
