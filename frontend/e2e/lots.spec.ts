@@ -31,6 +31,8 @@ const E2E_LOT = {
 
 interface MockSeededLotsOptions {
   failLotLoadsUntil?: number;
+  paginatedLotPages?: Array<(typeof E2E_LOT)[]>;
+  lotRequests?: string[];
 }
 
 async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}) {
@@ -75,8 +77,32 @@ async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}
 
     if (url.pathname === '/api/lots' && url.searchParams.get('projectId') === E2E_PROJECT_ID) {
       lotLoadAttempts += 1;
+      options.lotRequests?.push(`${url.pathname}${url.search}`);
       if (lotLoadAttempts <= (options.failLotLoadsUntil ?? 0)) {
         await json({ message: 'Lots temporarily unavailable' }, 500);
+        return;
+      }
+
+      if (options.paginatedLotPages) {
+        const page = Number(url.searchParams.get('page') || '1');
+        const limit = Number(url.searchParams.get('limit') || '20');
+        const lots = options.paginatedLotPages[page - 1] ?? [];
+        const total = options.paginatedLotPages.reduce(
+          (count, lotPage) => count + lotPage.length,
+          0,
+        );
+
+        await json({
+          lots,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: options.paginatedLotPages.length,
+            hasNextPage: page < options.paginatedLotPages.length,
+            hasPrevPage: page > 1,
+          },
+        });
         return;
       }
 
@@ -236,6 +262,30 @@ test.describe('Lots seeded UI contract', () => {
     await expect(page.getByRole('row').filter({ hasText: 'LOT-001' })).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
     expect(api.getLotLoadAttempts()).toBeGreaterThanOrEqual(2);
+  });
+
+  test('loads every lot page so the register and CSV export are not truncated', async ({
+    page,
+  }) => {
+    const lotRequests: string[] = [];
+    const secondPageLot = {
+      ...E2E_LOT,
+      id: 'e2e-lot-page-2',
+      lotNumber: 'LOT-101',
+      description: 'Second API page lot',
+    };
+
+    await mockSeededLotsApi(page, {
+      paginatedLotPages: [[E2E_LOT], [secondPageLot]],
+      lotRequests,
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
+
+    await expect(page.getByRole('row').filter({ hasText: 'LOT-001' })).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'LOT-101' })).toBeVisible();
+    expect(lotRequests.some((requestUrl) => requestUrl.includes('page=1&limit=100'))).toBe(true);
+    expect(lotRequests.some((requestUrl) => requestUrl.includes('page=2&limit=100'))).toBe(true);
   });
 
   test('creates a lot with trimmed values and the suggested ITP template', async ({ page }) => {

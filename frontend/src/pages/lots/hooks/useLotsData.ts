@@ -8,6 +8,8 @@ import type { Lot } from '../lotsPageTypes';
 
 const INITIAL_DISPLAY_COUNT = 20;
 const LOAD_MORE_COUNT = 15;
+const LOTS_API_PAGE_LIMIT = 100;
+const LOTS_API_MAX_PAGES = 100;
 
 interface UseLotsDataParams {
   projectId: string | undefined;
@@ -21,6 +23,36 @@ interface UseLotsDataParams {
   chainageMaxFilter: string;
   subcontractorFilter: string;
   areaZoneFilter: string;
+}
+
+interface LotsApiResponse {
+  lots?: Lot[];
+  data?: Lot[];
+  pagination?: {
+    hasNextPage?: boolean;
+    totalPages?: number;
+  };
+}
+
+async function fetchAllLotPages(projectId: string): Promise<Lot[]> {
+  const allLots: Lot[] = [];
+  let page = 1;
+
+  while (page <= LOTS_API_MAX_PAGES) {
+    const data = await apiFetch<LotsApiResponse>(
+      `/api/lots?projectId=${encodeURIComponent(projectId)}&page=${page}&limit=${LOTS_API_PAGE_LIMIT}`,
+    );
+
+    allLots.push(...(data.lots ?? data.data ?? []));
+
+    if (!data.pagination?.hasNextPage || page >= (data.pagination.totalPages ?? page)) {
+      return allLots;
+    }
+
+    page += 1;
+  }
+
+  throw new Error('Lot register export exceeded the maximum page count');
 }
 
 export function useLotsData({
@@ -178,10 +210,8 @@ export function useLotsData({
     try {
       setLoading(true);
       setError(null);
-      const data = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${encodeURIComponent(projectId)}`,
-      );
-      setLots(data.lots || []);
+      const allLots = await fetchAllLotPages(projectId);
+      setLots(allLots);
     } catch (err) {
       setLots([]);
       setError(extractErrorMessage(err, 'Failed to load lots.'));
@@ -251,10 +281,7 @@ export function useLotsData({
         if (document.visibilityState === 'visible' && projectId) {
           const silentFetchLots = async () => {
             try {
-              const data = await apiFetch<{ lots: Lot[] }>(
-                `/api/lots?projectId=${encodeURIComponent(projectId)}`,
-              );
-              const newLots = data.lots || [];
+              const newLots = await fetchAllLotPages(projectId);
               setLots((prevLots) => {
                 const hasChanges =
                   newLots.length !== prevLots.length ||
