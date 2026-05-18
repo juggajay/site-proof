@@ -57,15 +57,24 @@ export const queryKeys = {
   foremanBadges: (projectId: string) => ['foreman-badges', projectId] as const,
 
   // Subcontractor Portal
-  portalCompanies: ['portal-companies'] as const,
-  portalDashboard: ['portal-dashboard'] as const,
-  portalDockets: ['portal-dockets'] as const,
-  portalNCRs: ['portal-ncrs'] as const,
-  portalTestResults: ['portal-test-results'] as const,
-  portalITPs: ['portal-itps'] as const,
-  portalHoldPoints: ['portal-hold-points'] as const,
-  portalDocuments: ['portal-documents'] as const,
-  portalAssignedWork: ['portal-assigned-work'] as const,
+  portalCompanies: (userId: string | null | undefined) =>
+    ['portal-companies', userId ?? 'anonymous'] as const,
+  portalDashboard: (userId: string | null | undefined) =>
+    ['portal-dashboard', userId ?? 'anonymous'] as const,
+  portalDockets: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['portal-dockets', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalNCRs: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['portal-ncrs', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalTestResults: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['portal-test-results', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalITPs: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['portal-itps', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalHoldPoints: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['portal-hold-points', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalDocuments: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['portal-documents', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalAssignedWork: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['portal-assigned-work', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
 
   // Reports
   reports: (projectId: string) => ['reports', projectId] as const,

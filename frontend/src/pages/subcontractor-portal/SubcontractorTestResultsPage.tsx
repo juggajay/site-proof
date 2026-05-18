@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
@@ -88,14 +89,16 @@ function getResultBadge(result: string) {
 }
 
 export function SubcontractorTestResultsPage() {
+  const { user } = useAuth();
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies,
+    queryKey: queryKeys.portalCompanies(user?.id),
     queryFn: async () => {
       const res = await apiFetch<{ company: SubcontractorCompany }>(
         '/api/subcontractors/my-company',
       );
       return res.company;
     },
+    enabled: !!user?.id,
   });
   const canViewTestResults = isPortalModuleEnabled(company, 'testResults');
 
@@ -104,14 +107,14 @@ export function SubcontractorTestResultsPage() {
     isLoading: testsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalTestResults,
+    queryKey: queryKeys.portalTestResults(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ testResults?: ApiTestResult[] }>(
         `/api/test-results?projectId=${company!.projectId}&subcontractorView=true`,
       );
       return (res.testResults || []).map(normalizeTestResult);
     },
-    enabled: !!company?.projectId && canViewTestResults,
+    enabled: !!user?.id && !!company?.projectId && canViewTestResults,
   });
 
   const loading = companyLoading || (canViewTestResults && testsLoading);

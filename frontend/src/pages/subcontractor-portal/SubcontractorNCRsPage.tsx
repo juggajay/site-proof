@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
@@ -101,14 +102,16 @@ function getSeverityBadge(severity: string) {
 }
 
 export function SubcontractorNCRsPage() {
+  const { user } = useAuth();
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies,
+    queryKey: queryKeys.portalCompanies(user?.id),
     queryFn: async () => {
       const res = await apiFetch<{ company: SubcontractorCompany }>(
         '/api/subcontractors/my-company',
       );
       return res.company;
     },
+    enabled: !!user?.id,
   });
   const canViewNCRs = isPortalModuleEnabled(company, 'ncrs');
 
@@ -117,14 +120,14 @@ export function SubcontractorNCRsPage() {
     isLoading: ncrsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalNCRs,
+    queryKey: queryKeys.portalNCRs(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ ncrs: NCR[] }>(
         `/api/ncrs?projectId=${company!.projectId}&subcontractorView=true`,
       );
       return res.ncrs || [];
     },
-    enabled: !!company?.projectId && canViewNCRs,
+    enabled: !!user?.id && !!company?.projectId && canViewNCRs,
   });
 
   const loading = companyLoading || (canViewNCRs && ncrsLoading);

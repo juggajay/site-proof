@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { PortalAccessDenied } from './portalAccess';
@@ -43,14 +44,16 @@ function getStatusBadge(status: string) {
 }
 
 export function AssignedWorkPage() {
+  const { user } = useAuth();
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies,
+    queryKey: queryKeys.portalCompanies(user?.id),
     queryFn: async () => {
       const res = await apiFetch<{
         company: { projectName: string; projectId: string; portalAccess?: PortalAccess };
       }>('/api/subcontractors/my-company');
       return res.company;
     },
+    enabled: !!user?.id,
   });
   const canViewAssignedWork = isPortalModuleEnabled(company, 'lots');
 
@@ -59,14 +62,14 @@ export function AssignedWorkPage() {
     isLoading: lotsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalAssignedWork,
+    queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
         `/api/lots?projectId=${company!.projectId}&portalModule=lots`,
       );
       return res.lots || [];
     },
-    enabled: !!company?.projectId && canViewAssignedWork,
+    enabled: !!user?.id && !!company?.projectId && canViewAssignedWork,
   });
 
   const loading = companyLoading || (canViewAssignedWork && lotsLoading);

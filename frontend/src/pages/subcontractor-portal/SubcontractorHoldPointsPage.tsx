@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
@@ -83,14 +84,16 @@ function getStatusBadge(status: string) {
 }
 
 export function SubcontractorHoldPointsPage() {
+  const { user } = useAuth();
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies,
+    queryKey: queryKeys.portalCompanies(user?.id),
     queryFn: async () => {
       const res = await apiFetch<{ company: SubcontractorCompany }>(
         '/api/subcontractors/my-company',
       );
       return res.company;
     },
+    enabled: !!user?.id,
   });
   const canViewHoldPoints = isPortalModuleEnabled(company, 'holdPoints');
 
@@ -99,14 +102,14 @@ export function SubcontractorHoldPointsPage() {
     isLoading: hpLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalHoldPoints,
+    queryKey: queryKeys.portalHoldPoints(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ holdPoints: ApiHoldPoint[] }>(
         `/api/holdpoints/project/${company!.projectId}?subcontractorView=true`,
       );
       return (res.holdPoints || []).map(normalizeHoldPoint);
     },
-    enabled: !!company?.projectId && canViewHoldPoints,
+    enabled: !!user?.id && !!company?.projectId && canViewHoldPoints,
   });
 
   const loading = companyLoading || (canViewHoldPoints && hpLoading);
