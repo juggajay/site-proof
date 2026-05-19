@@ -302,6 +302,57 @@ test.describe('Dashboard seeded account contract', () => {
     await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 
+  test('keeps default dashboard header controls within iPhone width', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await mockDefaultDashboardApi(page);
+
+    await page.goto('/dashboard');
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const viewportWidth = window.innerWidth;
+      const controlNames = ['Last 30 Days', 'Refresh', 'Export PDF', 'Customize'];
+      const controls = controlNames.map((name) => {
+        const button = Array.from(document.querySelectorAll('button')).find((candidate) =>
+          candidate.textContent?.includes(name),
+        );
+        const rect = button?.getBoundingClientRect();
+        return {
+          name,
+          found: Boolean(button && rect),
+          left: rect?.left ?? null,
+          right: rect?.right ?? null,
+        };
+      });
+
+      return {
+        viewportWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        controls,
+      };
+    });
+
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.viewportWidth);
+    expect(layout.controls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Last 30 Days', found: true }),
+        expect.objectContaining({ name: 'Refresh', found: true }),
+        expect.objectContaining({ name: 'Export PDF', found: true }),
+        expect.objectContaining({ name: 'Customize', found: true }),
+      ]),
+    );
+    for (const control of layout.controls) {
+      expect(
+        control.left,
+        `${control.name} should not be clipped on the left`,
+      ).toBeGreaterThanOrEqual(0);
+      expect(
+        control.right,
+        `${control.name} should not be clipped on the right`,
+      ).toBeLessThanOrEqual(layout.viewportWidth);
+    }
+  });
+
   test('project manager dashboard links to mounted project routes', async ({ page }) => {
     await mockProjectManagerDashboardApi(page);
 
