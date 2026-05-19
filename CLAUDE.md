@@ -2,6 +2,10 @@
 
 Construction quality management platform for civil contractors. Manages lots, ITPs, hold points, NCRs, daily diaries, dockets, progress claims, and documents.
 
+For current workstream state, completed production/security work, and handoff
+instructions for a fresh agent, read
+[docs/agent-handoff.md](docs/agent-handoff.md).
+
 ## Quick Start
 
 ```bash
