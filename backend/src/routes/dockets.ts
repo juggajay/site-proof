@@ -7,6 +7,7 @@ import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pa
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { activeSubcontractorCompanyWhere, checkProjectAccess } from '../lib/projectAccess.js';
+import { requireEditableDiaryForWrite } from './diary/diaryAccess.js';
 import type { Prisma } from '@prisma/client';
 
 const DOCKET_STATUSES = ['draft', 'pending_approval', 'approved', 'rejected', 'queried'] as const;
@@ -1169,25 +1170,26 @@ docketsRouter.post(
     // === DIARY AUTO-POPULATION ===
     // When a docket is approved, write its labour and plant data into the daily diary
     try {
-      // Find or create diary for this date
-      let diary = await prisma.dailyDiary.findUnique({
-        where: { projectId_date: { projectId: docket.projectId, date: docket.date } },
-      });
-
-      if (!diary) {
-        diary = await prisma.dailyDiary.create({
-          data: {
-            projectId: docket.projectId,
-            date: docket.date,
-            status: 'draft',
-          },
+      await prisma.$transaction(async (tx) => {
+        // Find or create diary for this date
+        let diary = await tx.dailyDiary.findUnique({
+          where: { projectId_date: { projectId: docket.projectId, date: docket.date } },
         });
-      }
 
-      // Don't modify submitted diaries
-      if (diary.status !== 'submitted') {
+        if (!diary) {
+          diary = await tx.dailyDiary.create({
+            data: {
+              projectId: docket.projectId,
+              date: docket.date,
+              status: 'draft',
+            },
+          });
+        }
+
+        await requireEditableDiaryForWrite(tx, user, diary.id);
+
         // Fetch full docket with labour and plant entries
-        const fullDocket = await prisma.dailyDocket.findUnique({
+        const fullDocket = await tx.dailyDocket.findUnique({
           where: { id: docket.id },
           include: {
             labourEntries: {
@@ -1209,7 +1211,7 @@ docketsRouter.post(
         if (fullDocket) {
           // Write personnel records from labour entries
           for (const entry of fullDocket.labourEntries) {
-            await prisma.diaryPersonnel.create({
+            await tx.diaryPersonnel.create({
               data: {
                 diaryId: diary.id,
                 name: entry.employee.name,
@@ -1227,7 +1229,7 @@ docketsRouter.post(
 
           // Write plant records from plant entries
           for (const entry of fullDocket.plantEntries) {
-            await prisma.diaryPlant.create({
+            await tx.diaryPlant.create({
               data: {
                 diaryId: diary.id,
                 description: entry.plant.description || entry.plant.type,
@@ -1241,7 +1243,7 @@ docketsRouter.post(
             });
           }
         }
-      }
+      });
     } catch {
       // Don't fail the approval if diary population fails
     }
