@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { logError } from '@/lib/logger';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
+import { formatDateTime } from '@/lib/utils';
 
 interface Lot {
   id: string;
@@ -659,7 +660,7 @@ export function LotEditPage() {
             <p className="text-sm text-muted-foreground mb-4">
               Last modified:{' '}
               {concurrentEditInfo?.serverUpdatedAt
-                ? new Date(concurrentEditInfo.serverUpdatedAt).toLocaleString()
+                ? formatDateTime(concurrentEditInfo.serverUpdatedAt)
                 : 'Unknown'}
             </p>
             <p className="text-sm">

@@ -7,6 +7,7 @@ import { ApiError, apiFetch, authFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
+import { formatDateTime } from '@/lib/utils';
 
 interface ITPChecklistItem {
   id: string;
@@ -280,7 +281,7 @@ export function SubcontractorLotITPPage() {
         completion = data.completion;
       }
 
-      const caption = `ITP Evidence Photo - ${new Date().toLocaleString()}`;
+      const caption = `ITP Evidence Photo - ${formatDateTime(new Date())}`;
       const formData = new FormData();
       formData.append('file', file);
       formData.append('projectId', lot.projectId);

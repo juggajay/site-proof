@@ -1428,6 +1428,26 @@ test.describe('production readiness guardrails', () => {
     }
   });
 
+  test('frontend date-time displays avoid raw browser locale formatting', async () => {
+    const files = await collectSourceFiles(new URL('../src/', import.meta.url));
+    const rawBrowserLocaleDateTimePattern = /new Date\([^)]*\)\.toLocaleString\(\)/;
+    const rawDateHelperFallbackPattern = /return\s+\w+\.toLocaleString\(\);/;
+    const offenders: string[] = [];
+
+    for (const file of files) {
+      const pathname = file.pathname.replace(/\\/g, '/');
+      const source = await readFile(file, 'utf8');
+      if (
+        rawBrowserLocaleDateTimePattern.test(source) ||
+        rawDateHelperFallbackPattern.test(source)
+      ) {
+        offenders.push(pathname);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   test('unauthorized API responses clear stale auth state', async () => {
     const apiSource = await readFile(new URL('../src/lib/api.ts', import.meta.url), 'utf8');
     const authSource = await readFile(new URL('../src/lib/auth.tsx', import.meta.url), 'utf8');

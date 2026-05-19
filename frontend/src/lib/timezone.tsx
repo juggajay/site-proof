@@ -98,7 +98,7 @@ export function TimezoneProvider({ children }: { children: ReactNode }) {
         minute: '2-digit',
       });
     } catch {
-      return d.toLocaleString();
+      return d.toLocaleString('en-AU');
     }
   };
 

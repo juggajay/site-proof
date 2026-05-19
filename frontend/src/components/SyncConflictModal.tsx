@@ -8,6 +8,7 @@ import {
   OfflineLotEdit,
 } from '@/lib/offlineDb';
 import { logError } from '@/lib/logger';
+import { formatDateTime } from '@/lib/utils';
 
 interface SyncConflictModalProps {
   isOpen: boolean;
@@ -371,12 +372,14 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                 <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
                   <div>
                     <span className="font-medium">Your edit:</span>{' '}
-                    {new Date(localVersion?.localUpdatedAt || '').toLocaleString()}
+                    {localVersion?.localUpdatedAt
+                      ? formatDateTime(localVersion.localUpdatedAt)
+                      : '—'}
                   </div>
                   <div>
                     <span className="font-medium">Server update:</span>{' '}
                     {selectedConflict.conflictData?.detectedAt
-                      ? new Date(selectedConflict.conflictData.detectedAt).toLocaleString()
+                      ? formatDateTime(selectedConflict.conflictData.detectedAt)
                       : '—'}
                   </div>
                 </div>
