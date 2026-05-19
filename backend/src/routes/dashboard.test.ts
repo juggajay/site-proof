@@ -328,17 +328,6 @@ describe('Dashboard Stats API', () => {
         dateCompany.id,
         'admin',
       );
-      const dateProject = await prisma.project.create({
-        data: {
-          name: 'Dashboard Date Range Project',
-          projectNumber: `DASH-DATE-${Date.now()}`,
-          companyId: dateCompany.id,
-          status: 'active',
-          state: 'NSW',
-          specificationSet: 'TfNSW',
-        },
-      });
-
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
       const inRangeDate = new Date(today);
@@ -348,7 +337,30 @@ describe('Dashboard Stats API', () => {
       const dueDate = new Date(today);
       dueDate.setUTCDate(dueDate.getUTCDate() - 1);
 
+      const dateProject = await prisma.project.create({
+        data: {
+          name: 'Dashboard Date Range Project',
+          projectNumber: `DASH-DATE-${Date.now()}`,
+          companyId: dateCompany.id,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+          createdAt: oldDate,
+        },
+      });
+
       try {
+        await prisma.lot.create({
+          data: {
+            projectId: dateProject.id,
+            lotNumber: 'LOT-DATE-OLD',
+            lotType: 'general',
+            activityType: 'earthworks',
+            status: 'not_started',
+            createdAt: oldDate,
+          },
+        });
+
         await prisma.nCR.createMany({
           data: [
             {
@@ -382,6 +394,9 @@ describe('Dashboard Stats API', () => {
           .query({ startDate: formatDateOnly(today), endDate: formatDateOnly(today) });
 
         expect(res.status).toBe(200);
+        expect(res.body.totalProjects).toBe(1);
+        expect(res.body.activeProjects).toBe(1);
+        expect(res.body.totalLots).toBe(1);
         expect(res.body.openNCRs).toBe(1);
         expect(res.body.attentionItems.overdueNCRs).toHaveLength(1);
         expect(res.body.attentionItems.overdueNCRs[0]).toMatchObject({
@@ -394,6 +409,7 @@ describe('Dashboard Stats API', () => {
         ).toBe(false);
       } finally {
         await prisma.nCR.deleteMany({ where: { projectId: dateProject.id } });
+        await prisma.lot.deleteMany({ where: { projectId: dateProject.id } });
         await prisma.project.delete({ where: { id: dateProject.id } }).catch(() => {});
         await cleanupDashboardUser(dateUser.userId);
         await prisma.company.delete({ where: { id: dateCompany.id } }).catch(() => {});

@@ -302,7 +302,6 @@ dashboardRouter.get(
         prisma.project.findMany({
           where: {
             id: { in: projectIds },
-            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
           },
           select: {
             id: true,
@@ -314,7 +313,6 @@ dashboardRouter.get(
         prisma.lot.count({
           where: {
             projectId: { in: projectIds },
-            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
           },
         }),
         prisma.holdPoint.count({
