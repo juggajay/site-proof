@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { apiFetch, apiUrl } from '@/lib/api';
-import { Lock, Sparkles, Mail } from 'lucide-react';
+import { Lock, Sparkles, Mail, RefreshCw } from 'lucide-react';
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal';
 import type { LotStatusReport, NCRReport, TestReport, DiaryReport } from './types';
 import { ADVANCED_ANALYTICS_TIERS } from './types';
@@ -261,28 +261,35 @@ export function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Reports & Analytics</h1>
-        <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="whitespace-nowrap text-2xl font-bold leading-tight sm:text-3xl">
+          Reports & Analytics
+        </h1>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
           <button
             type="button"
+            aria-label="Schedule Reports"
             onClick={handleOpenScheduleModal}
-            className={`px-4 py-2 border rounded-md flex items-center gap-2 ${
+            className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium sm:px-4 ${
               hasAdvancedAnalytics
                 ? 'border-primary text-primary hover:bg-primary/5'
                 : 'border-amber-300 text-amber-700 hover:bg-amber-50'
             }`}
           >
             {hasAdvancedAnalytics ? <Mail className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-            Schedule Reports
+            <span className="hidden sm:inline">Schedule Reports</span>
+            <span className="sm:hidden">Schedule</span>
           </button>
           <button
             type="button"
+            aria-label="Refresh Report"
             onClick={handleRefreshReport}
             disabled={loading || !isReportDataTab(activeTab)}
-            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 sm:px-4"
           >
-            {loading ? 'Refreshing...' : 'Refresh Report'}
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{loading ? 'Refreshing...' : 'Refresh Report'}</span>
+            <span className="sm:hidden">{loading ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>
       </div>
