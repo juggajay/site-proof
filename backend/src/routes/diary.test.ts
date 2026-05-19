@@ -308,6 +308,24 @@ describe('Daily Diary API', () => {
       expect(res.status).toBe(403);
     });
 
+    it('can return null instead of 404 for an intentionally empty selected date', async () => {
+      const res = await request(app)
+        .get(`/api/diary/${projectId}/2099-12-31`)
+        .query({ missing: 'null' })
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toBeNull();
+    });
+
+    it('keeps the default 404 contract for a missing selected date', async () => {
+      const res = await request(app)
+        .get(`/api/diary/${projectId}/2099-12-30`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(404);
+    });
+
     it('should reject subcontractor portal users from diary reads', async () => {
       const targetDiary =
         diaryId ||
