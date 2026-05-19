@@ -187,6 +187,7 @@ export function RegisterPage() {
         <input
           id="email"
           type="email"
+          autoComplete="email"
           {...register('email')}
           className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
             errors.email ? 'border-destructive' : ''
@@ -206,6 +207,7 @@ export function RegisterPage() {
         <input
           id="password"
           type="password"
+          autoComplete="new-password"
           {...register('password')}
           className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
             errors.password ? 'border-destructive' : ''
@@ -279,6 +281,7 @@ export function RegisterPage() {
         <input
           id="confirmPassword"
           type="password"
+          autoComplete="new-password"
           {...register('confirmPassword')}
           className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
             errors.confirmPassword ? 'border-destructive' : ''

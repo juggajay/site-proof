@@ -171,6 +171,7 @@ export function ResetPasswordPage() {
         <Input
           id="password"
           type="password"
+          autoComplete="new-password"
           {...register('password')}
           className={`mt-1 ${errors.password ? 'border-destructive' : ''}`}
           placeholder="Enter new password"
@@ -241,6 +242,7 @@ export function ResetPasswordPage() {
         <Input
           id="confirmPassword"
           type="password"
+          autoComplete="new-password"
           {...register('confirmPassword')}
           className={`mt-1 ${errors.confirmPassword ? 'border-destructive' : ''}`}
           placeholder="Confirm new password"

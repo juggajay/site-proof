@@ -147,6 +147,24 @@ test.describe('Authentication', () => {
     await expect(page.getByText(/one special character/i)).toBeVisible();
   });
 
+  test('reset password form exposes account-creation autocomplete hints', async ({ page }) => {
+    await page.route('**/api/auth/validate-reset-token?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ valid: true }),
+      });
+    });
+
+    await page.goto('/reset-password?token=e2e-valid-token');
+
+    await expect(page.getByLabel(/new password/i)).toHaveAttribute('autocomplete', 'new-password');
+    await expect(page.getByLabel(/confirm password/i)).toHaveAttribute(
+      'autocomplete',
+      'new-password',
+    );
+  });
+
   test('should redirect unauthenticated users to login', async ({ page }) => {
     await page.goto('/projects');
 
@@ -377,6 +395,16 @@ test.describe('Login Flow', () => {
       page.getByRole('link', { name: /register|sign up|create.*account/i }),
     ).toBeVisible();
   });
+
+  test('login form exposes password-manager autocomplete hints', async ({ page }) => {
+    await page.goto('/login');
+
+    await expect(page.getByLabel(/^email$/i)).toHaveAttribute('autocomplete', 'username');
+    await expect(page.getByLabel(/^password$/i)).toHaveAttribute(
+      'autocomplete',
+      'current-password',
+    );
+  });
 });
 
 test.describe('Registration Flow', () => {
@@ -396,6 +424,17 @@ test.describe('Registration Flow', () => {
     // Check for Terms checkbox and link
     await expect(page.getByRole('checkbox', { name: /terms|agree/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /terms of service/i })).toBeVisible();
+  });
+
+  test('registration form exposes account-creation autocomplete hints', async ({ page }) => {
+    await page.goto('/register');
+
+    await expect(page.getByLabel(/^email$/i)).toHaveAttribute('autocomplete', 'email');
+    await expect(page.getByLabel(/^password$/i)).toHaveAttribute('autocomplete', 'new-password');
+    await expect(page.getByLabel(/confirm password/i)).toHaveAttribute(
+      'autocomplete',
+      'new-password',
+    );
   });
 
   test('registration page should show server errors', async ({ page }) => {
