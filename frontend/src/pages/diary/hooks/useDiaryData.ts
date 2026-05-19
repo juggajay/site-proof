@@ -183,9 +183,15 @@ export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
       setLoading(true);
       setError(null);
       try {
-        const data = await apiFetch<DailyDiary>(
-          `/api/diary/${encodeURIComponent(projectId)}/${encodeURIComponent(date)}`,
+        const data = await apiFetch<DailyDiary | null>(
+          `/api/diary/${encodeURIComponent(projectId)}/${encodeURIComponent(date)}?missing=null`,
         );
+        if (!data) {
+          resetDiaryForm();
+          void fetchWeatherForDate(date);
+          return;
+        }
+
         setDiary(data);
         setWeatherForm({
           weatherConditions: data.weatherConditions || '',

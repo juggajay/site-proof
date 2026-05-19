@@ -234,6 +234,10 @@ router.get(
     });
 
     if (!diary) {
+      if (req.query.missing === 'null') {
+        return res.json(null);
+      }
+
       throw AppError.notFound('No diary entry for this date');
     }
 
