@@ -91,7 +91,7 @@ export interface FilterTriggerButtonProps {
 export function FilterTriggerButton({
   onClick,
   activeCount,
-  label = 'Filter',
+  label = 'Filters',
   className,
 }: FilterTriggerButtonProps) {
   return (
@@ -101,14 +101,14 @@ export function FilterTriggerButton({
         // Base styles - industrial, high contrast
         'relative inline-flex items-center justify-center gap-2',
         'min-h-[48px] px-4 py-3 rounded-lg',
-        'bg-card text-white',
+        'bg-card text-card-foreground',
         'font-semibold text-sm uppercase tracking-wide',
         'border-2 border-border',
         'shadow-md',
         // Touch optimization
         'touch-manipulation select-none',
         // Active/hover states
-        'active:scale-[0.98] active:bg-muted',
+        'hover:bg-muted/60 active:scale-[0.98] active:bg-muted',
         'transition-all duration-100',
         // Focus state for accessibility
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2',
