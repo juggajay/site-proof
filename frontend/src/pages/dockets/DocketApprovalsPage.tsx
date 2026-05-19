@@ -12,7 +12,7 @@ import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { DocketApprovalsMobileView } from '@/components/foreman/DocketApprovalsMobileView';
 import { devLog, logError } from '@/lib/logger';
-import { downloadCsv } from '@/lib/csv';
+import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
 
 interface Docket {
   id: string;
@@ -145,6 +145,7 @@ export function DocketApprovalsPage() {
   const actionInProgressRef = useRef(false);
   const printingDocketRef = useRef<string | null>(null);
   const [printingDocketId, setPrintingDocketId] = useState<string | null>(null);
+  const [projectInfo, setProjectInfo] = useState<ProjectResponse['project'] | null>(null);
 
   // State for docket detail entries (fetched on modal open)
   const [detailLoading, setDetailLoading] = useState(false);
@@ -154,6 +155,7 @@ export function DocketApprovalsPage() {
   // Role checks - use roleInCompany which is the field returned from the backend
   const userRole = user?.roleInCompany || user?.role;
   const isSubcontractor = userRole === 'subcontractor' || userRole === 'subcontractor_admin';
+  const projectLabel = projectInfo?.name || projectId || 'this project';
 
   // Hours validation helper - warn if hours > 24
   const validateHours = (hours: string): { isValid: boolean; warning: string | null } => {
@@ -407,6 +409,37 @@ export function DocketApprovalsPage() {
     fetchDockets();
   }, [fetchDockets]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchProjectInfo = async () => {
+      if (!projectId) {
+        setProjectInfo(null);
+        return;
+      }
+
+      try {
+        const projectResponse = await apiFetch<ProjectResponse>(
+          `/api/projects/${encodeURIComponent(projectId)}`,
+        );
+        if (!cancelled) {
+          setProjectInfo(projectResponse.project ?? null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setProjectInfo(null);
+        }
+        logError('Error fetching docket project info:', err);
+      }
+    };
+
+    fetchProjectInfo();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
   // Feature #735: Real-time docket approval notification polling
   // Poll for updates every 30 seconds when the tab is visible
   useEffect(() => {
@@ -491,7 +524,7 @@ export function DocketApprovalsPage() {
       docket.approvedAt ? new Date(docket.approvedAt).toLocaleDateString() : '-',
     ]);
 
-    downloadCsv(`dockets-${projectId}-${new Date().toISOString().split('T')[0]}.csv`, [
+    downloadCsv(buildScopedCsvFilename('dockets', projectInfo?.name || projectId), [
       headers,
       ...rows,
     ]);
@@ -580,7 +613,7 @@ export function DocketApprovalsPage() {
             <div>
               <h1 className="text-2xl font-bold">Docket Approvals</h1>
               <p className="text-sm text-muted-foreground">
-                Review and approve subcontractor dockets for project {projectId}
+                Review and approve subcontractor dockets for project {projectLabel}
               </p>
             </div>
             <div className="flex gap-2">

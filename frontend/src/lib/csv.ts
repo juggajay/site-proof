@@ -34,6 +34,33 @@ export function sanitizeCsvFilename(filename: string): string {
   return fallback.toLowerCase().endsWith('.csv') ? fallback : `${fallback}.csv`;
 }
 
+export function slugifyCsvFilenamePart(
+  value: string | null | undefined,
+  fallback = 'export',
+): string {
+  const slug = (value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+
+  return slug || fallback;
+}
+
+export function buildScopedCsvFilename(
+  prefix: string,
+  scope: string | null | undefined,
+  date = new Date(),
+): string {
+  const datePart = date.toISOString().split('T')[0];
+  return sanitizeCsvFilename(
+    `${slugifyCsvFilenamePart(prefix)}-${slugifyCsvFilenamePart(scope, 'project')}-${datePart}.csv`,
+  );
+}
+
 export function downloadCsv(filename: string, rows: ReadonlyArray<ReadonlyArray<CsvCell>>): void {
   const blob = new Blob([buildCsv(rows)], { type: 'text/csv;charset=utf-8;' });
   downloadBlob(blob, sanitizeCsvFilename(filename), 'export.csv');

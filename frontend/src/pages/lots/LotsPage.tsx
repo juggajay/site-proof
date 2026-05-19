@@ -528,6 +528,7 @@ export function LotsPage() {
       {actions.exportModalOpen && projectId && (
         <ExportLotsModal
           projectId={projectId}
+          projectName={projectName}
           lots={filteredLots}
           canViewBudgets={canViewBudgets}
           isSubcontractor={isSubcontractor}

@@ -307,7 +307,7 @@ test.describe('Dockets seeded approval contract', () => {
     await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
 
     await expect(page.getByRole('heading', { name: 'Docket Approvals' })).toBeVisible();
-    await expect(page.getByText(`project ${E2E_PROJECT_ID}`)).toBeVisible();
+    await expect(page.getByText('project E2E Highway Upgrade')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Pending (1)' })).toBeVisible();
 
     const docketRow = page.getByRole('row').filter({ hasText: 'DKT-E2E-001' });
@@ -340,6 +340,24 @@ test.describe('Dockets seeded approval contract', () => {
     await expect(
       page.getByRole('row').filter({ hasText: 'DKT-E2E-001' }).getByText('Approved'),
     ).toBeVisible();
+  });
+
+  test('exports dockets with a project-name CSV filename', async ({ page }) => {
+    await mockSeededDocketsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
+
+    await expect(page.getByRole('row').filter({ hasText: 'DKT-E2E-001' })).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export CSV' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(
+      /^dockets-e2e-highway-upgrade-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+    expect(download.suggestedFilename()).not.toContain(E2E_PROJECT_ID);
+    await download.delete();
   });
 
   test('rejects encoded adjustment hours before approving', async ({ page }) => {
