@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 const E2E_LOT_ID = 'e2e-lot';
@@ -33,6 +33,38 @@ interface MockSeededLotsOptions {
   failLotLoadsUntil?: number;
   paginatedLotPages?: Array<(typeof E2E_LOT)[]>;
   lotRequests?: string[];
+}
+
+async function getTextContrastRatio(locator: Locator) {
+  return locator.evaluate((element) => {
+    const parseRgb = (color: string) => {
+      const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (!match) return null;
+      return {
+        r: Number(match[1]) / 255,
+        g: Number(match[2]) / 255,
+        b: Number(match[3]) / 255,
+      };
+    };
+
+    const linearize = (channel: number) =>
+      channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+
+    const luminance = (rgb: { r: number; g: number; b: number }) =>
+      0.2126 * linearize(rgb.r) + 0.7152 * linearize(rgb.g) + 0.0722 * linearize(rgb.b);
+
+    const styles = window.getComputedStyle(element);
+    const foreground = parseRgb(styles.color);
+    const background = parseRgb(styles.backgroundColor);
+
+    if (!foreground || !background) return 0;
+
+    const foregroundLum = luminance(foreground);
+    const backgroundLum = luminance(background);
+    const lighter = Math.max(foregroundLum, backgroundLum);
+    const darker = Math.min(foregroundLum, backgroundLum);
+    return (lighter + 0.05) / (darker + 0.05);
+  });
 }
 
 async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}) {
@@ -247,6 +279,21 @@ test.describe('Lots seeded UI contract', () => {
     await expect(lotRow.getByRole('cell', { name: 'Earthworks' })).toBeVisible();
     await expect(lotRow.getByText('E2E Subcontractors')).toBeVisible();
     await expect(lotRow.getByRole('button', { name: 'View' })).toBeVisible();
+  });
+
+  test('shows a readable mobile filter control beside lot search', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await mockSeededLotsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
+
+    await expect(page.getByRole('heading', { name: 'Lot Register' })).toBeVisible();
+    await expect(page.getByPlaceholder('Search lots...')).toBeVisible();
+
+    const filterButton = page.getByRole('button', { name: /Filter/i }).first();
+    await expect(filterButton).toBeVisible();
+    await expect(filterButton).toContainText(/Filter/i);
+    await expect.poll(() => getTextContrastRatio(filterButton)).toBeGreaterThanOrEqual(4.5);
   });
 
   test('shows retry instead of an empty state when lot loading fails', async ({ page }) => {
