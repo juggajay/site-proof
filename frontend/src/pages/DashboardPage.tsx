@@ -6,6 +6,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
+import { formatDateTime } from '@/lib/utils';
 import {
   parseJsonPreference,
   readLocalStorageItem,
@@ -177,7 +178,7 @@ function formatActivityTimestamp(timestamp: string): string {
   if (Number.isNaN(date.getTime())) {
     return 'Unknown time';
   }
-  return date.toLocaleString();
+  return formatDateTime(date);
 }
 
 function parseVisibleWidgetsPreference(raw: string | null): WidgetId[] {
