@@ -39,6 +39,7 @@ export const WeatherTab = React.memo(function WeatherTab({
   onFetchWeather,
 }: WeatherTabProps) {
   const weatherNumberError = getDiaryWeatherNumberError(weatherForm);
+  const weatherSourceIsWarning = weatherSource?.startsWith('Weather auto-population unavailable');
 
   // Auto-save state
   const [autoSaving, setAutoSaving] = useState(false);
@@ -173,7 +174,11 @@ export const WeatherTab = React.memo(function WeatherTab({
             </span>
           )}
           {weatherSource && !fetchingWeather && (
-            <span className="text-sm text-green-600">&#10003; {weatherSource}</span>
+            <span
+              className={`text-sm ${weatherSourceIsWarning ? 'text-amber-600' : 'text-green-600'}`}
+            >
+              {weatherSourceIsWarning ? '!' : '\u2713'} {weatherSource}
+            </span>
           )}
         </div>
       </div>

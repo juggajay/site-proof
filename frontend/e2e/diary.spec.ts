@@ -6,7 +6,9 @@ const E2E_DIARY_ID = 'e2e-diary';
 
 type SeededDiaryApiOptions = {
   failDiaryLoadsUntil?: number;
+  diaryNotFound?: boolean;
   submitDelayMs?: number;
+  weatherFailureStatus?: number;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -167,12 +169,24 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
         await json({ message: 'Unable to load diary for this date' }, 500);
         return;
       }
+      if (options.diaryNotFound) {
+        await json({ error: { message: 'Diary not found', code: 'NOT_FOUND' } }, 404);
+        return;
+      }
 
       await json(buildDiary(submitted ? 'submitted' : 'draft', diaryDateMatch[1]));
       return;
     }
 
     if (url.pathname.startsWith(`/api/diary/${E2E_PROJECT_ID}/weather/`)) {
+      if (options.weatherFailureStatus) {
+        await json(
+          { error: { message: 'Weather provider unavailable', code: 'EXTERNAL_SERVICE_ERROR' } },
+          options.weatherFailureStatus,
+        );
+        return;
+      }
+
       await json({
         weatherConditions: 'Fine',
         temperatureMin: 16,
@@ -331,6 +345,29 @@ test.describe('Daily diary seeded UI contract', () => {
     await expect.poll(() => api.getDiaryLoadCount()).toBeGreaterThan(2);
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Weather & General Notes' })).toBeVisible();
+  });
+
+  test('treats weather auto-population failure as a manual-entry notice', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') {
+        consoleErrors.push(message.text());
+      }
+    });
+
+    await mockSeededDiaryApi(page, { diaryNotFound: true, weatherFailureStatus: 502 });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/diary`);
+
+    await expect(page.getByText(/No diary entry for/)).toBeVisible();
+    await page.getByRole('button', { name: 'Create Diary Entry' }).click();
+
+    await expect(
+      page.getByText('Weather auto-population unavailable. Enter weather manually.'),
+    ).toBeVisible();
+    expect(consoleErrors.filter((message) => message.includes('Error fetching weather'))).toEqual(
+      [],
+    );
   });
 
   test('ignores duplicate submit confirmations while the request is in flight', async ({
