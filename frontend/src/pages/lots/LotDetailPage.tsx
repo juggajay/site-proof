@@ -6,6 +6,7 @@ import { useViewerAccess } from '@/hooks/useViewerAccess';
 import { apiFetch, ApiError, authFetch } from '@/lib/api';
 import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/errorHandling';
 import { devLog, devWarn, logError } from '@/lib/logger';
+import { formatDateTime } from '@/lib/utils';
 import { toast } from '@/components/ui/toaster';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal';
@@ -1239,7 +1240,7 @@ export function LotDetailPage() {
     }
 
     const gpsLocation = await getGPSLocation();
-    const caption = `ITP Evidence Photo - ${new Date().toLocaleString()}`;
+    const caption = `ITP Evidence Photo - ${formatDateTime(new Date())}`;
     const formData = new FormData();
     formData.append('file', file);
     formData.append('projectId', projectId);
