@@ -8,8 +8,8 @@ intended for a fresh agent starting from `master`.
 ## Current Repo State
 
 - Current branch: `master`
-- Current synced head when this handoff was written:
-  `829895d fix: lock diary auto-population from docket approval (#80)`
+- Current app-code baseline when this handoff refresh started:
+  `b06c5c0 fix: normalize frontend date-time formatting (#93)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -138,15 +138,55 @@ Important: no DeepSec revalidation has been run after PR #80. Revalidation can
 confirm `TP: 0`, but previous revalidation runs had real cost. Ask Jay before
 running another paid DeepSec revalidation.
 
+### Full-App QA Cleanup
+
+Status: initial QA queue closed.
+
+Codex ran a report-only app QA sweep on 2026-05-19. The first report scored the
+app at 66/100 and called out ten customer-facing quality issues. The following
+merges closed that initial queue:
+
+- PR #82 removed retired `SiteProof v2` branding from active app surfaces and
+  PDF generators.
+- PR #83 kept dashboard project and lot rollups independent of date filters.
+- Commit `777c4a5` degraded diary weather lookup failures without blocking the
+  diary page.
+- PR #85 replaced the dashboard print-dialog path with a real PDF download.
+- PR #86 routed report generated timestamps through the shared Australian
+  date/time formatting path.
+- PR #87 wrapped mobile dashboard actions at iPhone width.
+- PR #88 labelled the mobile lot filter trigger.
+- PR #89 changed CSV export filenames from project UUIDs to project-name slugs.
+- PR #90 compacted the mobile reports header.
+- PR #91 clarified the mobile diary quick-add rail and scroll affordance.
+- PR #92 formatted dashboard activity timestamps consistently.
+- PR #93 normalized the remaining frontend raw browser-locale date-time
+  displays and added a production-readiness guard against regressions.
+
+Verification evidence now lives in CI and guardrail tests:
+
+- `frontend/e2e/productionReadiness.spec.ts` includes checks for retired
+  branding, dashboard PDF generation, report timestamps, raw browser-locale
+  date-time formatting, and several production readiness invariants.
+- PR #93 CI passed Backend, backend-tests, Frontend, frontend-build, and
+  frontend-e2e before merge.
+
+The original report artifacts under `.gstack/dev-browser/full-app-qa-*` are
+historical. Do not treat their issue list as current without rechecking
+`master`; most referenced findings are now intentionally stale.
+
 ## Open Follow-Ups
 
 1. Optional: ask Jay whether to run one final DeepSec revalidation after PR #80.
    Expected outcome is zero live findings, but this has not been paid-verified.
-2. Keep production backup discipline in place for any future production data or
+2. Run a fresh report-only app QA pass before the first paying customer. The
+   initial 2026-05-19 QA issue list has been closed, but a fresh browser sweep is
+   the right next quality gate because the old report is now stale.
+3. Keep production backup discipline in place for any future production data or
    schema work. PostgreSQL client tools are now installed on Jay's Windows
    machine, but do not assume the local shell has the intended production
    `DATABASE_URL`.
-3. If new DeepSec findings appear, work them one by one. Root cause first,
+4. If new DeepSec findings appear, work them one by one. Root cause first,
    focused regression test, PR, wait for checks, merge, sync `master`.
 
 ## Handoff Checklist For The Next Agent
