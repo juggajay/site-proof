@@ -104,6 +104,12 @@ async function mockDefaultDashboardApi(
             description: 'Daily diary submitted for night shift',
             timestamp: 'not-a-date',
           },
+          {
+            id: 'activity-2',
+            type: 'lot',
+            description: 'Lot LOT-007 status changed to in progress',
+            timestamp: '2026-05-19T08:15:00Z',
+          },
         ],
       }),
     });
@@ -273,6 +279,7 @@ test.describe('Dashboard seeded account contract', () => {
     await expect(page.getByText('HP-42')).toBeVisible();
     await expect(page.getByText('Daily diary submitted for night shift')).toBeVisible();
     await expect(page.getByText('Unknown time')).toBeVisible();
+    await expect(page.getByText('Lot LOT-007 status changed to in progress')).toBeVisible();
 
     await expect(page.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/projects');
 
@@ -300,6 +307,20 @@ test.describe('Dashboard seeded account contract', () => {
     ).toBeVisible();
 
     await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible();
+  });
+
+  test.describe('timestamp locale contract', () => {
+    test.use({ locale: 'en-US', timezoneId: 'America/New_York' });
+
+    test('formats recent activity timestamps in Australian date order', async ({ page }) => {
+      await mockDefaultDashboardApi(page);
+
+      await page.goto('/dashboard');
+
+      const activityRow = page.getByText('Lot LOT-007 status changed to in progress').locator('..');
+      await expect(activityRow).toContainText(/19\/05\/2026,?\s+0?4:15\s*(am|AM)/);
+      await expect(activityRow).not.toContainText('5/19/2026');
+    });
   });
 
   test('keeps default dashboard header controls within iPhone width', async ({ page }) => {
