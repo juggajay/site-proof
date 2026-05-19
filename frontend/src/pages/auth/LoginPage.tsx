@@ -380,6 +380,7 @@ export function LoginPage() {
         <Input
           id="email"
           type="email"
+          autoComplete="username"
           {...loginForm.register('email')}
           className={`mt-1 ${loginForm.formState.errors.email ? 'border-destructive' : ''}`}
         />
@@ -395,6 +396,7 @@ export function LoginPage() {
         <Input
           id="password"
           type="password"
+          autoComplete="current-password"
           {...loginForm.register('password')}
           className={`mt-1 ${loginForm.formState.errors.password ? 'border-destructive' : ''}`}
         />
