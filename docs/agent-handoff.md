@@ -8,8 +8,8 @@ intended for a fresh agent starting from `master`.
 ## Current Repo State
 
 - Current branch: `master`
-- Current app-code baseline when this handoff refresh started:
-  `b06c5c0 fix: normalize frontend date-time formatting (#93)`
+- Current app-code baseline when this handoff refresh was last updated:
+  `ea0a20e fix: keep cookie banner above mobile nav (#98)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -100,8 +100,7 @@ Relevant archive indexes:
 
 ### DeepSec Security Hardening
 
-Status: all known findings fixed in code, pending optional post-merge
-revalidation.
+Status: all known findings from the May 2026 DeepSec pass are fixed in code.
 
 DeepSec revalidation run reported by Jay:
 
@@ -134,13 +133,13 @@ Verification run before PR #80 merge:
 - `git diff --check`
 - GitHub PR #80 checks all passed before squash merge.
 
-Important: no DeepSec revalidation has been run after PR #80. Revalidation can
-confirm `TP: 0`, but previous revalidation runs had real cost. Ask Jay before
-running another paid DeepSec revalidation.
+Important: Jay reported the DeepSec revalidation output above from
+`.deepsec`. Treat `.deepsec/` as local audit input only. If another paid
+revalidation is needed later, ask Jay first.
 
 ### Full-App QA Cleanup
 
-Status: initial QA queue closed.
+Status: initial QA queue closed, plus follow-up polish closed through PR #98.
 
 Codex ran a report-only app QA sweep on 2026-05-19. The first report scored the
 app at 66/100 and called out ten customer-facing quality issues. The following
@@ -162,14 +161,22 @@ merges closed that initial queue:
 - PR #92 formatted dashboard activity timestamps consistently.
 - PR #93 normalized the remaining frontend raw browser-locale date-time
   displays and added a production-readiness guard against regressions.
+- PR #94 refreshed this handoff after the first QA cleanup batch.
+- PR #95 stopped empty-date daily diary loads from logging noisy 404s.
+- PR #96 unmounted closed header dropdown contents so hidden notification and
+  user-menu actions are not present in the accessibility/text tree.
+- PR #97 added browser/password-manager autocomplete hints to login,
+  registration, and reset-password forms.
+- PR #98 moved the cookie consent banner above the fixed mobile navigation for
+  authenticated mobile users.
 
 Verification evidence now lives in CI and guardrail tests:
 
 - `frontend/e2e/productionReadiness.spec.ts` includes checks for retired
   branding, dashboard PDF generation, report timestamps, raw browser-locale
   date-time formatting, and several production readiness invariants.
-- PR #93 CI passed Backend, backend-tests, Frontend, frontend-build, and
-  frontend-e2e before merge.
+- PR #98 CI passed Backend, backend-tests, Frontend, frontend-build,
+  frontend-e2e, and Vercel before merge.
 
 The original report artifacts under `.gstack/dev-browser/full-app-qa-*` are
 historical. Do not treat their issue list as current without rechecking
@@ -177,16 +184,14 @@ historical. Do not treat their issue list as current without rechecking
 
 ## Open Follow-Ups
 
-1. Optional: ask Jay whether to run one final DeepSec revalidation after PR #80.
-   Expected outcome is zero live findings, but this has not been paid-verified.
-2. Run a fresh report-only app QA pass before the first paying customer. The
+1. Run a fresh report-only app QA pass before the first paying customer. The
    initial 2026-05-19 QA issue list has been closed, but a fresh browser sweep is
    the right next quality gate because the old report is now stale.
-3. Keep production backup discipline in place for any future production data or
+2. Keep production backup discipline in place for any future production data or
    schema work. PostgreSQL client tools are now installed on Jay's Windows
    machine, but do not assume the local shell has the intended production
    `DATABASE_URL`.
-4. If new DeepSec findings appear, work them one by one. Root cause first,
+3. If new DeepSec findings appear, work them one by one. Root cause first,
    focused regression test, PR, wait for checks, merge, sync `master`.
 
 ## Handoff Checklist For The Next Agent
