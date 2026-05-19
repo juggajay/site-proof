@@ -425,8 +425,8 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
 
   return (
     <div className="space-y-6 dashboard-content">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">
             Welcome back{user?.name ? `, ${user.name}` : user?.fullName ? `, ${user.fullName}` : ''}
@@ -435,13 +435,14 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 no-print">
+        <div className="grid w-full grid-cols-2 gap-2 no-print sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end lg:flex-nowrap">
           {/* Date Range Filter */}
-          <div className="relative">
+          <div className="relative min-w-0">
             <Button
               variant="outline"
               onClick={() => setShowDateRangeDropdown(!showDateRangeDropdown)}
               title="Filter by date range"
+              className="w-full justify-between sm:w-auto sm:justify-center"
             >
               <Calendar className="h-4 w-4" />
               <span>{currentDateRange.label}</span>
@@ -486,6 +487,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
             onClick={handleRefresh}
             disabled={isRefreshing}
             title="Refresh dashboard data"
+            className="w-full sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -497,6 +499,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
             onClick={handleExportPDF}
             title="Export to PDF"
             disabled={isExportingPDF || hasHardStatsError}
+            className="w-full sm:w-auto"
           >
             <Download className="h-4 w-4" />
             {isExportingPDF ? 'Exporting...' : 'Export PDF'}
@@ -508,6 +511,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
               variant="outline"
               onClick={() => setShowWidgetSettings(!showWidgetSettings)}
               title="Customize widgets"
+              className="w-full sm:w-auto"
             >
               <Settings2 className="h-4 w-4" />
               Customize
