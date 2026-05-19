@@ -517,6 +517,41 @@ test.describe('Reports seeded analytics contract', () => {
     ).toBeVisible();
   });
 
+  test('keeps the mobile reports header compact with visible actions', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await mockReportsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+
+    const heading = page.getByRole('heading', { name: 'Reports & Analytics' });
+    const scheduleButton = page.getByRole('button', { name: 'Schedule Reports' });
+    const refreshButton = page.getByRole('button', { name: 'Refresh Report' });
+
+    await expect(heading).toBeVisible();
+    await expect(page.getByText('Total Lots: 2')).toBeVisible();
+
+    const headingBox = await heading.boundingBox();
+    const scheduleBox = await scheduleButton.boundingBox();
+    const refreshBox = await refreshButton.boundingBox();
+    expect(headingBox).toBeTruthy();
+    expect(scheduleBox).toBeTruthy();
+    expect(refreshBox).toBeTruthy();
+
+    const headingMetrics = await heading.evaluate((element) => {
+      const styles = window.getComputedStyle(element);
+      return {
+        height: element.getBoundingClientRect().height,
+        lineHeight: Number.parseFloat(styles.lineHeight),
+      };
+    });
+
+    expect(headingMetrics.height).toBeLessThanOrEqual(headingMetrics.lineHeight * 1.35);
+    expect(scheduleBox!.y).toBeGreaterThan(headingBox!.y + headingBox!.height);
+    expect(scheduleBox!.x).toBeGreaterThanOrEqual(0);
+    expect(refreshBox!.x + refreshBox!.width).toBeLessThanOrEqual(375);
+    expect(Math.abs(scheduleBox!.y - refreshBox!.y)).toBeLessThanOrEqual(2);
+  });
+
   test('shows a retryable report load error without stale synthetic report content', async ({
     page,
   }) => {
