@@ -296,6 +296,29 @@ test.describe('Lots seeded UI contract', () => {
     await expect.poll(() => getTextContrastRatio(filterButton)).toBeGreaterThanOrEqual(4.5);
   });
 
+  test('exports lots with a project-name CSV filename', async ({ page }) => {
+    await mockSeededLotsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
+
+    await expect(page.getByRole('row').filter({ hasText: 'LOT-001' })).toBeVisible();
+    await expect(page.getByText('Manage lots for E2E Highway Upgrade')).toBeVisible();
+    await page.getByRole('button', { name: 'Export CSV' }).click();
+
+    const modal = page.getByRole('dialog', { name: /Export Lots to CSV/ });
+    await expect(modal).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await modal.getByRole('button', { name: 'Export CSV' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(
+      /^lot-register-e2e-highway-upgrade-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+    expect(download.suggestedFilename()).not.toContain(E2E_PROJECT_ID);
+    await download.delete();
+  });
+
   test('shows retry instead of an empty state when lot loading fails', async ({ page }) => {
     const api = await mockSeededLotsApi(page, { failLotLoadsUntil: 1 });
 

@@ -4,7 +4,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Moda
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { downloadCsv } from '@/lib/csv';
+import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
 
 interface ExportColumn {
   key: string;
@@ -28,6 +28,7 @@ interface ExportLot {
 
 interface ExportLotsModalProps {
   projectId: string;
+  projectName?: string | null;
   lots: ExportLot[];
   canViewBudgets: boolean;
   isSubcontractor: boolean;
@@ -54,6 +55,7 @@ const ALL_COLUMNS: ExportColumn[] = [
 
 export function ExportLotsModal({
   projectId,
+  projectName,
   lots,
   canViewBudgets,
   isSubcontractor,
@@ -174,7 +176,7 @@ export function ExportLotsModal({
       return row;
     });
 
-    downloadCsv(`lot-register-${projectId}-${new Date().toISOString().split('T')[0]}.csv`, [
+    downloadCsv(buildScopedCsvFilename('lot-register', projectName || projectId), [
       headers,
       ...rows,
     ]);
