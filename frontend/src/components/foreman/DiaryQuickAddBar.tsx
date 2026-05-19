@@ -45,31 +45,42 @@ export function DiaryQuickAddBar({
   if (isSubmitted) return null;
 
   return (
-    <div className="sticky bottom-[72px] z-30 bg-background/95 backdrop-blur border-t px-3 py-2">
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
-        {chips.map((chip) => {
-          const Icon = chip.icon;
-          return (
-            <button
-              key={chip.type}
-              onClick={() => onChipTap(chip.type)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap',
-                'touch-manipulation min-h-[40px]',
-                chip.color,
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {chip.label}
-            </button>
-          );
-        })}
-        <button
-          onClick={() => onChipTap('manual')}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap touch-manipulation min-h-[40px] bg-muted text-muted-foreground"
+    <div className="sticky bottom-[72px] z-30 border-t bg-background/95 px-3 py-2 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur">
+      <div className="relative">
+        <div
+          data-testid="diary-quick-add-rail"
+          aria-label="Diary quick add actions"
+          className="flex gap-2 overflow-x-auto overscroll-x-contain scroll-smooth pb-1 pr-12 [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-track]:bg-transparent"
         >
-          <Clock className="h-4 w-4" />+ More
-        </button>
+          {chips.map((chip) => {
+            const Icon = chip.icon;
+            return (
+              <button
+                key={chip.type}
+                onClick={() => onChipTap(chip.type)}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap',
+                  'touch-manipulation min-h-[40px]',
+                  chip.color,
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {chip.label}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => onChipTap('manual')}
+            className="flex min-h-[40px] shrink-0 touch-manipulation items-center gap-1.5 rounded-full bg-muted px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground"
+          >
+            <Clock className="h-4 w-4" />+ More
+          </button>
+        </div>
+        <div
+          data-testid="diary-quick-add-scroll-hint"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-background/95 to-transparent"
+        />
       </div>
     </div>
   );

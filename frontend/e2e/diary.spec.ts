@@ -370,6 +370,34 @@ test.describe('Daily diary seeded UI contract', () => {
     );
   });
 
+  test('shows the mobile quick-add rail as intentionally scrollable', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await mockSeededDiaryApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/diary`);
+
+    await expect(page.getByRole('button', { name: 'Activity' })).toBeVisible();
+    await expect(page.getByTestId('diary-quick-add-scroll-hint')).toBeVisible();
+
+    const rail = page.getByTestId('diary-quick-add-rail');
+    const scrollbarWidth = await rail.evaluate(
+      (element) => window.getComputedStyle(element).scrollbarWidth,
+    );
+    expect(scrollbarWidth).not.toBe('none');
+
+    const moreButton = page.getByRole('button', { name: /More/ });
+
+    await expect
+      .poll(async () => {
+        await rail.evaluate((element) => {
+          element.scrollLeft = element.scrollWidth;
+        });
+        const box = await moreButton.boundingBox();
+        return box ? Math.ceil(box.x + box.width) : Number.POSITIVE_INFINITY;
+      })
+      .toBeLessThanOrEqual(375);
+  });
+
   test('ignores duplicate submit confirmations while the request is in flight', async ({
     page,
   }) => {
