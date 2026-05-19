@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import { useDateFormat } from '@/lib/dateFormat';
+import { useTimezone } from '@/lib/timezone';
 import type { TestReport } from '../types';
 import { applyDatePreset } from '../types';
+import { formatReportDateTime } from '../reportFormatting';
 
 export interface TestResultsTabProps {
   report: TestReport | null;
@@ -13,9 +16,14 @@ export const TestResultsTab = React.memo(function TestResultsTab({
   loading,
   onRefresh,
 }: TestResultsTabProps) {
+  const { dateFormat } = useDateFormat();
+  const { timezone } = useTimezone();
   const [testStartDate, setTestStartDate] = useState<string>('');
   const [testEndDate, setTestEndDate] = useState<string>('');
   const [selectedTestTypes, setSelectedTestTypes] = useState<string[]>([]);
+  const generatedAt = report
+    ? formatReportDateTime(report.generatedAt, dateFormat, timezone)
+    : null;
 
   const availableTestTypes = useMemo(() => {
     if (!report) return [];
@@ -204,9 +212,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
           <div className="bg-card border rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium">Test Details</h3>
-              <span className="text-sm text-muted-foreground">
-                Generated: {new Date(report.generatedAt).toLocaleString()}
-              </span>
+              <span className="text-sm text-muted-foreground">Generated: {generatedAt}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-border">

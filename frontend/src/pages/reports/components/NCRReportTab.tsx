@@ -1,11 +1,18 @@
 import React from 'react';
+import { useDateFormat } from '@/lib/dateFormat';
+import { useTimezone } from '@/lib/timezone';
 import type { NCRReport } from '../types';
+import { formatReportDateTime } from '../reportFormatting';
 
 export interface NCRReportTabProps {
   report: NCRReport;
 }
 
 export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRReportTabProps) {
+  const { dateFormat } = useDateFormat();
+  const { timezone } = useTimezone();
+  const generatedAt = formatReportDateTime(report.generatedAt, dateFormat, timezone);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Summary Cards */}
@@ -183,9 +190,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
       <div className="bg-card border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium">NCR Details</h3>
-          <span className="text-sm text-muted-foreground">
-            Generated: {new Date(report.generatedAt).toLocaleString()}
-          </span>
+          <span className="text-sm text-muted-foreground">Generated: {generatedAt}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-border">

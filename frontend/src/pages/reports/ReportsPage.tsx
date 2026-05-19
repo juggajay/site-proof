@@ -7,6 +7,9 @@ import type { LotStatusReport, NCRReport, TestReport, DiaryReport } from './type
 import { ADVANCED_ANALYTICS_TIERS } from './types';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { useDateFormat } from '@/lib/dateFormat';
+import { useTimezone } from '@/lib/timezone';
+import { formatReportDateTime } from './reportFormatting';
 
 // Lazy-loaded tab components
 const LotStatusTab = lazy(() =>
@@ -50,6 +53,8 @@ interface ProjectNameResponse {
 export function ReportsPage() {
   const { projectId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { dateFormat } = useDateFormat();
+  const { timezone } = useTimezone();
   const activeTab = searchParams.get('tab') || 'lot-status';
   const reportRequestRef = useRef(0);
 
@@ -80,6 +85,10 @@ export function ReportsPage() {
   const hasAdvancedAnalytics = useMemo(
     () => ADVANCED_ANALYTICS_TIERS.includes(subscriptionTier),
     [subscriptionTier],
+  );
+  const printGeneratedAt = useMemo(
+    () => formatReportDateTime(new Date(), dateFormat, timezone),
+    [dateFormat, timezone],
   );
 
   const tabs = useMemo(
@@ -351,7 +360,7 @@ export function ReportsPage() {
               </div>
             </div>
             <div className="flex justify-between text-sm text-muted-foreground mt-3">
-              <span>Generated: {new Date().toLocaleString()}</span>
+              <span>Generated: {printGeneratedAt}</span>
               <span>Report ID: {projectId?.slice(0, 8)}</span>
             </div>
           </div>
