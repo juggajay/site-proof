@@ -1384,14 +1384,22 @@ test.describe('production readiness guardrails', () => {
     expect(joinedRoutes).toContain('Failed to delete old company logo');
   });
 
-  test('dashboard print styles do not use HTML parsing APIs', async () => {
+  test('dashboard export creates a real PDF instead of opening the print dialog', async () => {
     const dashboardPage = await readFile(
       new URL('../src/pages/DashboardPage.tsx', import.meta.url),
       'utf8',
     );
+    const pdfGeneratorSource = await readFile(
+      new URL('../src/lib/pdfGenerator.ts', import.meta.url),
+      'utf8',
+    );
 
-    expect(dashboardPage).toContain('printStyles.textContent');
-    expect(dashboardPage).not.toContain('printStyles.innerHTML');
+    expect(dashboardPage).toContain("await import('@/lib/pdfGenerator')");
+    expect(dashboardPage).toContain('generateDashboardPDF');
+    expect(dashboardPage).not.toContain('window.print');
+    expect(dashboardPage).not.toContain('dashboard-print-styles');
+    expect(pdfGeneratorSource).toContain('export async function generateDashboardPDF');
+    expect(pdfGeneratorSource).toContain('siteproof-dashboard-');
   });
 
   test('unauthorized API responses clear stale auth state', async () => {
@@ -1883,6 +1891,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/claims/ClaimsPage.tsx', import.meta.url),
       'utf8',
     );
+    const dashboardSource = await readFile(
+      new URL('../src/pages/DashboardPage.tsx', import.meta.url),
+      'utf8',
+    );
 
     expect(viteConfig).toContain("'**/assets/pdfGenerator*.js'");
     expect(viteConfig).toContain("'**/assets/PDFViewer*.js'");
@@ -1921,8 +1933,10 @@ test.describe('production readiness guardrails', () => {
     expect(pdfGeneratorSource).not.toContain('getJsPDFSync');
     expect(lotDetailSource).toContain("await import('@/lib/pdfGenerator')");
     expect(claimsSource).toContain("await import('@/lib/pdfGenerator')");
+    expect(dashboardSource).toContain("await import('@/lib/pdfGenerator')");
     expect(lotDetailSource).not.toMatch(/import \{[^}]*generateConformanceReportPDF/);
     expect(claimsSource).not.toMatch(/import \{[^}]*generateClaimEvidencePackagePDF/);
+    expect(dashboardSource).not.toMatch(/import \{[^}]*generateDashboardPDF/);
   });
 
   test('push notifications fail visibly and route notification clicks safely', async () => {
