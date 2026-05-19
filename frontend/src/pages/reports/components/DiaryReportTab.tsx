@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react';
+import { useDateFormat } from '@/lib/dateFormat';
+import { useTimezone } from '@/lib/timezone';
 import type { DiaryReport } from '../types';
 import { DIARY_SECTIONS, applyDatePreset } from '../types';
+import { formatReportDateTime } from '../reportFormatting';
 
 export interface DiaryReportTabProps {
   report: DiaryReport | null;
@@ -13,6 +16,8 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
   loading,
   onGenerateReport,
 }: DiaryReportTabProps) {
+  const { dateFormat } = useDateFormat();
+  const { timezone } = useTimezone();
   const [diarySections, setDiarySections] = useState<string[]>([
     'weather',
     'personnel',
@@ -22,6 +27,9 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
   ]);
   const [diaryStartDate, setDiaryStartDate] = useState<string>('');
   const [diaryEndDate, setDiaryEndDate] = useState<string>('');
+  const generatedAt = report
+    ? formatReportDateTime(report.generatedAt, dateFormat, timezone)
+    : null;
 
   const toggleDiarySection = useCallback((sectionId: string) => {
     setDiarySections((prev) =>
@@ -290,9 +298,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
           <div className="bg-card border rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium">Diary Entries</h3>
-              <span className="text-sm text-muted-foreground">
-                Generated: {new Date(report.generatedAt).toLocaleString()}
-              </span>
+              <span className="text-sm text-muted-foreground">Generated: {generatedAt}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-border">

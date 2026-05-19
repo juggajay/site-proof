@@ -1,12 +1,19 @@
 import React from 'react';
+import { useDateFormat } from '@/lib/dateFormat';
+import { useTimezone } from '@/lib/timezone';
 import type { LotStatusReport } from '../types';
 import { STATUS_COLORS, STATUS_LABELS } from '../types';
+import { formatReportDateTime } from '../reportFormatting';
 
 export interface LotStatusTabProps {
   report: LotStatusReport;
 }
 
 export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStatusTabProps) {
+  const { dateFormat } = useDateFormat();
+  const { timezone } = useTimezone();
+  const generatedAt = formatReportDateTime(report.generatedAt, dateFormat, timezone);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Summary Cards with Percentage */}
@@ -159,9 +166,7 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
       <div className="bg-card border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Total Lots: {report.totalLots}</h2>
-          <span className="text-sm text-muted-foreground">
-            Generated: {new Date(report.generatedAt).toLocaleString()}
-          </span>
+          <span className="text-sm text-muted-foreground">Generated: {generatedAt}</span>
         </div>
 
         {/* Activity Type Breakdown */}

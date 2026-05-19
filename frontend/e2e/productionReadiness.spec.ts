@@ -1402,6 +1402,32 @@ test.describe('production readiness guardrails', () => {
     expect(pdfGeneratorSource).toContain('siteproof-dashboard-');
   });
 
+  test('project report generated timestamps use date and timezone preferences', async () => {
+    const reportFormatting = await readFile(
+      new URL('../src/pages/reports/reportFormatting.ts', import.meta.url),
+      'utf8',
+    );
+    const reportFiles = [
+      '../src/pages/reports/ReportsPage.tsx',
+      '../src/pages/reports/components/LotStatusTab.tsx',
+      '../src/pages/reports/components/NCRReportTab.tsx',
+      '../src/pages/reports/components/TestResultsTab.tsx',
+      '../src/pages/reports/components/DiaryReportTab.tsx',
+    ];
+
+    expect(reportFormatting).toContain('export function formatReportDateTime');
+    expect(reportFormatting).toContain('dateFormat');
+    expect(reportFormatting).toContain('timeZone: timezone');
+    expect(reportFormatting).toContain('formatToParts');
+    expect(reportFormatting).toContain("'en-AU'");
+
+    for (const relativePath of reportFiles) {
+      const source = await readFile(new URL(relativePath, import.meta.url), 'utf8');
+      expect(source).toContain('formatReportDateTime');
+      expect(source).not.toMatch(/Generated:\s*\{new Date\([^)]*\)\.toLocaleString\(\)\}/);
+    }
+  });
+
   test('unauthorized API responses clear stale auth state', async () => {
     const apiSource = await readFile(new URL('../src/lib/api.ts', import.meta.url), 'utf8');
     const authSource = await readFile(new URL('../src/lib/auth.tsx', import.meta.url), 'utf8');
