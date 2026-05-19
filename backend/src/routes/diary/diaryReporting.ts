@@ -8,6 +8,23 @@ import { parseDiaryDate, parseDiaryRouteParam, requireDiaryReadAccess } from './
 const router = Router();
 const REPORT_QUERY_MAX_LENGTH = 120;
 const CSV_FORMULA_PREFIX_PATTERN = /^[\t\r ]*[=+\-@]/;
+const WEATHER_UNAVAILABLE_MESSAGE = 'Weather auto-population unavailable. Enter weather manually.';
+
+type WeatherLocation = {
+  latitude: number;
+  longitude: number;
+  fromProjectState: boolean;
+};
+
+type OpenMeteoDailyWeatherResponse = {
+  daily?: {
+    time?: string[];
+    weather_code?: number[];
+    temperature_2m_min?: number[];
+    temperature_2m_max?: number[];
+    precipitation_sum?: number[];
+  };
+};
 
 function parseOptionalQueryString(
   value: unknown,
@@ -60,6 +77,20 @@ function formatCsvCell(value: unknown) {
   return `"${safeValue.replace(/"/g, '""')}"`;
 }
 
+function sendWeatherUnavailable(res: Response, date: string, location: WeatherLocation) {
+  res.json({
+    date,
+    weatherConditions: null,
+    temperatureMin: null,
+    temperatureMax: null,
+    rainfallMm: null,
+    source: null,
+    unavailable: true,
+    message: WEATHER_UNAVAILABLE_MESSAGE,
+    location,
+  });
+}
+
 // GET /api/diary/:projectId/weather/:date - Get weather for project location
 // Uses Open-Meteo API (free, no API key required)
 router.get(
@@ -107,27 +138,44 @@ router.get(
       longitude = coords.lon;
     }
 
+    if (latitude === null || longitude === null) {
+      throw AppError.internal('Weather location unavailable');
+    }
+
+    const location = {
+      latitude,
+      longitude,
+      fromProjectState: !project.latitude || !project.longitude,
+    };
+
     // Fetch weather from Open-Meteo API
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Australia%2FSydney&start_date=${weatherDate}&end_date=${weatherDate}`;
 
-    const weatherResponse = await fetchWithTimeout(weatherUrl, undefined, 10000);
-
-    if (!weatherResponse.ok) {
-      throw new AppError(502, 'Failed to fetch weather data');
+    let weatherResponse: globalThis.Response;
+    try {
+      weatherResponse = await fetchWithTimeout(weatherUrl, undefined, 10000);
+    } catch {
+      sendWeatherUnavailable(res, weatherDate, location);
+      return;
     }
 
-    const weatherData = (await weatherResponse.json()) as {
-      daily?: {
-        time?: string[];
-        weather_code?: number[];
-        temperature_2m_min?: number[];
-        temperature_2m_max?: number[];
-        precipitation_sum?: number[];
-      };
-    };
+    if (!weatherResponse.ok) {
+      sendWeatherUnavailable(res, weatherDate, location);
+      return;
+    }
+
+    let weatherData: OpenMeteoDailyWeatherResponse;
+
+    try {
+      weatherData = (await weatherResponse.json()) as OpenMeteoDailyWeatherResponse;
+    } catch {
+      sendWeatherUnavailable(res, weatherDate, location);
+      return;
+    }
 
     if (!weatherData.daily || !weatherData.daily.time || weatherData.daily.time.length === 0) {
-      throw AppError.notFound('No weather data available for this date');
+      sendWeatherUnavailable(res, weatherDate, location);
+      return;
     }
 
     // Map WMO weather codes to conditions
@@ -172,11 +220,8 @@ router.get(
       temperatureMax: weatherData.daily.temperature_2m_max?.[0],
       rainfallMm: weatherData.daily.precipitation_sum?.[0] || 0,
       source: 'Open-Meteo',
-      location: {
-        latitude,
-        longitude,
-        fromProjectState: !project.latitude || !project.longitude,
-      },
+      unavailable: false,
+      location,
     });
   }),
 );

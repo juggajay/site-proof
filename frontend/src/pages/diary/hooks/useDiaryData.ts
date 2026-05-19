@@ -27,10 +27,14 @@ interface WeatherResponse {
   temperatureMax?: number | null;
   rainfallMm?: number | null;
   source?: string | null;
+  unavailable?: boolean;
+  message?: string | null;
   location?: {
     fromProjectState?: boolean;
   } | null;
 }
+
+const WEATHER_UNAVAILABLE_MESSAGE = 'Weather auto-population unavailable. Enter weather manually.';
 
 export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -147,6 +151,11 @@ export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
         const data = await apiFetch<WeatherResponse>(
           `/api/diary/${encodeURIComponent(projectId)}/weather/${encodeURIComponent(date)}`,
         );
+        if (data.unavailable) {
+          setWeatherSource(data.message || WEATHER_UNAVAILABLE_MESSAGE);
+          return;
+        }
+
         setWeatherForm((prev) => ({
           ...prev,
           weatherConditions: data.weatherConditions || prev.weatherConditions,
@@ -159,8 +168,8 @@ export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
             ? `Weather auto-populated from ${data.source || 'weather service'} (state capital)`
             : `Weather auto-populated from ${data.source || 'weather service'}`,
         );
-      } catch (err) {
-        logError('Error fetching weather:', err);
+      } catch {
+        setWeatherSource(WEATHER_UNAVAILABLE_MESSAGE);
       } finally {
         setFetchingWeather(false);
       }

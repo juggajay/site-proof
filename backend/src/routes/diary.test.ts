@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
@@ -47,6 +47,10 @@ describe('Daily Diary API', () => {
   let otherLotId: string;
   const userIds: string[] = [];
   const projectIds: string[] = [];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -373,6 +377,36 @@ describe('Daily Diary API', () => {
           .delete({ where: { id: subcontractorCompany.id } })
           .catch(() => {});
       }
+    });
+  });
+
+  describe('GET /api/diary/:projectId/weather/:date', () => {
+    it('returns a manual-entry fallback when the weather provider is unavailable', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockRejectedValueOnce(new Error('Open-Meteo unavailable'));
+
+      const res = await request(app)
+        .get(`/api/diary/${projectId}/weather/2026-01-15`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        date: '2026-01-15',
+        weatherConditions: null,
+        temperatureMin: null,
+        temperatureMax: null,
+        rainfallMm: null,
+        source: null,
+        unavailable: true,
+        message: 'Weather auto-population unavailable. Enter weather manually.',
+        location: {
+          latitude: -33.8688,
+          longitude: 151.2093,
+          fromProjectState: true,
+        },
+      });
     });
   });
 
