@@ -456,106 +456,102 @@ export function Header() {
             )}
           </button>
 
-          <div
-            className={`absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card shadow-lg transition-all duration-200 origin-top-right ${
-              isNotificationOpen
-                ? 'opacity-100 scale-100 translate-y-0'
-                : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
-            }`}
-          >
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h3 className="font-semibold">Notifications</h3>
-              <div className="flex items-center gap-2">
-                {oldNotificationCount > 0 && (
+          {isNotificationOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card shadow-lg">
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <h3 className="font-semibold">Notifications</h3>
+                <div className="flex items-center gap-2">
+                  {oldNotificationCount > 0 && (
+                    <button
+                      onClick={clearOldNotifications}
+                      className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                    >
+                      Clear old
+                    </button>
+                  )}
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      disabled={markAllReadMutation.isLoading}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      {markAllReadMutation.isLoading ? 'Marking...' : 'Mark all as read'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Filter tabs */}
+              <div className="flex border-b px-2">
+                {(['all', 'mention', 'info', 'alert'] as const).map((filter) => (
                   <button
-                    onClick={clearOldNotifications}
-                    className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                    key={filter}
+                    onClick={() => setNotificationFilter(filter)}
+                    className={`px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                      notificationFilter === filter
+                        ? 'border-b-2 border-primary text-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
                   >
-                    Clear old
+                    {filter === 'mention'
+                      ? '@Mentions'
+                      : filter === 'info'
+                        ? 'Info'
+                        : filter === 'alert'
+                          ? 'Alerts'
+                          : 'All'}
                   </button>
-                )}
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsRead}
-                    disabled={markAllReadMutation.isLoading}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    {markAllReadMutation.isLoading ? 'Marking...' : 'Mark all as read'}
-                  </button>
+                ))}
+              </div>
+              <div className="max-h-[350px] overflow-auto">
+                {filteredNotifications.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-muted-foreground">
+                    No {notificationFilter === 'all' ? '' : notificationFilter} notifications
+                  </div>
+                ) : (
+                  <ul>
+                    {filteredNotifications.map((notification) => (
+                      <li
+                        key={notification.id}
+                        className={`border-b last:border-0 ${!notification.isRead ? 'bg-primary/5' : ''}`}
+                      >
+                        <button
+                          onClick={() => markAsRead(notification)}
+                          className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/50"
+                        >
+                          <div className="mt-0.5 flex-shrink-0">
+                            {getNotificationIcon(notification.type)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">{notification.title}</span>
+                              {!notification.isRead && (
+                                <span className="h-2 w-2 rounded-full bg-primary" />
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                              {notification.message}
+                            </p>
+                            <span className="mt-1 text-xs text-muted-foreground">
+                              {formatRelativeTime(notification.createdAt)}
+                            </span>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
-            </div>
-            {/* Filter tabs */}
-            <div className="flex border-b px-2">
-              {(['all', 'mention', 'info', 'alert'] as const).map((filter) => (
+              <div className="border-t p-2">
                 <button
-                  key={filter}
-                  onClick={() => setNotificationFilter(filter)}
-                  className={`px-3 py-2 text-xs font-medium capitalize transition-colors ${
-                    notificationFilter === filter
-                      ? 'border-b-2 border-primary text-primary'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  type="button"
+                  onClick={openNotificationSettings}
+                  className="w-full rounded px-3 py-2 text-sm text-primary hover:bg-muted"
                 >
-                  {filter === 'mention'
-                    ? '@Mentions'
-                    : filter === 'info'
-                      ? 'Info'
-                      : filter === 'alert'
-                        ? 'Alerts'
-                        : 'All'}
+                  Notification settings
                 </button>
-              ))}
+              </div>
             </div>
-            <div className="max-h-[350px] overflow-auto">
-              {filteredNotifications.length === 0 ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">
-                  No {notificationFilter === 'all' ? '' : notificationFilter} notifications
-                </div>
-              ) : (
-                <ul>
-                  {filteredNotifications.map((notification) => (
-                    <li
-                      key={notification.id}
-                      className={`border-b last:border-0 ${!notification.isRead ? 'bg-primary/5' : ''}`}
-                    >
-                      <button
-                        onClick={() => markAsRead(notification)}
-                        className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/50"
-                      >
-                        <div className="mt-0.5 flex-shrink-0">
-                          {getNotificationIcon(notification.type)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">{notification.title}</span>
-                            {!notification.isRead && (
-                              <span className="h-2 w-2 rounded-full bg-primary" />
-                            )}
-                          </div>
-                          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                            {notification.message}
-                          </p>
-                          <span className="mt-1 text-xs text-muted-foreground">
-                            {formatRelativeTime(notification.createdAt)}
-                          </span>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="border-t p-2">
-              <button
-                type="button"
-                onClick={openNotificationSettings}
-                className="w-full rounded px-3 py-2 text-sm text-primary hover:bg-muted"
-              >
-                Notification settings
-              </button>
-            </div>
-          </div>
+          )}
         </div>
         {/* User Profile Menu */}
         <div ref={userMenuRef} className="relative">
@@ -584,55 +580,51 @@ export function Header() {
             />
           </button>
 
-          <div
-            className={`absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border bg-card shadow-lg transition-all duration-200 origin-top-right ${
-              isUserMenuOpen
-                ? 'opacity-100 scale-100 translate-y-0'
-                : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
-            }`}
-          >
-            <div className="border-b px-4 py-3">
-              <p className="text-sm font-medium">{user?.name || user?.email?.split('@')[0]}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+          {isUserMenuOpen && (
+            <div className="absolute right-0 top-full z-50 mt-1 min-w-[200px] rounded-lg border bg-card shadow-lg">
+              <div className="border-b px-4 py-3">
+                <p className="text-sm font-medium">{user?.name || user?.email?.split('@')[0]}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+              <div className="p-1">
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    navigate('/profile');
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                  role="menuitem"
+                >
+                  <UserCircle className="h-4 w-4" aria-hidden="true" />
+                  Profile
+                </button>
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    navigate('/settings');
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                  role="menuitem"
+                >
+                  <Settings className="h-4 w-4" aria-hidden="true" />
+                  Settings
+                </button>
+              </div>
+              <div className="border-t p-1">
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    handleSignOut();
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  role="menuitem"
+                >
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                  Sign out
+                </button>
+              </div>
             </div>
-            <div className="p-1">
-              <button
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  navigate('/profile');
-                }}
-                className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                role="menuitem"
-              >
-                <UserCircle className="h-4 w-4" aria-hidden="true" />
-                Profile
-              </button>
-              <button
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  navigate('/settings');
-                }}
-                className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
-                role="menuitem"
-              >
-                <Settings className="h-4 w-4" aria-hidden="true" />
-                Settings
-              </button>
-            </div>
-            <div className="border-t p-1">
-              <button
-                onClick={() => {
-                  setIsUserMenuOpen(false);
-                  handleSignOut();
-                }}
-                className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                role="menuitem"
-              >
-                <LogOut className="h-4 w-4" aria-hidden="true" />
-                Sign out
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

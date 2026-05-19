@@ -153,6 +153,29 @@ async function mockHeaderApis(page: Page) {
 }
 
 test.describe('Header notifications', () => {
+  test('keeps closed header menus out of the accessibility tree', async ({ page }) => {
+    await mockHeaderApis(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}`);
+    await expect(page.getByTestId('notification-badge')).toBeVisible();
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => ({
+          hasNotificationMenuText: document.body.textContent?.includes('Notification settings'),
+          hasUserMenuText: document.body.textContent?.includes('Sign out'),
+        })),
+      )
+      .toEqual({ hasNotificationMenuText: false, hasUserMenuText: false });
+
+    await page.getByRole('button', { name: 'Notifications' }).click();
+    await expect(page.getByRole('button', { name: 'Mark all as read' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Notification settings' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'User menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
+  });
+
   test('filters alert notifications and routes footer to settings', async ({ page }) => {
     await mockHeaderApis(page);
 
