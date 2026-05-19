@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { logError } from '@/lib/logger';
 import {
   parseJsonPreference,
   readLocalStorageItem,
@@ -315,6 +316,8 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
   const [showWidgetSettings, setShowWidgetSettings] = useState(false);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   // Primary dashboard stats query
   const {
@@ -376,59 +379,37 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     });
   };
 
-  // Export dashboard to PDF using browser print
-  const handleExportPDF = () => {
-    // Add print class to body for styling
-    document.body.classList.add('printing-dashboard');
+  const handleExportPDF = useCallback(async () => {
+    setPdfError(null);
+    setIsExportingPDF(true);
 
-    // Create a style element for print-specific styles
-    const printStyles = document.createElement('style');
-    printStyles.id = 'dashboard-print-styles';
-    printStyles.textContent = `
-      @media print {
-        body.printing-dashboard * {
-          visibility: hidden;
-        }
-        body.printing-dashboard .dashboard-content,
-        body.printing-dashboard .dashboard-content * {
-          visibility: visible;
-        }
-        body.printing-dashboard .dashboard-content {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          padding: 20px;
-        }
-        body.printing-dashboard .no-print {
-          display: none !important;
-        }
-        body.printing-dashboard .bg-card {
-          background: white !important;
-          border: 1px solid #ddd !important;
-        }
-        body.printing-dashboard h1 {
-          font-size: 24px;
-          margin-bottom: 10px;
-        }
-        @page {
-          size: A4 portrait;
-          margin: 15mm;
-        }
-      }
-    `;
-    document.head.appendChild(printStyles);
-
-    // Trigger print dialog
-    window.print();
-
-    // Cleanup after print
-    setTimeout(() => {
-      document.body.classList.remove('printing-dashboard');
-      const styleEl = document.getElementById('dashboard-print-styles');
-      if (styleEl) styleEl.remove();
-    }, 500);
-  };
+    try {
+      const { generateDashboardPDF } = await import('@/lib/pdfGenerator');
+      await generateDashboardPDF({
+        generatedAt: new Date().toISOString(),
+        exportedBy: user?.fullName || user?.name || user?.email || null,
+        dateRange: {
+          label: currentDateRange.label,
+          startDate: currentDateRange.startDate,
+          endDate: currentDateRange.endDate,
+        },
+        stats,
+      });
+    } catch (err) {
+      logError('Failed to generate dashboard PDF:', err);
+      setPdfError(extractErrorMessage(err, 'Failed to generate dashboard PDF'));
+    } finally {
+      setIsExportingPDF(false);
+    }
+  }, [
+    currentDateRange.endDate,
+    currentDateRange.label,
+    currentDateRange.startDate,
+    stats,
+    user?.email,
+    user?.fullName,
+    user?.name,
+  ]);
 
   if (loading) {
     return (
@@ -511,9 +492,14 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
           </Button>
 
           {/* Export PDF Button */}
-          <Button variant="outline" onClick={handleExportPDF} title="Export to PDF">
+          <Button
+            variant="outline"
+            onClick={handleExportPDF}
+            title="Export to PDF"
+            disabled={isExportingPDF || hasHardStatsError}
+          >
             <Download className="h-4 w-4" />
-            Export PDF
+            {isExportingPDF ? 'Exporting...' : 'Export PDF'}
           </Button>
 
           {/* Widget Settings Dropdown */}
@@ -575,6 +561,16 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
               Try again
             </Button>
           </div>
+        </div>
+      )}
+
+      {pdfError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800"
+        >
+          <p className="font-medium">Dashboard PDF could not be generated.</p>
+          <p className="text-sm mt-1">{pdfError}</p>
         </div>
       )}
 
