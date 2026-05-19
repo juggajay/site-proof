@@ -374,6 +374,39 @@ test.describe('Dashboard seeded account contract', () => {
     }
   });
 
+  test('keeps cookie consent above the fixed mobile navigation', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await mockDefaultDashboardApi(page);
+    await page.addInitScript(() => {
+      localStorage.removeItem('cookie_consent');
+    });
+
+    await page.goto('/dashboard');
+
+    const banner = page.getByTestId('cookie-consent-banner');
+    await expect(banner).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const bannerElement = document.querySelector('[data-testid="cookie-consent-banner"]');
+      const bottomNav = Array.from(document.querySelectorAll('nav.fixed')).find((nav) => {
+        const rect = nav.getBoundingClientRect();
+        return Math.abs(window.innerHeight - rect.bottom) < 2 && rect.height > 0;
+      });
+      const bannerRect = bannerElement?.getBoundingClientRect();
+      const navRect = bottomNav?.getBoundingClientRect();
+
+      return {
+        bannerBottom: bannerRect?.bottom ?? null,
+        navTop: navRect?.top ?? null,
+      };
+    });
+
+    expect(layout.bannerBottom).not.toBeNull();
+    expect(layout.navTop).not.toBeNull();
+    expect(layout.bannerBottom!).toBeLessThanOrEqual(layout.navTop! + 1);
+  });
+
   test('project manager dashboard links to mounted project routes', async ({ page }) => {
     await mockProjectManagerDashboardApi(page);
 

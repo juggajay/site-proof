@@ -8,6 +8,8 @@ import {
   removeLocalStorageItem,
   writeLocalStorageItem,
 } from '@/lib/storagePreferences';
+import { useAuth } from '@/lib/auth';
+import { cn } from '@/lib/utils';
 
 const CONSENT_KEY = 'cookie_consent';
 const CONSENT_VERSION = 'v1'; // Bump this to re-ask for consent after policy updates
@@ -47,6 +49,7 @@ function hasCurrentConsent(consent: ConsentState | null): boolean {
 
 export function CookieConsentBanner() {
   const [showBanner, setShowBanner] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     setShowBanner(!hasCurrentConsent(readStoredConsent()));
@@ -76,7 +79,10 @@ export function CookieConsentBanner() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-card border-t border-border shadow-lg"
+      className={cn(
+        'fixed left-0 right-0 z-50 bg-card border-t border-border p-4 shadow-lg',
+        user ? 'bottom-16 md:bottom-0' : 'bottom-0',
+      )}
       role="dialog"
       aria-label="Cookie consent"
       data-testid="cookie-consent-banner"
