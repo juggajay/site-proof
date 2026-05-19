@@ -23,6 +23,18 @@ test.describe('production readiness guardrails', () => {
     expect(CLAIM_SUBMISSION_OPTIONS.map((option) => option.method)).toEqual(['download']);
   });
 
+  test('user-facing frontend branding does not reference the retired v2 product name', async () => {
+    const frontendSources = ['../index.html', '../src/index.css', '../src/lib/pdfGenerator.ts'];
+
+    for (const relativePath of frontendSources) {
+      const source = await readFile(new URL(relativePath, import.meta.url), 'utf8');
+
+      expect(source, `${relativePath} should not expose retired versioned branding`).not.toMatch(
+        /SiteProof\s+v2/i,
+      );
+    }
+  });
+
   test('subcontractor register does not fall back to bundled demo records', async () => {
     const pageSource = await readFile(
       new URL('../src/pages/subcontractors/SubcontractorsPage.tsx', import.meta.url),
@@ -989,7 +1001,7 @@ test.describe('production readiness guardrails', () => {
     expect(integrationPreflightScript).toContain('request failed for');
     expect(integrationPreflightScript).toContain('setVapidDetails');
     expect(productionPreflightWorkflow).toContain('workflow_dispatch');
-    expect(productionPreflightWorkflow).toContain('permissions:\n  contents: read');
+    expect(productionPreflightWorkflow).toMatch(/permissions:\s*\r?\n\s+contents:\s+read/);
     expect(productionPreflightWorkflow).toContain('validate-dispatch:');
     expect(productionPreflightWorkflow).toContain(
       'Production preflight can only run from refs/heads/master.',
