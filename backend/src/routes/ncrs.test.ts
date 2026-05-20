@@ -6,6 +6,7 @@ import { authRouter } from './auth.js';
 import { lotsRouter } from './lots.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 const app = express();
 app.use(express.json());
@@ -145,6 +146,50 @@ describe('NCR API', () => {
   });
 
   describe('POST /api/ncrs', () => {
+    it('should write an audit log when creating an NCR', async () => {
+      await prisma.auditLog.deleteMany({
+        where: { projectId, action: AuditAction.NCR_CREATED },
+      });
+
+      const res = await request(app)
+        .post('/api/ncrs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          description: 'Audited non-conformance',
+          category: 'Workmanship',
+          severity: 'minor',
+          lotIds: [lotId],
+        });
+
+      expect(res.status).toBe(201);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          entityType: 'ncr',
+          entityId: res.body.ncr.id,
+          action: AuditAction.NCR_CREATED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(auditLog).not.toBeNull();
+      if (!auditLog) {
+        throw new Error('Expected NCR creation audit log');
+      }
+      expect(auditLog.userId).toBe(userId);
+      const changes = parseAuditLogChanges(auditLog.changes) as Record<string, unknown>;
+      expect(changes).toEqual({
+        ncrNumber: res.body.ncr.ncrNumber,
+        status: 'open',
+        severity: 'minor',
+        category: 'Workmanship',
+        lotIds: [lotId],
+      });
+      expect(JSON.stringify(changes)).not.toContain('Audited non-conformance');
+    });
+
     it('should create a minor NCR', async () => {
       const res = await request(app)
         .post('/api/ncrs')
