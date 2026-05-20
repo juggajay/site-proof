@@ -1530,6 +1530,20 @@ docketsRouter.post(
       },
     });
 
+    await createAuditLog({
+      projectId: docket.projectId,
+      userId: user.id,
+      entityType: 'daily_docket',
+      entityId: docket.id,
+      action: AuditAction.DOCKET_QUERIED,
+      changes: {
+        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        status: { from: docket.status, to: updatedDocket.status },
+        questionLength: questions.length,
+      },
+      req,
+    });
+
     // Step 6 - Notify subcontractor users
     const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`;
     const docketDate = docket.date.toISOString().split('T')[0];
@@ -1647,6 +1661,20 @@ docketsRouter.post(
         status: 'pending_approval', // Back to pending for re-review
         notes: newNotes,
       },
+    });
+
+    await createAuditLog({
+      projectId: docket.projectId,
+      userId: user.id,
+      entityType: 'daily_docket',
+      entityId: docket.id,
+      action: AuditAction.DOCKET_QUERY_RESPONDED,
+      changes: {
+        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        status: { from: docket.status, to: updatedDocket.status },
+        responseLength: response.length,
+      },
+      req,
     });
 
     // Notify project approvers about the response
