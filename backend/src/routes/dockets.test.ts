@@ -1449,6 +1449,8 @@ describe('Dockets API', () => {
     });
 
     it('should query docket', async () => {
+      await prisma.auditLog.deleteMany({ where: { entityId: queryableDocketId } });
+
       const res = await request(app)
         .post(`/api/dockets/${queryableDocketId}/query`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -1458,6 +1460,21 @@ describe('Dockets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.docket.status).toBe('queried');
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'daily_docket',
+          entityId: queryableDocketId,
+          action: 'docket_queried',
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+        status: { from: 'pending_approval', to: 'queried' },
+        questionLength: 'What work area was this for?'.length,
+      });
     });
 
     it('should reject query without questions', async () => {
@@ -1479,6 +1496,7 @@ describe('Dockets API', () => {
 
     it('should respond to query', async () => {
       // Set to queried state
+      await prisma.auditLog.deleteMany({ where: { entityId: queryableDocketId } });
       await prisma.dailyDocket.update({
         where: { id: queryableDocketId },
         data: { status: 'queried' },
@@ -1493,6 +1511,21 @@ describe('Dockets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.docket.status).toBe('pending_approval');
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId: subcontractorUserId,
+          entityType: 'daily_docket',
+          entityId: queryableDocketId,
+          action: 'docket_query_responded',
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+        status: { from: 'queried', to: 'pending_approval' },
+        responseLength: 'This was for the northern section'.length,
+      });
     });
 
     afterAll(async () => {
