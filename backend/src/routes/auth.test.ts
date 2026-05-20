@@ -608,13 +608,30 @@ describe('POST /api/auth/login', () => {
   });
 
   it('should reject wrong password', async () => {
-    const res = await request(app).post('/api/auth/login').send({
-      email: loginEmail,
-      password: 'WrongPassword123!',
-    });
+    const user = await prisma.user.findUnique({ where: { email: loginEmail } });
+    expect(user).toBeDefined();
+    await clearUserAuditLogs(user!.id);
 
-    expect(res.status).toBe(401);
-    expect(res.body.error.message).toContain('Invalid');
+    try {
+      const res = await request(app).post('/api/auth/login').send({
+        email: loginEmail,
+        password: 'WrongPassword123!',
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.message).toContain('Invalid');
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        user!.id,
+        AuditAction.USER_LOGIN_FAILED,
+      );
+      expect(auditLog.userId).toBe(user!.id);
+      expect(changes).toEqual({ method: 'password', reason: 'invalid_credentials' });
+      expect(JSON.stringify(changes)).not.toContain('WrongPassword123!');
+      expect(JSON.stringify(changes)).not.toMatch(/token|secret|code/i);
+    } finally {
+      await clearUserAuditLogs(user!.id);
+    }
   });
 
   it('should record failed login attempts and clear them after successful login', async () => {
@@ -835,9 +852,19 @@ describe('POST /api/auth/login', () => {
 
       expect(reuseRes.status).toBe(401);
       expect(reuseRes.body.error.message).toContain('Invalid MFA code');
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        user!.id,
+        AuditAction.USER_LOGIN_FAILED,
+      );
+      expect(auditLog.userId).toBe(user!.id);
+      expect(changes).toEqual({ method: 'password_mfa', reason: 'invalid_mfa' });
+      expect(JSON.stringify(changes)).not.toContain('ABCDEF1234');
+      expect(JSON.stringify(changes)).not.toMatch(/token|secret|code/i);
     } finally {
       const user = await prisma.user.findUnique({ where: { email: loginEmail } });
       if (user) {
+        await clearUserAuditLogs(user.id);
         await deleteMfaBackupCodes(user.id);
         await prisma.user.update({
           where: { id: user.id },
