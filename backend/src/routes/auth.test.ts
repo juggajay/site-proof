@@ -1483,6 +1483,16 @@ describe('Avatar Upload', () => {
       expect(uploadedFilename).toMatch(new RegExp(`^avatar-${userId}-[0-9a-f-]{36}\\.png$`));
       expect(uploadedFilename).not.toContain('.svg');
       expect(fs.existsSync(path.join(avatarUploadDir, uploadedFilename!))).toBe(true);
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        userId!,
+        AuditAction.USER_AVATAR_UPDATED,
+      );
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({ changedFields: ['avatarUrl'] });
+      expect(JSON.stringify(changes)).not.toContain(uploadedFilename!);
+      expect(JSON.stringify(changes)).not.toContain(res.body.avatarUrl);
+      expect(JSON.stringify(changes)).not.toContain(email);
     } finally {
       if (uploadedFilename) {
         fs.rmSync(path.join(avatarUploadDir, uploadedFilename), { force: true });
@@ -1525,6 +1535,16 @@ describe('Avatar Upload', () => {
 
       expect(res.status).toBe(200);
       expect(fs.existsSync(sentinelPath)).toBe(true);
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        userId!,
+        AuditAction.USER_AVATAR_REMOVED,
+      );
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({ changedFields: ['avatarUrl'] });
+      expect(JSON.stringify(changes)).not.toContain(sentinelFilename);
+      expect(JSON.stringify(changes)).not.toContain('example.com');
+      expect(JSON.stringify(changes)).not.toContain(email);
     } finally {
       fs.rmSync(sentinelPath, { force: true });
       if (userId) {

@@ -1248,6 +1248,10 @@ authRouter.post(
       throw error;
     }
 
+    await auditUserAuthEvent(req, userData.id, AuditAction.USER_AVATAR_UPDATED, {
+      changedFields: ['avatarUrl'],
+    });
+
     // Delete old avatar file if it exists (best-effort; never blocks the response)
     if (oldUser?.avatarUrl) {
       try {
@@ -1291,6 +1295,12 @@ authRouter.delete(
       where: { id: userData.id },
       data: { avatarUrl: null },
     });
+
+    if (user?.avatarUrl) {
+      await auditUserAuthEvent(req, userData.id, AuditAction.USER_AVATAR_REMOVED, {
+        changedFields: ['avatarUrl'],
+      });
+    }
 
     if (user?.avatarUrl) {
       try {
