@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { generateToken } from '../lib/auth.js';
 import crypto from 'crypto';
@@ -8,6 +8,7 @@ import { getFrontendUrl, getGoogleRedirectUri } from '../lib/runtimeConfig.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
+import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 
 export const oauthRouter = Router();
 
@@ -48,6 +49,26 @@ function normalizeOAuthEmail(email: string): string {
   }
 
   return normalizedEmail;
+}
+
+async function auditOAuthLogin(
+  req: Request,
+  userId: string,
+  provider: string,
+  flow: 'google_identity',
+) {
+  await createAuditLog({
+    userId,
+    entityType: 'user',
+    entityId: userId,
+    action: AuditAction.USER_LOGIN,
+    changes: {
+      method: 'oauth',
+      provider,
+      flow,
+    },
+    req,
+  });
 }
 
 /**
@@ -481,6 +502,8 @@ oauthRouter.post(
     if (mfaEnabled || !token) {
       throw getMfaRequiredError();
     }
+
+    await auditOAuthLogin(req, user.id, 'google', 'google_identity');
 
     res.json({
       user: {
