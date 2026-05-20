@@ -16,6 +16,7 @@ import {
 import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../lib/uploadPaths.js';
 import { assertCanRemoveUserFromProjectAdminRoles } from '../lib/projectAdminInvariant.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
+import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
@@ -436,6 +437,8 @@ companyRouter.post(
     }
 
     const companyId = user.companyId;
+    const previousRole = user.roleInCompany || null;
+    let removedProjectMembershipCount = 0;
     await prisma.$transaction(async (tx) => {
       await assertCanRemoveUserFromProjectAdminRoles(user.userId, {
         companyId,
@@ -453,16 +456,30 @@ companyRouter.post(
       const projectIds = companyProjects.map((p) => p.id);
 
       // Delete project user records
-      await tx.projectUser.deleteMany({
+      const removedProjectMemberships = await tx.projectUser.deleteMany({
         where: {
           userId: user.userId,
           projectId: { in: projectIds },
         },
       });
+      removedProjectMembershipCount = removedProjectMemberships.count;
 
       // Remove company association from user using raw SQL to avoid Prisma quirks
       // Set role_in_company to 'member' (default) since it's NOT NULL
       await tx.$executeRaw`UPDATE users SET company_id = NULL, role_in_company = 'member' WHERE id = ${user.userId}`;
+    });
+
+    await createAuditLog({
+      userId: user.userId,
+      entityType: 'company',
+      entityId: companyId,
+      action: AuditAction.COMPANY_MEMBER_LEFT,
+      changes: {
+        memberUserId: user.userId,
+        previousRole,
+        removedProjectMembershipCount,
+      },
+      req,
     });
 
     res.json({
@@ -550,6 +567,20 @@ companyRouter.post(
       // Demote current owner to admin
       prisma.$executeRaw`UPDATE users SET role_in_company = 'admin' WHERE id = ${user.userId}`,
     ]);
+
+    await createAuditLog({
+      userId: user.userId,
+      entityType: 'company',
+      entityId: user.companyId,
+      action: AuditAction.COMPANY_OWNERSHIP_TRANSFERRED,
+      changes: {
+        previousOwnerId: user.userId,
+        newOwnerId,
+        previousOwnerRole: { from: 'owner', to: 'admin' },
+        newOwnerRole: { from: newOwner.roleInCompany, to: 'owner' },
+      },
+      req,
+    });
 
     res.json({
       message: 'Ownership transferred successfully',
