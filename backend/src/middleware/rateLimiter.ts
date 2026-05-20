@@ -22,11 +22,12 @@ interface RateLimitResult {
   resetSeconds: number;
 }
 
-type RateLimitScope = 'api' | 'auth' | 'support';
+type RateLimitScope = 'api' | 'auth' | 'support' | 'verification-resend';
 type AuthLockoutResult = { locked: boolean; remainingSeconds: number };
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
 const authRateLimitStore = new Map<string, RateLimitEntry>();
+const verificationResendRateLimitStore = new Map<string, RateLimitEntry>();
 const lockoutStore = new Map<string, LockoutEntry>();
 
 function readPositiveIntegerEnv(name: string, fallback: number): number {
@@ -53,6 +54,11 @@ const AUTH_WINDOW_MS = 60 * 1000;
 const AUTH_MAX_REQUESTS = readPositiveIntegerEnv(
   'AUTH_RATE_LIMIT_MAX',
   process.env.NODE_ENV === 'production' ? 10 : 50,
+);
+const VERIFICATION_RESEND_WINDOW_MS = 24 * 60 * 60 * 1000;
+const VERIFICATION_RESEND_MAX_REQUESTS = readPositiveIntegerEnv(
+  'VERIFICATION_RESEND_RATE_LIMIT_MAX',
+  3,
 );
 const SUPPORT_WINDOW_MS = 60 * 1000;
 const CLEANUP_INTERVAL = 5 * 60 * 1000;
@@ -133,6 +139,7 @@ function cleanupLockoutMap() {
 setInterval(() => {
   cleanupRateLimitMap(rateLimitStore, WINDOW_MS);
   cleanupRateLimitMap(authRateLimitStore, AUTH_WINDOW_MS);
+  cleanupRateLimitMap(verificationResendRateLimitStore, VERIFICATION_RESEND_WINDOW_MS);
   cleanupLockoutMap();
 }, CLEANUP_INTERVAL).unref?.();
 
@@ -173,8 +180,12 @@ function consumeMemoryRateLimit(
   maxRequests: number,
 ): RateLimitResult {
   const now = Date.now();
-  let entry = key.startsWith('auth:') ? authRateLimitStore.get(key) : rateLimitStore.get(key);
-  const store = key.startsWith('auth:') ? authRateLimitStore : rateLimitStore;
+  const store = key.startsWith('auth:')
+    ? authRateLimitStore
+    : key.startsWith('verification-resend:')
+      ? verificationResendRateLimitStore
+      : rateLimitStore;
+  let entry = store.get(key);
 
   if (!entry || now - entry.firstRequestTime > windowMs) {
     entry = { count: 1, firstRequestTime: now };
@@ -501,6 +512,50 @@ async function handleAuthRateLimit(req: Request, res: Response, next: NextFuncti
  */
 export function authRateLimiter(req: Request, res: Response, next: NextFunction) {
   void handleAuthRateLimit(req, res, next).catch(next);
+}
+
+function getVerificationResendTarget(req: Request): string | null {
+  const email = (req.body as { email?: unknown } | undefined)?.email;
+  if (typeof email !== 'string') {
+    return null;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  return normalizedEmail.length > 0 ? normalizedEmail : null;
+}
+
+async function handleVerificationResendRateLimit(req: Request, res: Response, next: NextFunction) {
+  const targetEmail = getVerificationResendTarget(req);
+  if (!targetEmail) {
+    next();
+    return;
+  }
+
+  const result = await consumeRateLimit(
+    'verification-resend',
+    targetEmail,
+    VERIFICATION_RESEND_WINDOW_MS,
+    VERIFICATION_RESEND_MAX_REQUESTS,
+  );
+  setRateLimitHeaders(res, VERIFICATION_RESEND_MAX_REQUESTS, result.remaining, result.resetSeconds);
+
+  if (!result.allowed) {
+    throw new AppError(
+      429,
+      `Too many verification email requests. Please try again in ${result.resetSeconds} seconds.`,
+      'RATE_LIMITED',
+      { retryAfter: result.resetSeconds },
+    );
+  }
+
+  next();
+}
+
+/**
+ * Daily per-target limiter for verification email resends.
+ */
+export function verificationResendLimiter(req: Request, res: Response, next: NextFunction) {
+  void handleVerificationResendRateLimit(req, res, next).catch(next);
 }
 
 async function handleSupportRateLimit(req: Request, res: Response, next: NextFunction) {

@@ -28,6 +28,7 @@ import {
   getClientIp,
   isLockedOut,
   recordFailedAuthAttempt,
+  verificationResendLimiter,
 } from '../middleware/rateLimiter.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../lib/uploadPaths.js';
@@ -1557,6 +1558,7 @@ authRouter.get(
 // POST /api/auth/resend-verification - Resend verification email
 authRouter.post(
   '/resend-verification',
+  verificationResendLimiter,
   asyncHandler(async (req, res) => {
     const { email } = req.body;
 
