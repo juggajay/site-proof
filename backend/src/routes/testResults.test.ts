@@ -1572,6 +1572,54 @@ describe('Test Results API', () => {
   });
 
   describe('POST /api/test-results/:id/reject', () => {
+    it('should keep repeat direct verification idempotent for already verified test results', async () => {
+      const certificate = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename: 'repeat-verify-cert.pdf',
+          fileUrl: '/uploads/certificates/repeat-verify-cert.pdf',
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const verifiedAt = new Date('2026-02-03T04:05:06.000Z');
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Repeat Verify Test ${Date.now()}`,
+          status: 'verified',
+          certificateDocId: certificate.id,
+          verifiedAt,
+          verifiedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.testResult.status).toBe('verified');
+        expect(res.body.testResult.verifiedAt).toBe(verifiedAt.toISOString());
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, verifiedAt: true, verifiedById: true },
+        });
+        expect(unchanged.status).toBe('verified');
+        expect(unchanged.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+        expect(unchanged.verifiedById).toBe(userId);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
+      }
+    });
+
     it('should reject invalid rejection reasons without mutating the test result', async () => {
       const testResult = await createEnteredTestResult();
       const cases = [

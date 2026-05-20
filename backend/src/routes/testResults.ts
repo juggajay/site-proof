@@ -2158,6 +2158,29 @@ testResultsRouter.post(
       'You do not have permission to verify test results',
     );
 
+    if (testResult.status === 'verified') {
+      const existingVerifiedTestResult = await prisma.testResult.findUniqueOrThrow({
+        where: { id },
+        select: {
+          id: true,
+          testType: true,
+          status: true,
+          verifiedAt: true,
+          verifiedBy: {
+            select: {
+              fullName: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      return res.json({
+        message: 'Test result already verified',
+        testResult: existingVerifiedTestResult,
+      });
+    }
+
     // Feature #883: Require certificate before verification
     if (!testResult.certificateDocId) {
       throw new AppError(
