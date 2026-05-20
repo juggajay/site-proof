@@ -2,6 +2,7 @@ import { useState, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { DiaryMobileView } from '@/components/foreman/DiaryMobileView';
+import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
 import type { DiaryTab } from './types';
 import { useDiaryData } from './hooks/useDiaryData';
 import { useDiaryMobileHandlers } from './hooks/useDiaryMobileHandlers';
@@ -12,6 +13,7 @@ import { DiaryDesktopHeader } from './components/DiaryDesktopHeader';
 import { DiaryTabNav } from './components/DiaryTabNav';
 import { DiaryEmptyState } from './components/DiaryEmptyState';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // Lazy-loaded tab components
 const WeatherTab = lazy(() =>
@@ -32,6 +34,7 @@ export function DailyDiaryPage() {
   const { projectId } = useParams();
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<DiaryTab>('weather');
+  const [entryPendingDelete, setEntryPendingDelete] = useState<TimelineEntry | null>(null);
 
   // Data hook (state, fetching, effects)
   const data = useDiaryData({ projectId, isMobile });
@@ -96,7 +99,7 @@ export function DailyDiaryPage() {
           onQuickAdd={(type) => mobile.setActiveSheet(type === 'plant' ? 'manual' : type)}
           onRefresh={mobile.handleRefresh}
           onEditEntry={mobile.handleEditEntry}
-          onDeleteEntry={mobile.handleDeleteEntry}
+          onDeleteEntry={(entry) => setEntryPendingDelete(entry)}
         />
         <DiaryMobileSheets
           activeSheet={mobile.activeSheet}
@@ -117,6 +120,27 @@ export function DailyDiaryPage() {
           onSavePersonnel={mobile.handleSavePersonnel}
           onSavePlant={mobile.handleSavePlant}
           onSaveWeather={mobile.handleSaveWeather}
+        />
+        <ConfirmDialog
+          open={Boolean(entryPendingDelete)}
+          title="Delete Diary Entry"
+          description={
+            <>
+              <p>Delete this diary entry? This removes it from the daily diary timeline.</p>
+              {entryPendingDelete && (
+                <p className="font-medium text-foreground">{entryPendingDelete.description}</p>
+              )}
+            </>
+          }
+          confirmLabel="Delete"
+          variant="destructive"
+          onCancel={() => setEntryPendingDelete(null)}
+          onConfirm={() => {
+            if (entryPendingDelete) {
+              void mobile.handleDeleteEntry(entryPendingDelete);
+            }
+            setEntryPendingDelete(null);
+          }}
         />
       </>
     );
