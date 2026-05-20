@@ -1368,6 +1368,16 @@ describe('Profile Update', () => {
       const user = await prisma.user.findUnique({ where: { id: userId } });
       expect(user?.fullName).toBe('Jane Profile');
       expect(user?.phone).toBe('+61 2 1234 5678');
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        userId!,
+        AuditAction.USER_PROFILE_UPDATED,
+      );
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({ changedFields: ['fullName', 'phone'] });
+      expect(JSON.stringify(changes)).not.toContain('Jane Profile');
+      expect(JSON.stringify(changes)).not.toContain('+61 2 1234 5678');
+      expect(JSON.stringify(changes)).not.toContain(email);
     } finally {
       if (userId) {
         await prisma.auditLog.deleteMany({ where: { userId } });

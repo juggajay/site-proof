@@ -1141,6 +1141,10 @@ authRouter.patch(
       PROFILE_FULL_NAME_MAX_LENGTH,
     );
     const phone = normalizeProfilePhone(req.body.phone);
+    const changedFields = [
+      ...(fullName !== undefined ? ['fullName'] : []),
+      ...(phone !== undefined ? ['phone'] : []),
+    ];
 
     // Update user profile
     const updatedUser = await prisma.user.update({
@@ -1163,6 +1167,12 @@ authRouter.patch(
         },
       },
     });
+
+    if (changedFields.length > 0) {
+      await auditUserAuthEvent(req, userData.id, AuditAction.USER_PROFILE_UPDATED, {
+        changedFields,
+      });
+    }
 
     res.json({
       message: 'Profile updated successfully',
