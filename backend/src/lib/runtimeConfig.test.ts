@@ -346,7 +346,7 @@ describe('runtimeConfig', () => {
     expect(() => validateRuntimeConfig()).not.toThrow();
   });
 
-  it('requires durable production file storage or explicit local storage opt-in', () => {
+  it('requires durable production file storage even when local storage is explicitly enabled', () => {
     configureProductionBase();
     process.env.FRONTEND_URL = 'https://app.siteproof.example';
     process.env.BACKEND_URL = 'https://api.siteproof.example';
@@ -357,7 +357,7 @@ describe('runtimeConfig', () => {
     expect(() => validateRuntimeConfig()).toThrow('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
 
     process.env.ALLOW_LOCAL_FILE_STORAGE = 'true';
-    expect(() => validateRuntimeConfig()).not.toThrow();
+    expect(() => validateRuntimeConfig()).toThrow('ALLOW_LOCAL_FILE_STORAGE');
   });
 
   it('rejects partial or non-public production Supabase storage configuration', () => {
