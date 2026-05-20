@@ -2633,6 +2633,8 @@ holdpointsRouter.post(
     }
 
     const projectSettings = parseHPProjectSettings(releaseToken.holdPoint.lot.project.settings);
+    const tokenRecipientName = releaseToken.recipientName?.trim();
+    const effectiveReleasedByName = tokenRecipientName || releasedByName;
     await requireSuperintendentApprovalRecipients(
       releaseToken.holdPoint.lot.projectId,
       projectSettings,
@@ -2653,7 +2655,7 @@ holdpointsRouter.post(
         },
         data: {
           usedAt: releasedAt,
-          releasedByName,
+          releasedByName: effectiveReleasedByName,
           releasedByOrg: releasedByOrg || null,
           releaseSignatureUrl: signatureDataUrl || null,
           releaseNotes: releaseNotes || null,
@@ -2676,7 +2678,7 @@ holdpointsRouter.post(
         data: {
           status: 'released',
           releasedAt,
-          releasedByName,
+          releasedByName: effectiveReleasedByName,
           releasedByOrg: releasedByOrg || null,
           releaseMethod: 'secure_link',
           releaseSignatureUrl: signatureDataUrl || null,
@@ -2740,7 +2742,7 @@ holdpointsRouter.post(
       projectId: releaseToken.holdPoint.lot.projectId,
       type: 'hold_point_release',
       title: 'Hold Point Released (via Secure Link)',
-      message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been released by ${releasedByName} via secure link.`,
+      message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been released by ${effectiveReleasedByName} via secure link.`,
       linkUrl: `/projects/${releaseToken.holdPoint.lot.projectId}/hold-points`,
     }));
 
@@ -2776,7 +2778,7 @@ holdpointsRouter.post(
           projectName: releaseToken.holdPoint.lot.project.name,
           lotNumber: holdPoint.lot.lotNumber,
           holdPointDescription: holdPoint.description || 'Hold Point',
-          releasedByName,
+          releasedByName: effectiveReleasedByName,
           releasedByOrg: releasedByOrg || undefined,
           releaseMethod: 'secure_link',
           releaseNotes: releaseNotes || undefined,
@@ -2797,7 +2799,7 @@ holdpointsRouter.post(
           projectName: releaseToken.holdPoint.lot.project.name,
           lotNumber: holdPoint.lot.lotNumber,
           holdPointDescription: holdPoint.description || 'Hold Point',
-          releasedByName,
+          releasedByName: effectiveReleasedByName,
           releasedByOrg: releasedByOrg || undefined,
           releaseMethod: 'secure_link',
           releaseNotes: releaseNotes || undefined,
@@ -2817,10 +2819,12 @@ holdpointsRouter.post(
       entityId: holdPoint.id,
       action: AuditAction.HP_PUBLIC_RELEASED,
       changes: {
-        releasedByName,
+        releasedByName: effectiveReleasedByName,
+        submittedReleasedByName: releasedByName,
         releasedByOrg,
         releaseMethod: 'secure_link',
         tokenRecipient: releaseToken.recipientEmail,
+        tokenRecipientName: releaseToken.recipientName,
       },
       req,
     });
