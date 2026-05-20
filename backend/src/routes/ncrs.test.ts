@@ -1485,6 +1485,67 @@ describe('NCR Workflow', () => {
     });
   });
 
+  it('should reject closing directly from rectification status', async () => {
+    const ncrRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: 'Close should require verification NCR',
+        category: 'Workmanship',
+        severity: 'minor',
+        responsibleUserId: userId,
+      });
+    expect(ncrRes.status).toBe(201);
+    const ncrId = ncrRes.body.ncr.id as string;
+
+    const respondRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rootCauseCategory: 'Method',
+        rootCauseDescription: 'Incorrect procedure followed',
+        proposedCorrectiveAction: 'Retrain workers on correct method',
+      });
+    expect(respondRes.status).toBe(200);
+
+    const reviewRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/qm-review`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        action: 'accept',
+        comments: 'Response is acceptable',
+      });
+    expect(reviewRes.status).toBe(200);
+    expect(reviewRes.body.ncr.status).toBe('rectification');
+
+    const closeRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/close`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        verificationNotes: 'This should not close before verification',
+      });
+
+    expect(closeRes.status).toBe(400);
+    expect(closeRes.body.error.message).toContain('verification status');
+
+    const ncr = await prisma.nCR.findUniqueOrThrow({
+      where: { id: ncrId },
+      select: {
+        status: true,
+        verifiedAt: true,
+        verificationNotes: true,
+        closedAt: true,
+        closedById: true,
+      },
+    });
+    expect(ncr.status).toBe('rectification');
+    expect(ncr.verifiedAt).toBeNull();
+    expect(ncr.verificationNotes).toBeNull();
+    expect(ncr.closedAt).toBeNull();
+    expect(ncr.closedById).toBeNull();
+  });
+
   it('should close NCR', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${workflowNcrId}/close`)

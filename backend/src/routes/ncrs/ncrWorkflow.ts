@@ -626,9 +626,9 @@ ncrWorkflowRouter.post(
       NCR_QUALITY_MANAGEMENT_ROLES,
     );
 
-    // Check if NCR is in a state that can be closed
-    if (ncr.status !== 'verification' && ncr.status !== 'rectification') {
-      throw AppError.badRequest('NCR must be in verification or rectification status to close', {
+    // Closing is the final verification decision; rectification must be submitted first.
+    if (ncr.status !== 'verification') {
+      throw AppError.badRequest('NCR must be in verification status to close', {
         currentStatus: ncr.status,
       });
     }
