@@ -99,6 +99,10 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
       lotId: lot.id,
       percentageComplete: parseClaimPercentageInput(lot.percentComplete),
     }));
+    if (selectedLots.some((lot) => !lot.percentComplete.trim())) {
+      setCreateError('Percent complete is required for every selected lot.');
+      return;
+    }
     if (claimLots.some((lot) => lot.percentageComplete === null)) {
       setCreateError('Percent complete must be a decimal between 0 and 100.');
       return;
@@ -225,6 +229,8 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           type="number"
                           min={0}
                           max={100}
+                          step="0.01"
+                          required
                           value={lot.percentComplete}
                           onChange={(e) => updateLotPercentage(lot.id, e.target.value)}
                           className={`w-20 h-8 text-sm text-center ${
