@@ -895,7 +895,14 @@ completionsRouter.post(
       entityType: 'itp_completion',
       entityId: id,
       action: AuditAction.ITP_ITEM_VERIFIED,
-      changes: { verificationStatus: 'verified' },
+      changes: {
+        lotId: completion.itpInstance?.lotId,
+        checklistItemId: completion.checklistItemId,
+        verificationStatus: {
+          from: completionForAccess.verificationStatus,
+          to: 'verified',
+        },
+      },
       req,
     });
 
@@ -994,7 +1001,15 @@ completionsRouter.post(
       entityType: 'itp_completion',
       entityId: id,
       action: AuditAction.ITP_ITEM_REJECTED,
-      changes: { verificationStatus: 'rejected', reason: reason.trim() },
+      changes: {
+        lotId: completion.itpInstance?.lotId,
+        checklistItemId: completion.checklistItemId,
+        verificationStatus: {
+          from: completionForAccess.verificationStatus,
+          to: 'rejected',
+        },
+        reason: reason.trim(),
+      },
       req,
     });
 

@@ -4,6 +4,7 @@ import express from 'express';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 // Import ITP router - named export
 import { itpRouter } from './itp/index.js';
@@ -1581,6 +1582,128 @@ describe('ITP Completion Attachments', () => {
       expect(completion.verifiedById).toBe(userId);
       expect(completion.verificationNotes).toBe('Original verification note');
     } finally {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'pending',
+          completedById: null,
+          completedAt: null,
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+    }
+  });
+
+  it('should write audit context when verifying a pending ITP completion', async () => {
+    await prisma.auditLog.deleteMany({
+      where: { entityId: completionId, action: AuditAction.ITP_ITEM_VERIFIED },
+    });
+
+    try {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: userId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'pending_verification',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/verify`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'itp_completion',
+          entityId: completionId,
+          action: AuditAction.ITP_ITEM_VERIFIED,
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        lotId,
+        checklistItemId,
+        verificationStatus: { from: 'pending_verification', to: 'verified' },
+      });
+    } finally {
+      await prisma.auditLog.deleteMany({
+        where: { entityId: completionId, action: AuditAction.ITP_ITEM_VERIFIED },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'pending',
+          completedById: null,
+          completedAt: null,
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+    }
+  });
+
+  it('should write audit context when rejecting a pending ITP completion', async () => {
+    await prisma.auditLog.deleteMany({
+      where: { entityId: completionId, action: AuditAction.ITP_ITEM_REJECTED },
+    });
+
+    try {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: userId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'pending_verification',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/reject`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: 'Evidence photo is missing chainage marker' });
+
+      expect(res.status).toBe(200);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'itp_completion',
+          entityId: completionId,
+          action: AuditAction.ITP_ITEM_REJECTED,
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        lotId,
+        checklistItemId,
+        reason: 'Evidence photo is missing chainage marker',
+        verificationStatus: { from: 'pending_verification', to: 'rejected' },
+      });
+    } finally {
+      await prisma.auditLog.deleteMany({
+        where: { entityId: completionId, action: AuditAction.ITP_ITEM_REJECTED },
+      });
       await prisma.iTPCompletion.update({
         where: { id: completionId },
         data: {
