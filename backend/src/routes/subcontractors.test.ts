@@ -1547,6 +1547,99 @@ describe('Subcontractors API', () => {
       expect(res.body.company.companyName).toContain('Portal Test Co');
     });
 
+    it('should keep my-company roster and plant scoped to the linked subcontractor', async () => {
+      const suffix = Date.now();
+      const otherSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Portal Other Co ${suffix}`,
+          primaryContactName: 'Other Portal Admin',
+          primaryContactEmail: `portal-other-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      const ownEmployee = await prisma.employeeRoster.create({
+        data: {
+          subcontractorCompanyId: portalSubId,
+          name: `Portal Own Employee ${suffix}`,
+          role: 'Operator',
+          hourlyRate: 55,
+          status: 'pending',
+        },
+      });
+      const otherEmployee = await prisma.employeeRoster.create({
+        data: {
+          subcontractorCompanyId: otherSub.id,
+          name: `Portal Other Employee ${suffix}`,
+          role: 'Labourer',
+          hourlyRate: 45,
+          status: 'pending',
+        },
+      });
+      const ownPlant = await prisma.plantRegister.create({
+        data: {
+          subcontractorCompanyId: portalSubId,
+          type: 'Truck',
+          description: `Portal Own Plant ${suffix}`,
+          dryRate: 120,
+          status: 'pending',
+        },
+      });
+      const otherPlant = await prisma.plantRegister.create({
+        data: {
+          subcontractorCompanyId: otherSub.id,
+          type: 'Excavator',
+          description: `Portal Other Plant ${suffix}`,
+          dryRate: 180,
+          status: 'pending',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/subcontractors/my-company')
+          .set('Authorization', `Bearer ${portalToken}`);
+
+        expect(res.status).toBe(200);
+        const employeeNames = res.body.company.employees.map(
+          (employee: { name: string }) => employee.name,
+        );
+        expect(employeeNames).toContain(ownEmployee.name);
+        expect(employeeNames).not.toContain(otherEmployee.name);
+
+        const plantDescriptions = res.body.company.plant.map(
+          (plant: { description: string }) => plant.description,
+        );
+        expect(plantDescriptions).toContain(ownPlant.description);
+        expect(plantDescriptions).not.toContain(otherPlant.description);
+
+        const deleteOtherEmployeeRes = await request(app)
+          .delete(`/api/subcontractors/my-company/employees/${otherEmployee.id}`)
+          .set('Authorization', `Bearer ${portalToken}`);
+        expect(deleteOtherEmployeeRes.status).toBe(404);
+
+        const deleteOtherPlantRes = await request(app)
+          .delete(`/api/subcontractors/my-company/plant/${otherPlant.id}`)
+          .set('Authorization', `Bearer ${portalToken}`);
+        expect(deleteOtherPlantRes.status).toBe(404);
+
+        await expect(
+          prisma.employeeRoster.findUnique({ where: { id: otherEmployee.id } }),
+        ).resolves.toBeTruthy();
+        await expect(
+          prisma.plantRegister.findUnique({ where: { id: otherPlant.id } }),
+        ).resolves.toBeTruthy();
+      } finally {
+        await prisma.employeeRoster.deleteMany({
+          where: { id: { in: [ownEmployee.id, otherEmployee.id] } },
+        });
+        await prisma.plantRegister.deleteMany({
+          where: { id: { in: [ownPlant.id, otherPlant.id] } },
+        });
+        await prisma.subcontractorCompany.delete({ where: { id: otherSub.id } }).catch(() => {});
+      }
+    });
+
     it('should block suspended subcontractor portal access and roster mutations', async () => {
       await prisma.subcontractorCompany.update({
         where: { id: portalSubId },
