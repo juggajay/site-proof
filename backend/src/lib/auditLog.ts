@@ -123,6 +123,7 @@ export const AuditAction = {
   USER_EMAIL_VERIFIED: 'user_email_verified',
   USER_LOGIN: 'user_login',
   USER_LOGOUT: 'user_logout',
+  USER_PROFILE_UPDATED: 'user_profile_updated',
   ACCOUNT_DELETION_REQUESTED: 'account_deletion_requested',
   PASSWORD_CHANGED: 'password_changed',
   MFA_ENABLED: 'mfa_enabled',
