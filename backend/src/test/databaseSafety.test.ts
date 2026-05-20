@@ -21,6 +21,14 @@ describe('test database safety guard', () => {
     ).toThrow('non-local database host');
   });
 
+  it('rejects non-local database hosts even when NODE_ENV is not pre-set', () => {
+    expect(() =>
+      assertSafeTestDatabaseUrl({
+        DATABASE_URL: 'postgresql://user:pass@db.example.com:5432/siteproof_test',
+      }),
+    ).toThrow('non-local database host');
+  });
+
   it('rejects local database names that do not look disposable', () => {
     expect(() =>
       assertSafeTestDatabaseUrl({
