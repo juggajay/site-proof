@@ -18,6 +18,28 @@ async function collectSourceFiles(dir: URL): Promise<URL[]> {
   return nested.flat();
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function expectProjectRouteGuard(
+  appSource: string,
+  routePath: string,
+  pageComponent: string,
+  allowedRolesExpression = 'INTERNAL_ROLES',
+) {
+  expect(appSource).toMatch(
+    new RegExp(
+      `<Route\\s+path="${escapeRegExp(routePath)}"\\s+element=\\{\\s*` +
+        `<RoleProtectedRoute\\s+allowedRoles=\\{${escapeRegExp(allowedRolesExpression)}\\}>\\s*` +
+        `<${pageComponent}\\s*/>\\s*` +
+        `</RoleProtectedRoute>\\s*` +
+        `\\}\\s*/>`,
+      's',
+    ),
+  );
+}
+
 test.describe('production readiness guardrails', () => {
   test('claim submission exposes only implemented methods', () => {
     expect(CLAIM_SUBMISSION_OPTIONS.map((option) => option.method)).toEqual(['download']);
@@ -678,13 +700,9 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(appSource).toContain(
-      '<Route path="/projects/:projectId/hold-points" element={<HoldPointsPage />} />',
-    );
-    expect(appSource).toContain('<Route path="/projects/:projectId/ncr" element={<NCRPage />} />');
-    expect(appSource).toContain(
-      '<Route path="/projects/:projectId/tests" element={<TestResultsPage />} />',
-    );
+    expectProjectRouteGuard(appSource, '/projects/:projectId/hold-points', 'HoldPointsPage');
+    expectProjectRouteGuard(appSource, '/projects/:projectId/ncr', 'NCRPage');
+    expectProjectRouteGuard(appSource, '/projects/:projectId/tests', 'TestResultsPage');
     expect(holdPointsPage).toContain(
       '/projects/${encodeURIComponent(projectId)}/hold-points?hp=${encodeURIComponent(hpId)}',
     );
@@ -695,6 +713,28 @@ test.describe('production readiness guardrails', () => {
     expect(ncrActions).not.toContain('/projects/${projectId}/ncrs?ncr=${ncrId}');
     expect(testResultsRoute).toContain('/projects/${testResult.projectId}/tests');
     expect(testResultsRoute).not.toContain('/projects/${testResult.projectId}/test-results');
+  });
+
+  test('internal project module routes show role-denied UI before API fallback errors', async () => {
+    const appSource = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8');
+    const internalProjectRoutes = [
+      ['/projects/:projectId/itp', 'ITPPage'],
+      ['/projects/:projectId/hold-points', 'HoldPointsPage'],
+      ['/projects/:projectId/tests', 'TestResultsPage'],
+      ['/projects/:projectId/ncr', 'NCRPage'],
+      ['/projects/:projectId/diary', 'DailyDiaryPage'],
+      ['/projects/:projectId/documents', 'DocumentsPage'],
+    ] as const;
+
+    for (const [routePath, pageComponent] of internalProjectRoutes) {
+      expectProjectRouteGuard(appSource, routePath, pageComponent);
+    }
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/dockets',
+      'DocketApprovalsPage',
+      '[...INTERNAL_ROLES, ...SUBCONTRACTOR_ROLES]',
+    );
   });
 
   test('foreman mobile quick navigation resolves to mounted routes', async () => {
