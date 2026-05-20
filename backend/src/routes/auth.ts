@@ -32,6 +32,7 @@ import {
 import { logError, logWarn } from '../lib/serverLogger.js';
 import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../lib/uploadPaths.js';
 import { assertCanRemoveUserFromProjectAdminRoles } from '../lib/projectAdminInvariant.js';
+import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
@@ -45,6 +46,22 @@ const GENERIC_RESEND_VERIFICATION_MESSAGE =
   'If an account exists with this email, a new verification link has been sent.';
 
 export const authRouter = Router();
+
+async function auditUserAuthEvent(
+  req: Request,
+  userId: string,
+  action: string,
+  changes: Record<string, unknown>,
+) {
+  await createAuditLog({
+    userId,
+    entityType: 'user',
+    entityId: userId,
+    action,
+    changes,
+    req,
+  });
+}
 
 async function requireJwtAuth(req: Request, _res: Response, next: NextFunction) {
   try {
@@ -553,6 +570,11 @@ authRouter.post(
       expiresInHours: 24,
     });
 
+    await auditUserAuthEvent(req, user.id, AuditAction.USER_REGISTERED, {
+      emailVerified: { from: null, to: false },
+      tosVersion: CURRENT_TOS_VERSION,
+    });
+
     // Generate auth token
     const token = generateToken({
       userId: user.id,
@@ -626,6 +648,8 @@ authRouter.post(
       throw AppError.unauthorized('Invalid email or password');
     }
 
+    let loginMethod = 'password';
+
     // Check if MFA is enabled
     if (user.two_factor_enabled && user.two_factor_secret) {
       const normalizedMfaCode = normalizeMfaLoginCode(mfaCode);
@@ -651,6 +675,8 @@ authRouter.post(
           await recordFailedAuthAttempt(clientIp, normalizedEmail);
           throw AppError.unauthorized('Invalid MFA code');
         }
+
+        loginMethod = backupCodeValid ? 'password_mfa_backup_code' : 'password_mfa_totp';
         // MFA verified, continue to generate token
       } else {
         // MFA required but no code provided
@@ -679,6 +705,10 @@ authRouter.post(
     });
 
     await clearFailedAuthAttempts(clientIp, normalizedEmail);
+
+    await auditUserAuthEvent(req, user.id, AuditAction.USER_LOGIN, {
+      method: loginMethod,
+    });
 
     res.json({
       user: {
@@ -834,6 +864,10 @@ authRouter.post(
       role: tokenRecord.user.roleInCompany,
     });
 
+    await auditUserAuthEvent(req, tokenRecord.user.id, AuditAction.USER_LOGIN, {
+      method: 'magic_link',
+    });
+
     res.json({
       user: {
         id: tokenRecord.user.id,
@@ -902,6 +936,11 @@ authRouter.post(
     await prisma.user.update({
       where: { id: user.userId },
       data: { tokenInvalidatedAt: invalidatedAt },
+    });
+
+    await auditUserAuthEvent(req, user.userId, AuditAction.USER_LOGOUT, {
+      scope: 'all_devices',
+      sessionsInvalidated: true,
     });
 
     const now = invalidatedAt.toISOString();
@@ -1039,6 +1078,11 @@ authRouter.post(
         data: { usedAt: new Date() },
       }),
     ]);
+
+    await auditUserAuthEvent(req, resetToken.userId, AuditAction.PASSWORD_CHANGED, {
+      method: 'password_reset',
+      sessionsInvalidated: true,
+    });
 
     res.json({
       message: 'Password has been reset successfully. You can now log in with your new password.',
@@ -1314,6 +1358,11 @@ authRouter.post(
         passwordHash: newPasswordHash,
         tokenInvalidatedAt: new Date(),
       },
+    });
+
+    await auditUserAuthEvent(req, user.id, AuditAction.PASSWORD_CHANGED, {
+      method: 'password_change',
+      sessionsInvalidated: true,
     });
 
     res.json({ message: 'Password changed successfully' });
