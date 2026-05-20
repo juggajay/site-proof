@@ -1024,6 +1024,11 @@ authRouter.post(
         resetUrl,
         expiresInMinutes: 60,
       });
+
+      await auditUserAuthEvent(req, user.id, AuditAction.PASSWORD_RESET_REQUESTED, {
+        method: 'email',
+        expiresInMinutes: 60,
+      });
     }
 
     // Always return success (security: don't reveal if email exists)
