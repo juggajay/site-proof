@@ -139,6 +139,7 @@ describe('Daily Diary API', () => {
     await prisma.diaryActivity.deleteMany({ where: { diary: { projectId: { in: projectIds } } } });
     await prisma.diaryPlant.deleteMany({ where: { diary: { projectId: { in: projectIds } } } });
     await prisma.diaryPersonnel.deleteMany({ where: { diary: { projectId: { in: projectIds } } } });
+    await prisma.auditLog.deleteMany({ where: { projectId: { in: projectIds } } });
     await prisma.dailyDiary.deleteMany({ where: { projectId: { in: projectIds } } });
     await prisma.lot.deleteMany({ where: { projectId: { in: projectIds } } });
     await prisma.projectUser.deleteMany({
@@ -1006,6 +1007,19 @@ describe('Daily Diary API', () => {
     });
 
     it('should submit diary with warnings acknowledged', async () => {
+      if (!diaryId) {
+        diaryDate = new Date(Date.now() + 604800000).toISOString().split('T')[0];
+        const draftRes = await request(app)
+          .post('/api/diary')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            date: diaryDate,
+          });
+        expect(draftRes.status).toBe(201);
+        diaryId = draftRes.body.id;
+      }
+
       const res = await request(app)
         .post(`/api/diary/${diaryId}/submit`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -1013,6 +1027,21 @@ describe('Daily Diary API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.diary.status).toBe('submitted');
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'daily_diary',
+          entityId: diaryId,
+          action: 'diary_submitted',
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+        status: { from: 'draft', to: 'submitted' },
+        warningsAcknowledged: true,
+      });
     });
 
     it('should reject item writes that start before a concurrent submit commits', async () => {
