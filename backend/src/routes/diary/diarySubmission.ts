@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import {
   parseDiaryRouteParam,
   requireDiaryReadAccess,
@@ -140,7 +141,7 @@ router.post(
       throw AppError.badRequest('acknowledgeWarnings must be a boolean');
     }
 
-    const { updatedDiary, warnings } = await prisma.$transaction(async (tx) => {
+    const { updatedDiary, previousStatus, warnings } = await prisma.$transaction(async (tx) => {
       await requireEditableDiaryForWrite(
         tx,
         req.user!,
@@ -213,7 +214,22 @@ router.post(
         },
       });
 
-      return { updatedDiary, warnings };
+      return { updatedDiary, previousStatus: diary.status, warnings };
+    });
+
+    await createAuditLog({
+      projectId: updatedDiary.projectId,
+      userId,
+      entityType: 'daily_diary',
+      entityId: updatedDiary.id,
+      action: AuditAction.DIARY_SUBMITTED,
+      changes: {
+        date: updatedDiary.date.toISOString().split('T')[0],
+        status: { from: previousStatus, to: updatedDiary.status },
+        warningsAcknowledged: warnings.length > 0,
+        isLate: updatedDiary.isLate,
+      },
+      req,
     });
 
     res.json({
