@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `ea0a20e fix: keep cookie banner above mobile nav (#98)`
+  `1dda78c fix: require verified oauth callback email (#140)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -182,17 +182,83 @@ The original report artifacts under `.gstack/dev-browser/full-app-qa-*` are
 historical. Do not treat their issue list as current without rechecking
 `master`; most referenced findings are now intentionally stale.
 
+### Paying-User Readiness Hardening
+
+Status: main source-audit gap list is largely closed in code through PR #140.
+
+After the first QA cleanup batch, Codex and Claude ran a paying-user readiness
+review focused on compliance trust scaffolding: audit logs, workflow state
+guards, auth edge cases, subbie boundaries, and security ergonomics. The report
+artifacts under `.gstack/dev-browser/paying-user-readiness-*` are useful for
+history, but many line-item findings are now stale. Recheck `master` before
+using any item as live work.
+
+Closed areas since PR #98:
+
+- Hold point public release now binds the release identity to the token and
+  uses server-owned release timestamps.
+- ITP verification transitions are guarded: repeat verification is idempotent,
+  verified completions cannot be rejected, and verified completion edits require
+  verifier revision context.
+- Test result verification is idempotent and verified test results are guarded
+  against unsafe edits.
+- NCR rectification now requires evidence before entering verification, NCR
+  close requires verification status, and NCR close/reopen/QM transitions write
+  audit logs.
+- NCR creation, evidence add/remove, client notification, and workflow
+  transitions now have focused audit coverage.
+- Lot conformance and lot status overrides write audit entries.
+- Docket submit/approve/reject/query/respond transitions write audit entries.
+- Diary submissions and addendums write audit entries.
+- Claims re-certification is guarded, and certification/payment paths have
+  audit coverage.
+- Subcontractor invitations now expire, portal access changes are audited, and
+  representative cross-subbie isolation tests exist.
+- Company settings, membership changes, profile updates, avatar changes,
+  account deletion requests, API keys, webhooks, MFA enable/disable, auth
+  register/login/email verification/password reset/magic link/OAuth login, and
+  OAuth registration/callback login now write audit logs where appropriate.
+- OAuth callback now rejects Google userinfo unless `verified_email` is
+  explicitly true. The helper no longer defaults missing provider verification
+  state to trusted.
+- Global Prisma `P2003` errors now return HTTP 422 `INVALID_REFERENCE` instead
+  of generic database errors.
+
+Recent verification pattern:
+
+- Each code PR used focused regression coverage first, then broader affected
+  backend tests, `npm run format:check`, `npm run type-check`, `npm run lint`,
+  and `git diff --check` where relevant.
+- GitHub checks were watched before merge. The usual green set is Backend,
+  Frontend, backend-tests, frontend-build, frontend-e2e, Vercel, and Vercel
+  Preview Comments.
+
+Still not replaced by code fixes:
+
+- A real logged-in dogfood pass with sacrificial data. The 2026-05-20
+  report-only QA pass scored 88/100 with no blockers, but it deliberately did
+  not execute live write/destructive workflows, uploads, emails, scheduled jobs,
+  or multi-account role-boundary checks.
+- Before paying users, run a live QA pass against throwaway production or
+  staging data: create project, invite users, exercise subbie portal, upload
+  files, submit/approve dockets, submit diary, complete/verify ITP, release hold
+  point, run NCR lifecycle, certify/pay claim, export reports, and verify audit
+  log rows.
+
 ## Open Follow-Ups
 
-1. Run a fresh report-only app QA pass before the first paying customer. The
-   initial 2026-05-19 QA issue list has been closed, but a fresh browser sweep is
-   the right next quality gate because the old report is now stale.
+1. Run the live sacrificial-data dogfood pass before the first paying customer.
+   Report-only QA is no longer enough; the remaining risk is real integration
+   behavior under authenticated write workflows and role boundaries.
 2. Keep production backup discipline in place for any future production data or
    schema work. PostgreSQL client tools are now installed on Jay's Windows
    machine, but do not assume the local shell has the intended production
    `DATABASE_URL`.
 3. If new DeepSec findings appear, work them one by one. Root cause first,
    focused regression test, PR, wait for checks, merge, sync `master`.
+4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
+   Many findings from the 2026-05-19 and 2026-05-20 reports have been closed by
+   PRs #99-#140.
 
 ## Handoff Checklist For The Next Agent
 
