@@ -12,6 +12,7 @@ import {
   requireActiveProjectUser,
   requireNcrResponsibleOrProjectRole,
 } from './ncrAccess.js';
+import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 
 const NCR_WORKFLOW_SHORT_TEXT_MAX_LENGTH = 160;
 const NCR_WORKFLOW_TEXT_MAX_LENGTH = 5000;
@@ -591,6 +592,23 @@ ncrWorkflowRouter.post(
       }
     }
 
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_STATUS_CHANGED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        status: { from: ncr.status, to: updatedNcr.status },
+        withConcession: Boolean(withConcession),
+        verificationNotesPresent: Boolean(verificationNotes),
+        lessonsLearnedPresent: Boolean(lessonsLearned),
+        affectedLotCount: ncr.ncrLots.length,
+      },
+      req,
+    });
+
     res.json({
       ncr: updatedNcr,
       message:
@@ -761,6 +779,20 @@ ncrWorkflowRouter.post(
           ? `[Reopened: ${reason}] ${ncr.lessonsLearned || ''}`
           : ncr.lessonsLearned,
       },
+    });
+
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_STATUS_CHANGED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        status: { from: ncr.status, to: updatedNcr.status },
+        reasonPresent: Boolean(reason),
+      },
+      req,
     });
 
     res.json({ ncr: updatedNcr });

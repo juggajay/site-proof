@@ -1317,6 +1317,52 @@ describe('NCR Workflow', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ncr.status).toBe('closed');
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: workflowNcrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      status: { from: 'verification', to: 'closed' },
+      withConcession: false,
+      verificationNotesPresent: true,
+      lessonsLearnedPresent: true,
+    });
+  });
+
+  it('should reopen closed NCR and write an audit log', async () => {
+    const res = await request(app)
+      .post(`/api/ncrs/${workflowNcrId}/reopen`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        reason: 'Additional rectification evidence required',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ncr.status).toBe('rectification');
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: workflowNcrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      status: { from: 'closed', to: 'rectification' },
+      reasonPresent: true,
+    });
   });
 });
 
