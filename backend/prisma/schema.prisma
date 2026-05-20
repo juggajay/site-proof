@@ -1009,6 +1009,7 @@ model SubcontractorCompany {
   primaryContactEmail   String?   @map("primary_contact_email")
   primaryContactPhone   String?   @map("primary_contact_phone")
   status                String    @default("pending_approval")
+  invitationExpiresAt   DateTime? @map("invitation_expires_at")
   approvedById          String?   @map("approved_by")
   approvedAt            DateTime? @map("approved_at")
   portalAccess          Json?     @map("portal_access")
@@ -1026,6 +1027,7 @@ model SubcontractorCompany {
   lotAssignments      LotSubcontractorAssignment[]
 
   @@index([projectId, status])
+  @@index([status, invitationExpiresAt])
   @@map("subcontractor_companies")
 }
 
