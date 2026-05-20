@@ -93,15 +93,15 @@ function downloadClaimCsv(claim: Claim) {
     ],
     [
       `Claim ${claim.claimNumber}`,
-      new Date(claim.periodStart).toLocaleDateString(),
-      new Date(claim.periodEnd).toLocaleDateString(),
+      new Date(claim.periodStart).toLocaleDateString('en-AU'),
+      new Date(claim.periodEnd).toLocaleDateString('en-AU'),
       claim.status,
       claim.lotCount,
       claim.totalClaimedAmount,
       claim.certifiedAmount ?? '-',
       claim.paidAmount ?? '-',
-      claim.submittedAt ? new Date(claim.submittedAt).toLocaleDateString() : '-',
-      claim.paymentDueDate ? new Date(claim.paymentDueDate).toLocaleDateString() : '-',
+      claim.submittedAt ? new Date(claim.submittedAt).toLocaleDateString('en-AU') : '-',
+      claim.paymentDueDate ? new Date(claim.paymentDueDate).toLocaleDateString('en-AU') : '-',
     ],
   ]);
 }
@@ -174,8 +174,8 @@ export const ClaimsTable = React.memo(function ClaimsTable({
               >
                 <td className="p-4 font-medium">Claim {claim.claimNumber}</td>
                 <td className="p-4">
-                  {new Date(claim.periodStart).toLocaleDateString()} -{' '}
-                  {new Date(claim.periodEnd).toLocaleDateString()}
+                  {new Date(claim.periodStart).toLocaleDateString('en-AU')} -{' '}
+                  {new Date(claim.periodEnd).toLocaleDateString('en-AU')}
                 </td>
                 <td className="p-4">{getStatusBadge(claim.status)}</td>
                 <td className="p-4">

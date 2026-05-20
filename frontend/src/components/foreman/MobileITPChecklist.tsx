@@ -720,7 +720,7 @@ function MobileITPItemSheet({
                   : 'Updated'}{' '}
             by {completion.completedBy.fullName || completion.completedBy.email}
             {completion.completedAt &&
-              ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
+              ` on ${new Date(completion.completedAt).toLocaleDateString('en-AU')}`}
           </p>
         )}
       </div>

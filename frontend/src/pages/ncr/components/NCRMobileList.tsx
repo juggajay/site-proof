@@ -127,7 +127,7 @@ function NCRMobileListInner({
                     },
                     {
                       label: 'Due',
-                      value: ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString() : '-',
+                      value: ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString('en-AU') : '-',
                       priority: 'secondary',
                     },
                     { label: 'Age', value: `${ageInDays}d`, priority: 'secondary' },

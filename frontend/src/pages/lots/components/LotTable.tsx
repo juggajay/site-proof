@@ -490,7 +490,7 @@ export const LotTable = React.memo(function LotTable({
                             return (
                               <td key={columnId} className="p-3">
                                 {lot.budgetAmount
-                                  ? `$${lot.budgetAmount.toLocaleString()}`
+                                  ? `$${lot.budgetAmount.toLocaleString('en-AU')}`
                                   : '\u2014'}
                               </td>
                             );
@@ -564,13 +564,13 @@ export const LotTable = React.memo(function LotTable({
                                 <p>
                                   Created:{' '}
                                   {lot.createdAt
-                                    ? new Date(lot.createdAt).toLocaleDateString()
+                                    ? new Date(lot.createdAt).toLocaleDateString('en-AU')
                                     : '\u2014'}
                                 </p>
                                 <p>
                                   Updated:{' '}
                                   {lot.updatedAt
-                                    ? new Date(lot.updatedAt).toLocaleDateString()
+                                    ? new Date(lot.updatedAt).toLocaleDateString('en-AU')
                                     : '\u2014'}
                                 </p>
                               </div>

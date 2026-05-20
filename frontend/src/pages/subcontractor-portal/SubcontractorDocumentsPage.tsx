@@ -220,7 +220,7 @@ function DocumentCard({ document }: { document: Document }) {
                 <p className="text-sm text-muted-foreground line-clamp-1">{document.description}</p>
               )}
               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                <span>{new Date(document.uploadedAt).toLocaleDateString()}</span>
+                <span>{new Date(document.uploadedAt).toLocaleDateString('en-AU')}</span>
                 {document.fileSize && (
                   <>
                     <span>·</span>

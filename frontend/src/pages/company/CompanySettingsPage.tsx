@@ -677,13 +677,13 @@ export function CompanySettingsPage() {
           <div className="flex justify-between py-2 border-b">
             <span className="text-muted-foreground">Created</span>
             <span>
-              {company?.createdAt ? new Date(company.createdAt).toLocaleDateString() : '-'}
+              {company?.createdAt ? new Date(company.createdAt).toLocaleDateString('en-AU') : '-'}
             </span>
           </div>
           <div className="flex justify-between py-2">
             <span className="text-muted-foreground">Last Updated</span>
             <span>
-              {company?.updatedAt ? new Date(company.updatedAt).toLocaleDateString() : '-'}
+              {company?.updatedAt ? new Date(company.updatedAt).toLocaleDateString('en-AU') : '-'}
             </span>
           </div>
         </div>

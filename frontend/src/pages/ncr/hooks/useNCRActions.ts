@@ -293,8 +293,8 @@ export function useNCRActions({
         ncr.responsibleUser
           ? ncr.responsibleUser.fullName || ncr.responsibleUser.email
           : 'Unassigned',
-        ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString() : '-',
-        new Date(ncr.createdAt).toLocaleDateString(),
+        ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString('en-AU') : '-',
+        new Date(ncr.createdAt).toLocaleDateString('en-AU'),
       ]);
       downloadCsv(
         `ncr-register-${projectId || 'all'}-${new Date().toISOString().split('T')[0]}.csv`,

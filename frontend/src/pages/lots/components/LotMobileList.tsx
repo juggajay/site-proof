@@ -183,7 +183,9 @@ export const LotMobileList = React.memo(function LotMobileList({
                       </span>
                     )}
                   </div>
-                  <span>{lot.createdAt ? new Date(lot.createdAt).toLocaleDateString() : ''}</span>
+                  <span>
+                    {lot.createdAt ? new Date(lot.createdAt).toLocaleDateString('en-AU') : ''}
+                  </span>
                 </div>
               </div>
             );

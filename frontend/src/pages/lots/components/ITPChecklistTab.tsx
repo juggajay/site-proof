@@ -268,7 +268,7 @@ function ITPChecklistItemRow({
             <p className="text-xs text-muted-foreground mt-1">
               Completed by {completion.completedBy.fullName || completion.completedBy.email}
               {completion.completedAt &&
-                ` on ${new Date(completion.completedAt).toLocaleDateString()}`}
+                ` on ${new Date(completion.completedAt).toLocaleDateString('en-AU')}`}
             </p>
           )}
 
@@ -544,7 +544,7 @@ function PhotoLightbox({
               {selectedPhoto.document.uploadedBy.fullName ||
                 selectedPhoto.document.uploadedBy.email}
               {selectedPhoto.document.uploadedAt &&
-                ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
+                ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString('en-AU')}`}
             </p>
           )}
           {/* Show ITP item reference */}

@@ -321,7 +321,7 @@ export function ProjectUsersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {new Date(user.joinedAt).toLocaleDateString()}
+                    {new Date(user.joinedAt).toLocaleDateString('en-AU')}
                   </td>
                   <td className="px-4 py-3">
                     {user.userId !== currentUser?.id && (
