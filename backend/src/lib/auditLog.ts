@@ -138,6 +138,8 @@ export const AuditAction = {
   LOT_STATUS_CHANGED: 'lot_status_changed',
   NCR_CREATED: 'ncr_created',
   NCR_STATUS_CHANGED: 'ncr_status_changed',
+  NCR_EVIDENCE_ADDED: 'ncr_evidence_added',
+  NCR_EVIDENCE_REMOVED: 'ncr_evidence_removed',
   DOCKET_SUBMITTED: 'docket_submitted',
   DOCKET_APPROVED: 'docket_approved',
   DOCKET_REJECTED: 'docket_rejected',
