@@ -1430,6 +1430,11 @@ authRouter.post(
       }),
     ]);
 
+    await auditUserAuthEvent(req, verificationToken.userId, AuditAction.USER_EMAIL_VERIFIED, {
+      emailVerified: { from: false, to: true },
+      method: 'email_verification',
+    });
+
     res.json({
       message: 'Email verified successfully. You can now log in.',
       verified: true,

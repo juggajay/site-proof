@@ -120,6 +120,7 @@ export const AuditAction = {
   USER_APPROVED: 'user_approved',
   USER_SUSPENDED: 'user_suspended',
   USER_REGISTERED: 'user_registered',
+  USER_EMAIL_VERIFIED: 'user_email_verified',
   USER_LOGIN: 'user_login',
   USER_LOGOUT: 'user_logout',
   PASSWORD_CHANGED: 'password_changed',

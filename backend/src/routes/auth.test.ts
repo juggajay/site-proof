@@ -391,6 +391,64 @@ describe('JWT invalidation precision', () => {
 });
 
 describe('Email verification tokens', () => {
+  it('audits successful email verification without storing the verification token', async () => {
+    const email = `verify-audit-${Date.now()}@example.com`;
+    const rawToken = `verify_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    let userId: string | undefined;
+
+    try {
+      const regRes = await request(app).post('/api/auth/register').send({
+        email,
+        password: 'SecureP@ssword123!',
+        fullName: 'Verification Audit User',
+        tosAccepted: true,
+      });
+
+      expect(regRes.status).toBe(201);
+      userId = regRes.body.user.id as string;
+
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await prisma.emailVerificationToken.create({
+        data: {
+          userId,
+          token: hashAuthTokenForTest(rawToken),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+      await clearUserAuditLogs(userId);
+
+      const verifyRes = await request(app).post('/api/auth/verify-email').send({ token: rawToken });
+
+      expect(verifyRes.status).toBe(200);
+      expect(verifyRes.body.verified).toBe(true);
+
+      const verifiedUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { emailVerified: true, emailVerifiedAt: true },
+      });
+      expect(verifiedUser?.emailVerified).toBe(true);
+      expect(verifiedUser?.emailVerifiedAt).toBeInstanceOf(Date);
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        userId,
+        AuditAction.USER_EMAIL_VERIFIED,
+      );
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({
+        emailVerified: { from: false, to: true },
+        method: 'email_verification',
+      });
+      expect(JSON.stringify(changes)).not.toContain(rawToken);
+      expect(JSON.stringify(changes)).not.toMatch(/token|secret|code/i);
+    } finally {
+      if (userId) {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await clearUserAuditLogs(userId);
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+      }
+    }
+  });
+
   it('returns the same resend response for verified and unknown emails', async () => {
     const verifiedEmail = `verified-resend-${Date.now()}@example.com`;
     const unknownEmail = `unknown-resend-${Date.now()}@example.com`;
