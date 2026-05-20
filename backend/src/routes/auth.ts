@@ -2255,7 +2255,6 @@ authRouter.delete(
         id: true,
         email: true,
         passwordHash: true,
-        fullName: true,
         companyId: true,
         roleInCompany: true,
       },
@@ -2292,15 +2291,13 @@ authRouter.delete(
     await prisma.$transaction(async (tx) => {
       await assertCanRemoveUserFromProjectAdminRoles(user.id, { client: tx });
 
-      // Create an audit log entry before deletion (for compliance)
+      // Create a non-PII audit log entry before deletion (for compliance)
       await tx.auditLog.create({
         data: {
           entityType: 'user',
           entityId: user.id,
-          action: 'account_deletion_requested',
+          action: AuditAction.ACCOUNT_DELETION_REQUESTED,
           changes: JSON.stringify({
-            email: user.email,
-            fullName: user.fullName,
             deletedAt: new Date().toISOString(),
             reason: 'GDPR deletion request',
           }),
