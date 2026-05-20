@@ -294,6 +294,20 @@ router.post(
       },
     });
 
+    await createAuditLog({
+      projectId: diary.projectId,
+      userId,
+      entityType: 'diary_addendum',
+      entityId: addendum.id,
+      action: AuditAction.DIARY_ADDENDUM_ADDED,
+      changes: {
+        diaryId,
+        diaryDate: diary.date.toISOString().split('T')[0],
+        contentLength: trimmedContent.length,
+      },
+      req,
+    });
+
     res.status(201).json(addendum);
   }),
 );
