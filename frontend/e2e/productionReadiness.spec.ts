@@ -155,6 +155,24 @@ test.describe('production readiness guardrails', () => {
     expect(completenessModal).not.toContain('Exclude Problem Lots');
   });
 
+  test('claim creation requires explicit lot percentages instead of backend defaults', async () => {
+    const createClaimModal = await readFile(
+      new URL('../src/pages/claims/components/CreateClaimModal.tsx', import.meta.url),
+      'utf8',
+    );
+    const claimsRoute = await readFile(
+      new URL('../../backend/src/routes/claims.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(createClaimModal).toContain("percentComplete: '100'");
+    expect(createClaimModal).toContain('required');
+    expect(createClaimModal).toContain('Percent complete is required for every selected lot.');
+    expect(claimsRoute).toContain('Each claimed lot must include percentageComplete');
+    expect(claimsRoute).not.toContain('percentageComplete: lot.percentageComplete ?? 100');
+    expect(claimsRoute).not.toContain('percentageComplete: 100,');
+  });
+
   test('landing page avoids unverifiable claims and unmounted CTA routes', async () => {
     const landingSources = await Promise.all(
       [

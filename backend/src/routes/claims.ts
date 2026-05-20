@@ -30,6 +30,7 @@ const CLAIM_PAYMENT_NOTES_MAX_LENGTH = 3000;
 const MAX_CERTIFICATION_DOCUMENT_ID_LENGTH = 120;
 const MAX_CERTIFICATION_DOCUMENT_URL_LENGTH = 2048;
 const MAX_CERTIFICATION_DOCUMENT_FILENAME_LENGTH = 180;
+const CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE = 'Each claimed lot must include percentageComplete';
 
 function requiredTrimmedClaimString(fieldName: string, maxLength: number, requiredMessage: string) {
   return z
@@ -68,19 +69,34 @@ const createClaimSchema = z
         z.object({
           lotId: requiredTrimmedClaimString('lotId', CLAIM_ID_MAX_LENGTH, 'Lot ID is required'),
           percentageComplete: z
-            .number()
+            .number({
+              required_error: CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE,
+              invalid_type_error: 'Percentage complete must be a number',
+            })
             .finite('Percentage complete must be finite')
             .min(0, 'Percentage complete cannot be negative')
-            .max(100, 'Percentage complete cannot exceed 100')
-            .optional(),
+            .max(100, 'Percentage complete cannot exceed 100'),
         }),
       )
       .optional(),
   })
-  .refine(
-    (data) => (data.lots && data.lots.length > 0) || (data.lotIds && data.lotIds.length > 0),
-    { message: 'At least one lot is required', path: ['lotIds'] },
-  );
+  .superRefine((data, ctx) => {
+    if (data.lotIds && data.lotIds.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE,
+        path: ['lotIds'],
+      });
+    }
+
+    if (!data.lots || data.lots.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one lot is required',
+        path: ['lots'],
+      });
+    }
+  });
 
 const updateClaimSchema = z.object({
   status: z.enum(['draft', 'submitted', 'certified', 'disputed', 'paid']).optional(),
@@ -171,17 +187,21 @@ type RequestedClaimLot = {
 };
 
 function getRequestedClaimLots(data: z.infer<typeof createClaimSchema>): RequestedClaimLot[] {
-  if (data.lots && data.lots.length > 0) {
-    return data.lots.map((lot) => ({
-      lotId: lot.lotId,
-      percentageComplete: lot.percentageComplete ?? 100,
-    }));
-  }
-
-  return (data.lotIds || []).map((lotId) => ({
-    lotId,
-    percentageComplete: 100,
+  return (data.lots || []).map((lot) => ({
+    lotId: lot.lotId,
+    percentageComplete: lot.percentageComplete,
   }));
+}
+
+function getRequestedClaimPercentage(
+  percentageByLotId: Map<string, number>,
+  lotId: string,
+): number {
+  const percentageComplete = percentageByLotId.get(lotId);
+  if (percentageComplete === undefined) {
+    throw AppError.badRequest(CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE);
+  }
+  return percentageComplete;
 }
 
 function assertGenericClaimStatusTransition(currentStatus: string, nextStatus: string | undefined) {
@@ -598,6 +618,14 @@ router.post(
     // Validate request body
     const validation = createClaimSchema.safeParse(req.body);
     if (!validation.success) {
+      const hasMissingPercentageIssue = validation.error.issues.some((issue) =>
+        issue.message.includes('percentageComplete'),
+      );
+      if (hasMissingPercentageIssue) {
+        throw AppError.badRequest(CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE, {
+          issues: validation.error.issues,
+        });
+      }
       throw AppError.fromZodError(validation.error);
     }
     const { periodStart, periodEnd } = validation.data;
@@ -665,7 +693,7 @@ router.post(
 
           // Calculate total claimed amount from lot budget amounts and requested progress.
           const totalClaimedAmount = lots.reduce((sum, lot) => {
-            const percentageComplete = percentageByLotId.get(lot.id) ?? 100;
+            const percentageComplete = getRequestedClaimPercentage(percentageByLotId, lot.id);
             const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
             return sum + (budgetAmount * percentageComplete) / 100;
           }, 0);
@@ -683,7 +711,7 @@ router.post(
               totalClaimedAmount,
               claimedLots: {
                 create: lots.map((lot) => {
-                  const percentageComplete = percentageByLotId.get(lot.id) ?? 100;
+                  const percentageComplete = getRequestedClaimPercentage(percentageByLotId, lot.id);
                   const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
 
                   return {

@@ -206,6 +206,21 @@ describe('Progress Claims API', () => {
     return claim;
   }
 
+  async function createClaimableLot(prefix: string, budgetAmount = 1000) {
+    return prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `${prefix}-${Date.now()}`,
+        status: 'conformed',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        budgetAmount,
+        conformedAt: new Date(),
+        conformedById: userId,
+      },
+    });
+  }
+
   describe('GET /api/projects/:projectId/lots', () => {
     it('should list lots for claiming', async () => {
       const res = await request(app)
@@ -286,7 +301,7 @@ describe('Progress Claims API', () => {
         .send({
           periodStart,
           periodEnd,
-          lotIds: [lotId1],
+          lots: [{ lotId: lotId1, percentageComplete: 100 }],
         });
 
       expect(res.status).toBe(201);
@@ -310,12 +325,78 @@ describe('Progress Claims API', () => {
       expect(res.status).toBe(400);
     });
 
+    it('should reject legacy lotIds payloads without explicit percentages', async () => {
+      const lot = await createClaimableLot('LEGACY-CLAIM-LOT');
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            periodStart: '2025-02-01',
+            periodEnd: '2025-02-28',
+            lotIds: [lot.id],
+          });
+
+        if (res.status === 201) {
+          await prisma.claimedLot.deleteMany({ where: { claimId: res.body.claim.id } });
+          await prisma.progressClaim.delete({ where: { id: res.body.claim.id } }).catch(() => {});
+          await prisma.lot.update({
+            where: { id: lot.id },
+            data: { claimedInId: null, status: 'conformed' },
+          });
+        }
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('percentageComplete');
+
+        const unchangedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+        expect(unchangedLot?.status).toBe('conformed');
+        expect(unchangedLot?.claimedInId).toBeNull();
+      } finally {
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+      }
+    });
+
+    it('should reject claim lots missing explicit percentageComplete', async () => {
+      const lot = await createClaimableLot('MISSING-PERCENT-LOT');
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            periodStart: '2025-02-01',
+            periodEnd: '2025-02-28',
+            lots: [{ lotId: lot.id }],
+          });
+
+        if (res.status === 201) {
+          await prisma.claimedLot.deleteMany({ where: { claimId: res.body.claim.id } });
+          await prisma.progressClaim.delete({ where: { id: res.body.claim.id } }).catch(() => {});
+          await prisma.lot.update({
+            where: { id: lot.id },
+            data: { claimedInId: null, status: 'conformed' },
+          });
+        }
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('percentageComplete');
+
+        const unchangedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+        expect(unchangedLot?.status).toBe('conformed');
+        expect(unchangedLot?.claimedInId).toBeNull();
+      } finally {
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+      }
+    });
+
     it('should reject claim without period dates', async () => {
       const res = await request(app)
         .post(`/api/projects/${projectId}/claims`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          lotIds: [lotId2],
+          lots: [{ lotId: lotId2, percentageComplete: 100 }],
         });
 
       expect(res.status).toBe(400);
@@ -328,7 +409,7 @@ describe('Progress Claims API', () => {
         .send({
           periodStart: 'not-a-date',
           periodEnd: '2025-01-31',
-          lotIds: [lotId2],
+          lots: [{ lotId: lotId2, percentageComplete: 100 }],
         });
 
       expect(invalidDateRes.status).toBe(400);
@@ -339,7 +420,7 @@ describe('Progress Claims API', () => {
         .send({
           periodStart: '2025-02-01',
           periodEnd: '2025-01-31',
-          lotIds: [lotId2],
+          lots: [{ lotId: lotId2, percentageComplete: 100 }],
         });
 
       expect(reversedDateRes.status).toBe(400);
@@ -350,7 +431,7 @@ describe('Progress Claims API', () => {
         .send({
           periodStart: '2026-02-30',
           periodEnd: '2026-03-31',
-          lotIds: [lotId2],
+          lots: [{ lotId: lotId2, percentageComplete: 100 }],
         });
 
       expect(impossibleDateRes.status).toBe(400);
@@ -396,7 +477,7 @@ describe('Progress Claims API', () => {
         .send({
           periodStart: '2025-02-01',
           periodEnd: '2025-02-28',
-          lotIds: [lotNoBudget.id],
+          lots: [{ lotId: lotNoBudget.id, percentageComplete: 100 }],
         });
 
       expect(res.status).toBe(400);
@@ -438,7 +519,10 @@ describe('Progress Claims API', () => {
           .send({
             periodStart: '2025-02-01',
             periodEnd: '2025-02-28',
-            lotIds: [lotId2, otherLot.id],
+            lots: [
+              { lotId: lotId2, percentageComplete: 100 },
+              { lotId: otherLot.id, percentageComplete: 100 },
+            ],
           });
 
         expect(res.status).toBe(400);
@@ -483,7 +567,7 @@ describe('Progress Claims API', () => {
             .send({
               periodStart: `2025-03-0${index + 1}`,
               periodEnd: '2025-03-31',
-              lotIds: [lot.id],
+              lots: [{ lotId: lot.id, percentageComplete: 100 }],
             }),
         ),
       );
@@ -587,7 +671,11 @@ describe('Progress Claims API', () => {
           response: await request(app)
             .post(`/api/projects/${longId}/claims`)
             .set('Authorization', `Bearer ${authToken}`)
-            .send({ periodStart: '2026-01-01', periodEnd: '2026-01-31', lotIds: [lotId1] }),
+            .send({
+              periodStart: '2026-01-01',
+              periodEnd: '2026-01-31',
+              lots: [{ lotId: lotId1, percentageComplete: 100 }],
+            }),
         },
         {
           label: 'GET claims projectId',
@@ -1694,7 +1782,7 @@ describe('Progress Claims API', () => {
         .send({
           periodStart: '2025-03-01',
           periodEnd: '2025-03-31',
-          lotIds: [autoLot.id],
+          lots: [{ lotId: autoLot.id, percentageComplete: 100 }],
         });
 
       expect(res.status).toBe(201);
@@ -1735,7 +1823,7 @@ describe('Progress Claims API', () => {
           .send({
             periodStart: '2025-06-01',
             periodEnd: '2025-06-30',
-            lotIds: [lotId2],
+            lots: [{ lotId: lotId2, percentageComplete: 100 }],
           });
         expect(createRes.status).toBe(403);
       } finally {
@@ -1925,7 +2013,7 @@ describe('Claim Lots Association', () => {
       .send({
         periodStart: '2025-04-01',
         periodEnd: '2025-04-30',
-        lotIds: [lot.id],
+        lots: [{ lotId: lot.id, percentageComplete: 100 }],
       });
 
     expect(res.status).toBe(201);
@@ -1958,7 +2046,7 @@ describe('Claim Lots Association', () => {
       .send({
         periodStart: '2025-05-01',
         periodEnd: '2025-05-31',
-        lotIds: [nonConformedLot.id],
+        lots: [{ lotId: nonConformedLot.id, percentageComplete: 100 }],
       });
 
     expect(res.status).toBe(400);

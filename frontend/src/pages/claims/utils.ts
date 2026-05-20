@@ -117,6 +117,8 @@ export function parseClaimPercentageInput(value: string): number | null {
 }
 
 export function getClaimPercentageError(value: string): string | null {
+  if (!value.trim()) return 'Percent complete is required.';
+
   return parseClaimPercentageInput(value) === null
     ? 'Percent complete must be a decimal between 0 and 100.'
     : null;
