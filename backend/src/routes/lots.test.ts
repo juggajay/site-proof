@@ -5,6 +5,7 @@ import { lotsRouter } from './lots.js';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction } from '../lib/auditLog.js';
 
 const app = express();
 app.use(express.json());
@@ -1285,6 +1286,54 @@ describe('Lots API', () => {
       });
       expect(assignmentCount).toBe(0);
       expect(unchangedLot?.assignedSubcontractorId).toBeNull();
+    });
+  });
+
+  describe('POST /api/lots/:id/override-status', () => {
+    it('should write a sanitized audit log for manual status overrides', async () => {
+      const overrideLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-OVERRIDE-AUDIT-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/lots/${overrideLot.id}/override-status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .set('User-Agent', 'lot-override-audit-test')
+          .send({
+            status: 'in_progress',
+            reason: 'Manual override after field review',
+          });
+
+        expect(res.status).toBe(200);
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId,
+            userId,
+            entityType: 'lot',
+            entityId: overrideLot.id,
+            action: AuditAction.LOT_STATUS_CHANGED,
+          },
+        });
+        expect(auditLog).toBeTruthy();
+        expect(auditLog?.userAgent).toBe('lot-override-audit-test');
+        expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toEqual({
+          lotNumber: overrideLot.lotNumber,
+          status: { from: 'not_started', to: 'in_progress' },
+          reason: 'Manual override after field review',
+          override: true,
+        });
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: overrideLot.id } });
+        await prisma.lot.delete({ where: { id: overrideLot.id } }).catch(() => {});
+      }
     });
   });
 
