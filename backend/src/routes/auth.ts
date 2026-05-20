@@ -638,14 +638,27 @@ authRouter.post(
 
     const user = userResult[0];
 
-    if (!user || !user.password_hash) {
+    if (!user) {
       await recordFailedAuthAttempt(clientIp, normalizedEmail);
+      throw AppError.unauthorized('Invalid email or password');
+    }
+
+    if (!user.password_hash) {
+      await recordFailedAuthAttempt(clientIp, normalizedEmail);
+      await auditUserAuthEvent(req, user.id, AuditAction.USER_LOGIN_FAILED, {
+        method: 'password',
+        reason: 'password_unavailable',
+      });
       throw AppError.unauthorized('Invalid email or password');
     }
 
     // Verify password
     if (!verifyPassword(normalizedPassword, user.password_hash)) {
       await recordFailedAuthAttempt(clientIp, normalizedEmail);
+      await auditUserAuthEvent(req, user.id, AuditAction.USER_LOGIN_FAILED, {
+        method: 'password',
+        reason: 'invalid_credentials',
+      });
       throw AppError.unauthorized('Invalid email or password');
     }
 
@@ -674,6 +687,10 @@ authRouter.post(
 
         if (!isValid && !backupCodeValid) {
           await recordFailedAuthAttempt(clientIp, normalizedEmail);
+          await auditUserAuthEvent(req, user.id, AuditAction.USER_LOGIN_FAILED, {
+            method: 'password_mfa',
+            reason: 'invalid_mfa',
+          });
           throw AppError.unauthorized('Invalid MFA code');
         }
 
