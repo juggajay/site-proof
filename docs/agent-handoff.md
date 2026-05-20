@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `1dda78c fix: require verified oauth callback email (#140)`
+  `bd96e28 fix: fail closed on unsafe test database urls (#143)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -102,7 +102,7 @@ Relevant archive indexes:
 
 Status: all known findings from the May 2026 DeepSec pass are fixed in code.
 
-DeepSec revalidation run reported by Jay:
+Full DeepSec revalidation run reported by Jay:
 
 - Run: `20260519065030-cf318479622b5fd0`
 - TP: 1
@@ -110,11 +110,11 @@ DeepSec revalidation run reported by Jay:
 - Fixed: 79
 - Uncertain: 0
 
-The one remaining TP was:
+The one remaining TP from that run was:
 
 - `[MEDIUM] Diary submission validates and finalizes a stale snapshot`
 
-It was fixed in PR #80:
+It was already fixed in PR #80:
 
 - Commit on `master`: `829895d`
 - Change: docket approval diary auto-population now runs inside a transaction
@@ -129,13 +129,43 @@ Verification run before PR #80 merge:
 - `cd backend; pnpm test -- src/routes/dockets.test.ts`
 - `cd backend; pnpm lint`
 - `cd backend; pnpm type-check`
-- `cd backend; pnpm format:check`
-- `git diff --check`
 - GitHub PR #80 checks all passed before squash merge.
+
+Targeted DeepSec revalidation after syncing current `master`:
+
+- Run: `20260520183932-5119f506f6826681`
+- Scope: one forced recheck of
+  `backend/src/routes/diary/diarySubmission.ts`
+- Result: TP 0, FP 0, Fixed 1, Uncertain 0
+
+Current DeepSec status after that targeted revalidation:
+
+- Revalidated: 80/80
+- TP: 0
+- FP: 0
+- Fixed: 80
+- Uncertain: 0
+
+Additional safety hardening after the DeepSec queue was cleared:
+
+- PR #143 changed the Vitest database safety guard to reject unsafe external
+  `DATABASE_URL` values even when `NODE_ENV` was not pre-set before the test
+  process started.
+- `backend/vitest.config.ts` now explicitly sets `NODE_ENV=test`.
+- A controlled fake remote-DB test run produced
+  `REMOTE_TEST_DB_REFUSAL_OK`, confirming the guard fails closed before tests
+  can touch a non-local database.
+- `cd backend; pnpm test -- src/test/databaseSafety.test.ts --runInBand`
+- `cd backend; pnpm format:check`
+- `cd backend; pnpm type-check`
+- `cd backend; pnpm lint`
+- `git diff --check`
+- GitHub PR #143 checks all passed before squash merge.
 
 Important: Jay reported the DeepSec revalidation output above from
 `.deepsec`. Treat `.deepsec/` as local audit input only. If another paid
-revalidation is needed later, ask Jay first.
+revalidation is needed later, prefer targeted scope and record the run ID and
+cost.
 
 ### Full-App QA Cleanup
 
@@ -184,7 +214,7 @@ historical. Do not treat their issue list as current without rechecking
 
 ### Paying-User Readiness Hardening
 
-Status: main source-audit gap list is largely closed in code through PR #140.
+Status: main source-audit gap list is largely closed in code through PR #143.
 
 After the first QA cleanup batch, Codex and Claude ran a paying-user readiness
 review focused on compliance trust scaffolding: audit logs, workflow state
@@ -258,7 +288,7 @@ Still not replaced by code fixes:
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
    Many findings from the 2026-05-19 and 2026-05-20 reports have been closed by
-   PRs #99-#140.
+   PRs #99-#143.
 
 ## Handoff Checklist For The Next Agent
 
