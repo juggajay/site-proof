@@ -91,8 +91,9 @@ Status: mostly closed.
 - The stale February codebase audit tracker was archived at
   `docs/archive/2026-05-repo-hygiene/codebase-audit-report.md` after the May
   readiness and DeepSec hardening work made its top-level status misleading.
-- Remaining protected items were intentionally left in place or deferred where
-  Jay decision was needed.
+- The stale `skills/codebase-review/SKILL.md` workflow was replaced with a
+  deprecation stub that points agents to the current handoff/DeepSec workflow
+  and preserves the "Claude means real Claude" rule.
 
 Relevant archive indexes:
 
