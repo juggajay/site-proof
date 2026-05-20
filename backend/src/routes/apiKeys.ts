@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -201,6 +202,20 @@ router.post(
       },
     });
 
+    await createAuditLog({
+      userId,
+      entityType: 'api_key',
+      entityId: apiKeyRecord.id,
+      action: AuditAction.API_KEY_CREATED,
+      changes: {
+        name: apiKeyRecord.name,
+        scopes: apiKeyRecord.scopes,
+        keyPrefix: apiKeyRecord.keyPrefix,
+        expiresAt: apiKeyRecord.expiresAt?.toISOString() ?? null,
+      },
+      req,
+    });
+
     // Return the key (only shown once!)
     res.status(201).json({
       apiKey: {
@@ -258,6 +273,20 @@ router.delete(
     await prisma.apiKey.update({
       where: { id: keyId },
       data: { isActive: false },
+    });
+
+    await createAuditLog({
+      userId,
+      entityType: 'api_key',
+      entityId: apiKey.id,
+      action: AuditAction.API_KEY_REVOKED,
+      changes: {
+        name: apiKey.name,
+        scopes: apiKey.scopes,
+        keyPrefix: apiKey.keyPrefix,
+        isActive: { from: true, to: false },
+      },
+      req,
     });
 
     res.json({ message: 'API key revoked successfully' });

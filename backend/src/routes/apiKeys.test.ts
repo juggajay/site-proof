@@ -5,6 +5,7 @@ import apiKeysRouter from './apiKeys.js';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { parseAuditLogChanges } from '../lib/auditLog.js';
 
 const app = express();
 app.use(express.json());
@@ -32,6 +33,11 @@ describe('API Keys Management', () => {
   });
 
   afterAll(async () => {
+    await prisma.auditLog.deleteMany({
+      where: {
+        OR: [{ userId }, { entityType: 'api_key' }],
+      },
+    });
     // Clean up API keys
     await prisma.apiKey.deleteMany({ where: { userId } });
     // Clean up user
@@ -63,6 +69,25 @@ describe('API Keys Management', () => {
       // Store for later tests
       apiKeyId = res.body.apiKey.id;
       generatedApiKey = res.body.apiKey.key;
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          userId,
+          entityType: 'api_key',
+          entityId: apiKeyId,
+          action: 'api_key_created',
+        },
+      });
+      expect(auditLog).not.toBeNull();
+
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        name: 'Test API Key',
+        scopes: 'read',
+        keyPrefix: res.body.apiKey.keyPrefix,
+        expiresAt: null,
+      });
+      expect(JSON.stringify(changes)).not.toContain(generatedApiKey);
     });
 
     it('should create API key with expiration', async () => {
@@ -401,6 +426,25 @@ describe('API Keys Management', () => {
         where: { id: keyId },
       });
       expect(updatedKey?.isActive).toBe(false);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          userId,
+          entityType: 'api_key',
+          entityId: keyId,
+          action: 'api_key_revoked',
+        },
+      });
+      expect(auditLog).not.toBeNull();
+
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        name: 'Key to Revoke',
+        scopes: 'read',
+        keyPrefix: createRes.body.apiKey.keyPrefix,
+        isActive: { from: true, to: false },
+      });
+      expect(JSON.stringify(changes)).not.toContain(createRes.body.apiKey.key);
 
       // Cleanup
       await prisma.apiKey.delete({ where: { id: keyId } });
