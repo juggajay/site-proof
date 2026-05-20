@@ -2353,23 +2353,22 @@ lotsRouter.post(
       },
     });
 
-    // Record the override in the audit log with the reason
-    await prisma.auditLog.create({
-      data: {
-        projectId: lot.projectId,
-        userId: user.id,
-        entityType: 'Lot',
-        entityId: id,
-        action: 'status_override',
-        changes: JSON.stringify({
-          status: {
-            from: previousStatus,
-            to: status,
-          },
-          reason: reason.trim(),
-          overriddenBy: user.email,
-        }),
+    await createAuditLog({
+      projectId: lot.projectId,
+      userId: user.id,
+      entityType: 'lot',
+      entityId: id,
+      action: AuditAction.LOT_STATUS_CHANGED,
+      changes: {
+        lotNumber: lot.lotNumber,
+        status: {
+          from: previousStatus,
+          to: status,
+        },
+        reason: reason.trim(),
+        override: true,
       },
+      req,
     });
 
     res.json({
