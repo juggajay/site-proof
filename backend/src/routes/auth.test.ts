@@ -34,6 +34,7 @@ import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { encrypt } from '../lib/encryption.js';
 import { verifyToken } from '../lib/auth.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { deleteMfaBackupCodes, enableMfaAndReplaceBackupCodes } from '../lib/mfaBackupCodes.js';
 import {
   authRateLimiter,
@@ -59,6 +60,35 @@ const tinyPngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
 function hashAuthTokenForTest(token: string): string {
   return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
+}
+
+async function clearUserAuditLogs(userId: string) {
+  await prisma.auditLog.deleteMany({
+    where: {
+      OR: [{ userId }, { entityType: 'user', entityId: userId }],
+    },
+  });
+}
+
+async function expectLatestUserAuditLog(userId: string, action: string) {
+  const auditLog = await prisma.auditLog.findFirst({
+    where: {
+      entityType: 'user',
+      entityId: userId,
+      action,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  expect(auditLog).toBeDefined();
+  if (!auditLog) {
+    throw new Error(`Expected ${action} audit log for user ${userId}`);
+  }
+
+  return {
+    auditLog,
+    changes: parseAuditLogChanges(auditLog.changes) as Record<string, unknown>,
+  };
 }
 
 function listAvatarFiles(prefix: string) {
@@ -93,6 +123,7 @@ describe('POST /api/auth/register', () => {
     const user = await prisma.user.findUnique({ where: { email: testEmail } });
     if (user) {
       await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } });
+      await clearUserAuditLogs(user.id);
       await prisma.user.delete({ where: { id: user.id } });
     }
   });
@@ -117,6 +148,17 @@ describe('POST /api/auth/register', () => {
       orderBy: { createdAt: 'desc' },
     });
     expect(verificationToken?.token).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+    const { auditLog, changes } = await expectLatestUserAuditLog(
+      user!.id,
+      AuditAction.USER_REGISTERED,
+    );
+    expect(auditLog.userId).toBe(user!.id);
+    expect(changes).toEqual({
+      emailVerified: { from: null, to: false },
+      tosVersion: '1.0',
+    });
+    expect(JSON.stringify(changes)).not.toMatch(/password|token|secret/i);
   });
 
   it('should reject registration without email', async () => {
@@ -267,6 +309,7 @@ describe('POST /api/auth/register', () => {
       const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
       if (user) {
         await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } });
+        await clearUserAuditLogs(user.id);
         await prisma.user.delete({ where: { id: user.id } });
       }
     }
@@ -319,6 +362,8 @@ describe('JWT invalidation precision', () => {
     const userId = regRes.body.user.id as string;
 
     try {
+      await clearUserAuditLogs(userId);
+
       const logoutRes = await request(app)
         .post('/api/auth/logout-all-devices')
         .set('Authorization', `Bearer ${token}`);
@@ -330,8 +375,16 @@ describe('JWT invalidation precision', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(oldSessionRes.status).toBe(401);
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(userId, AuditAction.USER_LOGOUT);
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({
+        scope: 'all_devices',
+        sessionsInvalidated: true,
+      });
     } finally {
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
     }
   });
@@ -447,11 +500,16 @@ describe('POST /api/auth/login', () => {
     const user = await prisma.user.findUnique({ where: { email: loginEmail } });
     if (user) {
       await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } });
+      await clearUserAuditLogs(user.id);
       await prisma.user.delete({ where: { id: user.id } });
     }
   });
 
   it('should login with valid credentials', async () => {
+    const user = await prisma.user.findUnique({ where: { email: loginEmail } });
+    expect(user).toBeDefined();
+    await clearUserAuditLogs(user!.id);
+
     const res = await request(app).post('/api/auth/login').send({
       email: loginEmail,
       password: loginPassword,
@@ -460,6 +518,12 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(200);
     expect(res.body.user).toBeDefined();
     expect(res.body.token).toBeDefined();
+
+    const { auditLog, changes } = await expectLatestUserAuditLog(user!.id, AuditAction.USER_LOGIN);
+    expect(auditLog.userId).toBe(user!.id);
+    expect(changes).toEqual({ method: 'password' });
+    expect(JSON.stringify(changes)).not.toContain(loginPassword);
+    expect(JSON.stringify(changes)).not.toMatch(/token|secret|code/i);
   });
 
   it('should login with normalized email casing and whitespace', async () => {
@@ -799,6 +863,7 @@ describe('Password Reset Flow', () => {
     if (user) {
       await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } });
+      await clearUserAuditLogs(user.id);
       await prisma.user.delete({ where: { id: user.id } });
     }
   });
@@ -925,6 +990,8 @@ describe('Password Reset Flow', () => {
     });
 
     try {
+      await clearUserAuditLogs(userId);
+
       const resetRes = await request(app).post('/api/auth/reset-password').send({
         token: resetToken,
         password: newPassword,
@@ -937,9 +1004,24 @@ describe('Password Reset Flow', () => {
         .set('Authorization', `Bearer ${oldToken}`);
 
       expect(oldSessionRes.status).toBe(401);
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        userId,
+        AuditAction.PASSWORD_CHANGED,
+      );
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({
+        method: 'password_reset',
+        sessionsInvalidated: true,
+      });
+      expect(JSON.stringify(changes)).not.toContain(oldPassword);
+      expect(JSON.stringify(changes)).not.toContain(newPassword);
+      expect(JSON.stringify(changes)).not.toContain(resetToken);
+      expect(JSON.stringify(changes)).not.toMatch(/token|secret/i);
     } finally {
       await prisma.passwordResetToken.deleteMany({ where: { userId } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
     }
   });
@@ -972,6 +1054,7 @@ describe('Password Change', () => {
       expect(res.body.error.message).toContain('security requirements');
     } finally {
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
     }
   });
@@ -991,6 +1074,8 @@ describe('Password Change', () => {
     const oldToken = regRes.body.token;
 
     try {
+      await clearUserAuditLogs(userId);
+
       const changeRes = await request(app)
         .post('/api/auth/change-password')
         .set('Authorization', `Bearer ${oldToken}`)
@@ -1007,8 +1092,22 @@ describe('Password Change', () => {
         .set('Authorization', `Bearer ${oldToken}`);
 
       expect(oldSessionRes.status).toBe(401);
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        userId,
+        AuditAction.PASSWORD_CHANGED,
+      );
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({
+        method: 'password_change',
+        sessionsInvalidated: true,
+      });
+      expect(JSON.stringify(changes)).not.toContain(password);
+      expect(JSON.stringify(changes)).not.toContain(newPassword);
+      expect(JSON.stringify(changes)).not.toMatch(/token|secret/i);
     } finally {
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
     }
   });
@@ -1053,6 +1152,7 @@ describe('Magic Link Authentication', () => {
     if (user) {
       await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId: user.id } });
+      await clearUserAuditLogs(user.id);
       await prisma.user.delete({ where: { id: user.id } });
     }
   });
@@ -1087,6 +1187,39 @@ describe('Magic Link Authentication', () => {
       .send({ token: 'invalid-token' });
 
     expect(res.status).toBe(400);
+  });
+
+  it('should audit successful magic link login without logging the token', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+
+    const token = `magic_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user!.id,
+        token: hashAuthTokenForTest(token),
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+
+    try {
+      await clearUserAuditLogs(user!.id);
+
+      const res = await request(app).post('/api/auth/magic-link/verify').send({ token });
+
+      expect(res.status).toBe(200);
+      expect(res.body.token).toBeDefined();
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(
+        user!.id,
+        AuditAction.USER_LOGIN,
+      );
+      expect(auditLog.userId).toBe(user!.id);
+      expect(changes).toEqual({ method: 'magic_link' });
+      expect(JSON.stringify(changes)).not.toMatch(/password|token|secret|code/i);
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { token: hashAuthTokenForTest(token) } });
+    }
   });
 
   it('should not bypass MFA with a magic link', async () => {
