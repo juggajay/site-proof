@@ -520,8 +520,8 @@ export function DocketApprovalsPage() {
       docket.labourHours,
       docket.plantHours,
       statusLabels[docket.status] || docket.status,
-      docket.submittedAt ? new Date(docket.submittedAt).toLocaleDateString() : '-',
-      docket.approvedAt ? new Date(docket.approvedAt).toLocaleDateString() : '-',
+      docket.submittedAt ? new Date(docket.submittedAt).toLocaleDateString('en-AU') : '-',
+      docket.approvedAt ? new Date(docket.approvedAt).toLocaleDateString('en-AU') : '-',
     ]);
 
     downloadCsv(buildScopedCsvFilename('dockets', projectInfo?.name || projectId), [

@@ -518,7 +518,7 @@ export function LotDetailPage() {
           setIsOfflineData(true);
           toast({
             title: 'Offline Mode',
-            description: `Showing cached data from ${new Date(cachedData.cachedAt).toLocaleDateString()}`,
+            description: `Showing cached data from ${new Date(cachedData.cachedAt).toLocaleDateString('en-AU')}`,
             variant: 'default',
           });
         } else {

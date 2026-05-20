@@ -150,7 +150,7 @@ export function ChangelogNotification({ forceShow = false, onClose }: ChangelogN
           <div className="mt-1 flex items-center gap-2 text-sm text-primary-foreground/80">
             <span>Version {currentEntry.version}</span>
             <span>•</span>
-            <span>{new Date(currentEntry.date).toLocaleDateString()}</span>
+            <span>{new Date(currentEntry.date).toLocaleDateString('en-AU')}</span>
           </div>
         </div>
 

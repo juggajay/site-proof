@@ -159,18 +159,18 @@ export function ClaimsPage() {
     ];
     const rows = claims.map((c) => [
       `Claim ${c.claimNumber}`,
-      new Date(c.periodStart).toLocaleDateString(),
-      new Date(c.periodEnd).toLocaleDateString(),
+      new Date(c.periodStart).toLocaleDateString('en-AU'),
+      new Date(c.periodEnd).toLocaleDateString('en-AU'),
       c.status,
       c.lotCount,
       c.totalClaimedAmount,
       c.certifiedAmount ?? '-',
       c.paidAmount ?? '-',
-      c.submittedAt ? new Date(c.submittedAt).toLocaleDateString() : '-',
+      c.submittedAt ? new Date(c.submittedAt).toLocaleDateString('en-AU') : '-',
       c.paymentDueDate
-        ? new Date(c.paymentDueDate).toLocaleDateString()
+        ? new Date(c.paymentDueDate).toLocaleDateString('en-AU')
         : c.submittedAt
-          ? new Date(calculatePaymentDueDate(c.submittedAt)).toLocaleDateString()
+          ? new Date(calculatePaymentDueDate(c.submittedAt)).toLocaleDateString('en-AU')
           : '-',
     ]);
     downloadCsv(`progress-claims-${projectId}-${new Date().toISOString().split('T')[0]}.csv`, [
@@ -233,7 +233,7 @@ export function ClaimsPage() {
         downloadCsv(`claim-${claim.claimNumber}.csv`, [
           ['Claim Number', claim.claimNumber],
           ['Period', `${claim.periodStart} to ${claim.periodEnd}`],
-          ['Total Amount', `$${claim.totalClaimedAmount.toLocaleString()}`],
+          ['Total Amount', `$${claim.totalClaimedAmount.toLocaleString('en-AU')}`],
           ['Lots', claim.lotCount],
           ['Status', 'Submitted'],
         ]);
@@ -268,7 +268,7 @@ export function ClaimsPage() {
       if (disputeNotes.length > CLAIM_DISPUTE_NOTES_MAX_LENGTH) {
         toast({
           title: 'Dispute notes too long',
-          description: `Use ${CLAIM_DISPUTE_NOTES_MAX_LENGTH.toLocaleString()} characters or less.`,
+          description: `Use ${CLAIM_DISPUTE_NOTES_MAX_LENGTH.toLocaleString('en-AU')} characters or less.`,
           variant: 'error',
         });
         return;

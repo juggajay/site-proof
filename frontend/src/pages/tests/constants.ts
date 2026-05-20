@@ -48,7 +48,7 @@ export const formatTestDate = (value: string | null | undefined): string => {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return '-';
 
-  return date.toLocaleDateString();
+  return date.toLocaleDateString('en-AU');
 };
 
 export const isTestOverdue = (test: TestResult): boolean => {

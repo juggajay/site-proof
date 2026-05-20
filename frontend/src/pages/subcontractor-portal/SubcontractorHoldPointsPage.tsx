@@ -261,7 +261,7 @@ function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
               {holdPoint.releasedAt && holdPoint.releasedBy && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Released by {holdPoint.releasedBy.fullName} on{' '}
-                  {new Date(holdPoint.releasedAt).toLocaleDateString()}
+                  {new Date(holdPoint.releasedAt).toLocaleDateString('en-AU')}
                 </p>
               )}
             </div>

@@ -284,7 +284,7 @@ function NCRCard({ ncr }: { ncr: NCR }) {
               {lotNumbers && <p className="text-sm text-muted-foreground">Lot: {lotNumbers}</p>}
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{ncr.description}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Raised {new Date(ncr.raisedAt).toLocaleDateString()}
+                Raised {new Date(ncr.raisedAt).toLocaleDateString('en-AU')}
                 {ncr.raisedBy && ` by ${ncr.raisedBy.fullName}`}
               </p>
             </div>

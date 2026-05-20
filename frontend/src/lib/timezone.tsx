@@ -80,7 +80,7 @@ export function TimezoneProvider({ children }: { children: ReactNode }) {
         ...options,
       });
     } catch {
-      return d.toLocaleTimeString();
+      return d.toLocaleTimeString('en-AU');
     }
   };
 

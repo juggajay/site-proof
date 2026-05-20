@@ -722,7 +722,7 @@ function PhotoViewerModal({
               {selectedPhoto.document.uploadedBy.fullName ||
                 selectedPhoto.document.uploadedBy.email}
               {selectedPhoto.document.uploadedAt &&
-                ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString()}`}
+                ` on ${new Date(selectedPhoto.document.uploadedAt).toLocaleDateString('en-AU')}`}
             </p>
           )}
           {/* Show ITP item reference */}

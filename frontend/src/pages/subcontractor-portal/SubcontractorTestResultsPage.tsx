@@ -265,7 +265,7 @@ function TestResultCard({ testResult }: { testResult: TestResult }) {
                 <p className="text-xs text-muted-foreground mt-1">Value: {testResult.value}</p>
               )}
               <p className="text-xs text-muted-foreground mt-1">
-                {new Date(testResult.testedAt).toLocaleDateString()}
+                {new Date(testResult.testedAt).toLocaleDateString('en-AU')}
                 {testResult.testedBy && ` by ${testResult.testedBy.fullName}`}
               </p>
             </div>

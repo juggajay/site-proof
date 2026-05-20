@@ -231,7 +231,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{ncr.status}</td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {new Date(ncr.raisedAt).toLocaleDateString()}
+                    {new Date(ncr.raisedAt).toLocaleDateString('en-AU')}
                   </td>
                 </tr>
               ))}

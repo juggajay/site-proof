@@ -179,7 +179,7 @@ function NCRTableInner({
                 <td className="px-4 py-3 text-sm">
                   {ncr.dueDate ? (
                     <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
-                      {new Date(ncr.dueDate).toLocaleDateString()}
+                      {new Date(ncr.dueDate).toLocaleDateString('en-AU')}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">-</span>
@@ -276,7 +276,7 @@ function NCRTableInner({
                     {ncr.clientNotifiedAt && (
                       <span
                         className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 rounded"
-                        title={`Client notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString()}`}
+                        title={`Client notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString('en-AU')}`}
                       >
                         ✓ Client Notified
                       </span>

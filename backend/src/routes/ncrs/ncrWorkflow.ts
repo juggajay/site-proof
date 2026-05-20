@@ -753,7 +753,7 @@ ncrWorkflowRouter.post(
     // Check if already notified
     if (ncr.clientNotifiedAt) {
       throw AppError.badRequest(
-        `Client was already notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString()}`,
+        `Client was already notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString('en-AU')}`,
       );
     }
 
