@@ -8,6 +8,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../../lib/pagination.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import {
   activeSubcontractorCompanyWhere,
   requireSubcontractorPortalModuleAccess,
@@ -666,6 +667,22 @@ ncrCoreRouter.post(
     if (!ncr) {
       throw AppError.conflict('Could not allocate an NCR number. Please try again.');
     }
+
+    await createAuditLog({
+      projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_CREATED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        status: ncr.status,
+        severity: ncr.severity,
+        category: ncr.category,
+        lotIds: ncrLotIds,
+      },
+      req,
+    });
 
     // Feature #212: Notify responsible party when assigned to NCR
     if (responsibleUserId && responsibleUserId !== user.userId) {
