@@ -5,6 +5,7 @@ import { oauthRouter } from './oauth.js';
 import { prisma } from '../lib/prisma.js';
 import crypto from 'crypto';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 const app = express();
 app.use(express.json());
@@ -23,6 +24,35 @@ function hashOAuthStateForTest(state: string): string {
 function hashOAuthCallbackCodeForTest(code: string): string {
   const salt = process.env.OAUTH_CALLBACK_CODE_SALT || process.env.JWT_SECRET || '';
   return crypto.createHash('sha256').update(`${code}:${salt}`).digest('hex');
+}
+
+async function clearUserAuditLogs(userId: string) {
+  await prisma.auditLog.deleteMany({
+    where: {
+      OR: [{ userId }, { entityType: 'user', entityId: userId }],
+    },
+  });
+}
+
+async function expectLatestOAuthLoginAudit(userId: string) {
+  const auditLog = await prisma.auditLog.findFirst({
+    where: {
+      entityType: 'user',
+      entityId: userId,
+      action: AuditAction.USER_LOGIN,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  expect(auditLog).toBeDefined();
+  if (!auditLog) {
+    throw new Error(`Expected OAuth login audit log for user ${userId}`);
+  }
+
+  return {
+    auditLog,
+    changes: parseAuditLogChanges(auditLog.changes) as Record<string, unknown>,
+  };
 }
 
 async function createStoredOAuthState(params: {
@@ -572,10 +602,12 @@ describe('OAuth Routes', () => {
     afterAll(async () => {
       // Cleanup test user
       if (createdUserId) {
+        await clearUserAuditLogs(createdUserId);
         await prisma.user.delete({ where: { id: createdUserId } }).catch(() => {});
       }
       const user = await prisma.user.findUnique({ where: { email: testEmail } });
       if (user) {
+        await clearUserAuditLogs(user.id);
         await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
       }
     });
@@ -625,6 +657,16 @@ describe('OAuth Routes', () => {
       expect(res.body.token).toBeDefined();
 
       createdUserId = res.body.user.id;
+
+      const { auditLog, changes } = await expectLatestOAuthLoginAudit(createdUserId!);
+      expect(auditLog.userId).toBe(createdUserId);
+      expect(changes).toEqual({
+        method: 'oauth',
+        provider: 'google',
+        flow: 'google_identity',
+      });
+      expect(JSON.stringify(changes)).not.toContain(credential);
+      expect(JSON.stringify(changes)).not.toMatch(/token|secret|credential|code/i);
     });
 
     it('should update existing user with OAuth provider info', async () => {
