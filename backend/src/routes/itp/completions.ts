@@ -30,6 +30,7 @@ const ITP_ATTACHMENT_CAPTION_MAX_LENGTH = 2000;
 const ITP_ATTACHMENT_MIME_TYPE_MAX_LENGTH = 120;
 const ITP_COMPLETION_NOTES_MAX_LENGTH = 5000;
 const ITP_COMPLETION_FAILURE_DESCRIPTION_MAX_LENGTH = 5000;
+const ITP_COMPLETION_REVISION_REASON_MAX_LENGTH = 1000;
 const ITP_COMPLETION_SHORT_TEXT_MAX_LENGTH = 160;
 const ITP_COMPLETION_REJECTION_REASON_MAX_LENGTH = 3000;
 const ITP_SIGNATURE_DATA_URL_MAX_LENGTH = 512_000;
@@ -127,6 +128,15 @@ const updateCompletionSchema = z.object({
       `Notes must be ${ITP_COMPLETION_NOTES_MAX_LENGTH} characters or less`,
     )
     .nullable(),
+  revisionReason: z
+    .string({ invalid_type_error: 'Revision reason must be text' })
+    .trim()
+    .min(1, 'Revision reason is required')
+    .max(
+      ITP_COMPLETION_REVISION_REASON_MAX_LENGTH,
+      `Revision reason must be ${ITP_COMPLETION_REVISION_REASON_MAX_LENGTH} characters or less`,
+    )
+    .optional(),
 });
 
 // POST /completions/:id/reject - Reject completion
@@ -710,6 +720,7 @@ completionsRouter.patch(
       select: {
         checklistItemId: true,
         notes: true,
+        verificationStatus: true,
         itpInstance: {
           select: {
             lotId: true,
@@ -731,8 +742,9 @@ completionsRouter.patch(
       throw AppError.badRequest('Unable to determine project for ITP completion');
     }
 
+    let effectiveRole: string;
     if (completionForAccess.itpInstance.lotId) {
-      await requireItpLotRole(
+      effectiveRole = await requireItpLotRole(
         user,
         projectId,
         completionForAccess.itpInstance.lotId,
@@ -745,7 +757,7 @@ completionsRouter.patch(
         completionForAccess.itpInstance.lotId,
       );
     } else {
-      await requireItpProjectRole(
+      effectiveRole = await requireItpProjectRole(
         user,
         projectId,
         ITP_WRITE_ROLES,
@@ -753,6 +765,21 @@ completionsRouter.patch(
       );
       if (isItpSubcontractorUser(user)) {
         throw AppError.forbidden('ITP completion write access required');
+      }
+    }
+
+    const revisionReason = parseResult.data.revisionReason;
+    const isVerifiedRevision = completionForAccess.verificationStatus === 'verified';
+    if (isVerifiedRevision) {
+      if (!ITP_VERIFY_ROLES.includes(effectiveRole)) {
+        throw AppError.forbidden('ITP verifier access required to revise verified completions');
+      }
+
+      if (!revisionReason) {
+        throw AppError.conflict(
+          'Verified ITP completions require a verifier revision reason before notes can be changed',
+          { verificationStatus: completionForAccess.verificationStatus },
+        );
       }
     }
 
@@ -783,6 +810,12 @@ completionsRouter.patch(
         checklistItemId: completionForAccess.checklistItemId,
         notes: parseResult.data.notes,
         previousNotes: completionForAccess.notes,
+        ...(isVerifiedRevision
+          ? {
+              verifiedRevision: true,
+              revisionReason,
+            }
+          : {}),
       },
       req,
     });

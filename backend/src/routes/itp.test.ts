@@ -1401,6 +1401,101 @@ describe('ITP Completion Attachments', () => {
     expect(completion.status).toBe('pending');
   });
 
+  it('should require a verifier revision reason before updating verified completion notes', async () => {
+    const originalCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
+      where: { id: completionId },
+    });
+
+    await prisma.auditLog.deleteMany({
+      where: { entityId: completionId, action: AuditAction.ITP_ITEM_UPDATED },
+    });
+
+    try {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: userId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          notes: 'Verified baseline notes',
+          verificationStatus: 'verified',
+          verifiedAt: new Date('2026-01-02T00:00:00.000Z'),
+          verifiedById: userId,
+        },
+      });
+
+      const missingReason = await request(app)
+        .patch(`/api/itp/completions/${completionId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ notes: 'Unexplained post-verification change' });
+
+      expect(missingReason.status).toBe(409);
+      expect(missingReason.body.error.message).toContain('revision reason');
+
+      const unchanged = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: completionId },
+        select: {
+          notes: true,
+          verificationStatus: true,
+          verifiedAt: true,
+          verifiedById: true,
+        },
+      });
+      expect(unchanged.notes).toBe('Verified baseline notes');
+      expect(unchanged.verificationStatus).toBe('verified');
+      expect(unchanged.verifiedAt?.toISOString()).toBe('2026-01-02T00:00:00.000Z');
+      expect(unchanged.verifiedById).toBe(userId);
+
+      const corrected = await request(app)
+        .patch(`/api/itp/completions/${completionId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          notes: 'Verifier-approved correction',
+          revisionReason: 'Correcting a typo after verification',
+        });
+
+      expect(corrected.status).toBe(200);
+      expect(corrected.body.completion.notes).toBe('Verifier-approved correction');
+      expect(corrected.body.completion.verificationStatus).toBe('verified');
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'itp_completion',
+          entityId: completionId,
+          action: AuditAction.ITP_ITEM_UPDATED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(parseAuditLogChanges(auditLog?.changes ?? null)).toMatchObject({
+        checklistItemId,
+        notes: 'Verifier-approved correction',
+        previousNotes: 'Verified baseline notes',
+        verifiedRevision: true,
+        revisionReason: 'Correcting a typo after verification',
+      });
+    } finally {
+      await prisma.auditLog.deleteMany({
+        where: { entityId: completionId, action: AuditAction.ITP_ITEM_UPDATED },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: originalCompletion.status,
+          completedById: originalCompletion.completedById,
+          completedAt: originalCompletion.completedAt,
+          notes: originalCompletion.notes,
+          verificationStatus: originalCompletion.verificationStatus,
+          verifiedAt: originalCompletion.verifiedAt,
+          verifiedById: originalCompletion.verifiedById,
+          verificationNotes: originalCompletion.verificationNotes,
+        },
+      });
+    }
+  });
+
   it('should not create duplicate completions for concurrent checklist item writes', async () => {
     const concurrentChecklistItem = await prisma.iTPChecklistItem.create({
       data: {
