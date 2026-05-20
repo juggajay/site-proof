@@ -1255,18 +1255,30 @@ describe('Magic Link Authentication', () => {
   });
 
   it('should request magic link for existing user', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+    await clearUserAuditLogs(user!.id);
+
     const res = await request(app).post('/api/auth/magic-link/request').send({ email: magicEmail });
 
     expect(res.status).toBe(200);
     expect(res.body.message).toContain('If an account exists');
 
-    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
     const storedToken = await prisma.passwordResetToken.findFirst({
       where: { userId: user!.id },
       orderBy: { createdAt: 'desc' },
     });
     expect(storedToken?.token).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(storedToken?.token.startsWith('magic_')).toBe(false);
+
+    const { auditLog, changes } = await expectLatestUserAuditLog(
+      user!.id,
+      AuditAction.MAGIC_LINK_REQUESTED,
+    );
+    expect(auditLog.userId).toBe(user!.id);
+    expect(changes).toEqual({ method: 'magic_link', expiresInMinutes: 15 });
+    expect(JSON.stringify(changes)).not.toContain(storedToken!.token);
+    expect(JSON.stringify(changes)).not.toMatch(/token|secret|password/i);
   });
 
   it('should not reveal non-existent email', async () => {
