@@ -1111,6 +1111,50 @@ describe('Daily Diary API', () => {
       expect(longContentRes.status).toBe(400);
     });
 
+    it('should add submitted diary addendum and write an audit log without storing addendum content', async () => {
+      const addendumDiaryDate = new Date(Date.now() + 691200000).toISOString().split('T')[0];
+      const draftRes = await request(app)
+        .post('/api/diary')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          date: addendumDiaryDate,
+        });
+      expect(draftRes.status).toBe(201);
+
+      const submitRes = await request(app)
+        .post(`/api/diary/${draftRes.body.id}/submit`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ acknowledgeWarnings: true });
+      expect(submitRes.status).toBe(200);
+
+      const content = '  Late concrete pour note added after submission.  ';
+      const res = await request(app)
+        .post(`/api/diary/${draftRes.body.id}/addendum`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ content });
+
+      expect(res.status).toBe(201);
+      expect(res.body.content).toBe(content.trim());
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'diary_addendum',
+          entityId: res.body.id,
+          action: 'diary_addendum_added',
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+        diaryId: draftRes.body.id,
+        diaryDate: addendumDiaryDate,
+        contentLength: content.trim().length,
+      });
+      expect(auditLog?.changes).not.toContain(content.trim());
+    });
+
     it('should reject updating a submitted diary through the upsert endpoint', async () => {
       const res = await request(app)
         .post('/api/diary')

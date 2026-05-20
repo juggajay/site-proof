@@ -153,6 +153,7 @@ export const AuditAction = {
   DOCKET_APPROVED: 'docket_approved',
   DOCKET_REJECTED: 'docket_rejected',
   DIARY_SUBMITTED: 'diary_submitted',
+  DIARY_ADDENDUM_ADDED: 'diary_addendum_added',
   // ITP
   ITP_ITEM_COMPLETED: 'itp_item_completed',
   ITP_ITEM_UPDATED: 'itp_item_updated',
