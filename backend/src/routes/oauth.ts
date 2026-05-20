@@ -368,6 +368,11 @@ oauthRouter.get(
       verified_email?: boolean;
     };
 
+    if (!isVerifiedEmail(googleUser.verified_email)) {
+      logWarn('[OAuth] Google callback email is not verified');
+      return res.redirect(`${frontendUrl}/login?error=email_not_verified`);
+    }
+
     // Find or create user, then hand off a one-time code instead of putting the JWT in the URL.
     const { user, mfaEnabled, created } = await findOrCreateOAuthUser({
       provider: 'google',
@@ -375,17 +380,11 @@ oauthRouter.get(
       email: googleUser.email,
       fullName: googleUser.name,
       avatarUrl: googleUser.picture,
-      emailVerified: googleUser.verified_email ?? true,
+      emailVerified: true,
     });
 
     if (created) {
-      await auditOAuthRegistration(
-        req,
-        user.id,
-        'google',
-        'oauth_callback',
-        googleUser.verified_email ?? true,
-      );
+      await auditOAuthRegistration(req, user.id, 'google', 'oauth_callback', true);
     }
 
     if (mfaEnabled) {
@@ -527,7 +526,7 @@ oauthRouter.post(
       email: googleUser.email,
       fullName: googleUser.name,
       avatarUrl: googleUser.picture,
-      emailVerified: googleUser.verified_email ?? true,
+      emailVerified: googleUser.verified_email,
     });
 
     if (mfaEnabled || !token) {
@@ -540,7 +539,7 @@ oauthRouter.post(
         user.id,
         'google',
         'google_identity',
-        googleUser.verified_email ?? true,
+        googleUser.verified_email,
       );
     }
 
@@ -673,9 +672,9 @@ async function findOrCreateOAuthUser(params: {
   email: string;
   fullName?: string;
   avatarUrl?: string;
-  emailVerified?: boolean;
+  emailVerified: boolean;
 }) {
-  const { provider, providerId, email, fullName, avatarUrl, emailVerified = true } = params;
+  const { provider, providerId, email, fullName, avatarUrl, emailVerified } = params;
   const normalizedEmail = normalizeOAuthEmail(email);
 
   // First, try to find user by email

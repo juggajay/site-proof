@@ -451,6 +451,51 @@ describe('OAuth Routes', () => {
       }
     });
 
+    it('should reject callback users when Google does not explicitly verify the email', async () => {
+      const state = crypto.randomBytes(16).toString('hex');
+      const email = `oauth-callback-unverified-${Date.now()}@example.com`;
+      await createStoredOAuthState({
+        state,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      });
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'google-access-token' }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            id: `google-callback-unverified-${Date.now()}`,
+            email,
+            name: 'Unverified OAuth Callback User',
+          }),
+        } as Response);
+
+      try {
+        const res = await request(app).get('/api/auth/google/callback').query({
+          code: 'test-code',
+          state,
+        });
+
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toContain('/login?error=email_not_verified');
+        expect(res.headers.location).not.toContain('/auth/oauth-callback?code=');
+
+        const callbackUser = await prisma.user.findUnique({ where: { email } });
+        expect(callbackUser).toBeNull();
+      } finally {
+        vi.restoreAllMocks();
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (user) {
+          await prisma.oauthCallbackCode.deleteMany({ where: { userId: user.id } });
+          await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+        }
+      }
+    });
+
     it('should not issue callback codes for MFA-enabled OAuth users', async () => {
       const state = crypto.randomBytes(16).toString('hex');
       const email = `oauth-callback-mfa-${Date.now()}@example.com`;
