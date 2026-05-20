@@ -788,19 +788,20 @@ ncrWorkflowRouter.post(
       },
     });
 
-    // Create audit log entry
-    await prisma.auditLog.create({
-      data: {
-        userId: user.userId,
-        action: 'NCR_CLIENT_NOTIFIED',
-        entityType: 'NCR',
-        entityId: ncr.id,
-        changes: JSON.stringify({
-          ncrNumber: ncr.ncrNumber,
-          recipientEmail: recipientEmail || 'Not specified',
-          notificationPackage,
-        }),
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_CLIENT_NOTIFIED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        severity: ncr.severity,
+        affectedLotCount: ncr.ncrLots.length,
+        recipientEmailPresent: Boolean(recipientEmail),
+        additionalMessagePresent: Boolean(additionalMessage),
       },
+      req,
     });
 
     res.json({
