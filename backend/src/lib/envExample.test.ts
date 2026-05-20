@@ -50,9 +50,10 @@ describe('.env.example', () => {
     }
   });
 
-  it('documents the dedicated public support request rate limit', async () => {
+  it('documents the dedicated public endpoint rate limits', async () => {
     const envExample = await readEnvExample();
 
+    expect(envExample).toMatch(/^VERIFICATION_RESEND_RATE_LIMIT_MAX=/m);
     expect(envExample).toMatch(/^SUPPORT_RATE_LIMIT_MAX=/m);
   });
 

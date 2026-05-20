@@ -491,6 +491,39 @@ describe('Email verification tokens', () => {
     }
   });
 
+  it('rate limits verification resend by target email across source IPs', async () => {
+    const targetEmail = `resend-limit-${Date.now()}@example.com`;
+
+    for (let index = 0; index < 3; index += 1) {
+      const res = await request(app)
+        .post('/api/auth/resend-verification')
+        .set('X-Forwarded-For', `203.0.113.${index + 1}`)
+        .send({ email: targetEmail });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        message: 'If an account exists with this email, a new verification link has been sent.',
+      });
+    }
+
+    const limitedRes = await request(app)
+      .post('/api/auth/resend-verification')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .send({ email: targetEmail.toUpperCase() });
+
+    expect(limitedRes.status).toBe(429);
+    expect(limitedRes.body.error.code).toBe('RATE_LIMITED');
+    expect(limitedRes.body.error.message).toContain('Too many verification email requests');
+    expect(limitedRes.body.error.details.retryAfter).toBeGreaterThan(0);
+
+    const otherEmailRes = await request(app)
+      .post('/api/auth/resend-verification')
+      .set('X-Forwarded-For', '203.0.113.100')
+      .send({ email: `resend-limit-other-${Date.now()}@example.com` });
+
+    expect(otherEmailRes.status).toBe(200);
+  });
+
   it('does not report replaced verification tokens as already verified', async () => {
     const email = `verify-replaced-${Date.now()}@example.com`;
     const password = 'SecureP@ssword123!';

@@ -49,23 +49,24 @@ The system detects the hash format and applies the appropriate verification algo
 
 ### Optional Production Variables
 
-| Variable                                   | Description                                                                                                       | Default            |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ------------------ |
-| `RATE_LIMIT_STORE`                         | Durable rate-limit store. Production defaults to database and rejects `memory`.                                   | `database`         |
-| `API_RATE_LIMIT_MAX`                       | General API requests per minute per source                                                                        | `1000`             |
-| `AUTH_RATE_LIMIT_MAX`                      | Auth requests per minute per source                                                                               | `10` in production |
-| `SUPPORT_RATE_LIMIT_MAX`                   | Public support request submissions per minute per source                                                          | `10` in production |
-| `WEBHOOK_DELIVERY_TIMEOUT_MS`              | Webhook delivery timeout, capped at 30000ms                                                                       | `10000`            |
-| `ERROR_LOG_TO_FILE`                        | Persist structured API error logs to `logs/errors.log`; set `false` when stdout/monitoring is the source of truth | `true`             |
-| `ERROR_LOG_MAX_BYTES`                      | Maximum size for the local structured error log before it is trimmed                                              | `5242880`          |
+| Variable                                   | Description                                                                                                                 | Default            |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| `RATE_LIMIT_STORE`                         | Durable rate-limit store. Production defaults to database and rejects `memory`.                                             | `database`         |
+| `API_RATE_LIMIT_MAX`                       | General API requests per minute per source                                                                                  | `1000`             |
+| `AUTH_RATE_LIMIT_MAX`                      | Auth requests per minute per source                                                                                         | `10` in production |
+| `VERIFICATION_RESEND_RATE_LIMIT_MAX`       | Email verification resend requests per day per target email                                                                 | `3`                |
+| `SUPPORT_RATE_LIMIT_MAX`                   | Public support request submissions per minute per source                                                                    | `10` in production |
+| `WEBHOOK_DELIVERY_TIMEOUT_MS`              | Webhook delivery timeout, capped at 30000ms                                                                                 | `10000`            |
+| `ERROR_LOG_TO_FILE`                        | Persist structured API error logs to `logs/errors.log`; set `false` when stdout/monitoring is the source of truth           | `true`             |
+| `ERROR_LOG_MAX_BYTES`                      | Maximum size for the local structured error log before it is trimmed                                                        | `5242880`          |
 | `GOOGLE_REDIRECT_URI`                      | Optional Google OAuth redirect URI. If set in production, it must be public HTTPS; otherwise it derives from `BACKEND_URL`. | unset              |
-| `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` | Push notification keys. Configure both together.                                                                  | unset              |
-| `VAPID_SUBJECT`                            | Required contact subject when production VAPID keys are configured; use `mailto:` or a public HTTPS URL.          | unset              |
+| `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` | Push notification keys. Configure both together.                                                                            | unset              |
+| `VAPID_SUBJECT`                            | Required contact subject when production VAPID keys are configured; use `mailto:` or a public HTTPS URL.                    | unset              |
 
 ### Frontend Production Build Variables
 
-| Variable            | Description                                                                                         | Example                     |
-| ------------------- | --------------------------------------------------------------------------------------------------- | --------------------------- |
+| Variable            | Description                                                                                          | Example                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | `VITE_API_URL`      | Public API base for browser requests. Use a same-origin path when the API is reverse-proxied.        | `/api` or `https://api.example.com` |
 | `VITE_SUPABASE_URL` | Optional public Supabase URL for browser Supabase access. Leave blank unless a real project is used. | `https://project.supabase.co`       |
 
