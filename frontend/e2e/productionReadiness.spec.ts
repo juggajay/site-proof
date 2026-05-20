@@ -762,6 +762,31 @@ test.describe('production readiness guardrails', () => {
     expect(ncrPage).toContain("openModal('create')");
   });
 
+  test('destructive document and mobile diary deletes require confirmation dialogs', async () => {
+    const documentsPage = await readFile(
+      new URL('../src/pages/documents/DocumentsPage.tsx', import.meta.url),
+      'utf8',
+    );
+    const diaryPage = await readFile(
+      new URL('../src/pages/diary/DailyDiaryPage.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(documentsPage).toContain(
+      "import { ConfirmDialog } from '@/components/ui/ConfirmDialog'",
+    );
+    expect(documentsPage).toContain('const [documentPendingDelete, setDocumentPendingDelete]');
+    expect(documentsPage).toContain('setDocumentPendingDelete(doc)');
+    expect(documentsPage).toContain('title="Delete Document"');
+
+    expect(diaryPage).toContain("import { ConfirmDialog } from '@/components/ui/ConfirmDialog'");
+    expect(diaryPage).toContain('const [entryPendingDelete, setEntryPendingDelete]');
+    expect(diaryPage).toContain('onDeleteEntry={(entry) => setEntryPendingDelete(entry)}');
+    expect(diaryPage).toContain('title="Delete Diary Entry"');
+    expect(diaryPage).toContain('mobile.handleDeleteEntry(entryPendingDelete)');
+    expect(diaryPage).not.toContain('onDeleteEntry={mobile.handleDeleteEntry}');
+  });
+
   test('delay register export does not download failed API responses as CSV files', async () => {
     const delayRegisterPage = await readFile(
       new URL('../src/pages/diary/DelayRegisterPage.tsx', import.meta.url),
