@@ -8,6 +8,7 @@ const E2E_RELEASED_HP_ID = 'e2e-hp-released';
 interface MockHoldPointsOptions {
   failHoldPointLoadsUntil?: number;
   paginatedHoldPoints?: ReturnType<typeof buildHoldPoints>;
+  failRecordReleaseMessage?: string;
 }
 
 function getFutureDateValue() {
@@ -255,6 +256,11 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
 
     if (url.pathname === `/api/holdpoints/${E2E_NOTIFIED_HP_ID}/release`) {
       recordReleaseRequest = route.request().postDataJSON();
+      if (options.failRecordReleaseMessage) {
+        await json({ error: { message: options.failRecordReleaseMessage } }, 400);
+        return;
+      }
+
       notifiedReleaseRecorded = true;
       await json({
         holdPoint: buildHoldPoints(
@@ -479,5 +485,34 @@ test.describe('Hold points seeded release contract', () => {
         signatureDataUrl: null,
       });
     expect(api.getEvidenceUploadCount()).toBe(0);
+  });
+
+  test('shows backend validation errors inside the record release modal', async ({ page }) => {
+    await mockSeededHoldPointsApi(page, {
+      failRecordReleaseMessage: 'Release date must be a valid date',
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
+
+    const notifiedRow = page.getByRole('row').filter({ hasText: 'LOT-HP-002' });
+    await expect(notifiedRow).toBeVisible();
+    await notifiedRow.getByRole('button', { name: 'Record Release' }).click();
+
+    const recordModal = page.getByRole('dialog').filter({ hasText: 'Record Hold Point Release' });
+    await expect(
+      recordModal.getByRole('heading', { name: 'Record Hold Point Release' }),
+    ).toBeVisible();
+
+    await recordModal.getByLabel('Email Confirmation').check();
+    await recordModal
+      .getByPlaceholder('Enter name of person releasing')
+      .fill('E2E Release Reviewer');
+    await recordModal.locator('input[type="date"]').fill('2026-02-03');
+    await recordModal.locator('input[type="time"]').fill('14:20');
+    await recordModal.getByRole('button', { name: 'Record Release' }).click();
+
+    await expect(recordModal.getByRole('alert')).toContainText('Release date must be a valid date');
+    await expect(recordModal).toBeVisible();
+    await expect(notifiedRow.getByText('Released', { exact: true })).toBeHidden();
   });
 });

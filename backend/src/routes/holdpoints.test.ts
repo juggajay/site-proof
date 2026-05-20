@@ -322,6 +322,47 @@ describe('Hold Points API', () => {
       expect(completion.verifiedAt).toBeInstanceOf(Date);
     });
 
+    it('should accept email confirmation release with no signature data', async () => {
+      const hp = await prisma.holdPoint.create({
+        data: {
+          lotId,
+          itpChecklistItemId: checklistItemId,
+          pointType: 'hold_point',
+          status: 'notified',
+        },
+      });
+
+      const itpInstance = await prisma.iTPInstance.findUniqueOrThrow({
+        where: { lotId },
+        select: { id: true },
+      });
+      await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          status: 'completed',
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/holdpoints/${hp.id}/release`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          releasedByName: 'Email Release Reviewer',
+          releasedByOrg: 'Superintendent Team',
+          releaseDate: '2026-01-21',
+          releaseTime: '10:30',
+          releaseMethod: 'email',
+          releaseNotes: 'Email confirmation received',
+          signatureDataUrl: null,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.holdPoint.status).toBe('released');
+      expect(res.body.holdPoint.releaseMethod).toBe('email');
+      expect(res.body.holdPoint.releaseSignatureUrl).toBeNull();
+    });
+
     it('should reject releasing an already released hold point', async () => {
       const res = await request(app)
         .post(`/api/holdpoints/${holdPointId}/release`)
