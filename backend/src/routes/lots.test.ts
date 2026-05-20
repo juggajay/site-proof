@@ -1367,7 +1367,24 @@ describe('Lots API', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.lot.status).toBe('conformed');
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId,
+            userId,
+            entityType: 'lot',
+            entityId: forceAllowedLot.id,
+            action: 'lot_status_changed',
+          },
+        });
+        expect(auditLog).toBeTruthy();
+        expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+          lotNumber: forceAllowedLot.lotNumber,
+          status: { from: 'not_started', to: 'conformed' },
+          force: true,
+        });
       } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: forceAllowedLot.id } });
         await prisma.lot.delete({ where: { id: forceAllowedLot.id } }).catch(() => {});
       }
     });

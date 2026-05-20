@@ -14,6 +14,7 @@ import { getPaginationMeta, getPrismaSkipTake } from '../lib/pagination.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { ROLE_GROUPS, hasRoleInGroup } from '../lib/roles.js';
+import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 
 // ============================================================================
 // Zod Validation Schemas
@@ -2271,6 +2272,20 @@ lotsRouter.post(
         status: true,
         conformedAt: true,
       },
+    });
+
+    await createAuditLog({
+      projectId: lot.projectId,
+      userId: user.id,
+      entityType: 'lot',
+      entityId: updatedLot.id,
+      action: AuditAction.LOT_STATUS_CHANGED,
+      changes: {
+        lotNumber: lot.lotNumber,
+        status: { from: lot.status, to: updatedLot.status },
+        force,
+      },
+      req,
     });
 
     res.json({
