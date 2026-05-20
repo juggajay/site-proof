@@ -45,6 +45,7 @@ import { isSubcontractorInvitationExpired } from '../lib/subcontractorInvitation
 const AVATAR_STORAGE_PREFIX = 'avatars';
 const GENERIC_RESEND_VERIFICATION_MESSAGE =
   'If an account exists with this email, a new verification link has been sent.';
+const GENERIC_RESET_TOKEN_VALIDATION_MESSAGE = 'Invalid or expired reset token';
 
 export const authRouter = Router();
 
@@ -392,6 +393,11 @@ function rejectMagicLinkTokenForPasswordReset(token: string): void {
   if (isMagicLinkToken(token)) {
     throw AppError.badRequest('Invalid or expired reset token');
   }
+}
+
+function respondInvalidResetTokenValidation(res: Response, reason: string) {
+  logWarn('[Password Reset] Reset token validation failed', { reason });
+  return res.json({ valid: false, message: GENERIC_RESET_TOKEN_VALIDATION_MESSAGE });
 }
 
 function normalizeMfaLoginCode(value: unknown): string | undefined {
@@ -1133,7 +1139,7 @@ authRouter.get(
       normalizedToken.length > ONE_TIME_TOKEN_MAX_LENGTH ||
       isMagicLinkToken(normalizedToken)
     ) {
-      return res.json({ valid: false, message: 'Invalid reset token' });
+      return respondInvalidResetTokenValidation(res, 'invalid-shape');
     }
 
     const resetToken = await prisma.passwordResetToken.findFirst({
@@ -1141,15 +1147,15 @@ authRouter.get(
     });
 
     if (!resetToken) {
-      return res.json({ valid: false, message: 'Invalid reset token' });
+      return respondInvalidResetTokenValidation(res, 'not-found');
     }
 
     if (resetToken.usedAt) {
-      return res.json({ valid: false, message: 'This reset token has already been used' });
+      return respondInvalidResetTokenValidation(res, 'already-used');
     }
 
     if (resetToken.expiresAt < new Date()) {
-      return res.json({ valid: false, message: 'This reset token has expired' });
+      return respondInvalidResetTokenValidation(res, 'expired');
     }
 
     res.json({ valid: true });
