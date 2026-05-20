@@ -565,6 +565,22 @@ ncrWorkflowRouter.post(
       },
     });
 
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_QM_APPROVED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        severity: ncr.severity,
+        status: ncr.status,
+        qmApprovalRequired: ncr.qmApprovalRequired,
+        qmApproved: true,
+      },
+      req,
+    });
+
     res.json({
       ncr: updatedNcr,
       message: 'QM approval granted. NCR can now be closed.',

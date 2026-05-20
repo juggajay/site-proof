@@ -1804,10 +1804,32 @@ describe('Major NCR QM Approval', () => {
   it('should grant QM approval', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${majorNcrId}/qm-approve`)
-      .set('Authorization', `Bearer ${authToken}`);
+      .set('Authorization', `Bearer ${authToken}`)
+      .set('User-Agent', 'ncr-qm-approval-audit-test');
 
     expect(res.status).toBe(200);
     expect(res.body.message).toContain('approval granted');
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: majorNcrId,
+        action: AuditAction.NCR_QM_APPROVED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    expect(auditLog).toBeTruthy();
+    expect(auditLog!.ipAddress).toBeTruthy();
+    expect(auditLog!.userAgent).toBe('ncr-qm-approval-audit-test');
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      ncrNumber: res.body.ncr.ncrNumber,
+      severity: 'major',
+      qmApprovalRequired: true,
+      qmApproved: true,
+    });
   });
 
   it('should close major NCR after QM approval', async () => {
