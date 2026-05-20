@@ -1311,6 +1311,19 @@ describe('NCR Workflow', () => {
   });
 
   it('should accept response via QM review', async () => {
+    const currentNcr = await prisma.nCR.findUniqueOrThrow({ where: { id: workflowNcrId } });
+    if (currentNcr.status === 'open') {
+      const respondRes = await request(app)
+        .post(`/api/ncrs/${workflowNcrId}/respond`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          rootCauseCategory: 'Method',
+          rootCauseDescription: 'Incorrect procedure followed',
+          proposedCorrectiveAction: 'Retrain workers on correct method',
+        });
+      expect(respondRes.status).toBe(200);
+    }
+
     const res = await request(app)
       .post(`/api/ncrs/${workflowNcrId}/qm-review`)
       .set('Authorization', `Bearer ${authToken}`)
@@ -1338,6 +1351,67 @@ describe('NCR Workflow', () => {
       qmReviewAction: 'accept',
       commentsPresent: true,
     });
+
+    const reviewedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id: workflowNcrId },
+      select: { qmReviewedAt: true },
+    });
+    expect(reviewedNcr.qmReviewedAt).toBeTruthy();
+
+    const auditCountBeforeRetry = await prisma.auditLog.count({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: workflowNcrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+    });
+    const notificationCountBeforeRetry = await prisma.notification.count({
+      where: {
+        projectId,
+        userId,
+        type: 'ncr_response_accepted',
+      },
+    });
+
+    const retryRes = await request(app)
+      .post(`/api/ncrs/${workflowNcrId}/qm-review`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        action: 'accept',
+        comments: 'Response is acceptable',
+      });
+
+    expect(retryRes.status).toBe(200);
+    expect(retryRes.body.ncr.status).toBe('rectification');
+
+    const afterRetryNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id: workflowNcrId },
+      select: { qmReviewedAt: true },
+    });
+    expect(afterRetryNcr.qmReviewedAt?.toISOString()).toBe(reviewedNcr.qmReviewedAt?.toISOString());
+
+    await expect(
+      prisma.auditLog.count({
+        where: {
+          projectId,
+          userId,
+          entityType: 'ncr',
+          entityId: workflowNcrId,
+          action: AuditAction.NCR_STATUS_CHANGED,
+        },
+      }),
+    ).resolves.toBe(auditCountBeforeRetry);
+    await expect(
+      prisma.notification.count({
+        where: {
+          projectId,
+          userId,
+          type: 'ncr_response_accepted',
+        },
+      }),
+    ).resolves.toBe(notificationCountBeforeRetry);
   });
 
   it('should reject rectification when no evidence has been uploaded', async () => {
