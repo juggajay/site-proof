@@ -803,6 +803,11 @@ authRouter.post(
       expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
     });
 
+    await auditUserAuthEvent(req, user.id, AuditAction.MAGIC_LINK_REQUESTED, {
+      method: 'magic_link',
+      expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
+    });
+
     res.json({
       message: 'If an account exists with this email, a login link has been sent.',
     });
