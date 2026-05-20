@@ -4,6 +4,7 @@ import express from 'express';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction } from '../lib/auditLog.js';
 
 // Import claims router
 import claimsRouter from './claims.js';
@@ -938,6 +939,51 @@ describe('Progress Claims API', () => {
   });
 
   describe('POST /api/projects/:projectId/claims/:claimId/certify', () => {
+    it('should reject re-certifying an already certified claim', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'certified',
+          certifiedAmount: 800,
+          certifiedAt: new Date('2025-05-05T00:00:00.000Z'),
+        },
+      });
+      const auditCountBefore = await prisma.auditLog.count({
+        where: {
+          projectId,
+          entityType: 'progress_claim',
+          entityId: claim.id,
+          action: AuditAction.CLAIM_CERTIFIED,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          certifiedAmount: 900,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Current status: certified');
+
+      const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(unchangedClaim?.status).toBe('certified');
+      expect(Number(unchangedClaim?.certifiedAmount)).toBe(800);
+      expect(unchangedClaim?.certifiedAt?.toISOString()).toBe('2025-05-05T00:00:00.000Z');
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            projectId,
+            entityType: 'progress_claim',
+            entityId: claim.id,
+            action: AuditAction.CLAIM_CERTIFIED,
+          },
+        }),
+      ).resolves.toBe(auditCountBefore);
+    });
+
     it('should reject non-finite certification amounts', async () => {
       const claim = await createSubmittedCertificationClaim();
 
