@@ -70,6 +70,7 @@ async function createApiKeyBackedUser(options?: {
 
 async function deleteApiKeyBackedUser(userId: string) {
   await new Promise((resolve) => setTimeout(resolve, 25));
+  await prisma.auditLog.deleteMany({ where: { userId } });
   await prisma.apiKey.deleteMany({ where: { userId } });
   await prisma.mfaBackupCode.deleteMany({ where: { userId } });
   await prisma.user.delete({ where: { id: userId } }).catch(() => {});
@@ -98,6 +99,7 @@ describe('MFA API', () => {
   afterAll(async () => {
     // Clean up test data
     if (userId) {
+      await prisma.auditLog.deleteMany({ where: { userId } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
     }
@@ -723,11 +725,14 @@ describe('MFA API', () => {
     });
 
     afterAll(async () => {
+      await prisma.auditLog.deleteMany({ where: { userId: workflowUserId } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId: workflowUserId } });
       await prisma.user.delete({ where: { id: workflowUserId } }).catch(() => {});
     });
 
     it('should complete full MFA setup and verification workflow', async () => {
+      await prisma.auditLog.deleteMany({ where: { userId: workflowUserId } });
+
       // Step 1: Check initial status (should be disabled)
       let res = await request(app)
         .get('/api/mfa/status')
@@ -754,6 +759,22 @@ describe('MFA API', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.backupCodes).toBeDefined();
 
+      const enabledAuditLog = await prisma.auditLog.findFirst({
+        where: {
+          userId: workflowUserId,
+          entityType: 'user',
+          entityId: workflowUserId,
+          action: 'mfa_enabled',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(enabledAuditLog).not.toBeNull();
+      expect(enabledAuditLog?.changes ? JSON.parse(enabledAuditLog.changes) : null).toEqual({
+        mfaEnabled: { from: false, to: true },
+        method: 'totp',
+      });
+
       // Step 4: Check status (should be enabled)
       res = await request(app)
         .get('/api/mfa/status')
@@ -779,6 +800,22 @@ describe('MFA API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
+
+      const disabledAuditLog = await prisma.auditLog.findFirst({
+        where: {
+          userId: workflowUserId,
+          entityType: 'user',
+          entityId: workflowUserId,
+          action: 'mfa_disabled',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(disabledAuditLog).not.toBeNull();
+      expect(disabledAuditLog?.changes ? JSON.parse(disabledAuditLog.changes) : null).toEqual({
+        mfaEnabled: { from: true, to: false },
+        method: 'password',
+      });
 
       // Step 7: Verify status is disabled
       res = await request(app)

@@ -23,6 +23,7 @@ import {
   generateMfaBackupCodes,
   verifyAndConsumeMfaBackupCode,
 } from '../lib/mfaBackupCodes.js';
+import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 
 export const mfaRouter = Router();
 
@@ -213,6 +214,17 @@ mfaRouter.post(
 
     const backupCodes = generateMfaBackupCodes();
     await enableMfaAndReplaceBackupCodes(userId, backupCodes);
+    await createAuditLog({
+      userId,
+      entityType: 'user',
+      entityId: userId,
+      action: AuditAction.MFA_ENABLED,
+      changes: {
+        mfaEnabled: { from: false, to: true },
+        method: 'totp',
+      },
+      req,
+    });
 
     res.json({
       success: true,
@@ -257,9 +269,13 @@ mfaRouter.post(
 
     // Verify either password or MFA code
     let verified = false;
+    let verificationMethod: 'password' | 'totp' | 'backup_code' | null = null;
 
     if (normalizedPassword && user.password_hash) {
       verified = verifyPassword(normalizedPassword, user.password_hash);
+      if (verified) {
+        verificationMethod = 'password';
+      }
     }
 
     if (
@@ -275,10 +291,16 @@ mfaRouter.post(
         secret: decryptedSecret,
       });
       verified = typeof verifyResult === 'boolean' ? verifyResult : verifyResult.valid;
+      if (verified) {
+        verificationMethod = 'totp';
+      }
     }
 
     if (!verified && normalizedCode && MFA_BACKUP_CODE_PATTERN.test(normalizedCode)) {
       verified = await verifyAndConsumeMfaBackupCode(userId, normalizedCode);
+      if (verified) {
+        verificationMethod = 'backup_code';
+      }
     }
 
     if (!verified) {
@@ -286,6 +308,17 @@ mfaRouter.post(
     }
 
     await disableMfaAndDeleteBackupCodes(userId);
+    await createAuditLog({
+      userId,
+      entityType: 'user',
+      entityId: userId,
+      action: AuditAction.MFA_DISABLED,
+      changes: {
+        mfaEnabled: { from: true, to: false },
+        method: verificationMethod,
+      },
+      req,
+    });
 
     res.json({
       success: true,
