@@ -37,6 +37,28 @@ async function cleanupTestUser(userId: string) {
   await prisma.user.delete({ where: { id: userId } }).catch(() => {});
 }
 
+async function createNcrEvidence(projectId: string, userId: string, ncrId: string) {
+  const filename = `ncr-evidence-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+  const document = await prisma.document.create({
+    data: {
+      projectId,
+      documentType: 'ncr_evidence',
+      category: 'ncr_evidence',
+      filename,
+      fileUrl: `/uploads/documents/${filename}`,
+      uploadedById: userId,
+    },
+  });
+
+  return prisma.nCREvidence.create({
+    data: {
+      ncrId,
+      documentId: document.id,
+      evidenceType: 'photo',
+    },
+  });
+}
+
 describe('NCR API', () => {
   let authToken: string;
   let userId: string;
@@ -1177,7 +1199,57 @@ describe('NCR Workflow', () => {
     expect(res.body.ncr.status).toBe('rectification');
   });
 
+  it('should reject rectification when no evidence has been uploaded', async () => {
+    const ncrRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: 'Rectification should require evidence',
+        category: 'Workmanship',
+        severity: 'minor',
+        responsibleUserId: userId,
+      });
+    const ncrId = ncrRes.body.ncr.id as string;
+
+    await request(app)
+      .post(`/api/ncrs/${ncrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rootCauseCategory: 'Method',
+        rootCauseDescription: 'Incorrect procedure followed',
+        proposedCorrectiveAction: 'Retrain workers on correct method',
+      });
+
+    await request(app)
+      .post(`/api/ncrs/${ncrId}/qm-review`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        action: 'accept',
+        comments: 'Response is acceptable',
+      });
+
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/rectify`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rectificationNotes: 'Work has been rectified',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain(
+      'Please upload at least one piece of evidence before submitting for verification',
+    );
+    expect(res.body.error.details).toEqual({ evidenceCount: 0 });
+
+    const ncr = await prisma.nCR.findUniqueOrThrow({ where: { id: ncrId } });
+    expect(ncr.status).toBe('rectification');
+    expect(ncr.rectificationSubmittedAt).toBeNull();
+  });
+
   it('should submit rectification', async () => {
+    await createNcrEvidence(projectId, userId, workflowNcrId);
+
     const res = await request(app)
       .post(`/api/ncrs/${workflowNcrId}/rectify`)
       .set('Authorization', `Bearer ${authToken}`)
@@ -1405,6 +1477,8 @@ describe('Major NCR QM Approval', () => {
       .post(`/api/ncrs/${majorNcrId}/qm-review`)
       .set('Authorization', `Bearer ${authToken}`)
       .send({ action: 'accept' });
+
+    await createNcrEvidence(projectId, userId, majorNcrId);
 
     await request(app)
       .post(`/api/ncrs/${majorNcrId}/rectify`)

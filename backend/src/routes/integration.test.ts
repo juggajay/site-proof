@@ -188,7 +188,21 @@ describe('Full Workflow Integration', () => {
     expect(reviewRes.status).toBe(200);
     expect(reviewRes.body.ncr.status).toBe('rectification');
 
-    // 5. Submit rectification
+    // 5. Upload evidence before submitting rectification
+    const evidenceFilename = `integration-ncr-evidence-${Date.now()}.jpg`;
+    const evidenceRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/evidence`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        evidenceType: 'photo',
+        filename: evidenceFilename,
+        fileUrl: `/uploads/documents/${evidenceFilename}`,
+        mimeType: 'image/jpeg',
+      });
+
+    expect(evidenceRes.status).toBe(201);
+
+    // 6. Submit rectification
     const rectifyRes = await request(app)
       .post(`/api/ncrs/${ncrId}/rectify`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -199,7 +213,7 @@ describe('Full Workflow Integration', () => {
     expect(rectifyRes.status).toBe(200);
     expect(rectifyRes.body.ncr.status).toBe('verification');
 
-    // 6. Close NCR
+    // 7. Close NCR
     const closeRes = await request(app)
       .post(`/api/ncrs/${ncrId}/close`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -211,7 +225,7 @@ describe('Full Workflow Integration', () => {
     expect(closeRes.status).toBe(200);
     expect(closeRes.body.ncr.status).toBe('closed');
 
-    // 7. Verify NCR in list
+    // 8. Verify NCR in list
     const listRes = await request(app)
       .get(`/api/ncrs?projectId=${projectId}`)
       .set('Authorization', `Bearer ${adminToken}`);

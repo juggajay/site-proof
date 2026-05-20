@@ -314,6 +314,11 @@ ncrWorkflowRouter.post(
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
+      include: {
+        ncrEvidence: {
+          select: { id: true },
+        },
+      },
     });
 
     if (!ncr) {
@@ -328,6 +333,13 @@ ncrWorkflowRouter.post(
 
     if (ncr.status !== 'investigating' && ncr.status !== 'rectification') {
       throw AppError.badRequest('NCR is not ready for rectification');
+    }
+
+    if (ncr.ncrEvidence.length === 0) {
+      throw AppError.badRequest(
+        'Please upload at least one piece of evidence before submitting for verification',
+        { evidenceCount: 0 },
+      );
     }
 
     const updatedNcr = await prisma.nCR.update({
