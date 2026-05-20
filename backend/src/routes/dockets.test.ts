@@ -1248,6 +1248,85 @@ describe('Dockets API', () => {
       }
     });
 
+    it('should not auto-populate a submitted diary when approving a docket', async () => {
+      const date = new Date(Date.now() + 1_036_800_000);
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date,
+          status: 'pending_approval',
+          submittedAt: new Date(),
+        },
+      });
+      const diary = await prisma.dailyDiary.create({
+        data: {
+          projectId,
+          date,
+          status: 'submitted',
+          submittedAt: new Date(),
+          submittedById: userId,
+        },
+      });
+      const labour = await prisma.docketLabour.create({
+        data: {
+          docketId: docket.id,
+          employeeId,
+          startTime: '06:30',
+          finishTime: '14:30',
+          submittedHours: 8,
+          hourlyRate: 45.5,
+          submittedCost: 364,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 8,
+            },
+          },
+        },
+      });
+      const plantEntry = await prisma.docketPlant.create({
+        data: {
+          docketId: docket.id,
+          plantId,
+          hoursOperated: 3,
+          hourlyRate: 150,
+          submittedCost: 450,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 3,
+            },
+          },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/dockets/${docket.id}/approve`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            foremanNotes: 'Approve without mutating submitted diary',
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.docket.status).toBe('approved');
+        await expect(prisma.diaryPersonnel.count({ where: { diaryId: diary.id } })).resolves.toBe(
+          0,
+        );
+        await expect(prisma.diaryPlant.count({ where: { diaryId: diary.id } })).resolves.toBe(0);
+      } finally {
+        await prisma.diaryPersonnel.deleteMany({ where: { diaryId: diary.id } });
+        await prisma.diaryPlant.deleteMany({ where: { diaryId: diary.id } });
+        await prisma.docketLabourLot.deleteMany({ where: { docketLabourId: labour.id } });
+        await prisma.docketPlantLot.deleteMany({ where: { docketPlantId: plantEntry.id } });
+        await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
+        await prisma.docketPlant.deleteMany({ where: { docketId: docket.id } });
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+        await prisma.dailyDiary.delete({ where: { id: diary.id } }).catch(() => {});
+      }
+    });
+
     it('should reject approving non-pending docket', async () => {
       const res = await request(app)
         .post(`/api/dockets/${submittableDocketId}/approve`)
