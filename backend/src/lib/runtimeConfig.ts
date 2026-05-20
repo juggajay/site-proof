@@ -170,11 +170,13 @@ function assertProductionStorageConfig(): void {
 
   if (!hasAnySupabaseValue) {
     if (isExplicitlyEnabled(process.env.ALLOW_LOCAL_FILE_STORAGE)) {
-      return;
+      throw new Error(
+        'FATAL: ALLOW_LOCAL_FILE_STORAGE=true is not allowed in production. Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY for durable file storage.',
+      );
     }
 
     throw new Error(
-      'FATAL: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for production file storage unless ALLOW_LOCAL_FILE_STORAGE=true is set',
+      'FATAL: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for production file storage',
     );
   }
 
