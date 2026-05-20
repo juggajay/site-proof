@@ -170,6 +170,22 @@ ncrWorkflowRouter.post(
       },
     });
 
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_STATUS_CHANGED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        status: { from: ncr.status, to: updatedNcr.status },
+        rootCauseCategoryPresent: Boolean(rootCauseCategory),
+        rootCauseDescriptionPresent: Boolean(rootCauseDescription),
+        proposedCorrectiveActionPresent: Boolean(proposedCorrectiveAction),
+      },
+      req,
+    });
+
     res.json({ ncr: updatedNcr });
   }),
 );
@@ -251,6 +267,21 @@ ncrWorkflowRouter.post(
         });
       }
 
+      await createAuditLog({
+        projectId: ncr.projectId,
+        userId: user.userId,
+        entityType: 'ncr',
+        entityId: ncr.id,
+        action: AuditAction.NCR_STATUS_CHANGED,
+        changes: {
+          ncrNumber: ncr.ncrNumber,
+          status: { from: ncr.status, to: updatedNcr.status },
+          qmReviewAction: 'accept',
+          commentsPresent: Boolean(comments),
+        },
+        req,
+      });
+
       res.json({ ncr: updatedNcr, message: 'Response accepted, NCR proceeds to rectification' });
     } else {
       // Request revision - send back to responsible party
@@ -290,6 +321,23 @@ ncrWorkflowRouter.post(
           },
         });
       }
+
+      await createAuditLog({
+        projectId: ncr.projectId,
+        userId: user.userId,
+        entityType: 'ncr',
+        entityId: ncr.id,
+        action: AuditAction.NCR_STATUS_CHANGED,
+        changes: {
+          ncrNumber: ncr.ncrNumber,
+          status: { from: ncr.status, to: updatedNcr.status },
+          qmReviewAction: 'request_revision',
+          commentsPresent: Boolean(comments),
+          revisionRequested: true,
+          revisionCount: updatedNcr.revisionCount,
+        },
+        req,
+      });
 
       res.json({
         ncr: updatedNcr,
@@ -350,6 +398,21 @@ ncrWorkflowRouter.post(
         rectificationNotes,
         rectificationSubmittedAt: new Date(),
       },
+    });
+
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_STATUS_CHANGED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        status: { from: ncr.status, to: updatedNcr.status },
+        rectificationNotesPresent: Boolean(rectificationNotes),
+        evidenceCount: ncr.ncrEvidence.length,
+      },
+      req,
     });
 
     res.json({ ncr: updatedNcr });
@@ -433,6 +496,22 @@ ncrWorkflowRouter.post(
         },
       });
     }
+
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_STATUS_CHANGED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        status: { from: ncr.status, to: updatedNcr.status },
+        feedbackPresent: Boolean(feedback),
+        revisionRequested: true,
+        revisionCount: updatedNcr.revisionCount,
+      },
+      req,
+    });
 
     res.json({
       ncr: updatedNcr,

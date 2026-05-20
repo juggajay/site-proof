@@ -1214,6 +1214,24 @@ describe('NCR Workflow', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ncr.status).toBe('investigating');
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: workflowNcrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      status: { from: 'open', to: 'investigating' },
+      rootCauseCategoryPresent: true,
+      rootCauseDescriptionPresent: true,
+      proposedCorrectiveActionPresent: true,
+    });
   });
 
   it('should reject response when NCR not in open status', async () => {
@@ -1242,6 +1260,23 @@ describe('NCR Workflow', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ncr.status).toBe('rectification');
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: workflowNcrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      status: { from: 'investigating', to: 'rectification' },
+      qmReviewAction: 'accept',
+      commentsPresent: true,
+    });
   });
 
   it('should reject rectification when no evidence has been uploaded', async () => {
@@ -1304,6 +1339,89 @@ describe('NCR Workflow', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ncr.status).toBe('verification');
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: workflowNcrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      status: { from: 'rectification', to: 'verification' },
+      rectificationNotesPresent: true,
+      evidenceCount: 1,
+    });
+  });
+
+  it('should reject rectification and write an audit log', async () => {
+    const ncrRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: 'Rectification rejection audit NCR',
+        category: 'Workmanship',
+        severity: 'minor',
+        responsibleUserId: userId,
+      });
+    const ncrId = ncrRes.body.ncr.id as string;
+
+    await request(app)
+      .post(`/api/ncrs/${ncrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rootCauseCategory: 'Method',
+        rootCauseDescription: 'Incorrect procedure followed',
+        proposedCorrectiveAction: 'Retrain workers on correct method',
+      });
+
+    await request(app)
+      .post(`/api/ncrs/${ncrId}/qm-review`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        action: 'accept',
+        comments: 'Response is acceptable',
+      });
+
+    await createNcrEvidence(projectId, userId, ncrId);
+
+    await request(app)
+      .post(`/api/ncrs/${ncrId}/rectify`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rectificationNotes: 'Work has been rectified',
+      });
+
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/reject-rectification`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        feedback: 'Evidence does not prove the corrective action is complete',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ncr.status).toBe('rectification');
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: ncrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      status: { from: 'verification', to: 'rectification' },
+      feedbackPresent: true,
+    });
   });
 
   it('should close NCR', async () => {
@@ -1467,6 +1585,24 @@ describe('NCR QM Review - Request Revision', () => {
     expect(res.status).toBe(200);
     expect(res.body.ncr.status).toBe('open');
     expect(res.body.ncr.revisionRequested).toBe(true);
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: revisionNcrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      status: { from: 'investigating', to: 'open' },
+      qmReviewAction: 'request_revision',
+      commentsPresent: true,
+      revisionRequested: true,
+    });
   });
 
   it('should reject invalid action', async () => {
