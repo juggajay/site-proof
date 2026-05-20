@@ -123,6 +123,13 @@ describe('Subcontractors API', () => {
       expect(res.body.subcontractor.companyName).toBe('Test Subcontractor Co');
       expect(res.body.subcontractor.status).toBe('pending_approval');
       subcontractorCompanyId = res.body.subcontractor.id;
+
+      const storedInvitation = await prisma.subcontractorCompany.findUnique({
+        where: { id: subcontractorCompanyId },
+        select: { invitationExpiresAt: true },
+      });
+      expect(storedInvitation?.invitationExpiresAt).toBeInstanceOf(Date);
+      expect(storedInvitation!.invitationExpiresAt!.getTime()).toBeGreaterThan(Date.now());
     });
 
     it('should reject duplicate company name for same project', async () => {
@@ -670,6 +677,7 @@ describe('Subcontractors API', () => {
       expect(res.status).toBe(200);
       expect(res.body.invitation).toBeDefined();
       expect(res.body.invitation.companyName).toBe('Test Subcontractor Co');
+      expect(res.body.invitation.expiresAt).toBeDefined();
     });
 
     it('should return 404 for non-existent invitation', async () => {
@@ -696,6 +704,28 @@ describe('Subcontractors API', () => {
         expect(JSON.stringify(res.body)).not.toContain(removedSub.companyName);
       } finally {
         await prisma.subcontractorCompany.delete({ where: { id: removedSub.id } }).catch(() => {});
+      }
+    });
+
+    it('should not disclose expired invitation details publicly', async () => {
+      const expiredSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Expired Public Invite ${Date.now()}`,
+          primaryContactName: 'Expired Invite',
+          primaryContactEmail: `expired-public-${Date.now()}@example.com`,
+          status: 'pending_approval',
+          invitationExpiresAt: new Date(Date.now() - 60_000),
+        },
+      });
+
+      try {
+        const res = await request(app).get(`/api/subcontractors/invitation/${expiredSub.id}`);
+
+        expect(res.status).toBe(404);
+        expect(JSON.stringify(res.body)).not.toContain(expiredSub.companyName);
+      } finally {
+        await prisma.subcontractorCompany.delete({ where: { id: expiredSub.id } }).catch(() => {});
       }
     });
   });
@@ -1281,6 +1311,37 @@ describe('Subcontractors API', () => {
       }
     });
 
+    it('should reject new-account acceptance for expired invitations', async () => {
+      const expiredEmail = `expired-new-invite-${Date.now()}@example.com`;
+      const expiredSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Expired New Account Invite ${Date.now()}`,
+          primaryContactName: 'Expired New Invite User',
+          primaryContactEmail: expiredEmail,
+          status: 'pending_approval',
+          invitationExpiresAt: new Date(Date.now() - 60_000),
+        },
+      });
+
+      try {
+        const res = await request(app).post('/api/auth/register-and-accept-invitation').send({
+          email: expiredEmail,
+          password: 'SecureP@ssword123!',
+          fullName: 'Expired New Invite User',
+          invitationId: expiredSub.id,
+          tosAccepted: true,
+        });
+
+        expect(res.status).toBe(404);
+
+        const user = await prisma.user.findUnique({ where: { email: expiredEmail } });
+        expect(user).toBeNull();
+      } finally {
+        await prisma.subcontractorCompany.delete({ where: { id: expiredSub.id } }).catch(() => {});
+      }
+    });
+
     it('should reject already-approved invitations without linking or creating users', async () => {
       const approvedEmail = `approved-invite-${Date.now()}@example.com`;
       const approvedNewAccountEmail = `approved-new-invite-${Date.now()}@example.com`;
@@ -1345,6 +1406,52 @@ describe('Subcontractors API', () => {
         await prisma.subcontractorCompany
           .delete({ where: { id: approvedNewAccountSub.id } })
           .catch(() => {});
+      }
+    });
+
+    it('should reject logged-in acceptance for expired invitations without linking the user', async () => {
+      const expiredEmail = `expired-existing-invite-${Date.now()}@example.com`;
+      const expiredSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Expired Existing Invite ${Date.now()}`,
+          primaryContactName: 'Expired Existing Invite User',
+          primaryContactEmail: expiredEmail,
+          status: 'pending_approval',
+          invitationExpiresAt: new Date(Date.now() - 60_000),
+        },
+      });
+      const userRes = await request(app).post('/api/auth/register').send({
+        email: expiredEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Expired Existing Invite User',
+        tosAccepted: true,
+      });
+      const tempUserId = userRes.body.user.id as string;
+
+      try {
+        const res = await request(app)
+          .post(`/api/subcontractors/invitation/${expiredSub.id}/accept`)
+          .set('Authorization', `Bearer ${userRes.body.token}`);
+
+        expect(res.status).toBe(404);
+
+        const link = await prisma.subcontractorUser.findFirst({
+          where: {
+            subcontractorCompanyId: expiredSub.id,
+            userId: tempUserId,
+          },
+        });
+        expect(link).toBeNull();
+
+        const unchangedSub = await prisma.subcontractorCompany.findUnique({
+          where: { id: expiredSub.id },
+          select: { status: true },
+        });
+        expect(unchangedSub?.status).toBe('pending_approval');
+      } finally {
+        await cleanupTestUser(tempUserId);
+        await prisma.subcontractorCompany.delete({ where: { id: expiredSub.id } }).catch(() => {});
       }
     });
 

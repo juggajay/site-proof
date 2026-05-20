@@ -40,6 +40,7 @@ import {
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../lib/supabase.js';
+import { isSubcontractorInvitationExpired } from '../lib/subcontractorInvitations.js';
 
 const AVATAR_STORAGE_PREFIX = 'avatars';
 const GENERIC_RESEND_VERIFICATION_MESSAGE =
@@ -2117,7 +2118,11 @@ authRouter.post(
       });
 
       if (!invitedSubcontractor) {
-        throw AppError.notFound('Invitation not found or expired');
+        throw AppError.notFound('Invitation');
+      }
+
+      if (isSubcontractorInvitationExpired(invitedSubcontractor)) {
+        throw AppError.notFound('Invitation');
       }
 
       if (invitedSubcontractor.status !== 'pending_approval') {

@@ -8,6 +8,10 @@ import { sendSubcontractorInvitationEmail } from '../lib/email.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { buildFrontendUrl } from '../lib/runtimeConfig.js';
 import { logError } from '../lib/serverLogger.js';
+import {
+  getSubcontractorInvitationExpiresAt,
+  isSubcontractorInvitationExpired,
+} from '../lib/subcontractorInvitations.js';
 
 // Feature #483: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
@@ -324,6 +328,10 @@ subcontractorsRouter.get(
       throw AppError.notFound('Invitation');
     }
 
+    if (isSubcontractorInvitationExpired(subcontractor)) {
+      throw AppError.notFound('Invitation');
+    }
+
     // Get the head contractor company name
     const headContractor = await prisma.company.findUnique({
       where: { id: subcontractor.project.companyId },
@@ -339,6 +347,7 @@ subcontractorsRouter.get(
         primaryContactEmail: subcontractor.primaryContactEmail,
         primaryContactName: subcontractor.primaryContactName,
         status: subcontractor.status,
+        expiresAt: subcontractor.invitationExpiresAt?.toISOString() ?? null,
       },
     });
   }),
@@ -551,6 +560,7 @@ subcontractorsRouter.post(
         primaryContactEmail: finalContactEmail,
         primaryContactPhone: finalContactPhone,
         status: 'pending_approval',
+        invitationExpiresAt: getSubcontractorInvitationExpiresAt(),
       },
     });
 
@@ -639,6 +649,10 @@ subcontractorsRouter.post(
     }
 
     if (BLOCKED_SUBCONTRACTOR_STATUSES.has(subcontractor.status)) {
+      throw AppError.notFound('Invitation');
+    }
+
+    if (isSubcontractorInvitationExpired(subcontractor)) {
       throw AppError.notFound('Invitation');
     }
 
