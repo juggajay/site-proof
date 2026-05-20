@@ -6,6 +6,7 @@ import { type AuthUser } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import {
   NCR_EVIDENCE_MUTATION_ROLES,
   parseNcrRouteParam,
@@ -212,6 +213,20 @@ ncrEvidenceRouter.post(
       },
     });
 
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr_evidence',
+      entityId: evidence.id,
+      action: AuditAction.NCR_EVIDENCE_ADDED,
+      changes: {
+        ncrId: id,
+        documentId: finalDocumentId!,
+        evidenceType: evidence.evidenceType,
+      },
+      req,
+    });
+
     res.status(201).json({
       evidence,
       message: 'Evidence added to NCR successfully',
@@ -302,6 +317,8 @@ ncrEvidenceRouter.delete(
       where: { id: evidenceId },
       select: {
         ncrId: true,
+        documentId: true,
+        evidenceType: true,
         document: { select: { uploadedById: true } },
       },
     });
@@ -319,6 +336,20 @@ ncrEvidenceRouter.delete(
 
     await prisma.nCREvidence.delete({
       where: { id: evidenceId },
+    });
+
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr_evidence',
+      entityId: evidenceId,
+      action: AuditAction.NCR_EVIDENCE_REMOVED,
+      changes: {
+        ncrId: id,
+        documentId: evidence.documentId,
+        evidenceType: evidence.evidenceType,
+      },
+      req,
     });
 
     res.json({ message: 'Evidence removed successfully' });

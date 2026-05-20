@@ -2309,6 +2309,86 @@ describe('NCR Access Hardening', () => {
     expect(res.body.evidence.document.fileUrl).toBe(fileUrl);
   });
 
+  it('should write audit logs when adding and removing NCR evidence', async () => {
+    await prisma.auditLog.deleteMany({
+      where: {
+        projectId,
+        action: {
+          in: [AuditAction.NCR_EVIDENCE_ADDED, AuditAction.NCR_EVIDENCE_REMOVED],
+        },
+      },
+    });
+
+    const filename = `audited-ncr-evidence-${Date.now()}.jpg`;
+    const fileUrl = `/uploads/documents/${filename}`;
+    const addRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/evidence`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        evidenceType: 'photo',
+        filename,
+        fileUrl,
+        mimeType: 'image/jpeg',
+        caption: 'Caption should stay out of the audit log',
+      });
+
+    expect(addRes.status).toBe(201);
+
+    const evidenceId = addRes.body.evidence.id as string;
+    const documentId = addRes.body.evidence.document.id as string;
+
+    const addedAuditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        entityType: 'ncr_evidence',
+        entityId: evidenceId,
+        action: AuditAction.NCR_EVIDENCE_ADDED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(addedAuditLog).not.toBeNull();
+    if (!addedAuditLog) {
+      throw new Error('Expected NCR evidence added audit log');
+    }
+    expect(addedAuditLog.userId).toBe(userId);
+    const addedChanges = parseAuditLogChanges(addedAuditLog.changes) as Record<string, unknown>;
+    expect(addedChanges).toEqual({
+      ncrId,
+      documentId,
+      evidenceType: 'photo',
+    });
+    expect(JSON.stringify(addedChanges)).not.toContain(filename);
+    expect(JSON.stringify(addedChanges)).not.toContain(fileUrl);
+    expect(JSON.stringify(addedChanges)).not.toContain('Caption should stay out');
+
+    const deleteRes = await request(app)
+      .delete(`/api/ncrs/${ncrId}/evidence/${evidenceId}`)
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(deleteRes.status).toBe(200);
+
+    const removedAuditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        entityType: 'ncr_evidence',
+        entityId: evidenceId,
+        action: AuditAction.NCR_EVIDENCE_REMOVED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(removedAuditLog).not.toBeNull();
+    if (!removedAuditLog) {
+      throw new Error('Expected NCR evidence removed audit log');
+    }
+    expect(removedAuditLog.userId).toBe(userId);
+    const removedChanges = parseAuditLogChanges(removedAuditLog.changes) as Record<string, unknown>;
+    expect(removedChanges).toEqual({
+      ncrId,
+      documentId,
+      evidenceType: 'photo',
+    });
+  });
+
   it('should reject evidence file URLs outside stored document uploads', async () => {
     const filename = `comment-upload-reference-${Date.now()}.jpg`;
 
