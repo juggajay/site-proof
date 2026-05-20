@@ -34,25 +34,29 @@ async function clearUserAuditLogs(userId: string) {
   });
 }
 
-async function expectLatestOAuthLoginAudit(userId: string) {
+async function expectLatestOAuthAudit(userId: string, action: string) {
   const auditLog = await prisma.auditLog.findFirst({
     where: {
       entityType: 'user',
       entityId: userId,
-      action: AuditAction.USER_LOGIN,
+      action,
     },
     orderBy: { createdAt: 'desc' },
   });
 
   expect(auditLog).toBeDefined();
   if (!auditLog) {
-    throw new Error(`Expected OAuth login audit log for user ${userId}`);
+    throw new Error(`Expected ${action} OAuth audit log for user ${userId}`);
   }
 
   return {
     auditLog,
     changes: parseAuditLogChanges(auditLog.changes) as Record<string, unknown>,
   };
+}
+
+async function expectLatestOAuthLoginAudit(userId: string) {
+  return expectLatestOAuthAudit(userId, AuditAction.USER_LOGIN);
 }
 
 async function createStoredOAuthState(params: {
@@ -397,6 +401,21 @@ describe('OAuth Routes', () => {
         });
         expect(storedCode).toBeDefined();
 
+        const callbackUser = await prisma.user.findUnique({ where: { email } });
+        expect(callbackUser).toBeDefined();
+
+        const { auditLog: registrationAuditLog, changes: registrationChanges } =
+          await expectLatestOAuthAudit(callbackUser!.id, AuditAction.USER_REGISTERED);
+        expect(registrationAuditLog.userId).toBe(callbackUser!.id);
+        expect(registrationChanges).toEqual({
+          method: 'oauth',
+          provider: 'google',
+          flow: 'oauth_callback',
+          emailVerified: true,
+        });
+        expect(JSON.stringify(registrationChanges)).not.toContain(callbackCode!);
+        expect(JSON.stringify(registrationChanges)).not.toMatch(/token|secret|credential|code/i);
+
         const exchangeRes = await request(app)
           .post('/api/auth/oauth/exchange')
           .send({ code: callbackCode });
@@ -404,6 +423,17 @@ describe('OAuth Routes', () => {
         expect(exchangeRes.status).toBe(200);
         expect(exchangeRes.body.token).toBeDefined();
         expect(exchangeRes.body.user.email).toBe(email);
+
+        const { auditLog: loginAuditLog, changes: loginChanges } =
+          await expectLatestOAuthLoginAudit(callbackUser!.id);
+        expect(loginAuditLog.userId).toBe(callbackUser!.id);
+        expect(loginChanges).toEqual({
+          method: 'oauth',
+          provider: 'google',
+          flow: 'oauth_callback',
+        });
+        expect(JSON.stringify(loginChanges)).not.toContain(callbackCode!);
+        expect(JSON.stringify(loginChanges)).not.toMatch(/token|secret|credential|code/i);
 
         const reuseRes = await request(app)
           .post('/api/auth/oauth/exchange')
@@ -667,6 +697,18 @@ describe('OAuth Routes', () => {
       });
       expect(JSON.stringify(changes)).not.toContain(credential);
       expect(JSON.stringify(changes)).not.toMatch(/token|secret|credential|code/i);
+
+      const { auditLog: registrationAuditLog, changes: registrationChanges } =
+        await expectLatestOAuthAudit(createdUserId!, AuditAction.USER_REGISTERED);
+      expect(registrationAuditLog.userId).toBe(createdUserId);
+      expect(registrationChanges).toEqual({
+        method: 'oauth',
+        provider: 'google',
+        flow: 'google_identity',
+        emailVerified: true,
+      });
+      expect(JSON.stringify(registrationChanges)).not.toContain(credential);
+      expect(JSON.stringify(registrationChanges)).not.toMatch(/token|secret|credential|code/i);
     });
 
     it('should update existing user with OAuth provider info', async () => {
