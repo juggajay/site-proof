@@ -1202,6 +1202,67 @@ describe('NCR Workflow', () => {
     expect(afterNcr.lessonsLearned).toBe(beforeNcr.lessonsLearned);
   });
 
+  it('should audit client notification with metadata only', async () => {
+    const sensitiveDescription = `Client notification leak sentinel ${Date.now()}`;
+    const sensitiveMessage = `Private client context ${Date.now()}`;
+    const sensitiveRecipient = `client-${Date.now()}@example.com`;
+
+    const createRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: sensitiveDescription,
+        category: 'Workmanship',
+        severity: 'major',
+        responsibleUserId: userId,
+      });
+
+    expect(createRes.status).toBe(201);
+    const ncrId = createRes.body.ncr.id as string;
+
+    const notifyRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/notify-client`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .set('User-Agent', 'ncr-client-notify-audit-test')
+      .send({
+        recipientEmail: sensitiveRecipient,
+        additionalMessage: sensitiveMessage,
+      });
+
+    expect(notifyRes.status).toBe(200);
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: ncrId,
+        action: AuditAction.NCR_CLIENT_NOTIFIED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    expect(auditLog).toBeTruthy();
+    expect(auditLog!.ipAddress).toBeTruthy();
+    expect(auditLog!.userAgent).toBe('ncr-client-notify-audit-test');
+
+    const changes = parseAuditLogChanges(auditLog!.changes) as Record<string, unknown>;
+    expect(changes).toMatchObject({
+      ncrNumber: createRes.body.ncr.ncrNumber,
+      recipientEmailPresent: true,
+      additionalMessagePresent: true,
+      affectedLotCount: 0,
+      severity: 'major',
+    });
+
+    const serializedChanges = JSON.stringify(changes);
+    expect(serializedChanges).not.toContain(sensitiveRecipient);
+    expect(serializedChanges).not.toContain(sensitiveMessage);
+    expect(serializedChanges).not.toContain(sensitiveDescription);
+    expect(serializedChanges).not.toContain('notificationPackage');
+  });
+
   it('should submit response to NCR', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${workflowNcrId}/respond`)
