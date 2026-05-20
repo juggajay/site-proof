@@ -6,6 +6,7 @@ import { sendNotificationIfEnabled } from './notifications.js';
 import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pagination.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { activeSubcontractorCompanyWhere, checkProjectAccess } from '../lib/projectAccess.js';
 import { requireEditableDiaryForWrite } from './diary/diaryAccess.js';
 import type { Prisma } from '@prisma/client';
@@ -1032,6 +1033,21 @@ docketsRouter.post(
       },
     });
 
+    await createAuditLog({
+      projectId: docket.projectId,
+      userId: user.id,
+      entityType: 'daily_docket',
+      entityId: docket.id,
+      action: AuditAction.DOCKET_SUBMITTED,
+      changes: {
+        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        status: { from: docket.status, to: updatedDocket.status },
+        subcontractorCompanyId: docket.subcontractorCompanyId,
+        subcontractorCompanyName: docket.subcontractorCompany.companyName,
+      },
+      req,
+    });
+
     // Feature #926 - Notify foremen and approvers about pending docket
     // Get all project users who can approve dockets (foreman, site_manager, project_manager, admin, owner)
     const projectUsers = await prisma.projectUser.findMany({
@@ -1165,6 +1181,25 @@ docketsRouter.post(
           },
         },
       },
+    });
+
+    await createAuditLog({
+      projectId: docket.projectId,
+      userId: user.id,
+      entityType: 'daily_docket',
+      entityId: docket.id,
+      action: AuditAction.DOCKET_APPROVED,
+      changes: {
+        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        status: { from: docket.status, to: updatedDocket.status },
+        foremanNotes,
+        adjustmentReason,
+        approvedTotals: {
+          labourHours: labourApproved,
+          plantHours: plantApproved,
+        },
+      },
+      req,
     });
 
     // === DIARY AUTO-POPULATION ===
@@ -1362,6 +1397,20 @@ docketsRouter.post(
         approvedAt: new Date(),
         foremanNotes: reason,
       },
+    });
+
+    await createAuditLog({
+      projectId: docket.projectId,
+      userId: user.id,
+      entityType: 'daily_docket',
+      entityId: docket.id,
+      action: AuditAction.DOCKET_REJECTED,
+      changes: {
+        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        status: { from: docket.status, to: updatedDocket.status },
+        reason,
+      },
+      req,
     });
 
     // Feature #928 - Notify subcontractor users about docket rejection

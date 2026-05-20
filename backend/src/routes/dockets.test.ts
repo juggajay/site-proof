@@ -1103,6 +1103,20 @@ describe('Dockets API', () => {
           },
         });
         expect(pendingNotification).toBeNull();
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId,
+            userId: subcontractorUserId,
+            entityType: 'daily_docket',
+            entityId: submittableDocketId,
+            action: 'docket_submitted',
+          },
+        });
+        expect(auditLog).toBeTruthy();
+        expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+          status: { from: 'draft', to: 'pending_approval' },
+        });
       } finally {
         await prisma.projectUser.deleteMany({ where: { userId: pendingUserId } });
         await prisma.emailVerificationToken.deleteMany({ where: { userId: pendingUserId } });
@@ -1139,6 +1153,21 @@ describe('Dockets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.docket.status).toBe('approved');
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'daily_docket',
+          entityId: submittableDocketId,
+          action: 'docket_approved',
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+        status: { from: 'pending_approval', to: 'approved' },
+        foremanNotes: 'Looks good',
+      });
     });
 
     it('should not auto-populate a locked draft diary when approving a docket', async () => {
@@ -1228,6 +1257,7 @@ describe('Dockets API', () => {
     });
 
     afterAll(async () => {
+      await prisma.auditLog.deleteMany({ where: { entityId: submittableDocketId } });
       await prisma.docketLabourLot.deleteMany({ where: { docketLabourId: labourId } });
       await prisma.docketLabour.deleteMany({ where: { docketId: submittableDocketId } });
       await prisma.dailyDocket.delete({ where: { id: submittableDocketId } }).catch(() => {});
@@ -1279,9 +1309,25 @@ describe('Dockets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.docket.status).toBe('rejected');
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'daily_docket',
+          entityId: rejectableDocketId,
+          action: 'docket_rejected',
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+        status: { from: 'pending_approval', to: 'rejected' },
+        reason: 'Hours do not match diary',
+      });
     });
 
     afterAll(async () => {
+      await prisma.auditLog.deleteMany({ where: { entityId: rejectableDocketId } });
       await prisma.docketLabourLot.deleteMany({
         where: { docketLabour: { docketId: rejectableDocketId } },
       });
