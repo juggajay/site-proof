@@ -4,6 +4,7 @@ import express from 'express';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 // Import subcontractors router
 import { subcontractorsRouter } from './subcontractors.js';
@@ -897,22 +898,42 @@ describe('Subcontractors API', () => {
     });
 
     it('should update portal access settings', async () => {
+      const portalAccess = {
+        lots: true,
+        itps: true,
+        holdPoints: false,
+        testResults: false,
+        ncrs: false,
+        documents: true,
+      };
+
       const res = await request(app)
         .patch(`/api/subcontractors/${subcontractorCompanyId}/portal-access`)
         .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          portalAccess: {
-            lots: true,
-            itps: true,
-            holdPoints: false,
-            testResults: false,
-            ncrs: false,
-            documents: true,
-          },
-        });
+        .send({ portalAccess });
 
       expect(res.status).toBe(200);
       expect(res.body.portalAccess).toBeDefined();
+      expect(res.body.portalAccess).toMatchObject(portalAccess);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'subcontractor',
+          entityId: subcontractorCompanyId,
+          action: AuditAction.SUBCONTRACTOR_PORTAL_ACCESS_UPDATED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog!.changes) as {
+        portalAccess: Record<string, boolean>;
+        companyName: string;
+      };
+      expect(changes.companyName).toBe('Test Subcontractor Co');
+      expect(changes.portalAccess).toMatchObject(portalAccess);
     });
 
     it('should reject invalid portal access values', async () => {
