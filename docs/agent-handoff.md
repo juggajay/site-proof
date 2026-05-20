@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `bd96e28 fix: fail closed on unsafe test database urls (#143)`
+  `fa0b78a fix: use explicit AU locale for dates (#145)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -191,6 +191,9 @@ merges closed that initial queue:
 - PR #92 formatted dashboard activity timestamps consistently.
 - PR #93 normalized the remaining frontend raw browser-locale date-time
   displays and added a production-readiness guard against regressions.
+- PR #145 added explicit `en-AU` locale arguments to the remaining live-source
+  no-arg `toLocaleDateString`, `toLocaleTimeString`, and `toLocaleString`
+  calls in frontend/backend source.
 - PR #94 refreshed this handoff after the first QA cleanup batch.
 - PR #95 stopped empty-date daily diary loads from logging noisy 404s.
 - PR #96 unmounted closed header dropdown contents so hidden notification and
@@ -205,6 +208,9 @@ Verification evidence now lives in CI and guardrail tests:
 - `frontend/e2e/productionReadiness.spec.ts` includes checks for retired
   branding, dashboard PDF generation, report timestamps, raw browser-locale
   date-time formatting, and several production readiness invariants.
+- Static source guard after PR #145:
+  `rg -n "toLocale(?:Date|Time|String)String\(\)" frontend/src backend/src`
+  returns no live-source matches.
 - PR #98 CI passed Backend, backend-tests, Frontend, frontend-build,
   frontend-e2e, and Vercel before merge.
 
@@ -214,7 +220,7 @@ historical. Do not treat their issue list as current without rechecking
 
 ### Paying-User Readiness Hardening
 
-Status: main source-audit gap list is largely closed in code through PR #143.
+Status: main source-audit gap list is largely closed in code through PR #145.
 
 After the first QA cleanup batch, Codex and Claude ran a paying-user readiness
 review focused on compliance trust scaffolding: audit logs, workflow state
@@ -288,7 +294,7 @@ Still not replaced by code fixes:
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
    Many findings from the 2026-05-19 and 2026-05-20 reports have been closed by
-   PRs #99-#143.
+   PRs #99-#145.
 
 ## Handoff Checklist For The Next Agent
 
