@@ -361,23 +361,65 @@ function App() {
               />
 
               {/* ITP */}
-              <Route path="/projects/:projectId/itp" element={<ITPPage />} />
+              <Route
+                path="/projects/:projectId/itp"
+                element={
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                    <ITPPage />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Hold Points */}
-              <Route path="/projects/:projectId/hold-points" element={<HoldPointsPage />} />
+              <Route
+                path="/projects/:projectId/hold-points"
+                element={
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                    <HoldPointsPage />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Test Results */}
-              <Route path="/projects/:projectId/tests" element={<TestResultsPage />} />
+              <Route
+                path="/projects/:projectId/tests"
+                element={
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                    <TestResultsPage />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* NCR */}
-              <Route path="/projects/:projectId/ncr" element={<NCRPage />} />
+              <Route
+                path="/projects/:projectId/ncr"
+                element={
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                    <NCRPage />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Daily Diary */}
-              <Route path="/projects/:projectId/diary" element={<DailyDiaryPage />} />
+              <Route
+                path="/projects/:projectId/diary"
+                element={
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                    <DailyDiaryPage />
+                  </RoleProtectedRoute>
+                }
+              />
               <Route path="/projects/:projectId/delays" element={<DelayRegisterPage />} />
 
               {/* Docket Approvals */}
-              <Route path="/projects/:projectId/dockets" element={<DocketApprovalsPage />} />
+              <Route
+                path="/projects/:projectId/dockets"
+                element={
+                  <RoleProtectedRoute allowedRoles={[...INTERNAL_ROLES, ...SUBCONTRACTOR_ROLES]}>
+                    <DocketApprovalsPage />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Progress Claims - Commercial roles only */}
               <Route
@@ -400,7 +442,14 @@ function App() {
               />
 
               {/* Documents */}
-              <Route path="/projects/:projectId/documents" element={<DocumentsPage />} />
+              <Route
+                path="/projects/:projectId/documents"
+                element={
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                    <DocumentsPage />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Drawings */}
               <Route
