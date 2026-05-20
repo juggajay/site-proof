@@ -23,6 +23,12 @@ Archived 2026-05-14 as part of the Batch 2 repo hygiene PR (`chore/archive-stale
 | `2026-02-02-state-based-test-filtering-design.md` | State-based test filtering design |
 | `foreman-mobile-handoff.md` | Foreman mobile handoff doc |
 
+### Superseded audit trackers
+
+| File | Subject |
+|------|---------|
+| `codebase-audit-report.md` | February 2026 codebase audit tracker; superseded by the May 2026 production readiness and agent handoff docs |
+
 ### Research briefs (Feb 2026)
 
 | File | Subject |

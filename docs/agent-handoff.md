@@ -88,8 +88,11 @@ Status: mostly closed.
 - Stale planning docs were archived under dated archive folders.
 - Applied one-off migration scripts and superseded docs were archived in the
   Batch 3a hygiene PR.
-- Protected items were intentionally left in place or deferred where Jay
-  decision was needed.
+- The stale February codebase audit tracker was archived at
+  `docs/archive/2026-05-repo-hygiene/codebase-audit-report.md` after the May
+  readiness and DeepSec hardening work made its top-level status misleading.
+- Remaining protected items were intentionally left in place or deferred where
+  Jay decision was needed.
 
 Relevant archive indexes:
 
