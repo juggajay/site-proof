@@ -383,6 +383,114 @@ describe('Webhooks API', () => {
     });
 
     describe('POST /api/webhooks', () => {
+      it('should audit webhook management changes without storing secrets', async () => {
+        let auditedWebhookId: string | undefined;
+
+        try {
+          const createRes = await request(app)
+            .post('/api/webhooks')
+            .set('Authorization', `Bearer ${authToken}`)
+            .set('User-Agent', 'webhook-audit-test')
+            .send({
+              url: 'https://example.com/webhook?token=secret-token&tenant=siteproof',
+              events: ['lot.created'],
+            });
+
+          expect(createRes.status).toBe(201);
+          auditedWebhookId = createRes.body.id;
+
+          const createAudit = await prisma.auditLog.findFirst({
+            where: {
+              userId,
+              entityType: 'webhook',
+              entityId: auditedWebhookId,
+              action: 'webhook_created',
+            },
+          });
+          expect(createAudit).toBeTruthy();
+          expect(createAudit?.userAgent).toBe('webhook-audit-test');
+          expect(createAudit?.changes ? JSON.parse(createAudit.changes) : null).toEqual({
+            url: 'https://example.com/webhook?token=[REDACTED]&tenant=[REDACTED]',
+            events: ['lot.created'],
+            enabled: true,
+          });
+
+          const updateRes = await request(app)
+            .patch(`/api/webhooks/${auditedWebhookId}`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({
+              url: 'https://updated.example.com/webhook?token=new-secret',
+              events: ['lot.updated'],
+              enabled: false,
+            });
+
+          expect(updateRes.status).toBe(200);
+
+          const updateAudit = await prisma.auditLog.findFirst({
+            where: {
+              userId,
+              entityType: 'webhook',
+              entityId: auditedWebhookId,
+              action: 'webhook_updated',
+            },
+          });
+          expect(updateAudit).toBeTruthy();
+          expect(updateAudit?.changes ? JSON.parse(updateAudit.changes) : null).toEqual({
+            url: {
+              from: 'https://example.com/webhook?token=[REDACTED]&tenant=[REDACTED]',
+              to: 'https://updated.example.com/webhook?token=[REDACTED]',
+            },
+            events: { from: ['lot.created'], to: ['lot.updated'] },
+            enabled: { from: true, to: false },
+          });
+
+          const regenerateRes = await request(app)
+            .post(`/api/webhooks/${auditedWebhookId}/regenerate-secret`)
+            .set('Authorization', `Bearer ${authToken}`);
+
+          expect(regenerateRes.status).toBe(200);
+
+          const regenerateAudit = await prisma.auditLog.findFirst({
+            where: {
+              userId,
+              entityType: 'webhook',
+              entityId: auditedWebhookId,
+              action: 'webhook_secret_regenerated',
+            },
+          });
+          expect(regenerateAudit).toBeTruthy();
+          expect(regenerateAudit?.changes ? JSON.parse(regenerateAudit.changes) : null).toEqual({
+            regenerated: true,
+          });
+
+          const deleteRes = await request(app)
+            .delete(`/api/webhooks/${auditedWebhookId}`)
+            .set('Authorization', `Bearer ${authToken}`);
+
+          expect(deleteRes.status).toBe(204);
+
+          const deleteAudit = await prisma.auditLog.findFirst({
+            where: {
+              userId,
+              entityType: 'webhook',
+              entityId: auditedWebhookId,
+              action: 'webhook_deleted',
+            },
+          });
+          expect(deleteAudit).toBeTruthy();
+          expect(deleteAudit?.changes ? JSON.parse(deleteAudit.changes) : null).toEqual({
+            url: 'https://updated.example.com/webhook?token=[REDACTED]',
+            events: ['lot.updated'],
+            enabled: false,
+          });
+        } finally {
+          if (auditedWebhookId) {
+            await prisma.auditLog.deleteMany({ where: { entityId: auditedWebhookId } });
+            await prisma.webhookConfig.deleteMany({ where: { id: auditedWebhookId } });
+          }
+        }
+      });
+
       it('should create a webhook configuration', async () => {
         const res = await request(app)
           .post('/api/webhooks')

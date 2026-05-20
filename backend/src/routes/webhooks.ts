@@ -8,6 +8,7 @@ import { requireScope } from './apiKeys.js';
 import crypto from 'crypto';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 import { prisma } from '../lib/prisma.js';
 import { decrypt, encrypt } from '../lib/encryption.js';
 import { sanitizeUrlValueForLog } from '../lib/logSanitization.js';
@@ -324,6 +325,38 @@ function toPublicWebhookConfig(config: WebhookConfig, includeSecret = false) {
   };
 }
 
+function getWebhookAuditSnapshot(config: Pick<WebhookConfig, 'url' | 'events' | 'enabled'>) {
+  return {
+    url: sanitizeWebhookUrlForLog(config.url),
+    events: config.events,
+    enabled: config.enabled,
+  };
+}
+
+function buildWebhookUpdateAuditChanges(
+  before: WebhookConfig,
+  after: WebhookConfig,
+): Record<string, unknown> {
+  const changes: Record<string, unknown> = {};
+
+  if (before.url !== after.url) {
+    changes.url = {
+      from: sanitizeWebhookUrlForLog(before.url),
+      to: sanitizeWebhookUrlForLog(after.url),
+    };
+  }
+
+  if (JSON.stringify(before.events) !== JSON.stringify(after.events)) {
+    changes.events = { from: before.events, to: after.events };
+  }
+
+  if (before.enabled !== after.enabled) {
+    changes.enabled = { from: before.enabled, to: after.enabled };
+  }
+
+  return changes;
+}
+
 async function getWebhookConfig(id: string): Promise<WebhookConfig | null> {
   const record = await prisma.webhookConfig.findUnique({ where: { id } });
   return record ? toWebhookConfig(record) : null;
@@ -537,6 +570,14 @@ router.post(
         },
       }),
     );
+    await createAuditLog({
+      userId: user.id,
+      entityType: 'webhook',
+      entityId: config.id,
+      action: AuditAction.WEBHOOK_CREATED,
+      changes: getWebhookAuditSnapshot(config),
+      req,
+    });
 
     res.status(201).json({
       id: config.id,
@@ -613,6 +654,17 @@ router.patch(
         data,
       }),
     );
+    const auditChanges = buildWebhookUpdateAuditChanges(config, updatedConfig);
+    if (Object.keys(auditChanges).length > 0) {
+      await createAuditLog({
+        userId: user.id,
+        entityType: 'webhook',
+        entityId: updatedConfig.id,
+        action: AuditAction.WEBHOOK_UPDATED,
+        changes: auditChanges,
+        req,
+      });
+    }
 
     res.json(toPublicWebhookConfig(updatedConfig));
   }),
@@ -636,6 +688,14 @@ router.delete(
     }
 
     await prisma.webhookConfig.delete({ where: { id } });
+    await createAuditLog({
+      userId: user.id,
+      entityType: 'webhook',
+      entityId: config.id,
+      action: AuditAction.WEBHOOK_DELETED,
+      changes: getWebhookAuditSnapshot(config),
+      req,
+    });
 
     res.status(204).send();
   }),
@@ -670,6 +730,14 @@ router.post(
     await prisma.webhookConfig.update({
       where: { id },
       data: { secret: encryptWebhookSecret(secret) },
+    });
+    await createAuditLog({
+      userId: user.id,
+      entityType: 'webhook',
+      entityId: record.id,
+      action: AuditAction.WEBHOOK_SECRET_REGENERATED,
+      changes: { regenerated: true },
+      req,
     });
 
     res.json({
