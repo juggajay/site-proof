@@ -22,7 +22,7 @@ import { companyRouter } from './company.js';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
-import { parseAuditLogChanges } from '../lib/auditLog.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
@@ -44,6 +44,27 @@ function listCompanyLogoFiles(prefix: string) {
   }
 
   return new Set(fs.readdirSync(companyLogoUploadDir).filter((name) => name.startsWith(prefix)));
+}
+
+async function expectLatestCompanyAuditLog(companyId: string, action: string) {
+  const auditLog = await prisma.auditLog.findFirst({
+    where: {
+      entityType: 'company',
+      entityId: companyId,
+      action,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  expect(auditLog).toBeDefined();
+  if (!auditLog) {
+    throw new Error(`Expected ${action} audit log for company ${companyId}`);
+  }
+
+  return {
+    auditLog,
+    changes: parseAuditLogChanges(auditLog.changes) as Record<string, unknown>,
+  };
 }
 
 describe('Company API', () => {
@@ -271,6 +292,17 @@ describe('Company API', () => {
       expect(filename).toMatch(new RegExp(`^company-logo-${companyId}-[0-9a-f-]{36}\\.png$`));
       expect(filename).not.toContain('.svg');
       expect(fs.existsSync(logoPath)).toBe(true);
+
+      const { auditLog, changes } = await expectLatestCompanyAuditLog(
+        companyId,
+        AuditAction.COMPANY_LOGO_UPDATED,
+      );
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({ changedFields: ['logoUrl'] });
+      expect(JSON.stringify(changes)).not.toContain(filename);
+      expect(JSON.stringify(changes)).not.toContain(res.body.logoUrl);
+      expect(JSON.stringify(changes)).not.toContain('Company Test');
+
       fs.unlinkSync(logoPath);
     });
 
@@ -371,6 +403,17 @@ describe('Company API', () => {
       expect(res.body.company.abn).toBe('98765432109');
       expect(res.body.company.address).toBe('456 Another St');
       expect(res.body.company.logoUrl).toBe('https://example.com/new-logo.png');
+
+      const { auditLog, changes } = await expectLatestCompanyAuditLog(
+        companyId,
+        AuditAction.COMPANY_UPDATED,
+      );
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({ changedFields: ['name', 'abn', 'address', 'logoUrl'] });
+      expect(JSON.stringify(changes)).not.toContain(res.body.company.name);
+      expect(JSON.stringify(changes)).not.toContain('98765432109');
+      expect(JSON.stringify(changes)).not.toContain('456 Another St');
+      expect(JSON.stringify(changes)).not.toContain('https://example.com/new-logo.png');
     });
 
     it('should reject empty company name', async () => {

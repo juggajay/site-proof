@@ -660,6 +660,15 @@ companyRouter.post(
       throw error;
     }
 
+    await createAuditLog({
+      userId: user.userId,
+      entityType: 'company',
+      entityId: companyId,
+      action: AuditAction.COMPANY_LOGO_UPDATED,
+      changes: { changedFields: ['logoUrl'] },
+      req,
+    });
+
     if (currentCompany.logoUrl) {
       try {
         await removeStoredCompanyLogo(currentCompany.logoUrl, companyId);
@@ -747,6 +756,18 @@ companyRouter.patch(
       } catch (error) {
         logWarn('Failed to delete previous company logo after PATCH:', error);
       }
+    }
+
+    const changedFields = Object.keys(updateData);
+    if (changedFields.length > 0) {
+      await createAuditLog({
+        userId: user.userId,
+        entityType: 'company',
+        entityId: companyId,
+        action: AuditAction.COMPANY_UPDATED,
+        changes: { changedFields },
+        req,
+      });
     }
 
     res.json({

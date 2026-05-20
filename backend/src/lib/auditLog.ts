@@ -132,6 +132,8 @@ export const AuditAction = {
   MFA_DISABLED: 'mfa_disabled',
   API_KEY_CREATED: 'api_key_created',
   API_KEY_REVOKED: 'api_key_revoked',
+  COMPANY_UPDATED: 'company_updated',
+  COMPANY_LOGO_UPDATED: 'company_logo_updated',
   COMPANY_MEMBER_LEFT: 'company_member_left',
   COMPANY_OWNERSHIP_TRANSFERRED: 'company_ownership_transferred',
   PROJECT_CREATED: 'project_created',
