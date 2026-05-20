@@ -1541,6 +1541,124 @@ describe('ITP Completion Attachments', () => {
     expect(afterCompletion).toEqual(beforeCompletion);
   });
 
+  it('should keep repeat verification idempotent for already verified completions', async () => {
+    const verifiedAt = new Date('2026-01-02T03:04:05.000Z');
+
+    try {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: userId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'verified',
+          verifiedAt,
+          verifiedById: userId,
+          verificationNotes: 'Original verification note',
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/verify`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.completion.verificationStatus).toBe('verified');
+      expect(res.body.completion.verifiedAt).toBe(verifiedAt.toISOString());
+
+      const completion = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: completionId },
+        select: {
+          verificationStatus: true,
+          verifiedAt: true,
+          verifiedById: true,
+          verificationNotes: true,
+        },
+      });
+
+      expect(completion.verificationStatus).toBe('verified');
+      expect(completion.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+      expect(completion.verifiedById).toBe(userId);
+      expect(completion.verificationNotes).toBe('Original verification note');
+    } finally {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'pending',
+          completedById: null,
+          completedAt: null,
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+    }
+  });
+
+  it('should reject only pending verification completions', async () => {
+    try {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: userId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'verified',
+          verifiedAt: new Date('2026-01-02T03:04:05.000Z'),
+          verifiedById: userId,
+          verificationNotes: 'Verified evidence',
+        },
+      });
+
+      const verifiedReject = await request(app)
+        .post(`/api/itp/completions/${completionId}/reject`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: 'Trying to reverse verified item' });
+
+      expect(verifiedReject.status).toBe(409);
+      expect(verifiedReject.body.error.message).toContain('pending verification');
+
+      const afterVerifiedReject = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: completionId },
+        select: { verificationStatus: true, verificationNotes: true },
+      });
+      expect(afterVerifiedReject.verificationStatus).toBe('verified');
+      expect(afterVerifiedReject.verificationNotes).toBe('Verified evidence');
+
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+
+      const noneReject = await request(app)
+        .post(`/api/itp/completions/${completionId}/reject`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: 'Rejecting item that was never submitted' });
+
+      expect(noneReject.status).toBe(409);
+      expect(noneReject.body.error.message).toContain('pending verification');
+    } finally {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'pending',
+          completedById: null,
+          completedAt: null,
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+    }
+  });
+
   it('should reject inline data URLs for new attachment records', async () => {
     const res = await request(app)
       .post(`/api/itp/completions/${completionId}/attachments`)

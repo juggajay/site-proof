@@ -173,6 +173,25 @@ const addAttachmentSchema = z
 
 export const completionsRouter = Router();
 
+const completionVerificationResponseInclude = {
+  completedBy: {
+    select: { id: true, fullName: true, email: true },
+  },
+  verifiedBy: {
+    select: { id: true, fullName: true, email: true },
+  },
+  itpInstance: {
+    include: {
+      lot: {
+        select: { id: true, lotNumber: true, projectId: true },
+      },
+    },
+  },
+  checklistItem: {
+    select: { description: true },
+  },
+} as const;
+
 function parseCompletionRouteParam(value: unknown, field: string): string {
   if (typeof value !== 'string') {
     throw AppError.badRequest(`${field} must be a single value`);
@@ -793,6 +812,7 @@ completionsRouter.post(
     const completionForAccess = await prisma.iTPCompletion.findUnique({
       where: { id },
       select: {
+        verificationStatus: true,
         itpInstance: {
           select: {
             lotId: true,
@@ -818,6 +838,28 @@ completionsRouter.post(
       'ITP verification access required',
     );
 
+    if (completionForAccess.verificationStatus === 'verified') {
+      const completion = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id },
+        include: completionVerificationResponseInclude,
+      });
+
+      res.json({
+        completion: {
+          ...completion,
+          isCompleted: completion.status === 'completed',
+          isVerified: true,
+        },
+      });
+      return;
+    }
+
+    if (completionForAccess.verificationStatus === 'rejected') {
+      throw AppError.conflict('Rejected ITP completions must be resubmitted before verification', {
+        verificationStatus: completionForAccess.verificationStatus,
+      });
+    }
+
     const completion = await prisma.iTPCompletion.update({
       where: { id },
       data: {
@@ -825,24 +867,7 @@ completionsRouter.post(
         verifiedAt: new Date(),
         verifiedById: user.userId,
       },
-      include: {
-        completedBy: {
-          select: { id: true, fullName: true, email: true },
-        },
-        verifiedBy: {
-          select: { id: true, fullName: true, email: true },
-        },
-        itpInstance: {
-          include: {
-            lot: {
-              select: { id: true, lotNumber: true, projectId: true },
-            },
-          },
-        },
-        checklistItem: {
-          select: { description: true },
-        },
-      },
+      include: completionVerificationResponseInclude,
     });
 
     // Create notification for the user who completed the item (Feature #633)
@@ -901,6 +926,7 @@ completionsRouter.post(
     const completionForAccess = await prisma.iTPCompletion.findUnique({
       where: { id },
       select: {
+        verificationStatus: true,
         itpInstance: {
           select: {
             lotId: true,
@@ -926,6 +952,12 @@ completionsRouter.post(
       'ITP verification access required',
     );
 
+    if (completionForAccess.verificationStatus !== 'pending_verification') {
+      throw AppError.conflict('Only ITP completions pending verification can be rejected', {
+        verificationStatus: completionForAccess.verificationStatus,
+      });
+    }
+
     const completion = await prisma.iTPCompletion.update({
       where: { id },
       data: {
@@ -934,24 +966,7 @@ completionsRouter.post(
         verifiedById: user.userId,
         verificationNotes: reason.trim(),
       },
-      include: {
-        completedBy: {
-          select: { id: true, fullName: true, email: true },
-        },
-        verifiedBy: {
-          select: { id: true, fullName: true, email: true },
-        },
-        itpInstance: {
-          include: {
-            lot: {
-              select: { id: true, lotNumber: true, projectId: true },
-            },
-          },
-        },
-        checklistItem: {
-          select: { description: true },
-        },
-      },
+      include: completionVerificationResponseInclude,
     });
 
     // Create notification for the user who completed the item
