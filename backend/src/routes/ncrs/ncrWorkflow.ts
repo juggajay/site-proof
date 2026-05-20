@@ -71,6 +71,12 @@ const qmReviewSchema = z.object({
   comments: optionalTrimmedWorkflowString('Comments', NCR_WORKFLOW_TEXT_MAX_LENGTH),
 });
 
+const qmReviewedNcrInclude = {
+  project: { select: { name: true } },
+  raisedBy: { select: { fullName: true, email: true } },
+  responsibleUser: { select: { fullName: true, email: true } },
+} as const;
+
 const rectifyNcrSchema = z.object({
   rectificationNotes: optionalTrimmedWorkflowString(
     'Rectification notes',
@@ -216,8 +222,12 @@ ncrWorkflowRouter.post(
       throw AppError.notFound('NCR not found');
     }
 
-    // Must be in 'investigating' status (after response submitted)
-    if (ncr.status !== 'investigating') {
+    const isAcceptedRetry =
+      action === 'accept' && ncr.status === 'rectification' && ncr.qmReviewedAt !== null;
+
+    // Must be in 'investigating' status (after response submitted), except for idempotent
+    // accept retries that return the already-reviewed NCR without mutating timestamps.
+    if (!isAcceptedRetry && ncr.status !== 'investigating') {
       throw AppError.badRequest('NCR must be in investigating status to review');
     }
 
@@ -228,6 +238,19 @@ ncrWorkflowRouter.post(
       ['quality_manager', 'admin', 'project_manager'],
     );
 
+    if (isAcceptedRetry) {
+      const acceptedNcr = await prisma.nCR.findUniqueOrThrow({
+        where: { id },
+        include: qmReviewedNcrInclude,
+      });
+
+      res.json({
+        ncr: acceptedNcr,
+        message: 'Response already accepted, NCR is in rectification',
+      });
+      return;
+    }
+
     // Get reviewer info for notifications
     const reviewer = await prisma.user.findUnique({
       where: { id: user.userId },
@@ -237,19 +260,39 @@ ncrWorkflowRouter.post(
 
     if (action === 'accept') {
       // Accept response - proceed to rectification status
-      const updatedNcr = await prisma.nCR.update({
-        where: { id },
+      const reviewTime = new Date();
+      const reviewResult = await prisma.nCR.updateMany({
+        where: { id, status: 'investigating', qmReviewedAt: null },
         data: {
           status: 'rectification',
-          qmReviewedAt: new Date(),
+          qmReviewedAt: reviewTime,
           qmReviewedById: user.userId,
           qmReviewComments: comments || null,
           revisionRequested: false,
         },
+      });
+
+      if (reviewResult.count === 0) {
+        const acceptedNcr = await prisma.nCR.findFirst({
+          where: { id, status: 'rectification', qmReviewedAt: { not: null } },
+          include: qmReviewedNcrInclude,
+        });
+
+        if (acceptedNcr) {
+          res.json({
+            ncr: acceptedNcr,
+            message: 'Response already accepted, NCR is in rectification',
+          });
+          return;
+        }
+
+        throw AppError.badRequest('NCR must be in investigating status to review');
+      }
+
+      const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+        where: { id },
         include: {
-          project: { select: { name: true } },
-          raisedBy: { select: { fullName: true, email: true } },
-          responsibleUser: { select: { fullName: true, email: true } },
+          ...qmReviewedNcrInclude,
         },
       });
 
