@@ -739,10 +739,17 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/diary/diaryReporting.ts', import.meta.url),
       'utf8',
     );
+    const csvSafe = await readFile(
+      new URL('../../backend/src/lib/csvSafe.ts', import.meta.url),
+      'utf8',
+    );
 
-    expect(diaryReporting).toContain('const CSV_FORMULA_PREFIX_PATTERN = /^[\\t\\r ]*[=+\\-@]/');
-    expect(diaryReporting).toContain('const safeValue = CSV_FORMULA_PREFIX_PATTERN.test(rawValue)');
-    expect(diaryReporting).toContain("row.map(formatCsvCell).join(',')");
+    expect(csvSafe).toContain('const CSV_FORMULA_PREFIX_PATTERN = /^[\\t\\r\\n ]*[=+\\-@]/');
+    expect(csvSafe).toContain('export function escapeCsvFormulaValue(value: string): string');
+    expect(csvSafe).toContain('CSV_FORMULA_PREFIX_PATTERN.test(normalizedValue)');
+    expect(csvSafe).toContain("row.map(formatCsvCell).join(',')");
+    expect(diaryReporting).toContain("import { buildCsv } from '../../lib/csvSafe.js'");
+    expect(diaryReporting).toContain('const csv = buildCsv([csvHeaders, ...csvRows]);');
   });
 
   test('scheduled reports are capped per project across API and UI', async () => {
