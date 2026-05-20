@@ -2356,10 +2356,29 @@ describe('Account Deletion', () => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     expect(user).toBeNull();
 
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        entityType: 'user',
+        entityId: userId,
+        action: AuditAction.ACCOUNT_DELETION_REQUESTED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(auditLog).not.toBeNull();
+    if (!auditLog) {
+      throw new Error('Expected account deletion audit log');
+    }
+    expect(auditLog.userId).toBeNull();
+    const changes = parseAuditLogChanges(auditLog.changes) as Record<string, unknown>;
+    expect(changes.reason).toBe('GDPR deletion request');
+    expect(typeof changes.deletedAt).toBe('string');
+    expect(JSON.stringify(changes)).not.toContain(email);
+    expect(JSON.stringify(changes)).not.toContain('Delete Confirmed User');
+
     await prisma.auditLog.deleteMany({
       where: {
         entityId: userId,
-        action: 'account_deletion_requested',
+        action: AuditAction.ACCOUNT_DELETION_REQUESTED,
       },
     });
   });
