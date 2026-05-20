@@ -55,7 +55,7 @@ async function auditOAuthLogin(
   req: Request,
   userId: string,
   provider: string,
-  flow: 'google_identity',
+  flow: 'google_identity' | 'oauth_callback' | 'mock_oauth',
 ) {
   await createAuditLog({
     userId,
@@ -66,6 +66,28 @@ async function auditOAuthLogin(
       method: 'oauth',
       provider,
       flow,
+    },
+    req,
+  });
+}
+
+async function auditOAuthRegistration(
+  req: Request,
+  userId: string,
+  provider: string,
+  flow: 'google_identity' | 'oauth_callback' | 'mock_oauth',
+  emailVerified: boolean,
+) {
+  await createAuditLog({
+    userId,
+    entityType: 'user',
+    entityId: userId,
+    action: AuditAction.USER_REGISTERED,
+    changes: {
+      method: 'oauth',
+      provider,
+      flow,
+      emailVerified,
     },
     req,
   });
@@ -154,11 +176,10 @@ async function consumeOAuthCallbackCode(
 ): Promise<{ userId: string; provider: string } | null> {
   await cleanupExpiredStates();
 
-  const now = new Date();
   const rows = await prisma.$queryRaw<Array<{ user_id: string; provider: string }>>`
     DELETE FROM "oauth_callback_codes"
     WHERE "code_hash" = ${hashOAuthCallbackCode(code)}
-      AND "expires_at" > ${now}
+      AND "expires_at" > (now() AT TIME ZONE 'UTC')
     RETURNING "user_id", "provider";
   `;
 
@@ -348,7 +369,7 @@ oauthRouter.get(
     };
 
     // Find or create user, then hand off a one-time code instead of putting the JWT in the URL.
-    const { user, mfaEnabled } = await findOrCreateOAuthUser({
+    const { user, mfaEnabled, created } = await findOrCreateOAuthUser({
       provider: 'google',
       providerId: googleUser.id,
       email: googleUser.email,
@@ -356,6 +377,16 @@ oauthRouter.get(
       avatarUrl: googleUser.picture,
       emailVerified: googleUser.verified_email ?? true,
     });
+
+    if (created) {
+      await auditOAuthRegistration(
+        req,
+        user.id,
+        'google',
+        'oauth_callback',
+        googleUser.verified_email ?? true,
+      );
+    }
 
     if (mfaEnabled) {
       return res.redirect(`${frontendUrl}/login?error=mfa_required`);
@@ -490,7 +521,7 @@ oauthRouter.post(
     };
 
     // Find or create user
-    const { user, token, mfaEnabled } = await findOrCreateOAuthUser({
+    const { user, token, mfaEnabled, created } = await findOrCreateOAuthUser({
       provider: 'google',
       providerId: googleUser.id,
       email: googleUser.email,
@@ -501,6 +532,16 @@ oauthRouter.post(
 
     if (mfaEnabled || !token) {
       throw getMfaRequiredError();
+    }
+
+    if (created) {
+      await auditOAuthRegistration(
+        req,
+        user.id,
+        'google',
+        'google_identity',
+        googleUser.verified_email ?? true,
+      );
     }
 
     await auditOAuthLogin(req, user.id, 'google', 'google_identity');
@@ -557,6 +598,8 @@ oauthRouter.post(
       role: user.roleInCompany,
     });
 
+    await auditOAuthLogin(req, user.id, consumed.provider, 'oauth_callback');
+
     res.json({
       user: {
         id: user.id,
@@ -591,7 +634,7 @@ oauthRouter.post(
     // Create a mock user
     const mockProviderId = `mock_${provider}_${Date.now()}`;
 
-    const { user, token, mfaEnabled } = await findOrCreateOAuthUser({
+    const { user, token, mfaEnabled, created } = await findOrCreateOAuthUser({
       provider: provider || 'google',
       providerId: mockProviderId,
       email,
@@ -602,6 +645,12 @@ oauthRouter.post(
     if (mfaEnabled || !token) {
       throw getMfaRequiredError();
     }
+
+    if (created) {
+      await auditOAuthRegistration(req, user.id, provider || 'google', 'mock_oauth', true);
+    }
+
+    await auditOAuthLogin(req, user.id, provider || 'google', 'mock_oauth');
 
     res.json({
       user: {
@@ -630,6 +679,7 @@ async function findOrCreateOAuthUser(params: {
   const normalizedEmail = normalizeOAuthEmail(email);
 
   // First, try to find user by email
+  let created = false;
   let user = await prisma.user.findUnique({
     where: { email: normalizedEmail },
     include: {
@@ -653,6 +703,7 @@ async function findOrCreateOAuthUser(params: {
     });
   } else {
     // Create new user
+    created = true;
     user = await prisma.user.create({
       data: {
         email: normalizedEmail,
@@ -689,5 +740,6 @@ async function findOrCreateOAuthUser(params: {
     },
     token,
     mfaEnabled: user.twoFactorEnabled,
+    created,
   };
 }
