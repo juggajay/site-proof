@@ -25,7 +25,7 @@ function includesSafeMarker(value: string): boolean {
 export function assertSafeTestDatabaseUrl(
   env: TestDatabaseEnv = process.env as TestDatabaseEnv,
 ): void {
-  if (env.NODE_ENV !== 'test' || env.ALLOW_EXTERNAL_TEST_DATABASE === 'true') {
+  if (env.ALLOW_EXTERNAL_TEST_DATABASE === 'true') {
     return;
   }
 

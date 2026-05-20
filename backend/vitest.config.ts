@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -8,6 +8,7 @@ export default defineConfig({
     // isSupabaseConfigured() at module load; unsetting SUPABASE_URL ensures
     // upload tests never accidentally hit production Supabase Storage.
     env: {
+      NODE_ENV: 'test',
       SUPABASE_URL: '',
       SUPABASE_SERVICE_ROLE_KEY: '',
       SUPABASE_ANON_KEY: '',
@@ -23,4 +24,4 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
   },
-})
+});
