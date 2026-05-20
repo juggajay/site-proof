@@ -22,6 +22,7 @@ import { companyRouter } from './company.js';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { parseAuditLogChanges } from '../lib/auditLog.js';
 
 const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
@@ -79,6 +80,9 @@ describe('Company API', () => {
   });
 
   afterAll(async () => {
+    await prisma.auditLog.deleteMany({
+      where: { OR: [{ userId }, { entityId: companyId }] },
+    });
     await prisma.emailVerificationToken.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } }).catch(() => {});
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
@@ -942,6 +946,7 @@ describe('Company API', () => {
   });
 
   describe('POST /api/company/transfer-ownership', () => {
+    let oldOwnerId: string;
     let newOwnerId: string;
     let newOwnerToken: string;
     let transferCompanyId: string;
@@ -961,9 +966,10 @@ describe('Company API', () => {
         fullName: 'Transfer Owner',
         tosAccepted: true,
       });
+      oldOwnerId = ownerRes.body.user.id;
 
       await prisma.user.update({
-        where: { id: ownerRes.body.user.id },
+        where: { id: oldOwnerId },
         data: { companyId: transferCompanyId, roleInCompany: 'owner' },
       });
 
@@ -985,6 +991,11 @@ describe('Company API', () => {
     });
 
     afterAll(async () => {
+      await prisma.auditLog.deleteMany({
+        where: {
+          OR: [{ entityId: transferCompanyId }, { userId: oldOwnerId }, { userId: newOwnerId }],
+        },
+      });
       // Cleanup users
       const users = await prisma.user.findMany({
         where: { companyId: transferCompanyId },
@@ -1006,6 +1017,24 @@ describe('Company API', () => {
       expect(res.body.message).toContain('transferred successfully');
       expect(res.body.newOwner.id).toBe(newOwnerId);
       expect(res.body.transferredAt).toBeDefined();
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          userId: oldOwnerId,
+          entityType: 'company',
+          entityId: transferCompanyId,
+          action: 'company_ownership_transferred',
+        },
+      });
+      expect(auditLog).not.toBeNull();
+
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        previousOwnerId: oldOwnerId,
+        newOwnerId,
+        previousOwnerRole: { from: 'owner', to: 'admin' },
+        newOwnerRole: { from: 'admin', to: 'owner' },
+      });
     });
 
     it('should update roles correctly after transfer', async () => {
@@ -1258,6 +1287,11 @@ describe('Company API', () => {
 
     afterAll(async () => {
       // Cleanup
+      await prisma.auditLog.deleteMany({
+        where: {
+          OR: [{ entityId: leaveCompanyId }, { userId: leaveOwnerId }, { userId: leaveUserId }],
+        },
+      });
       await prisma.projectUser.deleteMany({ where: { projectId } });
       await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
 
@@ -1279,6 +1313,23 @@ describe('Company API', () => {
       expect(res.status).toBe(200);
       expect(res.body.message).toContain('Successfully left');
       expect(res.body.leftAt).toBeDefined();
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          userId: leaveUserId,
+          entityType: 'company',
+          entityId: leaveCompanyId,
+          action: 'company_member_left',
+        },
+      });
+      expect(auditLog).not.toBeNull();
+
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        memberUserId: leaveUserId,
+        previousRole: 'admin',
+        removedProjectMembershipCount: 1,
+      });
     });
 
     it('should remove company association from user', async () => {
