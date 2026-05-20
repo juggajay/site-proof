@@ -1213,6 +1213,64 @@ describe('Hold Point Token Release', () => {
     }
   });
 
+  it('should bind public release identity to the token recipient when present', async () => {
+    const rawIdentityToken = `identity-token-${Date.now()}`;
+    const identityToken = await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId,
+        token: hashHoldPointReleaseTokenForTest(rawIdentityToken),
+        recipientEmail: 'named-superintendent@example.com',
+        recipientName: 'Named Superintendent',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/holdpoints/public/${rawIdentityToken}/release`)
+        .send({
+          releasedByName: 'Imposter Name',
+          releasedByOrg: 'Client Company',
+          releaseNotes: 'Approved externally',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.holdPoint.releasedByName).toBe('Named Superintendent');
+
+      const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPointId } });
+      expect(holdPoint.releasedByName).toBe('Named Superintendent');
+
+      const usedToken = await prisma.holdPointReleaseToken.findUniqueOrThrow({
+        where: { id: identityToken.id },
+      });
+      expect(usedToken.releasedByName).toBe('Named Superintendent');
+    } finally {
+      await prisma.holdPointReleaseToken
+        .delete({ where: { id: identityToken.id } })
+        .catch(() => {});
+      await prisma.holdPoint.update({
+        where: { id: holdPointId },
+        data: {
+          status: 'pending',
+          releasedAt: null,
+          releasedByName: null,
+          releasedByOrg: null,
+          releaseMethod: null,
+          releaseSignatureUrl: null,
+          releaseNotes: null,
+        },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+        },
+      });
+    }
+  });
+
   it('should release hold point via public token', async () => {
     const res = await request(app).post(`/api/holdpoints/public/${releaseToken}/release`).send({
       releasedByName: 'External Reviewer',
