@@ -1479,6 +1479,83 @@ describe('Test Results API', () => {
       expect(invalidPassFailRes.status).toBe(400);
       expect(invalidPassFailRes.body.error.message).toContain('passFail');
     });
+
+    it('should reject non-verifier edits to verified test results', async () => {
+      const foreman = await registerTestUser('Test Result Foreman', 'foreman', companyId);
+      const testResult = await createEnteredTestResult();
+      const verifiedAt = new Date('2026-02-03T04:05:06.000Z');
+
+      try {
+        await prisma.projectUser.create({
+          data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+        });
+        await prisma.testResult.update({
+          where: { id: testResult.id },
+          data: {
+            status: 'verified',
+            verifiedAt,
+            verifiedById: userId,
+            resultUnit: '% MDD',
+          },
+        });
+
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}`)
+          .set('Authorization', `Bearer ${foreman.token}`)
+          .send({ resultUnit: 'kPa' });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Verified test results');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, verifiedAt: true, verifiedById: true, resultUnit: true },
+        });
+        expect(unchanged.status).toBe('verified');
+        expect(unchanged.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+        expect(unchanged.verifiedById).toBe(userId);
+        expect(unchanged.resultUnit).toBe('% MDD');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(foreman.userId);
+      }
+    });
+
+    it('should allow verifier corrections to verified test results', async () => {
+      const testResult = await createEnteredTestResult();
+      const verifiedAt = new Date('2026-02-03T04:05:06.000Z');
+
+      try {
+        await prisma.testResult.update({
+          where: { id: testResult.id },
+          data: {
+            status: 'verified',
+            verifiedAt,
+            verifiedById: userId,
+            resultUnit: '% MDD',
+          },
+        });
+
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ resultUnit: 'kPa' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.testResult.status).toBe('verified');
+
+        const updated = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, verifiedAt: true, verifiedById: true, resultUnit: true },
+        });
+        expect(updated.status).toBe('verified');
+        expect(updated.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+        expect(updated.verifiedById).toBe(userId);
+        expect(updated.resultUnit).toBe('kPa');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
   });
 
   describe('GET /api/test-results/:id/workflow', () => {

@@ -1283,12 +1283,18 @@ testResultsRouter.patch(
       throw AppError.notFound('Test result');
     }
 
-    await requireTestProjectRole(
+    const userProjectRole = await requireTestProjectRole(
       testResult.projectId,
       user,
       TEST_CREATORS,
       'You do not have permission to edit test results',
     );
+
+    if (testResult.status === 'verified' && !TEST_VERIFIERS.includes(userProjectRole)) {
+      throw AppError.conflict('Verified test results can only be edited by test result verifiers', {
+        status: testResult.status,
+      });
+    }
 
     const {
       lotId,
