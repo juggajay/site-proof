@@ -805,6 +805,64 @@ describe('Progress Claims API', () => {
       expect(Number(res.body.claim.certifiedAmount)).toBe(4800);
     });
 
+    it('should not re-stamp certified claims when generic update is retried', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      const originalCertifiedAt = new Date('2025-05-01T00:00:00.000Z');
+
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'certified',
+          certifiedAmount: 1000,
+          certifiedAt: originalCertifiedAt,
+        },
+      });
+
+      const res = await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'certified',
+          certifiedAmount: 1000,
+        });
+
+      expect(res.status).toBe(200);
+
+      const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(unchangedClaim?.status).toBe('certified');
+      expect(Number(unchangedClaim?.certifiedAmount)).toBe(1000);
+      expect(unchangedClaim?.certifiedAt?.toISOString()).toBe(originalCertifiedAt.toISOString());
+    });
+
+    it('should not re-stamp disputed claims when generic update is retried', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      const originalDisputedAt = new Date('2025-05-02T00:00:00.000Z');
+
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'disputed',
+          disputeNotes: 'Original dispute notes',
+          disputedAt: originalDisputedAt,
+        },
+      });
+
+      const res = await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'disputed',
+          disputeNotes: 'Original dispute notes',
+        });
+
+      expect(res.status).toBe(200);
+
+      const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(unchangedClaim?.status).toBe('disputed');
+      expect(unchangedClaim?.disputeNotes).toBe('Original dispute notes');
+      expect(unchangedClaim?.disputedAt?.toISOString()).toBe(originalDisputedAt.toISOString());
+    });
+
     it('should reject payment above the certified amount', async () => {
       const res = await request(app)
         .put(`/api/projects/${projectId}/claims/${claimId}`)

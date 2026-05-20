@@ -832,6 +832,22 @@ router.put(
       }
     }
 
+    if (
+      (status === 'certified' && claim.status === 'certified' && claim.certifiedAt) ||
+      (status === 'disputed' && claim.status === 'disputed' && claim.disputedAt)
+    ) {
+      const existingClaim = await prisma.progressClaim.findUniqueOrThrow({
+        where: { id: claimId },
+        include: {
+          _count: {
+            select: { claimedLots: true },
+          },
+        },
+      });
+      res.json({ claim: existingClaim });
+      return;
+    }
+
     const updateData: Prisma.ProgressClaimUpdateInput = {};
     const previousStatus = claim.status;
 
