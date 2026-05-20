@@ -2,12 +2,12 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { buildCsv } from '../../lib/csvSafe.js';
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
 import { parseDiaryDate, parseDiaryRouteParam, requireDiaryReadAccess } from './diaryAccess.js';
 
 const router = Router();
 const REPORT_QUERY_MAX_LENGTH = 120;
-const CSV_FORMULA_PREFIX_PATTERN = /^[\t\r ]*[=+\-@]/;
 const WEATHER_UNAVAILABLE_MESSAGE = 'Weather auto-population unavailable. Enter weather manually.';
 
 type WeatherLocation = {
@@ -69,12 +69,6 @@ function buildDiaryDateFilter(query: Request['query']) {
   }
 
   return dateFilter;
-}
-
-function formatCsvCell(value: unknown) {
-  const rawValue = value === null || value === undefined ? '' : String(value);
-  const safeValue = CSV_FORMULA_PREFIX_PATTERN.test(rawValue) ? `'${rawValue}` : rawValue;
-  return `"${safeValue.replace(/"/g, '""')}"`;
 }
 
 function sendWeatherUnavailable(res: Response, date: string, location: WeatherLocation) {
@@ -367,10 +361,7 @@ router.get(
       d.impact || '',
     ]);
 
-    const csv = [
-      csvHeaders.map(formatCsvCell).join(','),
-      ...csvRows.map((row) => row.map(formatCsvCell).join(',')),
-    ].join('\n');
+    const csv = buildCsv([csvHeaders, ...csvRows]);
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=delay-register.csv');

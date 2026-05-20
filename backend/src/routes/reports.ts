@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { escapeCsvFormulaValue } from '../lib/csvSafe.js';
 import {
   SCHEDULED_REPORT_FREQUENCIES,
   SCHEDULED_REPORT_TYPES,
@@ -217,6 +218,10 @@ function parseOptionalStringQuery(
   }
 
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function escapeOptionalCsvExportValue(value: string | null | undefined): string | null | undefined {
+  return value === null || value === undefined ? value : escapeCsvFormulaValue(value);
 }
 
 function parseOptionalCommaSeparatedQuery(value: unknown, fieldName: string): string[] {
@@ -1221,9 +1226,9 @@ reportsRouter.get(
         'Submitted Date': claim.submittedAt,
         'Certified Date': claim.certifiedAt,
         'Paid Date': claim.paidAt,
-        'Payment Reference': claim.paymentReference,
+        'Payment Reference': escapeOptionalCsvExportValue(claim.paymentReference),
         'Lot Count': claim.lotCount,
-        'Prepared By': claim.preparedBy?.name,
+        'Prepared By': escapeOptionalCsvExportValue(claim.preparedBy?.name),
       })),
     };
 

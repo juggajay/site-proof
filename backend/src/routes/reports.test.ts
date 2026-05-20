@@ -1395,7 +1395,7 @@ describe('Reports API - Claims Report', () => {
     const regRes = await request(app).post('/api/auth/register').send({
       email: testEmail,
       password: 'SecureP@ssword123!',
-      fullName: 'Claims Reports User',
+      fullName: '@Claims Reports User',
       tosAccepted: true,
     });
     authToken = regRes.body.token;
@@ -1444,6 +1444,7 @@ describe('Reports API - Claims Report', () => {
         status: 'submitted',
         preparedById: userId,
         totalClaimedAmount: 5000,
+        paymentReference: '=HYPERLINK("https://example.invalid","pay")',
         submittedAt: new Date(),
         claimedLots: {
           create: {
@@ -1581,6 +1582,19 @@ describe('Reports API - Claims Report', () => {
     expect(res.body.exportData).toBeDefined();
     expect(Array.isArray(res.body.exportData)).toBe(true);
     expect(res.body.exportData[0]['Claim #']).toBe(1);
+  });
+
+  it('should guard claims report export data from spreadsheet formula injection', async () => {
+    const res = await request(app)
+      .get('/api/reports/claims')
+      .set('Authorization', `Bearer ${authToken}`)
+      .query({ projectId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.exportData[0]['Payment Reference']).toBe(
+      `'=HYPERLINK("https://example.invalid","pay")`,
+    );
+    expect(res.body.exportData[0]['Prepared By']).toBe("'@Claims Reports User");
   });
 });
 
