@@ -1032,9 +1032,51 @@ describe('Password Reset Flow', () => {
 
       expect(validateRes.status).toBe(200);
       expect(validateRes.body.valid).toBe(false);
-      expect(validateRes.body.message).toContain('Invalid reset token');
+      expect(validateRes.body.message).toContain('Invalid or expired reset token');
     } finally {
       await prisma.passwordResetToken.deleteMany({ where: { token: hashAuthTokenForTest(token) } });
+    }
+  });
+
+  it('should return a uniform validation message for invalid, used, and expired reset tokens', async () => {
+    const user = await prisma.user.findUnique({ where: { email: resetEmail } });
+    expect(user).toBeDefined();
+
+    const unknownToken = `reset_unknown_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const usedToken = `reset_used_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const expiredToken = `reset_expired_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const createdTokenHashes = [usedToken, expiredToken].map(hashAuthTokenForTest);
+
+    await prisma.passwordResetToken.createMany({
+      data: [
+        {
+          userId: user!.id,
+          token: hashAuthTokenForTest(usedToken),
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          usedAt: new Date(),
+        },
+        {
+          userId: user!.id,
+          token: hashAuthTokenForTest(expiredToken),
+          expiresAt: new Date(Date.now() - 60 * 1000),
+        },
+      ],
+    });
+
+    try {
+      for (const token of [unknownToken, usedToken, expiredToken]) {
+        const res = await request(app).get('/api/auth/validate-reset-token').query({ token });
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+          valid: false,
+          message: 'Invalid or expired reset token',
+        });
+      }
+    } finally {
+      await prisma.passwordResetToken.deleteMany({
+        where: { token: { in: createdTokenHashes } },
+      });
     }
   });
 
