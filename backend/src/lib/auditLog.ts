@@ -128,6 +128,7 @@ export const AuditAction = {
   USER_AVATAR_UPDATED: 'user_avatar_updated',
   USER_AVATAR_REMOVED: 'user_avatar_removed',
   ACCOUNT_DELETION_REQUESTED: 'account_deletion_requested',
+  PASSWORD_RESET_REQUESTED: 'password_reset_requested',
   PASSWORD_CHANGED: 'password_changed',
   MFA_ENABLED: 'mfa_enabled',
   MFA_DISABLED: 'mfa_disabled',

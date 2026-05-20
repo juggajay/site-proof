@@ -954,17 +954,29 @@ describe('Password Reset Flow', () => {
   });
 
   it('should send reset email for existing user (always returns success)', async () => {
+    const user = await prisma.user.findUnique({ where: { email: resetEmail } });
+    expect(user).toBeDefined();
+    await clearUserAuditLogs(user!.id);
+
     const res = await request(app).post('/api/auth/forgot-password').send({ email: resetEmail });
 
     expect(res.status).toBe(200);
     expect(res.body.message).toContain('If an account exists');
 
-    const user = await prisma.user.findUnique({ where: { email: resetEmail } });
     const storedToken = await prisma.passwordResetToken.findFirst({
       where: { userId: user!.id },
       orderBy: { createdAt: 'desc' },
     });
     expect(storedToken?.token).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+    const { auditLog, changes } = await expectLatestUserAuditLog(
+      user!.id,
+      AuditAction.PASSWORD_RESET_REQUESTED,
+    );
+    expect(auditLog.userId).toBe(user!.id);
+    expect(changes).toEqual({ method: 'email', expiresInMinutes: 60 });
+    expect(JSON.stringify(changes)).not.toContain(storedToken!.token);
+    expect(JSON.stringify(changes)).not.toMatch(/token|secret|password/i);
 
     const leakedStoredTokenRes = await request(app).post('/api/auth/reset-password').send({
       token: storedToken!.token,
