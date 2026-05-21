@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Avoid screenshot timeouts when browser font readiness stalls during QA evidence capture.
+process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY ??= '1';
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
