@@ -5,6 +5,13 @@ type SignedUrlResponse = {
   expiresAt: string;
 };
 
+export type DocumentAccessDisposition = 'inline' | 'attachment';
+
+export type DocumentAccessOptions = {
+  expiresInMinutes?: number;
+  disposition?: DocumentAccessDisposition;
+};
+
 export type DocumentAccessUrl = {
   url: string;
   expiresAt: number;
@@ -37,15 +44,38 @@ function getResponseExpiry(responseExpiresAt: string, expiresInMinutes: number):
   return Number.isFinite(parsed) && parsed > Date.now() ? parsed : fallback;
 }
 
+function normalizeDocumentAccessOptions(
+  options: number | DocumentAccessOptions = 15,
+): Required<DocumentAccessOptions> {
+  if (typeof options === 'number') {
+    return {
+      expiresInMinutes: options,
+      disposition: 'attachment',
+    };
+  }
+
+  return {
+    expiresInMinutes: options.expiresInMinutes ?? 15,
+    disposition: options.disposition ?? 'attachment',
+  };
+}
+
+function getCacheKey(documentId: string, disposition: DocumentAccessDisposition): string {
+  return `${documentId}:${disposition}`;
+}
+
 export function invalidateDocumentAccessUrl(documentId: string): void {
-  signedUrlCache.delete(documentId);
+  signedUrlCache.delete(getCacheKey(documentId, 'attachment'));
+  signedUrlCache.delete(getCacheKey(documentId, 'inline'));
 }
 
 export async function getDocumentAccess(
   documentId: string,
   fileUrl?: string | null,
-  expiresInMinutes = 15,
+  options: number | DocumentAccessOptions = 15,
 ): Promise<DocumentAccessUrl> {
+  const { expiresInMinutes, disposition } = normalizeDocumentAccessOptions(options);
+
   if (!documentId) {
     return {
       url: rawFileUrl(fileUrl),
@@ -54,7 +84,8 @@ export async function getDocumentAccess(
     };
   }
 
-  const cached = signedUrlCache.get(documentId);
+  const cacheKey = getCacheKey(documentId, disposition);
+  const cached = signedUrlCache.get(cacheKey);
   if (cached && cached.refreshAt > Date.now()) {
     return cached;
   }
@@ -63,7 +94,7 @@ export async function getDocumentAccess(
     `/api/documents/${encodeURIComponent(documentId)}/signed-url`,
     {
       method: 'POST',
-      body: JSON.stringify({ expiresInMinutes }),
+      body: JSON.stringify({ expiresInMinutes, disposition }),
     },
   );
 
@@ -74,16 +105,16 @@ export async function getDocumentAccess(
     refreshAt: getRefreshAt(expiresAt),
   };
 
-  signedUrlCache.set(documentId, access);
+  signedUrlCache.set(cacheKey, access);
   return access;
 }
 
 export async function getDocumentAccessUrl(
   documentId: string,
   fileUrl?: string | null,
-  expiresInMinutes = 15,
+  options: number | DocumentAccessOptions = 15,
 ): Promise<string> {
-  const access = await getDocumentAccess(documentId, fileUrl, expiresInMinutes);
+  const access = await getDocumentAccess(documentId, fileUrl, options);
   return access.url;
 }
 
@@ -91,6 +122,6 @@ export async function openDocumentAccessUrl(
   documentId: string,
   fileUrl?: string | null,
 ): Promise<void> {
-  const url = await getDocumentAccessUrl(documentId, fileUrl);
+  const url = await getDocumentAccessUrl(documentId, fileUrl, { disposition: 'attachment' });
   window.open(url, '_blank', 'noopener,noreferrer');
 }

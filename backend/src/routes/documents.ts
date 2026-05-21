@@ -489,6 +489,18 @@ function getDocumentContentDisposition(
   return requestedDisposition;
 }
 
+function parseDocumentContentDisposition(value: unknown): 'inline' | 'attachment' {
+  if (value === undefined) {
+    return 'attachment';
+  }
+
+  if (value !== 'inline' && value !== 'attachment') {
+    throw AppError.badRequest('disposition must be inline or attachment');
+  }
+
+  return value;
+}
+
 function buildStoredFilename(originalName: string): string {
   return `${Date.now()}-${crypto.randomUUID()}-${sanitizeUploadFilename(originalName)}`;
 }
@@ -599,19 +611,59 @@ function getOptionalDateQuery(
   return date;
 }
 
-function sendDocumentFile(
+async function sendSupabaseDocumentFile(
+  document: { fileUrl: string; filename: string; mimeType: string | null },
+  res: Response,
+  contentType: string,
+  contentDisposition: 'inline' | 'attachment',
+): Promise<void> {
+  const storagePath = getSupabaseStoragePath(document.fileUrl, DOCUMENTS_BUCKET);
+  if (!storagePath || !isSupabaseConfigured()) {
+    res.redirect(document.fileUrl);
+    return;
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .storage.from(DOCUMENTS_BUCKET)
+    .download(storagePath);
+
+  if (error || !data) {
+    logWarn('Supabase document download failed:', error);
+    throw AppError.notFound('File');
+  }
+
+  const buffer = Buffer.from(await data.arrayBuffer());
+  res.setHeader(
+    'Content-Disposition',
+    `${contentDisposition}; filename="${getSafeDownloadFilename(document.filename)}"`,
+  );
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Length', String(buffer.length));
+  res.send(buffer);
+}
+
+async function sendDocumentFile(
   document: { fileUrl: string; filename: string; mimeType: string | null },
   res: Response,
   disposition: 'inline' | 'attachment' = 'inline',
-): void {
+): Promise<void> {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+  const contentType = getSafeServedDocumentMimeType(document);
+  const contentDisposition = getDocumentContentDisposition(disposition, contentType);
 
   if (isExternalFileUrl(document.fileUrl)) {
     if (!isSafeExternalDocumentUrl(document.fileUrl)) {
       throw AppError.notFound('File');
+    }
+
+    if (contentDisposition === 'inline') {
+      await sendSupabaseDocumentFile(document, res, contentType, contentDisposition);
+      return;
     }
 
     res.redirect(document.fileUrl);
@@ -622,9 +674,6 @@ function sendDocumentFile(
   if (!fs.existsSync(filePath)) {
     throw AppError.notFound('File');
   }
-
-  const contentType = getSafeServedDocumentMimeType(document);
-  const contentDisposition = getDocumentContentDisposition(disposition, contentType);
 
   res.setHeader(
     'Content-Disposition',
@@ -1080,6 +1129,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const documentId = parseDocumentRouteParam(req.params.documentId, 'documentId');
     const { token } = req.query;
+    const disposition = parseDocumentContentDisposition(req.query.disposition);
 
     if (!token || typeof token !== 'string') {
       throw AppError.badRequest('Token is required', {
@@ -1110,7 +1160,7 @@ router.get(
       throw AppError.notFound('Document');
     }
 
-    sendDocumentFile(document, res, 'attachment');
+    await sendDocumentFile(document, res, disposition);
   }),
 );
 
@@ -1670,7 +1720,7 @@ router.get(
       throw AppError.forbidden('Access denied');
     }
 
-    sendDocumentFile(document, res);
+    await sendDocumentFile(document, res);
   }),
 );
 
@@ -1681,6 +1731,7 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const documentId = parseDocumentRouteParam(req.params.documentId, 'documentId');
     const { expiresInMinutes } = req.body;
+    const disposition = parseDocumentContentDisposition(req.body.disposition);
     const userId = req.user!.id;
 
     if (!userId) {
@@ -1706,7 +1757,11 @@ router.post(
     // Generate signed token
     const { token, expiresAt } = await generateSignedUrlToken(documentId, userId, validExpiry);
 
-    const signedUrl = buildBackendUrl(`/api/documents/download/${documentId}?token=${token}`);
+    const query = new URLSearchParams({ token });
+    if (disposition === 'inline') {
+      query.set('disposition', disposition);
+    }
+    const signedUrl = buildBackendUrl(`/api/documents/download/${documentId}?${query}`);
 
     res.json({
       signedUrl,
@@ -1714,6 +1769,7 @@ router.post(
       documentId,
       filename: document.filename,
       mimeType: document.mimeType,
+      disposition,
       expiresAt: expiresAt.toISOString(),
       expiresInMinutes: validExpiry,
       message: `Signed URL valid for ${validExpiry} minutes`,
