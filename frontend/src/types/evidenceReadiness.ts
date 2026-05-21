@@ -55,3 +55,17 @@ export interface LotEvidenceReadiness {
     actionBlockerCount: number;
   };
 }
+
+export interface ClaimReadinessLot {
+  lotId: string;
+  lotNumber: string;
+  activityType: string | null;
+  claim: ReadinessBucket & {
+    budgetAmount?: number | null;
+    claimedInId?: string | null;
+  };
+}
+
+export interface ProjectClaimReadiness {
+  lots: ClaimReadinessLot[];
+}

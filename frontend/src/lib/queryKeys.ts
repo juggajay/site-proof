@@ -33,6 +33,9 @@ export const queryKeys = {
 
   // Claims & Costs
   claims: (projectId: string) => ['claims', projectId] as const,
+  claimReadiness: (projectId: string) => ['claim-readiness', projectId] as const,
+  claimEvidenceReview: (projectId: string, claimId: string) =>
+    ['claim-evidence-review', projectId, claimId] as const,
   costs: (projectId: string) => ['costs', projectId] as const,
 
   // Dockets

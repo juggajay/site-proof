@@ -11,6 +11,8 @@ import path from 'path';
 import { isStoredDocumentUploadPath } from '../lib/uploadPaths.js';
 import { DOCUMENTS_BUCKET, getSupabaseStoragePath } from '../lib/supabase.js';
 import { logError } from '../lib/serverLogger.js';
+import { buildLotReadinessFromInputs } from '../lib/evidenceReadiness.js';
+import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js';
 
 interface PaymentHistoryEntry {
   amount: number;
@@ -537,6 +539,109 @@ router.get(
     }));
 
     res.json({ lots: transformedLots });
+  }),
+);
+
+// GET /api/projects/:projectId/claim-readiness - Read-only lot readiness for claim creation
+router.get(
+  '/:projectId/claim-readiness',
+  asyncHandler(async (req, res) => {
+    const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
+    await requireCommercialProjectAccess(req.user!, projectId);
+
+    const lots = await prisma.lot.findMany({
+      where: {
+        projectId,
+        status: {
+          in: [
+            'not_started',
+            'in_progress',
+            'awaiting_test',
+            'hold_point',
+            'ncr_raised',
+            'completed',
+            'conformed',
+            'claimed',
+          ],
+        },
+      },
+      select: {
+        id: true,
+        lotNumber: true,
+        status: true,
+        activityType: true,
+        budgetAmount: true,
+        claimedInId: true,
+        holdPoints: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        testResults: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        documents: {
+          select: {
+            id: true,
+            documentType: true,
+          },
+        },
+      },
+      orderBy: { lotNumber: 'asc' },
+    });
+
+    const readinessLots = await Promise.all(
+      lots.map(async (lot) => {
+        const conformStatus = await checkConformancePrerequisites(lot.id);
+        if (!conformStatus.prerequisites) {
+          throw AppError.notFound('Lot');
+        }
+
+        const readiness = buildLotReadinessFromInputs({
+          lot: {
+            id: lot.id,
+            lotNumber: lot.lotNumber,
+            status: lot.status,
+            budgetAmount: lot.budgetAmount ? Number(lot.budgetAmount) : null,
+            claimedInId: lot.claimedInId,
+          },
+          canViewCommercial: true,
+          conformStatus: {
+            canConform: Boolean(conformStatus.canConform),
+            blockingReasons: conformStatus.blockingReasons ?? [],
+            prerequisites: conformStatus.prerequisites,
+          },
+          evidenceCounts: {
+            unreleasedHoldPoints: lot.holdPoints.filter(
+              (holdPoint) => holdPoint.status !== 'released',
+            ).length,
+            releasedHoldPoints: lot.holdPoints.filter(
+              (holdPoint) => holdPoint.status === 'released',
+            ).length,
+            approvedDockets: 0,
+            diaryEntries: 0,
+            documents: lot.documents.length,
+            photos: lot.documents.filter((document) => document.documentType === 'photo').length,
+            pendingTests: lot.testResults.filter((testResult) =>
+              ['pending', 'submitted'].includes(testResult.status),
+            ).length,
+          },
+        });
+
+        return {
+          lotId: readiness.lotId,
+          lotNumber: readiness.lotNumber,
+          activityType: lot.activityType,
+          claim: readiness.claim,
+        };
+      }),
+    );
+
+    res.json({ lots: readinessLots });
   }),
 );
 
