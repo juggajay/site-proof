@@ -198,6 +198,65 @@ describe('Projects API', () => {
       }
     });
 
+    it('should reject no-company members from bootstrapping a company project', async () => {
+      const suffix = Date.now();
+      const memberRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `project-create-no-company-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'No Company Project Creator',
+          tosAccepted: true,
+        });
+      const memberToken = memberRes.body.token;
+      const memberId = memberRes.body.user.id;
+      const projectNumber = `NO-COMPANY-CREATE-BLOCKED-${suffix}`;
+
+      let bootstrappedCompanyId: string | null = null;
+      let bootstrappedProjectId: string | null = null;
+
+      try {
+        const res = await request(app)
+          .post('/api/projects')
+          .set('Authorization', `Bearer ${memberToken}`)
+          .send({
+            name: 'Blocked No Company Project',
+            projectNumber,
+            state: 'NSW',
+            specificationSet: 'TfNSW',
+          });
+
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: memberId },
+          select: { companyId: true, roleInCompany: true },
+        });
+        bootstrappedCompanyId = updatedUser?.companyId ?? null;
+        const bootstrappedProject = await prisma.project.findFirst({
+          where: { projectNumber },
+          select: { id: true },
+        });
+        bootstrappedProjectId = bootstrappedProject?.id ?? null;
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain(
+          'Users must belong to an organization before creating projects',
+        );
+        expect(updatedUser?.companyId).toBeNull();
+        expect(updatedUser?.roleInCompany).toBe('member');
+        expect(bootstrappedProject).toBeNull();
+      } finally {
+        if (bootstrappedProjectId) {
+          await prisma.projectUser.deleteMany({ where: { projectId: bootstrappedProjectId } });
+          await prisma.project.delete({ where: { id: bootstrappedProjectId } }).catch(() => {});
+        }
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: memberId } });
+        await prisma.user.delete({ where: { id: memberId } }).catch(() => {});
+        if (bootstrappedCompanyId) {
+          await prisma.company.delete({ where: { id: bootstrappedCompanyId } }).catch(() => {});
+        }
+      }
+    });
+
     it('should reject subcontractor-linked users without a company from bootstrapping a new company', async () => {
       const suffix = Date.now();
       const setupProject = await prisma.project.create({
@@ -267,7 +326,9 @@ describe('Projects API', () => {
         bootstrappedProjectId = bootstrappedProject?.id ?? null;
 
         expect(res.status).toBe(403);
-        expect(res.body.error.message).toContain('Subcontractor portal users');
+        expect(res.body.error.message).toContain(
+          'Users must belong to an organization before creating projects',
+        );
         expect(updatedUser?.companyId).toBeNull();
         expect(updatedUser?.roleInCompany).toBe('subcontractor_admin');
         expect(bootstrappedProject).toBeNull();
