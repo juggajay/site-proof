@@ -4,6 +4,7 @@ import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './he
 const E2E_TEST_ID = 'e2e-test-result';
 const E2E_REJECT_TEST_ID = 'e2e-reject-test-result';
 const E2E_CREATED_TEST_ID = 'e2e-created-test-result';
+const E2E_AI_DRAFT_TEST_ID = 'e2e-ai-draft-test-result';
 
 type SeededStatus = 'entered' | 'verified' | 'results_received';
 
@@ -15,6 +16,7 @@ function buildTestResults(
   primaryStatus: SeededStatus = 'entered',
   rejectedStatus: SeededStatus = 'entered',
   includeCreatedFail = false,
+  aiExtractionState: 'none' | 'draft' | 'confirmed' = 'none',
 ) {
   const results = [
     {
@@ -109,6 +111,56 @@ function buildTestResults(
     });
   }
 
+  if (aiExtractionState === 'draft') {
+    results.push({
+      id: E2E_AI_DRAFT_TEST_ID,
+      testType: 'Certificate Review Required',
+      testRequestNumber: null,
+      laboratoryName: 'E2E Certificate Lab',
+      laboratoryReportNumber: null,
+      sampleDate: null,
+      sampleLocation: 'CH 250.000 LHS',
+      testDate: null,
+      resultDate: null,
+      resultValue: null,
+      resultUnit: null,
+      specificationMin: null,
+      specificationMax: null,
+      passFail: 'pending',
+      status: 'results_received',
+      lotId: null,
+      lot: null,
+      aiExtracted: true,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      updatedAt: '2026-05-10T00:00:00.000Z',
+    });
+  }
+
+  if (aiExtractionState === 'confirmed') {
+    results.push({
+      id: E2E_AI_DRAFT_TEST_ID,
+      testType: 'Compaction Test',
+      testRequestNumber: null,
+      laboratoryName: 'E2E Certificate Lab',
+      laboratoryReportNumber: 'CERT-E2E-001',
+      sampleDate: '2026-05-10',
+      sampleLocation: 'CH 250.000 LHS',
+      testDate: '2026-05-11',
+      resultDate: null,
+      resultValue: 97.5,
+      resultUnit: '% DDR',
+      specificationMin: 95,
+      specificationMax: null,
+      passFail: 'pass',
+      status: 'entered',
+      lotId: null,
+      lot: null,
+      aiExtracted: true,
+      createdAt: '2026-05-10T00:00:00.000Z',
+      updatedAt: '2026-05-10T00:00:00.000Z',
+    });
+  }
+
   return results;
 }
 
@@ -120,8 +172,10 @@ async function mockSeededTestResultsApi(page: Page, options: MockTestResultsOpti
   let rejectRequest: unknown;
   let createTestRequest: unknown;
   let createNcrRequest: unknown;
+  let confirmExtractionRequest: unknown;
   let testResultsLoadCount = 0;
   let verifyRequestCount = 0;
+  let aiExtractionState: 'none' | 'draft' | 'confirmed' = 'none';
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -191,7 +245,12 @@ async function mockSeededTestResultsApi(page: Page, options: MockTestResultsOpti
       }
 
       await json({
-        testResults: buildTestResults(primaryStatus, rejectedStatus, includeCreatedFail),
+        testResults: buildTestResults(
+          primaryStatus,
+          rejectedStatus,
+          includeCreatedFail,
+          aiExtractionState,
+        ),
       });
       return;
     }
@@ -223,6 +282,73 @@ async function mockSeededTestResultsApi(page: Page, options: MockTestResultsOpti
       return;
     }
 
+    if (
+      url.pathname === '/api/test-results/upload-certificate' &&
+      route.request().method() === 'POST'
+    ) {
+      aiExtractionState = 'draft';
+      await json(
+        {
+          message: 'Certificate uploaded and processed successfully',
+          testResult: {
+            id: E2E_AI_DRAFT_TEST_ID,
+            testType: 'Certificate Review Required',
+            status: 'results_received',
+            aiExtracted: true,
+          },
+          extraction: {
+            success: true,
+            extractedFields: {
+              testType: { value: 'Compaction Test', confidence: 0.15 },
+              laboratoryName: { value: 'E2E Certificate Lab', confidence: 0.8 },
+              laboratoryReportNumber: { value: 'CERT-E2E-001', confidence: 0.8 },
+              sampleDate: { value: '2026-05-10', confidence: 0.8 },
+              testDate: { value: '2026-05-11', confidence: 0.8 },
+              sampleLocation: { value: 'CH 250.000 LHS', confidence: 0.8 },
+              resultValue: { value: '97.5', confidence: 0.8 },
+              resultUnit: { value: '% DDR', confidence: 0.8 },
+              specificationMin: { value: '95', confidence: 0.8 },
+              specificationMax: { value: '', confidence: 1 },
+            },
+            confidence: {
+              testType: 0.15,
+              laboratoryName: 0.8,
+              laboratoryReportNumber: 0.8,
+              sampleDate: 0.8,
+              testDate: 0.8,
+              sampleLocation: 0.8,
+              resultValue: 0.8,
+              resultUnit: 0.8,
+              specificationMin: 0.8,
+              specificationMax: 1,
+            },
+            lowConfidenceFields: [{ field: 'testType', confidence: 0.15 }],
+            needsReview: true,
+            reviewMessage: '1 field(s) need manual verification due to low AI confidence',
+          },
+        },
+        201,
+      );
+      return;
+    }
+
+    if (
+      url.pathname === `/api/test-results/${E2E_AI_DRAFT_TEST_ID}/confirm-extraction` &&
+      route.request().method() === 'PATCH'
+    ) {
+      confirmExtractionRequest = route.request().postDataJSON();
+      aiExtractionState = 'confirmed';
+      await json({
+        testResult: buildTestResults(
+          primaryStatus,
+          rejectedStatus,
+          includeCreatedFail,
+          aiExtractionState,
+        ).find((test) => test.id === E2E_AI_DRAFT_TEST_ID),
+      });
+      return;
+    }
+
     if (url.pathname === '/api/ncrs' && route.request().method() === 'POST') {
       createNcrRequest = route.request().postDataJSON();
       await json({ ncr: { ncrNumber: 'NCR-E2E-TEST-001' } });
@@ -240,6 +366,7 @@ async function mockSeededTestResultsApi(page: Page, options: MockTestResultsOpti
     getRejectRequest: () => rejectRequest,
     getCreateTestRequest: () => createTestRequest,
     getCreateNcrRequest: () => createNcrRequest,
+    getConfirmExtractionRequest: () => confirmExtractionRequest,
   };
 }
 
@@ -381,6 +508,34 @@ test.describe('Test results seeded quality evidence contract', () => {
 
     await createModal.getByLabel('Result Value').fill('1e3');
     await expect(createModal.getByLabel('Pass/Fail Status')).toHaveValue('fail');
+  });
+
+  test('labels AI extraction rows as draft until the review dialog is confirmed', async ({
+    page,
+  }) => {
+    const api = await mockSeededTestResultsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/tests`);
+
+    await page.getByRole('button', { name: 'Upload Certificate' }).click();
+    const uploadModal = page.getByRole('dialog').filter({ hasText: 'Upload Test Certificate' });
+    await uploadModal.locator('#certificate-upload').setInputFiles({
+      name: 'e2e-ai-certificate.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n%E2E AI certificate\n'),
+    });
+    await uploadModal.getByRole('button', { name: '🤖 Extract with AI' }).click();
+
+    const reviewModal = page.getByRole('dialog').filter({ hasText: 'Review AI Extracted Data' });
+    await expect(reviewModal.getByText('AI Extraction Complete')).toBeVisible();
+
+    await reviewModal.getByRole('button', { name: 'Cancel' }).click();
+    expect(api.getConfirmExtractionRequest()).toBeUndefined();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    const draftRow = page.getByRole('row').filter({ hasText: 'Certificate Review Required' });
+    await expect(draftRow.getByText('Draft extraction review')).toBeVisible();
+    await expect(draftRow.getByText('Draft review')).toBeVisible();
   });
 
   test('surfaces test-result load failures with retry and no false empty state', async ({
