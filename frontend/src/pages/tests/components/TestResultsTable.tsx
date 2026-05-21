@@ -43,6 +43,10 @@ type TestCertificateLot = NonNullable<TestResult['lot']> & {
   chainageEnd?: number | null;
 };
 
+function isAiExtractionReviewDraft(test: TestResult): boolean {
+  return Boolean(test.aiExtracted && test.status === 'results_received');
+}
+
 export const TestResultsTable = React.memo(function TestResultsTable({
   projectId,
   filteredTestResults,
@@ -112,6 +116,13 @@ export const TestResultsTable = React.memo(function TestResultsTable({
               const test = filteredTestResults[virtualRow.index];
               const overdue = isTestOverdue(test);
               const daysSince = getDaysSince(test.sampleDate, test.createdAt);
+              const aiExtractionReviewDraft = isAiExtractionReviewDraft(test);
+              const statusLabel = aiExtractionReviewDraft
+                ? 'Draft review'
+                : testStatusLabels[test.status] || test.status;
+              const statusClass = aiExtractionReviewDraft
+                ? 'bg-amber-100 text-amber-800'
+                : testStatusColors[test.status] || 'bg-muted';
               return (
                 <div
                   key={virtualRow.key}
@@ -140,6 +151,14 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                                 title="AI Extracted from certificate"
                               >
                                 AI
+                              </span>
+                            )}
+                            {aiExtractionReviewDraft && (
+                              <span
+                                className="px-1.5 py-0.5 text-[10px] bg-amber-100 text-amber-800 rounded font-bold"
+                                title="Draft extraction review. Confirm the AI review dialog before treating this as an official test result."
+                              >
+                                Draft extraction review
                               </span>
                             )}
                             {overdue && (
@@ -186,10 +205,8 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-muted'}`}
-                          >
-                            {testStatusLabels[test.status] || test.status}
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${statusClass}`}>
+                            {statusLabel}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm">
