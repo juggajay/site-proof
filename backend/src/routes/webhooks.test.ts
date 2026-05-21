@@ -91,6 +91,8 @@ describe('Webhooks API', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     delete process.env.WEBHOOK_DELIVERY_TIMEOUT_MS;
+    delete process.env.WEBHOOK_DELIVERY_MAX_ATTEMPTS;
+    delete process.env.WEBHOOK_DELIVERY_RETRY_DELAY_MS;
     if (ORIGINAL_ENCRYPTION_KEY === undefined) {
       delete process.env.ENCRYPTION_KEY;
     } else {
@@ -1407,6 +1409,28 @@ describe('Webhooks API', () => {
         );
         expect(delivery.success).toBe(false);
         expect(delivery.responseStatus).toBe(302);
+      });
+
+      it('should retry transient webhook failures before recording the final delivery result', async () => {
+        process.env.WEBHOOK_DELIVERY_RETRY_DELAY_MS = '0';
+        const config = await createDeliveryConfig();
+        const fetchMock = vi
+          .spyOn(globalThis, 'fetch')
+          .mockResolvedValueOnce(new Response('temporary outage', { status: 503 }))
+          .mockResolvedValueOnce(new Response('accepted', { status: 200 }));
+
+        const delivery = await deliverWebhook(config, 'test.retry', { ok: true });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(delivery.success).toBe(true);
+        expect(delivery.responseStatus).toBe(200);
+        expect(delivery.responseBody).toBe('accepted');
+
+        const storedDelivery = await prisma.webhookDelivery.findUnique({
+          where: { id: delivery.id },
+        });
+        expect(storedDelivery?.success).toBe(true);
+        expect(storedDelivery?.responseStatus).toBe(200);
       });
 
       it('should time out slow webhook deliveries', async () => {
