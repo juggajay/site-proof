@@ -19,6 +19,10 @@ const WEBHOOK_MANAGER_ROLES = ['owner', 'admin'];
 const LOCAL_WEBHOOK_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '::1'];
 const DEFAULT_WEBHOOK_DELIVERY_TIMEOUT_MS = 10000;
 const MAX_WEBHOOK_DELIVERY_TIMEOUT_MS = 30000;
+const DEFAULT_WEBHOOK_DELIVERY_MAX_ATTEMPTS = 3;
+const MAX_WEBHOOK_DELIVERY_MAX_ATTEMPTS = 5;
+const DEFAULT_WEBHOOK_DELIVERY_RETRY_DELAY_MS = 250;
+const MAX_WEBHOOK_DELIVERY_RETRY_DELAY_MS = 5000;
 const MAX_WEBHOOK_RESPONSE_BODY_CHARS = 4096;
 const MAX_WEBHOOK_URL_LENGTH = 2048;
 const MAX_WEBHOOK_ID_LENGTH = 120;
@@ -124,6 +128,39 @@ function getWebhookDeliveryTimeoutMs(): number {
     return DEFAULT_WEBHOOK_DELIVERY_TIMEOUT_MS;
   }
   return Math.min(parsed, MAX_WEBHOOK_DELIVERY_TIMEOUT_MS);
+}
+
+function getWebhookDeliveryMaxAttempts(): number {
+  const parsed = Number.parseInt(
+    String(process.env.WEBHOOK_DELIVERY_MAX_ATTEMPTS ?? DEFAULT_WEBHOOK_DELIVERY_MAX_ATTEMPTS),
+    10,
+  );
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_WEBHOOK_DELIVERY_MAX_ATTEMPTS;
+  }
+  return Math.min(parsed, MAX_WEBHOOK_DELIVERY_MAX_ATTEMPTS);
+}
+
+function getWebhookDeliveryRetryDelayMs(): number {
+  const parsed = Number.parseInt(
+    String(process.env.WEBHOOK_DELIVERY_RETRY_DELAY_MS ?? DEFAULT_WEBHOOK_DELIVERY_RETRY_DELAY_MS),
+    10,
+  );
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_WEBHOOK_DELIVERY_RETRY_DELAY_MS;
+  }
+  return Math.min(parsed, MAX_WEBHOOK_DELIVERY_RETRY_DELAY_MS);
+}
+
+function shouldRetryWebhookStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function waitForRetryDelay(ms: number): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function toResponseBodyPreview(responseBody: string): string {
@@ -864,38 +901,58 @@ export async function deliverWebhook(
   }
 
   const timeoutMs = getWebhookDeliveryTimeoutMs();
-  const abortController = new AbortController();
-  const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+  const maxAttempts = getWebhookDeliveryMaxAttempts();
+  const retryDelayMs = getWebhookDeliveryRetryDelayMs();
 
-  try {
-    const response = await fetch(deliveryUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Webhook-Signature': signature,
-        'X-Webhook-Event': event,
-        'X-Webhook-ID': deliveryId,
-      },
-      body: payload,
-      redirect: 'error',
-      signal: abortController.signal,
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), timeoutMs);
 
-    delivery.responseStatus = response.status;
-    delivery.responseBody = toResponseBodyPreview(await response.text());
-    delivery.success = response.status >= 200 && response.status < 300;
-  } catch (error: unknown) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      delivery.error = `Webhook delivery timed out after ${timeoutMs}ms`;
-    } else {
-      delivery.error = error instanceof Error ? error.message : 'Unknown error';
+    try {
+      const response = await fetch(deliveryUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Webhook-Signature': signature,
+          'X-Webhook-Event': event,
+          'X-Webhook-ID': deliveryId,
+        },
+        body: payload,
+        redirect: 'error',
+        signal: abortController.signal,
+      });
+
+      delivery.responseStatus = response.status;
+      delivery.responseBody = toResponseBodyPreview(await response.text());
+      delivery.error = null;
+      delivery.success = response.status >= 200 && response.status < 300;
+
+      if (
+        delivery.success ||
+        !shouldRetryWebhookStatus(response.status) ||
+        attempt === maxAttempts
+      ) {
+        break;
+      }
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        delivery.error = `Webhook delivery timed out after ${timeoutMs}ms`;
+      } else {
+        delivery.error = error instanceof Error ? error.message : 'Unknown error';
+      }
+      delivery.success = false;
+
+      if (attempt === maxAttempts) {
+        logError(
+          `[Webhook Delivery] ${event} -> ${sanitizeWebhookUrlForLog(config.url)}: ERROR - ${delivery.error}`,
+        );
+        break;
+      }
+    } finally {
+      clearTimeout(timeout);
     }
-    delivery.success = false;
-    logError(
-      `[Webhook Delivery] ${event} -> ${sanitizeWebhookUrlForLog(config.url)}: ERROR - ${delivery.error}`,
-    );
-  } finally {
-    clearTimeout(timeout);
+
+    await waitForRetryDelay(retryDelayMs);
   }
 
   await recordWebhookDelivery(delivery);
