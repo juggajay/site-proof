@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
@@ -20,10 +20,39 @@ interface WeatherTabProps {
   weatherForm: WeatherFormState;
   setWeatherForm: React.Dispatch<React.SetStateAction<WeatherFormState>>;
   saving: boolean;
-  onSave: () => Promise<void>;
+  onSave: () => Promise<boolean | void>;
   fetchingWeather: boolean;
   weatherSource: string | null;
   onFetchWeather: (date: string) => Promise<void>;
+}
+
+function normalizeRichTextEmpty(value: string | null | undefined): string {
+  const normalized = (value || '').trim();
+  return normalized === '<p></p>' || normalized === '<p><br></p>' || normalized === '<br>'
+    ? ''
+    : normalized;
+}
+
+function serializeWeatherFormState(form: WeatherFormState): string {
+  return JSON.stringify({
+    weatherConditions: form.weatherConditions || '',
+    temperatureMin: form.temperatureMin || '',
+    temperatureMax: form.temperatureMax || '',
+    rainfallMm: form.rainfallMm || '',
+    weatherNotes: form.weatherNotes || '',
+    generalNotes: normalizeRichTextEmpty(form.generalNotes),
+  });
+}
+
+function serializeDiaryWeatherState(diary: DailyDiary): string {
+  return serializeWeatherFormState({
+    weatherConditions: diary.weatherConditions || '',
+    temperatureMin: diary.temperatureMin?.toString() || '',
+    temperatureMax: diary.temperatureMax?.toString() || '',
+    rainfallMm: diary.rainfallMm?.toString() || '',
+    weatherNotes: diary.weatherNotes || '',
+    generalNotes: diary.generalNotes || '',
+  });
 }
 
 export const WeatherTab = React.memo(function WeatherTab({
@@ -44,18 +73,27 @@ export const WeatherTab = React.memo(function WeatherTab({
   // Auto-save state
   const [autoSaving, setAutoSaving] = useState(false);
   const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const currentWeatherFormJson = useMemo(
+    () => serializeWeatherFormState(weatherForm),
+    [weatherForm],
+  );
+  const [savedWeatherFormJson, setSavedWeatherFormJson] = useState(currentWeatherFormJson);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const previousWeatherFormRef = useRef<string>('');
+  const hasUnsavedChanges = Boolean(
+    diary && diary.status !== 'submitted' && currentWeatherFormJson !== savedWeatherFormJson,
+  );
+
+  const resetDirtyBaselineToCurrentForm = useCallback(() => {
+    setSavedWeatherFormJson(currentWeatherFormJson);
+    setLastAutoSaved(null);
+  }, [currentWeatherFormJson]);
 
   // Auto-save functionality
   const performAutoSave = useCallback(async () => {
     if (!diary || diary.status === 'submitted' || saving || autoSaving) return;
     if (weatherNumberError) return;
 
-    const currentFormJson = JSON.stringify(weatherForm);
-    if (currentFormJson === previousWeatherFormRef.current) {
-      setHasUnsavedChanges(false);
+    if (currentWeatherFormJson === savedWeatherFormJson) {
       return;
     }
 
@@ -80,24 +118,47 @@ export const WeatherTab = React.memo(function WeatherTab({
       });
 
       setLastAutoSaved(new Date());
-      setHasUnsavedChanges(false);
-      previousWeatherFormRef.current = currentFormJson;
+      setSavedWeatherFormJson(currentWeatherFormJson);
     } catch (err) {
       logError('Auto-save failed:', err);
     } finally {
       setAutoSaving(false);
     }
-  }, [diary, saving, autoSaving, weatherForm, projectId, selectedDate, weatherNumberError]);
+  }, [
+    diary,
+    saving,
+    autoSaving,
+    weatherForm,
+    projectId,
+    selectedDate,
+    weatherNumberError,
+    currentWeatherFormJson,
+    savedWeatherFormJson,
+  ]);
 
-  // Track weather form changes for auto-save
+  // Reset the dirty baseline whenever the saved diary object changes.
+  // This covers successful create/update/submit transitions from parent state.
   useEffect(() => {
-    if (diary && diary.status !== 'submitted') {
-      const currentFormJson = JSON.stringify(weatherForm);
-      if (currentFormJson !== previousWeatherFormRef.current) {
-        setHasUnsavedChanges(true);
-      }
+    if (!diary) {
+      resetDirtyBaselineToCurrentForm();
+      return;
     }
-  }, [weatherForm, diary]);
+
+    setSavedWeatherFormJson(serializeDiaryWeatherState(diary));
+
+    if (diary.status === 'submitted') {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      setLastAutoSaved(null);
+    }
+  }, [diary, resetDirtyBaselineToCurrentForm]);
+
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      setLastAutoSaved(null);
+    }
+  }, [hasUnsavedChanges]);
 
   // Auto-save timer - save every 60 seconds if there are changes
   useEffect(() => {
@@ -130,19 +191,12 @@ export const WeatherTab = React.memo(function WeatherTab({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, diary]);
 
-  // Initialize previous form ref when diary loads
-  useEffect(() => {
-    if (diary) {
-      previousWeatherFormRef.current = JSON.stringify({
-        weatherConditions: diary.weatherConditions || '',
-        temperatureMin: diary.temperatureMin?.toString() || '',
-        temperatureMax: diary.temperatureMax?.toString() || '',
-        rainfallMm: diary.rainfallMm?.toString() || '',
-        weatherNotes: diary.weatherNotes || '',
-        generalNotes: diary.generalNotes || '',
-      });
+  const handleManualSave = async () => {
+    const saved = await onSave();
+    if (saved !== false) {
+      resetDirtyBaselineToCurrentForm();
     }
-  }, [diary]);
+  };
 
   return (
     <div className="rounded-lg border bg-card p-6">
@@ -156,13 +210,13 @@ export const WeatherTab = React.memo(function WeatherTab({
               Auto-saving...
             </span>
           )}
-          {!autoSaving && lastAutoSaved && (
+          {!autoSaving && !hasUnsavedChanges && lastAutoSaved && (
             <span className="text-xs text-muted-foreground">
               Auto-saved{' '}
               {lastAutoSaved.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
-          {!autoSaving && hasUnsavedChanges && !lastAutoSaved && (
+          {!autoSaving && hasUnsavedChanges && (
             <span className="text-xs text-orange-500">&bull; Unsaved changes</span>
           )}
         </div>
@@ -307,7 +361,7 @@ export const WeatherTab = React.memo(function WeatherTab({
       {diary?.status !== 'submitted' && (
         <div className="mt-4 flex items-center gap-3">
           <button
-            onClick={onSave}
+            onClick={handleManualSave}
             disabled={saving || Boolean(weatherNumberError)}
             className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >

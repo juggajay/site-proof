@@ -93,6 +93,12 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
   let activityCreateRequest: unknown;
   let plantCreateRequest: unknown;
   let delayCreateRequest: unknown;
+  let addendums: Array<{
+    id: string;
+    content: string;
+    addedBy: typeof E2E_ADMIN_USER;
+    addedAt: string;
+  }> = [];
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -200,9 +206,16 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
 
     if (url.pathname === '/api/diary' && route.request().method() === 'POST') {
       weatherSaveRequest = route.request().postDataJSON();
+      const weatherSave = weatherSaveRequest as Partial<ReturnType<typeof buildDiary>>;
       await json({
         ...buildDiary(submitted ? 'submitted' : 'draft'),
-        ...(weatherSaveRequest as object),
+        ...weatherSave,
+        weatherConditions: weatherSave.weatherConditions ?? null,
+        temperatureMin: weatherSave.temperatureMin ?? null,
+        temperatureMax: weatherSave.temperatureMax ?? null,
+        rainfallMm: weatherSave.rainfallMm ?? null,
+        weatherNotes: weatherSave.weatherNotes ?? null,
+        generalNotes: weatherSave.generalNotes ?? null,
         date: `${E2E_DIARY_DATE}T00:00:00.000Z`,
       });
       return;
@@ -268,7 +281,23 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
     }
 
     if (url.pathname === `/api/diary/${E2E_DIARY_ID}/addendums`) {
-      await json([]);
+      await json(addendums);
+      return;
+    }
+
+    if (
+      url.pathname === `/api/diary/${E2E_DIARY_ID}/addendum` &&
+      route.request().method() === 'POST'
+    ) {
+      const request = route.request().postDataJSON() as { content: string };
+      const addendum = {
+        id: `e2e-addendum-${addendums.length + 1}`,
+        content: request.content,
+        addedBy: E2E_ADMIN_USER,
+        addedAt: `${E2E_DIARY_DATE}T08:00:00.000Z`,
+      };
+      addendums = [...addendums, addendum];
+      await json(addendum, 201);
       return;
     }
 
@@ -368,6 +397,47 @@ test.describe('Daily diary seeded UI contract', () => {
     expect(consoleErrors.filter((message) => message.includes('Error fetching weather'))).toEqual(
       [],
     );
+  });
+
+  test('clears the unsaved indicator after create, save, submit, and addendum', async ({
+    page,
+  }) => {
+    await mockSeededDiaryApi(page, { diaryNotFound: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/diary`);
+
+    await expect(page.getByText(/No diary entry for/)).toBeVisible();
+    await page.getByRole('button', { name: 'Create Diary Entry' }).click();
+    await expect(page.getByRole('button', { name: 'Create Diary Entry' })).toBeVisible();
+    await expect(page.locator('input[placeholder="e.g. 15"]')).toHaveValue('16');
+    await page.getByRole('button', { name: 'Create Diary Entry' }).click();
+
+    await expect(page.getByRole('button', { name: 'Update Weather Info' })).toBeVisible();
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+
+    await page.locator('input[placeholder="e.g. 15"]').fill('17');
+    await expect(page.getByText('Unsaved changes')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Update Weather Info' }).click();
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Submit Diary' }).click();
+    const modal = page.locator('.fixed').filter({ hasText: 'Submit Daily Diary?' }).first();
+    await modal.getByRole('button', { name: 'Confirm Submit' }).click();
+
+    await expect(
+      page
+        .locator('span')
+        .filter({ hasText: /^Submitted$/ })
+        .first(),
+    ).toBeVisible();
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+
+    await page.getByPlaceholder('Enter addendum notes...').fill('QA addendum saved cleanly');
+    await page.getByRole('button', { name: 'Add Addendum' }).click();
+
+    await expect(page.getByText('QA addendum saved cleanly')).toBeVisible();
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
   });
 
   test('shows the mobile quick-add rail as intentionally scrollable', async ({ page }) => {

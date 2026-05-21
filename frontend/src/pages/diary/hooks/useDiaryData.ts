@@ -233,8 +233,8 @@ export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
 
   // --- Core Handlers ---
 
-  const createOrUpdateDiary = useCallback(async () => {
-    if (saving || savingDiaryRef.current) return;
+  const createOrUpdateDiary = useCallback(async (): Promise<boolean> => {
+    if (saving || savingDiaryRef.current) return false;
     savingDiaryRef.current = true;
     setSaving(true);
     setError(null);
@@ -242,7 +242,7 @@ export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
       const weatherNumberError = getDiaryWeatherNumberError(weatherForm);
       if (weatherNumberError) {
         setError(weatherNumberError);
-        return;
+        return false;
       }
 
       const temperatureMin = parseOptionalDiaryTemperatureInput(weatherForm.temperatureMin);
@@ -264,10 +264,12 @@ export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
       });
       setDiary(data);
       setShowNewEntry(true);
-      fetchDiaries();
+      void fetchDiaries();
+      return true;
     } catch (err) {
       logError('Error saving diary:', err);
       setError(extractErrorMessage(err, 'Failed to save diary'));
+      return false;
     } finally {
       savingDiaryRef.current = false;
       setSaving(false);
