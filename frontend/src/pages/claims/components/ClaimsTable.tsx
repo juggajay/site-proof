@@ -9,7 +9,7 @@ import {
   Send,
   Package,
   Loader2,
-  Brain,
+  ClipboardCheck,
   Plus,
 } from 'lucide-react';
 import type { Claim } from '../types';
@@ -247,14 +247,14 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                     <button
                       onClick={() => onCompletenessCheck(claim.id)}
                       disabled={loadingCompleteness && showCompletenessModal === claim.id}
-                      className="p-2 hover:bg-purple-100 rounded-lg text-purple-600 disabled:opacity-50"
-                      aria-label="AI Completeness Check"
-                      title="AI Completeness Check"
+                      className="p-2 hover:bg-primary/10 rounded-lg text-primary disabled:opacity-50"
+                      aria-label="Claim Evidence Review"
+                      title="Claim Evidence Review"
                     >
                       {loadingCompleteness && showCompletenessModal === claim.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Brain className="h-4 w-4" />
+                        <ClipboardCheck className="h-4 w-4" />
                       )}
                     </button>
                     <button

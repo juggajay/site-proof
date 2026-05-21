@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildClaimEvidenceReviewFromInputs,
   buildLotReadinessFromInputs,
   filterCommercialReadiness,
   type LotReadinessInput,
@@ -199,5 +200,97 @@ describe('evidence readiness helpers', () => {
         }),
       ]),
     );
+  });
+
+  it('builds post-claim evidence review with readiness vocabulary', () => {
+    const review = buildClaimEvidenceReviewFromInputs({
+      analyzedAt: '2026-05-21T00:00:00.000Z',
+      claim: {
+        id: 'claim-1',
+        claimNumber: 7,
+        totalClaimedAmount: 1500,
+        claimedLots: [
+          {
+            amountClaimed: 1000,
+            lot: {
+              id: 'lot-ready',
+              lotNumber: 'LOT-READY',
+              activityType: 'Earthworks',
+              testResults: [{ id: 'test-1', status: 'verified', passFail: 'pass' }],
+              ncrLots: [],
+              documents: [
+                { id: 'photo-1', documentType: 'photo' },
+                { id: 'photo-2', documentType: 'photo' },
+                { id: 'photo-3', documentType: 'photo' },
+              ],
+              itpInstance: {
+                template: {
+                  checklistItems: [
+                    { id: 'item-1', pointType: 'standard' },
+                    { id: 'item-2', pointType: 'standard' },
+                  ],
+                },
+                completions: [
+                  {
+                    id: 'completion-1',
+                    status: 'completed',
+                    verificationStatus: 'verified',
+                    checklistItemId: 'item-1',
+                  },
+                  {
+                    id: 'completion-2',
+                    status: 'completed',
+                    verificationStatus: 'verified',
+                    checklistItemId: 'item-2',
+                  },
+                ],
+              },
+              holdPoints: [],
+            },
+          },
+          {
+            amountClaimed: 500,
+            lot: {
+              id: 'lot-blocked',
+              lotNumber: 'LOT-BLOCKED',
+              activityType: 'Drainage',
+              testResults: [{ id: 'test-2', status: 'verified', passFail: 'fail' }],
+              ncrLots: [
+                {
+                  ncr: {
+                    id: 'ncr-1',
+                    status: 'open',
+                    severity: 'major',
+                  },
+                },
+              ],
+              documents: [],
+              itpInstance: null,
+              holdPoints: [{ id: 'hp-1', status: 'requested' }],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(review.claimId).toBe('claim-1');
+    expect(review.summary).toMatchObject({
+      totalLots: 2,
+      readyCount: 1,
+      blockedCount: 1,
+      totalClaimAmount: 1500,
+      recommendedAmount: 1000,
+    });
+    expect(review.lots[0].claim.state).toBe('ready');
+    expect(review.lots[0].claim.support.map((readinessItem) => readinessItem.code)).toContain(
+      'itp_complete',
+    );
+    expect(review.lots[1].claim.state).toBe('blocked');
+    expect(review.lots[1].claim.blockers.map((readinessItem) => readinessItem.code)).toEqual(
+      expect.arrayContaining(['failed_tests', 'open_major_ncrs', 'unreleased_hold_points']),
+    );
+    expect(
+      review.lots[1].claim.blockers.every((readinessItem) => !readinessItem.blocksAction),
+    ).toBe(true);
   });
 });

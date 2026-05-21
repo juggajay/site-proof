@@ -1836,6 +1836,31 @@ describe('Progress Claims API', () => {
       expect(Array.isArray(res.body.lots)).toBe(true);
     });
 
+    it('should get claim evidence review data with readiness-shaped buckets', async () => {
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/completeness-check`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.claimId).toBe(evidenceClaimId);
+      expect(res.body.summary).toMatchObject({
+        totalLots: 1,
+        totalClaimAmount: 2000,
+        recommendedAmount: 2000,
+      });
+      expect(res.body.summary).toHaveProperty('readyCount');
+      expect(res.body.summary).toHaveProperty('reviewCount');
+      expect(res.body.summary).toHaveProperty('blockedCount');
+      expect(res.body.summary).not.toHaveProperty('averageCompletenessScore');
+      expect(res.body.summary).not.toHaveProperty('includeCount');
+      expect(res.body.lots[0]).toHaveProperty('claim');
+      expect(res.body.lots[0].claim).toHaveProperty('blockers');
+      expect(res.body.lots[0].claim).toHaveProperty('warnings');
+      expect(res.body.lots[0].claim).toHaveProperty('support');
+      expect(res.body.lots[0]).not.toHaveProperty('completenessScore');
+      expect(res.body.lots[0]).not.toHaveProperty('recommendation');
+    });
+
     it('should return 404 for non-existent claim', async () => {
       const res = await request(app)
         .get(`/api/projects/${projectId}/claims/non-existent-id/evidence-package`)
