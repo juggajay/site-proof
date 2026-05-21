@@ -149,6 +149,7 @@ export const AuditAction = {
   LOT_CREATED: 'lot_created',
   LOT_UPDATED: 'lot_updated',
   LOT_STATUS_CHANGED: 'lot_status_changed',
+  LOT_FORCE_CONFORMED: 'lot_force_conformed',
   LOT_SUBCONTRACTOR_ASSIGNED: 'lot_subcontractor_assigned',
   LOT_SUBCONTRACTOR_ASSIGNMENT_UPDATED: 'lot_subcontractor_assignment_updated',
   LOT_SUBCONTRACTOR_ASSIGNMENT_REMOVED: 'lot_subcontractor_assignment_removed',

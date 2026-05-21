@@ -1410,6 +1410,14 @@ const LOT_EDITORS = [
   'quality_manager',
   'foreman',
 ];
+const LOT_BUDGET_EDITORS = ['owner', 'admin', 'project_manager'];
+const CONFORMED_LOT_BUDGET_EDIT_FIELDS = new Set(['budgetAmount', 'expectedUpdatedAt']);
+
+function getProvidedUpdateFields(data: z.infer<typeof updateLotSchema>) {
+  return Object.entries(data)
+    .filter(([, value]) => value !== undefined)
+    .map(([key]) => key);
+}
 
 // PATCH /api/lots/:id - Update a lot
 lotsRouter.patch(
@@ -1444,11 +1452,6 @@ lotsRouter.patch(
       LOT_EDITORS,
       'You do not have permission to edit lots',
     );
-
-    // Don't allow editing conformed or claimed lots (without special override)
-    if (lot.status === 'conformed' || lot.status === 'claimed') {
-      throw AppError.badRequest(`Cannot edit a ${lot.status} lot`);
-    }
 
     // Feature #871: Concurrent edit detection (optimistic locking)
     // If client sends expectedUpdatedAt, check if lot was modified since
@@ -1488,6 +1491,27 @@ lotsRouter.patch(
       structureId: validatedStructureId,
       structureElement: validatedStructureElement,
     } = validation.data;
+    const providedUpdateFields = getProvidedUpdateFields(validation.data);
+    const isConformedBudgetOnlyUpdate =
+      lot.status === 'conformed' &&
+      budgetAmount !== undefined &&
+      providedUpdateFields.every((field) => CONFORMED_LOT_BUDGET_EDIT_FIELDS.has(field));
+
+    if (lot.status === 'claimed') {
+      throw AppError.badRequest('Cannot edit a claimed lot');
+    }
+
+    if (lot.status === 'conformed' && !isConformedBudgetOnlyUpdate) {
+      throw AppError.badRequest(
+        'Cannot edit a conformed lot. Only the budget amount can be updated before the lot is claimed.',
+      );
+    }
+
+    if (isConformedBudgetOnlyUpdate && !LOT_BUDGET_EDITORS.includes(userProjectRole)) {
+      throw AppError.forbidden(
+        'Only project managers, admins, or owners can edit budgets on conformed lots',
+      );
+    }
 
     // Feature #853 & #854: Validate area zone and structure ID for respective lot types
     const existingLot = await prisma.lot.findUnique({
@@ -1547,17 +1571,11 @@ lotsRouter.patch(
       updateData.structureElement = validatedStructureElement; // Feature #854
     if (status !== undefined) updateData.status = status;
     // Only PMs and above can set budget
-    if (
-      budgetAmount !== undefined &&
-      ['owner', 'admin', 'project_manager'].includes(userProjectRole)
-    ) {
+    if (budgetAmount !== undefined && LOT_BUDGET_EDITORS.includes(userProjectRole)) {
       updateData.budgetAmount = budgetAmount;
     }
     // Only PMs and above can assign subcontractors
-    if (
-      assignedSubcontractorId !== undefined &&
-      ['owner', 'admin', 'project_manager'].includes(userProjectRole)
-    ) {
+    if (assignedSubcontractorId !== undefined && LOT_BUDGET_EDITORS.includes(userProjectRole)) {
       if (assignedSubcontractorId) {
         await requireSubcontractorInProject(assignedSubcontractorId, lot.projectId);
       }
@@ -1586,10 +1604,7 @@ lotsRouter.patch(
         },
       });
 
-      if (
-        assignedSubcontractorId !== undefined &&
-        ['owner', 'admin', 'project_manager'].includes(userProjectRole)
-      ) {
+      if (assignedSubcontractorId !== undefined && LOT_BUDGET_EDITORS.includes(userProjectRole)) {
         await syncPrimaryLotSubcontractorAssignment(tx, {
           lotId: id,
           projectId: lot.projectId,
@@ -2316,7 +2331,7 @@ lotsRouter.post(
       userId: user.id,
       entityType: 'lot',
       entityId: updatedLot.id,
-      action: AuditAction.LOT_STATUS_CHANGED,
+      action: force ? AuditAction.LOT_FORCE_CONFORMED : AuditAction.LOT_STATUS_CHANGED,
       changes: {
         lotNumber: lot.lotNumber,
         status: { from: lot.status, to: updatedLot.status },
