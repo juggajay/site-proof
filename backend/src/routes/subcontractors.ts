@@ -1289,7 +1289,8 @@ subcontractorsRouter.get(
             totalPlantApproved: true,
           },
         },
-        assignedLots: {
+        lotAssignments: {
+          where: { status: 'active' },
           select: { id: true },
         },
       },
@@ -1332,7 +1333,7 @@ subcontractorsRouter.get(
         })),
         totalApprovedDockets,
         totalCost,
-        assignedLotCount: sub.assignedLots.length,
+        assignedLotCount: sub.lotAssignments.length,
       };
     });
 

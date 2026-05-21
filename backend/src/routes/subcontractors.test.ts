@@ -328,6 +328,48 @@ describe('Subcontractors API', () => {
       expect(res.body.subcontractors.length).toBeGreaterThan(0);
     });
 
+    it('should count explicit lot assignments for each subcontractor', async () => {
+      const suffix = Date.now();
+      const assignedSubcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Assigned Lot Subcontractor ${suffix}`,
+          primaryContactName: 'Assigned Lot Contact',
+          primaryContactEmail: `assigned-lot-sub-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      const assignedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `SUB-ASSIGN-${suffix}`,
+          lotType: 'roadworks',
+          activityType: 'earthworks',
+          description: 'Lot assigned through the explicit assignment table',
+        },
+      });
+      await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: assignedLot.id,
+          subcontractorCompanyId: assignedSubcontractor.id,
+          assignedById: userId,
+          status: 'active',
+        },
+      });
+
+      const res = await request(app)
+        .get(`/api/subcontractors/project/${projectId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      const row = res.body.subcontractors.find(
+        (sub: { id: string }) => sub.id === assignedSubcontractor.id,
+      );
+      expect(row).toBeDefined();
+      expect(row.assignedLotCount).toBe(1);
+    });
+
     it('should reject malformed includeRemoved query parameters', async () => {
       const duplicateIncludeRemovedRes = await request(app)
         .get(`/api/subcontractors/project/${projectId}`)
