@@ -174,6 +174,23 @@ test.describe('production readiness guardrails', () => {
     expect(claimsRoute).not.toContain('percentageComplete: 100,');
   });
 
+  test('claim evidence review uses deterministic wording instead of AI branding', async () => {
+    const claimsTable = await readFile(
+      new URL('../src/pages/claims/components/ClaimsTable.tsx', import.meta.url),
+      'utf8',
+    );
+    const completenessModal = await readFile(
+      new URL('../src/pages/claims/components/CompletenessCheckModal.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(claimsTable).not.toContain('AI Completeness Check');
+    expect(completenessModal).not.toMatch(/\bAI\b|Brain|Completeness Analysis|AI Suggestions/);
+    expect(completenessModal).toContain('Claim Evidence Review');
+    expect(completenessModal).toContain('Reviewing claim evidence');
+    expect(completenessModal).toContain('Recommended actions');
+  });
+
   test('Australia/Sydney date keys do not roll back to the UTC day', () => {
     const earlySydneyMorning = new Date('2026-05-20T14:30:00.000Z');
 

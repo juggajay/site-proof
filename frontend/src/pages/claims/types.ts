@@ -45,50 +45,10 @@ export interface PaymentDueStatus {
   className: string;
 }
 
-export interface CompletenessIssue {
-  type: string;
-  severity: 'critical' | 'warning' | 'info';
-  message: string;
-  suggestion: string;
-}
-
-export interface CompletenessLotSummary {
-  itpStatus: string;
-  testStatus: string;
-  holdPointStatus: string;
-  ncrStatus: string;
-  photoCount: number;
-}
-
-export interface CompletenessLot {
-  lotId: string;
-  lotNumber: string;
-  activityType: string;
-  claimAmount: number;
-  completenessScore: number;
-  recommendation: 'include' | 'review' | 'exclude';
-  issues: CompletenessIssue[];
-  summary: CompletenessLotSummary;
-}
-
-export interface CompletenessSummary {
-  totalLots: number;
-  includeCount: number;
-  reviewCount: number;
-  excludeCount: number;
-  averageCompletenessScore: number;
-  totalClaimAmount: number;
-  recommendedAmount: number;
-}
-
-export interface CompletenessData {
-  claimId: string;
-  claimNumber: number;
-  analyzedAt: string;
-  summary: CompletenessSummary;
-  overallSuggestions: string[];
-  lots: CompletenessLot[];
-}
+export type {
+  ClaimEvidenceReview as CompletenessData,
+  ClaimEvidenceReviewLot as CompletenessLot,
+} from '@/types/evidenceReadiness';
 
 export type SubmitMethod = 'download';
 

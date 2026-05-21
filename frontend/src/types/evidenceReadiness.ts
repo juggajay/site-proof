@@ -69,3 +69,27 @@ export interface ClaimReadinessLot {
 export interface ProjectClaimReadiness {
   lots: ClaimReadinessLot[];
 }
+
+export interface ClaimEvidenceReviewLot {
+  lotId: string;
+  lotNumber: string;
+  activityType: string;
+  claimAmount: number;
+  claim: ReadinessBucket;
+}
+
+export interface ClaimEvidenceReview {
+  claimId: string;
+  claimNumber: number;
+  analyzedAt: string;
+  summary: {
+    totalLots: number;
+    readyCount: number;
+    reviewCount: number;
+    blockedCount: number;
+    totalClaimAmount: number;
+    recommendedAmount: number;
+  };
+  overallSuggestions: string[];
+  lots: ClaimEvidenceReviewLot[];
+}

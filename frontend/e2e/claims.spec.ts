@@ -205,6 +205,74 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
     }
 
     if (
+      url.pathname ===
+        `/api/projects/${E2E_PROJECT_ID}/claims/${E2E_CLAIM_ID}/completeness-check` &&
+      route.request().method() === 'GET'
+    ) {
+      await json({
+        claimId: E2E_CLAIM_ID,
+        claimNumber: 7,
+        analyzedAt: '2026-05-21T00:00:00.000Z',
+        summary: {
+          totalLots: 2,
+          readyCount: 1,
+          reviewCount: 1,
+          blockedCount: 0,
+          totalClaimAmount: 120000,
+          recommendedAmount: 120000,
+        },
+        overallSuggestions: [
+          'Review warnings on 1 claim line so the client can follow the evidence trail.',
+        ],
+        lots: [
+          {
+            lotId: 'e2e-ready-lot',
+            lotNumber: 'LOT-READY-001',
+            activityType: 'Earthworks',
+            claimAmount: 90000,
+            claim: {
+              state: 'ready',
+              blockers: [],
+              warnings: [],
+              support: [
+                {
+                  code: 'itp_complete',
+                  severity: 'support',
+                  area: 'itp',
+                  title: 'ITP checklist complete',
+                  detail: 'All checklist items are complete.',
+                  blocksAction: false,
+                },
+              ],
+            },
+          },
+          {
+            lotId: 'e2e-review-lot',
+            lotNumber: 'LOT-REVIEW-001',
+            activityType: 'Drainage',
+            claimAmount: 30000,
+            claim: {
+              state: 'warning',
+              blockers: [],
+              warnings: [
+                {
+                  code: 'no_photos',
+                  severity: 'warning',
+                  area: 'document',
+                  title: 'No photo evidence',
+                  detail: 'Add photos where they would help the client verify the claimed work.',
+                  blocksAction: false,
+                },
+              ],
+              support: [],
+            },
+          },
+        ],
+      });
+      return;
+    }
+
+    if (
       url.pathname === `/api/projects/${E2E_PROJECT_ID}/claims/${E2E_CLAIM_ID}/payment` &&
       route.request().method() === 'POST'
     ) {
@@ -264,9 +332,19 @@ test.describe('Claims seeded commercial contract', () => {
     await expect(claimRow.getByText('$120,000')).toBeVisible();
     await expect(claimRow.getByText('$25,000')).toBeVisible();
     await expect(claimRow.getByRole('button', { name: 'Submit Claim' })).toBeVisible();
-    await expect(claimRow.getByRole('button', { name: 'AI Completeness Check' })).toBeVisible();
+    await expect(claimRow.getByRole('button', { name: 'Claim Evidence Review' })).toBeVisible();
     await expect(claimRow.getByRole('button', { name: 'Generate Evidence Package' })).toBeVisible();
     await expect(claimRow.getByRole('button', { name: 'Download CSV' })).toBeVisible();
+
+    await claimRow.getByRole('button', { name: 'Claim Evidence Review' }).click();
+    const evidenceReviewModal = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Claim Evidence Review' });
+    await expect(evidenceReviewModal.getByText('Recommended actions')).toBeVisible();
+    await expect(evidenceReviewModal.getByText('LOT-READY-001')).toBeVisible();
+    await expect(evidenceReviewModal.getByText('LOT-REVIEW-001')).toBeVisible();
+    await expect(evidenceReviewModal.getByText('No photo evidence')).toBeVisible();
+    await evidenceReviewModal.getByRole('button', { name: 'Close' }).first().click();
 
     const rowDownloadPromise = page.waitForEvent('download');
     await claimRow.getByRole('button', { name: 'Download CSV' }).click();

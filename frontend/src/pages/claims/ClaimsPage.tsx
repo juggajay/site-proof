@@ -407,12 +407,12 @@ export function ClaimsPage() {
         );
         setCompletenessData(data);
       } catch (error) {
-        logError('Error running completeness check:', error);
+        logError('Error running claim evidence review:', error);
         toast({
-          title: 'Completeness check failed',
+          title: 'Claim evidence review failed',
           description: extractErrorMessage(
             error,
-            'Failed to run completeness check. Please try again.',
+            'Failed to review claim evidence. Please try again.',
           ),
           variant: 'error',
         });

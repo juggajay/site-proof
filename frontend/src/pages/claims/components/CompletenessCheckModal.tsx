@@ -1,6 +1,7 @@
 import React from 'react';
-import { Loader2, Brain, AlertTriangle, Info, XCircle, CheckCircle2 } from 'lucide-react';
-import type { CompletenessData, CompletenessLot, CompletenessIssue } from '../types';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, XCircle } from 'lucide-react';
+import type { CompletenessData, CompletenessLot } from '../types';
+import type { EvidenceReadinessItem } from '@/types/evidenceReadiness';
 import { formatCurrency } from '../utils';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/button';
@@ -11,138 +12,107 @@ interface CompletenessCheckModalProps {
   onClose: () => void;
 }
 
-function LotIssueItem({ issue }: { issue: CompletenessIssue }) {
+function severityStyles(item: EvidenceReadinessItem) {
+  if (item.severity === 'blocker') {
+    return {
+      wrapper: 'bg-red-50 border-red-100',
+      icon: <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />,
+      title: 'text-red-800',
+      detail: 'text-red-700',
+    };
+  }
+
+  if (item.severity === 'warning') {
+    return {
+      wrapper: 'bg-amber-50 border-amber-100',
+      icon: <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />,
+      title: 'text-amber-800',
+      detail: 'text-amber-700',
+    };
+  }
+
+  return {
+    wrapper: 'bg-green-50 border-green-100',
+    icon: <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />,
+    title: 'text-green-800',
+    detail: 'text-green-700',
+  };
+}
+
+function EvidenceItem({ item }: { item: EvidenceReadinessItem }) {
+  const styles = severityStyles(item);
+
   return (
-    <div
-      className={`flex items-start gap-2 p-2 rounded text-sm ${
-        issue.severity === 'critical'
-          ? 'bg-red-100'
-          : issue.severity === 'warning'
-            ? 'bg-amber-100'
-            : 'bg-primary/10'
-      }`}
-    >
-      {issue.severity === 'critical' && (
-        <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
-      )}
-      {issue.severity === 'warning' && (
-        <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-      )}
-      {issue.severity === 'info' && <Info className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />}
+    <div className={`flex items-start gap-2 rounded border p-2 text-sm ${styles.wrapper}`}>
+      {styles.icon}
       <div>
-        <div
-          className={`font-medium ${
-            issue.severity === 'critical'
-              ? 'text-red-800'
-              : issue.severity === 'warning'
-                ? 'text-amber-800'
-                : 'text-primary'
-          }`}
-        >
-          {issue.message}
-        </div>
-        <div
-          className={`text-xs mt-0.5 ${
-            issue.severity === 'critical'
-              ? 'text-red-700'
-              : issue.severity === 'warning'
-                ? 'text-amber-700'
-                : 'text-primary/80'
-          }`}
-        >
-          {issue.suggestion}
-        </div>
+        <div className={`font-medium ${styles.title}`}>{item.title}</div>
+        <div className={`text-xs mt-0.5 ${styles.detail}`}>{item.detail}</div>
       </div>
     </div>
   );
 }
 
-function LotAnalysisCard({ lot }: { lot: CompletenessLot }) {
+function stateBadge(lot: CompletenessLot) {
+  if (lot.claim.state === 'blocked') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+        <XCircle className="h-3 w-3" /> Blocked
+      </span>
+    );
+  }
+
+  if (lot.claim.state === 'warning') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+        <AlertTriangle className="h-3 w-3" /> Needs review
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+      <CheckCircle2 className="h-3 w-3" /> Ready
+    </span>
+  );
+}
+
+function LotEvidenceCard({ lot }: { lot: CompletenessLot }) {
+  const items = [...lot.claim.blockers, ...lot.claim.warnings, ...lot.claim.support];
+
   return (
     <div
       className={`rounded-lg border p-4 ${
-        lot.recommendation === 'exclude'
-          ? 'border-red-200 bg-red-50'
-          : lot.recommendation === 'review'
-            ? 'border-amber-200 bg-amber-50'
-            : 'border-green-200 bg-green-50'
+        lot.claim.state === 'blocked'
+          ? 'border-red-200 bg-red-50/60'
+          : lot.claim.state === 'warning'
+            ? 'border-amber-200 bg-amber-50/60'
+            : 'border-green-200 bg-green-50/60'
       }`}
     >
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold">{lot.lotNumber}</span>
             <span className="text-sm text-muted-foreground">{lot.activityType}</span>
-            {lot.recommendation === 'include' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                <CheckCircle2 className="h-3 w-3" /> Ready
-              </span>
-            )}
-            {lot.recommendation === 'review' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                <AlertTriangle className="h-3 w-3" /> Review
-              </span>
-            )}
-            {lot.recommendation === 'exclude' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                <XCircle className="h-3 w-3" /> Exclude
-              </span>
-            )}
+            {stateBadge(lot)}
           </div>
-          <div className="text-sm text-muted-foreground mt-1">
-            {formatCurrency(lot.claimAmount)}
+          <div className="mt-1 text-sm text-muted-foreground">
+            Claim line: {formatCurrency(lot.claimAmount)}
           </div>
-        </div>
-        <div
-          className={`text-2xl font-bold ${
-            lot.completenessScore >= 80
-              ? 'text-green-600'
-              : lot.completenessScore >= 60
-                ? 'text-amber-600'
-                : 'text-red-600'
-          }`}
-        >
-          {lot.completenessScore}%
         </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-5 gap-2 mb-3 text-xs">
-        <div className="text-center p-1 bg-white/50 rounded">
-          <div className="font-medium">ITP</div>
-          <div className="text-muted-foreground">{lot.summary.itpStatus}</div>
-        </div>
-        <div className="text-center p-1 bg-white/50 rounded">
-          <div className="font-medium">Tests</div>
-          <div className="text-muted-foreground">{lot.summary.testStatus}</div>
-        </div>
-        <div className="text-center p-1 bg-white/50 rounded">
-          <div className="font-medium">Hold Points</div>
-          <div className="text-muted-foreground">{lot.summary.holdPointStatus}</div>
-        </div>
-        <div className="text-center p-1 bg-white/50 rounded">
-          <div className="font-medium">NCRs</div>
-          <div className="text-muted-foreground">{lot.summary.ncrStatus}</div>
-        </div>
-        <div className="text-center p-1 bg-white/50 rounded">
-          <div className="font-medium">Photos</div>
-          <div className="text-muted-foreground">{lot.summary.photoCount}</div>
-        </div>
-      </div>
-
-      {/* Issues */}
-      {lot.issues.length > 0 && (
-        <div className="space-y-2">
-          {lot.issues.map((issue, index) => (
-            <LotIssueItem key={index} issue={issue} />
+      {items.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {items.map((item) => (
+            <EvidenceItem key={`${lot.lotId}-${item.code}`} item={item} />
           ))}
         </div>
-      )}
-
-      {lot.issues.length === 0 && (
-        <div className="flex items-center gap-2 text-sm text-green-700">
+      ) : (
+        <div className="mt-3 flex items-center gap-2 text-sm text-green-700">
           <CheckCircle2 className="h-4 w-4" />
-          This lot is complete and ready for claiming
+          Claim evidence is ready for review.
         </div>
       )}
     </div>
@@ -158,76 +128,66 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
     <Modal onClose={onClose} className="max-w-4xl">
       <ModalHeader>
         <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-purple-600" />
-          <span>AI Completeness Analysis</span>
+          <ClipboardCheck className="h-5 w-5 text-primary" />
+          <span>Claim Evidence Review</span>
         </div>
       </ModalHeader>
       <ModalBody>
         {loading ? (
           <div className="flex flex-col items-center justify-center p-12">
-            <Loader2 className="h-12 w-12 animate-spin text-purple-600 mb-4" />
-            <p className="text-muted-foreground">Analyzing claim completeness...</p>
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Reviewing claim evidence...</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Checking ITP completion, hold points, test results, NCRs, and evidence
+              Checking ITPs, hold points, test results, NCRs, and supporting documents.
             </p>
           </div>
         ) : data ? (
           <div className="space-y-6">
-            {/* Summary Section */}
             <div className="grid gap-4 md:grid-cols-4">
               <div className="rounded-lg border bg-card p-4 text-center">
-                <div
-                  className={`text-3xl font-bold ${
-                    data.summary.averageCompletenessScore >= 80
-                      ? 'text-green-600'
-                      : data.summary.averageCompletenessScore >= 60
-                        ? 'text-amber-600'
-                        : 'text-red-600'
-                  }`}
-                >
-                  {data.summary.averageCompletenessScore}%
-                </div>
-                <p className="text-sm text-muted-foreground">Average Score</p>
+                <div className="text-3xl font-bold text-green-600">{data.summary.readyCount}</div>
+                <p className="text-sm text-muted-foreground">Ready</p>
               </div>
               <div className="rounded-lg border bg-card p-4 text-center">
-                <div className="flex justify-center gap-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                    <CheckCircle2 className="h-3 w-3" /> {data.summary.includeCount}
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                    <AlertTriangle className="h-3 w-3" /> {data.summary.reviewCount}
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                    <XCircle className="h-3 w-3" /> {data.summary.excludeCount}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">Lot Status</p>
+                <div className="text-3xl font-bold text-amber-600">{data.summary.reviewCount}</div>
+                <p className="text-sm text-muted-foreground">Needs review</p>
+              </div>
+              <div className="rounded-lg border bg-card p-4 text-center">
+                <div className="text-3xl font-bold text-red-600">{data.summary.blockedCount}</div>
+                <p className="text-sm text-muted-foreground">Blocked</p>
               </div>
               <div className="rounded-lg border bg-card p-4 text-center">
                 <div className="text-xl font-bold">
                   {formatCurrency(data.summary.totalClaimAmount)}
                 </div>
-                <p className="text-sm text-muted-foreground">Total Claim</p>
-              </div>
-              <div className="rounded-lg border bg-card p-4 text-center">
-                <div className="text-xl font-bold text-green-600">
-                  {formatCurrency(data.summary.recommendedAmount)}
-                </div>
-                <p className="text-sm text-muted-foreground">Recommended</p>
+                <p className="text-sm text-muted-foreground">Total claim</p>
               </div>
             </div>
 
-            {/* Overall Suggestions */}
+            <div className="rounded-lg border bg-card p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="font-medium">Evidence-supported amount</div>
+                  <p className="text-sm text-muted-foreground">
+                    Claim value excluding lines with evidence blockers.
+                  </p>
+                </div>
+                <div className="text-xl font-bold text-green-700">
+                  {formatCurrency(data.summary.recommendedAmount)}
+                </div>
+              </div>
+            </div>
+
             {data.overallSuggestions.length > 0 && (
-              <div className="rounded-lg border bg-purple-50 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Brain className="h-4 w-4 text-purple-600" />
-                  <span className="font-medium text-purple-900">AI Suggestions</span>
+              <div className="rounded-lg border bg-primary/5 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <ClipboardCheck className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-primary">Recommended actions</span>
                 </div>
                 <ul className="space-y-1">
                   {data.overallSuggestions.map((suggestion, index) => (
-                    <li key={index} className="text-sm text-purple-800 flex items-start gap-2">
-                      <span className="text-purple-400">&#8226;</span>
+                    <li key={index} className="flex items-start gap-2 text-sm text-primary">
+                      <span className="text-primary/60">&#8226;</span>
                       {suggestion}
                     </li>
                   ))}
@@ -235,19 +195,18 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
               </div>
             )}
 
-            {data.summary.excludeCount > 0 && (
+            {data.summary.blockedCount > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Review the claim lots before submission. Lots marked for exclusion should be removed
-                by creating a corrected claim package.
+                Evidence blockers do not change this claim&apos;s status. Resolve them before
+                sharing the claim pack when the client needs a cleaner evidence trail.
               </div>
             )}
 
-            {/* Lot-by-Lot Analysis */}
             <div>
-              <h3 className="font-semibold mb-3">Lot Analysis</h3>
+              <h3 className="font-semibold mb-3">Claim lines</h3>
               <div className="space-y-3">
                 {data.lots.map((lot) => (
-                  <LotAnalysisCard key={lot.lotId} lot={lot} />
+                  <LotEvidenceCard key={lot.lotId} lot={lot} />
                 ))}
               </div>
             </div>
