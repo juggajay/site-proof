@@ -1,4 +1,4 @@
-import { FileText } from 'lucide-react';
+import { AlertTriangle, FileText } from 'lucide-react';
 import type { Lot, ConformStatus, LotTab } from '../types';
 import type { ConformanceFormat } from '@/lib/pdfGenerator';
 import { ConformanceReportModal } from './ConformanceReportModal';
@@ -8,12 +8,14 @@ interface QualityManagementSectionProps {
   conformStatus: ConformStatus | null;
   loadingConformStatus: boolean;
   canConformLots: boolean;
+  canForceConformLots: boolean;
   canVerifyTestResults: boolean;
   conforming: boolean;
   generatingReport: boolean;
   showReportFormatDialog: boolean;
   selectedReportFormat: ConformanceFormat;
   onConformLot: () => void;
+  onForceConformLot: () => void;
   onTabChange: (tab: LotTab) => void;
   onShowReportDialog: () => void;
   onGenerateReport: () => void;
@@ -26,12 +28,14 @@ export function QualityManagementSection({
   conformStatus,
   loadingConformStatus,
   canConformLots,
+  canForceConformLots,
   canVerifyTestResults,
   conforming,
   generatingReport,
   showReportFormatDialog,
   selectedReportFormat,
   onConformLot,
+  onForceConformLot,
   onTabChange,
   onShowReportDialog,
   onGenerateReport,
@@ -41,6 +45,8 @@ export function QualityManagementSection({
   const isConformedOrClaimed = lot.status === 'conformed' || lot.status === 'claimed';
   const canShowConformSection =
     canConformLots && lot.status !== 'conformed' && lot.status !== 'claimed';
+  const canForceConformBlockedLot =
+    canForceConformLots && conformStatus !== null && !conformStatus.canConform;
 
   return (
     <>
@@ -145,10 +151,24 @@ export function QualityManagementSection({
                   </ul>
                 </div>
               )}
+              {canForceConformBlockedLot && (
+                <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+                    <div>
+                      <p className="font-medium">Admin override available</p>
+                      <p>
+                        Force conformance bypasses incomplete prerequisites and records the override
+                        in the audit trail.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
 
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <button
               onClick={onConformLot}
               disabled={conforming || (conformStatus !== null && !conformStatus.canConform)}
@@ -160,6 +180,15 @@ export function QualityManagementSection({
             >
               {conforming ? 'Conforming...' : 'Conform Lot'}
             </button>
+            {canForceConformBlockedLot && (
+              <button
+                onClick={onForceConformLot}
+                disabled={conforming}
+                className="rounded-lg border border-amber-600 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {conforming ? 'Conforming...' : 'Force Conform Lot'}
+              </button>
+            )}
             {canVerifyTestResults && (
               <button
                 onClick={() => onTabChange('tests')}
