@@ -106,7 +106,7 @@ export function getPaymentDueStatus(claim: Claim): PaymentDueStatus | null {
 /** Calculate claim amount for a lot based on percent complete */
 export function calculateLotClaimAmount(lot: ConformedLot): number {
   const percentComplete = parseClaimPercentageInput(lot.percentComplete);
-  return lot.budgetAmount * ((percentComplete ?? 0) / 100);
+  return (lot.budgetAmount ?? 0) * ((percentComplete ?? 0) / 100);
 }
 
 export function parseClaimPercentageInput(value: string): number | null {

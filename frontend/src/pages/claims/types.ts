@@ -23,7 +23,7 @@ export interface ConformedLot {
   id: string;
   lotNumber: string;
   activity: string;
-  budgetAmount: number;
+  budgetAmount: number | null;
   selected: boolean;
   percentComplete: string; // 0-100, kept as text so invalid input is not coerced
 }

@@ -11,6 +11,7 @@ type SeededClaimsApiOptions = {
   initialStatus?: ClaimStatus;
   initialPaidAmount?: number;
   initialCertifiedAmount?: number | null;
+  claimReadinessLots?: unknown[];
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,6 +54,29 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
   const paymentRequests: unknown[] = [];
   let claimLoadCount = 0;
   let createClaimRequest: unknown;
+  const claimReadinessLots = options.claimReadinessLots ?? [
+    {
+      lotId: 'e2e-claim-lot',
+      lotNumber: 'LOT-CLAIM-001',
+      activityType: 'Earthworks',
+      claim: {
+        state: 'ready',
+        blockers: [],
+        warnings: [],
+        support: [
+          {
+            code: 'passing_verified_test',
+            severity: 'support',
+            area: 'test',
+            title: 'Passing verified test',
+            detail: 'At least one passing test result is verified.',
+            blocksAction: false,
+          },
+        ],
+        budgetAmount: 100000,
+      },
+    },
+  ];
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -125,6 +149,14 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
           },
         ],
       });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/projects/${E2E_PROJECT_ID}/claim-readiness` &&
+      route.request().method() === 'GET'
+    ) {
+      await json({ lots: claimReadinessLots });
       return;
     }
 
@@ -370,6 +402,89 @@ test.describe('Claims seeded commercial contract', () => {
           },
         ],
       });
+  });
+
+  test('shows claim readiness and only disables action-blocked lots', async ({ page }) => {
+    await mockSeededClaimsApi(page, {
+      claimReadinessLots: [
+        {
+          lotId: 'e2e-ready-lot',
+          lotNumber: 'LOT-READY-001',
+          activityType: 'Earthworks',
+          claim: {
+            state: 'ready',
+            blockers: [],
+            warnings: [],
+            support: [
+              {
+                code: 'passing_verified_test',
+                severity: 'support',
+                area: 'test',
+                title: 'Passing verified test',
+                detail: 'At least one passing test result is verified.',
+                blocksAction: false,
+              },
+            ],
+            budgetAmount: 100000,
+          },
+        },
+        {
+          lotId: 'e2e-hp-lot',
+          lotNumber: 'LOT-HP-001',
+          activityType: 'Drainage',
+          claim: {
+            state: 'warning',
+            blockers: [
+              {
+                code: 'unreleased_hold_points',
+                severity: 'blocker',
+                area: 'hold_point',
+                title: '1 hold point not released',
+                detail: 'Release hold points before sending a client-ready claim evidence pack.',
+                blocksAction: false,
+              },
+            ],
+            warnings: [],
+            support: [],
+            budgetAmount: 50000,
+          },
+        },
+        {
+          lotId: 'e2e-no-budget-lot',
+          lotNumber: 'LOT-BUDGET-001',
+          activityType: 'Pavements',
+          claim: {
+            state: 'blocked',
+            blockers: [
+              {
+                code: 'missing_budget',
+                severity: 'blocker',
+                area: 'budget',
+                title: 'Budget amount missing',
+                detail: 'Add a positive budget amount before claiming this lot.',
+                blocksAction: true,
+              },
+            ],
+            warnings: [],
+            support: [],
+          },
+        },
+      ],
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/claims`);
+    await page.getByRole('button', { name: 'New Claim' }).click();
+
+    const modal = page.getByRole('dialog').filter({ hasText: 'Create New Progress Claim' });
+    await expect(modal.getByText('LOT-READY-001')).toBeVisible();
+    await expect(modal.getByText('LOT-HP-001')).toBeVisible();
+    await expect(modal.getByText('1 hold point not released')).toBeVisible();
+    await expect(modal.getByText('LOT-BUDGET-001')).toBeVisible();
+    await expect(modal.getByText('Budget amount missing')).toBeVisible();
+
+    await modal.getByLabel('Select LOT-HP-001').check();
+    await expect(modal.getByRole('button', { name: 'Create Claim' })).toBeEnabled();
+    await expect(modal.getByLabel('Select LOT-BUDGET-001')).toBeDisabled();
   });
 
   test('records a final payment against a certified claim', async ({ page }) => {

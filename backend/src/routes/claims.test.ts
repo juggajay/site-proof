@@ -221,6 +221,94 @@ describe('Progress Claims API', () => {
     });
   }
 
+  describe('GET /api/projects/:projectId/claim-readiness', () => {
+    it('shows missing budget before claim creation while preserving create-time enforcement', async () => {
+      const lotWithoutBudget = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `CLAIM-READY-NO-BUDGET-${Date.now()}`,
+          status: 'conformed',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          conformedAt: new Date(),
+          conformedById: userId,
+        },
+      });
+
+      const readinessRes = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(readinessRes.status).toBe(200);
+      const readinessLot = readinessRes.body.lots.find(
+        (lot: { lotId: string }) => lot.lotId === lotWithoutBudget.id,
+      );
+      expect(readinessLot.claim.blockers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'missing_budget', blocksAction: true }),
+        ]),
+      );
+
+      const createRes = await request(app)
+        .post(`/api/projects/${projectId}/claims`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          periodStart: '2026-05-01',
+          periodEnd: '2026-05-31',
+          lots: [{ lotId: lotWithoutBudget.id, percentageComplete: 100 }],
+        });
+
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.message).toContain('do not have a rate set');
+    });
+
+    it('shows unreleased hold points as evidence blockers without action blocking', async () => {
+      const lot = await createClaimableLot(`CLAIM-READY-HP-${Date.now()}`, 2000);
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Claim readiness HP template ${Date.now()}`,
+          activityType: 'Earthworks',
+        },
+      });
+      const checklistItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 1,
+          description: 'Superintendent release required',
+          pointType: 'hold_point',
+          responsibleParty: 'contractor',
+          evidenceRequired: 'none',
+        },
+      });
+
+      await prisma.holdPoint.create({
+        data: {
+          lotId: lot.id,
+          itpChecklistItemId: checklistItem.id,
+          pointType: 'hold_point',
+          description: 'Superintendent release required',
+          status: 'requested',
+        },
+      });
+
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      const readinessLot = res.body.lots.find((item: { lotId: string }) => item.lotId === lot.id);
+      expect(readinessLot.claim.blockers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'unreleased_hold_points',
+            blocksAction: false,
+          }),
+        ]),
+      );
+    });
+  });
+
   describe('GET /api/projects/:projectId/lots', () => {
     it('should list lots for claiming', async () => {
       const res = await request(app)
