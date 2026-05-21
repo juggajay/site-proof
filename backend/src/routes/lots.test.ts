@@ -1202,6 +1202,163 @@ describe('Lots API', () => {
     }, 60000);
   });
 
+  describe('GET /api/lots/:id/readiness', () => {
+    it('should return deterministic readiness for an internal project user without writing audit logs', async () => {
+      const readinessLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-READY-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      try {
+        const beforeAuditCount = await prisma.auditLog.count({
+          where: { entityType: 'lot', entityId: readinessLot.id },
+        });
+
+        const res = await request(app)
+          .get(`/api/lots/${readinessLot.id}/readiness`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.readiness).toMatchObject({
+          lotId: readinessLot.id,
+          lotNumber: readinessLot.lotNumber,
+          status: 'not_started',
+          conformance: { state: 'blocked' },
+          claim: { state: 'not_conformed' },
+        });
+        expect(res.body.readiness.conformance.blockers).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ code: 'no_itp_assigned', blocksAction: true }),
+            expect.objectContaining({ code: 'no_passing_verified_test', blocksAction: true }),
+          ]),
+        );
+        expect(res.body.readiness.claim.blockers).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ code: 'not_conformed', blocksAction: true }),
+          ]),
+        );
+        expect(res.body.readiness.summary.actionBlockerCount).toBeGreaterThanOrEqual(3);
+
+        const afterAuditCount = await prisma.auditLog.count({
+          where: { entityType: 'lot', entityId: readinessLot.id },
+        });
+        expect(afterAuditCount).toBe(beforeAuditCount);
+      } finally {
+        await prisma.lot.delete({ where: { id: readinessLot.id } }).catch(() => {});
+      }
+    });
+
+    it('should omit commercial fields and enforce lot assignment for subcontractor readiness', async () => {
+      const assignedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-READY-SUB-${Date.now()}`,
+          status: 'conformed',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount: 9999,
+        },
+      });
+      const unassignedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-READY-SUB-UNASSIGNED-${Date.now()}`,
+          status: 'conformed',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount: 8888,
+        },
+      });
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Readiness Subcontractor ${Date.now()}`,
+          abn: '51824753556',
+          primaryContactName: 'Readiness Subcontractor',
+          primaryContactEmail: `readiness-sub-${Date.now()}@example.com`,
+          status: 'approved',
+          portalAccess: {
+            lots: true,
+            itps: true,
+            holdPoints: true,
+            testResults: true,
+            ncrs: true,
+            documents: true,
+          },
+        },
+      });
+      const subcontractorRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `readiness-sub-user-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Readiness Subcontractor User',
+          tosAccepted: true,
+        });
+      const subcontractorToken = subcontractorRes.body.token;
+      const subcontractorUserId = subcontractorRes.body.user.id;
+
+      await prisma.user.update({
+        where: { id: subcontractorUserId },
+        data: { companyId, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractorUserId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          role: 'user',
+        },
+      });
+      await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: assignedLot.id,
+          subcontractorCompanyId: subcontractorCompany.id,
+          canCompleteITP: true,
+          itpRequiresVerification: true,
+          status: 'active',
+          assignedById: userId,
+        },
+      });
+
+      try {
+        const assignedRes = await request(app)
+          .get(`/api/lots/${assignedLot.id}/readiness`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(assignedRes.status).toBe(200);
+        expect(assignedRes.body.readiness.claim).not.toHaveProperty('budgetAmount');
+        expect(JSON.stringify(assignedRes.body.readiness)).not.toContain('9999');
+        expect(JSON.stringify(assignedRes.body.readiness)).not.toContain('missing_budget');
+
+        const unassignedRes = await request(app)
+          .get(`/api/lots/${unassignedLot.id}/readiness`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(unassignedRes.status).toBe(403);
+      } finally {
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: subcontractorCompany.id },
+        });
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: subcontractorCompany.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.lot.delete({ where: { id: assignedLot.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: unassignedLot.id } }).catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorUserId } });
+        await prisma.user.delete({ where: { id: subcontractorUserId } }).catch(() => {});
+      }
+    }, 60000);
+  });
+
   describe('PATCH /api/lots/:id', () => {
     it('should update a lot', async () => {
       const res = await request(app)

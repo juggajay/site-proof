@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js';
+import { buildLotReadinessFromInputs } from '../lib/evidenceReadiness.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
@@ -2229,6 +2230,99 @@ lotsRouter.get(
       canCloseNCRs,
       canManageITPTemplates,
     });
+  }),
+);
+
+// GET /api/lots/:id/readiness - Get deterministic evidence readiness for a lot
+lotsRouter.get(
+  '/:id/readiness',
+  asyncHandler(async (req, res) => {
+    const id = parseLotRouteParam(req.params.id, 'id');
+    const user = req.user!;
+
+    const lot = await prisma.lot.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        lotNumber: true,
+        status: true,
+        projectId: true,
+        budgetAmount: true,
+        claimedInId: true,
+        holdPoints: {
+          select: { status: true },
+        },
+        documents: {
+          select: {
+            documentType: true,
+            category: true,
+            mimeType: true,
+          },
+        },
+        testResults: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!lot) {
+      throw AppError.notFound('Lot');
+    }
+
+    await requireLotReadAccess(lot, user);
+    await requireSubcontractorLotPortalModules(user, lot.projectId, [
+      'itps',
+      'testResults',
+      'ncrs',
+    ]);
+
+    const effectiveProjectRole = isSubcontractorUser(user)
+      ? null
+      : await getEffectiveProjectRole(lot.projectId, user);
+    const canViewCommercial = !isSubcontractorUser(user) && canViewLotBudget(effectiveProjectRole);
+    const conformStatus = await checkConformancePrerequisites(id);
+
+    if (!conformStatus.prerequisites) {
+      throw AppError.notFound('Lot');
+    }
+
+    const readiness = buildLotReadinessFromInputs({
+      lot: {
+        id: lot.id,
+        lotNumber: lot.lotNumber,
+        status: lot.status,
+        budgetAmount: lot.budgetAmount === null ? null : Number(lot.budgetAmount),
+        claimedInId: lot.claimedInId,
+      },
+      canViewCommercial,
+      conformStatus: {
+        canConform: Boolean(conformStatus.canConform),
+        blockingReasons: conformStatus.blockingReasons ?? [],
+        prerequisites: conformStatus.prerequisites,
+      },
+      evidenceCounts: {
+        unreleasedHoldPoints: lot.holdPoints.filter((holdPoint) => holdPoint.status !== 'released')
+          .length,
+        releasedHoldPoints: lot.holdPoints.filter((holdPoint) => holdPoint.status === 'released')
+          .length,
+        approvedDockets: 0,
+        diaryEntries: 0,
+        documents: lot.documents.length,
+        photos: lot.documents.filter((document) => {
+          const type = `${document.documentType ?? ''} ${document.category ?? ''} ${
+            document.mimeType ?? ''
+          }`.toLowerCase();
+          return type.includes('photo') || type.includes('image/');
+        }).length,
+        pendingTests: lot.testResults.filter((test) =>
+          ['pending', 'requested', 'submitted'].includes(test.status),
+        ).length,
+      },
+    });
+
+    res.json({ readiness });
   }),
 );
 
