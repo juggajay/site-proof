@@ -1024,6 +1024,11 @@ export function DocumentsPage() {
                         : 'text-muted-foreground hover:bg-yellow-100'
                     }
                     title={doc.isFavourite ? 'Remove from Favourites' : 'Add to Favourites'}
+                    aria-label={
+                      doc.isFavourite
+                        ? `Remove ${doc.filename} from favourites`
+                        : `Add ${doc.filename} to favourites`
+                    }
                   >
                     <svg
                       className="h-5 w-5"
@@ -1046,6 +1051,7 @@ export function DocumentsPage() {
                       onClick={() => void openViewer(doc)}
                       className="text-primary hover:bg-primary/10"
                       title="View"
+                      aria-label={`View ${doc.filename}`}
                     >
                       <svg
                         className="h-5 w-5"
@@ -1073,6 +1079,7 @@ export function DocumentsPage() {
                     onClick={() => void handleDownload(doc)}
                     className="rounded-md p-2 hover:bg-muted"
                     title="Download"
+                    aria-label={`Download ${doc.filename}`}
                   >
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
@@ -1089,6 +1096,7 @@ export function DocumentsPage() {
                     onClick={() => setDocumentPendingDelete(doc)}
                     className="text-red-600 hover:bg-red-100"
                     title="Delete"
+                    aria-label={`Delete ${doc.filename}`}
                   >
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path
