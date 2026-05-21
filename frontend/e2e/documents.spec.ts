@@ -291,6 +291,12 @@ test.describe('Documents seeded evidence contract', () => {
       .locator('.flex.items-center.gap-4.p-4')
       .filter({ hasText: 'e2e-drawing.pdf' });
     await expect(pdfItem).toBeVisible();
+    await expect(
+      pdfItem.locator('button[aria-label="Add e2e-drawing.pdf to favourites"]'),
+    ).toBeVisible();
+    await expect(pdfItem.locator('button[aria-label="View e2e-drawing.pdf"]')).toBeVisible();
+    await expect(pdfItem.locator('button[aria-label="Download e2e-drawing.pdf"]')).toBeVisible();
+    await expect(pdfItem.locator('button[aria-label="Delete e2e-drawing.pdf"]')).toBeVisible();
     await expect(pdfItem.getByText('Drawing', { exact: true })).toBeVisible();
     await expect(pdfItem.getByText('design', { exact: true })).toBeVisible();
     await expect(pdfItem.getByText('1.0 MB')).toBeVisible();
@@ -312,7 +318,7 @@ test.describe('Documents seeded evidence contract', () => {
 
     await page.getByRole('button', { name: 'Clear All' }).click();
     await expect(pdfItem).toBeVisible();
-    await pdfItem.getByRole('button', { name: 'Add to Favourites' }).click();
+    await pdfItem.getByRole('button', { name: 'Add e2e-drawing.pdf to favourites' }).click();
     expect(api.getFavouriteRequest()).toMatchObject({ isFavourite: true });
 
     await page.getByRole('button', { name: 'Favourites', exact: true }).click();
@@ -320,13 +326,13 @@ test.describe('Documents seeded evidence contract', () => {
     await expect(pdfItem).toBeVisible();
     await page.getByRole('button', { name: 'Clear All' }).click();
 
-    await photoItem.getByRole('button', { name: 'View' }).click();
+    await photoItem.getByRole('button', { name: 'View e2e-proof-photo.jpg' }).click();
     const viewer = page.getByTestId('document-viewer-modal');
     await expect(viewer.getByText('e2e-proof-photo.jpg')).toBeVisible();
     await expect(viewer.getByText('E2E evidence photo')).toBeVisible();
     await viewer.getByRole('button', { name: 'Close' }).click();
 
-    await pdfItem.getByRole('button', { name: 'Download' }).click();
+    await pdfItem.getByRole('button', { name: 'Download e2e-drawing.pdf' }).click();
     await expect.poll(() => openedUrls).toContain('/signed/e2e-document');
     expect(api.getSignedUrlRequests(E2E_PDF_DOC_ID)).toContainEqual(
       expect.objectContaining({ disposition: 'attachment' }),
@@ -358,7 +364,7 @@ test.describe('Documents seeded evidence contract', () => {
     expect(api.getUploadBody()).not.toContain('  Uploaded from E2E  ');
     await expect(page.getByText('e2e-upload.pdf')).toBeVisible();
 
-    await pdfItem.getByRole('button', { name: 'Delete' }).click();
+    await pdfItem.getByRole('button', { name: 'Delete e2e-drawing.pdf' }).click();
     const deleteDialog = page.getByRole('alertdialog').filter({ hasText: 'Delete Document' });
     await expect(deleteDialog.getByText('Delete "e2e-drawing.pdf"?')).toBeVisible();
     await deleteDialog.getByRole('button', { name: 'Delete' }).click();
@@ -406,7 +412,7 @@ test.describe('Documents seeded evidence contract', () => {
       .locator('.flex.items-center.gap-4.p-4')
       .filter({ hasText: 'e2e-drawing.pdf' });
     await expect(pdfItem).toBeVisible();
-    await pdfItem.getByRole('button', { name: 'Add to Favourites' }).dblclick();
+    await pdfItem.getByRole('button', { name: 'Add e2e-drawing.pdf to favourites' }).dblclick();
 
     await expect.poll(() => api.getFavouriteRequest()).toMatchObject({ isFavourite: true });
     expect(api.getFavouriteRequestCount()).toBe(1);
