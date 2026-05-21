@@ -66,6 +66,34 @@ function canCreateProjectForCompany(user: AuthenticatedUser): boolean {
   return PROJECT_CREATOR_ROLES.has(user.roleInCompany);
 }
 
+async function hasSubcontractorProjectIdentity(user: AuthenticatedUser): Promise<boolean> {
+  if (isSubcontractorUser(user)) {
+    return true;
+  }
+
+  const normalizedEmail = user.email.trim().toLowerCase();
+  const now = new Date();
+  const activeSubcontractorIdentity = await prisma.subcontractorCompany.findFirst({
+    where: {
+      status: { notIn: [...BLOCKED_SUBCONTRACTOR_STATUSES] },
+      OR: [
+        { users: { some: { userId: user.id } } },
+        {
+          AND: [
+            { primaryContactEmail: { equals: normalizedEmail, mode: 'insensitive' } },
+            {
+              OR: [{ status: { not: 'pending_approval' } }, { invitationExpiresAt: { gt: now } }],
+            },
+          ],
+        },
+      ],
+    },
+    select: { id: true },
+  });
+
+  return Boolean(activeSubcontractorIdentity);
+}
+
 function isBlockedSubcontractorStatus(status: string | null | undefined): boolean {
   return Boolean(status && BLOCKED_SUBCONTRACTOR_STATUS_SET.has(status));
 }
@@ -1091,6 +1119,10 @@ projectsRouter.post(
       'Specification set',
       PROJECT_SPECIFICATION_SET_MAX_LENGTH,
     );
+
+    if (await hasSubcontractorProjectIdentity(user)) {
+      throw AppError.forbidden('Subcontractor portal users cannot create company projects');
+    }
 
     if (!user.companyId) {
       throw AppError.forbidden('Users must belong to an organization before creating projects');

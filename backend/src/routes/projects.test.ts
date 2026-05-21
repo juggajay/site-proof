@@ -190,11 +190,159 @@ describe('Projects API', () => {
           });
 
         expect(res.status).toBe(403);
-        expect(res.body.error.message).toContain('Only company admins and project managers');
+        expect(res.body.error.message).toContain(
+          'Subcontractor portal users cannot create company projects',
+        );
         await expect(prisma.project.count({ where: { projectNumber } })).resolves.toBe(0);
       } finally {
         await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorId } });
         await prisma.user.delete({ where: { id: subcontractorId } }).catch(() => {});
+      }
+    });
+
+    it('should reject pending subcontractor invitees from creating projects even if they own a company', async () => {
+      const suffix = Date.now();
+      const inviteeEmail = `project-create-pending-sub-${suffix}@example.com`;
+      const bootstrapCompany = await prisma.company.create({
+        data: { name: `Pending Subcontractor Bootstrap Company ${suffix}` },
+      });
+      const setupProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Pending Subcontractor Invite Setup ${suffix}`,
+          projectNumber: `PENDING-SUB-SETUP-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const pendingSubcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: setupProject.id,
+          companyName: `Pending Invite Subcontractor ${suffix}`,
+          primaryContactEmail: inviteeEmail,
+          status: 'pending_approval',
+          invitationExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+      const inviteeRes = await request(app).post('/api/auth/register').send({
+        email: inviteeEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Pending Invite Project Creator',
+        tosAccepted: true,
+      });
+      const inviteeToken = inviteeRes.body.token;
+      const inviteeId = inviteeRes.body.user.id;
+      const projectNumber = `PENDING-SUB-CREATE-BLOCKED-${suffix}`;
+
+      await prisma.user.update({
+        where: { id: inviteeId },
+        data: { companyId: bootstrapCompany.id, roleInCompany: 'owner' },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/projects')
+          .set('Authorization', `Bearer ${inviteeToken}`)
+          .send({
+            name: 'Blocked Pending Subcontractor Project',
+            projectNumber,
+            state: 'NSW',
+            specificationSet: 'TfNSW',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain(
+          'Subcontractor portal users cannot create company projects',
+        );
+        await expect(prisma.project.count({ where: { projectNumber } })).resolves.toBe(0);
+      } finally {
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: pendingSubcontractor.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: pendingSubcontractor.id } })
+          .catch(() => {});
+        await prisma.project.delete({ where: { id: setupProject.id } }).catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: inviteeId } });
+        await prisma.user.delete({ where: { id: inviteeId } }).catch(() => {});
+        await prisma.project.deleteMany({ where: { companyId: bootstrapCompany.id } });
+        await prisma.company.delete({ where: { id: bootstrapCompany.id } }).catch(() => {});
+      }
+    });
+
+    it('should reject linked subcontractor users from creating projects even if they own a company', async () => {
+      const suffix = Date.now();
+      const bootstrapCompany = await prisma.company.create({
+        data: { name: `Linked Subcontractor Bootstrap Company ${suffix}` },
+      });
+      const setupProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Linked Subcontractor Setup ${suffix}`,
+          projectNumber: `LINKED-SUB-SETUP-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: setupProject.id,
+          companyName: `Linked Project Create Subcontractor ${suffix}`,
+          status: 'approved',
+        },
+      });
+      const subcontractorRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `project-create-linked-sub-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Linked Project Create Subcontractor',
+          tosAccepted: true,
+        });
+      const subcontractorToken = subcontractorRes.body.token;
+      const subcontractorId = subcontractorRes.body.user.id;
+      const projectNumber = `LINKED-SUB-CREATE-BLOCKED-${suffix}`;
+
+      await prisma.user.update({
+        where: { id: subcontractorId },
+        data: { companyId: bootstrapCompany.id, roleInCompany: 'owner' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractorId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          role: 'admin',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/projects')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            name: 'Blocked Linked Subcontractor Project',
+            projectNumber,
+            state: 'NSW',
+            specificationSet: 'TfNSW',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain(
+          'Subcontractor portal users cannot create company projects',
+        );
+        await expect(prisma.project.count({ where: { projectNumber } })).resolves.toBe(0);
+      } finally {
+        await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractorId } });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.project.delete({ where: { id: setupProject.id } }).catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorId } });
+        await prisma.user.delete({ where: { id: subcontractorId } }).catch(() => {});
+        await prisma.project.deleteMany({ where: { companyId: bootstrapCompany.id } });
+        await prisma.company.delete({ where: { id: bootstrapCompany.id } }).catch(() => {});
       }
     });
 
@@ -327,7 +475,7 @@ describe('Projects API', () => {
 
         expect(res.status).toBe(403);
         expect(res.body.error.message).toContain(
-          'Users must belong to an organization before creating projects',
+          'Subcontractor portal users cannot create company projects',
         );
         expect(updatedUser?.companyId).toBeNull();
         expect(updatedUser?.roleInCompany).toBe('subcontractor_admin');
