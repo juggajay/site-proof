@@ -12,7 +12,7 @@ import {
   FileText,
   Image,
 } from 'lucide-react';
-import { getAuthToken, useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
 import { SUPABASE_URL } from '@/lib/config';
 import { toast } from '@/components/ui/toaster';
@@ -414,36 +414,53 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     }
   };
 
-  const uploadFiles = async (
+  const buildCommentFormData = (
+    content: string,
     files: PendingAttachment[],
-  ): Promise<{ filename: string; fileUrl: string; fileSize: number; mimeType: string }[]> => {
-    const token = getAuthToken();
-    if (!token) {
-      throw new Error('Authentication required');
-    }
-
+    parentId?: string,
+  ): FormData => {
     const formData = new FormData();
     formData.append('entityType', entityType);
     formData.append('entityId', entityId);
+    formData.append('content', content);
+    if (parentId) {
+      formData.append('parentId', parentId);
+    }
 
     for (const { file } of files) {
       formData.append('files', file);
     }
 
-    const response = await authFetch('/api/comments/attachments/upload', {
+    return formData;
+  };
+
+  const createComment = async (
+    content: string,
+    files: PendingAttachment[],
+    parentId?: string,
+  ): Promise<void> => {
+    if (files.length === 0) {
+      await apiFetch('/api/comments', {
+        method: 'POST',
+        body: JSON.stringify({
+          entityType,
+          entityId,
+          content,
+          ...(parentId ? { parentId } : {}),
+        }),
+      });
+      return;
+    }
+
+    const response = await authFetch('/api/comments', {
       method: 'POST',
-      body: formData,
+      body: buildCommentFormData(content, files, parentId),
     });
 
     if (!response.ok) {
       const responseText = await response.text().catch(() => '');
-      throw new Error(extractResponseError(responseText, 'Failed to upload attachments'));
+      throw new Error(extractResponseError(responseText, 'Failed to post comment'));
     }
-
-    const data = (await response.json()) as {
-      attachments: { filename: string; fileUrl: string; fileSize: number; mimeType: string }[];
-    };
-    return data.attachments;
   };
 
   // Format file size
@@ -461,22 +478,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     setSubmitting(true);
 
     try {
-      // Upload any pending attachments
-      let attachments: { filename: string; fileUrl: string; fileSize: number; mimeType: string }[] =
-        [];
-      if (pendingAttachments.length > 0) {
-        attachments = await uploadFiles(pendingAttachments);
-      }
-
-      await apiFetch('/api/comments', {
-        method: 'POST',
-        body: JSON.stringify({
-          entityType,
-          entityId,
-          content: newComment.trim(),
-          attachments,
-        }),
-      });
+      await createComment(newComment.trim(), pendingAttachments);
 
       setNewComment('');
       clearPendingDraft();
@@ -496,23 +498,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     setSubmitting(true);
 
     try {
-      // Upload any pending attachments for reply
-      let attachments: { filename: string; fileUrl: string; fileSize: number; mimeType: string }[] =
-        [];
-      if (replyAttachments.length > 0) {
-        attachments = await uploadFiles(replyAttachments);
-      }
-
-      await apiFetch('/api/comments', {
-        method: 'POST',
-        body: JSON.stringify({
-          entityType,
-          entityId,
-          content: replyContent.trim(),
-          parentId,
-          attachments,
-        }),
-      });
+      await createComment(replyContent.trim(), replyAttachments, parentId);
 
       clearReplyDraft();
       await fetchComments();
@@ -584,9 +570,6 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
         window.open(attachment.fileUrl, '_blank', 'noopener,noreferrer');
         return;
       }
-
-      const token = getAuthToken();
-      if (!token) throw new Error('Authentication required');
 
       const response = await authFetch(`/api/comments/attachments/${attachment.id}/download`);
 

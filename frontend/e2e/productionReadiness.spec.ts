@@ -316,6 +316,18 @@ test.describe('production readiness guardrails', () => {
     expect(commentsSection).toContain('if (url.origin !== expectedOrigin) return false');
   });
 
+  test('comment submissions with files use a single multipart create request', async () => {
+    const commentsSection = await readFile(
+      new URL('../src/components/comments/CommentsSection.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(commentsSection).not.toContain('/api/comments/attachments/upload');
+    expect(commentsSection).toContain('const buildCommentFormData =');
+    expect(commentsSection).toContain("formData.append('files', file)");
+    expect(commentsSection).toContain("authFetch('/api/comments'");
+  });
+
   test('frontend public URL config rejects unsafe production values', async () => {
     const configSource = await readFile(new URL('../src/lib/config.ts', import.meta.url), 'utf8');
     const viteConfig = await readFile(new URL('../vite.config.ts', import.meta.url), 'utf8');
