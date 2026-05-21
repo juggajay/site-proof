@@ -98,6 +98,8 @@ async function mockProjectsApi(
     failProjectLoadsUntil?: number;
     createProjectFailure?: string;
     createProjectFailureStatus?: number;
+    projectDashboardFailure?: string;
+    projectDashboardFailureStatus?: number;
   } = {},
 ) {
   const user = options.user ?? projectsUser;
@@ -174,6 +176,14 @@ async function mockProjectsApi(
     }
 
     if (url.pathname === `/api/projects/${E2E_PROJECT_ID}/dashboard`) {
+      if (options.projectDashboardFailure) {
+        await json(
+          { error: { message: options.projectDashboardFailure } },
+          options.projectDashboardFailureStatus ?? 403,
+        );
+        return;
+      }
+
       await json(projectDashboardData);
       return;
     }
@@ -348,6 +358,22 @@ test.describe('Projects seeded account contract', () => {
       page.getByRole('link', { name: /Lot L-001 status changed to in progress/ }),
     ).toHaveAttribute('href', `/projects/${E2E_PROJECT_ID}/lots`);
     await expect(page.getByText('Unknown time')).toBeVisible();
+  });
+
+  test('shows access denied instead of a permanent loading state for forbidden projects', async ({
+    page,
+  }) => {
+    await mockProjectsApi(page, {
+      projectDashboardFailure: 'You do not have access to this project',
+      projectDashboardFailureStatus: 403,
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}`);
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('Access Denied', { timeout: 1500 });
+    await expect(alert).toContainText('You do not have access to this project');
+    await expect(page.getByLabel('Loading project dashboard')).toHaveCount(0);
   });
 
   test('redirects foreman mobile users to the foreman today view', async ({ page }) => {

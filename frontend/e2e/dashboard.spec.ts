@@ -387,6 +387,103 @@ test.describe('Dashboard seeded account contract', () => {
     );
   });
 
+  test('routes subcontractor users away from the head-contractor dashboard content', async ({
+    page,
+  }) => {
+    let headContractorStatsRequested = false;
+    await mockDashboardShell(
+      page,
+      {
+        id: 'e2e-subbie-dashboard-user',
+        email: 'site@subbie.example',
+        fullName: 'Sally Subbie',
+        role: 'subcontractor',
+        roleInCompany: 'member',
+        companyId: 'e2e-head-contractor-company',
+        companyName: 'Head Contractor Pty Ltd',
+        hasPassword: true,
+      },
+      null,
+    );
+
+    await page.route('**/api/subcontractors/my-company', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          company: {
+            id: 'e2e-subcontractor-company',
+            companyName: 'E2E Subbie Pty Ltd',
+            projectId: E2E_PROJECT_ID,
+            projectName: 'E2E Highway Upgrade',
+            employees: [],
+            plant: [],
+            portalAccess: {
+              lots: true,
+              itps: true,
+              holdPoints: true,
+              testResults: true,
+              ncrs: true,
+              documents: true,
+            },
+          },
+        }),
+      });
+    });
+
+    await page.route('**/api/dockets?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ dockets: [] }),
+      });
+    });
+
+    await page.route('**/api/lots?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ lots: [] }),
+      });
+    });
+
+    await page.route('**/api/notifications?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ notifications: [], unreadCount: 0 }),
+      });
+    });
+
+    await page.route('**/api/dashboard/stats**', async (route) => {
+      headContractorStatsRequested = true;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          totalProjects: 99,
+          activeProjects: 99,
+          totalLots: 99,
+          openHoldPoints: 0,
+          openNCRs: 0,
+          attentionItems: { total: 0, overdueNCRs: [], staleHoldPoints: [] },
+          recentActivities: [],
+        }),
+      });
+    });
+
+    await page.goto('/dashboard');
+
+    await expect(
+      page.getByRole('heading', { name: /Good (morning|afternoon|evening), Sally/ }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: "Today's Docket" })).toBeVisible();
+    await expect(page.getByText('E2E Subbie Pty Ltd')).toBeVisible();
+    await expect(page.getByText('Total Projects')).toHaveCount(0);
+    await expect(page.getByText('Create Lot')).toHaveCount(0);
+    expect(headContractorStatsRequested).toBe(false);
+  });
+
   test.describe('timestamp locale contract', () => {
     test.use({ locale: 'en-US', timezoneId: 'America/New_York' });
 
