@@ -189,11 +189,13 @@ export const AuditAction = {
   CLAIM_CERTIFIED: 'claim_certified',
   CLAIM_PAYMENT_RECORDED: 'claim_payment_recorded',
   // Subcontractors
+  SUBCONTRACTOR_INVITED: 'subcontractor_invited',
   SUBCONTRACTOR_INVITATION_ACCEPTED: 'subcontractor_invitation_accepted',
   SUBCONTRACTOR_STATUS_CHANGED: 'subcontractor_status_changed',
   SUBCONTRACTOR_EMPLOYEE_RATE_APPROVED: 'subcontractor_employee_rate_approved',
   SUBCONTRACTOR_PLANT_RATE_APPROVED: 'subcontractor_plant_rate_approved',
-  SUBCONTRACTOR_PORTAL_ACCESS_UPDATED: 'subcontractor_portal_access_updated',
+  SUBCONTRACTOR_PORTAL_ACCESS_CHANGED: 'subcontractor_portal_access_changed',
+  SUBCONTRACTOR_PORTAL_ACCESS_UPDATED: 'subcontractor_portal_access_changed',
 } as const;
 
 export type AuditActionType = (typeof AuditAction)[keyof typeof AuditAction];

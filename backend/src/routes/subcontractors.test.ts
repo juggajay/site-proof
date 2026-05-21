@@ -131,6 +131,24 @@ describe('Subcontractors API', () => {
       });
       expect(storedInvitation?.invitationExpiresAt).toBeInstanceOf(Date);
       expect(storedInvitation!.invitationExpiresAt!.getTime()).toBeGreaterThan(Date.now());
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'subcontractor',
+          entityId: subcontractorCompanyId,
+          action: AuditAction.SUBCONTRACTOR_INVITED,
+        },
+      });
+
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog!.changes) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        companyName: 'Test Subcontractor Co',
+        primaryContactEmail: expect.stringContaining('@example.com'),
+        status: 'pending_approval',
+      });
     });
 
     it('should reject duplicate company name for same project', async () => {
@@ -964,7 +982,7 @@ describe('Subcontractors API', () => {
           userId,
           entityType: 'subcontractor',
           entityId: subcontractorCompanyId,
-          action: AuditAction.SUBCONTRACTOR_PORTAL_ACCESS_UPDATED,
+          action: AuditAction.SUBCONTRACTOR_PORTAL_ACCESS_CHANGED,
         },
         orderBy: { createdAt: 'desc' },
       });

@@ -611,6 +611,21 @@ subcontractorsRouter.post(
       },
     });
 
+    await createAuditLog({
+      projectId,
+      userId: user.id,
+      entityType: 'subcontractor',
+      entityId: subcontractor.id,
+      action: AuditAction.SUBCONTRACTOR_INVITED,
+      changes: {
+        companyName: subcontractor.companyName,
+        primaryContactEmail: subcontractor.primaryContactEmail,
+        status: subcontractor.status,
+        globalSubcontractorId: globalId,
+      },
+      req,
+    });
+
     // Feature #942 - Send subcontractor invitation email with setup link
     const inviteUrl = buildFrontendUrl(
       `/subcontractor-portal/accept-invite?id=${subcontractor.id}`,
@@ -1256,7 +1271,7 @@ subcontractorsRouter.patch(
       userId: user.id,
       entityType: 'subcontractor',
       entityId: id,
-      action: AuditAction.SUBCONTRACTOR_PORTAL_ACCESS_UPDATED,
+      action: AuditAction.SUBCONTRACTOR_PORTAL_ACCESS_CHANGED,
       changes: { portalAccess: mergedAccess, companyName: subcontractor.companyName },
       req,
     });

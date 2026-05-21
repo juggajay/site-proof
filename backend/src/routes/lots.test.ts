@@ -100,6 +100,23 @@ describe('Lots API', () => {
       expect(res.body.lot).toBeDefined();
       expect(res.body.lot.lotNumber).toBe('LOT-001');
       lotId = res.body.lot.id;
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'lot',
+          entityId: lotId,
+          action: AuditAction.LOT_CREATED,
+        },
+      });
+
+      expect(auditLog).toBeTruthy();
+      expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+        lotNumber: 'LOT-001',
+        activityType: 'Earthworks',
+        status: 'not_started',
+      });
     });
 
     it('should keep company admin lot creation rights when project membership is lower', async () => {

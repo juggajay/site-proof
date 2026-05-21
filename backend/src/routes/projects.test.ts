@@ -5,6 +5,7 @@ import { projectsRouter } from './projects.js';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 const app = express();
 app.use(express.json());
@@ -68,6 +69,25 @@ describe('Projects API', () => {
       expect(res.body.project).toBeDefined();
       expect(res.body.project.name).toBe('Test Project');
       projectId = res.body.project.id;
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project',
+          entityId: projectId,
+          action: AuditAction.PROJECT_CREATED,
+        },
+      });
+
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog!.changes) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        name: 'Test Project',
+        projectNumber: res.body.project.projectNumber,
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      });
     });
 
     it('should reject project without name', async () => {
