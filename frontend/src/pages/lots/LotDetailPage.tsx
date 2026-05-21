@@ -136,6 +136,7 @@ export function LotDetailPage() {
   } | null>(null);
   const [conforming, setConforming] = useState(false);
   const [showConformConfirm, setShowConformConfirm] = useState(false);
+  const [showForceConformConfirm, setShowForceConformConfirm] = useState(false);
   const [qualityAccess, setQualityAccess] = useState<QualityAccess | null>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [loadingTests, setLoadingTests] = useState(false);
@@ -643,6 +644,7 @@ export function LotDetailPage() {
 
   // Extract quality access permissions
   const canConformLots = qualityAccess?.canConformLots || false;
+  const canForceConformLots = qualityAccess?.role === 'owner' || qualityAccess?.role === 'admin';
   const canVerifyTestResults = qualityAccess?.canVerifyTestResults || false;
 
   // Permission check for managing lot (assign subcontractors)
@@ -1516,19 +1518,23 @@ export function LotDetailPage() {
     });
   };
 
-  const handleConformLot = async () => {
+  const handleConformLot = async (force = false) => {
     if (conforming || !lotId) return;
 
     setConforming(true);
     try {
       await apiFetch(`/api/lots/${encodeURIComponent(lotId)}/conform`, {
         method: 'POST',
+        ...(force ? { body: JSON.stringify({ force: true }) } : {}),
       });
       setShowConformConfirm(false);
+      setShowForceConformConfirm(false);
       setLot((prev) => (prev ? { ...prev, status: 'conformed' } : null));
       toast({
         title: 'Lot conformed',
-        description: 'The lot has been marked as quality-approved.',
+        description: force
+          ? 'The lot has been force conformed and marked as quality-approved.'
+          : 'The lot has been marked as quality-approved.',
         variant: 'success',
       });
     } catch (err) {
@@ -1955,12 +1961,14 @@ export function LotDetailPage() {
         conformStatus={conformStatus}
         loadingConformStatus={loadingConformStatus}
         canConformLots={canConformLots}
+        canForceConformLots={canForceConformLots}
         canVerifyTestResults={canVerifyTestResults}
         conforming={conforming}
         generatingReport={generatingReport}
         showReportFormatDialog={showReportFormatDialog}
         selectedReportFormat={selectedReportFormat}
         onConformLot={() => setShowConformConfirm(true)}
+        onForceConformLot={() => setShowForceConformConfirm(true)}
         onTabChange={handleTabChange}
         onShowReportDialog={handleShowReportDialog}
         onGenerateReport={handleGenerateReport}
@@ -2156,7 +2164,24 @@ export function LotDetailPage() {
         }
         confirmLabel="Conform Lot"
         onCancel={() => setShowConformConfirm(false)}
-        onConfirm={() => void handleConformLot()}
+        onConfirm={() => void handleConformLot(false)}
+      />
+
+      <ConfirmDialog
+        open={showForceConformConfirm}
+        title="Force Conform Lot"
+        description={
+          <>
+            <p>Force conform {lot?.lotNumber || 'this lot'}?</p>
+            <p>
+              This bypasses incomplete prerequisites and records the override in the audit trail.
+            </p>
+          </>
+        }
+        confirmLabel="Force Conform Lot"
+        variant="destructive"
+        onCancel={() => setShowForceConformConfirm(false)}
+        onConfirm={() => void handleConformLot(true)}
       />
     </div>
   );

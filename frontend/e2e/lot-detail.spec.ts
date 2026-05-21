@@ -133,6 +133,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
   let itpLoadAttempts = 0;
   let completionRequestCount = 0;
   let attachmentRequest: unknown;
+  let conformRequestBody: unknown;
   let completion = null as null | {
     id: string;
     checklistItemId: string;
@@ -227,6 +228,24 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
           hasPassingTest: false,
           noOpenNcrs: true,
           openNcrs: [],
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === `/api/lots/${E2E_LOT_ID}/conform` && route.request().method() === 'POST') {
+      conformRequestBody = route.request().postDataJSON();
+      await json({
+        message: 'Lot conformed successfully',
+        lot: {
+          ...E2E_LOT,
+          status: 'conformed',
+          conformedAt: '2026-01-15T02:00:00.000Z',
+          conformedBy: {
+            id: E2E_ADMIN_USER.id,
+            fullName: E2E_ADMIN_USER.fullName,
+            email: E2E_ADMIN_USER.email,
+          },
         },
       });
       return;
@@ -335,6 +354,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
   return {
     getCompletionRequestCount: () => completionRequestCount,
     getAttachmentRequest: () => attachmentRequest,
+    getConformRequestBody: () => conformRequestBody,
     getItpLoadAttempts: () => itpLoadAttempts,
     getLotLoadAttempts: () => lotLoadAttempts,
   };
@@ -412,5 +432,25 @@ test.describe('Lot detail ITP workflow', () => {
       fileUrl:
         'https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/projects/e2e/supabase-proof-photo.jpg',
     });
+  });
+
+  test('lets admins force conform when prerequisites block normal conformance', async ({
+    page,
+  }) => {
+    const api = await mockLotDetailApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+
+    await expect(page.getByText('Cannot conform lot:')).toBeVisible();
+    await expect(page.getByText('ITP incomplete')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Conform Lot', exact: true })).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Force Conform Lot' }).click();
+    const dialog = page.getByRole('alertdialog').filter({ hasText: 'Force Conform Lot' });
+    await expect(dialog).toContainText('This bypasses incomplete prerequisites');
+    await dialog.getByRole('button', { name: 'Force Conform Lot' }).click();
+
+    await expect.poll(() => api.getConformRequestBody()).toMatchObject({ force: true });
+    await expect(page.getByRole('heading', { name: 'Lot Conformed' })).toBeVisible();
   });
 });

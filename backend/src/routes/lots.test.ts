@@ -1306,6 +1306,75 @@ describe('Lots API', () => {
     });
   });
 
+  describe('POST /api/lots/:id/subcontractors', () => {
+    it('should audit subcontractor lot assignment changes', async () => {
+      const auditLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-SUB-AUDIT-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Lot Assignment Audit Subbie ${Date.now()}`,
+          primaryContactName: 'Assignment Audit Contact',
+          primaryContactEmail: `lot-assignment-audit-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+      let createdAssignmentId: string | null = null;
+
+      try {
+        const res = await request(app)
+          .post(`/api/lots/${auditLot.id}/subcontractors`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .set('User-Agent', 'lot-assignment-audit-test')
+          .send({
+            subcontractorCompanyId: subcontractor.id,
+            canCompleteITP: true,
+            itpRequiresVerification: false,
+          });
+
+        expect(res.status).toBe(201);
+        createdAssignmentId = res.body.id;
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId,
+            userId,
+            entityType: 'lot_subcontractor_assignment',
+            entityId: res.body.id,
+            action: AuditAction.LOT_SUBCONTRACTOR_ASSIGNED,
+          },
+        });
+        expect(auditLog).toBeTruthy();
+        expect(auditLog?.userAgent).toBe('lot-assignment-audit-test');
+        expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+          lotId: auditLot.id,
+          lotNumber: auditLot.lotNumber,
+          subcontractorCompanyId: subcontractor.id,
+          subcontractorCompanyName: subcontractor.companyName,
+          status: { from: null, to: 'active' },
+          canCompleteITP: true,
+          itpRequiresVerification: false,
+        });
+      } finally {
+        if (createdAssignmentId) {
+          await prisma.auditLog.deleteMany({ where: { entityId: createdAssignmentId } });
+        }
+        await prisma.lotSubcontractorAssignment.deleteMany({ where: { lotId: auditLot.id } });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+        await prisma.lot.delete({ where: { id: auditLot.id } }).catch(() => {});
+      }
+    });
+  });
+
   describe('POST /api/lots/:id/override-status', () => {
     it('should write a sanitized audit log for manual status overrides', async () => {
       const overrideLot = await prisma.lot.create({

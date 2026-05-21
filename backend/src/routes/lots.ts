@@ -2633,6 +2633,24 @@ lotsRouter.post(
       return upsertedAssignment;
     });
 
+    await createAuditLog({
+      projectId: lot.projectId,
+      userId: user.id,
+      entityType: 'lot_subcontractor_assignment',
+      entityId: assignment.id,
+      action: AuditAction.LOT_SUBCONTRACTOR_ASSIGNED,
+      changes: {
+        lotId: id,
+        lotNumber: lot.lotNumber,
+        subcontractorCompanyId,
+        subcontractorCompanyName: subcontractor.companyName,
+        status: { from: existingAssignment?.status ?? null, to: assignment.status },
+        canCompleteITP: assignment.canCompleteITP,
+        itpRequiresVerification: assignment.itpRequiresVerification,
+      },
+      req,
+    });
+
     res.status(201).json(assignment);
   }),
 );
@@ -2655,7 +2673,7 @@ lotsRouter.patch(
     // Get the lot to verify access
     const lot = await prisma.lot.findUnique({
       where: { id },
-      select: { id: true, projectId: true, assignedSubcontractorId: true },
+      select: { id: true, projectId: true, lotNumber: true, assignedSubcontractorId: true },
     });
 
     if (!lot) {
@@ -2672,7 +2690,12 @@ lotsRouter.patch(
     // Verify assignment exists and belongs to this lot
     const assignment = await prisma.lotSubcontractorAssignment.findFirst({
       where: { id: assignmentId, lotId: id },
-      select: { id: true, subcontractorCompanyId: true },
+      select: {
+        id: true,
+        subcontractorCompanyId: true,
+        canCompleteITP: true,
+        itpRequiresVerification: true,
+      },
     });
 
     if (!assignment) {
@@ -2693,6 +2716,26 @@ lotsRouter.patch(
       },
     });
 
+    await createAuditLog({
+      projectId: lot.projectId,
+      userId: user.id,
+      entityType: 'lot_subcontractor_assignment',
+      entityId: updated.id,
+      action: AuditAction.LOT_SUBCONTRACTOR_ASSIGNMENT_UPDATED,
+      changes: {
+        lotId: id,
+        lotNumber: lot.lotNumber,
+        subcontractorCompanyId: assignment.subcontractorCompanyId,
+        subcontractorCompanyName: updated.subcontractorCompany.companyName,
+        canCompleteITP: { from: assignment.canCompleteITP, to: updated.canCompleteITP },
+        itpRequiresVerification: {
+          from: assignment.itpRequiresVerification,
+          to: updated.itpRequiresVerification,
+        },
+      },
+      req,
+    });
+
     res.json(updated);
   }),
 );
@@ -2708,7 +2751,7 @@ lotsRouter.delete(
     // Get the lot to verify access
     const lot = await prisma.lot.findUnique({
       where: { id },
-      select: { id: true, projectId: true, assignedSubcontractorId: true },
+      select: { id: true, projectId: true, lotNumber: true, assignedSubcontractorId: true },
     });
 
     if (!lot) {
@@ -2725,7 +2768,12 @@ lotsRouter.delete(
     // Verify assignment exists and belongs to this lot
     const assignment = await prisma.lotSubcontractorAssignment.findFirst({
       where: { id: assignmentId, lotId: id },
-      select: { id: true, subcontractorCompanyId: true },
+      select: {
+        id: true,
+        subcontractorCompanyId: true,
+        status: true,
+        subcontractorCompany: { select: { companyName: true } },
+      },
     });
 
     if (!assignment) {
@@ -2758,6 +2806,22 @@ lotsRouter.delete(
           },
         });
       }
+    });
+
+    await createAuditLog({
+      projectId: lot.projectId,
+      userId: user.id,
+      entityType: 'lot_subcontractor_assignment',
+      entityId: assignment.id,
+      action: AuditAction.LOT_SUBCONTRACTOR_ASSIGNMENT_REMOVED,
+      changes: {
+        lotId: id,
+        lotNumber: lot.lotNumber,
+        subcontractorCompanyId: assignment.subcontractorCompanyId,
+        subcontractorCompanyName: assignment.subcontractorCompany.companyName,
+        status: { from: assignment.status, to: 'removed' },
+      },
+      req,
     });
 
     res.json({ message: 'Assignment removed successfully' });
