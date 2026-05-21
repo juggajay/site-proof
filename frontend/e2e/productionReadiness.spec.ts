@@ -1292,6 +1292,17 @@ test.describe('production readiness guardrails', () => {
     expect(productionPreflightWorkflow).toContain('ALLOW_LOCAL_FILE_STORAGE: "false"');
   });
 
+  test('Playwright screenshot captures skip font-ready waits for deterministic QA evidence', async () => {
+    const playwrightConfig = await readFile(
+      new URL('../playwright.config.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY).toBe('1');
+    expect(playwrightConfig).toContain('PW_TEST_SCREENSHOT_NO_FONTS_READY');
+    expect(playwrightConfig).toContain("process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY ??= '1'");
+  });
+
   test('sensitive document and API errors use the production-safe logger', async () => {
     const loggerSource = await readFile(new URL('../src/lib/logger.ts', import.meta.url), 'utf8');
     const errorHandlingSource = await readFile(
