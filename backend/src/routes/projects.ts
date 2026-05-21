@@ -70,20 +70,6 @@ function isBlockedSubcontractorStatus(status: string | null | undefined): boolea
   return Boolean(status && BLOCKED_SUBCONTRACTOR_STATUS_SET.has(status));
 }
 
-async function hasActiveSubcontractorPortalLink(userId: string): Promise<boolean> {
-  const link = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId,
-      subcontractorCompany: {
-        status: { notIn: [...BLOCKED_SUBCONTRACTOR_STATUSES] },
-      },
-    },
-    select: { id: true },
-  });
-
-  return Boolean(link);
-}
-
 function normalizeProjectUserEmail(value: unknown): string {
   if (typeof value !== 'string') {
     throw AppError.badRequest('Email is required');
@@ -1106,56 +1092,34 @@ projectsRouter.post(
       PROJECT_SPECIFICATION_SET_MAX_LENGTH,
     );
 
-    if (user.companyId && !canCreateProjectForCompany(user)) {
+    if (!user.companyId) {
+      throw AppError.forbidden('Users must belong to an organization before creating projects');
+    }
+
+    if (!canCreateProjectForCompany(user)) {
       throw AppError.forbidden('Only company admins and project managers can create projects');
     }
 
-    // Check project limit if user has a company
-    if (user.companyId) {
-      const company = await prisma.company.findUnique({
-        where: { id: user.companyId },
-        select: { subscriptionTier: true },
+    const companyId = user.companyId;
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { subscriptionTier: true },
+    });
+
+    if (company) {
+      const tier = company.subscriptionTier || 'basic';
+      const limit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic;
+
+      // Count existing projects for this company
+      const projectCount = await prisma.project.count({
+        where: { companyId },
       });
 
-      if (company) {
-        const tier = company.subscriptionTier || 'basic';
-        const limit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic;
-
-        // Count existing projects for this company
-        const projectCount = await prisma.project.count({
-          where: { companyId: user.companyId },
-        });
-
-        if (projectCount >= limit) {
-          throw AppError.forbidden(
-            `Your ${tier} subscription allows up to ${limit} projects. Please upgrade to create more projects.`,
-          );
-        }
+      if (projectCount >= limit) {
+        throw AppError.forbidden(
+          `Your ${tier} subscription allows up to ${limit} projects. Please upgrade to create more projects.`,
+        );
       }
-    }
-
-    // Create company for user if they don't have one
-    let companyId = user.companyId;
-    if (!companyId) {
-      if (isSubcontractorUser(user) || (await hasActiveSubcontractorPortalLink(user.id))) {
-        throw AppError.forbidden('Subcontractor portal users cannot create company projects');
-      }
-
-      const company = await prisma.company.create({
-        data: {
-          name: `${user.fullName || user.email}'s Company`,
-          abn: '',
-        },
-      });
-      companyId = company.id;
-      // Update user's company and set them as owner
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          companyId: company.id,
-          roleInCompany: 'owner', // Make them owner of the new company
-        },
-      });
     }
 
     // Generate project number if not provided
