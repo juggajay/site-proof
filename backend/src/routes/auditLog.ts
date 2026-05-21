@@ -214,6 +214,10 @@ auditLogRouter.get(
         { action: containsInsensitive(searchFilter) },
         { entityType: containsInsensitive(searchFilter) },
         { entityId: containsInsensitive(searchFilter) },
+        { user: { email: containsInsensitive(searchFilter) } },
+        { user: { fullName: containsInsensitive(searchFilter) } },
+        { project: { name: containsInsensitive(searchFilter) } },
+        { project: { projectNumber: containsInsensitive(searchFilter) } },
       ];
     }
 

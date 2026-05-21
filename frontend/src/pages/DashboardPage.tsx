@@ -18,6 +18,8 @@ import { ForemanMobileDashboard } from '@/components/foreman/ForemanMobileDashbo
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
+import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard';
+import { isSubcontractorRole } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
 import {
   FolderKanban,
@@ -254,10 +256,16 @@ export function DashboardPage() {
 
   // Feature #292, #293, #294: Check user role for role-specific dashboards
   const roleUser = user as DashboardRoleUser | null;
+  const roleCandidates = [roleUser?.roleInCompany, roleUser?.role];
   const userRole = roleUser?.roleInCompany || roleUser?.role;
+  const isSubcontractor = roleCandidates.some(isSubcontractorRole);
   const isForeman = userRole === 'foreman';
   const isQualityManager = userRole === 'quality_manager';
   const isProjectManager = userRole === 'project_manager';
+
+  if (isSubcontractor) {
+    return <SubcontractorDashboard />;
+  }
 
   // Render mobile or desktop foreman dashboard based on screen size
   if (isForeman) {

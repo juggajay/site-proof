@@ -5,7 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { apiFetch, ApiError } from '@/lib/api';
-import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import {
   MapPin,
   Calendar,
@@ -95,12 +95,20 @@ export function ProjectDashboard() {
     queryKey: queryKeys.dashboard(projectId),
     queryFn: () => apiFetch<ProjectDashboardData>(`/api/projects/${encodedProjectId}/dashboard`),
     enabled: !!projectId,
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+        return false;
+      }
+      return failureCount < 3;
+    },
   });
 
   const error = queryError
-    ? queryError instanceof ApiError && queryError.status === 404
-      ? 'Project not found'
-      : extractErrorMessage(queryError, 'Failed to load project dashboard')
+    ? isForbidden(queryError)
+      ? `Access Denied. ${extractErrorMessage(queryError, 'You do not have access to this project')}`
+      : queryError instanceof ApiError && queryError.status === 404
+        ? 'Project not found'
+        : extractErrorMessage(queryError, 'Failed to load project dashboard')
     : null;
 
   const handleRefresh = async () => {

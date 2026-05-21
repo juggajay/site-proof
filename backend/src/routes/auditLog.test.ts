@@ -18,6 +18,7 @@ describe('Audit Log API', () => {
   let userId: string;
   let companyId: string;
   let projectId: string;
+  let projectNumber: string;
   let secondUserId: string;
   let auditLogIds: string[] = [];
 
@@ -61,10 +62,11 @@ describe('Audit Log API', () => {
     });
 
     // Create test project
+    projectNumber = `AUDIT-${Date.now()}`;
     const project = await prisma.project.create({
       data: {
         name: `AuditLog Test Project ${Date.now()}`,
-        projectNumber: `AUDIT-${Date.now()}`,
+        projectNumber,
         companyId,
         status: 'active',
         state: 'NSW',
@@ -458,6 +460,32 @@ describe('Audit Log API', () => {
       expect(res.status).toBe(200);
       expect(res.body.logs.length).toBeGreaterThan(0);
       expect(res.body.logs.some((log: any) => log.entityType === 'Lot')).toBe(true);
+    });
+
+    it('should search visible user and project columns', async () => {
+      const userSearchRes = await request(app)
+        .get('/api/audit-logs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ search: 'Second Test User' });
+
+      expect(userSearchRes.status).toBe(200);
+      expect(userSearchRes.body.logs.length).toBeGreaterThan(0);
+      expect(
+        userSearchRes.body.logs.some((log: any) => log.user?.fullName === 'Second Test User'),
+      ).toBe(true);
+
+      const projectNumberSearchRes = await request(app)
+        .get('/api/audit-logs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ search: projectNumber });
+
+      expect(projectNumberSearchRes.status).toBe(200);
+      expect(projectNumberSearchRes.body.logs.length).toBeGreaterThan(0);
+      expect(
+        projectNumberSearchRes.body.logs.some(
+          (log: any) => log.project?.projectNumber === projectNumber,
+        ),
+      ).toBe(true);
     });
 
     it('should filter by date range (startDate)', async () => {
