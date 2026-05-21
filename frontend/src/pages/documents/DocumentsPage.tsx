@@ -92,6 +92,17 @@ async function getResponseErrorMessage(res: Response, fallback: string): Promise
   }
 }
 
+function formatFailedUpload(filename: string, reason: string): string {
+  const trimmedReason = reason.trim();
+  if (!trimmedReason || trimmedReason === 'Upload failed') {
+    return filename;
+  }
+
+  return trimmedReason.toLowerCase().includes(filename.toLowerCase())
+    ? trimmedReason
+    : `${filename}: ${trimmedReason}`;
+}
+
 export function DocumentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
@@ -313,7 +324,7 @@ export function DocumentsPage() {
   const uploadDocsMutation = useMutation({
     mutationFn: async ({ files, form }: { files: File[]; form: typeof uploadForm }) => {
       const uploadedDocs: Document[] = [];
-      const failedFiles: string[] = [];
+      const failedUploads: string[] = [];
       const sanitizedForm = {
         ...form,
         caption: form.caption.trim(),
@@ -341,20 +352,23 @@ export function DocumentsPage() {
             const newDoc = await res.json();
             uploadedDocs.push(newDoc);
           } else {
-            logError('Document upload failed', await getResponseErrorMessage(res, 'Upload failed'));
-            failedFiles.push(file.name);
+            const reason = await getResponseErrorMessage(res, 'Upload failed');
+            logError('Document upload failed', reason);
+            failedUploads.push(formatFailedUpload(file.name, reason));
           }
         } catch (err) {
           logError('Document upload failed', err);
-          failedFiles.push(file.name);
+          failedUploads.push(
+            formatFailedUpload(file.name, extractErrorMessage(err, 'Upload failed')),
+          );
         }
 
         setUploadedCount(i + 1);
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       }
 
-      if (failedFiles.length > 0) {
-        const description = `Uploaded ${uploadedDocs.length} of ${files.length}. Failed: ${failedFiles.join(', ')}`;
+      if (failedUploads.length > 0) {
+        const description = `Uploaded ${uploadedDocs.length} of ${files.length}. Failed: ${failedUploads.join('; ')}`;
         if (uploadedDocs.length === 0) {
           throw new Error(description);
         }

@@ -84,6 +84,8 @@ const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
   'image/gif',
   'image/webp',
 ]);
+const SUPPORTED_DOCUMENT_FILE_TYPE_DESCRIPTION =
+  'PDF, Word, Excel, Outlook email, and image files (JPEG, PNG, GIF, WebP)';
 const EXTENSION_DOCUMENT_MIME_TYPES = new Map([
   ['.eml', 'message/rfc822'],
   ['.msg', 'application/vnd.ms-outlook'],
@@ -456,6 +458,20 @@ function getSafeStoredDocumentMimeType(
   return ALLOWED_DOCUMENT_MIME_TYPES.has(normalizedMimeType)
     ? normalizedMimeType
     : 'application/octet-stream';
+}
+
+function getUnsupportedDocumentFileTypeMessage(
+  file: Pick<Express.Multer.File, 'mimetype' | 'originalname'>,
+): string {
+  const filename = sanitizeUploadFilename(file.originalname);
+  const extension = path.extname(file.originalname).toLowerCase();
+  const normalizedMimeType = getNormalizedDocumentMimeType(file);
+  const textFileHint =
+    extension === '.txt' || normalizedMimeType === 'text/plain'
+      ? ' Text files (.txt) are not supported for project documents.'
+      : '';
+
+  return `Invalid file type for ${filename}.${textFileHint} Supported project document uploads: ${SUPPORTED_DOCUMENT_FILE_TYPE_DESCRIPTION}.`;
 }
 
 function getSafeServedDocumentMimeType(document: {
@@ -1225,7 +1241,7 @@ const upload = multer({
     if (ALLOWED_DOCUMENT_MIME_TYPES.has(getNormalizedDocumentMimeType(file))) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type'));
+      cb(new Error(getUnsupportedDocumentFileTypeMessage(file)));
     }
   },
 });

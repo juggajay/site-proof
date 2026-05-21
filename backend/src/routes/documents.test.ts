@@ -1010,6 +1010,24 @@ describe('Documents API', () => {
       }
     });
 
+    it('rejects unsupported text document uploads with a useful diagnostic', async () => {
+      const res = await request(app)
+        .post('/api/documents/upload')
+        .set('Authorization', `Bearer ${authToken}`)
+        .field('projectId', projectId)
+        .field('documentType', 'specification')
+        .attach('file', Buffer.from('small spec notes'), {
+          filename: 'qa-doc-v2.txt',
+          contentType: 'text/plain',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_FILE_TYPE');
+      expect(res.body.error.message).toContain('qa-doc-v2.txt');
+      expect(res.body.error.message).toContain('Text files (.txt) are not supported');
+      expect(res.body.error.message).toContain('PDF, Word, Excel, Outlook email, and image files');
+    });
+
     it('rejects PDF uploads whose content does not match the declared file type', async () => {
       const filename = `spoofed-document-${Date.now()}.pdf`;
 
