@@ -236,7 +236,7 @@ const releaseHoldPointSchema = z.object({
   releaseTime: nullableReleaseTimeSchema,
   releaseMethod: optionalReleaseMethodSchema,
   releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
-  signatureDataUrl: optionalTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
+  signatureDataUrl: nullableTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
 });
 
 const escalateSchema = z.object({
@@ -258,7 +258,7 @@ const publicReleaseSchema = z.object({
   releasedByName: requiredTrimmedStringSchema('Released by name', MAX_NAME_LENGTH),
   releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
   releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
-  signatureDataUrl: optionalTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
+  signatureDataUrl: nullableTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
 });
 
 // Secure link expiry time (48 hours)

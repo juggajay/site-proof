@@ -94,6 +94,7 @@ export function HoldPointsPage() {
   const [recordingRelease, setRecordingRelease] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [recordReleaseError, setRecordReleaseError] = useState<string | null>(null);
   const generatingPdfRef = useRef<string | null>(null);
   const chasingHpRef = useRef<string | null>(null);
   const requestingRef = useRef(false);
@@ -283,6 +284,7 @@ export function HoldPointsPage() {
       setSelectedHoldPoint(hp);
       setHoldPointDetails(null);
       setRequestError(null);
+      setRecordReleaseError(null);
       setShowRecordReleaseModal(true);
       fetchHoldPointDetails(hp);
     },
@@ -391,6 +393,7 @@ export function HoldPointsPage() {
         return;
       recordingReleaseRef.current = true;
       setRecordingRelease(true);
+      setRecordReleaseError(null);
       try {
         let finalReleaseNotes = releaseNotes || '';
 
@@ -446,7 +449,8 @@ export function HoldPointsPage() {
         setSelectedHoldPoint(null);
         setHoldPointDetails(null);
       } catch (err) {
-        handleApiError(err, 'Failed to record hold point release');
+        const message = handleApiError(err, 'Failed to record hold point release');
+        setRecordReleaseError(message);
       } finally {
         recordingReleaseRef.current = false;
         setRecordingRelease(false);
@@ -494,6 +498,7 @@ export function HoldPointsPage() {
     setSelectedHoldPoint(null);
     setHoldPointDetails(null);
     setRequestError(null);
+    setRecordReleaseError(null);
   }, []);
 
   const handleClearFilter = useCallback(() => setStatusFilter('all'), []);
@@ -573,6 +578,7 @@ export function HoldPointsPage() {
         <RecordReleaseModal
           holdPoint={selectedHoldPoint}
           recording={recordingRelease}
+          error={recordReleaseError}
           approvalRequirement={holdPointDetails?.approvalRequirement}
           onClose={handleCloseRecordModal}
           onSubmit={handleSubmitRecordRelease}

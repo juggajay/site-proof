@@ -32,6 +32,7 @@ type RecordReleaseFormData = z.infer<typeof recordReleaseSchema>;
 interface RecordReleaseModalProps {
   holdPoint: HoldPoint;
   recording: boolean;
+  error?: string | null;
   approvalRequirement?: 'any' | 'superintendent';
   onClose: () => void;
   onSubmit: (
@@ -49,6 +50,7 @@ interface RecordReleaseModalProps {
 export function RecordReleaseModal({
   holdPoint,
   recording,
+  error,
   approvalRequirement,
   onClose,
   onSubmit,
@@ -149,6 +151,15 @@ export function RecordReleaseModal({
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
               This project requires superintendent-level authorization to release hold points.
             </p>
+          </div>
+        )}
+
+        {error && (
+          <div
+            className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm font-medium text-destructive"
+            role="alert"
+          >
+            {error}
           </div>
         )}
 
