@@ -233,6 +233,55 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       return;
     }
 
+    if (url.pathname === `/api/lots/${E2E_LOT_ID}/readiness`) {
+      await json({
+        readiness: {
+          lotId: E2E_LOT_ID,
+          lotNumber: 'LOT-ITP-001',
+          status: 'in_progress',
+          conformance: {
+            state: 'blocked',
+            blockers: [
+              {
+                code: 'itp_incomplete',
+                severity: 'blocker',
+                area: 'itp',
+                title: 'ITP incomplete',
+                detail: '0/1 checklist items complete.',
+                blocksAction: true,
+                actionLabel: 'Open ITP',
+                actionHref: '?tab=itp',
+              },
+            ],
+            warnings: [],
+            support: [],
+          },
+          claim: {
+            state: 'not_conformed',
+            blockers: [
+              {
+                code: 'not_conformed',
+                severity: 'blocker',
+                area: 'claim',
+                title: 'Lot not conformed',
+                detail: 'Conform this lot before it can be claimed.',
+                blocksAction: true,
+              },
+            ],
+            warnings: [],
+            support: [],
+          },
+          summary: {
+            blockerCount: 2,
+            warningCount: 0,
+            supportCount: 0,
+            actionBlockerCount: 2,
+          },
+        },
+      });
+      return;
+    }
+
     if (url.pathname === `/api/lots/${E2E_LOT_ID}/conform` && route.request().method() === 'POST') {
       conformRequestBody = route.request().postDataJSON();
       await json({
@@ -361,6 +410,19 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
 }
 
 test.describe('Lot detail ITP workflow', () => {
+  test('shows evidence readiness blockers near the top of lot detail', async ({ page }) => {
+    await mockLotDetailApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+
+    const panel = page.getByLabel('Evidence readiness');
+    await expect(panel.getByRole('heading', { name: 'Evidence readiness' })).toBeVisible();
+    await expect(panel.getByText('Conformance: Blocked')).toBeVisible();
+    await expect(panel.getByText('ITP incomplete')).toBeVisible();
+    await expect(panel.getByText('Claim: Not ready')).toBeVisible();
+    await expect(panel.getByText('Lot not conformed')).toBeVisible();
+  });
+
   test('shows retry instead of a false missing-ITP state when ITP loading fails', async ({
     page,
   }) => {
@@ -442,7 +504,7 @@ test.describe('Lot detail ITP workflow', () => {
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
 
     await expect(page.getByText('Cannot conform lot:')).toBeVisible();
-    await expect(page.getByText('ITP incomplete')).toBeVisible();
+    await expect(page.getByRole('listitem').filter({ hasText: /^ITP incomplete$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Conform Lot', exact: true })).toBeDisabled();
 
     await page.getByRole('button', { name: 'Force Conform Lot' }).click();
