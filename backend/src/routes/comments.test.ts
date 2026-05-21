@@ -372,6 +372,43 @@ describe('Comments API', () => {
       commentId = res.body.comment.id;
     });
 
+    it('should create a comment and attachment from a single multipart request', async () => {
+      const filename = `comment-upload-test-direct-${Date.now()}.txt`;
+
+      const res = await request(app)
+        .post('/api/comments')
+        .set('Authorization', `Bearer ${authToken}`)
+        .field('entityType', 'Lot')
+        .field('entityId', lotId)
+        .field('content', 'Multipart comment with direct attachment')
+        .attach('files', Buffer.from('direct comment attachment body'), {
+          filename,
+          contentType: 'text/plain',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.comment.content).toBe('Multipart comment with direct attachment');
+      expect(res.body.comment.attachments).toHaveLength(1);
+      expect(res.body.comment.attachments[0].filename).toBe(filename);
+      expect(res.body.comment.attachments[0].mimeType).toBe('text/plain');
+
+      const persistedAttachment = await prisma.commentAttachment.findFirst({
+        where: {
+          commentId: res.body.comment.id,
+          filename,
+        },
+      });
+      expect(persistedAttachment).not.toBeNull();
+
+      if (res.body.comment.attachments[0].fileUrl.startsWith('/uploads/')) {
+        const uploadedPath = path.join(
+          process.cwd(),
+          res.body.comment.attachments[0].fileUrl.replace(/^\//, ''),
+        );
+        expect(fs.existsSync(uploadedPath)).toBe(true);
+      }
+    });
+
     it('should allow subcontractors to create comments only on assigned lots', async () => {
       const assignedRes = await request(app)
         .post('/api/comments')

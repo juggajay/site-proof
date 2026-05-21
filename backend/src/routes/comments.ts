@@ -719,6 +719,53 @@ function getValidAttachments(attachments: unknown, projectId: string): Attachmen
   return validAttachments;
 }
 
+async function cleanupStoredCommentAttachments(
+  attachments: Pick<AttachmentInput, 'fileUrl'>[],
+  projectId: string,
+  logMessage: string,
+): Promise<void> {
+  await Promise.all(
+    attachments.map(async (attachment) => {
+      try {
+        await removeStoredCommentAttachment(attachment.fileUrl, projectId);
+      } catch (cleanupError) {
+        logWarn(logMessage, cleanupError);
+      }
+    }),
+  );
+}
+
+async function storeCommentAttachmentFiles(
+  files: Express.Multer.File[],
+  projectId: string,
+): Promise<AttachmentInput[]> {
+  const attachments: AttachmentInput[] = [];
+
+  try {
+    for (const file of files) {
+      const fileUrl = isSupabaseConfigured()
+        ? await uploadCommentAttachmentToSupabase(file, projectId)
+        : await uploadCommentAttachmentToDisk(file);
+
+      attachments.push({
+        filename: sanitizeFilename(file.originalname),
+        fileUrl,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+      });
+    }
+  } catch (error) {
+    await cleanupStoredCommentAttachments(
+      attachments,
+      projectId,
+      'Failed to remove comment attachment after upload rollback:',
+    );
+    throw error;
+  }
+
+  return attachments;
+}
+
 // POST /api/comments/attachments/upload - Upload files for comment attachments
 commentsRouter.post(
   '/attachments/upload',
@@ -747,35 +794,7 @@ commentsRouter.post(
       assertUploadedFileMatchesDeclaredType(file);
     }
 
-    const attachments: AttachmentInput[] = [];
-    try {
-      for (const file of files) {
-        const fileUrl = isSupabaseConfigured()
-          ? await uploadCommentAttachmentToSupabase(file, projectId)
-          : await uploadCommentAttachmentToDisk(file);
-
-        attachments.push({
-          filename: sanitizeFilename(file.originalname),
-          fileUrl,
-          fileSize: file.size,
-          mimeType: file.mimetype,
-        });
-      }
-    } catch (error) {
-      // Roll back every successfully-stored attachment from the same batch.
-      // Each cleanup is independent and best-effort so one failure does not
-      // mask the original upload error.
-      await Promise.all(
-        attachments.map(async (attachment) => {
-          try {
-            await removeStoredCommentAttachment(attachment.fileUrl, projectId);
-          } catch (cleanupError) {
-            logWarn('Failed to remove comment attachment after upload rollback:', cleanupError);
-          }
-        }),
-      );
-      throw error;
-    }
+    const attachments = await storeCommentAttachmentFiles(files, projectId);
 
     res.status(201).json({ attachments });
   }),
@@ -813,6 +832,7 @@ commentsRouter.get(
 // POST /api/comments - Create a new comment
 commentsRouter.post(
   '/',
+  commentAttachmentUpload.array('files', COMMENT_ATTACHMENT_MAX_FILES),
   asyncHandler(async (req: AuthRequest, res) => {
     const { attachments } = req.body;
     const entityType = getSingleString(req.body.entityType);
@@ -859,43 +879,66 @@ commentsRouter.post(
       );
     }
 
-    const validAttachments = getValidAttachments(attachments, projectId);
+    const files = req.files as Express.Multer.File[] | undefined;
+    for (const file of files || []) {
+      assertUploadedFileMatchesDeclaredType(file);
+    }
+
+    const uploadedAttachments =
+      files && files.length > 0 ? await storeCommentAttachmentFiles(files, projectId) : [];
+    const validAttachments =
+      uploadedAttachments.length > 0
+        ? uploadedAttachments
+        : getValidAttachments(attachments, projectId);
+
     if (Array.isArray(attachments) && attachments.length > 0 && validAttachments.length === 0) {
       throw AppError.badRequest('No valid attachments provided');
     }
 
-    const comment = await prisma.comment.create({
-      data: {
-        entityType: canonicalEntityType,
-        entityId,
-        content: trimmedContent,
-        authorId: userId,
-        parentId: parentId || null,
-        attachments: {
-          create: validAttachments,
-        },
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            email: true,
-            fullName: true,
-            avatarUrl: true,
+    let comment;
+    try {
+      comment = await prisma.comment.create({
+        data: {
+          entityType: canonicalEntityType,
+          entityId,
+          content: trimmedContent,
+          authorId: userId,
+          parentId: parentId || null,
+          attachments: {
+            create: validAttachments,
           },
         },
-        attachments: {
-          select: {
-            id: true,
-            filename: true,
-            fileUrl: true,
-            fileSize: true,
-            mimeType: true,
-            createdAt: true,
+        include: {
+          author: {
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              avatarUrl: true,
+            },
+          },
+          attachments: {
+            select: {
+              id: true,
+              filename: true,
+              fileUrl: true,
+              fileSize: true,
+              mimeType: true,
+              createdAt: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error) {
+      if (uploadedAttachments.length > 0) {
+        await cleanupStoredCommentAttachments(
+          uploadedAttachments,
+          projectId,
+          'Failed to remove comment attachment after comment create rollback:',
+        );
+      }
+      throw error;
+    }
 
     // Check for @mentions and create notifications
     try {
