@@ -203,7 +203,9 @@ export function DocumentsPage() {
     Promise.all(
       imageDocs.map(async (doc) => {
         try {
-          const accessUrl = await getDocumentAccess(doc.id, doc.fileUrl);
+          const accessUrl = await getDocumentAccess(doc.id, doc.fileUrl, {
+            disposition: 'inline',
+          });
           return [doc.id, accessUrl] as const;
         } catch (err) {
           logError('Failed to load document preview URL:', err);
@@ -528,7 +530,7 @@ export function DocumentsPage() {
     setViewerError(null);
     setViewerZoom(100);
     try {
-      const url = await getDocumentAccessUrl(doc.id, doc.fileUrl);
+      const url = await getDocumentAccessUrl(doc.id, doc.fileUrl, { disposition: 'inline' });
       setViewerUrl(url);
     } catch (err) {
       logError('Failed to load document URL:', err);

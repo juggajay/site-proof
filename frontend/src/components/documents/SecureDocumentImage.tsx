@@ -30,7 +30,7 @@ export function SecureDocumentImage({
 
     const loadAccessUrl = async () => {
       try {
-        const access = await getDocumentAccess(documentId, fileUrl);
+        const access = await getDocumentAccess(documentId, fileUrl, { disposition: 'inline' });
         if (cancelled) return;
 
         setSrc(access.url);

@@ -111,6 +111,7 @@ async function mockSeededDocumentsApi(
   let uploadBody = '';
   let documentLoadCount = 0;
   const signedUrlRequestCounts = new Map<string, number>();
+  const signedUrlRequests = new Map<string, unknown[]>();
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -191,6 +192,10 @@ async function mockSeededDocumentsApi(
       const documentId = url.pathname.split('/').at(-2);
       if (documentId) {
         signedUrlRequestCounts.set(documentId, (signedUrlRequestCounts.get(documentId) ?? 0) + 1);
+        signedUrlRequests.set(documentId, [
+          ...(signedUrlRequests.get(documentId) ?? []),
+          route.request().postDataJSON(),
+        ]);
       }
       await json({
         signedUrl: documentId === E2E_PHOTO_DOC_ID ? transparentPixel : '/signed/e2e-document',
@@ -242,6 +247,7 @@ async function mockSeededDocumentsApi(
     getDeleteRequestId: () => deleteRequestId,
     getDocumentLoadCount: () => documentLoadCount,
     getSignedUrlRequestCount: (documentId: string) => signedUrlRequestCounts.get(documentId) ?? 0,
+    getSignedUrlRequests: (documentId: string) => signedUrlRequests.get(documentId) ?? [],
     getUploadBody: () => uploadBody,
   };
 }
@@ -289,6 +295,9 @@ test.describe('Documents seeded evidence contract', () => {
     await expect(pdfItem.getByText('design', { exact: true })).toBeVisible();
     await expect(pdfItem.getByText('1.0 MB')).toBeVisible();
     await expect(pdfItem.getByText('E2E IFC drawing')).toBeVisible();
+    await expect
+      .poll(() => api.getSignedUrlRequests(E2E_PHOTO_DOC_ID))
+      .toContainEqual(expect.objectContaining({ disposition: 'inline' }));
 
     await page.getByLabel('Document Type').selectOption('drawing');
     await expect(pdfItem).toBeVisible();
@@ -319,6 +328,9 @@ test.describe('Documents seeded evidence contract', () => {
 
     await pdfItem.getByRole('button', { name: 'Download' }).click();
     await expect.poll(() => openedUrls).toContain('/signed/e2e-document');
+    expect(api.getSignedUrlRequests(E2E_PDF_DOC_ID)).toContainEqual(
+      expect.objectContaining({ disposition: 'attachment' }),
+    );
 
     await page.getByRole('button', { name: 'Upload Document' }).click();
     const uploadModal = page.getByRole('dialog').filter({ hasText: 'Upload Document' });

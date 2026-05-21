@@ -516,6 +516,100 @@ describe('Documents API', () => {
       }
     });
 
+    it('should send inline local previews with browser-embeddable headers', async () => {
+      const storedFilename = `signed-preview-${Date.now()}.pdf`;
+      const storedPath = writeTestUpload(uploadDir, storedFilename);
+
+      const localDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Quality Records',
+          filename: 'inline-preview.pdf',
+          fileUrl: `/uploads/documents/${storedFilename}`,
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      try {
+        const createRes = await request(app)
+          .post(`/api/documents/${localDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ disposition: 'inline' });
+
+        expect(createRes.status).toBe(200);
+        expect(createRes.body.signedUrl).toContain('disposition=inline');
+
+        const res = await request(app).get(
+          `/api/documents/download/${localDocument.id}?token=${createRes.body.token}&disposition=inline`,
+        );
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-disposition']).toBe('inline; filename="inline-preview.pdf"');
+        expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+        expect(res.headers['x-content-type-options']).toBe('nosniff');
+        expect(res.headers['cache-control']).toContain('no-store');
+      } finally {
+        await prisma.document.deleteMany({ where: { id: localDocument.id } });
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+    });
+
+    it('should proxy configured Supabase inline previews instead of redirecting to storage', async () => {
+      process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      const storagePath = `${projectId}/photos/supabase-inline-preview.png`;
+      const externalUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/documents/${storagePath}`;
+      const externalDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'Site Photos',
+          filename: 'supabase-inline-preview.png',
+          fileUrl: externalUrl,
+          fileSize: 11,
+          mimeType: 'image/png',
+          uploadedById: userId,
+        },
+      });
+
+      const download = vi.fn().mockResolvedValue({
+        data: new Blob([Buffer.from('image bytes')], { type: 'image/png' }),
+        error: null,
+      });
+      const from = vi.fn(() => ({ download }));
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const createRes = await request(app)
+          .post(`/api/documents/${externalDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ disposition: 'inline' });
+
+        const res = await request(app).get(
+          `/api/documents/download/${externalDocument.id}?token=${createRes.body.token}&disposition=inline`,
+        );
+
+        expect(res.status).toBe(200);
+        expect(res.headers.location).toBeUndefined();
+        expect(res.headers['content-type']).toContain('image/png');
+        expect(res.headers['content-disposition']).toBe(
+          'inline; filename="supabase-inline-preview.png"',
+        );
+        expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+        expect(from).toHaveBeenCalledWith('documents');
+        expect(download).toHaveBeenCalledWith(storagePath);
+      } finally {
+        await prisma.document.deleteMany({ where: { id: externalDocument.id } });
+      }
+    });
+
     it('should send certificate and drawing backed local signed downloads', async () => {
       const cases = [
         {
