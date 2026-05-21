@@ -1,4 +1,5 @@
 import type { TestResult } from './types';
+import { getCalendarDaysSince } from '@/lib/localDate';
 
 export const TEST_REJECTION_REASON_MAX_LENGTH = 3000;
 
@@ -53,25 +54,12 @@ export const formatTestDate = (value: string | null | undefined): string => {
 
 export const isTestOverdue = (test: TestResult): boolean => {
   if (test.status === 'verified') return false;
-  const created = new Date(test.createdAt);
-  if (!Number.isFinite(created.getTime())) return false;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const daysSinceCreated = Math.floor(
-    (today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24),
-  );
-  return daysSinceCreated >= OVERDUE_DAYS;
+  return getCalendarDaysSince(test.createdAt) >= OVERDUE_DAYS;
 };
 
 // Feature #197: Calculate days since sample/creation
 export const getDaysSince = (dateStr: string | null, fallbackDateStr: string): number => {
-  const date = dateStr ? new Date(dateStr) : new Date(fallbackDateStr);
-  if (!Number.isFinite(date.getTime())) return 0;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  return getCalendarDaysSince(dateStr || fallbackDateStr);
 };
 
 const DECIMAL_NUMBER_PATTERN = /^[+-]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:[eE][+-]?\d+)?$/;

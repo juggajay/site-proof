@@ -1,5 +1,6 @@
 // Lazy load jsPDF for better bundle size
 import { devLog } from './logger';
+import { formatDateKey } from './localDate';
 
 let jsPDFModule: typeof import('jspdf') | null = null;
 
@@ -696,7 +697,7 @@ export async function generateConformanceReportPDF(
 
   // Save the PDF with format-specific filename
   const formatSuffix = options.format !== 'standard' ? `-${options.format.toUpperCase()}` : '';
-  const filename = `Conformance-Report-${data.lot.lotNumber}${formatSuffix}-${new Date().toISOString().split('T')[0]}.pdf`;
+  const filename = `Conformance-Report-${data.lot.lotNumber}${formatSuffix}-${formatDateKey()}.pdf`;
   doc.save(filename);
 }
 
@@ -1193,7 +1194,7 @@ export async function generateHPEvidencePackagePDF(
   );
 
   // Save the PDF
-  const filename = `HP-Evidence-Package-${data.lot.lotNumber}-${new Date().toISOString().split('T')[0]}.pdf`;
+  const filename = `HP-Evidence-Package-${data.lot.lotNumber}-${formatDateKey()}.pdf`;
   doc.save(filename);
 }
 
@@ -1761,7 +1762,7 @@ export async function generateClaimEvidencePackagePDF(
   }
 
   // Save the PDF
-  const filename = `Claim-${data.claim.claimNumber}-Evidence-Package-${new Date().toISOString().split('T')[0]}.pdf`;
+  const filename = `Claim-${data.claim.claimNumber}-Evidence-Package-${formatDateKey()}.pdf`;
   doc.save(filename);
 
   devLog(`Claim evidence package PDF generated in ${Date.now() - startTime}ms`);
@@ -2092,7 +2093,7 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
   doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
 
   // Save the PDF
-  const filename = `NCR-${data.ncr.ncrNumber}-${new Date().toISOString().split('T')[0]}.pdf`;
+  const filename = `NCR-${data.ncr.ncrNumber}-${formatDateKey()}.pdf`;
   doc.save(filename);
 
   devLog(`NCR detail PDF generated in ${Date.now() - startTime}ms`);
@@ -2361,7 +2362,7 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
   doc.text('Civil Execution and Conformance Platform', pageWidth - margin - 50, footerY);
 
   // Save the PDF
-  const filename = `Test-Certificate-${data.test.testRequestNumber || data.test.id}-${new Date().toISOString().split('T')[0]}.pdf`;
+  const filename = `Test-Certificate-${data.test.testRequestNumber || data.test.id}-${formatDateKey()}.pdf`;
   doc.save(filename);
 
   devLog(`Test certificate PDF generated in ${Date.now() - startTime}ms`);
@@ -3401,7 +3402,7 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
   doc.setTextColor(100, 116, 139);
   doc.text(`Generated from SiteProof on ${formatDateTime(data.generatedAt)}`, margin, footerY);
 
-  const filenameDate = new Date(data.generatedAt).toISOString().split('T')[0];
+  const filenameDate = formatDateKey(new Date(data.generatedAt));
   doc.save(`siteproof-dashboard-${filenameDate}.pdf`);
 
   devLog(`Dashboard PDF generated in ${Date.now() - startTime}ms`);

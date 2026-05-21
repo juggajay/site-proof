@@ -26,6 +26,7 @@ import { QuickCaptureButton } from './QuickCaptureButton';
 import { PhotoCaptureModal } from './PhotoCaptureModal';
 import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { formatDateKey } from '@/lib/localDate';
 
 interface DashboardData {
   todayDiary: {
@@ -69,7 +70,7 @@ function getTimeOfDay(): string {
 }
 
 function formatDateForUrl(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return formatDateKey(date);
 }
 
 function getSafeInternalLink(link: string | undefined, fallback: string): string {

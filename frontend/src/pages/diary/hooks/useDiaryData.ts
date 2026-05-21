@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch, ApiError } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatDateKey } from '@/lib/localDate';
 import { logError } from '@/lib/logger';
 import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
 import type { DocketSummaryData } from '@/components/foreman/DiaryDocketSummary';
@@ -37,7 +38,7 @@ interface WeatherResponse {
 const WEATHER_UNAVAILABLE_MESSAGE = 'Weather auto-population unavailable. Enter weather manually.';
 
 export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => formatDateKey());
   const [diary, setDiary] = useState<DailyDiary | null>(null);
   const [diaries, setDiaries] = useState<DailyDiary[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);

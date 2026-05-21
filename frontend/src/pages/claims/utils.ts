@@ -6,6 +6,7 @@
 import type { Claim, CertificationDueStatus, PaymentDueStatus, ConformedLot } from './types';
 import { SOPA_TIMEFRAMES } from './constants';
 import { downloadCsv } from '@/lib/csv';
+import { formatDateKey } from '@/lib/localDate';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 
 /** Format a number as AUD currency, or return '-' for null */
@@ -141,5 +142,5 @@ export function exportChartDataToCSV(
     }),
   );
 
-  downloadCsv(`${filename}-${new Date().toISOString().split('T')[0]}.csv`, [headers, ...rows]);
+  downloadCsv(`${filename}-${formatDateKey()}.csv`, [headers, ...rows]);
 }

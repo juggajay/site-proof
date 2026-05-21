@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { formatDateTime } from '@/lib/utils';
+import { formatDateKey } from '@/lib/localDate';
 import {
   parseJsonPreference,
   readLocalStorageItem,
@@ -137,7 +138,7 @@ const DATE_RANGE_PRESETS: {
 ];
 
 const formatDateForApi = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  return formatDateKey(date);
 };
 
 // Widget configuration

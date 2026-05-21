@@ -8,6 +8,7 @@ import type { DocketSummaryData, ManualEntries } from './DiaryDocketSummary';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard';
 import type { DailyDiary } from '@/pages/diary/types';
+import { formatDateKey } from '@/lib/localDate';
 
 interface DiaryMobileViewProps {
   // Date & lot
@@ -71,7 +72,7 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
     onRefresh,
   });
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = formatDateKey();
   const isToday = selectedDate === todayStr;
   const isSubmitted = diary?.status === 'submitted';
 

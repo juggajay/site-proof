@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/api';
 import { Plus } from 'lucide-react';
 import { LazyCumulativeChart, LazyMonthlyChart } from '@/components/charts/LazyCharts';
 import { downloadCsv } from '@/lib/csv';
+import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import type { ClaimEvidencePackageData, ClaimPackageOptions } from '@/lib/pdfGenerator';
@@ -173,10 +174,7 @@ export function ClaimsPage() {
           ? new Date(calculatePaymentDueDate(c.submittedAt)).toLocaleDateString('en-AU')
           : '-',
     ]);
-    downloadCsv(`progress-claims-${projectId}-${new Date().toISOString().split('T')[0]}.csv`, [
-      headers,
-      ...rows,
-    ]);
+    downloadCsv(`progress-claims-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);
   }, [claims, projectId]);
 
   const handleExportCumulativeData = useCallback(() => {
@@ -287,7 +285,7 @@ export function ClaimsPage() {
                   ...c,
                   status: 'disputed' as const,
                   disputeNotes,
-                  disputedAt: new Date().toISOString().split('T')[0],
+                  disputedAt: formatDateKey(),
                 }
               : c,
           ),

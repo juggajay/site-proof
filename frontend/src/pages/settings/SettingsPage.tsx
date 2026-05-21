@@ -6,6 +6,7 @@ import { useTimezone, TIMEZONES } from '@/lib/timezone';
 import { getAuthToken, useAuth } from '@/lib/auth';
 import { ApiError, apiFetch, authFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatDateKey } from '@/lib/localDate';
 import {
   Sun,
   Moon,
@@ -637,7 +638,7 @@ export function SettingsPage() {
         throw new Error('Export returned an unexpected file type. Please try again.');
       }
 
-      const fallbackFilename = `siteproof-data-export-${new Date().toISOString().split('T')[0]}.json`;
+      const fallbackFilename = `siteproof-data-export-${formatDateKey()}.json`;
       const filename = sanitizeJsonExportFilename(
         getContentDispositionFilename(response.headers.get('Content-Disposition')),
         fallbackFilename,

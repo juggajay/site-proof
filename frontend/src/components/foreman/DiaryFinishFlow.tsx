@@ -18,6 +18,7 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { extractErrorDetails, extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
+import { formatDateKey } from '@/lib/localDate';
 
 interface DiaryDraft {
   id: string;
@@ -62,8 +63,7 @@ interface DiaryFinishFlowProps {
 }
 
 function getLocalDateString(date = new Date()): string {
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().split('T')[0];
+  return formatDateKey(date);
 }
 
 function toNumber(value: number | string | null | undefined): number {

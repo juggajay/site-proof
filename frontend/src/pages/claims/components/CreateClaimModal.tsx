@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { logError } from '@/lib/logger';
+import { formatDateKey } from '@/lib/localDate';
 
 interface CreateClaimModalProps {
   projectId: string;
@@ -44,8 +45,8 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     return {
-      periodStart: firstOfMonth.toISOString().split('T')[0],
-      periodEnd: lastOfMonth.toISOString().split('T')[0],
+      periodStart: formatDateKey(firstOfMonth),
+      periodEnd: formatDateKey(lastOfMonth),
       selectedLots: [],
     };
   });

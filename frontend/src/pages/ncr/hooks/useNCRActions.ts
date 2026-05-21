@@ -3,6 +3,7 @@ import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, extractErrorDetails } from '@/lib/errorHandling';
 import { downloadCsv } from '@/lib/csv';
+import { formatDateKey } from '@/lib/localDate';
 import type { NCR } from '../types';
 
 const optionalTrimmed = (value?: string) => {
@@ -296,10 +297,7 @@ export function useNCRActions({
         ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString('en-AU') : '-',
         new Date(ncr.createdAt).toLocaleDateString('en-AU'),
       ]);
-      downloadCsv(
-        `ncr-register-${projectId || 'all'}-${new Date().toISOString().split('T')[0]}.csv`,
-        [headers, ...rows],
-      );
+      downloadCsv(`ncr-register-${projectId || 'all'}-${formatDateKey()}.csv`, [headers, ...rows]);
     },
     [projectId],
   );
