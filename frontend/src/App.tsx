@@ -286,6 +286,7 @@ function App() {
 
             {/* Subcontractor Portal - Accept Invite (public/hybrid auth) */}
             <Route path="/subcontractor-portal/accept-invite" element={<AcceptInvitePage />} />
+            <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
             {/* Public secure hold-point release link */}
             <Route path="/hp-release/:token" element={<PublicHoldPointReleasePage />} />
@@ -496,6 +497,9 @@ function App() {
 
               {/* Profile */}
               <Route path="/profile" element={<ProfilePage />} />
+
+              {/* In-app invitation acceptance */}
+              <Route path="/invitations" element={<AcceptInvitePage />} />
 
               {/* Support */}
               <Route path="/support" element={<SupportPage />} />

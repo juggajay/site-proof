@@ -40,6 +40,8 @@ export const queryKeys = {
   // Subcontractors
   subcontractors: (projectId: string) => ['subcontractors', projectId] as const,
   lotAssignments: (lotId: string) => ['lot-assignments', lotId] as const,
+  pendingSubcontractorInvitation: (userId: string | null | undefined) =>
+    ['pending-subcontractor-invitation', userId ?? 'anonymous'] as const,
 
   // Users & Auth
   profile: ['profile'] as const,
