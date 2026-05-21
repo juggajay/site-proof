@@ -33,6 +33,7 @@ interface MockSeededLotsOptions {
   failLotLoadsUntil?: number;
   paginatedLotPages?: Array<(typeof E2E_LOT)[]>;
   lotRequests?: string[];
+  lot?: typeof E2E_LOT;
 }
 
 async function getTextContrastRatio(locator: Locator) {
@@ -73,6 +74,7 @@ async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}
   let bulkCreateRequest: unknown;
   let updateRequest: unknown;
   let cloneRequestCount = 0;
+  const seededLot = options.lot ?? E2E_LOT;
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -138,7 +140,7 @@ async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}
         return;
       }
 
-      await json({ lots: [E2E_LOT] });
+      await json({ lots: [seededLot] });
       return;
     }
 
@@ -192,7 +194,7 @@ async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}
     }
 
     if (url.pathname === `/api/lots/${E2E_LOT_ID}` && route.request().method() === 'GET') {
-      await json({ lot: E2E_LOT });
+      await json({ lot: seededLot });
       return;
     }
 
@@ -200,7 +202,7 @@ async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}
       updateRequest = route.request().postDataJSON();
       await json({
         lot: {
-          ...E2E_LOT,
+          ...seededLot,
           ...(updateRequest as object),
           updatedAt: '2026-01-15T01:00:00.000Z',
         },
@@ -541,6 +543,36 @@ test.describe('Lots seeded UI contract', () => {
         chainageStart: 250.5,
         chainageEnd: 300.75,
         budgetAmount: 1250.25,
+      });
+  });
+
+  test('allows commercial budget edits on conformed lots without unlocking QA fields', async ({
+    page,
+  }) => {
+    const api = await mockSeededLotsApi(page, {
+      lot: {
+        ...E2E_LOT,
+        status: 'conformed',
+        budgetAmount: null,
+      },
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}/edit`);
+
+    await expect(page.getByRole('heading', { name: 'Edit Lot' })).toBeVisible();
+    await expect(page.getByText('Only the commercial budget can be edited')).toBeVisible();
+    await expect(page.getByLabel('Lot Number')).toBeDisabled();
+    await expect(page.getByLabel('Status')).toBeDisabled();
+    await expect(page.getByLabel('Budget Amount ($)')).toBeEnabled();
+
+    await page.getByLabel('Budget Amount ($)').fill('48000');
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+
+    await expect
+      .poll(() => api.getUpdateRequest())
+      .toEqual({
+        budgetAmount: 48000,
+        expectedUpdatedAt: '2026-01-15T00:00:00.000Z',
       });
   });
 

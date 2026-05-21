@@ -1264,6 +1264,88 @@ describe('Lots API', () => {
       await prisma.emailVerificationToken.deleteMany({ where: { userId: outsiderUserId } });
       await prisma.user.delete({ where: { id: outsiderUserId } }).catch(() => {});
     });
+
+    it('should allow commercial users to set a budget on conformed unclaimed lots', async () => {
+      const conformedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-CONFORMED-BUDGET-${Date.now()}`,
+          status: 'conformed',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount: null,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/lots/${conformedLot.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ budgetAmount: 48000 });
+
+        expect(res.status).toBe(200);
+        expect(Number(res.body.lot.budgetAmount)).toBe(48000);
+
+        const updatedLot = await prisma.lot.findUnique({
+          where: { id: conformedLot.id },
+          select: { status: true, budgetAmount: true },
+        });
+        expect(updatedLot?.status).toBe('conformed');
+        expect(Number(updatedLot?.budgetAmount)).toBe(48000);
+      } finally {
+        await prisma.lot.delete({ where: { id: conformedLot.id } }).catch(() => {});
+      }
+    });
+
+    it('should reject non-budget edits to conformed lots', async () => {
+      const conformedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-CONFORMED-NON-BUDGET-${Date.now()}`,
+          status: 'conformed',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount: 12000,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/lots/${conformedLot.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ description: 'This should stay locked' });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Cannot edit a conformed lot');
+      } finally {
+        await prisma.lot.delete({ where: { id: conformedLot.id } }).catch(() => {});
+      }
+    });
+
+    it('should reject budget edits to claimed lots', async () => {
+      const claimedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-CLAIMED-BUDGET-${Date.now()}`,
+          status: 'claimed',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount: 12000,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/lots/${claimedLot.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ budgetAmount: 48000 });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Cannot edit a claimed lot');
+      } finally {
+        await prisma.lot.delete({ where: { id: claimedLot.id } }).catch(() => {});
+      }
+    });
   });
 
   describe('POST /api/lots/:id/assign', () => {
@@ -1509,7 +1591,7 @@ describe('Lots API', () => {
             userId,
             entityType: 'lot',
             entityId: forceAllowedLot.id,
-            action: 'lot_status_changed',
+            action: 'lot_force_conformed',
           },
         });
         expect(auditLog).toBeTruthy();

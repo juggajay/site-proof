@@ -125,7 +125,7 @@ export function LotDetailPage() {
       navigate(basePath);
     }
   };
-  const { canViewBudgets: _canViewBudgets } = useCommercialAccess();
+  const { canViewBudgets } = useCommercialAccess();
   const { canCreate: canEdit } = useViewerAccess();
   const isMobile = useIsMobile();
   const [lot, setLot] = useState<Lot | null>(null);
@@ -756,8 +756,9 @@ export function LotDetailPage() {
     return null;
   }
 
-  // Check if lot can be edited
-  const isEditable = lot.status !== 'conformed' && lot.status !== 'claimed';
+  // Conformed lots keep QA fields locked, but commercial users can still add a budget before claiming.
+  const isEditable =
+    lot.status !== 'claimed' && (lot.status !== 'conformed' || Boolean(canViewBudgets));
 
   const handleAssignTemplate = async (templateId: string) => {
     if (!lotId || assigningTemplate) return false;

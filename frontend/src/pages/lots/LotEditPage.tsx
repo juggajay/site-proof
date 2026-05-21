@@ -51,17 +51,17 @@ interface SubcontractorsResponse {
 }
 
 interface LotUpdatePayload {
-  lotNumber: string;
-  description: string | null;
-  activityType: string | null;
-  chainageStart: number | null;
-  chainageEnd: number | null;
-  offset: string | null;
-  offsetCustom: string | null;
-  layer: string | null;
-  areaZone: string | null;
-  status: string | null;
-  budgetAmount?: number;
+  lotNumber?: string;
+  description?: string | null;
+  activityType?: string | null;
+  chainageStart?: number | null;
+  chainageEnd?: number | null;
+  offset?: string | null;
+  offsetCustom?: string | null;
+  layer?: string | null;
+  areaZone?: string | null;
+  status?: string | null;
+  budgetAmount?: number | null;
   assignedSubcontractorId?: string | null;
   expectedUpdatedAt?: string;
 }
@@ -387,6 +387,7 @@ export function LotEditPage() {
     const parsedChainageStart = parseOptionalNonNegativeDecimalInput(formData.chainageStart);
     const parsedChainageEnd = parseOptionalNonNegativeDecimalInput(formData.chainageEnd);
     const parsedBudgetAmount = parseOptionalNonNegativeDecimalInput(formData.budgetAmount);
+    const isConformedBudgetOnlyMode = lot?.status === 'conformed' && canViewBudgets;
 
     if (
       parsedChainageStart !== null &&
@@ -397,32 +398,39 @@ export function LotEditPage() {
       return;
     }
 
+    if (isConformedBudgetOnlyMode && parsedBudgetAmount === null) {
+      setSaveError('Budget amount is required before this conformed lot can be claimed.');
+      return;
+    }
+
     setSaving(true);
 
     const token = getAuthToken();
     const user = getCurrentUser();
 
     // Build update payload
-    const updatePayload: LotUpdatePayload = {
-      lotNumber: formData.lotNumber,
-      description: formData.description || null,
-      activityType: formData.activityType || null,
-      chainageStart: parsedChainageStart,
-      chainageEnd: parsedChainageEnd,
-      offset: formData.offset || null,
-      offsetCustom: formData.offset === 'custom' ? formData.offsetCustom || null : null,
-      layer: formData.layer || null,
-      areaZone: formData.areaZone || null,
-      status: formData.status || null,
-    };
+    const updatePayload: LotUpdatePayload = isConformedBudgetOnlyMode
+      ? {}
+      : {
+          lotNumber: formData.lotNumber,
+          description: formData.description || null,
+          activityType: formData.activityType || null,
+          chainageStart: parsedChainageStart,
+          chainageEnd: parsedChainageEnd,
+          offset: formData.offset || null,
+          offsetCustom: formData.offset === 'custom' ? formData.offsetCustom || null : null,
+          layer: formData.layer || null,
+          areaZone: formData.areaZone || null,
+          status: formData.status || null,
+        };
 
     // Only include budget if user has access
-    if (canViewBudgets && parsedBudgetAmount !== null) {
+    if (canViewBudgets && (parsedBudgetAmount !== null || isConformedBudgetOnlyMode)) {
       updatePayload.budgetAmount = parsedBudgetAmount;
     }
 
     // Include subcontractor assignment (can be null to unassign)
-    if (canViewBudgets) {
+    if (canViewBudgets && !isConformedBudgetOnlyMode) {
       updatePayload.assignedSubcontractorId = formData.assignedSubcontractorId || null;
     }
 
@@ -432,6 +440,12 @@ export function LotEditPage() {
     }
 
     // If offline, save to IndexedDB and queue for sync
+    if (!isOnline && isConformedBudgetOnlyMode) {
+      setSaveError('Budget updates on conformed lots require an internet connection.');
+      setSaving(false);
+      return;
+    }
+
     if (!isOnline && lotId && projectId && user) {
       try {
         await saveLotEditOffline({
@@ -569,8 +583,13 @@ export function LotEditPage() {
     return null;
   }
 
-  // Check if lot is in a non-editable state
-  const isLocked = lot.status === 'conformed' || lot.status === 'claimed';
+  // Conformed lots keep QA fields locked but allow commercial budget repair before claiming.
+  const isClaimed = lot.status === 'claimed';
+  const isConformed = lot.status === 'conformed';
+  const canEditConformedBudget = isConformed && canViewBudgets;
+  const detailsLocked = isConformed || isClaimed;
+  const budgetLocked = isClaimed || (isConformed && !canViewBudgets);
+  const canSubmit = !isClaimed && (!isConformed || canEditConformedBudget);
 
   return (
     <div className="space-y-6 p-6 max-w-3xl mx-auto">
@@ -598,9 +617,12 @@ export function LotEditPage() {
       </div>
 
       {/* Locked Warning */}
-      {isLocked && (
+      {detailsLocked && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
-          <strong>Note:</strong> This lot is {lot.status} and cannot be edited.
+          <strong>Note:</strong>{' '}
+          {canEditConformedBudget
+            ? 'Only the commercial budget can be edited on this conformed lot before it is claimed.'
+            : `This lot is ${lot.status} and cannot be edited.`}
         </div>
       )}
 
@@ -694,7 +716,7 @@ export function LotEditPage() {
                 name="lotNumber"
                 value={formData.lotNumber}
                 onChange={handleInputChange}
-                disabled={isLocked}
+                disabled={detailsLocked}
                 required
                 className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
               />
@@ -709,7 +731,7 @@ export function LotEditPage() {
                 name="status"
                 value={formData.status}
                 onChange={handleInputChange}
-                disabled={isLocked}
+                disabled={detailsLocked}
                 className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
               >
                 <option value="">Select status</option>
@@ -731,7 +753,7 @@ export function LotEditPage() {
               name="description"
               value={formData.description}
               onChange={handleInputChange}
-              disabled={isLocked}
+              disabled={detailsLocked}
               rows={3}
               className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
             />
@@ -746,7 +768,7 @@ export function LotEditPage() {
               name="activityType"
               value={formData.activityType}
               onChange={handleInputChange}
-              disabled={isLocked}
+              disabled={detailsLocked}
               className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
             >
               <option value="">Select activity type</option>
@@ -774,7 +796,7 @@ export function LotEditPage() {
                 name="chainageStart"
                 value={formData.chainageStart}
                 onChange={handleInputChange}
-                disabled={isLocked}
+                disabled={detailsLocked}
                 step="0.01"
                 className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
               />
@@ -790,7 +812,7 @@ export function LotEditPage() {
                 name="chainageEnd"
                 value={formData.chainageEnd}
                 onChange={handleInputChange}
-                disabled={isLocked}
+                disabled={detailsLocked}
                 step="0.01"
                 className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
               />
@@ -805,7 +827,7 @@ export function LotEditPage() {
                 name="offset"
                 value={formData.offset}
                 onChange={handleInputChange}
-                disabled={isLocked}
+                disabled={detailsLocked}
                 className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
               >
                 <option value="">Select offset</option>
@@ -828,7 +850,7 @@ export function LotEditPage() {
                   name="offsetCustom"
                   value={formData.offsetCustom}
                   onChange={handleInputChange}
-                  disabled={isLocked}
+                  disabled={detailsLocked}
                   placeholder="e.g., +2.5m, -1.0m CL"
                   className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
                 />
@@ -845,7 +867,7 @@ export function LotEditPage() {
                 name="layer"
                 value={formData.layer}
                 onChange={handleInputChange}
-                disabled={isLocked}
+                disabled={detailsLocked}
                 className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
               />
             </div>
@@ -860,7 +882,7 @@ export function LotEditPage() {
                 name="areaZone"
                 value={formData.areaZone}
                 onChange={handleInputChange}
-                disabled={isLocked}
+                disabled={detailsLocked}
                 className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
               />
             </div>
@@ -883,7 +905,7 @@ export function LotEditPage() {
                   name="budgetAmount"
                   value={formData.budgetAmount}
                   onChange={handleInputChange}
-                  disabled={isLocked}
+                  disabled={budgetLocked}
                   step="0.01"
                   className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
                 />
@@ -898,7 +920,7 @@ export function LotEditPage() {
                   name="assignedSubcontractorId"
                   value={formData.assignedSubcontractorId}
                   onChange={handleInputChange}
-                  disabled={isLocked}
+                  disabled={detailsLocked}
                   className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
                 >
                   <option value="">No subcontractor assigned</option>
@@ -924,7 +946,7 @@ export function LotEditPage() {
           </button>
           <button
             type="submit"
-            disabled={isLocked || saving}
+            disabled={!canSubmit || saving}
             className="rounded-lg bg-primary px-6 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? 'Saving...' : 'Save Changes'}
