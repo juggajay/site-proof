@@ -360,6 +360,53 @@ subcontractorsRouter.get(
 // Apply authentication middleware to all subsequent routes
 subcontractorsRouter.use(requireAuth);
 
+// GET /api/subcontractors/my-pending-invitation - Find the current user's invite without email link
+subcontractorsRouter.get(
+  '/my-pending-invitation',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    const email = user.email.trim();
+    const now = new Date();
+
+    const invitation = await prisma.subcontractorCompany.findFirst({
+      where: {
+        status: 'pending_approval',
+        primaryContactEmail: { equals: email, mode: 'insensitive' },
+        OR: [{ invitationExpiresAt: null }, { invitationExpiresAt: { gt: now } }],
+      },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            company: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!invitation) {
+      res.json({ invitation: null });
+      return;
+    }
+
+    res.json({
+      invitation: {
+        id: invitation.id,
+        companyName: invitation.companyName,
+        projectId: invitation.project.id,
+        projectName: invitation.project.name,
+        headContractorName: invitation.project.company.name,
+        primaryContactEmail: invitation.primaryContactEmail,
+        primaryContactName: invitation.primaryContactName,
+        status: invitation.status,
+        expiresAt: invitation.invitationExpiresAt?.toISOString() ?? null,
+      },
+    });
+  }),
+);
+
 // GET /api/subcontractors/directory - Get global subcontractors for the user's organization
 // This allows selecting existing subcontractors when inviting to a new project
 subcontractorsRouter.get(

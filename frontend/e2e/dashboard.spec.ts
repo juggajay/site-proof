@@ -8,7 +8,21 @@ const defaultProject = {
   status: 'active',
 };
 
-async function mockDashboardShell(page: Page, user = E2E_ADMIN_USER) {
+type PendingInvitation = {
+  id: string;
+  companyName: string;
+  projectName: string;
+  headContractorName: string;
+  primaryContactEmail: string;
+  primaryContactName: string;
+  status: string;
+};
+
+async function mockDashboardShell(
+  page: Page,
+  user = E2E_ADMIN_USER,
+  pendingInvitation: PendingInvitation | null = null,
+) {
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,
@@ -33,6 +47,14 @@ async function mockDashboardShell(page: Page, user = E2E_ADMIN_USER) {
     });
   });
 
+  await page.route('**/api/subcontractors/my-pending-invitation', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ invitation: pendingInvitation }),
+    });
+  });
+
   await mockAuthenticatedUserState(page, user);
 }
 
@@ -42,13 +64,17 @@ async function mockDefaultDashboardApi(
 ) {
   let statsRequestCount = 0;
 
-  await mockDashboardShell(page, {
-    ...E2E_ADMIN_USER,
-    name: 'E2E Admin',
-    fullName: 'E2E Admin',
-    roleInCompany: 'admin',
-    companyName: 'E2E Civil Pty Ltd',
-  });
+  await mockDashboardShell(
+    page,
+    {
+      ...E2E_ADMIN_USER,
+      name: 'E2E Admin',
+      fullName: 'E2E Admin',
+      roleInCompany: 'admin',
+      companyName: 'E2E Civil Pty Ltd',
+    },
+    null,
+  );
 
   await page.route('**/api/dashboard/stats**', async (route) => {
     statsRequestCount += 1;
@@ -307,6 +333,58 @@ test.describe('Dashboard seeded account contract', () => {
     ).toBeVisible();
 
     await expect(alert.getByRole('button', { name: 'Try again' })).toBeVisible();
+  });
+
+  test('shows a pending subcontractor invitation banner with an in-app accept link', async ({
+    page,
+  }) => {
+    await mockDashboardShell(
+      page,
+      {
+        id: 'e2e-invited-viewer',
+        email: 'site@subbie.example',
+        fullName: 'Sally Subbie',
+        role: 'viewer',
+        roleInCompany: 'viewer',
+        companyId: 'e2e-company',
+        hasPassword: true,
+      },
+      {
+        id: 'e2e-invite-token',
+        companyName: 'E2E Subbie Pty Ltd',
+        projectName: 'E2E Highway Upgrade',
+        headContractorName: 'Head Contractor Pty Ltd',
+        primaryContactEmail: 'site@subbie.example',
+        primaryContactName: 'Sally Subbie',
+        status: 'pending_approval',
+      },
+    );
+
+    await page.route('**/api/dashboard/stats**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          totalProjects: 0,
+          activeProjects: 0,
+          totalLots: 0,
+          openHoldPoints: 0,
+          openNCRs: 0,
+          attentionItems: { total: 0, overdueNCRs: [], staleHoldPoints: [] },
+          recentActivities: [],
+        }),
+      });
+    });
+
+    await page.goto('/dashboard');
+
+    await expect(
+      page.getByRole('region', { name: 'Pending subcontractor invitation' }),
+    ).toContainText('E2E Subbie Pty Ltd');
+    await expect(page.getByRole('link', { name: 'Accept Invitation' })).toHaveAttribute(
+      'href',
+      '/invitations',
+    );
   });
 
   test.describe('timestamp locale contract', () => {

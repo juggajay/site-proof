@@ -401,6 +401,18 @@ async function mockSeededSubcontractorsApi(
 
 async function mockInviteAcceptanceApi(page: Page) {
   let registerRequest: unknown = null;
+  let acceptRequestCount = 0;
+  let accepted = false;
+
+  const pendingInvitation = {
+    id: 'e2e-invite-token',
+    companyName: 'E2E Subbie Pty Ltd',
+    projectName: 'E2E Highway Upgrade',
+    headContractorName: 'Head Contractor Pty Ltd',
+    primaryContactEmail: invitedSubcontractorUser.email,
+    primaryContactName: invitedSubcontractorUser.fullName,
+    status: 'pending_approval',
+  };
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -413,14 +425,28 @@ async function mockInviteAcceptanceApi(page: Page) {
 
     if (url.pathname === '/api/subcontractors/invitation/e2e-invite-token') {
       await json({
-        invitation: {
-          id: 'e2e-invite-token',
+        invitation: pendingInvitation,
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/subcontractors/my-pending-invitation') {
+      await json({ invitation: accepted ? null : pendingInvitation });
+      return;
+    }
+
+    if (
+      url.pathname === '/api/subcontractors/invitation/e2e-invite-token/accept' &&
+      route.request().method() === 'POST'
+    ) {
+      acceptRequestCount += 1;
+      accepted = true;
+      await json({
+        subcontractor: {
+          id: 'e2e-sub-company',
           companyName: 'E2E Subbie Pty Ltd',
           projectName: 'E2E Highway Upgrade',
-          headContractorName: 'Head Contractor Pty Ltd',
-          primaryContactEmail: invitedSubcontractorUser.email,
-          primaryContactName: invitedSubcontractorUser.fullName,
-          status: 'pending_approval',
+          status: 'approved',
         },
       });
       return;
@@ -431,6 +457,7 @@ async function mockInviteAcceptanceApi(page: Page) {
       route.request().method() === 'POST'
     ) {
       registerRequest = route.request().postDataJSON();
+      accepted = true;
       await json({
         user: invitedSubcontractorUser,
         token: 'e2e-sub-token',
@@ -445,7 +472,15 @@ async function mockInviteAcceptanceApi(page: Page) {
     }
 
     if (url.pathname === '/api/auth/me') {
-      await json({ user: invitedSubcontractorUser });
+      await json({
+        user: accepted
+          ? invitedSubcontractorUser
+          : {
+              ...invitedSubcontractorUser,
+              role: 'viewer',
+              roleInCompany: 'viewer',
+            },
+      });
       return;
     }
 
@@ -505,6 +540,7 @@ async function mockInviteAcceptanceApi(page: Page) {
 
   return {
     getRegisterRequest: () => registerRequest,
+    getAcceptRequestCount: () => acceptRequestCount,
   };
 }
 
@@ -1077,6 +1113,31 @@ test.describe('Subcontractor invite acceptance', () => {
         invitationId: 'e2e-invite-token',
         tosAccepted: true,
       });
+    await expect(page).toHaveURL(/\/subcontractor-portal$/);
+    await expect(
+      page.getByRole('heading', { name: /Good (morning|afternoon|evening), Sally/ }),
+    ).toBeVisible();
+  });
+
+  test('lets an authenticated invited user accept from the in-app invitations route', async ({
+    page,
+  }) => {
+    const api = await mockInviteAcceptanceApi(page);
+    await mockAuthenticatedUserState(page, {
+      ...invitedSubcontractorUser,
+      role: 'viewer',
+      roleInCompany: 'viewer',
+    });
+
+    await page.goto('/invitations');
+
+    await expect(page.getByRole('heading', { name: "You've been invited!" })).toBeVisible();
+    await expect(page.getByText('E2E Subbie Pty Ltd')).toBeVisible();
+    await expect(page.getByText(`Logged in as ${invitedSubcontractorUser.email}`)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Accept Invitation' }).click();
+
+    await expect.poll(() => api.getAcceptRequestCount()).toBe(1);
     await expect(page).toHaveURL(/\/subcontractor-portal$/);
     await expect(
       page.getByRole('heading', { name: /Good (morning|afternoon|evening), Sally/ }),

@@ -40,6 +40,7 @@ import {
   Camera,
   Plus,
   FlaskConical,
+  MailCheck,
 } from 'lucide-react';
 
 // Date range presets
@@ -236,6 +237,16 @@ type DashboardUser = ReturnType<typeof useAuth>['user'];
 type DashboardRoleUser = NonNullable<DashboardUser> & {
   roleInCompany?: string | null;
 };
+
+interface PendingInvitation {
+  id: string;
+  companyName: string;
+  projectName: string;
+  headContractorName: string;
+  primaryContactEmail: string;
+  primaryContactName?: string | null;
+  status: string;
+}
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -545,6 +556,8 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
           </div>
         </div>
       </div>
+
+      <PendingInvitationBanner user={user} />
 
       {statsErrorMessage && (
         <div
@@ -948,5 +961,48 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
         </>
       )}
     </div>
+  );
+}
+
+function PendingInvitationBanner({ user }: { user: DashboardUser }) {
+  const { data } = useQuery({
+    queryKey: queryKeys.pendingSubcontractorInvitation(user?.id),
+    queryFn: () =>
+      apiFetch<{ invitation: PendingInvitation | null }>(
+        '/api/subcontractors/my-pending-invitation',
+      ),
+    enabled: Boolean(user?.id),
+    retry: false,
+  });
+
+  const invitation = data?.invitation;
+  if (!invitation) {
+    return null;
+  }
+
+  return (
+    <section
+      role="region"
+      aria-label="Pending subcontractor invitation"
+      className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div>
+            <p className="font-medium">Pending subcontractor invitation</p>
+            <p className="text-sm">
+              Accept your invite to {invitation.companyName} on {invitation.projectName}.
+            </p>
+          </div>
+        </div>
+        <Link
+          to="/invitations"
+          className="inline-flex items-center justify-center rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700 sm:shrink-0"
+        >
+          Accept Invitation
+        </Link>
+      </div>
+    </section>
   );
 }

@@ -1342,6 +1342,37 @@ describe('Subcontractors API', () => {
       }
     });
 
+    it('should return only the logged-in user pending invitation for in-app acceptance', async () => {
+      const res = await request(app)
+        .get('/api/subcontractors/my-pending-invitation')
+        .set('Authorization', `Bearer ${subcontractorToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.invitation).toMatchObject({
+        id: invitationSubId,
+        companyName: expect.stringContaining('Invite Accept Test'),
+        primaryContactEmail: invitationContactEmail,
+        status: 'pending_approval',
+      });
+      expect(res.body.invitation.projectName).toBeDefined();
+      expect(res.body.invitation.headContractorName).toBeDefined();
+    });
+
+    it('should not leak another subcontractor pending invitation to the wrong user', async () => {
+      const wrongUser = await registerTestUser('sub-pending-invite-outsider', 'Pending Outsider');
+
+      try {
+        const res = await request(app)
+          .get('/api/subcontractors/my-pending-invitation')
+          .set('Authorization', `Bearer ${wrongUser.token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.invitation).toBeNull();
+      } finally {
+        await cleanupTestUser(wrongUser.userId);
+      }
+    });
+
     it('should reject new-account acceptance for inactive invitations', async () => {
       const suspendedEmail = `suspended-invite-${Date.now()}@example.com`;
       const suspendedSub = await prisma.subcontractorCompany.create({

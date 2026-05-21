@@ -48,18 +48,17 @@ interface Invitation {
 export function AcceptInvitePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const invitationId = searchParams.get('id')?.trim() || null;
-  const invitationApiPath = invitationId
-    ? `/api/subcontractors/invitation/${encodeURIComponent(invitationId)}`
-    : null;
+  const explicitInvitationId = searchParams.get('id')?.trim() || null;
   const { user, loading: authLoading, refreshUser, setToken } = useAuth();
 
   const [invitation, setInvitation] = useState<Invitation | null>(null);
+  const [discoveredInvitationId, setDiscoveredInvitationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const invitationId = explicitInvitationId || discoveredInvitationId;
 
   const {
     register,
@@ -97,37 +96,81 @@ export function AcceptInvitePage() {
 
   // Fetch invitation details
   useEffect(() => {
+    let cancelled = false;
+
+    function applyInvitation(nextInvitation: Invitation) {
+      setInvitation(nextInvitation);
+      setDiscoveredInvitationId(nextInvitation.id);
+
+      if (nextInvitation.primaryContactEmail) {
+        setValue('email', nextInvitation.primaryContactEmail);
+      }
+      if (nextInvitation.primaryContactName) {
+        setValue('fullName', nextInvitation.primaryContactName);
+      }
+    }
+
     async function fetchInvitation() {
-      if (!invitationId) {
+      if (authLoading) {
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      if (!explicitInvitationId && !user) {
         setError('No invitation ID provided');
         setLoading(false);
         return;
       }
 
       try {
-        const data = await apiFetch<{ invitation: Invitation }>(invitationApiPath!);
-        setInvitation(data.invitation);
-
-        // Pre-fill email from invitation
-        if (data.invitation.primaryContactEmail) {
-          setValue('email', data.invitation.primaryContactEmail);
+        if (explicitInvitationId) {
+          const data = await apiFetch<{ invitation: Invitation }>(
+            `/api/subcontractors/invitation/${encodeURIComponent(explicitInvitationId)}`,
+          );
+          if (!cancelled) {
+            applyInvitation(data.invitation);
+          }
+          return;
         }
-        if (data.invitation.primaryContactName) {
-          setValue('fullName', data.invitation.primaryContactName);
+
+        const data = await apiFetch<{ invitation: Invitation | null }>(
+          '/api/subcontractors/my-pending-invitation',
+        );
+
+        if (!data.invitation) {
+          if (!cancelled) {
+            setInvitation(null);
+            setDiscoveredInvitationId(null);
+            setError('No pending invitations found for your account.');
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          applyInvitation(data.invitation);
         }
       } catch (err) {
-        if (isNotFound(err)) {
-          setError('This invitation was not found or has expired.');
-        } else {
-          setError(extractErrorMessage(err, 'Failed to load invitation details'));
+        if (!cancelled) {
+          if (isNotFound(err)) {
+            setError('This invitation was not found or has expired.');
+          } else {
+            setError(extractErrorMessage(err, 'Failed to load invitation details'));
+          }
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     fetchInvitation();
-  }, [invitationApiPath, invitationId, setValue]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, explicitInvitationId, setValue, user]);
 
   // Handle accepting invitation for logged-in users
   const handleAcceptAsLoggedIn = async () => {
