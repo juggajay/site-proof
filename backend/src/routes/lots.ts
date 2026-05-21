@@ -1136,6 +1136,8 @@ lotsRouter.post(
           id: true,
           lotNumber: true,
           description: true,
+          activityType: true,
+          lotType: true,
           status: true,
           assignedSubcontractorId: true,
           createdAt: true,
@@ -1164,6 +1166,22 @@ lotsRouter.post(
       }
 
       return createdLot;
+    });
+
+    await createAuditLog({
+      projectId,
+      userId: user.id,
+      entityType: 'lot',
+      entityId: lot.id,
+      action: AuditAction.LOT_CREATED,
+      changes: {
+        lotNumber: lot.lotNumber,
+        activityType: lot.activityType,
+        lotType: lot.lotType,
+        status: lot.status,
+        assignedSubcontractorId: lot.assignedSubcontractorId,
+      },
+      req,
     });
 
     res.status(201).json({ lot });
@@ -1214,6 +1232,25 @@ lotsRouter.post(
             chainageEnd: true,
             createdAt: true,
           },
+        }),
+      ),
+    );
+
+    await Promise.all(
+      createdLots.map((lot) =>
+        createAuditLog({
+          projectId,
+          userId: user.id,
+          entityType: 'lot',
+          entityId: lot.id,
+          action: AuditAction.LOT_CREATED,
+          changes: {
+            lotNumber: lot.lotNumber,
+            activityType: lot.activityType,
+            status: lot.status,
+            bulkCreate: true,
+          },
+          req,
         }),
       ),
     );

@@ -1189,6 +1189,23 @@ projectsRouter.post(
       },
     });
 
+    await createAuditLog({
+      projectId: project.id,
+      userId: user.id,
+      entityType: 'project',
+      entityId: project.id,
+      action: AuditAction.PROJECT_CREATED,
+      changes: {
+        name: project.name,
+        projectNumber: project.projectNumber,
+        state: state || 'NSW',
+        specificationSet: specificationSet || 'MRTS',
+        clientName: clientName || null,
+        contractValue: contractValue ?? null,
+      },
+      req,
+    });
+
     res.status(201).json({ project });
   }),
 );
