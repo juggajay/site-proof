@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatDateKey } from '@/lib/localDate';
 import {
   Sun,
   Cloud,
@@ -487,5 +488,5 @@ function getTimeOfDay(): string {
 }
 
 function formatDateForUrl(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return formatDateKey(date);
 }

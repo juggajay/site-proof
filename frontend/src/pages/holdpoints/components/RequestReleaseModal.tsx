@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { logError } from '@/lib/logger';
+import { formatDateKey } from '@/lib/localDate';
 
 const emailAddressSchema = z.string().trim().email();
 
@@ -328,7 +329,7 @@ export function RequestReleaseModal({
                     <Input
                       type="date"
                       {...register('scheduledDate')}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={formatDateKey()}
                       className={errors.scheduledDate ? 'border-destructive' : ''}
                     />
                     {errors.scheduledDate && (

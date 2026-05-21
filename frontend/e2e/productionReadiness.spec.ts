@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readdir, readFile } from 'node:fs/promises';
 import { CLAIM_SUBMISSION_OPTIONS } from '../src/pages/claims/submissionOptions';
 import { getPhotoLocationLinks } from '../src/pages/lots/components/photoLocationLinks';
+import { formatDateKey, getCalendarDaysSince } from '../src/lib/localDate';
 
 async function collectSourceFiles(dir: URL): Promise<URL[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -171,6 +172,33 @@ test.describe('production readiness guardrails', () => {
     expect(claimsRoute).toContain('Each claimed lot must include percentageComplete');
     expect(claimsRoute).not.toContain('percentageComplete: lot.percentageComplete ?? 100');
     expect(claimsRoute).not.toContain('percentageComplete: 100,');
+  });
+
+  test('Australia/Sydney date keys do not roll back to the UTC day', () => {
+    const earlySydneyMorning = new Date('2026-05-20T14:30:00.000Z');
+
+    expect(formatDateKey(earlySydneyMorning)).toBe('2026-05-21');
+    expect(getCalendarDaysSince('2026-05-21', '2026-05-20T14:30:00.000Z')).toBe(0);
+  });
+
+  test('date-only defaults and export filenames avoid UTC ISO day slicing', async () => {
+    const criticalDateSources = [
+      '../src/pages/DashboardPage.tsx',
+      '../src/pages/diary/hooks/useDiaryData.ts',
+      '../src/pages/diary/components/DiaryDateSelector.tsx',
+      '../src/pages/tests/TestResultsPage.tsx',
+      '../src/pages/tests/constants.ts',
+      '../src/pages/ncr/hooks/useNCRActions.ts',
+      '../src/lib/csv.ts',
+    ];
+
+    for (const relativePath of criticalDateSources) {
+      const source = await readFile(new URL(relativePath, import.meta.url), 'utf8');
+
+      expect(source, `${relativePath} should use local date helpers`).not.toContain(
+        "toISOString().split('T')[0]",
+      );
+    }
   });
 
   test('landing page avoids unverifiable claims and unmounted CTA routes', async () => {

@@ -10,6 +10,7 @@ import {
   Printer,
   Download,
 } from 'lucide-react';
+import { formatDateKey } from '@/lib/localDate';
 import { devWarn } from '@/lib/logger';
 
 interface Lot {
@@ -186,7 +187,7 @@ export function LinearMapView({
       });
 
       const link = document.createElement('a');
-      link.download = `linear-map-${new Date().toISOString().split('T')[0]}.png`;
+      link.download = `linear-map-${formatDateKey()}.png`;
       link.href = dataUrl;
       link.click();
     } catch (error) {

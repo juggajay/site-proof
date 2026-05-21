@@ -11,6 +11,7 @@ import { BatchUploadModal } from './components/BatchUploadModal';
 import { RejectTestModal } from './components/RejectTestModal';
 import { NcrPromptModal, NcrCreateModal } from './components/NcrModals';
 import { downloadCsv } from '@/lib/csv';
+import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatTestDate, TEST_REJECTION_REASON_MAX_LENGTH } from './constants';
@@ -395,10 +396,7 @@ export function TestResultsPage() {
       formatTestDate(test.testDate),
     ]);
 
-    downloadCsv(`test-results-${projectId}-${new Date().toISOString().split('T')[0]}.csv`, [
-      headers,
-      ...rows,
-    ]);
+    downloadCsv(`test-results-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);
   }, [testResults, projectId]);
 
   // Loading state

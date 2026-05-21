@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
+import { formatDateKey } from '@/lib/localDate';
 
 interface RecordCertificationModalProps {
   claim: Claim;
@@ -28,9 +29,7 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
   onCertify,
 }: RecordCertificationModalProps) {
   const [certifiedAmount, setCertifiedAmount] = useState(String(claim.totalClaimedAmount));
-  const [certificationDate, setCertificationDate] = useState(
-    () => new Date().toISOString().split('T')[0],
-  );
+  const [certificationDate, setCertificationDate] = useState(() => formatDateKey());
   const [variationNotes, setVariationNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [certifying, setCertifying] = useState(false);

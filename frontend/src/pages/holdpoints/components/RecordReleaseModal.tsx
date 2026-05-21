@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { formatDateKey } from '@/lib/localDate';
 
 const recordReleaseSchema = z.object({
   releasedByName: z.string().trim().min(1, 'Name of person releasing is required'),
@@ -71,7 +72,7 @@ export function RecordReleaseModal({
     defaultValues: {
       releasedByName: '',
       releasedByOrg: '',
-      releaseDate: new Date().toISOString().split('T')[0],
+      releaseDate: formatDateKey(),
       releaseTime: new Date().toTimeString().slice(0, 5),
       releaseNotes: '',
       releaseMethod: 'digital',

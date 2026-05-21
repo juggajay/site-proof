@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar, Clock } from 'lucide-react';
+import { formatDateKey } from '@/lib/localDate';
 
 interface DateTimePickerProps {
   value: string; // ISO datetime string
@@ -24,7 +25,7 @@ export function DateTimePicker({
     try {
       const dt = new Date(isoString);
       if (isNaN(dt.getTime())) return { date: '', time: '' };
-      const date = dt.toISOString().split('T')[0];
+      const date = formatDateKey(dt);
       const time = dt.toTimeString().slice(0, 5); // HH:MM
       return { date, time };
     } catch {

@@ -1,4 +1,5 @@
 import { downloadBlob } from './downloads';
+import { formatDateKey } from './localDate';
 
 export type CsvCell = string | number | boolean | null | undefined;
 
@@ -55,7 +56,7 @@ export function buildScopedCsvFilename(
   scope: string | null | undefined,
   date = new Date(),
 ): string {
-  const datePart = date.toISOString().split('T')[0];
+  const datePart = formatDateKey(date);
   return sanitizeCsvFilename(
     `${slugifyCsvFilenamePart(prefix)}-${slugifyCsvFilenamePart(scope, 'project')}-${datePart}.csv`,
   );

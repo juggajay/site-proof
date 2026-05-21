@@ -26,6 +26,7 @@ import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { isPortalModuleEnabled } from './portalAccessModel';
+import { formatDateKey } from '@/lib/localDate';
 
 interface PortalAccess {
   lots: boolean;
@@ -108,7 +109,7 @@ function getGreeting() {
 }
 
 function getToday() {
-  return new Date().toISOString().split('T')[0];
+  return formatDateKey();
 }
 
 function getDocketStatusIcon(status: string) {

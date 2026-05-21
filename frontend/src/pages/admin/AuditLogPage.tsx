@@ -26,6 +26,7 @@ import {
   ModalFooter,
 } from '@/components/ui/Modal';
 import { downloadCsv } from '@/lib/csv';
+import { formatDateKey } from '@/lib/localDate';
 
 interface AuditLog {
   id: string;
@@ -284,10 +285,7 @@ export function AuditLogPage() {
         return;
       }
 
-      downloadCsv(
-        `audit-logs-${new Date().toISOString().split('T')[0]}.csv`,
-        buildCsvRows(exportedLogs),
-      );
+      downloadCsv(`audit-logs-${formatDateKey()}.csv`, buildCsvRows(exportedLogs));
     } catch {
       setExportError('Failed to export audit logs. Please try again.');
     } finally {

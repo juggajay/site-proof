@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
+import { formatDateKey } from '@/lib/localDate';
 
 interface RecordPaymentModalProps {
   claim: Claim;
@@ -31,7 +32,7 @@ export const RecordPaymentModal = React.memo(function RecordPaymentModal({
   const [paymentAmount, setPaymentAmount] = useState(() =>
     outstandingAmount > 0 ? String(outstandingAmount) : '',
   );
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(() => formatDateKey());
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [error, setError] = useState<string | null>(null);

@@ -12,6 +12,7 @@ import {
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import { LazyHoldPointsChart } from '@/components/charts/LazyCharts';
 import { Button } from '@/components/ui/button';
+import { formatDateKey } from '@/lib/localDate';
 import { logError } from '@/lib/logger';
 
 // Types
@@ -480,10 +481,7 @@ export function HoldPointsPage() {
       hp.releasedByName || '-',
       hp.releaseNotes || '-',
     ]);
-    downloadCsv(`hold-points-${projectId}-${new Date().toISOString().split('T')[0]}.csv`, [
-      headers,
-      ...rows,
-    ]);
+    downloadCsv(`hold-points-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);
   }, [holdPoints, projectId]);
 
   const handleCloseRequestModal = useCallback(() => {

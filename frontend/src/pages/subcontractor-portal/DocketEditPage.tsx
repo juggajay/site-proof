@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { logError } from '@/lib/logger';
+import { formatDateKey } from '@/lib/localDate';
 
 interface Employee {
   id: string;
@@ -199,7 +200,7 @@ export function DocketEditPage() {
   const [wetOrDry, setWetOrDry] = useState<'dry' | 'wet'>('dry');
   const [selectedLotId, setSelectedLotId] = useState<string>('');
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatDateKey();
 
   // Fetch initial data
   useEffect(() => {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
+import { dateKeyToUtcDayNumber, formatDateKey } from '@/lib/localDate';
 import { formatDate } from '../constants';
 import type { DailyDiary } from '../types';
 
@@ -35,14 +36,12 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
   // Helper function to get diary status for a date
   const getDiaryStatusForDate = useCallback(
     (date: Date): 'submitted' | 'draft' | 'missing' | 'future' => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const checkDate = new Date(date);
-      checkDate.setHours(0, 0, 0, 0);
+      const todayDay = dateKeyToUtcDayNumber(formatDateKey());
+      const checkDay = dateKeyToUtcDayNumber(formatDateKey(date));
 
-      if (checkDate > today) return 'future';
+      if (todayDay !== null && checkDay !== null && checkDay > todayDay) return 'future';
 
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = formatDateKey(date);
       const d = diaries.find((d) => d.date.split('T')[0] === dateStr);
       if (d) return d.status;
       return 'missing';
@@ -88,7 +87,7 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
   };
 
   const handleCalendarDayClick = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatDateKey(date);
     onDateChange(dateStr);
     setShowCalendar(false);
   };
@@ -148,7 +147,7 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
           type="date"
           value={selectedDate}
           onChange={(e) => onDateChange(e.target.value)}
-          max={new Date().toISOString().split('T')[0]}
+          max={formatDateKey()}
           className="rounded-md border border-input bg-background px-3 py-2"
         />
         {diary && (
@@ -240,7 +239,7 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
                             ? 'bg-red-500 text-white hover:bg-red-600'
                             : 'bg-muted text-muted-foreground cursor-not-allowed'
                     } ${
-                      day.date.toISOString().split('T')[0] === selectedDate
+                      formatDateKey(day.date) === selectedDate
                         ? 'ring-2 ring-primary ring-offset-2'
                         : ''
                     }`}
