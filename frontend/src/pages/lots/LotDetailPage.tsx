@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { useViewerAccess } from '@/hooks/useViewerAccess';
 import { apiFetch, ApiError, authFetch } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/errorHandling';
 import { devLog, devWarn, logError } from '@/lib/logger';
 import { formatDateTime } from '@/lib/utils';
@@ -55,9 +56,11 @@ import { StatusOverrideModal } from './components/StatusOverrideModal';
 import { QualityManagementSection } from './components/QualityManagementSection';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
+import { LotReadinessPanel } from './components/LotReadinessPanel';
 import { PhotosTab } from './components/PhotosTab';
 import { ITPChecklistTab } from './components/ITPChecklistTab';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import type { LotEvidenceReadiness } from '@/types/evidenceReadiness';
 
 interface ProjectResponse {
   project?: {
@@ -246,6 +249,21 @@ export function LotDetailPage() {
   const handleTabChange = (tabId: LotTab) => {
     setSearchParams({ tab: tabId });
   };
+
+  const {
+    data: readinessData,
+    isLoading: loadingReadiness,
+    error: readinessError,
+    refetch: refetchReadiness,
+  } = useQuery({
+    queryKey: queryKeys.lotReadiness(lotId || ''),
+    queryFn: () =>
+      apiFetch<{ readiness: LotEvidenceReadiness }>(
+        `/api/lots/${encodeURIComponent(lotId!)}/readiness`,
+      ),
+    enabled: Boolean(lotId),
+    refetchInterval: 20_000,
+  });
 
   // Fetch quality access permissions for this project
   useEffect(() => {
@@ -1828,6 +1846,14 @@ export function LotDetailPage() {
           setShowAssignSubcontractorModal(true);
         }}
         onRemoveAssignment={(assignmentId: string) => removeAssignmentMutation.mutate(assignmentId)}
+      />
+
+      <LotReadinessPanel
+        readiness={readinessData?.readiness ?? null}
+        loading={loadingReadiness}
+        error={readinessError ? 'Could not load evidence readiness.' : null}
+        onRetry={() => void refetchReadiness()}
+        onTabChange={handleTabChange}
       />
 
       {/* Tab Navigation */}
