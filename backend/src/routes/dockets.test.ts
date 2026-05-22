@@ -1143,6 +1143,39 @@ describe('Dockets API', () => {
       expect(res.status).toBe(400);
     });
 
+    it('should approve docket when optional approval text fields are null', async () => {
+      const nullableApprovalDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(Date.now() + 777600000),
+          status: 'pending_approval',
+          submittedAt: new Date(),
+          totalLabourSubmitted: 8,
+          totalPlantSubmitted: 0,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/dockets/${nullableApprovalDocket.id}/approve`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          foremanNotes: null,
+          adjustmentReason: null,
+          adjustedLabourHours: 8,
+          adjustedPlantHours: 0,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.docket.status).toBe('approved');
+
+      const stored = await prisma.dailyDocket.findUnique({
+        where: { id: nullableApprovalDocket.id },
+      });
+      expect(stored?.foremanNotes).toBeNull();
+      expect(stored?.adjustmentReason).toBeNull();
+    });
+
     it('should approve docket', async () => {
       const res = await request(app)
         .post(`/api/dockets/${submittableDocketId}/approve`)
@@ -1403,6 +1436,31 @@ describe('Dockets API', () => {
         status: { from: 'pending_approval', to: 'rejected' },
         reason: 'Hours do not match diary',
       });
+    });
+
+    it('should reject docket when optional rejection reason is null', async () => {
+      const nullableRejectDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(Date.now() + 1036800000),
+          status: 'pending_approval',
+          submittedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/dockets/${nullableRejectDocket.id}/reject`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.docket.status).toBe('rejected');
+
+      const stored = await prisma.dailyDocket.findUnique({
+        where: { id: nullableRejectDocket.id },
+      });
+      expect(stored?.foremanNotes).toBeNull();
     });
 
     afterAll(async () => {

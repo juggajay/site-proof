@@ -49,6 +49,14 @@ const requiredDocketIdSchema = (fieldName: string) =>
     .min(1, `${fieldName} is required`)
     .max(MAX_DOCKET_ID_LENGTH, `${fieldName} is too long`);
 
+const optionalNullableTextSchema = (fieldName: string, maxLength: number) =>
+  z
+    .string()
+    .trim()
+    .max(maxLength, `${fieldName} must be ${maxLength} characters or less`)
+    .nullable()
+    .optional();
+
 const optionalTimeSchema = z
   .string()
   .trim()
@@ -85,32 +93,14 @@ const updateDocketSchema = z.object({
 });
 
 const approveDocketSchema = z.object({
-  foremanNotes: z
-    .string()
-    .trim()
-    .max(
-      MAX_DOCKET_REASON_LENGTH,
-      `Foreman notes must be ${MAX_DOCKET_REASON_LENGTH} characters or less`,
-    )
-    .optional(),
-  adjustmentReason: z
-    .string()
-    .trim()
-    .max(
-      MAX_DOCKET_REASON_LENGTH,
-      `Adjustment reason must be ${MAX_DOCKET_REASON_LENGTH} characters or less`,
-    )
-    .optional(),
+  foremanNotes: optionalNullableTextSchema('Foreman notes', MAX_DOCKET_REASON_LENGTH),
+  adjustmentReason: optionalNullableTextSchema('Adjustment reason', MAX_DOCKET_REASON_LENGTH),
   adjustedLabourHours: finiteNonNegativeNumber('Adjusted labour total').optional(),
   adjustedPlantHours: finiteNonNegativeNumber('Adjusted plant total').optional(),
 });
 
 const rejectDocketSchema = z.object({
-  reason: z
-    .string()
-    .trim()
-    .max(MAX_DOCKET_REASON_LENGTH, `Reason must be ${MAX_DOCKET_REASON_LENGTH} characters or less`)
-    .optional(),
+  reason: optionalNullableTextSchema('Reason', MAX_DOCKET_REASON_LENGTH),
 });
 
 const queryDocketSchema = z.object({
