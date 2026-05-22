@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Check, X, CheckSquare } from 'lucide-react';
 import { SwipeableCard } from './SwipeableCard';
@@ -75,7 +75,15 @@ function formatDateAU(dateStr: string): string {
   }
 }
 
-function DocketCard({ docket, onTap }: { docket: Docket; onTap: () => void }) {
+function DocketCard({
+  docket,
+  onTap,
+  actions,
+}: {
+  docket: Docket;
+  onTap: () => void;
+  actions?: ReactNode;
+}) {
   const touchStartRef = useRef({ x: 0, y: 0 });
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -130,6 +138,12 @@ function DocketCard({ docket, onTap }: { docket: Docket; onTap: () => void }) {
           <p className="font-medium text-sm">{docket.plantHours}h</p>
         </div>
       </div>
+
+      {actions && (
+        <div className="flex gap-2 border-t pt-3" onClick={(event) => event.stopPropagation()}>
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
@@ -286,7 +300,32 @@ export function DocketApprovalsMobileView({
                   }}
                   disabled={!canApprove}
                 >
-                  <DocketCard docket={docket} onTap={() => onTapDocket(docket)} />
+                  <DocketCard
+                    docket={docket}
+                    onTap={() => onTapDocket(docket)}
+                    actions={
+                      canApprove ? (
+                        <>
+                          <button
+                            type="button"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white"
+                            onClick={() => onApprove(docket)}
+                          >
+                            <Check className="h-4 w-4" />
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700"
+                            onClick={() => onReject(docket)}
+                          >
+                            <X className="h-4 w-4" />
+                            Reject
+                          </button>
+                        </>
+                      ) : undefined
+                    }
+                  />
                 </SwipeableCard>
               ) : (
                 <DocketCard key={docket.id} docket={docket} onTap={() => onTapDocket(docket)} />
