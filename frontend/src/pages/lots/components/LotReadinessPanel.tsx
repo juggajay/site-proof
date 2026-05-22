@@ -144,8 +144,8 @@ export function LotReadinessPanel({
 }: LotReadinessPanelProps) {
   if (loading) {
     return (
-      <section className="rounded-lg border bg-card p-4" aria-label="Evidence readiness">
-        <h2 className="text-lg font-semibold">Evidence readiness</h2>
+      <section className="rounded-lg border bg-card p-4" aria-label="Evidence Readiness">
+        <h2 className="text-lg font-semibold">Evidence Readiness</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Checking blockers and supporting proof...
         </p>
@@ -157,9 +157,9 @@ export function LotReadinessPanel({
     return (
       <section
         className="rounded-lg border border-amber-200 bg-amber-50 p-4"
-        aria-label="Evidence readiness"
+        aria-label="Evidence Readiness"
       >
-        <h2 className="text-lg font-semibold text-amber-950">Evidence readiness unavailable</h2>
+        <h2 className="text-lg font-semibold text-amber-950">Evidence Readiness unavailable</h2>
         <p className="mt-1 text-sm text-amber-900">{error}</p>
         <button
           type="button"
@@ -176,10 +176,10 @@ export function LotReadinessPanel({
   if (!readiness) return null;
 
   return (
-    <section className="rounded-lg border bg-card p-4" aria-label="Evidence readiness">
+    <section className="rounded-lg border bg-card p-4" aria-label="Evidence Readiness">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Evidence readiness</h2>
+          <h2 className="text-lg font-semibold">Evidence Readiness</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {readiness.summary.actionBlockerCount} action blocker
             {readiness.summary.actionBlockerCount === 1 ? '' : 's'} /{' '}

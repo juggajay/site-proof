@@ -125,6 +125,7 @@ const E2E_ITP_INSTANCE_WITH_PHOTO = {
 interface MockLotDetailOptions {
   failLotLoadsUntil?: number;
   failItpLoadsUntil?: number;
+  noItpAssigned?: boolean;
   withPhotoEvidence?: boolean;
 }
 
@@ -134,6 +135,8 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
   let completionRequestCount = 0;
   let attachmentRequest: unknown;
   let conformRequestBody: unknown;
+  let templatesRequestIncludesGlobal = false;
+  let assignedTemplateRequest: unknown;
   let completion = null as null | {
     id: string;
     checklistItemId: string;
@@ -234,6 +237,65 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
     }
 
     if (url.pathname === `/api/lots/${E2E_LOT_ID}/readiness`) {
+      if (options.noItpAssigned) {
+        await json({
+          readiness: {
+            lotId: E2E_LOT_ID,
+            lotNumber: 'LOT-ITP-001',
+            status: 'not_started',
+            conformance: {
+              state: 'blocked',
+              blockers: [
+                {
+                  code: 'no_itp',
+                  severity: 'blocker',
+                  area: 'itp',
+                  title: 'No ITP assigned',
+                  detail: 'Assign an ITP before conforming this lot.',
+                  blocksAction: true,
+                  actionLabel: 'Assign ITP',
+                  actionHref: '?tab=itp',
+                },
+                {
+                  code: 'no_passing_test',
+                  severity: 'blocker',
+                  area: 'test',
+                  title: 'No passing test result',
+                  detail: 'Record and verify a passing test before conforming this lot.',
+                  blocksAction: true,
+                  actionLabel: 'Add test',
+                  actionHref: '?tab=tests',
+                },
+              ],
+              warnings: [],
+              support: [],
+            },
+            claim: {
+              state: 'not_conformed',
+              blockers: [
+                {
+                  code: 'not_conformed',
+                  severity: 'blocker',
+                  area: 'claim',
+                  title: 'Lot not conformed',
+                  detail: 'Conform this lot before it can be claimed.',
+                  blocksAction: true,
+                },
+              ],
+              warnings: [],
+              support: [],
+            },
+            summary: {
+              blockerCount: 3,
+              warningCount: 0,
+              supportCount: 0,
+              actionBlockerCount: 3,
+            },
+          },
+        });
+        return;
+      }
+
       await json({
         readiness: {
           lotId: E2E_LOT_ID,
@@ -325,6 +387,11 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
         return;
       }
 
+      if (options.noItpAssigned) {
+        await json({ message: 'No ITP assigned to this lot' }, 404);
+        return;
+      }
+
       if (options.withPhotoEvidence) {
         await json({ instance: E2E_ITP_INSTANCE_WITH_PHOTO });
         return;
@@ -336,6 +403,29 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
           completions: completion ? [completion] : [],
         },
       });
+      return;
+    }
+
+    if (url.pathname === '/api/itp/templates') {
+      templatesRequestIncludesGlobal = url.searchParams.get('includeGlobal') === 'true';
+      await json({
+        templates: templatesRequestIncludesGlobal
+          ? [
+              {
+                ...E2E_ITP_INSTANCE.template,
+                projectId: null,
+                activityType: 'Earthworks',
+                isActive: true,
+              },
+            ]
+          : [],
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/itp/instances' && route.request().method() === 'POST') {
+      assignedTemplateRequest = route.request().postDataJSON();
+      await json({ instance: E2E_ITP_INSTANCE });
       return;
     }
 
@@ -406,6 +496,8 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
     getConformRequestBody: () => conformRequestBody,
     getItpLoadAttempts: () => itpLoadAttempts,
     getLotLoadAttempts: () => lotLoadAttempts,
+    getTemplatesRequestIncludesGlobal: () => templatesRequestIncludesGlobal,
+    getAssignedTemplateRequest: () => assignedTemplateRequest,
   };
 }
 
@@ -415,12 +507,38 @@ test.describe('Lot detail ITP workflow', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
 
-    const panel = page.getByLabel('Evidence readiness');
-    await expect(panel.getByRole('heading', { name: 'Evidence readiness' })).toBeVisible();
+    const panel = page.getByLabel('Evidence Readiness');
+    await expect(panel.getByRole('heading', { name: 'Evidence Readiness' })).toBeVisible();
     await expect(panel.getByText('Conformance: Blocked')).toBeVisible();
     await expect(panel.getByText('ITP incomplete')).toBeVisible();
     await expect(panel.getByText('Claim: Not ready')).toBeVisible();
     await expect(panel.getByText('Lot not conformed')).toBeVisible();
+  });
+
+  test('lets users assign an available seeded ITP from the readiness action path', async ({
+    page,
+  }) => {
+    const api = await mockLotDetailApi(page, { noItpAssigned: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+
+    const panel = page.getByLabel('Evidence Readiness');
+    await expect(panel.getByRole('heading', { name: 'Evidence Readiness' })).toBeVisible();
+    await panel.getByRole('button', { name: 'Assign ITP' }).click();
+
+    await expect(page.getByText('No ITP template assigned to this lot yet')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create ITP Template First' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Assign ITP Template' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Assign ITP Template' })).toBeVisible();
+    await page.getByRole('button', { name: /E2E Earthworks ITP/ }).click();
+
+    await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
+    expect(api.getTemplatesRequestIncludesGlobal()).toBe(true);
+    expect(api.getAssignedTemplateRequest()).toEqual({
+      lotId: E2E_LOT_ID,
+      templateId: 'e2e-template',
+    });
   });
 
   test('shows retry instead of a false missing-ITP state when ITP loading fails', async ({
