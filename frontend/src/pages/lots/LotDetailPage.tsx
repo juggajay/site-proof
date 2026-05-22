@@ -318,27 +318,27 @@ export function LotDetailPage() {
     void fetchLot();
   }, [fetchLot]);
 
+  const fetchConformStatus = useCallback(async () => {
+    if (!lotId || !lot || lot.status === 'conformed' || lot.status === 'claimed') return;
+
+    setLoadingConformStatus(true);
+
+    try {
+      const data = await apiFetch<ConformStatus>(
+        `/api/lots/${encodeURIComponent(lotId)}/conform-status`,
+      );
+      setConformStatus(data);
+    } catch (err) {
+      logError('Failed to fetch conform status:', err);
+    } finally {
+      setLoadingConformStatus(false);
+    }
+  }, [lotId, lot]);
+
   // Fetch conformance status when lot is loaded and not yet conformed
   useEffect(() => {
-    async function fetchConformStatus() {
-      if (!lotId || !lot || lot.status === 'conformed' || lot.status === 'claimed') return;
-
-      setLoadingConformStatus(true);
-
-      try {
-        const data = await apiFetch<ConformStatus>(
-          `/api/lots/${encodeURIComponent(lotId)}/conform-status`,
-        );
-        setConformStatus(data);
-      } catch (err) {
-        logError('Failed to fetch conform status:', err);
-      } finally {
-        setLoadingConformStatus(false);
-      }
-    }
-
-    fetchConformStatus();
-  }, [lotId, lot]);
+    void fetchConformStatus();
+  }, [fetchConformStatus]);
 
   // Fetch tab counts on initial load for badges
   useEffect(() => {
@@ -476,7 +476,7 @@ export function LotDetailPage() {
         // No ITP assigned - fetch available templates
         try {
           const templatesData = await apiFetch<{ templates: ITPTemplate[] }>(
-            `/api/itp/templates?projectId=${encodedProjectId}`,
+            `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true`,
           );
           setTemplates(templatesData.templates || []);
         } catch (templateErr) {
@@ -790,6 +790,8 @@ export function LotDetailPage() {
         body: JSON.stringify({ lotId, templateId }),
       });
       setItpInstance(data.instance);
+      void refetchReadiness();
+      void fetchConformStatus();
       // Modal closing is handled by the ITPChecklistTab component
       return true;
     } catch (err) {
