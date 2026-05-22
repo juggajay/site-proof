@@ -342,6 +342,23 @@ test.describe('Dockets seeded approval contract', () => {
     ).toBeVisible();
   });
 
+  test('shows explicit approve and reject actions on mobile pending docket cards', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockSeededDocketsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets?status=pending_approval`);
+
+    await expect(page.getByText('DKT-E2E-001')).toBeVisible();
+    const approveButton = page.getByRole('button', { name: 'Approve', exact: true });
+    await expect(approveButton).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reject', exact: true })).toBeVisible();
+
+    await approveButton.click();
+    await expect(page.getByRole('dialog', { name: 'Approve Docket' })).toBeVisible();
+  });
+
   test('exports dockets with a project-name CSV filename', async ({ page }) => {
     await mockSeededDocketsApi(page);
 
