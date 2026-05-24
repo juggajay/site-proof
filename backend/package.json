@@ -55,6 +55,7 @@
   "overrides": {
     "js-cookie": "3.0.7",
     "minimatch": "^9.0.9",
+    "qs": "6.15.2",
     "ws": "8.20.1"
   },
   "devDependencies": {
