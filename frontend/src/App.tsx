@@ -143,6 +143,11 @@ const CostsPage = lazy(() =>
 const CompanySettingsPage = lazy(() =>
   import('@/pages/company/CompanySettingsPage').then((m) => ({ default: m.CompanySettingsPage })),
 );
+const CompanyOnboardingPage = lazy(() =>
+  import('@/pages/onboarding/CompanyOnboardingPage').then((m) => ({
+    default: m.CompanyOnboardingPage,
+  })),
+);
 const PortfolioPage = lazy(() =>
   import('@/pages/portfolio/PortfolioPage').then((m) => ({ default: m.PortfolioPage })),
 );
@@ -294,6 +299,7 @@ function App() {
             {/* Protected Routes */}
             <Route element={<ProtectedAppShell />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/onboarding" element={<CompanyOnboardingPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
 
               {/* Portfolio - Admin Only */}

@@ -361,6 +361,116 @@ function normalizeCompanyLogoUrl(value: unknown): string | null | undefined {
   return normalized;
 }
 
+// POST /api/company - Create the current user's first company
+companyRouter.post(
+  '/',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    requireBrowserSession(req, 'Company creation');
+
+    if (user.companyId) {
+      throw AppError.badRequest('You already belong to a company');
+    }
+
+    if (isSubcontractorCompanyRole(user)) {
+      throw AppError.forbidden(
+        'Subcontractor portal users cannot create head contractor companies',
+      );
+    }
+
+    const name = normalizeCompanyString(req.body.name, 'Company name', COMPANY_NAME_MAX_LENGTH, {
+      required: true,
+    });
+    const abn = normalizeCompanyString(req.body.abn, 'Company ABN', COMPANY_ABN_MAX_LENGTH);
+    const address = normalizeCompanyString(
+      req.body.address,
+      'Company address',
+      COMPANY_ADDRESS_MAX_LENGTH,
+    );
+
+    const { company, updatedUser } = await prisma.$transaction(async (tx) => {
+      const currentUser = await tx.user.findUnique({
+        where: { id: user.userId },
+        select: { companyId: true },
+      });
+
+      if (!currentUser) {
+        throw AppError.unauthorized('Invalid user session');
+      }
+
+      if (currentUser.companyId) {
+        throw AppError.badRequest('You already belong to a company');
+      }
+
+      const company = await tx.company.create({
+        data: {
+          name: name!,
+          abn: abn ?? null,
+          address: address ?? null,
+          subscriptionTier: 'basic',
+        },
+        select: {
+          id: true,
+          name: true,
+          abn: true,
+          address: true,
+          logoUrl: true,
+          subscriptionTier: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      const updatedUser = await tx.user.update({
+        where: { id: user.userId },
+        data: {
+          companyId: company.id,
+          roleInCompany: 'owner',
+        },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          phone: true,
+          roleInCompany: true,
+          companyId: true,
+          avatarUrl: true,
+          passwordHash: true,
+        },
+      });
+
+      return { company, updatedUser };
+    });
+
+    await createAuditLog({
+      userId: user.userId,
+      entityType: 'company',
+      entityId: company.id,
+      action: AuditAction.COMPANY_CREATED,
+      changes: {
+        companyName: company.name,
+      },
+      req,
+    });
+
+    res.status(201).json({
+      company,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        fullName: updatedUser.fullName,
+        phone: updatedUser.phone,
+        role: updatedUser.roleInCompany,
+        roleInCompany: updatedUser.roleInCompany,
+        companyId: updatedUser.companyId,
+        companyName: company.name,
+        avatarUrl: updatedUser.avatarUrl,
+        hasPassword: Boolean(updatedUser.passwordHash),
+      },
+    });
+  }),
+);
+
 // GET /api/company - Get the current user's company
 companyRouter.get(
   '/',

@@ -109,6 +109,90 @@ describe('Company API', () => {
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   });
 
+  describe('POST /api/company', () => {
+    it('creates a company for a company-less user and promotes them to owner', async () => {
+      const noCompanyEmail = `company-onboarding-${Date.now()}@example.com`;
+      const regRes = await request(app).post('/api/auth/register').send({
+        email: noCompanyEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Company Onboarding User',
+        tosAccepted: true,
+      });
+
+      const onboardingUserId = regRes.body.user.id as string;
+      let createdCompanyId: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post('/api/company')
+          .set('Authorization', `Bearer ${regRes.body.token}`)
+          .send({
+            name: '  Onboarding Civil Pty Ltd  ',
+            abn: '  12345678901  ',
+            address: '  10 Test Street, Sydney NSW 2000  ',
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.company).toMatchObject({
+          name: 'Onboarding Civil Pty Ltd',
+          abn: '12345678901',
+          address: '10 Test Street, Sydney NSW 2000',
+          subscriptionTier: 'basic',
+        });
+        expect(res.body.user).toMatchObject({
+          id: onboardingUserId,
+          role: 'owner',
+          roleInCompany: 'owner',
+          companyId: res.body.company.id,
+          companyName: 'Onboarding Civil Pty Ltd',
+        });
+
+        const responseCompanyId = res.body.company.id as string;
+        createdCompanyId = responseCompanyId;
+
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: onboardingUserId },
+          select: { companyId: true, roleInCompany: true },
+        });
+        expect(updatedUser).toMatchObject({
+          companyId: createdCompanyId,
+          roleInCompany: 'owner',
+        });
+
+        const { auditLog, changes } = await expectLatestCompanyAuditLog(
+          responseCompanyId,
+          'company_created',
+        );
+        expect(auditLog.userId).toBe(onboardingUserId);
+        expect(changes.companyName).toBe('Onboarding Civil Pty Ltd');
+      } finally {
+        await prisma.auditLog.deleteMany({
+          where: {
+            OR: [
+              { userId: onboardingUserId },
+              ...(createdCompanyId ? [{ entityId: createdCompanyId }] : []),
+            ],
+          },
+        });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: onboardingUserId } });
+        await prisma.user.delete({ where: { id: onboardingUserId } }).catch(() => {});
+        if (createdCompanyId) {
+          await prisma.company.delete({ where: { id: createdCompanyId } }).catch(() => {});
+        }
+      }
+    });
+
+    it('rejects company creation when the user already belongs to a company', async () => {
+      const res = await request(app)
+        .post('/api/company')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Second Company Pty Ltd' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('already belong to a company');
+    });
+  });
+
   describe('GET /api/company', () => {
     it("should get the current user's company", async () => {
       const res = await request(app)
