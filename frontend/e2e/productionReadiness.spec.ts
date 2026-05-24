@@ -565,11 +565,11 @@ test.describe('production readiness guardrails', () => {
     expect(appSource).not.toContain("from '@/components/ChangelogNotification'");
     expect(appSource).not.toContain("from '@/components/SessionTimeoutWarning'");
     expect(protectedShellSource).toMatch(
-      /<ProtectedRoute>\s*<KeyboardShortcutsProvider>\s*<MainLayout\s*\/>\s*<\/KeyboardShortcutsProvider>\s*<\/ProtectedRoute>/,
+      /<ProtectedRoute>\s*<KeyboardShortcutsProvider>\s*<CompanyOnboardingGate>\s*<MainLayout\s*\/>\s*<\/CompanyOnboardingGate>\s*<\/KeyboardShortcutsProvider>\s*<\/ProtectedRoute>/,
     );
     expect(appSource).not.toMatch(/<KeyboardShortcutsProvider>\s*<Suspense/);
     expect(protectedShellSource).toContain('<OnboardingTour enabled={showGeneralOnboarding} />');
-    expect(protectedShellSource).toContain('<ChangelogNotification />');
+    expect(protectedShellSource).toContain('{!isCompanySetupRoute && <ChangelogNotification />}');
     expect(protectedShellSource).toContain('<SessionTimeoutWarning />');
     expect(errorBoundarySource).toContain('useNavigate');
     expect(errorBoundarySource).toContain("navigate('/dashboard', { replace: true })");
@@ -590,9 +590,10 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(protectedShellSource).toContain(
-      'const showGeneralOnboarding = !SUBCONTRACTOR_ROLES.includes(userRole)',
-    );
+    expect(protectedShellSource).toContain('const showGeneralOnboarding =');
+    expect(protectedShellSource).toContain('Boolean(user?.companyId)');
+    expect(protectedShellSource).toContain('!SUBCONTRACTOR_ROLES.includes(userRole)');
+    expect(protectedShellSource).toContain('!isCompanySetupRoute');
     expect(protectedShellSource).toContain('<OnboardingTour enabled={showGeneralOnboarding} />');
     expect(onboardingSource).toContain('enabled = true');
     expect(onboardingSource).toContain('if (!enabled && !forceShow)');

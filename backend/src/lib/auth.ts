@@ -38,6 +38,7 @@ export interface AuthUser {
   name?: string | null;
   phone?: string | null;
   companyId?: string | null;
+  companyName?: string | null;
   createdAt?: Date;
   avatarUrl?: string | null;
   hasPassword?: boolean;
@@ -56,12 +57,13 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
         phone: string | null;
         role_in_company: string;
         company_id: string | null;
+        company_name: string | null;
         created_at: Date;
         avatar_url: string | null;
         token_invalidated_at: Date | null;
         has_password: boolean;
       }>
-    >`SELECT id, email, full_name, phone, role_in_company, company_id, created_at, avatar_url, token_invalidated_at, password_hash IS NOT NULL AS has_password FROM users WHERE id = ${payload.userId}`;
+    >`SELECT users.id, users.email, users.full_name, users.phone, users.role_in_company, users.company_id, companies.name AS company_name, users.created_at, users.avatar_url, users.token_invalidated_at, users.password_hash IS NOT NULL AS has_password FROM users LEFT JOIN companies ON companies.id = users.company_id WHERE users.id = ${payload.userId}`;
 
     const user = userResult[0];
 
@@ -96,6 +98,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       name: user.full_name,
       phone: user.phone,
       companyId: user.company_id,
+      companyName: user.company_name,
       role: user.role_in_company,
       createdAt: user.created_at,
       avatarUrl: user.avatar_url,

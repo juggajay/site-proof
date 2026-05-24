@@ -140,6 +140,7 @@ export const AuditAction = {
   WEBHOOK_DELETED: 'webhook_deleted',
   WEBHOOK_SECRET_REGENERATED: 'webhook_secret_regenerated',
   COMPANY_UPDATED: 'company_updated',
+  COMPANY_CREATED: 'company_created',
   COMPANY_LOGO_UPDATED: 'company_logo_updated',
   COMPANY_MEMBER_LEFT: 'company_member_left',
   COMPANY_OWNERSHIP_TRANSFERRED: 'company_ownership_transferred',

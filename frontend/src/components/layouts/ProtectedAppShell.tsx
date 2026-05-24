@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import {
   KeyboardShortcutsHelp,
@@ -12,18 +13,39 @@ import { MainLayout } from './MainLayout';
 
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
 
+function CompanyOnboardingGate({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  const userRole = user?.roleInCompany || user?.role || '';
+  const isSubcontractor = SUBCONTRACTOR_ROLES.includes(userRole);
+  const needsCompany = Boolean(user) && !user?.companyId && !isSubcontractor;
+
+  if (needsCompany && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  if (!needsCompany && location.pathname === '/onboarding') {
+    return <Navigate to="/projects" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
   const { isOpen, closeHelp } = useKeyboardShortcutsHelp();
   const { user } = useAuth();
+  const location = useLocation();
   const userRole = user?.role || user?.roleInCompany || '';
-  const showGeneralOnboarding = !SUBCONTRACTOR_ROLES.includes(userRole);
+  const isCompanySetupRoute = location.pathname === '/onboarding';
+  const showGeneralOnboarding =
+    Boolean(user?.companyId) && !SUBCONTRACTOR_ROLES.includes(userRole) && !isCompanySetupRoute;
 
   return (
     <>
       {children}
       <KeyboardShortcutsHelp isOpen={isOpen} onClose={closeHelp} />
       <OnboardingTour enabled={showGeneralOnboarding} />
-      <ChangelogNotification />
+      {!isCompanySetupRoute && <ChangelogNotification />}
       <SessionTimeoutWarning />
     </>
   );
@@ -33,7 +55,9 @@ export function ProtectedAppShell() {
   return (
     <ProtectedRoute>
       <KeyboardShortcutsProvider>
-        <MainLayout />
+        <CompanyOnboardingGate>
+          <MainLayout />
+        </CompanyOnboardingGate>
       </KeyboardShortcutsProvider>
     </ProtectedRoute>
   );
