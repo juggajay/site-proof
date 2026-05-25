@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `bd3f439 fix: add 404 recovery links (#190)`
+  `bf3371c fix: surface audit log pagination controls (#194)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -291,7 +291,7 @@ Recent verification pattern:
 
 ### Evidence Readiness And Activation QA
 
-Status: core activation and dogfood findings are closed through PR #190, with a
+Status: core activation and dogfood findings are closed through PR #194, with a
 small number of product-decision items still open.
 
 Evidence Readiness shipped in PRs #175-#178:
@@ -327,6 +327,13 @@ Production dogfood and activation follow-up PRs:
 - PR #188 opened newly created projects.
 - PR #189 clarified and tested audit log search scope.
 - PR #190 added contextual 404 recovery links.
+- PR #191 refreshed this tracked handoff after the activation/RBAC cleanup.
+- PR #192 added a claims-oriented project reports tab backed by the existing
+  claims reporting API.
+- PR #193 changed audit log action display, details, filters, and CSV export
+  from raw backend event codes to readable customer-facing labels.
+- PR #194 surfaced audit log pagination controls above the table as well as
+  below it, so large audit trails do not require scrolling to navigate.
 
 Historical `.gstack/dev-browser` reports remain useful as evidence trails, but
 their issue lists are not live backlogs. In particular, these are stale unless a
@@ -343,6 +350,9 @@ fresh production recheck proves otherwise:
 - "Project create leaves users on the project list", closed by PR #188.
 - "Audit log search does not match user/project columns", closed by PR #189.
 - "404 dead-end page", closed by PR #190.
+- "No claims-oriented reports tab", closed by PR #192.
+- "Audit log action labels are too raw", closed by PR #193.
+- "Audit log pagination is only at the bottom", closed by PR #194.
 
 Open product-decision items:
 
@@ -355,10 +365,9 @@ Open product-decision items:
 
 Open low-risk polish candidates:
 
-- Add a claims-oriented report view or tab if Jay wants progress-claim reporting
-  surfaced inside project reports.
-- Improve audit action display labels if future audit events are still too raw
-  for customer-facing review.
+- Keep watching for new audit action names that fall back to automatic
+  formatting. PR #193 added the known production action map, but new backend
+  audit events should get an explicit label when added.
 - Re-run live dogfood after each activation batch using sacrificial data and
   compare against the latest merged PRs, not historical report text.
 
@@ -375,7 +384,7 @@ Open low-risk polish candidates:
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
    Many findings from the 2026-05-19 through 2026-05-25 reports have been
-   closed by PRs #99-#190.
+   closed by PRs #99-#194.
 
 ## Handoff Checklist For The Next Agent
 
