@@ -393,6 +393,37 @@ export function AuditLogPage() {
     void refetchUsers();
   };
 
+  const renderPaginationControls = () =>
+    totalPages > 1 ? (
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Page {page} of {totalPages}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -590,8 +621,11 @@ export function AuditLogPage() {
       )}
 
       {/* Results Count */}
-      <div className="text-sm text-muted-foreground">
-        Showing {logs.length} of {total} audit log entries
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-muted-foreground">
+          Showing {logs.length} of {total} audit log entries
+        </div>
+        {renderPaginationControls()}
       </div>
 
       {/* Error State */}
@@ -697,35 +731,7 @@ export function AuditLogPage() {
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
+          {renderPaginationControls()}
         </>
       )}
 

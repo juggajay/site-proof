@@ -400,6 +400,8 @@ test.describe('Audit log seeded admin contract', () => {
     await page.goto('/audit-log');
 
     await expect(page.getByText('Showing 50 of 101 audit log entries')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next' })).toHaveCount(2);
+    await expect(page.getByRole('button', { name: 'Previous' })).toHaveCount(2);
 
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export CSV' }).click();
