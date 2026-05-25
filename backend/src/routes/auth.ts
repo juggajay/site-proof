@@ -42,6 +42,7 @@ import {
   isSupabaseConfigured,
 } from '../lib/supabase.js';
 import { isSubcontractorInvitationExpired } from '../lib/subcontractorInvitations.js';
+import { hasActiveSubcontractorPortalIdentity } from '../lib/projectAccess.js';
 
 const AVATAR_STORAGE_PREFIX = 'avatars';
 const GENERIC_RESEND_VERIFICATION_MESSAGE =
@@ -87,6 +88,7 @@ async function requireJwtAuth(req: Request, _res: Response, next: NextFunction) 
       roleInCompany: userData.role,
       role: userData.role,
       companyId: userData.companyId || null,
+      hasSubcontractorPortalAccess: userData.hasSubcontractorPortalAccess,
     };
 
     next();
@@ -744,6 +746,7 @@ authRouter.post(
         companyId: user.company_id,
         companyName,
         hasPassword: true,
+        hasSubcontractorPortalAccess: await hasActiveSubcontractorPortalIdentity(user.id),
       },
       token,
     });

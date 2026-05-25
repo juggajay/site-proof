@@ -36,6 +36,7 @@ interface User {
   roleInCompany?: string;
   companyId?: string | null;
   companyName?: string | null;
+  hasSubcontractorPortalAccess?: boolean;
   createdAt?: string;
   avatarUrl?: string | null;
   hasPassword?: boolean;

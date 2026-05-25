@@ -42,6 +42,7 @@ export interface AuthUser {
   createdAt?: Date;
   avatarUrl?: string | null;
   hasPassword?: boolean;
+  hasSubcontractorPortalAccess?: boolean;
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
@@ -62,8 +63,20 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
         avatar_url: string | null;
         token_invalidated_at: Date | null;
         has_password: boolean;
+        has_subcontractor_portal_access: boolean;
       }>
-    >`SELECT users.id, users.email, users.full_name, users.phone, users.role_in_company, users.company_id, companies.name AS company_name, users.created_at, users.avatar_url, users.token_invalidated_at, users.password_hash IS NOT NULL AS has_password FROM users LEFT JOIN companies ON companies.id = users.company_id WHERE users.id = ${payload.userId}`;
+    >`SELECT users.id, users.email, users.full_name, users.phone, users.role_in_company, users.company_id, companies.name AS company_name, users.created_at, users.avatar_url, users.token_invalidated_at, users.password_hash IS NOT NULL AS has_password,
+        EXISTS (
+          SELECT 1
+          FROM subcontractor_users
+          JOIN subcontractor_companies
+            ON subcontractor_companies.id = subcontractor_users.subcontractor_company_id
+          WHERE subcontractor_users.user_id = users.id
+            AND subcontractor_companies.status NOT IN ('suspended', 'removed')
+        ) AS has_subcontractor_portal_access
+      FROM users
+      LEFT JOIN companies ON companies.id = users.company_id
+      WHERE users.id = ${payload.userId}`;
 
     const user = userResult[0];
 
@@ -103,6 +116,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       createdAt: user.created_at,
       avatarUrl: user.avatar_url,
       hasPassword: Boolean(user.has_password),
+      hasSubcontractorPortalAccess: Boolean(user.has_subcontractor_portal_access),
     };
   } catch {
     return null;

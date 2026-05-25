@@ -93,6 +93,10 @@ function isSubcontractorPortalRole(user: AuthenticatedUser): boolean {
   return SUBCONTRACTOR_PORTAL_ROLES.has(user.roleInCompany || '');
 }
 
+function canManageLinkedSubcontractorCompany(user: AuthenticatedUser, linkRole: string): boolean {
+  return user.roleInCompany === 'subcontractor_admin' || linkRole === 'admin';
+}
+
 function assertSubcontractorPortalActive(company: { status: string }) {
   if (BLOCKED_SUBCONTRACTOR_STATUSES.has(company.status)) {
     throw AppError.forbidden(
@@ -798,11 +802,6 @@ subcontractorsRouter.get(
   asyncHandler(async (req, res) => {
     const user = req.user!;
 
-    // Check if user is a subcontractor
-    if (!isSubcontractorPortalRole(user)) {
-      throw AppError.forbidden('Only subcontractors can access this endpoint');
-    }
-
     // Get the user's subcontractor company via SubcontractorUser
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
       where: { userId: user.id },
@@ -823,7 +822,7 @@ subcontractorsRouter.get(
     });
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      throw AppError.notFound('Subcontractor company');
+      throw AppError.forbidden('Only subcontractors can access this endpoint');
     }
 
     const company = subcontractorUser.subcontractorCompany;
@@ -876,11 +875,6 @@ subcontractorsRouter.post(
   asyncHandler(async (req, res) => {
     const user = req.user!;
 
-    // Check if user is a subcontractor admin
-    if (user.roleInCompany !== 'subcontractor_admin') {
-      throw AppError.forbidden('Only subcontractor admins can add employees');
-    }
-
     // Get the user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
       where: { userId: user.id },
@@ -889,6 +883,10 @@ subcontractorsRouter.post(
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
       throw AppError.notFound('Subcontractor company');
+    }
+
+    if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
+      throw AppError.forbidden('Only subcontractor admins can add employees');
     }
 
     assertSubcontractorPortalActive(subcontractorUser.subcontractorCompany);
@@ -930,11 +928,6 @@ subcontractorsRouter.post(
   asyncHandler(async (req, res) => {
     const user = req.user!;
 
-    // Check if user is a subcontractor admin
-    if (user.roleInCompany !== 'subcontractor_admin') {
-      throw AppError.forbidden('Only subcontractor admins can add plant');
-    }
-
     // Get the user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
       where: { userId: user.id },
@@ -943,6 +936,10 @@ subcontractorsRouter.post(
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
       throw AppError.notFound('Subcontractor company');
+    }
+
+    if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
+      throw AppError.forbidden('Only subcontractor admins can add plant');
     }
 
     assertSubcontractorPortalActive(subcontractorUser.subcontractorCompany);
@@ -995,11 +992,6 @@ subcontractorsRouter.delete(
     const user = req.user!;
     const id = normalizeIdParam(req.params.id, 'Employee ID');
 
-    // Check if user is a subcontractor admin
-    if (user.roleInCompany !== 'subcontractor_admin') {
-      throw AppError.forbidden('Only subcontractor admins can delete employees');
-    }
-
     // Get the user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
       where: { userId: user.id },
@@ -1008,6 +1000,10 @@ subcontractorsRouter.delete(
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
       throw AppError.notFound('Subcontractor company');
+    }
+
+    if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
+      throw AppError.forbidden('Only subcontractor admins can delete employees');
     }
 
     assertSubcontractorPortalActive(subcontractorUser.subcontractorCompany);
@@ -1036,11 +1032,6 @@ subcontractorsRouter.delete(
     const user = req.user!;
     const id = normalizeIdParam(req.params.id, 'Plant ID');
 
-    // Check if user is a subcontractor admin
-    if (user.roleInCompany !== 'subcontractor_admin') {
-      throw AppError.forbidden('Only subcontractor admins can delete plant');
-    }
-
     // Get the user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
       where: { userId: user.id },
@@ -1049,6 +1040,10 @@ subcontractorsRouter.delete(
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
       throw AppError.notFound('Subcontractor company');
+    }
+
+    if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
+      throw AppError.forbidden('Only subcontractor admins can delete plant');
     }
 
     assertSubcontractorPortalActive(subcontractorUser.subcontractorCompany);

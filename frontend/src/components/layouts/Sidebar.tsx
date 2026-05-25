@@ -30,6 +30,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { queryKeys } from '@/lib/queryKeys';
 import { useUIStore } from '@/stores/uiStore'; // Feature #442: Zustand client state
+import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import {
   ROLE_GROUPS,
   hasRoleInGroup,
@@ -202,7 +203,8 @@ export function Sidebar() {
   // Use Zustand toggle instead of local state
   const toggleSidebar = zustandToggleSidebar;
 
-  const userRole = user?.roleInCompany || user?.role || '';
+  const userRole = getCompanyRole(user);
+  const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
 
   // Role-based access checks
   const hasCommercial = hasCommercialAccess(userRole);
@@ -226,7 +228,11 @@ export function Sidebar() {
       return false;
     }
     // Check allowed roles
-    if (item.allowedRoles && !item.allowedRoles.includes(userRole)) {
+    if (
+      item.allowedRoles &&
+      !item.allowedRoles.includes(userRole) &&
+      !(item.allowedRoles.some((role) => isSubcontractorRole(role)) && hasPortalIdentity)
+    ) {
       return false;
     }
     // Check excluded roles
@@ -269,7 +275,7 @@ export function Sidebar() {
   const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem);
 
   // Filter subcontractor navigation (only for subcontractors)
-  const filteredSubcontractorNavigation = isSubcontractor
+  const filteredSubcontractorNavigation = hasPortalIdentity
     ? subcontractorNavigation.filter(shouldShowItem)
     : [];
 
