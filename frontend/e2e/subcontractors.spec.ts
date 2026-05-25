@@ -1023,6 +1023,32 @@ test.describe('Subcontractors seeded register contract', () => {
     });
   });
 
+  test('uses an ABN placeholder that passes the invite validator', async ({ page }) => {
+    const api = await mockSeededSubcontractorsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/subcontractors`);
+
+    await page.getByRole('button', { name: 'Invite Subcontractor' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite Subcontractor' });
+    await expect(inviteDialog.getByText('Create New Subcontractor')).toBeVisible();
+
+    await inviteDialog.getByLabel('Company Name *').fill('Placeholder Valid Civil Pty Ltd');
+    await inviteDialog.getByLabel('Primary Contact Name *').fill('Val Abn');
+    await inviteDialog.getByLabel('Email *').fill('valid-abn@example.com');
+
+    const abnInput = inviteDialog.getByTestId('abn-input');
+    const placeholder = await abnInput.getAttribute('placeholder');
+    expect(placeholder).toBeTruthy();
+
+    await abnInput.fill(placeholder!);
+    await expect(inviteDialog.getByTestId('abn-error')).toHaveCount(0);
+    await expect(
+      inviteDialog.getByRole('button', { name: 'Create & Send Invitation' }),
+    ).toBeEnabled();
+
+    expect(api.getInviteRequests()).toHaveLength(0);
+  });
+
   test('rejects encoded rate inputs in admin roster modals before posting', async ({ page }) => {
     const api = await mockSeededSubcontractorsApi(page);
 
