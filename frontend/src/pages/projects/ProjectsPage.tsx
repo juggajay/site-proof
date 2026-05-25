@@ -14,7 +14,7 @@ import {
   isOptionalNonNegativeDecimalInput,
   parseOptionalNonNegativeDecimalInput,
 } from '@/lib/numericInput';
-import { isSubcontractorUser } from '@/lib/subcontractorIdentity';
+import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 
 interface Project {
   id: string;
@@ -111,7 +111,7 @@ export function ProjectsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const isSubcontractor = isSubcontractorUser(user);
+  const isSubcontractor = hasSubcontractorPortalIdentity(user);
 
   const {
     data: projectsData,

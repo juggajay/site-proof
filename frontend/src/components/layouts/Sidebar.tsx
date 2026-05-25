@@ -236,7 +236,11 @@ export function Sidebar() {
       return false;
     }
     // Check excluded roles
-    if (item.excludeRoles && item.excludeRoles.includes(userRole)) {
+    if (
+      item.excludeRoles &&
+      (item.excludeRoles.includes(userRole) ||
+        (item.excludeRoles.some((role) => isSubcontractorRole(role)) && hasPortalIdentity))
+    ) {
       return false;
     }
     return true;
@@ -359,7 +363,7 @@ export function Sidebar() {
         )}
 
         {/* Hide project navigation for subcontractors */}
-        {projectId && !isSubcontractor && (
+        {projectId && !isSubcontractor && !hasPortalIdentity && (
           <>
             <div className="my-4 border-t pt-4">
               {!isCollapsed && (
