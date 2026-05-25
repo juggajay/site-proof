@@ -161,6 +161,120 @@ describe('POST /api/auth/register', () => {
     expect(JSON.stringify(changes)).not.toMatch(/password|token|secret/i);
   });
 
+  it('auto-verifies explicitly configured demo domains without creating a verification token', async () => {
+    const previousBypassDomains = process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS;
+    const email = `demo-bypass-${Date.now()}@demo.siteproof.test`;
+    let userId: string | undefined;
+
+    try {
+      process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS = 'demo.siteproof.test';
+
+      const res = await request(app).post('/api/auth/register').send({
+        email,
+        password: 'SecureP@ssword123!',
+        fullName: 'Demo Bypass User',
+        tosAccepted: true,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.user.email).toBe(email);
+      expect(res.body.user.emailVerified).toBe(true);
+      expect(res.body.verificationRequired).toBe(false);
+      expect(res.body.message).toContain('Email verified');
+      userId = res.body.user.id as string;
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      expect(user?.emailVerified).toBe(true);
+      expect(user?.emailVerifiedAt).toBeInstanceOf(Date);
+
+      const verificationToken = await prisma.emailVerificationToken.findFirst({
+        where: { userId },
+      });
+      expect(verificationToken).toBeNull();
+
+      const registered = await expectLatestUserAuditLog(userId, AuditAction.USER_REGISTERED);
+      expect(registered.changes).toEqual({
+        emailVerified: { from: null, to: true },
+        tosVersion: '1.0',
+        method: 'domain_allowlist',
+        domain: 'demo.siteproof.test',
+      });
+
+      const verified = await expectLatestUserAuditLog(userId, AuditAction.USER_EMAIL_VERIFIED);
+      expect(verified.changes).toEqual({
+        emailVerified: { from: false, to: true },
+        method: 'domain_allowlist',
+        domain: 'demo.siteproof.test',
+      });
+      expect(JSON.stringify(verified.changes)).not.toMatch(/password|token|secret/i);
+    } finally {
+      if (previousBypassDomains === undefined) {
+        delete process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS;
+      } else {
+        process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS = previousBypassDomains;
+      }
+
+      if (userId) {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await clearUserAuditLogs(userId);
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+      }
+    }
+  });
+
+  it('keeps unknown domains on the normal email verification path when bypass is configured', async () => {
+    const previousBypassDomains = process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS;
+    const email = `normal-verification-${Date.now()}@example.com`;
+    let userId: string | undefined;
+
+    try {
+      process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS = 'demo.siteproof.test';
+
+      const res = await request(app).post('/api/auth/register').send({
+        email,
+        password: 'SecureP@ssword123!',
+        fullName: 'Normal Verification User',
+        tosAccepted: true,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.user.email).toBe(email);
+      expect(res.body.user.emailVerified).toBe(false);
+      expect(res.body.verificationRequired).toBe(true);
+      userId = res.body.user.id as string;
+
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      expect(user?.emailVerified).toBe(false);
+      expect(user?.emailVerifiedAt).toBeNull();
+
+      const verificationToken = await prisma.emailVerificationToken.findFirst({
+        where: { userId },
+      });
+      expect(verificationToken?.token).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+      const verifiedAudit = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          entityId: userId,
+          action: AuditAction.USER_EMAIL_VERIFIED,
+        },
+      });
+      expect(verifiedAudit).toBeNull();
+    } finally {
+      if (previousBypassDomains === undefined) {
+        delete process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS;
+      } else {
+        process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS = previousBypassDomains;
+      }
+
+      if (userId) {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await clearUserAuditLogs(userId);
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+      }
+    }
+  });
+
   it('should reject registration without email', async () => {
     const res = await request(app).post('/api/auth/register').send({
       password: 'SecureP@ssword123!',
