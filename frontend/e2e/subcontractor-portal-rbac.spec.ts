@@ -22,6 +22,18 @@ const subcontractorPortalUser = {
   companyName: null,
 };
 
+const linkedPortalMemberUser = {
+  ...E2E_ADMIN_USER,
+  id: 'e2e-linked-portal-member-user',
+  email: 'linked-portal-member@example.com',
+  fullName: 'Linked Portal Member',
+  role: 'member',
+  roleInCompany: null,
+  companyId: null,
+  companyName: null,
+  hasSubcontractorPortalAccess: true,
+};
+
 const portalCompany = {
   id: 'e2e-subcontractor-company',
   companyName: 'E2E Civil Subcontractors',
@@ -41,7 +53,10 @@ const portalCompany = {
 
 async function mockSubcontractorPortalApi(
   page: Page,
-  user: typeof linkedHeadContractorPortalUser | typeof subcontractorPortalUser,
+  user:
+    | typeof linkedHeadContractorPortalUser
+    | typeof subcontractorPortalUser
+    | typeof linkedPortalMemberUser,
 ) {
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -135,6 +150,29 @@ test.describe('Subcontractor portal RBAC', () => {
     page,
   }) => {
     await mockSubcontractorPortalApi(page, subcontractorPortalUser);
+
+    await page.goto('/projects');
+
+    await page.waitForURL('**/subcontractor-portal', { timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'New Project' })).toHaveCount(0);
+    await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
+  });
+
+  test('routes linked portal identities to subcontractor dashboard instead of HC dashboard', async ({
+    page,
+  }) => {
+    await mockSubcontractorPortalApi(page, linkedPortalMemberUser);
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
+    await expect(page.getByRole('link', { name: /projects/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /portal/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /create lot/i })).toHaveCount(0);
+  });
+
+  test('redirects linked portal identities away from the projects index', async ({ page }) => {
+    await mockSubcontractorPortalApi(page, linkedPortalMemberUser);
 
     await page.goto('/projects');
 
