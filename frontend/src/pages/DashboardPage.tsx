@@ -169,6 +169,23 @@ const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = [
 
 const WIDGET_STORAGE_KEY = 'siteproof_dashboard_widgets';
 const VALID_WIDGET_IDS = new Set<WidgetId>(WIDGET_CONFIG.map((widget) => widget.id));
+const LOT_STATUS_OVERVIEW_ITEMS = [
+  { key: 'not_started', label: 'Not Started', dotClassName: 'bg-slate-400' },
+  { key: 'in_progress', label: 'In Progress', dotClassName: 'bg-blue-500' },
+  { key: 'awaiting_test', label: 'Awaiting Test', dotClassName: 'bg-purple-500' },
+  { key: 'hold_point', label: 'Hold Point', dotClassName: 'bg-amber-500' },
+  { key: 'ncr_raised', label: 'NCR Raised', dotClassName: 'bg-red-500' },
+  { key: 'completed', label: 'Completed', dotClassName: 'bg-green-500' },
+  { key: 'conformed', label: 'Conformed', dotClassName: 'bg-emerald-600' },
+  { key: 'claimed', label: 'Claimed', dotClassName: 'bg-teal-500' },
+] as const;
+
+type LotStatusKey = (typeof LOT_STATUS_OVERVIEW_ITEMS)[number]['key'];
+type LotStatusCounts = Record<LotStatusKey, number>;
+
+const EMPTY_LOT_STATUS_COUNTS: LotStatusCounts = Object.fromEntries(
+  LOT_STATUS_OVERVIEW_ITEMS.map((item) => [item.key, 0]),
+) as LotStatusCounts;
 
 function getSafeInternalLink(link: string | undefined, fallback: string): string {
   if (link?.startsWith('/') && !link.startsWith('//')) {
@@ -219,6 +236,7 @@ interface DashboardStats {
   totalProjects: number;
   activeProjects: number;
   totalLots: number;
+  lotStatusCounts?: Partial<LotStatusCounts>;
   openHoldPoints: number;
   openNCRs: number;
   attentionItems: {
@@ -233,6 +251,10 @@ interface DashboardStats {
     timestamp: string;
     link?: string;
   }>;
+}
+
+function getLotStatusCount(stats: DashboardStats, status: LotStatusKey): number {
+  return stats.lotStatusCounts?.[status] ?? EMPTY_LOT_STATUS_COUNTS[status];
 }
 
 type DashboardUser = ReturnType<typeof useAuth>['user'];
@@ -319,6 +341,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     totalProjects: 0,
     activeProjects: 0,
     totalLots: 0,
+    lotStatusCounts: EMPTY_LOT_STATUS_COUNTS,
     openHoldPoints: 0,
     openNCRs: 0,
     attentionItems: {
@@ -358,6 +381,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
         totalProjects: result.totalProjects || 0,
         activeProjects: result.activeProjects || 0,
         totalLots: result.totalLots || 0,
+        lotStatusCounts: result.lotStatusCounts || EMPTY_LOT_STATUS_COUNTS,
         openHoldPoints: result.openHoldPoints || 0,
         openNCRs: result.openNCRs || 0,
         attentionItems: result.attentionItems || {
@@ -793,46 +817,19 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
                   <h2 className="text-lg font-semibold">Lot Status Overview</h2>
                 </div>
                 <div className="p-4 space-y-1">
-                  <button
-                    onClick={() => navigate('/projects?lotStatus=draft')}
-                    className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                      <span className="text-sm">Draft</span>
-                    </div>
-                    <span className="font-medium">0</span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/projects?lotStatus=in_progress')}
-                    className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                      <span className="text-sm">In Progress</span>
-                    </div>
-                    <span className="font-medium">0</span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/projects?lotStatus=on_hold')}
-                    className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                      <span className="text-sm">On Hold</span>
-                    </div>
-                    <span className="font-medium">0</span>
-                  </button>
-                  <button
-                    onClick={() => navigate('/projects?lotStatus=completed')}
-                    className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      <span className="text-sm">Completed</span>
-                    </div>
-                    <span className="font-medium">0</span>
-                  </button>
+                  {LOT_STATUS_OVERVIEW_ITEMS.map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => navigate(`/projects?lotStatus=${item.key}`)}
+                      className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${item.dotClassName}`} />
+                        <span className="text-sm">{item.label}</span>
+                      </div>
+                      <span className="font-medium">{getLotStatusCount(stats, item.key)}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

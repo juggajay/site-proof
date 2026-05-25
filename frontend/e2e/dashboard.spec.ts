@@ -94,6 +94,16 @@ async function mockDefaultDashboardApi(
         totalProjects: 3,
         activeProjects: 2,
         totalLots: 14,
+        lotStatusCounts: {
+          not_started: 2,
+          in_progress: 3,
+          awaiting_test: 1,
+          hold_point: 2,
+          ncr_raised: 1,
+          completed: 0,
+          conformed: 4,
+          claimed: 1,
+        },
         openHoldPoints: 4,
         openNCRs: 2,
         attentionItems: {
@@ -300,6 +310,19 @@ test.describe('Dashboard seeded account contract', () => {
     await expect(page.getByText('Total Projects').locator('..')).toContainText('3');
     await expect(page.getByText('Active Projects').locator('..')).toContainText('2');
     await expect(page.getByText('Total Lots').locator('..')).toContainText('14');
+    const lotStatusOverview = page
+      .getByRole('heading', { name: 'Lot Status Overview' })
+      .locator('../..');
+    await expect(lotStatusOverview.getByRole('button', { name: /Not Started\s+2/ })).toBeVisible();
+    await expect(lotStatusOverview.getByRole('button', { name: /In Progress\s+3/ })).toBeVisible();
+    await expect(
+      lotStatusOverview.getByRole('button', { name: /Awaiting Test\s+1/ }),
+    ).toBeVisible();
+    await expect(lotStatusOverview.getByRole('button', { name: /Hold Point\s+2/ })).toBeVisible();
+    await expect(lotStatusOverview.getByRole('button', { name: /NCR Raised\s+1/ })).toBeVisible();
+    await expect(lotStatusOverview.getByRole('button', { name: /Completed\s+0/ })).toBeVisible();
+    await expect(lotStatusOverview.getByRole('button', { name: /Conformed\s+4/ })).toBeVisible();
+    await expect(lotStatusOverview.getByRole('button', { name: /Claimed\s+1/ })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Items Requiring Attention' })).toBeVisible();
     await expect(page.getByText('NCR-9001')).toBeVisible();
     await expect(page.getByText('HP-42')).toBeVisible();

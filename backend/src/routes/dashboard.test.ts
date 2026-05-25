@@ -153,6 +153,88 @@ describe('Dashboard Stats API', () => {
       expect(res.body.activeProjects).toBeGreaterThanOrEqual(1);
     });
 
+    it('should include lot status counts for the real lot lifecycle statuses', async () => {
+      const statusLots = await prisma.lot.createMany({
+        data: [
+          {
+            projectId,
+            lotNumber: `LOT-DASH-IN-PROGRESS-${Date.now()}`,
+            lotType: 'general',
+            activityType: 'earthworks',
+            status: 'in_progress',
+          },
+          {
+            projectId,
+            lotNumber: `LOT-DASH-AWAITING-TEST-${Date.now()}`,
+            lotType: 'general',
+            activityType: 'earthworks',
+            status: 'awaiting_test',
+          },
+          {
+            projectId,
+            lotNumber: `LOT-DASH-HOLD-POINT-${Date.now()}`,
+            lotType: 'general',
+            activityType: 'earthworks',
+            status: 'hold_point',
+          },
+          {
+            projectId,
+            lotNumber: `LOT-DASH-NCR-${Date.now()}`,
+            lotType: 'general',
+            activityType: 'earthworks',
+            status: 'ncr_raised',
+          },
+          {
+            projectId,
+            lotNumber: `LOT-DASH-COMPLETED-${Date.now()}`,
+            lotType: 'general',
+            activityType: 'earthworks',
+            status: 'completed',
+          },
+          {
+            projectId,
+            lotNumber: `LOT-DASH-CONFORMED-${Date.now()}`,
+            lotType: 'general',
+            activityType: 'earthworks',
+            status: 'conformed',
+          },
+          {
+            projectId,
+            lotNumber: `LOT-DASH-CLAIMED-${Date.now()}`,
+            lotType: 'general',
+            activityType: 'earthworks',
+            status: 'claimed',
+          },
+        ],
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/dashboard/stats')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(statusLots.count).toBe(7);
+        expect(res.status).toBe(200);
+        expect(res.body.lotStatusCounts).toEqual({
+          not_started: 1,
+          in_progress: 1,
+          awaiting_test: 1,
+          hold_point: 1,
+          ncr_raised: 1,
+          completed: 1,
+          conformed: 1,
+          claimed: 1,
+        });
+      } finally {
+        await prisma.lot.deleteMany({
+          where: {
+            projectId,
+            lotNumber: { startsWith: 'LOT-DASH-' },
+          },
+        });
+      }
+    });
+
     it('should include same-company projects for admins without explicit project membership', async () => {
       const companyAdmin = await registerDashboardUser(
         'dashboard-company-admin',

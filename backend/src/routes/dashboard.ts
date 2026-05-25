@@ -39,8 +39,20 @@ const COMPANY_ADMIN_ROLES = new Set(['owner', 'admin']);
 const SUBCONTRACTOR_DASHBOARD_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const DATE_COMPONENT_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
 const DASHBOARD_ROUTE_PARAM_MAX_LENGTH = 120;
+const LOT_STATUS_KEYS = [
+  'not_started',
+  'in_progress',
+  'awaiting_test',
+  'hold_point',
+  'ncr_raised',
+  'completed',
+  'conformed',
+  'claimed',
+] as const;
 
 type AuthUser = NonNullable<Express.Request['user']>;
+type LotStatusKey = (typeof LOT_STATUS_KEYS)[number];
+type LotStatusCounts = Record<LotStatusKey, number>;
 type DashboardProject = {
   id: string;
   name: string;
@@ -57,6 +69,10 @@ type DashboardDateRange = {
   endInclusive?: Date;
   endExclusive?: Date;
 };
+
+function createEmptyLotStatusCounts(): LotStatusCounts {
+  return Object.fromEntries(LOT_STATUS_KEYS.map((status) => [status, 0])) as LotStatusCounts;
+}
 
 async function getDashboardProjectAccess(user: AuthUser): Promise<DashboardProjectAccess[]> {
   if (SUBCONTRACTOR_DASHBOARD_ROLES.has(user.roleInCompany || '')) {
@@ -281,6 +297,7 @@ dashboardRouter.get(
         totalProjects: 0,
         activeProjects: 0,
         totalLots: 0,
+        lotStatusCounts: createEmptyLotStatusCounts(),
         openHoldPoints: 0,
         openNCRs: 0,
         attentionItems: {
@@ -297,99 +314,121 @@ dashboardRouter.get(
     const staleHPThreshold = new Date(today);
     staleHPThreshold.setDate(staleHPThreshold.getDate() - 7); // Hold points older than 7 days without activity
 
-    const [projects, totalLots, openHoldPoints, openNCRs, overdueNCRs, staleHoldPoints] =
-      await Promise.all([
-        prisma.project.findMany({
-          where: {
-            id: { in: projectIds },
-          },
-          select: {
-            id: true,
-            name: true,
-            projectNumber: true,
-            status: true,
-          },
-        }),
-        prisma.lot.count({
-          where: {
-            projectId: { in: projectIds },
-          },
-        }),
-        prisma.holdPoint.count({
-          where: {
-            lot: { projectId: { in: projectIds } },
-            status: { in: ['pending', 'scheduled', 'requested'] },
-            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
-          },
-        }),
-        prisma.nCR.count({
-          where: {
-            projectId: { in: projectIds },
-            status: { notIn: ['closed', 'closed_concession'] },
-            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
-          },
-        }),
-        prisma.nCR.findMany({
-          where: {
-            projectId: { in: projectIds },
-            status: { notIn: ['closed', 'closed_concession'] },
-            dueDate: { lt: today },
-            ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
-          },
-          select: {
-            id: true,
-            ncrNumber: true,
-            description: true,
-            status: true,
-            dueDate: true,
-            category: true,
-            project: {
-              select: {
-                id: true,
-                name: true,
-                projectNumber: true,
-              },
+    const [
+      projects,
+      totalLots,
+      lotStatusGroups,
+      openHoldPoints,
+      openNCRs,
+      overdueNCRs,
+      staleHoldPoints,
+    ] = await Promise.all([
+      prisma.project.findMany({
+        where: {
+          id: { in: projectIds },
+        },
+        select: {
+          id: true,
+          name: true,
+          projectNumber: true,
+          status: true,
+        },
+      }),
+      prisma.lot.count({
+        where: {
+          projectId: { in: projectIds },
+        },
+      }),
+      prisma.lot.groupBy({
+        by: ['status'],
+        where: {
+          projectId: { in: projectIds },
+        },
+        _count: {
+          _all: true,
+        },
+      }),
+      prisma.holdPoint.count({
+        where: {
+          lot: { projectId: { in: projectIds } },
+          status: { in: ['pending', 'scheduled', 'requested'] },
+          ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
+        },
+      }),
+      prisma.nCR.count({
+        where: {
+          projectId: { in: projectIds },
+          status: { notIn: ['closed', 'closed_concession'] },
+          ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
+        },
+      }),
+      prisma.nCR.findMany({
+        where: {
+          projectId: { in: projectIds },
+          status: { notIn: ['closed', 'closed_concession'] },
+          dueDate: { lt: today },
+          ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
+        },
+        select: {
+          id: true,
+          ncrNumber: true,
+          description: true,
+          status: true,
+          dueDate: true,
+          category: true,
+          project: {
+            select: {
+              id: true,
+              name: true,
+              projectNumber: true,
             },
           },
-          orderBy: { dueDate: 'asc' },
-          take: 10,
-        }),
-        prisma.holdPoint.findMany({
-          where: {
-            lot: { projectId: { in: projectIds } },
-            status: { in: ['pending', 'scheduled', 'requested'] },
-            AND: [
-              { createdAt: { lt: staleHPThreshold } },
-              ...(createdAtDateFilter ? [{ createdAt: createdAtDateFilter }] : []),
-            ],
-          },
-          select: {
-            id: true,
-            description: true,
-            status: true,
-            scheduledDate: true,
-            createdAt: true,
-            lot: {
-              select: {
-                id: true,
-                lotNumber: true,
-                project: {
-                  select: {
-                    id: true,
-                    name: true,
-                    projectNumber: true,
-                  },
+        },
+        orderBy: { dueDate: 'asc' },
+        take: 10,
+      }),
+      prisma.holdPoint.findMany({
+        where: {
+          lot: { projectId: { in: projectIds } },
+          status: { in: ['pending', 'scheduled', 'requested'] },
+          AND: [
+            { createdAt: { lt: staleHPThreshold } },
+            ...(createdAtDateFilter ? [{ createdAt: createdAtDateFilter }] : []),
+          ],
+        },
+        select: {
+          id: true,
+          description: true,
+          status: true,
+          scheduledDate: true,
+          createdAt: true,
+          lot: {
+            select: {
+              id: true,
+              lotNumber: true,
+              project: {
+                select: {
+                  id: true,
+                  name: true,
+                  projectNumber: true,
                 },
               },
             },
           },
-          orderBy: { createdAt: 'asc' },
-          take: 10,
-        }),
-      ]);
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 10,
+      }),
+    ]);
 
     const totalProjects = projects.length;
     const activeProjects = projects.filter((p) => p.status === 'active').length;
+    const lotStatusCounts = createEmptyLotStatusCounts();
+    for (const group of lotStatusGroups) {
+      if (LOT_STATUS_KEYS.includes(group.status as LotStatusKey)) {
+        lotStatusCounts[group.status as LotStatusKey] = group._count._all;
+      }
+    }
 
     // Format attention items
     const formattedOverdueNCRs = overdueNCRs.map((ncr) => ({
@@ -489,6 +528,7 @@ dashboardRouter.get(
       totalProjects,
       activeProjects,
       totalLots,
+      lotStatusCounts,
       openHoldPoints,
       openNCRs,
       attentionItems: {
