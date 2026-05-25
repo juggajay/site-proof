@@ -48,8 +48,46 @@ const AVATAR_STORAGE_PREFIX = 'avatars';
 const GENERIC_RESEND_VERIFICATION_MESSAGE =
   'If an account exists with this email, a new verification link has been sent.';
 const GENERIC_RESET_TOKEN_VALIDATION_MESSAGE = 'Invalid or expired reset token';
+const VERIFICATION_BYPASS_EMAIL_DOMAINS_ENV = 'VERIFICATION_BYPASS_EMAIL_DOMAINS';
 
 export const authRouter = Router();
+
+function getEmailDomain(email: string): string | null {
+  const atIndex = email.lastIndexOf('@');
+  if (atIndex === -1 || atIndex === email.length - 1) {
+    return null;
+  }
+  return email
+    .slice(atIndex + 1)
+    .trim()
+    .toLowerCase();
+}
+
+function getVerificationBypassDomains(): Set<string> {
+  const rawValue = process.env[VERIFICATION_BYPASS_EMAIL_DOMAINS_ENV];
+  if (!rawValue) {
+    return new Set();
+  }
+
+  return new Set(
+    rawValue
+      .split(',')
+      .map((domain) => domain.trim().toLowerCase().replace(/^@/, ''))
+      .filter((domain) => domain && !domain.includes('*') && domain.includes('.')),
+  );
+}
+
+function shouldBypassEmailVerification(email: string): { bypass: boolean; domain: string | null } {
+  const domain = getEmailDomain(email);
+  if (!domain) {
+    return { bypass: false, domain: null };
+  }
+
+  return {
+    bypass: getVerificationBypassDomains().has(domain),
+    domain,
+  };
+}
 
 async function auditUserAuthEvent(
   req: Request,
@@ -532,15 +570,18 @@ authRouter.post(
     const name =
       fullName ||
       (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || null);
+    const verificationBypass = shouldBypassEmailVerification(normalizedEmail);
+    const emailVerifiedAt = verificationBypass.bypass ? new Date() : null;
 
-    // Create user with emailVerified set to false and ToS acceptance recorded
+    // Create user with email verification state and ToS acceptance recorded.
     const passwordHash = hashPassword(normalizedPassword);
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
         passwordHash,
         fullName: name,
-        emailVerified: false,
+        emailVerified: verificationBypass.bypass,
+        emailVerifiedAt,
       },
       select: {
         id: true,
@@ -555,35 +596,49 @@ authRouter.post(
     // Use PostgreSQL NOW() function for timestamp compatibility
     await prisma.$executeRaw`UPDATE users SET tos_accepted_at = NOW(), tos_version = ${CURRENT_TOS_VERSION} WHERE id = ${user.id}`;
 
-    // Generate email verification token
-    const crypto = await import('crypto');
-    const verificationToken = crypto.randomBytes(32).toString('hex');
+    if (!verificationBypass.bypass) {
+      // Generate email verification token
+      const crypto = await import('crypto');
+      const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    // Token expires in 24 hours
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      // Token expires in 24 hours
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await prisma.emailVerificationToken.create({
-      data: {
-        userId: user.id,
-        token: hashOneTimeToken(verificationToken),
-        expiresAt,
-      },
-    });
+      await prisma.emailVerificationToken.create({
+        data: {
+          userId: user.id,
+          token: hashOneTimeToken(verificationToken),
+          expiresAt,
+        },
+      });
 
-    const verifyUrl = buildFrontendUrl(`/verify-email?token=${verificationToken}`);
+      const verifyUrl = buildFrontendUrl(`/verify-email?token=${verificationToken}`);
 
-    // Send verification email
-    await sendVerificationEmail({
-      to: normalizedEmail,
-      userName: name || undefined,
-      verificationUrl: verifyUrl,
-      expiresInHours: 24,
-    });
+      // Send verification email
+      await sendVerificationEmail({
+        to: normalizedEmail,
+        userName: name || undefined,
+        verificationUrl: verifyUrl,
+        expiresInHours: 24,
+      });
+    }
 
     await auditUserAuthEvent(req, user.id, AuditAction.USER_REGISTERED, {
-      emailVerified: { from: null, to: false },
+      emailVerified: { from: null, to: user.emailVerified },
       tosVersion: CURRENT_TOS_VERSION,
+      ...(verificationBypass.bypass && {
+        method: 'domain_allowlist',
+        domain: verificationBypass.domain,
+      }),
     });
+
+    if (verificationBypass.bypass) {
+      await auditUserAuthEvent(req, user.id, AuditAction.USER_EMAIL_VERIFIED, {
+        emailVerified: { from: false, to: true },
+        method: 'domain_allowlist',
+        domain: verificationBypass.domain,
+      });
+    }
 
     // Generate auth token
     const token = generateToken({
@@ -602,8 +657,10 @@ authRouter.post(
         hasPassword: true,
       },
       token,
-      message: 'Account created. Please check your email to verify your account.',
-      verificationRequired: true,
+      message: verificationBypass.bypass
+        ? 'Account created. Email verified for this configured demo domain.'
+        : 'Account created. Please check your email to verify your account.',
+      verificationRequired: !verificationBypass.bypass,
     });
   }),
 );
