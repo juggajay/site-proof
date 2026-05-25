@@ -115,7 +115,7 @@ describe('checkProjectAccess', () => {
         email: `project-access-sub-${suffix}@example.com`,
         fullName: 'Project Access Subcontractor',
         roleInCompany: 'subcontractor',
-        companyId: company.id,
+        companyId: null,
       },
     });
     const subcontractorCompany = await prisma.subcontractorCompany.create({
@@ -182,7 +182,7 @@ describe('checkProjectAccess', () => {
         email: `portal-module-sub-${suffix}@example.com`,
         fullName: 'Portal Module Subcontractor',
         roleInCompany: 'subcontractor_admin',
-        companyId: company.id,
+        companyId: null,
       },
     });
     const subcontractorCompany = await prisma.subcontractorCompany.create({

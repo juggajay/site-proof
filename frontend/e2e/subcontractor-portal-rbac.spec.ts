@@ -120,16 +120,15 @@ async function mockSubcontractorPortalApi(
 }
 
 test.describe('Subcontractor portal RBAC', () => {
-  test('allows a head-contractor user with an accepted subcontractor invite into the portal', async ({
+  test('denies a head-contractor company user even when a stale subcontractor link exists', async ({
     page,
   }) => {
     await mockSubcontractorPortalApi(page, linkedHeadContractorPortalUser);
 
     await page.goto('/subcontractor-portal');
 
-    await expect(page.getByText('Access Denied')).toHaveCount(0);
-    await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
-    await expect(page.getByText('SUB-LOT-001')).toBeVisible();
+    await expect(page.getByText('Access Denied')).toBeVisible();
+    await expect(page.getByText('E2E Civil Subcontractors')).toHaveCount(0);
   });
 
   test('keeps subcontractor users out of the head-contractor project workspace', async ({
@@ -139,7 +138,7 @@ test.describe('Subcontractor portal RBAC', () => {
 
     await page.goto('/projects');
 
-    await expect(page).toHaveURL('/subcontractor-portal');
+    await page.waitForURL('**/subcontractor-portal', { timeout: 15000 });
     await expect(page.getByRole('button', { name: 'New Project' })).toHaveCount(0);
     await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
   });

@@ -290,7 +290,7 @@ describe('ITP Templates API', () => {
 
       await prisma.user.update({
         where: { id: subcontractor.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {
@@ -955,7 +955,7 @@ describe('ITP Instances', () => {
 
     await prisma.user.update({
       where: { id: subcontractor.userId },
-      data: { companyId, roleInCompany: 'subcontractor' },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
     });
     await prisma.subcontractorUser.create({
       data: {
@@ -1100,7 +1100,7 @@ describe('ITP Instances', () => {
 
     await prisma.user.update({
       where: { id: subcontractor.userId },
-      data: { companyId, roleInCompany: 'subcontractor' },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
     });
     await prisma.subcontractorUser.create({
       data: {
@@ -2159,7 +2159,7 @@ describe('ITP Completion Attachments', () => {
 
     await prisma.user.update({
       where: { id: subcontractor.userId },
-      data: { companyId, roleInCompany: 'subcontractor' },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
     });
     await prisma.subcontractorUser.create({
       data: {
@@ -2227,7 +2227,7 @@ describe('ITP Completion Attachments', () => {
 
       await prisma.user.update({
         where: { id: subcontractor.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {
@@ -2373,7 +2373,7 @@ describe('ITP Completion Attachments', () => {
 
     await prisma.user.update({
       where: { id: subcontractor.userId },
-      data: { companyId, roleInCompany: 'subcontractor' },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
     });
     await prisma.subcontractorUser.create({
       data: {

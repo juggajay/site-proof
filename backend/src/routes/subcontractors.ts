@@ -59,7 +59,7 @@ type AuthenticatedUser = NonNullable<Request['user']>;
 const HEAD_CONTRACTOR_PROJECT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager'];
 const SUBCONTRACTOR_PORTAL_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const BLOCKED_SUBCONTRACTOR_STATUSES = new Set(['suspended', 'removed']);
-const PRESERVED_HEAD_CONTRACTOR_ROLES = new Set([
+const HEAD_CONTRACTOR_COMPANY_ROLES = new Set([
   'owner',
   'admin',
   'project_manager',
@@ -95,6 +95,12 @@ function isSubcontractorPortalRole(user: AuthenticatedUser): boolean {
 
 function canManageLinkedSubcontractorCompany(user: AuthenticatedUser, linkRole: string): boolean {
   return user.roleInCompany === 'subcontractor_admin' || linkRole === 'admin';
+}
+
+function assertStandaloneSubcontractorPortalUser(user: AuthenticatedUser) {
+  if (user.companyId || !isSubcontractorPortalRole(user)) {
+    throw AppError.forbidden('Only standalone subcontractor portal users can access this endpoint');
+  }
 }
 
 function assertSubcontractorPortalActive(company: { status: string }) {
@@ -728,6 +734,24 @@ subcontractorsRouter.post(
     }
 
     await prisma.$transaction(async (tx) => {
+      const currentUser = await tx.user.findUnique({
+        where: { id: user.id },
+        select: { companyId: true, roleInCompany: true },
+      });
+
+      if (!currentUser) {
+        throw AppError.unauthorized('Invalid user session');
+      }
+
+      if (
+        currentUser.companyId ||
+        HEAD_CONTRACTOR_COMPANY_ROLES.has(currentUser.roleInCompany || '')
+      ) {
+        throw AppError.forbidden(
+          'Head contractor company accounts cannot accept subcontractor invitations. Use a separate subcontractor account.',
+        );
+      }
+
       const existingLinks = await tx.subcontractorUser.findMany({
         where: { subcontractorCompanyId: id },
         select: { userId: true },
@@ -761,11 +785,7 @@ subcontractorsRouter.post(
         },
       });
 
-      const currentUser = await tx.user.findUnique({
-        where: { id: user.id },
-        select: { roleInCompany: true },
-      });
-      if (!PRESERVED_HEAD_CONTRACTOR_ROLES.has(currentUser?.roleInCompany || '')) {
+      if (!isSubcontractorPortalRole({ ...user, roleInCompany: currentUser.roleInCompany })) {
         await tx.user.update({
           where: { id: user.id },
           data: { roleInCompany: 'subcontractor_admin' },
@@ -801,6 +821,7 @@ subcontractorsRouter.get(
   '/my-company',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    assertStandaloneSubcontractorPortalUser(user);
 
     // Get the user's subcontractor company via SubcontractorUser
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
@@ -874,6 +895,7 @@ subcontractorsRouter.post(
   '/my-company/employees',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    assertStandaloneSubcontractorPortalUser(user);
 
     // Get the user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
@@ -927,6 +949,7 @@ subcontractorsRouter.post(
   '/my-company/plant',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    assertStandaloneSubcontractorPortalUser(user);
 
     // Get the user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
@@ -991,6 +1014,7 @@ subcontractorsRouter.delete(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const id = normalizeIdParam(req.params.id, 'Employee ID');
+    assertStandaloneSubcontractorPortalUser(user);
 
     // Get the user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
@@ -1031,6 +1055,7 @@ subcontractorsRouter.delete(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const id = normalizeIdParam(req.params.id, 'Plant ID');
+    assertStandaloneSubcontractorPortalUser(user);
 
     // Get the user's subcontractor company
     const subcontractorUser = await prisma.subcontractorUser.findFirst({

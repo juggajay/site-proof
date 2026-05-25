@@ -630,6 +630,73 @@ describe('POST /api/auth/login', () => {
     expect(res.body.token).toBeDefined();
   });
 
+  it('does not expose subcontractor portal access for head-contractor users with stale links', async () => {
+    const suffix = Date.now();
+    const company = await prisma.company.create({
+      data: { name: `Auth Stale Link Company ${suffix}` },
+    });
+    const project = await prisma.project.create({
+      data: {
+        name: `Auth Stale Link Project ${suffix}`,
+        projectNumber: `AUTH-STL-${suffix}`,
+        companyId: company.id,
+        status: 'active',
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      },
+    });
+    const subcontractor = await prisma.subcontractorCompany.create({
+      data: {
+        projectId: project.id,
+        companyName: `Auth Stale Link Subbie ${suffix}`,
+        primaryContactName: 'Auth Stale Link User',
+        primaryContactEmail: loginEmail,
+        status: 'approved',
+      },
+    });
+    const user = await prisma.user.findUnique({ where: { email: loginEmail } });
+    expect(user).toBeDefined();
+
+    try {
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { companyId: company.id, roleInCompany: 'owner' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: user!.id,
+          subcontractorCompanyId: subcontractor.id,
+          role: 'admin',
+        },
+      });
+
+      const loginRes = await request(app).post('/api/auth/login').send({
+        email: loginEmail,
+        password: loginPassword,
+      });
+
+      expect(loginRes.status).toBe(200);
+      expect(loginRes.body.user.companyId).toBe(company.id);
+      expect(loginRes.body.user.hasSubcontractorPortalAccess).toBe(false);
+
+      const meRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${loginRes.body.token}`);
+
+      expect(meRes.status).toBe(200);
+      expect(meRes.body.user.hasSubcontractorPortalAccess).toBe(false);
+    } finally {
+      await prisma.subcontractorUser.deleteMany({ where: { userId: user!.id } });
+      await prisma.subcontractorCompany.delete({ where: { id: subcontractor.id } }).catch(() => {});
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { companyId: null, roleInCompany: 'member' },
+      });
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
   it('should reject invalid email', async () => {
     const res = await request(app).post('/api/auth/login').send({
       email: 'nonexistent@example.com',

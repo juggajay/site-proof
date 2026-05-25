@@ -391,7 +391,7 @@ companyRouter.post(
     const { company, updatedUser } = await prisma.$transaction(async (tx) => {
       const currentUser = await tx.user.findUnique({
         where: { id: user.userId },
-        select: { companyId: true },
+        select: { companyId: true, roleInCompany: true },
       });
 
       if (!currentUser) {
@@ -400,6 +400,28 @@ companyRouter.post(
 
       if (currentUser.companyId) {
         throw AppError.badRequest('You already belong to a company');
+      }
+
+      if (COMPANY_SUBCONTRACTOR_ROLES.has(currentUser.roleInCompany || '')) {
+        throw AppError.forbidden(
+          'Subcontractor portal accounts cannot create head contractor companies',
+        );
+      }
+
+      const subcontractorLink = await tx.subcontractorUser.findFirst({
+        where: {
+          userId: user.userId,
+          subcontractorCompany: {
+            status: { not: 'removed' },
+          },
+        },
+        select: { id: true },
+      });
+
+      if (subcontractorLink) {
+        throw AppError.forbidden(
+          'Subcontractor portal accounts cannot create head contractor companies',
+        );
       }
 
       const company = await tx.company.create({
