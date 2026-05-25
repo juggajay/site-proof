@@ -1,4 +1,5 @@
 import { useRef, useCallback, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Check, X, CheckSquare } from 'lucide-react';
 import { SwipeableCard } from './SwipeableCard';
@@ -35,6 +36,7 @@ interface DocketApprovalsMobileViewProps {
   totalPlantHours: number;
   loadError?: string | null;
   canApprove: boolean;
+  subcontractorSetupHref: string;
   onApprove: (docket: Docket) => void;
   onReject: (docket: Docket) => void;
   onTapDocket: (docket: Docket) => void;
@@ -149,6 +151,7 @@ function DocketCard({
 }
 
 export function DocketApprovalsMobileView({
+  dockets,
   filteredDockets,
   loading,
   statusFilter,
@@ -158,12 +161,14 @@ export function DocketApprovalsMobileView({
   totalPlantHours,
   loadError,
   canApprove,
+  subcontractorSetupHref,
   onApprove,
   onReject,
   onTapDocket,
   onRefresh,
 }: DocketApprovalsMobileViewProps) {
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh });
+  const hasSubmittedDockets = dockets.some((docket) => docket.status !== 'draft');
 
   return (
     <div className="flex flex-col h-full">
@@ -268,14 +273,34 @@ export function DocketApprovalsMobileView({
           {!loadError && !loading && filteredDockets.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <CheckSquare className="h-12 w-12 text-muted-foreground/40 mb-3" />
-              <p className="text-base font-medium text-muted-foreground">
-                {statusFilter === 'pending_approval' ? 'All caught up' : 'No dockets found'}
-              </p>
-              <p className="text-sm text-muted-foreground/70 mt-1">
-                {statusFilter === 'pending_approval'
-                  ? 'No dockets waiting for your review'
-                  : 'Try changing the filter above'}
-              </p>
+              {!hasSubmittedDockets ? (
+                <>
+                  <p className="text-base font-medium text-foreground">
+                    No subcontractor dockets yet
+                  </p>
+                  <p className="mt-1 max-w-xs text-sm text-muted-foreground/70">
+                    Subcontractors submit dockets from their portal. Invite a subcontractor and
+                    assign lots to start receiving dockets.
+                  </p>
+                  <Link
+                    to={subcontractorSetupHref}
+                    className="mt-4 rounded-md border px-3 py-2 text-sm font-medium text-foreground"
+                  >
+                    Invite a subcontractor
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <p className="text-base font-medium text-muted-foreground">
+                    {statusFilter === 'pending_approval' ? 'All caught up' : 'No dockets found'}
+                  </p>
+                  <p className="text-sm text-muted-foreground/70 mt-1">
+                    {statusFilter === 'pending_approval'
+                      ? 'No dockets waiting for your review'
+                      : 'Try changing the filter above'}
+                  </p>
+                </>
+              )}
             </div>
           )}
 

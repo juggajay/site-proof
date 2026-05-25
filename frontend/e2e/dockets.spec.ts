@@ -7,6 +7,7 @@ type SeededDocketsApiOptions = {
   failDocketLoadsUntil?: number;
   approveDelayMs?: number;
   user?: typeof E2E_ADMIN_USER;
+  dockets?: ReturnType<typeof buildDocket>[];
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,7 +67,9 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
         await json({ message: 'Unable to load dockets right now' }, 500);
         return;
       }
-      await json({ dockets: [buildDocket(approved ? 'approved' : 'pending_approval')] });
+      await json({
+        dockets: options.dockets ?? [buildDocket(approved ? 'approved' : 'pending_approval')],
+      });
       return;
     }
 
@@ -430,6 +433,21 @@ test.describe('Dockets seeded approval contract', () => {
     await expect.poll(() => api.getDocketLoadCount()).toBeGreaterThan(2);
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByRole('row').filter({ hasText: 'DKT-E2E-001' })).toBeVisible();
+  });
+
+  test('guides empty owner approvals state toward subcontractor setup', async ({ page }) => {
+    await mockSeededDocketsApi(page, { dockets: [] });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
+
+    await expect(page.getByRole('heading', { name: 'Docket Approvals' })).toBeVisible();
+    await expect(page.getByText('No dockets found')).toHaveCount(0);
+    await expect(page.getByText('No subcontractor dockets yet')).toBeVisible();
+    await expect(page.getByText('Subcontractors submit dockets from their portal.')).toBeVisible();
+
+    const cta = page.getByRole('link', { name: 'Invite a subcontractor' });
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveAttribute('href', `/projects/${E2E_PROJECT_ID}/subcontractors`);
   });
 
   test('ignores duplicate approve clicks while the request is in flight', async ({ page }) => {

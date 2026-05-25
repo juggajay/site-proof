@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
@@ -156,6 +156,7 @@ export function DocketApprovalsPage() {
   const userRole = user?.roleInCompany || user?.role;
   const isSubcontractor = userRole === 'subcontractor' || userRole === 'subcontractor_admin';
   const projectLabel = projectInfo?.name || projectId || 'this project';
+  const subcontractorSetupHref = projectId ? `/projects/${projectId}/subcontractors` : '/projects';
 
   // Hours validation helper - warn if hours > 24
   const validateHours = (hours: string): { isValid: boolean; warning: string | null } => {
@@ -601,6 +602,7 @@ export function DocketApprovalsPage() {
           totalPlantHours={totalPlantHours}
           loadError={loadError}
           canApprove={canApprove}
+          subcontractorSetupHref={subcontractorSetupHref}
           onApprove={(d) => openActionModal(d, 'approve')}
           onReject={(d) => openActionModal(d, 'reject')}
           onTapDocket={handleTapDocket}
@@ -683,7 +685,37 @@ export function DocketApprovalsPage() {
                   ) : filteredDockets.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
-                        No dockets found
+                        {submittedDockets.length === 0 ? (
+                          <div className="mx-auto flex max-w-md flex-col items-center gap-3">
+                            <div>
+                              <p className="font-medium text-foreground">
+                                No subcontractor dockets yet
+                              </p>
+                              <p className="mt-1 text-sm">
+                                Subcontractors submit dockets from their portal. Invite a
+                                subcontractor and assign lots to start receiving dockets.
+                              </p>
+                            </div>
+                            <Button asChild variant="outline">
+                              <Link to={subcontractorSetupHref}>Invite a subcontractor</Link>
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="mx-auto flex max-w-md flex-col items-center gap-3">
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {statusFilter === 'pending_approval'
+                                  ? 'All caught up'
+                                  : `No ${statusLabels[statusFilter]?.toLowerCase() || 'matching'} dockets`}
+                              </p>
+                              <p className="mt-1 text-sm">
+                                {statusFilter === 'pending_approval'
+                                  ? 'No dockets are waiting for review. Use All Dockets to view approved and rejected history.'
+                                  : 'Try a different filter to view the rest of the docket history.'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ) : (
