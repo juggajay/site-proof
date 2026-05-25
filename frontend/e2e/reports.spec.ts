@@ -235,6 +235,78 @@ function ncrReport() {
   };
 }
 
+function claimsReport() {
+  return {
+    generatedAt: '2026-05-09T01:00:00.000Z',
+    projectId: E2E_PROJECT_ID,
+    dateRange: { startDate: null, endDate: null },
+    totalClaims: 2,
+    statusCounts: { certified: 1, paid: 1 },
+    financialSummary: {
+      totalClaimed: 180000,
+      totalCertified: 160000,
+      totalPaid: 90000,
+      outstanding: 70000,
+      certificationRate: '88.9',
+      collectionRate: '56.3',
+      totalLots: 5,
+    },
+    monthlyBreakdown: [
+      {
+        month: '2026-05',
+        claimed: 180000,
+        certified: 160000,
+        paid: 90000,
+        count: 2,
+        variance: 20000,
+      },
+    ],
+    claims: [
+      {
+        id: 'e2e-report-claim-8',
+        claimNumber: 8,
+        periodStart: '2026-05-01',
+        periodEnd: '2026-05-31',
+        status: 'certified',
+        totalClaimedAmount: 120000,
+        certifiedAmount: 100000,
+        paidAmount: 30000,
+        variance: 20000,
+        outstanding: 70000,
+        submittedAt: '2026-05-10',
+        certifiedAt: '2026-05-12',
+        paidAt: null,
+        paymentReference: null,
+        lotCount: 3,
+        lots: [],
+        preparedBy: { name: 'E2E Admin', email: E2E_ADMIN_USER.email },
+        preparedAt: '2026-05-09',
+      },
+      {
+        id: 'e2e-report-claim-7',
+        claimNumber: 7,
+        periodStart: '2026-04-01',
+        periodEnd: '2026-04-30',
+        status: 'paid',
+        totalClaimedAmount: 60000,
+        certifiedAmount: 60000,
+        paidAmount: 60000,
+        variance: 0,
+        outstanding: 0,
+        submittedAt: '2026-04-10',
+        certifiedAt: '2026-04-12',
+        paidAt: '2026-04-20',
+        paymentReference: 'PAY-7',
+        lotCount: 2,
+        lots: [],
+        preparedBy: { name: 'E2E Admin', email: E2E_ADMIN_USER.email },
+        preparedAt: '2026-04-09',
+      },
+    ],
+    exportData: [],
+  };
+}
+
 async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
   const reportRequests: string[] = [];
   const createScheduleRequests: unknown[] = [];
@@ -338,6 +410,12 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
     if (url.pathname === '/api/reports/diary') {
       reportRequests.push(`${url.pathname}?${url.searchParams.toString()}`);
       await json(diaryReport(url));
+      return;
+    }
+
+    if (url.pathname === '/api/reports/claims') {
+      reportRequests.push(`${url.pathname}?${url.searchParams.toString()}`);
+      await json(claimsReport());
       return;
     }
 
@@ -462,6 +540,18 @@ test.describe('Reports seeded analytics contract', () => {
       .toContain(
         '/api/reports/diary?projectId=e2e-project&sections=weather%2Cpersonnel%2Cplant%2Cactivities&startDate=2026-05-03&endDate=2026-05-04',
       );
+
+    await page.getByRole('tab', { name: 'Claims' }).click();
+    await expect(page.getByText('Total Claimed')).toBeVisible();
+    await expect(page.getByText('$180,000', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Claim 8')).toBeVisible();
+    const claimEightRow = page.getByRole('row').filter({ hasText: 'Claim 8' });
+    await expect(claimEightRow).toContainText('Certified');
+    await expect(claimEightRow).toContainText('01/05/2026 to 31/05/2026');
+    await expect(claimEightRow).toContainText('$70,000');
+    await expect
+      .poll(() => api.getReportRequests())
+      .toContain('/api/reports/claims?projectId=e2e-project');
 
     await page.getByRole('button', { name: 'Schedule Reports' }).click();
     const scheduleDialog = page.getByRole('dialog').filter({ hasText: 'Schedule Email Reports' });

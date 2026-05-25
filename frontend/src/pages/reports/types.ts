@@ -183,6 +183,62 @@ export interface DiaryReport {
   };
 }
 
+export interface ClaimsReport {
+  generatedAt: string;
+  projectId: string;
+  dateRange: {
+    startDate: string | null;
+    endDate: string | null;
+  };
+  totalClaims: number;
+  statusCounts: Record<string, number>;
+  financialSummary: {
+    totalClaimed: number;
+    totalCertified: number;
+    totalPaid: number;
+    outstanding: number;
+    certificationRate: string;
+    collectionRate: string;
+    totalLots: number;
+  };
+  monthlyBreakdown: Array<{
+    month: string;
+    claimed: number;
+    certified: number;
+    paid: number;
+    count: number;
+    variance: number;
+  }>;
+  claims: Array<{
+    id: string;
+    claimNumber: number;
+    periodStart: string;
+    periodEnd: string;
+    status: string;
+    totalClaimedAmount: number;
+    certifiedAmount: number | null;
+    paidAmount: number | null;
+    variance: number | null;
+    outstanding: number | null;
+    submittedAt: string | null;
+    certifiedAt: string | null;
+    paidAt: string | null;
+    paymentReference: string | null;
+    lotCount: number;
+    lots: Array<{
+      lotNumber: string;
+      description: string | null;
+      activityType: string | null;
+      amountClaimed: number;
+    }>;
+    preparedBy: {
+      name: string;
+      email: string;
+    } | null;
+    preparedAt: string | null;
+  }>;
+}
+
 export const STATUS_COLORS: Record<string, string> = {
   not_started: 'bg-muted text-foreground',
   in_progress: 'bg-primary/10 text-primary',
