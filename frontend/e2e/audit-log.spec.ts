@@ -26,7 +26,7 @@ type AuditLog = {
 const seededLogs: AuditLog[] = [
   {
     id: 'e2e-audit-log-lot-created',
-    action: 'lot.created',
+    action: 'lot_created',
     entityType: 'Lot',
     entityId: 'e2e-lot-001',
     changes: {
@@ -49,7 +49,7 @@ const seededLogs: AuditLog[] = [
   },
   {
     id: 'e2e-audit-log-project-updated',
-    action: 'project.updated',
+    action: 'project_updated',
     entityType: 'Project',
     entityId: E2E_PROJECT_ID,
     changes: {
@@ -71,7 +71,7 @@ const seededLogs: AuditLog[] = [
   },
   {
     id: 'e2e-audit-log-system',
-    action: 'system.retention',
+    action: 'lot_force_conformed',
     entityType: 'System',
     entityId: 'system-retention',
     changes: { retainedDays: 365 },
@@ -187,7 +187,7 @@ async function mockAuditLogApi(
         await json({ message: 'Filter options unavailable' }, 500);
         return;
       }
-      await json({ actions: ['lot.created', 'project.updated', 'system.retention'] });
+      await json({ actions: ['lot_created', 'project_updated', 'lot_force_conformed'] });
       return;
     }
 
@@ -322,9 +322,11 @@ test.describe('Audit log seeded admin contract', () => {
 
     await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
     await expect(page.getByText('Showing 3 of 3 audit log entries')).toBeVisible();
-    await expect(page.getByText('lot.created')).toBeVisible();
-    await expect(page.getByText('project.updated')).toBeVisible();
-    const systemRow = page.getByRole('row').filter({ hasText: 'system.retention' });
+    await expect(page.getByText('Lot created')).toBeVisible();
+    await expect(page.getByText('Project updated')).toBeVisible();
+    await expect(page.getByText('Lot force conformed')).toBeVisible();
+    await expect(page.getByText('lot_created')).toBeHidden();
+    const systemRow = page.getByRole('row').filter({ hasText: 'Lot force conformed' });
     await expect(systemRow.getByText('System').first()).toBeVisible();
 
     const downloadPromise = page.waitForEvent('download');
@@ -337,29 +339,32 @@ test.describe('Audit log seeded admin contract', () => {
     expect(csv).toContain('"IP Address"');
     expect(csv).toContain('"User Agent"');
     expect(csv).toContain('"Changes"');
+    expect(csv).toContain('Lot created');
+    expect(csv).not.toContain('lot_created');
     expect(csv).toContain('LOT-001');
 
-    await page.getByRole('button', { name: /View details for lot\.created Lot e2e-lot/ }).click();
+    await page.getByRole('button', { name: /View details for Lot created Lot e2e-lot/ }).click();
     const detailDialog = page.getByRole('dialog').filter({ hasText: 'Audit Log Details' });
     await expect(detailDialog.getByText('Review the selected activity record')).toBeVisible();
+    await expect(detailDialog.getByText('Lot created')).toBeVisible();
     await expect(detailDialog.getByText('203.0.113.10')).toBeVisible();
     await expect(detailDialog.getByText('"lotNumber": "LOT-001"')).toBeVisible();
     await detailDialog.getByRole('button', { name: 'Close' }).first().click();
 
     await page.getByLabel('Search audit logs').fill('E2E Admin');
     await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
-    await expect(page.getByText('lot.created')).toBeVisible();
-    await expect(page.getByText('project.updated')).toBeHidden();
+    await expect(page.getByText('Lot created')).toBeVisible();
+    await expect(page.getByText('Project updated')).toBeHidden();
 
     await page.getByLabel('Search audit logs').fill('E2E-001');
     await expect(page.getByText('Showing 2 of 2 audit log entries')).toBeVisible();
-    await expect(page.getByText('lot.created')).toBeVisible();
-    await expect(page.getByText('project.updated')).toBeVisible();
+    await expect(page.getByText('Lot created')).toBeVisible();
+    await expect(page.getByText('Project updated')).toBeVisible();
 
     await page.getByLabel('Search audit logs').fill('project');
     await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
-    await expect(page.getByText('project.updated')).toBeVisible();
-    await expect(page.getByText('lot.created')).toBeHidden();
+    await expect(page.getByText('Project updated')).toBeVisible();
+    await expect(page.getByText('Lot created')).toBeHidden();
 
     await page.getByRole('button', { name: /Filters/ }).click();
     await page.getByLabel('Entity Type').selectOption('Lot');
@@ -368,16 +373,16 @@ test.describe('Audit log seeded admin contract', () => {
     await expect(page.getByText('Showing 3 of 3 audit log entries')).toBeVisible();
 
     await page.getByLabel('Entity Type').selectOption('Lot');
-    await page.getByLabel('Action').selectOption('lot.created');
+    await page.getByLabel('Action').selectOption({ label: 'Lot created' });
     await page.getByLabel('User', { exact: true }).selectOption(E2E_ADMIN_USER.id);
     await page.getByLabel('From Date').fill('2026-05-01');
     await page.getByLabel('To Date').fill('2026-05-03');
 
     await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
-    await expect(page.getByRole('table').getByText('lot.created')).toBeVisible();
+    await expect(page.getByRole('table').getByText('Lot created')).toBeVisible();
     await expect.poll(() => api.getListRequests().at(-1) || '').toContain('entityType=Lot');
     const lastRequest = api.getListRequests().at(-1) || '';
-    expect(lastRequest).toContain('action=lot.created');
+    expect(lastRequest).toContain('action=lot_created');
     expect(lastRequest).toContain(`userId=${E2E_ADMIN_USER.id}`);
     expect(lastRequest).toContain('startDate=2026-05-01');
     expect(lastRequest).toContain('endDate=2026-05-03');
