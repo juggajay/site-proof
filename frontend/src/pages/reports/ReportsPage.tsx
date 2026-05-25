@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { Lock, Sparkles, Mail, RefreshCw } from 'lucide-react';
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal';
-import type { LotStatusReport, NCRReport, TestReport, DiaryReport } from './types';
+import type { LotStatusReport, NCRReport, TestReport, DiaryReport, ClaimsReport } from './types';
 import { ADVANCED_ANALYTICS_TIERS } from './types';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -24,11 +24,14 @@ const TestResultsTab = lazy(() =>
 const DiaryReportTab = lazy(() =>
   import('./components/DiaryReportTab').then((m) => ({ default: m.DiaryReportTab })),
 );
+const ClaimsReportTab = lazy(() =>
+  import('./components/ClaimsReportTab').then((m) => ({ default: m.ClaimsReportTab })),
+);
 const AdvancedAnalyticsTab = lazy(() =>
   import('./components/AdvancedAnalyticsTab').then((m) => ({ default: m.AdvancedAnalyticsTab })),
 );
 
-const REPORT_DATA_TABS = ['lot-status', 'ncr', 'test', 'diary'] as const;
+const REPORT_DATA_TABS = ['lot-status', 'ncr', 'test', 'diary', 'claims'] as const;
 type ReportDataTab = (typeof REPORT_DATA_TABS)[number];
 
 function isReportDataTab(tab: string): tab is ReportDataTab {
@@ -62,6 +65,7 @@ export function ReportsPage() {
   const [ncrReport, setNCRReport] = useState<NCRReport | null>(null);
   const [testReport, setTestReport] = useState<TestReport | null>(null);
   const [diaryReport, setDiaryReport] = useState<DiaryReport | null>(null);
+  const [claimsReport, setClaimsReport] = useState<ClaimsReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subscriptionTier, setSubscriptionTier] = useState<string>('basic');
@@ -97,6 +101,7 @@ export function ReportsPage() {
       { id: 'ncr', label: 'NCR Report' },
       { id: 'test', label: 'Test Results' },
       { id: 'diary', label: 'Diary Report' },
+      { id: 'claims', label: 'Claims' },
       { id: 'advanced', label: 'Advanced Analytics', premium: true },
     ],
     [],
@@ -176,6 +181,10 @@ export function ReportsPage() {
             if (extraParams?.sections) queryParams.set('sections', extraParams.sections);
             if (extraParams?.startDate) queryParams.set('startDate', extraParams.startDate);
             if (extraParams?.endDate) queryParams.set('endDate', extraParams.endDate);
+            break;
+          case 'claims':
+            endpoint = 'claims';
+            break;
         }
 
         const data = await apiFetch<unknown>(`/api/reports/${endpoint}?${queryParams.toString()}`);
@@ -193,6 +202,9 @@ export function ReportsPage() {
             break;
           case 'diary':
             setDiaryReport(data as DiaryReport);
+            break;
+          case 'claims':
+            setClaimsReport(data as ClaimsReport);
             break;
         }
       } catch (err) {
@@ -345,6 +357,7 @@ export function ReportsPage() {
                   {activeTab === 'ncr' && 'NCR Report'}
                   {activeTab === 'test' && 'Test Results Report'}
                   {activeTab === 'diary' && 'Daily Diary Report'}
+                  {activeTab === 'claims' && 'Claims Report'}
                   {activeTab === 'advanced' && 'Advanced Analytics Report'}
                 </h1>
                 <p className="text-lg text-foreground mt-1">{projectName}</p>
@@ -400,6 +413,8 @@ export function ReportsPage() {
                   onGenerateReport={handleDiaryReportGenerate}
                 />
               )}
+
+              {activeTab === 'claims' && claimsReport && <ClaimsReportTab report={claimsReport} />}
 
               {activeTab === 'advanced' && (
                 <AdvancedAnalyticsTab
