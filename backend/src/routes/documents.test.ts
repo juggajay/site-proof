@@ -1777,7 +1777,7 @@ describe('Documents API', () => {
           primaryContactName: 'Document Portal Sub',
           primaryContactEmail: `doc-sub-portal-contact-${suffix}@example.com`,
           status: 'approved',
-          portalAccess: { documents: false, itps: false },
+          portalAccess: { documents: false, itps: false, testResults: false },
         },
       });
 
