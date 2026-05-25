@@ -97,7 +97,11 @@ function filterLogs(url: URL, sourceLogs = seededLogs) {
       (log) =>
         log.action.toLowerCase().includes(search) ||
         log.entityType.toLowerCase().includes(search) ||
-        log.entityId.toLowerCase().includes(search),
+        log.entityId.toLowerCase().includes(search) ||
+        log.user?.email.toLowerCase().includes(search) ||
+        log.user?.fullName?.toLowerCase().includes(search) ||
+        log.project?.name.toLowerCase().includes(search) ||
+        log.project?.projectNumber.toLowerCase().includes(search),
     );
   }
 
@@ -341,6 +345,16 @@ test.describe('Audit log seeded admin contract', () => {
     await expect(detailDialog.getByText('203.0.113.10')).toBeVisible();
     await expect(detailDialog.getByText('"lotNumber": "LOT-001"')).toBeVisible();
     await detailDialog.getByRole('button', { name: 'Close' }).first().click();
+
+    await page.getByLabel('Search audit logs').fill('E2E Admin');
+    await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
+    await expect(page.getByText('lot.created')).toBeVisible();
+    await expect(page.getByText('project.updated')).toBeHidden();
+
+    await page.getByLabel('Search audit logs').fill('E2E-001');
+    await expect(page.getByText('Showing 2 of 2 audit log entries')).toBeVisible();
+    await expect(page.getByText('lot.created')).toBeVisible();
+    await expect(page.getByText('project.updated')).toBeVisible();
 
     await page.getByLabel('Search audit logs').fill('project');
     await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
