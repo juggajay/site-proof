@@ -1807,7 +1807,8 @@ export function LotDetailPage() {
     }
   };
 
-  // Valid statuses for override
+  // Workflow statuses only. Conformance and claim terminal states are controlled
+  // through Evidence Readiness, Force Conform, and progress claims.
   const validStatuses = [
     { value: 'not_started', label: 'Not Started' },
     { value: 'in_progress', label: 'In Progress' },
