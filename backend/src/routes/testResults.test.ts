@@ -70,7 +70,7 @@ function findNewFilesWithContent(beforeFiles: Set<string>, content: Buffer): str
     .filter((file) => fs.readFileSync(path.join(certificatesDir, file)).equals(content));
 }
 
-async function registerTestUser(fullName: string, roleInCompany: string, companyId: string) {
+async function registerTestUser(fullName: string, roleInCompany: string, companyId: string | null) {
   const email = `${fullName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
   const res = await request(app).post('/api/auth/register').send({
     email,
@@ -309,7 +309,7 @@ describe('Test Results API', () => {
       const subcontractor = await registerTestUser(
         'Test Results Project Role Sub',
         'subcontractor',
-        companyId,
+        null,
       );
       const testType = `Blocked Subcontractor Creator ${suffix}`;
 
@@ -1038,7 +1038,7 @@ describe('Test Results API', () => {
       const subcontractor = await registerTestUser(
         'Test Results Subcontractor',
         'subcontractor',
-        companyId,
+        null,
       );
       const unassignedLot = await prisma.lot.create({
         data: {
@@ -1147,7 +1147,7 @@ describe('Test Results API', () => {
       const subcontractor = await registerTestUser(
         'Test Results Portal Blocked',
         'subcontractor',
-        companyId,
+        null,
       );
       const assignedTestResult = await prisma.testResult.create({
         data: {

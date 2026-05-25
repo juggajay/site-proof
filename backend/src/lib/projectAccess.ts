@@ -72,7 +72,23 @@ export function isSubcontractorPortalRole(role: string | null | undefined): bool
   return SUBCONTRACTOR_PORTAL_ROLES.has(role || '');
 }
 
+export function isStandaloneSubcontractorPortalIdentity(user: {
+  companyId?: string | null;
+  roleInCompany?: string | null;
+}): boolean {
+  return !user.companyId && isSubcontractorPortalRole(user.roleInCompany);
+}
+
 export async function hasActiveSubcontractorPortalIdentity(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { companyId: true, roleInCompany: true },
+  });
+
+  if (!user || !isStandaloneSubcontractorPortalIdentity(user)) {
+    return false;
+  }
+
   const subcontractorUser = await prisma.subcontractorUser.findFirst({
     where: {
       userId,
@@ -148,6 +164,7 @@ export async function checkProjectAccess(userId: string, projectId: string): Pro
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return false;
   const isSubcontractor = isSubcontractorPortalRole(user.roleInCompany);
+  const isStandaloneSubcontractor = isStandaloneSubcontractorPortalIdentity(user);
 
   // Admin/owner users can access all projects in their company
   if (!isSubcontractor && (user.roleInCompany === 'admin' || user.roleInCompany === 'owner')) {
@@ -170,13 +187,17 @@ export async function checkProjectAccess(userId: string, projectId: string): Pro
   }
 
   // Check subcontractor access
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-    },
-    select: { id: true },
-  });
+  if (isStandaloneSubcontractor) {
+    const subcontractorUser = await prisma.subcontractorUser.findFirst({
+      where: {
+        userId,
+        subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
+      },
+      select: { id: true },
+    });
 
-  return Boolean(subcontractorUser);
+    return Boolean(subcontractorUser);
+  }
+
+  return false;
 }

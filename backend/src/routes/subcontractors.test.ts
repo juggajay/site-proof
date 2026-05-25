@@ -1332,11 +1332,6 @@ describe('Subcontractors API', () => {
       });
       subcontractorToken = acceptRes.body.token;
       subcontractorUserId = acceptRes.body.user.id;
-
-      await prisma.user.update({
-        where: { id: subcontractorUserId },
-        data: { companyId, roleInCompany: 'viewer' },
-      });
     });
 
     it('should reject logged-in users whose email does not match the invitation', async () => {
@@ -1591,17 +1586,14 @@ describe('Subcontractors API', () => {
       expect(portalRes.body.company.id).toBe(invitationSubId);
     });
 
-    it('should allow preserved head-contractor users to enter the linked subcontractor portal', async () => {
+    it('should reject head-contractor company users from accepting subcontractor invitations', async () => {
       const suffix = Date.now();
-      const preservedUser = await registerTestUser(
-        'preserved-hc-portal',
-        'Preserved HC Portal User',
-      );
+      const preservedUser = await registerTestUser('hc-invite-reject', 'HC Invite Reject User');
       const preservedSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
-          companyName: `Preserved HC Portal ${suffix}`,
-          primaryContactName: 'Preserved HC Portal User',
+          companyName: `HC Invite Reject ${suffix}`,
+          primaryContactName: 'HC Invite Reject User',
           primaryContactEmail: preservedUser.email,
           status: 'pending_approval',
         },
@@ -1617,28 +1609,31 @@ describe('Subcontractors API', () => {
           .post(`/api/subcontractors/invitation/${preservedSub.id}/accept`)
           .set('Authorization', `Bearer ${preservedUser.token}`);
 
-        expect(acceptRes.status).toBe(200);
+        expect(acceptRes.status).toBe(403);
+        expect(acceptRes.body.error.message).toContain(
+          'Head contractor company accounts cannot accept subcontractor invitations',
+        );
 
         const acceptedUser = await prisma.user.findUnique({
           where: { id: preservedUser.userId },
-          select: { roleInCompany: true },
+          select: { companyId: true, roleInCompany: true },
         });
+        expect(acceptedUser?.companyId).toBe(companyId);
         expect(acceptedUser?.roleInCompany).toBe('owner');
 
-        const meRes = await request(app)
-          .get('/api/auth/me')
-          .set('Authorization', `Bearer ${preservedUser.token}`);
+        const links = await prisma.subcontractorUser.findMany({
+          where: {
+            subcontractorCompanyId: preservedSub.id,
+            userId: preservedUser.userId,
+          },
+        });
+        expect(links).toHaveLength(0);
 
-        expect(meRes.status).toBe(200);
-        expect(meRes.body.user.role).toBe('owner');
-        expect(meRes.body.user.hasSubcontractorPortalAccess).toBe(true);
-
-        const portalRes = await request(app)
-          .get('/api/subcontractors/my-company')
-          .set('Authorization', `Bearer ${preservedUser.token}`);
-
-        expect(portalRes.status).toBe(200);
-        expect(portalRes.body.company.id).toBe(preservedSub.id);
+        const unchangedSub = await prisma.subcontractorCompany.findUnique({
+          where: { id: preservedSub.id },
+          select: { status: true },
+        });
+        expect(unchangedSub?.status).toBe('pending_approval');
       } finally {
         await prisma.subcontractorUser.deleteMany({
           where: { subcontractorCompanyId: preservedSub.id },
@@ -1697,7 +1692,7 @@ describe('Subcontractors API', () => {
 
       await prisma.user.update({
         where: { id: portalUserId },
-        data: { companyId, roleInCompany: 'subcontractor_admin' },
+        data: { companyId: null, roleInCompany: 'subcontractor_admin' },
       });
 
       await prisma.subcontractorUser.create({
@@ -1717,6 +1712,54 @@ describe('Subcontractors API', () => {
       expect(res.status).toBe(200);
       expect(res.body.company).toBeDefined();
       expect(res.body.company.companyName).toContain('Portal Test Co');
+    });
+
+    it('should reject stale head-contractor accounts with subcontractor links from my-company endpoints', async () => {
+      const staleUser = await registerTestUser('stale-hc-portal-link', 'Stale HC Portal Link User');
+
+      await prisma.user.update({
+        where: { id: staleUser.userId },
+        data: { companyId, roleInCompany: 'owner' },
+      });
+
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: staleUser.userId,
+          subcontractorCompanyId: portalSubId,
+          role: 'admin',
+        },
+      });
+
+      try {
+        const getRes = await request(app)
+          .get('/api/subcontractors/my-company')
+          .set('Authorization', `Bearer ${staleUser.token}`);
+
+        expect(getRes.status).toBe(403);
+        expect(getRes.body.error.message).toContain('standalone subcontractor portal users');
+
+        const employeeRes = await request(app)
+          .post('/api/subcontractors/my-company/employees')
+          .set('Authorization', `Bearer ${staleUser.token}`)
+          .send({
+            name: 'Should Not Create',
+            role: 'Operator',
+            hourlyRate: 50,
+          });
+
+        expect(employeeRes.status).toBe(403);
+
+        const createdEmployee = await prisma.employeeRoster.findFirst({
+          where: {
+            subcontractorCompanyId: portalSubId,
+            name: 'Should Not Create',
+          },
+        });
+        expect(createdEmployee).toBeNull();
+      } finally {
+        await prisma.subcontractorUser.deleteMany({ where: { userId: staleUser.userId } });
+        await cleanupTestUser(staleUser.userId);
+      }
     });
 
     it('should keep my-company roster and plant scoped to the linked subcontractor', async () => {

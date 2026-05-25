@@ -20,7 +20,7 @@ function hashHoldPointReleaseTokenForTest(token: string): string {
   return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
 }
 
-async function registerTestUser(fullName: string, roleInCompany: string, companyId: string) {
+async function registerTestUser(fullName: string, roleInCompany: string, companyId: string | null) {
   const email = `${fullName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
   const res = await request(app).post('/api/auth/register').send({
     email,
@@ -579,7 +579,7 @@ describe('Hold Points API access control', () => {
     const subcontractor = await registerTestUser(
       'Hold Points Subcontractor',
       'subcontractor',
-      companyId,
+      null,
     );
     createdUserIds.push(subcontractor.userId);
 
@@ -693,7 +693,7 @@ describe('Hold Points API access control', () => {
     const subcontractor = await registerTestUser(
       'Hold Points Portal Blocked',
       'subcontractor',
-      companyId,
+      null,
     );
 
     await prisma.subcontractorUser.create({

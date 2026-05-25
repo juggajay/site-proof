@@ -191,6 +191,87 @@ describe('Company API', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.message).toContain('already belong to a company');
     });
+
+    it('rejects company creation when the user is linked to a subcontractor portal account', async () => {
+      const suffix = Date.now();
+      const portalEmail = `company-subbie-linked-${suffix}@example.com`;
+      const regRes = await request(app).post('/api/auth/register').send({
+        email: portalEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Linked Subbie Portal User',
+        tosAccepted: true,
+      });
+      const portalUserId = regRes.body.user.id as string;
+      let createdCompanyId: string | undefined;
+      let projectId: string | undefined;
+      let subcontractorCompanyId: string | undefined;
+
+      try {
+        const project = await prisma.project.create({
+          data: {
+            name: `Linked Subbie Project ${suffix}`,
+            projectNumber: `LINKED-SUB-${suffix}`,
+            companyId,
+            status: 'active',
+            state: 'NSW',
+            specificationSet: 'TfNSW',
+          },
+        });
+        projectId = project.id;
+
+        const subcontractor = await prisma.subcontractorCompany.create({
+          data: {
+            projectId: project.id,
+            companyName: `Linked Subbie ${suffix}`,
+            primaryContactName: 'Linked Subbie Portal User',
+            primaryContactEmail: portalEmail,
+            status: 'approved',
+          },
+        });
+        subcontractorCompanyId = subcontractor.id;
+
+        await prisma.subcontractorUser.create({
+          data: {
+            subcontractorCompanyId: subcontractor.id,
+            userId: portalUserId,
+            role: 'admin',
+          },
+        });
+
+        const res = await request(app)
+          .post('/api/company')
+          .set('Authorization', `Bearer ${regRes.body.token}`)
+          .send({ name: 'Should Not Become HC Pty Ltd' });
+
+        createdCompanyId = res.body.company?.id;
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('Subcontractor portal accounts');
+
+        const user = await prisma.user.findUnique({
+          where: { id: portalUserId },
+          select: { companyId: true, roleInCompany: true },
+        });
+        expect(user?.companyId).toBeNull();
+        expect(user?.roleInCompany).not.toBe('owner');
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { userId: portalUserId } });
+        await prisma.subcontractorUser.deleteMany({ where: { userId: portalUserId } });
+        if (subcontractorCompanyId) {
+          await prisma.subcontractorCompany
+            .delete({ where: { id: subcontractorCompanyId } })
+            .catch(() => {});
+        }
+        if (projectId) {
+          await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
+        }
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: portalUserId } });
+        await prisma.user.delete({ where: { id: portalUserId } }).catch(() => {});
+        if (createdCompanyId) {
+          await prisma.company.delete({ where: { id: createdCompanyId } }).catch(() => {});
+        }
+      }
+    });
   });
 
   describe('GET /api/company', () => {

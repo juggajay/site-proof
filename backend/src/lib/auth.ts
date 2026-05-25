@@ -66,7 +66,9 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
         has_subcontractor_portal_access: boolean;
       }>
     >`SELECT users.id, users.email, users.full_name, users.phone, users.role_in_company, users.company_id, companies.name AS company_name, users.created_at, users.avatar_url, users.token_invalidated_at, users.password_hash IS NOT NULL AS has_password,
-        EXISTS (
+        users.company_id IS NULL
+        AND users.role_in_company IN ('subcontractor', 'subcontractor_admin')
+        AND EXISTS (
           SELECT 1
           FROM subcontractor_users
           JOIN subcontractor_companies

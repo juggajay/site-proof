@@ -4,6 +4,7 @@ type RoleUser =
   | {
       role?: string;
       roleInCompany?: string;
+      companyId?: string | null;
       hasSubcontractorPortalAccess?: boolean;
     }
   | null
@@ -18,5 +19,9 @@ export function isSubcontractorUser(user: RoleUser): boolean {
 }
 
 export function hasSubcontractorPortalIdentity(user: RoleUser): boolean {
+  if (!user || user.companyId) {
+    return false;
+  }
+
   return isSubcontractorUser(user) || user?.hasSubcontractorPortalAccess === true;
 }

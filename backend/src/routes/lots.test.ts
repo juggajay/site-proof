@@ -782,7 +782,7 @@ describe('Lots API', () => {
 
       await prisma.user.update({
         where: { id: subcontractorUserId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
 
       await prisma.subcontractorUser.create({
@@ -969,7 +969,7 @@ describe('Lots API', () => {
 
       await prisma.user.update({
         where: { id: subcontractorUserId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
 
       await prisma.subcontractorUser.create({
@@ -1305,7 +1305,7 @@ describe('Lots API', () => {
 
       await prisma.user.update({
         where: { id: subcontractorUserId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {

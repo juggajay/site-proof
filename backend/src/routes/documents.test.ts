@@ -1481,7 +1481,7 @@ describe('Documents API', () => {
       try {
         await prisma.user.update({
           where: { id: subUserId },
-          data: { companyId, roleInCompany: 'subcontractor' },
+          data: { companyId: null, roleInCompany: 'subcontractor' },
         });
         await prisma.subcontractorUser.create({
           data: {
@@ -1607,7 +1607,7 @@ describe('Documents API', () => {
         await prisma.emailVerificationToken.deleteMany({ where: { userId: subUserId } });
         await prisma.user.delete({ where: { id: subUserId } }).catch(() => {});
       }
-    });
+    }, 60000);
 
     it('should filter subcontractor document lists by category portal modules', async () => {
       const suffix = `${Date.now()}-${crypto.randomUUID()}`;
@@ -1673,7 +1673,7 @@ describe('Documents API', () => {
       try {
         await prisma.user.update({
           where: { id: subUserId },
-          data: { companyId, roleInCompany: 'subcontractor' },
+          data: { companyId: null, roleInCompany: 'subcontractor' },
         });
         await prisma.subcontractorUser.create({
           data: {
@@ -1844,7 +1844,7 @@ describe('Documents API', () => {
       try {
         await prisma.user.update({
           where: { id: subUserId },
-          data: { companyId, roleInCompany: 'subcontractor' },
+          data: { companyId: null, roleInCompany: 'subcontractor' },
         });
         await prisma.subcontractorUser.create({
           data: {
