@@ -26,11 +26,11 @@ const PORTAL_ACCESS_LABELS: Record<SubcontractorPortalAccessKey, string> = {
 
 export const DEFAULT_SUBCONTRACTOR_PORTAL_ACCESS: PortalAccessRecord = {
   lots: true,
-  itps: false,
-  holdPoints: false,
-  testResults: false,
+  itps: true,
+  holdPoints: true,
+  testResults: true,
   ncrs: false,
-  documents: false,
+  documents: true,
 };
 
 export function activeSubcontractorCompanyWhere(

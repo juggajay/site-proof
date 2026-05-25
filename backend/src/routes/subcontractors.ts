@@ -879,11 +879,11 @@ subcontractorsRouter.get(
         })),
         portalAccess: company.portalAccess || {
           lots: true,
-          itps: false,
-          holdPoints: false,
-          testResults: false,
+          itps: true,
+          holdPoints: true,
+          testResults: true,
           ncrs: false,
-          documents: false,
+          documents: true,
         },
       },
     });
@@ -1221,11 +1221,11 @@ subcontractorsRouter.delete(
 // Default portal access settings
 const DEFAULT_PORTAL_ACCESS = {
   lots: true,
-  itps: false,
-  holdPoints: false,
-  testResults: false,
+  itps: true,
+  holdPoints: true,
+  testResults: true,
   ncrs: false,
-  documents: false,
+  documents: true,
 };
 
 // PATCH /api/subcontractors/:id/portal-access - Update portal access settings

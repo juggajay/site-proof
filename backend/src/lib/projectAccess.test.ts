@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { prisma } from './prisma.js';
 import {
   checkProjectAccess,
+  hasPortalModuleEnabled,
   hasSubcontractorPortalModuleAccess,
   requireSubcontractorPortalModuleAccess,
 } from './projectAccess.js';
@@ -248,5 +249,13 @@ describe('checkProjectAccess', () => {
       await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
       await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
     }
+  });
+
+  it('defaults new subcontractor portal access to assigned work and evidence modules', () => {
+    for (const module of ['lots', 'itps', 'holdPoints', 'testResults', 'documents'] as const) {
+      expect(hasPortalModuleEnabled(undefined, module)).toBe(true);
+    }
+
+    expect(hasPortalModuleEnabled(undefined, 'ncrs')).toBe(false);
   });
 });
