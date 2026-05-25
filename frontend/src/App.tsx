@@ -261,6 +261,7 @@ const INTERNAL_ROLES = [
 ];
 
 const REPORT_ROLES = [...INTERNAL_ROLES, 'viewer'];
+const PROJECT_WORKSPACE_ROLES = [...INTERNAL_ROLES, 'viewer'];
 
 function App() {
   return (
@@ -314,7 +315,14 @@ function App() {
 
               {/* Projects */}
               <Route path="/projects" element={<ProjectsPage />} />
-              <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+              <Route
+                path="/projects/:projectId"
+                element={
+                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                    <ProjectDetailPage />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Foreman Mobile Views - nested under ForemanMobileShell for 5-tab nav */}
               <Route
@@ -356,8 +364,22 @@ function App() {
               />
 
               {/* Lots */}
-              <Route path="/projects/:projectId/lots" element={<LotsPage />} />
-              <Route path="/projects/:projectId/lots/:lotId" element={<LotDetailPage />} />
+              <Route
+                path="/projects/:projectId/lots"
+                element={
+                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                    <LotsPage />
+                  </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId/lots/:lotId"
+                element={
+                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                    <LotDetailPage />
+                  </RoleProtectedRoute>
+                }
+              />
               <Route
                 path="/projects/:projectId/lots/:lotId/edit"
                 element={
@@ -416,13 +438,20 @@ function App() {
                   </RoleProtectedRoute>
                 }
               />
-              <Route path="/projects/:projectId/delays" element={<DelayRegisterPage />} />
+              <Route
+                path="/projects/:projectId/delays"
+                element={
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                    <DelayRegisterPage />
+                  </RoleProtectedRoute>
+                }
+              />
 
               {/* Docket Approvals */}
               <Route
                 path="/projects/:projectId/dockets"
                 element={
-                  <RoleProtectedRoute allowedRoles={[...INTERNAL_ROLES, ...SUBCONTRACTOR_ROLES]}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DocketApprovalsPage />
                   </RoleProtectedRoute>
                 }

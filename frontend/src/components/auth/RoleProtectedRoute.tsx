@@ -2,7 +2,8 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import type { ReactNode } from 'react';
-import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
+import { ROLE_GROUPS, hasRoleInGroup, isSubcontractorRole } from '@/lib/roles';
+import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 
 interface RoleProtectedRouteProps {
   children: ReactNode;
@@ -38,7 +39,10 @@ export function RoleProtectedRoute({
 
   // Check if user's role is in allowed roles
   const userRole = user.roleInCompany || user.role || 'member';
-  const hasAccess = allowedRoles.includes(userRole);
+  const allowsSubcontractorPortal = allowedRoles.some((role) => isSubcontractorRole(role));
+  const hasAccess =
+    allowedRoles.includes(userRole) ||
+    (allowsSubcontractorPortal && hasSubcontractorPortalIdentity(user));
 
   if (!hasAccess) {
     return (

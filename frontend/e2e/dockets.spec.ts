@@ -154,7 +154,7 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 
-  await mockAuthenticatedUserState(page);
+  await mockAuthenticatedUserState(page, options.user ?? E2E_ADMIN_USER);
 
   return {
     getCreateRequest: () => createRequest,
@@ -407,31 +407,14 @@ test.describe('Dockets seeded approval contract', () => {
     });
   });
 
-  test('rejects encoded create-docket hours before posting', async ({ page }) => {
+  test('keeps subcontractors out of the project docket approvals workspace', async ({ page }) => {
     const api = await mockSeededDocketsApi(page, { user: E2E_SUBCONTRACTOR_USER });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
 
-    await page.getByRole('button', { name: 'Create Docket' }).click();
-    const modal = page.getByRole('dialog', { name: 'Create Docket' });
-    await modal.getByLabel('Date *').fill('2026-01-16');
-    await modal.getByLabel('Labour Hours').fill('1e2');
-    await modal.getByLabel('Plant Hours').fill('3.25');
-    await modal.getByRole('button', { name: 'Create Docket', exact: true }).click();
-
-    await expect(page.getByText('Hours must be a non-negative decimal number.')).toBeVisible();
+    await expect(page.getByText('Access Denied')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create Docket' })).toHaveCount(0);
     expect(api.getCreateRequestCount()).toBe(0);
-
-    await modal.getByLabel('Labour Hours').fill('8.5');
-    await modal.getByRole('button', { name: 'Create Docket', exact: true }).click();
-
-    await expect.poll(() => api.getCreateRequestCount()).toBe(1);
-    expect(api.getCreateRequest()).toMatchObject({
-      projectId: E2E_PROJECT_ID,
-      date: '2026-01-16',
-      labourHours: 8.5,
-      plantHours: 3.25,
-    });
   });
 
   test('shows a retryable load error instead of a false empty state', async ({ page }) => {

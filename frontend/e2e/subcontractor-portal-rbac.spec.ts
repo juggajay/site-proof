@@ -1,0 +1,146 @@
+import { test, expect, type Page } from '@playwright/test';
+import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
+
+const linkedHeadContractorPortalUser = {
+  ...E2E_ADMIN_USER,
+  id: 'e2e-linked-hc-portal-user',
+  email: 'linked-hc-portal@example.com',
+  fullName: 'Linked HC Portal User',
+  role: 'owner',
+  roleInCompany: 'owner',
+  hasSubcontractorPortalAccess: true,
+};
+
+const subcontractorPortalUser = {
+  ...E2E_ADMIN_USER,
+  id: 'e2e-subcontractor-portal-user',
+  email: 'subbie-portal@example.com',
+  fullName: 'Sam Subbie',
+  role: 'subcontractor_admin',
+  roleInCompany: 'subcontractor_admin',
+  companyId: null,
+  companyName: null,
+};
+
+const portalCompany = {
+  id: 'e2e-subcontractor-company',
+  companyName: 'E2E Civil Subcontractors',
+  projectId: E2E_PROJECT_ID,
+  projectName: 'E2E Highway Upgrade',
+  employees: [],
+  plant: [],
+  portalAccess: {
+    lots: true,
+    itps: true,
+    holdPoints: true,
+    testResults: true,
+    ncrs: true,
+    documents: true,
+  },
+};
+
+async function mockSubcontractorPortalApi(
+  page: Page,
+  user: typeof linkedHeadContractorPortalUser | typeof subcontractorPortalUser,
+) {
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const json = (body: unknown, status = 200) =>
+      route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+
+    if (url.pathname === '/api/auth/me') {
+      await json({ user });
+      return;
+    }
+
+    if (url.pathname === '/api/subcontractors/my-company') {
+      await json({ company: portalCompany });
+      return;
+    }
+
+    if (url.pathname === '/api/dockets') {
+      await json({ dockets: [] });
+      return;
+    }
+
+    if (url.pathname === '/api/lots' && url.searchParams.get('projectId') === E2E_PROJECT_ID) {
+      await json({
+        lots: [
+          {
+            id: 'e2e-assigned-lot',
+            lotNumber: 'SUB-LOT-001',
+            activity: 'Drainage',
+            activityType: 'Drainage',
+            status: 'in_progress',
+          },
+        ],
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/notifications') {
+      await json({ notifications: [], unreadCount: 0 });
+      return;
+    }
+
+    if (url.pathname === '/api/projects') {
+      await json({
+        projects: [
+          {
+            id: E2E_PROJECT_ID,
+            name: 'E2E Highway Upgrade',
+            projectNumber: 'E2E-001',
+            status: 'active',
+            contractValue: null,
+          },
+        ],
+      });
+      return;
+    }
+
+    if (url.pathname === `/api/projects/${E2E_PROJECT_ID}`) {
+      await json({
+        project: {
+          id: E2E_PROJECT_ID,
+          name: 'E2E Highway Upgrade',
+          projectNumber: 'E2E-001',
+        },
+      });
+      return;
+    }
+
+    await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
+  });
+
+  await mockAuthenticatedUserState(page, user);
+}
+
+test.describe('Subcontractor portal RBAC', () => {
+  test('allows a head-contractor user with an accepted subcontractor invite into the portal', async ({
+    page,
+  }) => {
+    await mockSubcontractorPortalApi(page, linkedHeadContractorPortalUser);
+
+    await page.goto('/subcontractor-portal');
+
+    await expect(page.getByText('Access Denied')).toHaveCount(0);
+    await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
+    await expect(page.getByText('SUB-LOT-001')).toBeVisible();
+  });
+
+  test('keeps subcontractor users out of the head-contractor project workspace', async ({
+    page,
+  }) => {
+    await mockSubcontractorPortalApi(page, subcontractorPortalUser);
+
+    await page.goto('/projects');
+
+    await expect(page).toHaveURL('/subcontractor-portal');
+    await expect(page.getByRole('button', { name: 'New Project' })).toHaveCount(0);
+    await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
+  });
+});

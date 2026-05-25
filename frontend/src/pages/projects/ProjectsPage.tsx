@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
@@ -14,6 +14,7 @@ import {
   isOptionalNonNegativeDecimalInput,
   parseOptionalNonNegativeDecimalInput,
 } from '@/lib/numericInput';
+import { isSubcontractorUser } from '@/lib/subcontractorIdentity';
 
 interface Project {
   id: string;
@@ -109,6 +110,7 @@ function formatStatusLabel(status: string | null | undefined): string {
 export function ProjectsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const isSubcontractor = isSubcontractorUser(user);
 
   const {
     data: projectsData,
@@ -118,7 +120,7 @@ export function ProjectsPage() {
   } = useQuery({
     queryKey: queryKeys.projects,
     queryFn: () => apiFetch<{ projects: Project[] }>('/api/projects'),
-    enabled: !!user,
+    enabled: !!user && !isSubcontractor,
   });
 
   const projects = projectsData?.projects || [];
@@ -234,6 +236,10 @@ export function ProjectsPage() {
         </div>
       </div>
     );
+  }
+
+  if (isSubcontractor) {
+    return <Navigate to="/subcontractor-portal" replace />;
   }
 
   return (

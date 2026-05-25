@@ -38,6 +38,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       roleInCompany: user.role,
       role: user.role,
       companyId: user.companyId || null,
+      hasSubcontractorPortalAccess: user.hasSubcontractorPortalAccess,
     };
 
     next();
@@ -66,6 +67,7 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
           roleInCompany: user.role,
           role: user.role,
           companyId: user.companyId || null,
+          hasSubcontractorPortalAccess: user.hasSubcontractorPortalAccess,
         };
       }
     }

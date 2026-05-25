@@ -9,6 +9,7 @@ import { ChangelogNotification } from '@/components/ChangelogNotification';
 import { OnboardingTour } from '@/components/OnboardingTour';
 import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { useAuth } from '@/lib/auth';
+import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { MainLayout } from './MainLayout';
 
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
@@ -16,8 +17,7 @@ const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
 function CompanyOnboardingGate({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const location = useLocation();
-  const userRole = user?.roleInCompany || user?.role || '';
-  const isSubcontractor = SUBCONTRACTOR_ROLES.includes(userRole);
+  const isSubcontractor = hasSubcontractorPortalIdentity(user);
   const needsCompany = Boolean(user) && !user?.companyId && !isSubcontractor;
 
   if (needsCompany && location.pathname !== '/onboarding') {
@@ -35,10 +35,13 @@ function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
   const { isOpen, closeHelp } = useKeyboardShortcutsHelp();
   const { user } = useAuth();
   const location = useLocation();
-  const userRole = user?.role || user?.roleInCompany || '';
+  const userRole = getCompanyRole(user);
   const isCompanySetupRoute = location.pathname === '/onboarding';
   const showGeneralOnboarding =
-    Boolean(user?.companyId) && !SUBCONTRACTOR_ROLES.includes(userRole) && !isCompanySetupRoute;
+    Boolean(user?.companyId) &&
+    !SUBCONTRACTOR_ROLES.includes(userRole) &&
+    !hasSubcontractorPortalIdentity(user) &&
+    !isCompanySetupRoute;
 
   return (
     <>

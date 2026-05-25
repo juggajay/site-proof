@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { ForemanBottomNavV2 } from '@/components/foreman/ForemanBottomNavV2';
 import { useForemanMobileStore } from '@/stores/foremanMobileStore';
+import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import {
   ROLE_GROUPS,
   hasRoleInGroup,
@@ -128,8 +129,8 @@ export function MobileNav() {
   const { projectId } = useParams();
   const { user } = useAuth();
 
-  // Use roleInCompany first (from backend), fallback to role
-  const userRole = user?.roleInCompany || user?.role || '';
+  const userRole = getCompanyRole(user);
+  const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
   const hasCommercial = hasCommercialAccess(userRole);
   const hasAdmin = isAdminRole(userRole);
   const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
@@ -141,7 +142,13 @@ export function MobileNav() {
     if (item.requiresCommercialAccess && !hasCommercial) return false;
     if (item.requiresAdmin && !hasAdmin) return false;
     if (item.requiresManagement && !hasManagement) return false;
-    if (item.allowedRoles && !item.allowedRoles.includes(userRole)) return false;
+    if (
+      item.allowedRoles &&
+      !item.allowedRoles.includes(userRole) &&
+      !(item.allowedRoles.some((role) => isSubcontractorRole(role)) && hasPortalIdentity)
+    ) {
+      return false;
+    }
     if (item.excludeRoles && item.excludeRoles.includes(userRole)) return false;
     return true;
   };
@@ -201,7 +208,7 @@ export function MobileNav() {
               ))}
 
               {/* Subcontractor Navigation */}
-              {isSubcontractor && (
+              {hasPortalIdentity && (
                 <>
                   <div className="my-4 border-t pt-4">
                     <p className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">

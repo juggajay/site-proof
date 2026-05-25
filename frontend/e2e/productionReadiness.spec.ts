@@ -805,12 +805,7 @@ test.describe('production readiness guardrails', () => {
     for (const [routePath, pageComponent] of internalProjectRoutes) {
       expectProjectRouteGuard(appSource, routePath, pageComponent);
     }
-    expectProjectRouteGuard(
-      appSource,
-      '/projects/:projectId/dockets',
-      'DocketApprovalsPage',
-      '[...INTERNAL_ROLES, ...SUBCONTRACTOR_ROLES]',
-    );
+    expectProjectRouteGuard(appSource, '/projects/:projectId/dockets', 'DocketApprovalsPage');
   });
 
   test('foreman mobile quick navigation resolves to mounted routes', async () => {

@@ -27,6 +27,7 @@ async function registerTestUser(prefix: string, fullName: string) {
   });
 
   return {
+    email,
     token: res.body.token as string,
     userId: res.body.user.id as string,
   };
@@ -1588,6 +1589,65 @@ describe('Subcontractors API', () => {
 
       expect(portalRes.status).toBe(200);
       expect(portalRes.body.company.id).toBe(invitationSubId);
+    });
+
+    it('should allow preserved head-contractor users to enter the linked subcontractor portal', async () => {
+      const suffix = Date.now();
+      const preservedUser = await registerTestUser(
+        'preserved-hc-portal',
+        'Preserved HC Portal User',
+      );
+      const preservedSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Preserved HC Portal ${suffix}`,
+          primaryContactName: 'Preserved HC Portal User',
+          primaryContactEmail: preservedUser.email,
+          status: 'pending_approval',
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: preservedUser.userId },
+        data: { companyId, roleInCompany: 'owner' },
+      });
+
+      try {
+        const acceptRes = await request(app)
+          .post(`/api/subcontractors/invitation/${preservedSub.id}/accept`)
+          .set('Authorization', `Bearer ${preservedUser.token}`);
+
+        expect(acceptRes.status).toBe(200);
+
+        const acceptedUser = await prisma.user.findUnique({
+          where: { id: preservedUser.userId },
+          select: { roleInCompany: true },
+        });
+        expect(acceptedUser?.roleInCompany).toBe('owner');
+
+        const meRes = await request(app)
+          .get('/api/auth/me')
+          .set('Authorization', `Bearer ${preservedUser.token}`);
+
+        expect(meRes.status).toBe(200);
+        expect(meRes.body.user.role).toBe('owner');
+        expect(meRes.body.user.hasSubcontractorPortalAccess).toBe(true);
+
+        const portalRes = await request(app)
+          .get('/api/subcontractors/my-company')
+          .set('Authorization', `Bearer ${preservedUser.token}`);
+
+        expect(portalRes.status).toBe(200);
+        expect(portalRes.body.company.id).toBe(preservedSub.id);
+      } finally {
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: preservedSub.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: preservedSub.id } })
+          .catch(() => {});
+        await cleanupTestUser(preservedUser.userId);
+      }
     });
 
     it('should reject duplicate acceptance', async () => {

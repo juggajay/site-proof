@@ -11,6 +11,7 @@ declare global {
         roleInCompany: string;
         role: string;
         companyId: string | null;
+        hasSubcontractorPortalAccess?: boolean;
       };
       apiKey?: {
         id: string;

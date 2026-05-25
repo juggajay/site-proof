@@ -72,6 +72,18 @@ export function isSubcontractorPortalRole(role: string | null | undefined): bool
   return SUBCONTRACTOR_PORTAL_ROLES.has(role || '');
 }
 
+export async function hasActiveSubcontractorPortalIdentity(userId: string): Promise<boolean> {
+  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+    where: {
+      userId,
+      subcontractorCompany: activeSubcontractorCompanyWhere(),
+    },
+    select: { id: true },
+  });
+
+  return Boolean(subcontractorUser);
+}
+
 export function hasPortalModuleEnabled(
   portalAccess: Prisma.JsonValue | null | undefined,
   module: SubcontractorPortalAccessKey,
