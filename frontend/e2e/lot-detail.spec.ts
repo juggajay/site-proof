@@ -633,4 +633,33 @@ test.describe('Lot detail ITP workflow', () => {
     await expect.poll(() => api.getConformRequestBody()).toMatchObject({ force: true });
     await expect(page.getByRole('heading', { name: 'Lot Conformed' })).toBeVisible();
   });
+
+  test('clarifies workflow status overrides are separate from conformance and claims', async ({
+    page,
+  }) => {
+    await mockLotDetailApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+
+    await page.getByRole('button', { name: 'Override Workflow Status' }).click();
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Override Workflow Status' });
+
+    await expect(dialog).toContainText('Move this lot between operational workflow states.');
+    await expect(dialog.getByLabel(/New Workflow Status/)).toBeVisible();
+    await expect(dialog).toContainText(
+      'Conformed and claimed are controlled separately through Evidence Readiness, Force Conform, and progress claims.',
+    );
+
+    const optionTexts = await dialog.locator('#override-status option').allTextContents();
+    expect(optionTexts).toEqual([
+      'Select workflow status...',
+      'Not Started',
+      'Awaiting Test',
+      'Hold Point',
+      'NCR Raised',
+      'Completed',
+    ]);
+    expect(optionTexts).not.toContain('Conformed');
+    expect(optionTexts).not.toContain('Claimed');
+  });
 });

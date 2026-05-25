@@ -31,6 +31,13 @@ interface StatusOverrideModalProps {
   isSubmitting: boolean;
 }
 
+function formatStatusLabel(status: string) {
+  return status
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export function StatusOverrideModal({
   isOpen,
   currentStatus,
@@ -79,9 +86,9 @@ export function StatusOverrideModal({
             <RefreshCw className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-xl font-semibold">Override Status</div>
+            <div className="text-xl font-semibold">Override Workflow Status</div>
             <p className="text-sm text-muted-foreground font-normal">
-              Manually change the lot status
+              Move this lot between operational workflow states.
             </p>
           </div>
         </div>
@@ -94,20 +101,20 @@ export function StatusOverrideModal({
               <div
                 className={`mt-1 px-3 py-2 rounded border ${lotStatusColors[currentStatus] || 'bg-muted text-muted-foreground'}`}
               >
-                {currentStatus.replace('_', ' ')}
+                {formatStatusLabel(currentStatus)}
               </div>
             </div>
 
             <div>
               <Label htmlFor="override-status">
-                New Status <span className="text-red-500">*</span>
+                New Workflow Status <span className="text-red-500">*</span>
               </Label>
               <NativeSelect
                 id="override-status"
                 {...register('selectedStatus')}
                 className={errors.selectedStatus ? 'border-destructive mt-1' : 'mt-1'}
               >
-                <option value="">Select new status...</option>
+                <option value="">Select workflow status...</option>
                 {availableStatuses.map((status) => (
                   <option key={status.value} value={status.value}>
                     {status.label}
@@ -137,6 +144,10 @@ export function StatusOverrideModal({
                   {errors.reason.message}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground mt-2">
+                Conformed and claimed are controlled separately through Evidence Readiness, Force
+                Conform, and progress claims.
+              </p>
               <p className="text-xs text-muted-foreground mt-1">
                 This reason will be recorded in the lot history for audit purposes.
               </p>
@@ -149,7 +160,7 @@ export function StatusOverrideModal({
           Cancel
         </Button>
         <Button type="submit" form="status-override-form" disabled={isSubmitting}>
-          {isSubmitting ? 'Overriding...' : 'Override Status'}
+          {isSubmitting ? 'Overriding...' : 'Override Workflow Status'}
         </Button>
       </ModalFooter>
     </Modal>

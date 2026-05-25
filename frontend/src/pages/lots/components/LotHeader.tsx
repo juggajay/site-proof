@@ -114,15 +114,15 @@ export function LotHeader({
               </span>
             </button>
           )}
-          {/* Override Status Button - only for quality managers and above */}
+          {/* Override Workflow Status Button - only for quality managers and above */}
           {canConformLots && lot.status !== 'claimed' && (
             <button
               onClick={onOverrideStatus}
               className="flex items-center gap-1.5 rounded-lg border border-purple-500 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50"
-              title="Manually override lot status"
+              title="Manually override lot workflow status"
             >
               <RefreshCw className="h-4 w-4" />
-              <span>Override Status</span>
+              <span>Override Workflow Status</span>
             </button>
           )}
           <span
