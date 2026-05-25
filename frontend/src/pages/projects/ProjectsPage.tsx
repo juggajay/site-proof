@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
@@ -110,6 +110,7 @@ function formatStatusLabel(status: string | null | undefined): string {
 export function ProjectsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const isSubcontractor = isSubcontractorUser(user);
 
   const {
@@ -158,11 +159,12 @@ export function ProjectsPage() {
         }),
       });
     },
-    onSuccess: () => {
+    onSuccess: ({ project }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects });
       setFormData(EMPTY_PROJECT_FORM);
       setShowCreateModal(false);
       setCreateError(null);
+      navigate(`/projects/${encodeURIComponent(project.id)}`);
     },
     onError: (err) => {
       setCreateError(extractErrorMessage(err, 'Failed to create project'));

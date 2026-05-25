@@ -175,6 +175,20 @@ async function mockProjectsApi(
       return;
     }
 
+    if (url.pathname === '/api/projects/created-project') {
+      await json({
+        project: {
+          id: 'created-project',
+          name: 'Pacific Highway Upgrade',
+          projectNumber: 'PHU-001',
+          status: 'active',
+          clientName: 'Transport NSW',
+          state: 'QLD',
+        },
+      });
+      return;
+    }
+
     if (url.pathname === `/api/projects/${E2E_PROJECT_ID}/dashboard`) {
       if (options.projectDashboardFailure) {
         await json(
@@ -185,6 +199,21 @@ async function mockProjectsApi(
       }
 
       await json(projectDashboardData);
+      return;
+    }
+
+    if (url.pathname === '/api/projects/created-project/dashboard') {
+      await json({
+        ...projectDashboardData,
+        project: {
+          id: 'created-project',
+          name: 'Pacific Highway Upgrade',
+          projectNumber: 'PHU-001',
+          status: 'active',
+          client: 'Transport NSW',
+          state: 'QLD',
+        },
+      });
       return;
     }
 
@@ -241,7 +270,7 @@ test.describe('Projects seeded account contract', () => {
     await expect(page.getByRole('link', { name: /E2E Bridge Widening/ })).toContainText('On Hold');
   });
 
-  test('creates a project with trimmed text and numeric contract value', async ({ page }) => {
+  test('creates a project with trimmed text and opens the new project', async ({ page }) => {
     const api = await mockProjectsApi(page, { projects: [] });
 
     await page.goto('/projects');
@@ -285,7 +314,8 @@ test.describe('Projects seeded account contract', () => {
         targetCompletion: '2026-12-15',
       });
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByText('Pacific Highway Upgrade')).toBeVisible();
+    await expect(page).toHaveURL(/\/projects\/created-project$/);
+    await expect(page.getByRole('heading', { name: 'Pacific Highway Upgrade' })).toBeVisible();
   });
 
   test('keeps the create project dialog open when the subscription limit is reached', async ({
