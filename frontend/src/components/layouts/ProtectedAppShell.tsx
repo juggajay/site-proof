@@ -5,7 +5,6 @@ import {
   KeyboardShortcutsHelp,
   useKeyboardShortcutsHelp,
 } from '@/components/KeyboardShortcutsHelp';
-import { ChangelogNotification } from '@/components/ChangelogNotification';
 import { OnboardingTour } from '@/components/OnboardingTour';
 import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { useAuth } from '@/lib/auth';
@@ -48,7 +47,6 @@ function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
       {children}
       <KeyboardShortcutsHelp isOpen={isOpen} onClose={closeHelp} />
       <OnboardingTour enabled={showGeneralOnboarding} />
-      {!isCompanySetupRoute && <ChangelogNotification />}
       <SessionTimeoutWarning />
     </>
   );

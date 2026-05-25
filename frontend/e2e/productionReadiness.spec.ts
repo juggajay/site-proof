@@ -569,7 +569,7 @@ test.describe('production readiness guardrails', () => {
     );
     expect(appSource).not.toMatch(/<KeyboardShortcutsProvider>\s*<Suspense/);
     expect(protectedShellSource).toContain('<OnboardingTour enabled={showGeneralOnboarding} />');
-    expect(protectedShellSource).toContain('{!isCompanySetupRoute && <ChangelogNotification />}');
+    expect(protectedShellSource).not.toContain('ChangelogNotification');
     expect(protectedShellSource).toContain('<SessionTimeoutWarning />');
     expect(errorBoundarySource).toContain('useNavigate');
     expect(errorBoundarySource).toContain("navigate('/dashboard', { replace: true })");

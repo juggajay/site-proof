@@ -59,6 +59,91 @@ async function mockAdminPortfolioAccess(page: Page) {
   await mockAuthenticatedUserState(page, companyAdminUser);
 }
 
+async function mockFreshAuthenticatedDashboard(page: Page) {
+  const freshUser = {
+    ...E2E_ADMIN_USER,
+    role: 'member',
+    roleInCompany: 'admin',
+    name: 'Fresh Admin',
+    fullName: 'Fresh Admin',
+    companyName: 'Fresh Civil Pty Ltd',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const json = (body: unknown, status = 200) =>
+      route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+
+    if (url.pathname === '/api/auth/me') {
+      await json({ user: freshUser });
+      return;
+    }
+
+    if (url.pathname === '/api/notifications') {
+      await json({ notifications: [], unreadCount: 0 });
+      return;
+    }
+
+    if (url.pathname === '/api/projects') {
+      await json({ projects: [] });
+      return;
+    }
+
+    if (url.pathname === '/api/subcontractors/my-pending-invitation') {
+      await json({ invitation: null });
+      return;
+    }
+
+    if (url.pathname === '/api/dashboard/stats') {
+      await json({
+        totalProjects: 0,
+        activeProjects: 0,
+        totalLots: 0,
+        lotStatusCounts: {
+          not_started: 0,
+          in_progress: 0,
+          awaiting_test: 0,
+          hold_point: 0,
+          ncr_raised: 0,
+          completed: 0,
+          conformed: 0,
+          claimed: 0,
+        },
+        openHoldPoints: 0,
+        openNCRs: 0,
+        attentionItems: { total: 0, overdueNCRs: [], staleHoldPoints: [] },
+        recentActivities: [],
+      });
+      return;
+    }
+
+    await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
+  });
+
+  await page.addInitScript((mockUser) => {
+    localStorage.setItem('siteproof_remember_me', 'true');
+    localStorage.setItem(
+      'cookie_consent',
+      JSON.stringify({
+        version: 'v1',
+        accepted: true,
+        timestamp: '2026-01-15T00:00:00.000Z',
+      }),
+    );
+    localStorage.setItem(
+      'siteproof_auth',
+      JSON.stringify({
+        user: mockUser,
+        token: 'e2e-token',
+      }),
+    );
+  }, freshUser);
+}
+
 test.describe('Authentication', () => {
   test('should show login page', async ({ page }) => {
     await page.goto('/login');
@@ -74,6 +159,25 @@ test.describe('Authentication', () => {
 
     await page.keyboard.press('Shift+/');
     await expect(page.getByText('Keyboard Shortcuts')).toHaveCount(0);
+  });
+
+  test('shows only one first-run overlay and persists the dismissal', async ({ page }) => {
+    await mockFreshAuthenticatedDashboard(page);
+
+    await page.goto('/dashboard');
+    await page.waitForTimeout(1200);
+
+    await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Skip tour' }).last().click();
+    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toHaveCount(0);
+
+    await page.reload();
+    await page.waitForTimeout(1200);
+
+    await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toHaveCount(0);
   });
 
   test('should show registration page', async ({ page }) => {
