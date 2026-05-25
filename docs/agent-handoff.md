@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-05-20
+Last updated: 2026-05-25
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `fa0b78a fix: use explicit AU locale for dates (#145)`
+  `bd3f439 fix: add 404 recovery links (#190)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -224,7 +224,7 @@ historical. Do not treat their issue list as current without rechecking
 
 ### Paying-User Readiness Hardening
 
-Status: main source-audit gap list is largely closed in code through PR #145.
+Status: main source-audit gap list is largely closed in code through PR #190.
 
 After the first QA cleanup batch, Codex and Claude ran a paying-user readiness
 review focused on compliance trust scaffolding: audit logs, workflow state
@@ -263,33 +263,110 @@ Closed areas since PR #98:
   state to trusted.
 - Global Prisma `P2003` errors now return HTTP 422 `INVALID_REFERENCE` instead
   of generic database errors.
+- Subcontractor project creation is blocked unless the user has an
+  organization, and dedicated subcontractor portal users cannot create head
+  contractor projects.
+- In-app subcontractor invitation acceptance exists and records the accepted
+  invitation audit event.
+- Document uploads now return user-facing rejection reasons for unsupported file
+  types instead of a generic "uploaded 0 of 1" message.
+- Project, lot, subcontractor invitation, and portal-access creation/change
+  events have audit coverage.
+- Dashboard lot status counts use the real lifecycle status buckets.
+- Newly created projects open directly after creation, instead of leaving the
+  owner on the project list.
+- Audit log search covers actions, entities, users, and projects, and the
+  placeholder now describes that scope.
+- 404s now provide safe recovery links back to the relevant project, projects
+  list, dashboard, or subcontractor portal.
 
 Recent verification pattern:
 
 - Each code PR used focused regression coverage first, then broader affected
-  backend tests, `npm run format:check`, `npm run type-check`, `npm run lint`,
+  backend/frontend tests, `pnpm format:check`, `pnpm type-check`, `pnpm lint`,
   and `git diff --check` where relevant.
 - GitHub checks were watched before merge. The usual green set is Backend,
   Frontend, backend-tests, frontend-build, frontend-e2e, Vercel, and Vercel
   Preview Comments.
 
-Still not replaced by code fixes:
+### Evidence Readiness And Activation QA
 
-- A real logged-in dogfood pass with sacrificial data. The 2026-05-20
-  report-only QA pass scored 88/100 with no blockers, but it deliberately did
-  not execute live write/destructive workflows, uploads, emails, scheduled jobs,
-  or multi-account role-boundary checks.
-- Before paying users, run a live QA pass against throwaway production or
-  staging data: create project, invite users, exercise subbie portal, upload
-  files, submit/approve dockets, submit diary, complete/verify ITP, release hold
-  point, run NCR lifecycle, certify/pay claim, export reports, and verify audit
-  log rows.
+Status: core activation and dogfood findings are closed through PR #190, with a
+small number of product-decision items still open.
+
+Evidence Readiness shipped in PRs #175-#178:
+
+- PR #175 added the backend lot evidence-readiness endpoint.
+- PR #176 added the lot readiness panel.
+- PR #177 added claim creation readiness.
+- PR #178 reframed the claim evidence review copy and contract around
+  deterministic evidence readiness.
+
+Production dogfood and activation follow-up PRs:
+
+- PR #166 counted explicit subcontractor lot assignments.
+- PR #167 required organization setup before head-contractor project creation.
+- PR #168 blocked subcontractor project creation.
+- PR #169 added in-app subcontractor invite acceptance.
+- PR #170 surfaced document upload failure reasons.
+- PR #171 audited project, lot, subcontractor invitation, and portal-access
+  creation/change events.
+- PR #172 polished dogfood UX and audit search.
+- PR #173 audited lot assignments and exposed force conform.
+- PR #174 kept force-conformed lots claim-ready by preserving or allowing the
+  required budget path.
+- PR #179 accepted blank docket approval notes.
+- PR #180 used seeded ITP templates from the readiness inline action.
+- PR #181 showed mobile docket approval actions.
+- PR #182 added company onboarding through `/onboarding` and `POST /api/company`.
+- PR #183 repaired subcontractor portal RBAC.
+- PR #184 fixed dashboard lot status counts.
+- PR #185 removed the stale login changelog modal.
+- PR #186 replaced the invalid ABN invite placeholder.
+- PR #187 guided empty docket approvals toward subcontractor invites.
+- PR #188 opened newly created projects.
+- PR #189 clarified and tested audit log search scope.
+- PR #190 added contextual 404 recovery links.
+
+Historical `.gstack/dev-browser` reports remain useful as evidence trails, but
+their issue lists are not live backlogs. In particular, these are stale unless a
+fresh production recheck proves otherwise:
+
+- "No in-app company creation" from the launch-readiness synthesis, closed by
+  PR #182.
+- "Subcontractor portal access denied after invite acceptance" and "subbie sees
+  head-contractor workspace", closed by PR #183.
+- "Dashboard lot status all zeros", closed by PR #184.
+- "Double modal on login", closed by PR #185.
+- "ABN placeholder fails validation", closed by PR #186.
+- "Docket approvals empty state has no next action", closed by PR #187.
+- "Project create leaves users on the project list", closed by PR #188.
+- "Audit log search does not match user/project columns", closed by PR #189.
+- "404 dead-end page", closed by PR #190.
+
+Open product-decision items:
+
+- Dual identity rule: decide how accounts that are both head-contractor staff
+  and accepted subcontractor portal users should behave on `/dashboard` and in
+  navigation. Do not silently change this without Jay's decision.
+- Email verification bypass for QA/self-serve testing: needs a security/product
+  call before implementation.
+- Pricing and free-tier packaging are intentionally deferred.
+
+Open low-risk polish candidates:
+
+- Add a claims-oriented report view or tab if Jay wants progress-claim reporting
+  surfaced inside project reports.
+- Improve audit action display labels if future audit events are still too raw
+  for customer-facing review.
+- Re-run live dogfood after each activation batch using sacrificial data and
+  compare against the latest merged PRs, not historical report text.
 
 ## Open Follow-Ups
 
-1. Run the live sacrificial-data dogfood pass before the first paying customer.
-   Report-only QA is no longer enough; the remaining risk is real integration
-   behavior under authenticated write workflows and role boundaries.
+1. Re-run live sacrificial-data dogfood before the first paying customer and
+   after any activation/RBAC change. Use the current app state, not stale
+   `.gstack` report assumptions.
 2. Keep production backup discipline in place for any future production data or
    schema work. PostgreSQL client tools are now installed on Jay's Windows
    machine, but do not assume the local shell has the intended production
@@ -297,8 +374,8 @@ Still not replaced by code fixes:
 3. If new DeepSec findings appear, work them one by one. Root cause first,
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
-   Many findings from the 2026-05-19 and 2026-05-20 reports have been closed by
-   PRs #99-#145.
+   Many findings from the 2026-05-19 through 2026-05-25 reports have been
+   closed by PRs #99-#190.
 
 ## Handoff Checklist For The Next Agent
 
