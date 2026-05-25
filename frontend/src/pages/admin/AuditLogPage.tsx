@@ -338,7 +338,7 @@ export function AuditLogPage() {
               type="text"
               value={filters.search}
               onChange={(e) => handleFilterChange('search', e.target.value)}
-              placeholder="Search actions, entities..."
+              placeholder="Search actions, entities, users, projects..."
               className="pl-10"
             />
           </div>
