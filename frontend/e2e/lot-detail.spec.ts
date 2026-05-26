@@ -127,6 +127,14 @@ interface MockLotDetailOptions {
   failItpLoadsUntil?: number;
   noItpAssigned?: boolean;
   withPhotoEvidence?: boolean;
+  availableTemplates?: Array<{
+    id: string;
+    name: string;
+    activityType: string;
+    checklistItems: unknown[];
+    projectId: string | null;
+    isActive: boolean;
+  }>;
 }
 
 async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) {
@@ -461,14 +469,14 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       templatesRequestIncludesGlobal = url.searchParams.get('includeGlobal') === 'true';
       await json({
         templates: templatesRequestIncludesGlobal
-          ? [
+          ? (options.availableTemplates ?? [
               {
                 ...E2E_ITP_INSTANCE.template,
                 projectId: null,
                 activityType: 'Earthworks',
                 isActive: true,
               },
-            ]
+            ])
           : [],
       });
       return;
@@ -590,6 +598,41 @@ test.describe('Lot detail ITP workflow', () => {
       lotId: E2E_LOT_ID,
       templateId: 'e2e-template',
     });
+  });
+
+  test('describes activity-matching ITP templates as suggestions when other templates remain available', async ({
+    page,
+  }) => {
+    await mockLotDetailApi(page, {
+      noItpAssigned: true,
+      availableTemplates: [
+        {
+          ...E2E_ITP_INSTANCE.template,
+          projectId: null,
+          activityType: 'Earthworks',
+          isActive: true,
+        },
+        {
+          ...E2E_ITP_INSTANCE.template,
+          id: 'e2e-structures-template',
+          name: 'E2E Structures ITP',
+          projectId: null,
+          activityType: 'Structures',
+          isActive: true,
+        },
+      ],
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await page.getByRole('button', { name: 'Assign ITP Template' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Assign ITP Template' })).toBeVisible();
+    await expect(
+      page.getByText('Templates matching Earthworks are suggested first.'),
+    ).toBeVisible();
+    await expect(page.getByText('Showing templates for Earthworks activity')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /E2E Earthworks ITP/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /E2E Structures ITP/ })).toBeVisible();
   });
 
   test('shows retry instead of a false missing-ITP state when ITP loading fails', async ({

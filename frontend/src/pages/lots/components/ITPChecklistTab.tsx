@@ -1026,8 +1026,10 @@ export function ITPChecklistTab({
             <h2 className="text-xl font-semibold mb-4">Assign ITP Template</h2>
             {lot.activityType && (
               <p className="text-sm text-muted-foreground mb-3">
-                Showing templates for{' '}
-                <span className="font-medium text-foreground">{lot.activityType}</span> activity
+                Templates matching{' '}
+                <span className="font-medium text-foreground">{lot.activityType}</span> are
+                suggested first. Other active templates remain available if this lot needs a
+                different checklist.
               </p>
             )}
             <div className="space-y-2 max-h-60 overflow-y-auto">
