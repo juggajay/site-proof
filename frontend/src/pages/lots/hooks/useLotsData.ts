@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAuthToken } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { devLog, logError } from '@/lib/logger';
-import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import type { Lot } from '../lotsPageTypes';
 
 const INITIAL_DISPLAY_COUNT = 20;
@@ -74,6 +74,7 @@ export function useLotsData({
   const [lots, setLots] = useState<Lot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [projectName, setProjectName] = useState<string>('');
   const [subcontractors, setSubcontractors] = useState<{ id: string; companyName: string }[]>([]);
   const [projectAreas, setProjectAreas] = useState<
@@ -198,6 +199,7 @@ export function useLotsData({
     if (!projectId) {
       setLots([]);
       setError(null);
+      setAccessDenied(false);
       setLoading(false);
       return;
     }
@@ -210,10 +212,12 @@ export function useLotsData({
     try {
       setLoading(true);
       setError(null);
+      setAccessDenied(false);
       const allLots = await fetchAllLotPages(projectId);
       setLots(allLots);
     } catch (err) {
       setLots([]);
+      setAccessDenied(isForbidden(err));
       setError(extractErrorMessage(err, 'Failed to load lots.'));
       logError('Fetch lots error:', err);
     } finally {
@@ -356,6 +360,7 @@ export function useLotsData({
     setLots,
     loading,
     error,
+    accessDenied,
     setError,
     projectName,
     subcontractors,

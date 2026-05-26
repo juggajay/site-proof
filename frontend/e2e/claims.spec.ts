@@ -7,6 +7,7 @@ type ClaimStatus = 'draft' | 'submitted' | 'certified' | 'partially_paid' | 'pai
 
 type SeededClaimsApiOptions = {
   failClaimLoadsUntil?: number;
+  forbidClaimLoads?: boolean;
   submitDelayMs?: number;
   initialStatus?: ClaimStatus;
   initialPaidAmount?: number;
@@ -127,6 +128,10 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
       route.request().method() === 'GET'
     ) {
       claimLoadCount += 1;
+      if (options.forbidClaimLoads) {
+        await json({ error: { message: 'You do not have access to this project' } }, 403);
+        return;
+      }
       if (claimLoadCount <= (options.failClaimLoadsUntil ?? 0)) {
         await json({ message: 'Unable to load progress claims' }, 500);
         return;
@@ -412,6 +417,20 @@ test.describe('Claims seeded commercial contract', () => {
     await expect.poll(() => api.getClaimLoadCount()).toBeGreaterThan(2);
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByRole('row').filter({ hasText: 'Claim 7' })).toBeVisible();
+  });
+
+  test('shows access denied for forbidden project claims instead of claim actions', async ({
+    page,
+  }) => {
+    await mockSeededClaimsApi(page, { forbidClaimLoads: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/claims`);
+
+    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+    await expect(page.getByText('You do not have access to this project')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Progress Claims' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'New Claim' })).toHaveCount(0);
+    await expect(page.getByText('No claims yet')).toHaveCount(0);
   });
 
   test('ignores duplicate submit clicks while the request is in flight', async ({ page }) => {

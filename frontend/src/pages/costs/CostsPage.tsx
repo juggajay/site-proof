@@ -18,8 +18,9 @@ import { MobileDataCard } from '@/components/ui/MobileDataCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { downloadCsv } from '@/lib/csv';
-import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import { formatDateKey } from '@/lib/localDate';
 
 interface CostSummary {
@@ -83,6 +84,7 @@ export function CostsPage() {
     : costsError
       ? extractErrorMessage(costsError, 'Could not load project costs. Please try again.')
       : null;
+  const accessDenied = isForbidden(costsError);
   const hasNoLoadedCostData = Boolean(loadError && !costData);
   const summary: CostSummary | null = hasNoLoadedCostData
     ? null
@@ -205,6 +207,10 @@ export function CostsPage() {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
+  }
+
+  if (accessDenied) {
+    return <AccessDeniedState message={loadError ?? undefined} />;
   }
 
   return (
