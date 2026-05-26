@@ -2122,14 +2122,18 @@ export function LotDetailPage() {
               </button>
               <button
                 onClick={handleAssignSubcontractor}
-                disabled={assigningSubcontractor}
+                disabled={
+                  assigningSubcontractor || (!selectedSubcontractor && !lot.assignedSubcontractorId)
+                }
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {assigningSubcontractor
                   ? 'Assigning...'
                   : selectedSubcontractor
                     ? 'Assign Subcontractor'
-                    : 'Remove Assignment'}
+                    : lot.assignedSubcontractorId
+                      ? 'Remove Assignment'
+                      : 'Select subcontractor'}
               </button>
             </div>
           </div>

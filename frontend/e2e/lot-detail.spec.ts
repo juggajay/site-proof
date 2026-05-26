@@ -426,6 +426,19 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       return;
     }
 
+    if (url.pathname === `/api/subcontractors/for-project/${E2E_PROJECT_ID}`) {
+      await json({
+        subcontractors: [
+          {
+            id: 'e2e-subcontractor-company',
+            companyName: 'E2E Subcontractors',
+            status: 'approved',
+          },
+        ],
+      });
+      return;
+    }
+
     if (
       url.pathname === '/api/test-results' &&
       url.searchParams.get('projectId') === E2E_PROJECT_ID
@@ -662,6 +675,22 @@ test.describe('Lot detail ITP workflow', () => {
 
     await expect(page.getByRole('heading', { name: 'LOT-ITP-001' })).toBeVisible();
     expect(api.getLotLoadAttempts()).toBeGreaterThanOrEqual(2);
+  });
+
+  test('does not offer to remove a subcontractor assignment when none exists', async ({ page }) => {
+    await mockLotDetailApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+    await page.getByRole('button', { name: 'Assign Subcontractor' }).first().click();
+
+    const modal = page.locator('.fixed').filter({ hasText: 'Subcontractor Company' });
+    await expect(modal.getByRole('heading', { name: 'Assign Subcontractor' })).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Remove Assignment' })).toHaveCount(0);
+    await expect(modal.getByRole('button', { name: 'Select subcontractor' })).toBeDisabled();
+
+    await modal.locator('#subcontractor-select').selectOption('e2e-subcontractor-company');
+
+    await expect(modal.getByRole('button', { name: 'Assign Subcontractor' })).toBeEnabled();
   });
 
   test('guards duplicate checklist completion submissions', async ({ page }) => {
