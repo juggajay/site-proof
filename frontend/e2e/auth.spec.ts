@@ -578,6 +578,55 @@ test.describe('Authentication', () => {
     await expect(page.getByRole('link', { name: /forgot.*password/i })).toBeVisible();
   });
 
+  test('uses an icon component instead of an inline emoji for invalid reset links', async ({
+    page,
+  }) => {
+    await page.goto('/reset-password');
+
+    await expect(page.getByRole('heading', { name: 'Invalid Reset Link' })).toBeVisible();
+    await expect(page.getByText('🔒')).toHaveCount(0);
+  });
+
+  test('routes global module shortcuts back to the project list instead of 404 pages', async ({
+    page,
+  }) => {
+    await mockAuthenticatedUserState(page);
+
+    await page.route('**/api/**', async (route) => {
+      const url = new URL(route.request().url());
+      const json = (body: unknown, status = 200) =>
+        route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify(body),
+        });
+
+      if (url.pathname === '/api/auth/me') {
+        await json({ user: E2E_ADMIN_USER });
+        return;
+      }
+
+      if (url.pathname === '/api/notifications') {
+        await json({ notifications: [], unreadCount: 0 });
+        return;
+      }
+
+      if (url.pathname === '/api/projects') {
+        await json({ projects: [] });
+        return;
+      }
+
+      await json({});
+    });
+
+    for (const path of ['/reports', '/subcontractors']) {
+      await page.goto(path);
+
+      await expect(page).toHaveURL('/projects');
+      await expect(page.getByText('Page Not Found')).toHaveCount(0);
+    }
+  });
+
   test('should exchange OAuth callback code without storing legacy token keys', async ({
     page,
   }) => {

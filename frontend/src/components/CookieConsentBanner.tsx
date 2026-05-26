@@ -80,18 +80,28 @@ export function CookieConsentBanner() {
   return (
     <div
       className={cn(
-        'fixed left-0 right-0 z-50 bg-card border-t border-border p-4 shadow-lg',
+        'fixed left-0 right-0 z-50 bg-card border-t border-border px-3 py-2 shadow-lg sm:p-4',
         user ? 'bottom-16 md:bottom-0' : 'bottom-0',
       )}
       role="dialog"
       aria-label="Cookie consent"
       data-testid="cookie-consent-banner"
     >
-      <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <div className="flex items-start gap-3 flex-1">
-          <Cookie className="h-6 w-6 text-orange-500 mt-0.5 flex-shrink-0" />
+      <div className="mx-auto flex max-w-4xl items-start gap-3 sm:items-center sm:gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-2 sm:gap-3">
+          <Cookie className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500 sm:h-6 sm:w-6" />
           <div>
-            <p className="text-sm text-foreground">
+            <p className="text-xs leading-snug text-foreground sm:hidden">
+              We use cookies to improve SiteProof. See our{' '}
+              <Link
+                to="/privacy-policy"
+                className="font-medium text-orange-600 hover:underline dark:text-orange-400"
+              >
+                Privacy Policy
+              </Link>
+              .
+            </p>
+            <p className="hidden text-sm text-foreground sm:block">
               We use cookies to enhance your experience and analyze site usage. By continuing to use
               SiteProof, you agree to our{' '}
               <Link
@@ -105,17 +115,17 @@ export function CookieConsentBanner() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto">
+        <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             onClick={handleReject}
-            className="px-4 py-2 text-sm font-medium text-foreground bg-card border border-border rounded-md hover:bg-muted/50 transition-colors"
+            className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/50 sm:px-4 sm:py-2 sm:text-sm"
             data-testid="cookie-reject-button"
           >
             Decline
           </button>
           <button
             onClick={handleAccept}
-            className="px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-md transition-colors"
+            className="rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-700 sm:px-4 sm:py-2 sm:text-sm"
             data-testid="cookie-accept-button"
           >
             Accept
