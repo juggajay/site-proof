@@ -161,16 +161,13 @@ test.describe('Authentication', () => {
     await expect(page.getByText('Keyboard Shortcuts')).toHaveCount(0);
   });
 
-  test('shows only one first-run overlay and persists the dismissal', async ({ page }) => {
+  test('does not auto-open launch overlays on authenticated dashboards', async ({ page }) => {
     await mockFreshAuthenticatedDashboard(page);
 
     await page.goto('/dashboard');
     await page.waitForTimeout(1200);
 
     await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Skip tour' }).last().click();
     await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toHaveCount(0);
 
     await page.reload();
