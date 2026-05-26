@@ -256,6 +256,7 @@ const assignSubcontractorSchema = z.object({
 // Schema for conforming a lot
 const conformLotSchema = z.object({
   force: z.boolean().optional(),
+  reason: z.string().trim().max(1000, 'Reason must be at most 1000 characters').optional(),
 });
 
 // Schema for overriding status
@@ -2367,7 +2368,14 @@ lotsRouter.post(
     if (!validation.success) {
       throw AppError.fromZodError(validation.error);
     }
-    const { force } = validation.data; // Optional force parameter to skip prerequisite check
+    const { force, reason } = validation.data; // Optional force parameter to skip prerequisite check
+    const forceReason = reason?.trim();
+
+    if (force && (!forceReason || forceReason.length < 5)) {
+      throw AppError.badRequest(
+        'Force conform reason is required and must be at least 5 characters',
+      );
+    }
 
     // Check conformance prerequisites first
     const conformStatus = await checkConformancePrerequisites(id);
@@ -2430,6 +2438,7 @@ lotsRouter.post(
         lotNumber: lot.lotNumber,
         status: { from: lot.status, to: updatedLot.status },
         force,
+        ...(forceReason ? { reason: forceReason } : {}),
       },
       req,
     });

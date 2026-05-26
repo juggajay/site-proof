@@ -19,6 +19,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'default' | 'destructive';
+  confirmDisabled?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -30,6 +31,7 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   variant = 'default',
+  confirmDisabled = false,
   onCancel,
   onConfirm,
 }: ConfirmDialogProps) {
@@ -51,8 +53,10 @@ export function ConfirmDialog({
           <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
             className={cn(buttonVariants({ variant }))}
+            disabled={confirmDisabled}
             onClick={(event) => {
               event.preventDefault();
+              if (confirmDisabled) return;
               onConfirm();
             }}
           >
