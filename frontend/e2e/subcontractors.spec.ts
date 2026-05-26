@@ -544,7 +544,11 @@ async function mockInviteAcceptanceApi(page: Page) {
   };
 }
 
-async function mockSubcontractorDashboardApi(page: Page, notifications: PortalNotification[]) {
+async function mockSubcontractorDashboardApi(
+  page: Page,
+  notifications: PortalNotification[],
+  portalAccess?: PortalAccess,
+) {
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
     const json = (body: unknown, status = 200) =>
@@ -590,14 +594,7 @@ async function mockSubcontractorDashboardApi(page: Page, notifications: PortalNo
           projectName: 'E2E Highway Upgrade',
           employees: [],
           plant: [],
-          portalAccess: {
-            lots: true,
-            itps: true,
-            holdPoints: false,
-            testResults: false,
-            ncrs: false,
-            documents: false,
-          },
+          ...(portalAccess ? { portalAccess } : {}),
         },
       });
       return;
@@ -619,7 +616,7 @@ async function mockSubcontractorDashboardApi(page: Page, notifications: PortalNo
   await mockAuthenticatedUserState(page, invitedSubcontractorUser);
 }
 
-async function mockPortalModuleAccessApi(page: Page, portalAccess: PortalAccess) {
+async function mockPortalModuleAccessApi(page: Page, portalAccess?: PortalAccess) {
   let lotRequests = 0;
 
   await page.route('**/api/**', async (route) => {
@@ -664,7 +661,7 @@ async function mockPortalModuleAccessApi(page: Page, portalAccess: PortalAccess)
           projectName: 'E2E Highway Upgrade',
           employees: [],
           plant: [],
-          portalAccess,
+          ...(portalAccess ? { portalAccess } : {}),
         },
       });
       return;
@@ -1172,6 +1169,20 @@ test.describe('Subcontractor invite acceptance', () => {
 });
 
 test.describe('Subcontractor portal module access', () => {
+  test('shows default evidence quick links when portal access is unconfigured', async ({
+    page,
+  }) => {
+    await mockSubcontractorDashboardApi(page, []);
+
+    await page.goto('/subcontractor-portal');
+
+    await expect(page.getByRole('link', { name: /ITPs/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Hold Points/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Test Results/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Documents/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /NCRs/ })).toHaveCount(0);
+  });
+
   test('shows only unread rate counter notifications in the dashboard attention list', async ({
     page,
   }) => {
@@ -1216,6 +1227,18 @@ test.describe('Subcontractor portal module access', () => {
     await expect(page.getByRole('alert')).toContainText('ITPs portal access is not enabled');
     await expect(page.getByRole('link', { name: 'Back to Portal' })).toBeVisible();
     expect(api.getLotRequestCount()).toBe(0);
+  });
+
+  test('defaults unconfigured portal access to assigned work and evidence modules', async ({
+    page,
+  }) => {
+    const api = await mockPortalModuleAccessApi(page);
+
+    await page.goto('/subcontractor-portal/itps');
+
+    await expect(page.getByRole('heading', { name: 'ITPs' })).toBeVisible();
+    await expect(page.getByText('Concrete ITP')).toBeVisible();
+    expect(api.getLotRequestCount()).toBeGreaterThan(0);
   });
 });
 

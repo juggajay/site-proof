@@ -1777,7 +1777,7 @@ describe('Documents API', () => {
           primaryContactName: 'Document Portal Sub',
           primaryContactEmail: `doc-sub-portal-contact-${suffix}@example.com`,
           status: 'approved',
-          portalAccess: { documents: false, itps: false },
+          portalAccess: { documents: false, itps: false, testResults: false },
         },
       });
 
@@ -1891,7 +1891,7 @@ describe('Documents API', () => {
 
         await prisma.subcontractorCompany.update({
           where: { id: subcontractorCompany.id },
-          data: { portalAccess: { documents: false, itps: true } },
+          data: { portalAccess: { documents: false, itps: true, testResults: false } },
         });
 
         const stillBlockedGeneralReadRes = await request(app)

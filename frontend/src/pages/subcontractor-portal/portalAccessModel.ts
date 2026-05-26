@@ -9,11 +9,11 @@ export interface PortalAccess {
 
 export const DEFAULT_PORTAL_ACCESS: PortalAccess = {
   lots: true,
-  itps: false,
-  holdPoints: false,
-  testResults: false,
+  itps: true,
+  holdPoints: true,
+  testResults: true,
   ncrs: false,
-  documents: false,
+  documents: true,
 };
 
 export function isPortalModuleEnabled(

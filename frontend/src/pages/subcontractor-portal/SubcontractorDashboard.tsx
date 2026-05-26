@@ -518,7 +518,7 @@ export function SubcontractorDashboard() {
           </div>
         </Link>
         {/* Portal Access - ITPs */}
-        {company?.portalAccess?.itps && (
+        {isPortalModuleEnabled(company, 'itps') && (
           <Link
             to="/subcontractor-portal/itps"
             className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
@@ -533,7 +533,7 @@ export function SubcontractorDashboard() {
           </Link>
         )}
         {/* Portal Access - Hold Points */}
-        {company?.portalAccess?.holdPoints && (
+        {isPortalModuleEnabled(company, 'holdPoints') && (
           <Link
             to="/subcontractor-portal/holdpoints"
             className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
@@ -548,7 +548,7 @@ export function SubcontractorDashboard() {
           </Link>
         )}
         {/* Portal Access - Test Results */}
-        {company?.portalAccess?.testResults && (
+        {isPortalModuleEnabled(company, 'testResults') && (
           <Link
             to="/subcontractor-portal/tests"
             className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
@@ -563,7 +563,7 @@ export function SubcontractorDashboard() {
           </Link>
         )}
         {/* Portal Access - NCRs */}
-        {company?.portalAccess?.ncrs && (
+        {isPortalModuleEnabled(company, 'ncrs') && (
           <Link
             to="/subcontractor-portal/ncrs"
             className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
@@ -578,7 +578,7 @@ export function SubcontractorDashboard() {
           </Link>
         )}
         {/* Portal Access - Documents */}
-        {company?.portalAccess?.documents && (
+        {isPortalModuleEnabled(company, 'documents') && (
           <Link
             to="/subcontractor-portal/documents"
             className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
