@@ -144,6 +144,68 @@ async function mockFreshAuthenticatedDashboard(page: Page) {
   }, freshUser);
 }
 
+async function mockOwnerWithRoleOverride(page: Page, roleOverride: string) {
+  const ownerUser = {
+    ...E2E_ADMIN_USER,
+    role: 'owner',
+    roleInCompany: 'owner',
+    name: 'Owner Override Tester',
+    fullName: 'Owner Override Tester',
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const json = (body: unknown, status = 200) =>
+      route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+
+    if (url.pathname === '/api/auth/me') {
+      await json({ user: ownerUser });
+      return;
+    }
+
+    if (url.pathname === '/api/notifications') {
+      await json({ notifications: [], unreadCount: 0 });
+      return;
+    }
+
+    if (url.pathname === '/api/projects') {
+      await json({ projects: [] });
+      return;
+    }
+
+    if (url.pathname === '/api/audit-logs/actions') {
+      await json({ actions: [] });
+      return;
+    }
+
+    if (url.pathname === '/api/audit-logs/entity-types') {
+      await json({ entityTypes: [] });
+      return;
+    }
+
+    if (url.pathname === '/api/audit-logs/users') {
+      await json({ users: [] });
+      return;
+    }
+
+    if (url.pathname === '/api/audit-logs') {
+      await json({ logs: [], pagination: { total: 0, page: 1, pageSize: 25, totalPages: 1 } });
+      return;
+    }
+
+    await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
+  });
+
+  await mockAuthenticatedUserState(page, ownerUser);
+  await page.addInitScript((override) => {
+    localStorage.setItem('siteproof_role_override', override);
+  }, roleOverride);
+}
+
 test.describe('Authentication', () => {
   test('should show login page', async ({ page }) => {
     await page.goto('/login');
@@ -175,6 +237,16 @@ test.describe('Authentication', () => {
 
     await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toHaveCount(0);
+  });
+
+  test('applies dev role override to protected route access checks', async ({ page }) => {
+    await mockOwnerWithRoleOverride(page, 'foreman');
+
+    await page.goto('/audit-log');
+
+    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+    await expect(page.getByText(/don't have permission/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Audit Log' })).toHaveCount(0);
   });
 
   test('should show registration page', async ({ page }) => {

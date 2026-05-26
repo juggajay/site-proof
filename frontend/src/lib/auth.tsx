@@ -254,7 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const roleOverride = getRoleOverride();
     // Only allow override if actual user is admin/owner
     if (roleOverride && ['admin', 'owner'].includes(actualUser.role || '')) {
-      return { ...actualUser, role: roleOverride };
+      return { ...actualUser, role: roleOverride, roleInCompany: roleOverride };
     }
     return actualUser;
   }, [actualUser]);
