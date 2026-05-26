@@ -140,6 +140,7 @@ export function LotDetailPage() {
   const [conforming, setConforming] = useState(false);
   const [showConformConfirm, setShowConformConfirm] = useState(false);
   const [showForceConformConfirm, setShowForceConformConfirm] = useState(false);
+  const [forceConformReason, setForceConformReason] = useState('');
   const [qualityAccess, setQualityAccess] = useState<QualityAccess | null>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [loadingTests, setLoadingTests] = useState(false);
@@ -1539,18 +1540,41 @@ export function LotDetailPage() {
     });
   };
 
-  const handleConformLot = async (force = false) => {
+  const handleConformLot = async (force = false, reason?: string) => {
     if (conforming || !lotId) return;
+
+    const trimmedReason = reason?.trim() ?? '';
+    if (force && trimmedReason.length < 5) {
+      toast({
+        title: 'Reason required',
+        description: 'Please provide a reason before force conforming this lot.',
+        variant: 'error',
+      });
+      return;
+    }
 
     setConforming(true);
     try {
       await apiFetch(`/api/lots/${encodeURIComponent(lotId)}/conform`, {
         method: 'POST',
-        ...(force ? { body: JSON.stringify({ force: true }) } : {}),
+        ...(force ? { body: JSON.stringify({ force: true, reason: trimmedReason }) } : {}),
       });
       setShowConformConfirm(false);
       setShowForceConformConfirm(false);
+      setForceConformReason('');
       setLot((prev) => (prev ? { ...prev, status: 'conformed' } : null));
+      setConformStatus(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.lotReadiness(lotId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.lot(lotId) }),
+        ...(projectId
+          ? [
+              queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) }),
+              queryClient.invalidateQueries({ queryKey: queryKeys.claimReadiness(projectId) }),
+            ]
+          : []),
+      ]);
+      await refetchReadiness();
       toast({
         title: 'Lot conformed',
         description: force
@@ -2206,12 +2230,34 @@ export function LotDetailPage() {
             <p>
               This bypasses incomplete prerequisites and records the override in the audit trail.
             </p>
+            <label
+              htmlFor="force-conform-reason"
+              className="block pt-2 text-sm font-medium text-foreground"
+            >
+              Reason for force conforming
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Explain why this lot is being quality-approved before all blockers are cleared.
+            </p>
+            <textarea
+              id="force-conform-reason"
+              value={forceConformReason}
+              onChange={(event) => setForceConformReason(event.target.value)}
+              rows={3}
+              maxLength={1000}
+              className="mt-2 min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="Example: QA manager reviewed field evidence and approved the exception."
+            />
           </>
         }
         confirmLabel="Force Conform Lot"
         variant="destructive"
-        onCancel={() => setShowForceConformConfirm(false)}
-        onConfirm={() => void handleConformLot(true)}
+        confirmDisabled={forceConformReason.trim().length < 5 || conforming}
+        onCancel={() => {
+          setShowForceConformConfirm(false);
+          setForceConformReason('');
+        }}
+        onConfirm={() => void handleConformLot(true, forceConformReason)}
       />
     </div>
   );

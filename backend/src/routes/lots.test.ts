@@ -1700,7 +1700,7 @@ describe('Lots API', () => {
         const res = await request(app)
           .post(`/api/lots/${forceDeniedLot.id}/conform`)
           .set('Authorization', `Bearer ${projectManagerToken}`)
-          .send({ force: true });
+          .send({ force: true, reason: 'Project manager attempted blocked override' });
 
         expect(res.status).toBe(403);
         expect(res.body.error.message).toContain('Only project admins or owners can force');
@@ -1737,7 +1737,7 @@ describe('Lots API', () => {
         const res = await request(app)
           .post(`/api/lots/${forceAllowedLot.id}/conform`)
           .set('Authorization', `Bearer ${authToken}`)
-          .send({ force: true });
+          .send({ force: true, reason: 'QA manager override for blocked prerequisites' });
 
         expect(res.status).toBe(200);
         expect(res.body.lot.status).toBe('conformed');
@@ -1756,10 +1756,45 @@ describe('Lots API', () => {
           lotNumber: forceAllowedLot.lotNumber,
           status: { from: 'not_started', to: 'conformed' },
           force: true,
+          reason: 'QA manager override for blocked prerequisites',
         });
       } finally {
         await prisma.auditLog.deleteMany({ where: { entityId: forceAllowedLot.id } });
         await prisma.lot.delete({ where: { id: forceAllowedLot.id } }).catch(() => {});
+      }
+    });
+
+    it('should reject forced conformance without an override reason', async () => {
+      const forceReasonLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-FORCE-REASON-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/lots/${forceReasonLot.id}/conform`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ force: true });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Force conform reason is required');
+
+        const unchangedLot = await prisma.lot.findUnique({
+          where: { id: forceReasonLot.id },
+          select: { status: true, conformedAt: true, conformedById: true },
+        });
+        expect(unchangedLot).toMatchObject({
+          status: 'not_started',
+          conformedAt: null,
+          conformedById: null,
+        });
+      } finally {
+        await prisma.lot.delete({ where: { id: forceReasonLot.id } }).catch(() => {});
       }
     });
   });

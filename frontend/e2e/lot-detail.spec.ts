@@ -135,6 +135,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
   let completionRequestCount = 0;
   let attachmentRequest: unknown;
   let conformRequestBody: unknown;
+  let forceConformed = false;
   let templatesRequestIncludesGlobal = false;
   let assignedTemplateRequest: unknown;
   let completion = null as null | {
@@ -237,6 +238,55 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
     }
 
     if (url.pathname === `/api/lots/${E2E_LOT_ID}/readiness`) {
+      if (forceConformed) {
+        await json({
+          readiness: {
+            lotId: E2E_LOT_ID,
+            lotNumber: 'LOT-ITP-001',
+            status: 'conformed',
+            conformance: {
+              state: 'already_conformed',
+              blockers: [],
+              warnings: [],
+              support: [
+                {
+                  code: 'already_conformed',
+                  severity: 'support',
+                  area: 'conformance',
+                  title: 'Lot conformed',
+                  detail: 'This lot is quality-approved.',
+                  blocksAction: false,
+                },
+              ],
+            },
+            claim: {
+              state: 'ready',
+              budgetAmount: 250000,
+              claimedInId: null,
+              blockers: [],
+              warnings: [],
+              support: [
+                {
+                  code: 'ready_to_claim',
+                  severity: 'support',
+                  area: 'claim',
+                  title: 'Ready to claim',
+                  detail: 'This lot can be added to a progress claim.',
+                  blocksAction: false,
+                },
+              ],
+            },
+            summary: {
+              blockerCount: 0,
+              warningCount: 0,
+              supportCount: 2,
+              actionBlockerCount: 0,
+            },
+          },
+        });
+        return;
+      }
+
       if (options.noItpAssigned) {
         await json({
           readiness: {
@@ -346,6 +396,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
 
     if (url.pathname === `/api/lots/${E2E_LOT_ID}/conform` && route.request().method() === 'POST') {
       conformRequestBody = route.request().postDataJSON();
+      forceConformed = true;
       await json({
         message: 'Lot conformed successfully',
         lot: {
@@ -628,10 +679,27 @@ test.describe('Lot detail ITP workflow', () => {
     await page.getByRole('button', { name: 'Force Conform Lot' }).click();
     const dialog = page.getByRole('alertdialog').filter({ hasText: 'Force Conform Lot' });
     await expect(dialog).toContainText('This bypasses incomplete prerequisites');
+    await expect(dialog.getByText('Reason for force conforming')).toBeVisible();
+    await expect(
+      dialog.getByText(
+        'Explain why this lot is being quality-approved before all blockers are cleared.',
+      ),
+    ).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Force Conform Lot' })).toBeDisabled();
+
+    await dialog.getByLabel('Reason for force conforming').fill('QA manager override for dogfood');
     await dialog.getByRole('button', { name: 'Force Conform Lot' }).click();
 
-    await expect.poll(() => api.getConformRequestBody()).toMatchObject({ force: true });
+    await expect
+      .poll(() => api.getConformRequestBody())
+      .toMatchObject({
+        force: true,
+        reason: 'QA manager override for dogfood',
+      });
     await expect(page.getByRole('heading', { name: 'Lot Conformed' })).toBeVisible();
+    await expect(page.getByText('Conformance: Complete')).toBeVisible();
+    await expect(page.getByText('Claim: Ready')).toBeVisible();
+    await expect(page.getByText('0 action blockers / 0 warnings / 2 support items')).toBeVisible();
   });
 
   test('clarifies workflow status overrides are separate from conformance and claims', async ({
