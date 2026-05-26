@@ -22,6 +22,7 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
     subcontractor.portalAccess || DEFAULT_PORTAL_ACCESS,
   );
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const savingAccessRef = useRef(false);
 
   const updatePortalAccess = useCallback(
@@ -31,6 +32,7 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
       const previousAccess = localAccess;
       savingAccessRef.current = true;
       setSavingAccess(true);
+      setSaveStatus('saving');
       setLocalAccess(access);
       setSaveError(null);
 
@@ -43,10 +45,12 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
           },
         );
         onAccessUpdated(subcontractor.id, access);
+        setSaveStatus('saved');
       } catch (error) {
         logError('Update portal access error:', error);
         setLocalAccess(previousAccess);
         setSaveError(extractErrorMessage(error, 'Portal access was not saved. Please try again.'));
+        setSaveStatus('idle');
       } finally {
         savingAccessRef.current = false;
         setSavingAccess(false);
@@ -149,6 +153,13 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
               <br />
               Control what project information this subcontractor can view in their portal. They
               will always have access to their dockets and company management.
+            </p>
+            <p className="mt-2 text-xs text-primary/80" role="status" aria-live="polite">
+              {saveStatus === 'saving'
+                ? 'Saving portal access changes...'
+                : saveStatus === 'saved'
+                  ? 'Portal access saved.'
+                  : 'Changes save automatically.'}
             </p>
           </div>
 

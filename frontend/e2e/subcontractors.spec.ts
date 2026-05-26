@@ -916,6 +916,7 @@ test.describe('Subcontractors seeded register contract', () => {
       .click();
     const portalDialog = page.getByRole('dialog').filter({ hasText: 'Portal Access' });
     await expect(portalDialog.getByRole('heading', { name: 'Portal Access' })).toBeVisible();
+    await expect(portalDialog.getByText('Changes save automatically.')).toBeVisible();
     await expect(
       portalDialog.getByRole('switch', { name: 'Documents portal access' }),
     ).toHaveAttribute('aria-checked', 'false');
@@ -931,6 +932,7 @@ test.describe('Subcontractors seeded register contract', () => {
     await expect(
       portalDialog.getByRole('switch', { name: 'Documents portal access' }),
     ).toHaveAttribute('aria-checked', 'true');
+    await expect(portalDialog.getByRole('status')).toContainText('Portal access saved.');
     await portalDialog.getByRole('button', { name: 'Close portal access' }).click();
 
     await page.getByRole('button', { name: 'Suspend' }).click();
