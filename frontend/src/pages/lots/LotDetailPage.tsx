@@ -430,19 +430,44 @@ export function LotDetailPage() {
     const pendingCount = await getPendingSyncCount();
     setOfflinePendingCount(pendingCount);
 
+    const loadAvailableTemplates = async () => {
+      setItpInstance(null);
+      try {
+        const templatesData = await apiFetch<{ templates: ITPTemplate[] }>(
+          `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true`,
+        );
+        setTemplates(templatesData.templates || []);
+      } catch (templateErr) {
+        logError('Failed to fetch ITP templates for lot:', templateErr);
+        setTemplates([]);
+        setItpLoadError(
+          extractErrorMessage(
+            templateErr,
+            'No ITP is assigned, and available templates could not be loaded.',
+          ),
+        );
+      }
+    };
+
     try {
       // Try to fetch from server first
-      const data = await apiFetch<{ instance: ITPInstance }>(
+      const data = await apiFetch<{ instance: ITPInstance | null }>(
         `/api/itp/instances/lot/${encodedLotId}`,
       );
-      setItpInstance(data.instance);
+      if (!data.instance) {
+        await loadAvailableTemplates();
+        return;
+      }
+
+      const instance = data.instance;
+      setItpInstance(instance);
       setIsOfflineData(false);
 
       // Cache the ITP data for offline use
-      if (data.instance?.template) {
-        const items: OfflineChecklistItem[] = data.instance.template.checklistItems.map(
+      if (instance.template) {
+        const items: OfflineChecklistItem[] = instance.template.checklistItems.map(
           (item: ITPChecklistItem) => {
-            const completion = data.instance.completions.find(
+            const completion = instance.completions.find(
               (c: ITPCompletion) => c.checklistItemId === item.id,
             );
             let status: 'pending' | 'completed' | 'na' | 'failed' = 'pending';
@@ -464,32 +489,12 @@ export function LotDetailPage() {
           },
         );
 
-        await cacheITPChecklist(
-          lotId,
-          data.instance.template.id,
-          data.instance.template.name,
-          items,
-        );
+        await cacheITPChecklist(lotId, instance.template.id, instance.template.name, items);
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        setItpInstance(null);
-        // No ITP assigned - fetch available templates
-        try {
-          const templatesData = await apiFetch<{ templates: ITPTemplate[] }>(
-            `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true`,
-          );
-          setTemplates(templatesData.templates || []);
-        } catch (templateErr) {
-          logError('Failed to fetch ITP templates for lot:', templateErr);
-          setTemplates([]);
-          setItpLoadError(
-            extractErrorMessage(
-              templateErr,
-              'No ITP is assigned, and available templates could not be loaded.',
-            ),
-          );
-        }
+        // Backwards-compatible handling for older deployments that still used 404 for no ITP.
+        await loadAvailableTemplates();
       } else {
         logError('Failed to fetch ITP instance, trying offline cache:', err);
 
@@ -565,12 +570,13 @@ export function LotDetailPage() {
 
     const silentFetchItpUpdates = async () => {
       try {
-        const data = await apiFetch<{ instance: ITPInstance }>(
+        const data = await apiFetch<{ instance: ITPInstance | null }>(
           `/api/itp/instances/lot/${encodeURIComponent(lotId)}`,
         );
         // Only update if there are actual changes in completions
         setItpInstance((prevInstance) => {
-          if (!prevInstance || !data.instance) return data.instance || prevInstance;
+          if (!data.instance) return null;
+          if (!prevInstance) return data.instance;
 
           const prevCompletions = prevInstance.completions || [];
           const newCompletions = data.instance.completions || [];
