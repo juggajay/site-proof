@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `bf3371c fix: surface audit log pagination controls (#194)`
+  `4dc7dd3 fix: require active portal identity for subbie routes (#201)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -291,8 +291,9 @@ Recent verification pattern:
 
 ### Evidence Readiness And Activation QA
 
-Status: core activation and dogfood findings are closed through PR #194, with a
-small number of product-decision items still open.
+Status: core activation and dogfood findings are closed through PR #201. No
+known activation/RBAC blocker remains from the May 2026 dogfood queue; use fresh
+live QA before treating any older `.gstack` report item as active.
 
 Evidence Readiness shipped in PRs #175-#178:
 
@@ -334,6 +335,21 @@ Production dogfood and activation follow-up PRs:
   from raw backend event codes to readable customer-facing labels.
 - PR #194 surfaced audit log pagination controls above the table as well as
   below it, so large audit trails do not require scrolling to navigate.
+- PR #195 refreshed this tracked handoff after the audit and activation polish
+  sequence.
+- PR #196 enforced the "owner is never a subbie" invariant on backend
+  company-creation and invitation-acceptance paths.
+- PR #197 clarified that lot status override is workflow-only; conformance and
+  claimed states remain controlled by Evidence Readiness, Force Conform, and
+  progress claims.
+- PR #198 added a controlled demo/QA email-verification bypass so self-serve
+  testing no longer stalls on unavailable inboxes.
+- PR #199 routed accepted subcontractor portal identities to subcontractor
+  surfaces instead of head-contractor dashboard/project workspaces.
+- PR #200 defaulted newly invited or unconfigured subcontractor portal access
+  to assigned work and evidence modules, while keeping NCR access opt-in.
+- PR #201 required an active portal identity flag, not just stale
+  `subcontractor_admin` role text, before frontend subcontractor routes open.
 
 Historical `.gstack/dev-browser` reports remain useful as evidence trails, but
 their issue lists are not live backlogs. In particular, these are stale unless a
@@ -353,15 +369,20 @@ fresh production recheck proves otherwise:
 - "No claims-oriented reports tab", closed by PR #192.
 - "Audit log action labels are too raw", closed by PR #193.
 - "Audit log pagination is only at the bottom", closed by PR #194.
+- "Owner account can also behave as a subbie", closed by PRs #196 and #201.
+- "Status override looks like the path to conformance", closed by PR #197.
+- "Fresh QA/self-serve signup blocks on email verification", closed for demo/QA
+  flows by PR #198.
+- "Subbie dashboard/project routes show head-contractor surfaces", closed by
+  PR #199.
+- "New subbie portal appears empty unless HC remembers toggles", closed by
+  PR #200.
 
 Open product-decision items:
 
-- Dual identity rule: decide how accounts that are both head-contractor staff
-  and accepted subcontractor portal users should behave on `/dashboard` and in
-  navigation. Do not silently change this without Jay's decision.
-- Email verification bypass for QA/self-serve testing: needs a security/product
-  call before implementation.
 - Pricing and free-tier packaging are intentionally deferred.
+- Public/self-serve email verification policy is still a product/security
+  decision. PR #198 is a demo/QA bypass, not a blanket production weakening.
 
 Open low-risk polish candidates:
 
@@ -384,7 +405,7 @@ Open low-risk polish candidates:
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
    Many findings from the 2026-05-19 through 2026-05-25 reports have been
-   closed by PRs #99-#194.
+   closed by PRs #99-#201.
 
 ## Handoff Checklist For The Next Agent
 
