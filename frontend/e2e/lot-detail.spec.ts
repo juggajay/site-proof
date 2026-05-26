@@ -460,7 +460,7 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       }
 
       if (options.noItpAssigned) {
-        await json({ message: 'No ITP assigned to this lot' }, 404);
+        await json({ instance: null });
         return;
       }
 

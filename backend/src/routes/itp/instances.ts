@@ -291,7 +291,8 @@ instancesRouter.get(
     });
 
     if (!instance) {
-      throw AppError.notFound('No ITP assigned to this lot');
+      res.json({ instance: null });
+      return;
     }
 
     // Use snapshot if available, otherwise fall back to live template

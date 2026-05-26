@@ -1016,6 +1016,29 @@ describe('ITP Instances', () => {
     expect(res.body.instance.template).toBeDefined();
   });
 
+  it('returns a null instance for accessible lots with no assigned ITP', async () => {
+    const lotWithoutItp = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `ITP-NONE-${Date.now()}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .get(`/api/itp/instances/lot/${lotWithoutItp.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.instance).toBeNull();
+    } finally {
+      await prisma.lot.delete({ where: { id: lotWithoutItp.id } }).catch(() => {});
+    }
+  });
+
   it('should validate subcontractorView query parameters', async () => {
     const subcontractorViewRes = await request(app)
       .get(`/api/itp/instances/lot/${lotId}?subcontractorView=true`)

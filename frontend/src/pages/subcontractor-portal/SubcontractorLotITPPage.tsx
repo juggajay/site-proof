@@ -111,7 +111,7 @@ export function SubcontractorLotITPPage() {
 
       // Fetch ITP instance for this lot
       try {
-        const itpData = await apiFetch<{ instance: ITPInstance }>(
+        const itpData = await apiFetch<{ instance: ITPInstance | null }>(
           `/api/itp/instances/lot/${lotId}?subcontractorView=true`,
         );
         setItpInstance(itpData.instance);
