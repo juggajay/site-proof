@@ -345,7 +345,7 @@ export function ProjectDashboard() {
         <StatPill
           label="ITPs complete"
           value={stats.itps.completed}
-          sub={`${stats.itps.pending} pending`}
+          sub={`${stats.itps.pending} in progress`}
           icon={<ClipboardCheck className="h-3.5 w-3.5" />}
           color="text-green-600 dark:text-green-400"
         />

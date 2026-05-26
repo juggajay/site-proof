@@ -289,6 +289,11 @@ export function Header() {
     navigate('/settings');
   };
 
+  const openAllNotifications = () => {
+    setIsNotificationOpen(false);
+    navigate('/notifications');
+  };
+
   // Format relative time
   const formatRelativeTime = (timestamp: string) => {
     const now = new Date();
@@ -541,7 +546,14 @@ export function Header() {
                   </ul>
                 )}
               </div>
-              <div className="border-t p-2">
+              <div className="grid grid-cols-2 gap-2 border-t p-2">
+                <button
+                  type="button"
+                  onClick={openAllNotifications}
+                  className="w-full rounded px-3 py-2 text-sm text-primary hover:bg-muted"
+                >
+                  View all notifications
+                </button>
                 <button
                   type="button"
                   onClick={openNotificationSettings}

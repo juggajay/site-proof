@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Check, X } from 'lucide-react';
+import { Check, Lock, X } from 'lucide-react';
 import { resetPasswordSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation';
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -114,7 +114,9 @@ export function ResetPasswordPage() {
   if (!tokenValid) {
     return (
       <div className="space-y-4 text-center" role="alert">
-        <div className="text-6xl">🔒</div>
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <Lock className="h-8 w-8" aria-hidden="true" />
+        </div>
         <h2 className="text-2xl font-bold text-destructive">Invalid Reset Link</h2>
         <p className="text-muted-foreground">{tokenError}</p>
         <div className="space-y-2 pt-4">

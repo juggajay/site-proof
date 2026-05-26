@@ -599,11 +599,14 @@ test.describe('Dashboard seeded account contract', () => {
       const navRect = bottomNav?.getBoundingClientRect();
 
       return {
+        bannerHeight: bannerRect?.height ?? null,
         bannerBottom: bannerRect?.bottom ?? null,
         navTop: navRect?.top ?? null,
       };
     });
 
+    expect(layout.bannerHeight).not.toBeNull();
+    expect(layout.bannerHeight!).toBeLessThanOrEqual(112);
     expect(layout.bannerBottom).not.toBeNull();
     expect(layout.navTop).not.toBeNull();
     expect(layout.bannerBottom!).toBeLessThanOrEqual(layout.navTop! + 1);
