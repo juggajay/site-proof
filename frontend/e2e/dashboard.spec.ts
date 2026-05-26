@@ -330,7 +330,10 @@ test.describe('Dashboard seeded account contract', () => {
     await expect(page.getByText('Unknown time')).toBeVisible();
     await expect(page.getByText('Lot LOT-007 status changed to in progress')).toBeVisible();
 
-    await expect(page.getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/projects');
+    await expect(page.getByRole('link', { name: 'Reports' })).toHaveAttribute(
+      'href',
+      `/projects/${E2E_PROJECT_ID}/reports`,
+    );
 
     await page.getByRole('button', { name: 'Customize' }).click();
     await page.getByRole('button', { name: 'Recent Activity' }).click();
