@@ -172,7 +172,7 @@ export function ProjectDashboard() {
       case 'draft':
         return 'Draft';
       default:
-        return 'Not started';
+        return 'No';
     }
   };
 
@@ -322,14 +322,14 @@ export function ProjectDashboard() {
       {/* Compact Stat Ribbon */}
       <div className="grid grid-cols-4 md:grid-cols-8 gap-px bg-border rounded-lg overflow-hidden border">
         <StatPill
-          label="Lots"
-          value={stats.lots.total}
-          sub={`${stats.lots.progressPct}%`}
+          label="lots complete"
+          value={`${stats.lots.progressPct}%`}
+          sub={`${stats.lots.completed} of ${stats.lots.total} lots`}
           icon={<MapPin className="h-3.5 w-3.5" />}
           color="text-blue-600 dark:text-blue-400"
         />
         <StatPill
-          label="NCRs"
+          label="open NCRs"
           value={stats.ncrs.open}
           sub={stats.ncrs.overdue > 0 ? `${stats.ncrs.overdue} late` : 'open'}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
@@ -337,44 +337,39 @@ export function ProjectDashboard() {
           alert={stats.ncrs.overdue > 0}
         />
         <StatPill
-          label="Hold Pts"
+          label="pending hold points"
           value={stats.holdPoints.pending}
-          sub="pending"
           icon={<Clock className="h-3.5 w-3.5" />}
           color="text-orange-600 dark:text-orange-400"
         />
         <StatPill
-          label="ITPs"
-          value={stats.itps.pending}
-          sub={`${stats.itps.completed} done`}
+          label="ITPs complete"
+          value={stats.itps.completed}
+          sub={`${stats.itps.pending} pending`}
           icon={<ClipboardCheck className="h-3.5 w-3.5" />}
           color="text-green-600 dark:text-green-400"
         />
         <StatPill
-          label="Dockets"
+          label="dockets pending"
           value={stats.dockets.pendingApproval}
-          sub="pending"
           icon={<FileCheck className="h-3.5 w-3.5" />}
           color="text-amber-600 dark:text-amber-400"
         />
         <StatPill
-          label="Tests"
+          label="test results"
           value={stats.tests.total}
-          sub="results"
           icon={<FlaskConical className="h-3.5 w-3.5" />}
           color="text-teal-600 dark:text-teal-400"
         />
         <StatPill
-          label="Docs"
+          label="documents"
           value={stats.documents.total}
-          sub="files"
           icon={<FileText className="h-3.5 w-3.5" />}
           color="text-muted-foreground"
         />
         <StatPill
-          label="Diary"
+          label="diary entry today"
           value={getDiaryLabel()}
-          sub="today"
           icon={<Calendar className="h-3.5 w-3.5" />}
           color={getDiaryColor()}
         />
@@ -595,11 +590,13 @@ function StatPill({
 }: {
   label: string;
   value: string | number;
-  sub: string;
+  sub?: string;
   icon: React.ReactNode;
   color: string;
   alert?: boolean;
 }) {
+  const labelText = label.trim();
+
   return (
     <div
       className={cn(
@@ -611,10 +608,10 @@ function StatPill({
       <p
         className={cn('text-lg font-bold leading-tight', alert && 'text-red-600 dark:text-red-400')}
       >
-        {value}
+        <span>{value}</span>
+        {labelText && <span className="ml-1 text-sm font-semibold"> {labelText}</span>}
       </p>
-      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{sub}</p>
-      <p className="text-[10px] text-muted-foreground font-medium leading-tight">{label}</p>
+      {sub && <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{sub}</p>}
     </div>
   );
 }

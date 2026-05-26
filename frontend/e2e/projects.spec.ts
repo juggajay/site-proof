@@ -379,6 +379,10 @@ test.describe('Projects seeded account contract', () => {
     await expect(
       page.getByRole('heading', { name: 'Quality Overview' }).locator('..').locator('..'),
     ).toContainText('2');
+    await expect(page.getByText('40% lots complete')).toBeVisible();
+    await expect(page.getByText('Draft diary entry today')).toBeVisible();
+    await expect(page.getByText('8 ITPs complete')).toBeVisible();
+    await expect(page.getByText('12 test results')).toBeVisible();
 
     await expect(page.getByRole('link', { name: /NCR E2E-NCR-1 overdue/ })).toHaveAttribute(
       'href',
