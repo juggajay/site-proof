@@ -23,5 +23,5 @@ export function hasSubcontractorPortalIdentity(user: RoleUser): boolean {
     return false;
   }
 
-  return isSubcontractorUser(user) || user?.hasSubcontractorPortalAccess === true;
+  return user.hasSubcontractorPortalAccess === true;
 }

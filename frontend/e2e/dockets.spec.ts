@@ -16,6 +16,8 @@ const E2E_SUBCONTRACTOR_USER = {
   id: 'e2e-subcontractor-user',
   role: 'subcontractor_admin',
   roleInCompany: 'subcontractor_admin',
+  companyId: null,
+  hasSubcontractorPortalAccess: true,
 };
 
 function buildDocket(status: 'pending_approval' | 'approved' = 'pending_approval') {
