@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `4dc7dd3 fix: require active portal identity for subbie routes (#201)`
+  `cea9d98 fix: apply dev role override to route guards (#217)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -291,7 +291,7 @@ Recent verification pattern:
 
 ### Evidence Readiness And Activation QA
 
-Status: core activation and dogfood findings are closed through PR #201. No
+Status: core activation and dogfood findings are closed through PR #217. No
 known activation/RBAC blocker remains from the May 2026 dogfood queue; use fresh
 live QA before treating any older `.gstack` report item as active.
 
@@ -350,6 +350,32 @@ Production dogfood and activation follow-up PRs:
   to assigned work and evidence modules, while keeping NCR access opt-in.
 - PR #201 required an active portal identity flag, not just stale
   `subcontractor_admin` role text, before frontend subcontractor routes open.
+- PR #202 refreshed this tracked handoff after the owner/subbie invariant and
+  portal-identity fixes.
+- PR #203 stopped authenticated launch modals from auto-opening on every login.
+- PR #204 added the authenticated notifications page route behind the existing
+  header bell.
+- PR #205 required a Force Conform reason, recorded it in the audit metadata,
+  and invalidated readiness state after conforming a lot.
+- PR #206 made forbidden project workspaces render Access Denied instead of
+  empty/blank states.
+- PR #207 clarified the ITP template picker copy so activity matches are
+  suggestions, not a hard filter.
+- PR #208 routed the dashboard Reports quick-link to project reports instead of
+  the project list dead-end.
+- PR #209 rewrote project dashboard KPI labels into plain operational English.
+- PR #210 made the subcontractor Pending Approvals banner actionable.
+- PR #211 disabled the empty lot-assignment removal action.
+- PR #212 returned an empty ITP instance state for lots with no ITP instead of
+  surfacing a 404 to the frontend.
+- PR #213 added explicit autosave feedback to the portal access panel.
+- PR #214 kept head-contractor users out of stale subcontractor redirects.
+- PR #215 made reset-password submit errors uniform for invalid, used, and
+  expired reset tokens.
+- PR #216 aligned the Company Settings ABN placeholder with the valid invite
+  placeholder.
+- PR #217 made the dev role override apply to both `role` and `roleInCompany`,
+  so route guards, navigation, and pages use the same effective role in QA.
 
 Historical `.gstack/dev-browser` reports remain useful as evidence trails, but
 their issue lists are not live backlogs. In particular, these are stale unless a
@@ -377,6 +403,25 @@ fresh production recheck proves otherwise:
   PR #199.
 - "New subbie portal appears empty unless HC remembers toggles", closed by
   PR #200.
+- "Welcome tour / What's New modal nag stack", closed by PR #203.
+- "Notifications bell routes to 404", closed by PR #204.
+- "Force Conform has no reason / stale readiness after conform", closed by
+  PR #205.
+- "Cross-tenant 403 UX varies by page", closed by PR #206.
+- "ITP template picker claims an activity filter it does not enforce", closed
+  by PR #207.
+- "Dashboard Reports quick-link points to the project list", closed by PR #208.
+- "Project dashboard KPI labels are unclear", closed by PR #209.
+- "Pending Approvals banner is not clickable", closed by PR #210.
+- "Remove Assignment appears when nothing is assigned", closed by PR #211.
+- "Lots with no ITP return 404 instance state", closed by PR #212.
+- "Portal access autosave is implicit", closed by PR #213.
+- "Owner login can follow stale subcontractor redirect", closed by PR #214.
+- "Reset-password submit reveals token state", closed by PR #215.
+- "Company Settings ABN placeholder is not a valid example", closed by
+  PR #216.
+- "Dev role switcher says one role while route guards use another", closed by
+  PR #217.
 
 Open product-decision items:
 
@@ -405,7 +450,7 @@ Open low-risk polish candidates:
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
    Many findings from the 2026-05-19 through 2026-05-25 reports have been
-   closed by PRs #99-#201.
+   closed by PRs #99-#217.
 
 ## Handoff Checklist For The Next Agent
 
