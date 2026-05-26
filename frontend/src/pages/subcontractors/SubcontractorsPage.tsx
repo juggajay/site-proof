@@ -410,6 +410,18 @@ export function SubcontractorsPage() {
       ),
     [subcontractors],
   );
+  const firstPendingApprovalSubcontractor = useMemo(() => {
+    const pendingCompany = subcontractors.find((s) => s.status === 'pending_approval');
+    if (pendingCompany) return pendingCompany;
+
+    return (
+      subcontractors.find(
+        (s) =>
+          s.employees.some((employee) => employee.status === 'pending') ||
+          s.plant.some((plant) => plant.status === 'pending'),
+      ) ?? null
+    );
+  }, [subcontractors]);
   const totalEmployees = useMemo(
     () => subcontractors.reduce((sum, s) => sum + s.employees.length, 0),
     [subcontractors],
@@ -418,6 +430,27 @@ export function SubcontractorsPage() {
     () => subcontractors.reduce((sum, s) => sum + s.totalCost, 0),
     [subcontractors],
   );
+  const handleReviewPendingApprovals = useCallback(() => {
+    if (!firstPendingApprovalSubcontractor) return;
+    setExpandedId(firstPendingApprovalSubcontractor.id);
+  }, [firstPendingApprovalSubcontractor]);
+  const pendingApprovalSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (pendingApprovalCount > 0) {
+      parts.push(
+        `${pendingApprovalCount} subcontractor${pendingApprovalCount === 1 ? '' : 's'} pending approval`,
+      );
+    }
+    if (pendingEmployees > 0) {
+      parts.push(
+        `${pendingEmployees} employee rate${pendingEmployees === 1 ? '' : 's'} pending approval`,
+      );
+    }
+    if (pendingPlant > 0) {
+      parts.push(`${pendingPlant} plant rate${pendingPlant === 1 ? '' : 's'} pending approval`);
+    }
+    return parts.join(' • ');
+  }, [pendingApprovalCount, pendingEmployees, pendingPlant]);
 
   if (loading) {
     return (
@@ -486,13 +519,18 @@ export function SubcontractorsPage() {
         <>
           {/* Pending Approvals Alert */}
           {(pendingApprovalCount > 0 || pendingEmployees > 0 || pendingPlant > 0) && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <h3 className="font-semibold text-amber-800">Pending Approvals</h3>
-              <p className="text-sm text-amber-700 mt-1">
-                {pendingApprovalCount > 0 && `${pendingApprovalCount} subcontractor(s) \u2022 `}
-                {pendingEmployees > 0 && `${pendingEmployees} employee rate(s) \u2022 `}
-                {pendingPlant > 0 && `${pendingPlant} plant rate(s)`}
-              </p>
+            <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-semibold text-amber-800">Pending Approvals</h3>
+                <p className="text-sm text-amber-700 mt-1">{pendingApprovalSummary}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleReviewPendingApprovals}
+                className="self-start rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 sm:self-auto"
+              >
+                Review pending approvals
+              </button>
             </div>
           )}
 

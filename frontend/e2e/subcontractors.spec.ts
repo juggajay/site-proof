@@ -872,8 +872,11 @@ test.describe('Subcontractors seeded register contract', () => {
     await expect(
       page.getByText('Manage subcontractor companies, employees, and rates'),
     ).toBeVisible();
-    await expect(page.getByText('Pending Approvals')).toBeVisible();
-    await expect(page.getByText('1 subcontractor(s)')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pending Approvals' })).toBeVisible();
+    await expect(page.getByText('1 subcontractor pending approval')).toBeVisible();
+    await expect(page.getByText('1 subcontractor(s)')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Review pending approvals' }).click();
+    await expect(page.getByRole('button', { name: 'Approve Company' })).toBeVisible();
     await expect(page.getByText('Total Subcontractors')).toBeVisible();
     await expect(page.getByText('Total Cost to Date')).toBeVisible();
 
