@@ -1294,6 +1294,48 @@ describe('Password Reset Flow', () => {
     }
   });
 
+  it('should return a uniform reset-submit message for invalid, used, and expired reset tokens', async () => {
+    const user = await prisma.user.findUnique({ where: { email: resetEmail } });
+    expect(user).toBeDefined();
+
+    const unknownToken = `reset_submit_unknown_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const usedToken = `reset_submit_used_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const expiredToken = `reset_submit_expired_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const createdTokenHashes = [usedToken, expiredToken].map(hashAuthTokenForTest);
+
+    await prisma.passwordResetToken.createMany({
+      data: [
+        {
+          userId: user!.id,
+          token: hashAuthTokenForTest(usedToken),
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+          usedAt: new Date(),
+        },
+        {
+          userId: user!.id,
+          token: hashAuthTokenForTest(expiredToken),
+          expiresAt: new Date(Date.now() - 60 * 1000),
+        },
+      ],
+    });
+
+    try {
+      for (const token of [unknownToken, usedToken, expiredToken]) {
+        const res = await request(app).post('/api/auth/reset-password').send({
+          token,
+          password: 'NewPassword123!',
+        });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toBe('Invalid or expired reset token');
+      }
+    } finally {
+      await prisma.passwordResetToken.deleteMany({
+        where: { token: { in: createdTokenHashes } },
+      });
+    }
+  });
+
   it('should reject weak replacement passwords during reset', async () => {
     const user = await prisma.user.findUnique({ where: { email: resetEmail } });
     expect(user).toBeDefined();

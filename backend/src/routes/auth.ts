@@ -1143,17 +1143,17 @@ authRouter.post(
     });
 
     if (!resetToken) {
-      throw AppError.badRequest('Invalid or expired reset token');
+      throw AppError.badRequest(GENERIC_RESET_TOKEN_VALIDATION_MESSAGE);
     }
 
     // Check if token has been used
     if (resetToken.usedAt) {
-      throw AppError.badRequest('This reset token has already been used');
+      throw AppError.badRequest(GENERIC_RESET_TOKEN_VALIDATION_MESSAGE);
     }
 
     // Check if token has expired
     if (resetToken.expiresAt < new Date()) {
-      throw AppError.badRequest('This reset token has expired');
+      throw AppError.badRequest(GENERIC_RESET_TOKEN_VALIDATION_MESSAGE);
     }
 
     // Hash the new password
