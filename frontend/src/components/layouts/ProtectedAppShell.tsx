@@ -12,6 +12,7 @@ import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontrac
 import { MainLayout } from './MainLayout';
 
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
+const AUTO_SHOW_GENERAL_ONBOARDING = false;
 
 function CompanyOnboardingGate({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
   const userRole = getCompanyRole(user);
   const isCompanySetupRoute = location.pathname === '/onboarding';
   const showGeneralOnboarding =
+    AUTO_SHOW_GENERAL_ONBOARDING &&
     Boolean(user?.companyId) &&
     !SUBCONTRACTOR_ROLES.includes(userRole) &&
     !hasSubcontractorPortalIdentity(user) &&
