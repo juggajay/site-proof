@@ -131,6 +131,7 @@ export function LotDetailPage() {
   const { canViewBudgets } = useCommercialAccess();
   const { canCreate: canEdit } = useViewerAccess();
   const isMobile = useIsMobile();
+  const tabSectionRef = useRef<HTMLDivElement>(null);
   const [lot, setLot] = useState<Lot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{
@@ -249,6 +250,13 @@ export function LotDetailPage() {
   // Handle tab change
   const handleTabChange = (tabId: LotTab) => {
     setSearchParams({ tab: tabId });
+  };
+
+  const handleReadinessTabChange = (tabId: LotTab) => {
+    setSearchParams({ tab: tabId });
+    window.requestAnimationFrame(() => {
+      tabSectionRef.current?.scrollIntoView({ block: 'start', inline: 'nearest' });
+    });
   };
 
   const {
@@ -1886,7 +1894,7 @@ export function LotDetailPage() {
         loading={loadingReadiness}
         error={readinessError ? 'Could not load evidence readiness.' : null}
         onRetry={() => void refetchReadiness()}
-        onTabChange={handleTabChange}
+        onTabChange={handleReadinessTabChange}
       />
 
       {/* Tab Navigation */}
@@ -1898,7 +1906,7 @@ export function LotDetailPage() {
       />
 
       {/* Tab Content */}
-      <div className="min-h-[300px]" role="tabpanel">
+      <div ref={tabSectionRef} className="min-h-[300px]" role="tabpanel">
         {/* ITP Checklist Tab */}
         {currentTab === 'itp' && lot && (
           <div className="space-y-4 animate-in fade-in duration-200">

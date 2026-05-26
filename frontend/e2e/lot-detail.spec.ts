@@ -613,6 +613,23 @@ test.describe('Lot detail ITP workflow', () => {
     });
   });
 
+  test('scrolls readiness actions to the target tab content on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockLotDetailApi(page, { noItpAssigned: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+
+    const panel = page.getByLabel('Evidence Readiness');
+    await expect(panel.getByRole('heading', { name: 'Evidence Readiness' })).toBeVisible();
+    await panel.getByRole('button', { name: 'Assign ITP' }).click();
+
+    const assignTemplateButton = page.getByRole('button', { name: 'Assign ITP Template' });
+    await expect(assignTemplateButton).toBeVisible();
+
+    const buttonBox = await assignTemplateButton.boundingBox();
+    expect(buttonBox?.y).toBeLessThan(520);
+  });
+
   test('describes activity-matching ITP templates as suggestions when other templates remain available', async ({
     page,
   }) => {
