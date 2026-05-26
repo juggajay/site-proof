@@ -253,6 +253,11 @@ interface DashboardStats {
   }>;
 }
 
+interface DashboardProject {
+  id: string;
+  status?: string | null;
+}
+
 function getLotStatusCount(stats: DashboardStats, status: LotStatusKey): number {
   return stats.lotStatusCounts?.[status] ?? EMPTY_LOT_STATUS_COUNTS[status];
 }
@@ -312,6 +317,20 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
   // Date range filter state
   const [dateRangePreset, setDateRangePreset] = useState<DateRangePreset>('last30days');
   const [showDateRangeDropdown, setShowDateRangeDropdown] = useState(false);
+
+  const { data: projectsData } = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => apiFetch<{ projects: DashboardProject[] }>('/api/projects'),
+    staleTime: 30_000,
+  });
+
+  const reportsProject = useMemo(() => {
+    const projects = projectsData?.projects ?? [];
+    return projects.find((project) => project.status === 'active') ?? projects[0];
+  }, [projectsData?.projects]);
+  const reportsQuickLink = reportsProject
+    ? `/projects/${encodeURIComponent(reportsProject.id)}/reports`
+    : '/projects';
 
   // Get current date range based on preset
   const currentDateRange = useMemo(() => {
@@ -909,7 +928,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
                   <span className="font-medium">Portfolio</span>
                 </Link>
                 <Link
-                  to="/projects"
+                  to={reportsQuickLink}
                   className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
                 >
                   <FileText className="h-5 w-5 text-green-600" />
