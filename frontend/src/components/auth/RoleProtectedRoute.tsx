@@ -40,9 +40,11 @@ export function RoleProtectedRoute({
   // Check if user's role is in allowed roles
   const userRole = user.roleInCompany || user.role || 'member';
   const allowsSubcontractorPortal = allowedRoles.some((role) => isSubcontractorRole(role));
+  const userHasSubcontractorRole = isSubcontractorRole(userRole);
   const hasAccess =
-    allowedRoles.includes(userRole) ||
-    (allowsSubcontractorPortal && hasSubcontractorPortalIdentity(user));
+    allowsSubcontractorPortal && hasSubcontractorPortalIdentity(user)
+      ? true
+      : !userHasSubcontractorRole && allowedRoles.includes(userRole);
 
   if (!hasAccess) {
     return (

@@ -20,6 +20,29 @@ const subcontractorPortalUser = {
   roleInCompany: 'subcontractor_admin',
   companyId: null,
   companyName: null,
+  hasSubcontractorPortalAccess: true,
+};
+
+const staleSubcontractorRoleUser = {
+  ...E2E_ADMIN_USER,
+  id: 'e2e-stale-subcontractor-role-user',
+  email: 'stale-subbie-role@example.com',
+  fullName: 'Stale Subbie Role',
+  role: 'subcontractor_admin',
+  roleInCompany: 'subcontractor_admin',
+  companyId: null,
+  companyName: null,
+  hasSubcontractorPortalAccess: false,
+};
+
+const companyLinkedSubcontractorRoleUser = {
+  ...staleSubcontractorRoleUser,
+  id: 'e2e-company-linked-subcontractor-role-user',
+  email: 'company-linked-subbie-role@example.com',
+  fullName: 'Company Linked Subbie Role',
+  companyId: 'e2e-company',
+  companyName: 'E2E Head Contractor',
+  hasSubcontractorPortalAccess: true,
 };
 
 const linkedPortalMemberUser = {
@@ -56,6 +79,8 @@ async function mockSubcontractorPortalApi(
   user:
     | typeof linkedHeadContractorPortalUser
     | typeof subcontractorPortalUser
+    | typeof staleSubcontractorRoleUser
+    | typeof companyLinkedSubcontractorRoleUser
     | typeof linkedPortalMemberUser,
 ) {
   await page.route('**/api/**', async (route) => {
@@ -156,6 +181,29 @@ test.describe('Subcontractor portal RBAC', () => {
     await page.waitForURL('**/subcontractor-portal', { timeout: 15000 });
     await expect(page.getByRole('button', { name: 'New Project' })).toHaveCount(0);
     await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
+  });
+
+  test('does not open the portal for a stale subcontractor role without an active portal link', async ({
+    page,
+  }) => {
+    await mockSubcontractorPortalApi(page, staleSubcontractorRoleUser);
+
+    await page.goto('/subcontractor-portal');
+
+    await page.waitForURL('**/onboarding', { timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Set up your company' })).toBeVisible();
+    await expect(page.getByText('E2E Civil Subcontractors')).toHaveCount(0);
+  });
+
+  test('denies a company-linked user even when their role is stale subcontractor_admin', async ({
+    page,
+  }) => {
+    await mockSubcontractorPortalApi(page, companyLinkedSubcontractorRoleUser);
+
+    await page.goto('/subcontractor-portal');
+
+    await expect(page.getByText('Access Denied')).toBeVisible();
+    await expect(page.getByText('E2E Civil Subcontractors')).toHaveCount(0);
   });
 
   test('routes linked portal identities to subcontractor dashboard instead of HC dashboard', async ({

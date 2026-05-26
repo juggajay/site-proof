@@ -67,7 +67,8 @@ const invitedSubcontractorUser = {
   fullName: 'Sally Subbie',
   role: 'subcontractor_admin',
   roleInCompany: 'subcontractor_admin',
-  companyId: 'e2e-sub-company',
+  companyId: null,
+  hasSubcontractorPortalAccess: true,
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
