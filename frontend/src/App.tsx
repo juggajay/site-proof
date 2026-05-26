@@ -134,6 +134,9 @@ const SettingsPage = lazy(() =>
 const ProfilePage = lazy(() =>
   import('@/pages/profile/ProfilePage').then((m) => ({ default: m.ProfilePage })),
 );
+const NotificationsPage = lazy(() =>
+  import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })),
+);
 const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
 );
@@ -532,6 +535,9 @@ function App() {
 
               {/* Profile */}
               <Route path="/profile" element={<ProfilePage />} />
+
+              {/* Notifications */}
+              <Route path="/notifications" element={<NotificationsPage />} />
 
               {/* In-app invitation acceptance */}
               <Route path="/invitations" element={<AcceptInvitePage />} />

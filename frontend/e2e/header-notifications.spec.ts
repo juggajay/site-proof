@@ -191,6 +191,17 @@ test.describe('Header notifications', () => {
     await expect(page).toHaveURL(/\/settings$/);
   });
 
+  test('renders the notifications route instead of a 404', async ({ page }) => {
+    await mockHeaderApis(page);
+
+    await page.goto('/notifications');
+
+    await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Overdue NCR/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Mentioned in a comment/ })).toBeVisible();
+    await expect(page.getByText('Page Not Found')).toHaveCount(0);
+  });
+
   test('does not navigate unsafe notification links', async ({ page }) => {
     await mockHeaderApis(page);
 
