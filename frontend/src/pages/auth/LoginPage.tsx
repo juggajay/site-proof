@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { MfaRequiredError } from '@/lib/authErrors';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { loginSchema, emailSchema } from '@/lib/validation';
+import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +25,11 @@ const mfaSchema = z.object({
     .regex(/^(?:\d{6}|[A-Fa-f0-9]{10})$/, 'Enter a 6-digit code or 10-character backup code'),
 });
 type MfaFormData = z.infer<typeof mfaSchema>;
+
+type RedirectUser = {
+  companyId?: string | null;
+  hasSubcontractorPortalAccess?: boolean;
+};
 
 function getSafeRedirectPath(redirect: string | null): string | null {
   if (!redirect || !redirect.startsWith('/') || redirect.startsWith('//')) {
@@ -47,12 +53,32 @@ function getSafeLocationRedirect(from: unknown): string | null {
   return `${location.pathname}${search}${hash}`;
 }
 
-function getPostLoginRedirect(searchParams: URLSearchParams, locationState: unknown): string {
-  return (
+function getDefaultPostLoginRedirect(user: RedirectUser): string {
+  return hasSubcontractorPortalIdentity(user) ? '/subcontractor-portal' : '/dashboard';
+}
+
+function isAllowedPostLoginRedirect(redirect: string, user: RedirectUser): boolean {
+  if (redirect === '/subcontractor-portal' || redirect.startsWith('/subcontractor-portal/')) {
+    return hasSubcontractorPortalIdentity(user);
+  }
+
+  return true;
+}
+
+function getPostLoginRedirect(
+  searchParams: URLSearchParams,
+  locationState: unknown,
+  user: RedirectUser,
+): string {
+  const redirect =
     getSafeRedirectPath(searchParams.get('redirect')) ||
-    getSafeLocationRedirect((locationState as { from?: unknown } | null)?.from) ||
-    '/dashboard'
-  );
+    getSafeLocationRedirect((locationState as { from?: unknown } | null)?.from);
+
+  if (redirect && isAllowedPostLoginRedirect(redirect, user)) {
+    return redirect;
+  }
+
+  return getDefaultPostLoginRedirect(user);
 }
 
 function getLoginErrorMessage(error: string | null): string | null {
@@ -110,9 +136,9 @@ export function LoginPage() {
 
     try {
       const mfaCode = mfaRequired ? mfaForm.getValues('mfaCode') : undefined;
-      await signIn(data.email, data.password, data.rememberMe, mfaCode);
+      const signedInUser = await signIn(data.email, data.password, data.rememberMe, mfaCode);
       // Navigate to the original destination or dashboard
-      const from = getPostLoginRedirect(searchParams, location.state);
+      const from = getPostLoginRedirect(searchParams, location.state, signedInUser);
       navigate(from, { replace: true });
     } catch (err) {
       // Check for MFA challenge (Feature #22, #421)
@@ -134,8 +160,13 @@ export function LoginPage() {
     const loginData = loginForm.getValues();
 
     try {
-      await signIn(loginData.email, loginData.password, loginData.rememberMe, data.mfaCode);
-      const from = getPostLoginRedirect(searchParams, location.state);
+      const signedInUser = await signIn(
+        loginData.email,
+        loginData.password,
+        loginData.rememberMe,
+        data.mfaCode,
+      );
+      const from = getPostLoginRedirect(searchParams, location.state, signedInUser);
       navigate(from, { replace: true });
     } catch (err) {
       if (err instanceof Error) {

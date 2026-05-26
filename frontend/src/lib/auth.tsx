@@ -83,7 +83,7 @@ interface AuthContextType {
     password: string,
     rememberMe?: boolean,
     mfaCode?: string,
-  ) => Promise<void>;
+  ) => Promise<User>;
   signUp: (email: string, password: string, metadata?: object) => Promise<void>;
   signOut: () => Promise<void>;
   handleSessionExpired: () => void;
@@ -299,7 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     rememberMe: boolean = true,
     mfaCode?: string,
-  ) => {
+  ): Promise<User> => {
     const response = await fetchWithTimeout(apiUrl('/api/auth/login'), {
       method: 'POST',
       headers: {
@@ -334,6 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setActualUser(data.user);
     setSessionExpired(false);
+    return data.user;
   };
 
   const signUp = async (email: string, password: string, metadata?: object) => {
