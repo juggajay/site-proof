@@ -371,6 +371,78 @@ test.describe('Authentication', () => {
     expect(rememberMe).toBe('true');
   });
 
+  test('routes head contractor users away from subcontractor-only redirects after login', async ({
+    page,
+  }) => {
+    await page.route('**/api/auth/login', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          token: 'hc-login-e2e-token',
+          user: E2E_ADMIN_USER,
+        }),
+      });
+    });
+
+    await page.route('**/api/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ user: E2E_ADMIN_USER }),
+      });
+    });
+
+    await page.route('**/api/**', async (route) => {
+      const url = new URL(route.request().url());
+      const json = (body: unknown, status = 200) =>
+        route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify(body),
+        });
+
+      if (url.pathname === '/api/auth/login' || url.pathname === '/api/auth/me') {
+        await route.fallback();
+        return;
+      }
+
+      if (url.pathname === '/api/notifications') {
+        await json({ notifications: [], unreadCount: 0 });
+        return;
+      }
+
+      if (url.pathname === '/api/projects') {
+        await json({ projects: [] });
+        return;
+      }
+
+      if (url.pathname === '/api/dashboard/stats') {
+        await json({
+          totalProjects: 0,
+          activeProjects: 0,
+          totalLots: 0,
+          lotStatusCounts: {},
+          openHoldPoints: 0,
+          openNCRs: 0,
+          attentionItems: { total: 0, overdueNCRs: [], staleHoldPoints: [] },
+          recentActivities: [],
+        });
+        return;
+      }
+
+      await json({});
+    });
+
+    await page.goto('/login?redirect=/subcontractor-portal');
+    await page.getByLabel(/email/i).fill(E2E_ADMIN_USER.email);
+    await page.getByLabel(/password/i).fill(strongPassword);
+    await page.getByRole('button', { name: signInButtonName }).click();
+
+    await expect(page).toHaveURL('/dashboard');
+    await expect(page.getByText('Access Denied')).toHaveCount(0);
+  });
+
   test('stores non-remembered sign-ins in session storage only', async ({ page }) => {
     await page.route('**/api/auth/login', async (route) => {
       await route.fulfill({
