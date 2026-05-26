@@ -3,10 +3,11 @@ import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { Plus } from 'lucide-react';
 import { LazyCumulativeChart, LazyMonthlyChart } from '@/components/charts/LazyCharts';
+import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
-import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import type { ClaimEvidencePackageData, ClaimPackageOptions } from '@/lib/pdfGenerator';
 
 import type {
@@ -35,6 +36,7 @@ export function ClaimsPage() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Modal visibility state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -60,11 +62,13 @@ export function ClaimsPage() {
     if (!projectId) {
       setLoading(false);
       setLoadError('Project not found');
+      setAccessDenied(false);
       return;
     }
 
     setLoading(true);
     setLoadError(null);
+    setAccessDenied(false);
     try {
       const data = await apiFetch<{ claims?: Claim[] }>(
         `/api/projects/${encodeURIComponent(projectId)}/claims`,
@@ -73,6 +77,7 @@ export function ClaimsPage() {
     } catch (error) {
       logError('Error fetching claims:', error);
       setClaims([]);
+      setAccessDenied(isForbidden(error));
       setLoadError(extractErrorMessage(error, 'Could not load progress claims. Please try again.'));
     } finally {
       setLoading(false);
@@ -483,6 +488,10 @@ export function ClaimsPage() {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
+  }
+
+  if (accessDenied) {
+    return <AccessDeniedState message={loadError ?? undefined} />;
   }
 
   return (

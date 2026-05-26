@@ -15,6 +15,7 @@ import { Printer, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ContextFAB } from '@/components/mobile/ContextFAB';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
+import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { parseJsonPreference, readLocalStorageItem } from '@/lib/storagePreferences';
 
 // Extracted components
@@ -108,6 +109,7 @@ export function LotsPage() {
     setLots,
     loading,
     error,
+    accessDenied,
     setError,
     projectName,
     subcontractors,
@@ -174,6 +176,10 @@ export function LotsPage() {
     setViewMode(mode);
     actions.toggleViewMode(mode);
   };
+
+  if (!loading && accessDenied) {
+    return <AccessDeniedState message={error ?? undefined} />;
+  }
 
   // =====================
   // Render

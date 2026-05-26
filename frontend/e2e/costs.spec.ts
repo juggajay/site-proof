@@ -4,6 +4,7 @@ import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './he
 
 type SeededCostsApiOptions = {
   failCostsUntil?: number;
+  forbidCosts?: boolean;
 };
 
 function seededCostData() {
@@ -111,6 +112,14 @@ async function mockSeededCostsApi(page: Page, options: SeededCostsApiOptions = {
 
   await page.route(`**/api/projects/${E2E_PROJECT_ID}/costs`, async (route) => {
     costsRequestCount += 1;
+    if (options.forbidCosts) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'You do not have access to this project' } }),
+      });
+      return;
+    }
     if (costsRequestCount <= (options.failCostsUntil ?? 0)) {
       await route.fulfill({
         status: 500,
@@ -208,5 +217,19 @@ test.describe('Costs seeded commercial contract', () => {
       'aria-selected',
       'true',
     );
+  });
+
+  test('shows access denied for forbidden project costs instead of cost controls', async ({
+    page,
+  }) => {
+    await mockSeededCostsApi(page, { forbidCosts: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/costs`);
+
+    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+    await expect(page.getByText('You do not have access to this project')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Project Costs' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Export Report' })).toHaveCount(0);
+    await expect(page.getByText('Total Cost')).toHaveCount(0);
   });
 });
