@@ -448,7 +448,7 @@ export function CompanySettingsPage() {
               type="text"
               value={formData.abn}
               onChange={(e) => setFormData((prev) => ({ ...prev, abn: e.target.value }))}
-              placeholder="XX XXX XXX XXX"
+              placeholder="51 824 753 556"
               disabled={saving}
             />
           </div>

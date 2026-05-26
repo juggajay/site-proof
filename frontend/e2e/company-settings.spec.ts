@@ -198,6 +198,7 @@ test.describe('Company settings seeded owner contract', () => {
 
     await expect(page.getByRole('heading', { name: 'Company Settings' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Company Information' })).toBeVisible();
+    await expect(page.getByLabel('ABN')).toHaveAttribute('placeholder', '51 824 753 556');
     await expect(page.getByRole('heading', { name: 'Billing & Subscription' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Transfer Ownership' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Upgrade Plan' })).toHaveAttribute(
