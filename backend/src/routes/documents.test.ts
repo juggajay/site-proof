@@ -1891,7 +1891,7 @@ describe('Documents API', () => {
 
         await prisma.subcontractorCompany.update({
           where: { id: subcontractorCompany.id },
-          data: { portalAccess: { documents: false, itps: true } },
+          data: { portalAccess: { documents: false, itps: true, testResults: false } },
         });
 
         const stillBlockedGeneralReadRes = await request(app)
