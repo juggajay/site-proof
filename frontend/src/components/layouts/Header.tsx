@@ -3,12 +3,8 @@ import { apiFetch } from '@/lib/api';
 import {
   Bell,
   LogOut,
-  User,
   ChevronDown,
   FolderKanban,
-  AlertCircle,
-  CheckCircle,
-  Clock,
   Settings,
   UserCircle,
   Search,
@@ -17,9 +13,8 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
-import { createMutationErrorHandler } from '@/lib/errorHandling';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { useTheme } from '@/lib/theme';
@@ -32,23 +27,6 @@ interface Project {
   projectNumber: string;
 }
 
-interface Notification {
-  id: string;
-  type: string;
-  title: string;
-  message: string | null;
-  linkUrl: string | null;
-  isRead: boolean;
-  createdAt: string;
-  project?: {
-    id: string;
-    name: string;
-    projectNumber: string;
-  } | null;
-}
-
-type NotificationFilter = 'all' | 'mention' | 'info' | 'alert';
-
 function decodePathSegment(segment: string): string {
   try {
     return decodeURIComponent(segment);
@@ -57,47 +35,16 @@ function decodePathSegment(segment: string): string {
   }
 }
 
-function getSafeInternalPath(linkUrl: string | null): string | null {
-  const trimmed = linkUrl?.trim();
-  if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
-    return null;
-  }
-  return trimmed;
-}
-
-function matchesNotificationFilter(
-  notification: Notification,
-  filter: NotificationFilter,
-): boolean {
-  if (filter === 'all') {
-    return true;
-  }
-
-  const type = notification.type.toLowerCase();
-  if (filter === 'alert') {
-    return type === 'warning' || type.includes('alert');
-  }
-
-  return type === filter;
-}
-
 export function Header() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams();
   const { setTheme, resolvedTheme } = useTheme();
-  const queryClient = useQueryClient();
   const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
   const projectSelectorRef = useRef<HTMLDivElement>(null);
   const projectSearchInputRef = useRef<HTMLInputElement>(null);
-
-  // Notification UI state
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>('all');
-  const [hideOldNotifications, setHideOldNotifications] = useState(false);
-  const notificationRef = useRef<HTMLDivElement>(null);
 
   // User menu state
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -117,10 +64,9 @@ export function Header() {
   const { data: notificationsData } = useQuery({
     queryKey: queryKeys.notifications,
     queryFn: () =>
-      apiFetch<{ notifications: Notification[]; unreadCount: number }>('/api/notifications'),
+      apiFetch<{ notifications: unknown[]; unreadCount: number }>('/api/notifications'),
     refetchInterval: 60000,
   });
-  const notifications = notificationsData?.notifications || [];
   const unreadCount = notificationsData?.unreadCount || 0;
 
   // Find the current project from the list
@@ -142,37 +88,6 @@ export function Header() {
     }
   }, [isProjectSelectorOpen]);
 
-  // Check if notification is old (more than 7 days)
-  const isOldNotification = (createdAt: string) => {
-    const now = new Date();
-    const date = new Date(createdAt);
-    if (Number.isNaN(date.getTime())) {
-      return false;
-    }
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = diffMs / 86400000;
-    return diffDays > 7;
-  };
-
-  // Clear old notifications (client-side hide)
-  const clearOldNotifications = () => {
-    setHideOldNotifications(true);
-  };
-
-  // Filter notifications by type and old-notification hide state
-  const visibleNotifications = hideOldNotifications
-    ? notifications.filter((n) => !isOldNotification(n.createdAt))
-    : notifications;
-
-  // Count old notifications currently visible (drives the "Clear old" button visibility)
-  const oldNotificationCount = visibleNotifications.filter((n) =>
-    isOldNotification(n.createdAt),
-  ).length;
-  const filteredNotifications =
-    notificationFilter === 'all'
-      ? visibleNotifications
-      : visibleNotifications.filter((n) => matchesNotificationFilter(n, notificationFilter));
-
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -181,9 +96,6 @@ export function Header() {
         !projectSelectorRef.current.contains(event.target as Node)
       ) {
         setIsProjectSelectorOpen(false);
-      }
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setIsNotificationOpen(false);
       }
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
@@ -198,7 +110,6 @@ export function Header() {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsProjectSelectorOpen(false);
-        setIsNotificationOpen(false);
         setIsUserMenuOpen(false);
       }
     };
@@ -243,87 +154,8 @@ export function Header() {
     navigate(targetPath);
   };
 
-  // Mark notification as read mutation
-  const markReadMutation = useMutation({
-    mutationFn: (notificationId: string) =>
-      apiFetch(`/api/notifications/${notificationId}/read`, { method: 'PUT' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications }),
-    onError: createMutationErrorHandler('Failed to mark notification as read'),
-  });
-
-  const markAsRead = (notification: Notification) => {
-    const safeLinkUrl = getSafeInternalPath(notification.linkUrl);
-    if (notification.isRead) {
-      // If already read, just navigate
-      if (safeLinkUrl) {
-        navigate(safeLinkUrl);
-        setIsNotificationOpen(false);
-      }
-      return;
-    }
-
-    markReadMutation.mutate(notification.id, {
-      onSuccess: () => {
-        // Navigate if there's a link
-        if (safeLinkUrl) {
-          navigate(safeLinkUrl);
-          setIsNotificationOpen(false);
-        }
-      },
-    });
-  };
-
-  // Mark all as read mutation
-  const markAllReadMutation = useMutation({
-    mutationFn: () => apiFetch('/api/notifications/read-all', { method: 'PUT' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications }),
-    onError: createMutationErrorHandler('Failed to mark all notifications as read'),
-  });
-
-  const markAllAsRead = () => {
-    markAllReadMutation.mutate();
-  };
-
-  const openNotificationSettings = () => {
-    setIsNotificationOpen(false);
-    navigate('/settings');
-  };
-
   const openAllNotifications = () => {
-    setIsNotificationOpen(false);
     navigate('/notifications');
-  };
-
-  // Format relative time
-  const formatRelativeTime = (timestamp: string) => {
-    const now = new Date();
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) {
-      return 'Unknown time';
-    }
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
-  };
-
-  // Get notification icon by type
-  const getNotificationIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case 'warning':
-        return <AlertCircle className="h-4 w-4 text-amber-500" />;
-      case 'success':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'mention':
-        return <User className="h-4 w-4 text-primary" />;
-      default:
-        return <Clock className="h-4 w-4 text-primary" />;
-    }
   };
 
   return (
@@ -437,13 +269,11 @@ export function Header() {
         )}
 
         {/* Notification Bell */}
-        <div ref={notificationRef} className="relative">
+        <div className="relative">
           <button
-            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+            onClick={openAllNotifications}
             className="relative rounded-full p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground touch-manipulation"
             aria-label="Notifications"
-            aria-expanded={isNotificationOpen}
-            aria-haspopup="true"
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
             {unreadCount > 0 && (
@@ -460,110 +290,6 @@ export function Header() {
               </>
             )}
           </button>
-
-          {isNotificationOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-80 rounded-lg border bg-card shadow-lg">
-              <div className="flex items-center justify-between border-b px-4 py-3">
-                <h3 className="font-semibold">Notifications</h3>
-                <div className="flex items-center gap-2">
-                  {oldNotificationCount > 0 && (
-                    <button
-                      onClick={clearOldNotifications}
-                      className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-                    >
-                      Clear old
-                    </button>
-                  )}
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={markAllAsRead}
-                      disabled={markAllReadMutation.isLoading}
-                      className="text-xs text-primary hover:underline"
-                    >
-                      {markAllReadMutation.isLoading ? 'Marking...' : 'Mark all as read'}
-                    </button>
-                  )}
-                </div>
-              </div>
-              {/* Filter tabs */}
-              <div className="flex border-b px-2">
-                {(['all', 'mention', 'info', 'alert'] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setNotificationFilter(filter)}
-                    className={`px-3 py-2 text-xs font-medium capitalize transition-colors ${
-                      notificationFilter === filter
-                        ? 'border-b-2 border-primary text-primary'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {filter === 'mention'
-                      ? '@Mentions'
-                      : filter === 'info'
-                        ? 'Info'
-                        : filter === 'alert'
-                          ? 'Alerts'
-                          : 'All'}
-                  </button>
-                ))}
-              </div>
-              <div className="max-h-[350px] overflow-auto">
-                {filteredNotifications.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-muted-foreground">
-                    No {notificationFilter === 'all' ? '' : notificationFilter} notifications
-                  </div>
-                ) : (
-                  <ul>
-                    {filteredNotifications.map((notification) => (
-                      <li
-                        key={notification.id}
-                        className={`border-b last:border-0 ${!notification.isRead ? 'bg-primary/5' : ''}`}
-                      >
-                        <button
-                          onClick={() => markAsRead(notification)}
-                          className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/50"
-                        >
-                          <div className="mt-0.5 flex-shrink-0">
-                            {getNotificationIcon(notification.type)}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium">{notification.title}</span>
-                              {!notification.isRead && (
-                                <span className="h-2 w-2 rounded-full bg-primary" />
-                              )}
-                            </div>
-                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-                              {notification.message}
-                            </p>
-                            <span className="mt-1 text-xs text-muted-foreground">
-                              {formatRelativeTime(notification.createdAt)}
-                            </span>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2 border-t p-2">
-                <button
-                  type="button"
-                  onClick={openAllNotifications}
-                  className="w-full rounded px-3 py-2 text-sm text-primary hover:bg-muted"
-                >
-                  View all notifications
-                </button>
-                <button
-                  type="button"
-                  onClick={openNotificationSettings}
-                  className="w-full rounded px-3 py-2 text-sm text-primary hover:bg-muted"
-                >
-                  Notification settings
-                </button>
-              </div>
-            </div>
-          )}
         </div>
         {/* User Profile Menu */}
         <div ref={userMenuRef} className="relative">
