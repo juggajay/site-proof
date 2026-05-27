@@ -1,6 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
+const E2E_SECOND_PROJECT_ID = 'e2e-second-project';
+
 const linkedHeadContractorPortalUser = {
   ...E2E_ADMIN_USER,
   id: 'e2e-linked-hc-portal-user',
@@ -57,22 +59,43 @@ const linkedPortalMemberUser = {
   hasSubcontractorPortalAccess: true,
 };
 
-const portalCompany = {
-  id: 'e2e-subcontractor-company',
-  companyName: 'E2E Civil Subcontractors',
-  projectId: E2E_PROJECT_ID,
-  projectName: 'E2E Highway Upgrade',
-  employees: [],
-  plant: [],
-  portalAccess: {
-    lots: true,
-    itps: true,
-    holdPoints: true,
-    testResults: true,
-    ncrs: true,
-    documents: true,
-  },
+const portalAccess = {
+  lots: true,
+  itps: true,
+  holdPoints: true,
+  testResults: true,
+  ncrs: true,
+  documents: true,
 };
+
+const portalProjectOptions = [
+  {
+    id: 'e2e-subcontractor-company',
+    companyName: 'E2E Civil Subcontractors',
+    projectId: E2E_PROJECT_ID,
+    projectName: 'E2E Highway Upgrade',
+    status: 'approved',
+    portalAccess,
+  },
+  {
+    id: 'e2e-second-subcontractor-company',
+    companyName: 'E2E Civil Subcontractors',
+    projectId: E2E_SECOND_PROJECT_ID,
+    projectName: 'E2E Rail Upgrade',
+    status: 'approved',
+    portalAccess,
+  },
+];
+
+function portalCompany(projectId = E2E_PROJECT_ID) {
+  const selected = portalProjectOptions.find((project) => project.projectId === projectId);
+  return {
+    ...(selected || portalProjectOptions[0]),
+    employees: [],
+    plant: [],
+    availableProjects: portalProjectOptions,
+  };
+}
 
 async function mockSubcontractorPortalApi(
   page: Page,
@@ -98,7 +121,7 @@ async function mockSubcontractorPortalApi(
     }
 
     if (url.pathname === '/api/subcontractors/my-company') {
-      await json({ company: portalCompany });
+      await json({ company: portalCompany(url.searchParams.get('projectId') || undefined) });
       return;
     }
 
@@ -116,6 +139,24 @@ async function mockSubcontractorPortalApi(
             activity: 'Drainage',
             activityType: 'Drainage',
             status: 'in_progress',
+          },
+        ],
+      });
+      return;
+    }
+
+    if (
+      url.pathname === '/api/lots' &&
+      url.searchParams.get('projectId') === E2E_SECOND_PROJECT_ID
+    ) {
+      await json({
+        lots: [
+          {
+            id: 'e2e-second-assigned-lot',
+            lotNumber: 'SUB-LOT-002',
+            activity: 'Earthworks',
+            activityType: 'Earthworks',
+            status: 'not_started',
           },
         ],
       });
@@ -242,5 +283,20 @@ test.describe('Subcontractor portal RBAC', () => {
     await expect(page.getByText('Access Denied')).toHaveCount(0);
     await expect(page.getByText('Assigned Work')).toBeVisible();
     await expect(page.getByText('SUB-LOT-001')).toBeVisible();
+  });
+
+  test('lets portal users switch assigned work between linked projects', async ({ page }) => {
+    await mockSubcontractorPortalApi(page, subcontractorPortalUser);
+
+    await page.goto('/subcontractor-portal/work');
+
+    await expect(page.getByLabel('Project')).toHaveValue(E2E_PROJECT_ID);
+    await expect(page.getByText('SUB-LOT-001')).toBeVisible();
+
+    await page.getByLabel('Project').selectOption(E2E_SECOND_PROJECT_ID);
+
+    await expect(page).toHaveURL(new RegExp(`projectId=${E2E_SECOND_PROJECT_ID}`));
+    await expect(page.getByLabel('Project')).toHaveValue(E2E_SECOND_PROJECT_ID);
+    await expect(page.getByText('SUB-LOT-002')).toBeVisible();
   });
 });

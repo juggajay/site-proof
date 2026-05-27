@@ -45,7 +45,7 @@ function getStatusBadge(status: string) {
 
 export function AssignedWorkPage() {
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
   const { data: company, isLoading: companyLoading } = useQuery({
     queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
@@ -54,7 +54,15 @@ export function AssignedWorkPage() {
         ? `?projectId=${encodeURIComponent(requestedProjectId)}`
         : '';
       const res = await apiFetch<{
-        company: { projectName: string; projectId: string; portalAccess?: PortalAccess };
+        company: {
+          projectName: string;
+          projectId: string;
+          portalAccess?: PortalAccess;
+          availableProjects?: Array<{
+            projectId: string;
+            projectName: string;
+          }>;
+        };
       }>(`/api/subcontractors/my-company${query}`);
       return res.company;
     },
@@ -79,6 +87,14 @@ export function AssignedWorkPage() {
 
   const loading = companyLoading || (canViewAssignedWork && lotsLoading);
   const projectName = company?.projectName || '';
+  const projectOptions = company?.availableProjects || [];
+  const showProjectSwitcher = projectOptions.length > 1;
+
+  const handleProjectChange = (projectId: string) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('projectId', projectId);
+    setSearchParams(nextParams);
+  };
 
   // Group lots by status
   const inProgress = lots.filter((l) => l.status === 'in_progress');
@@ -137,6 +153,29 @@ export function AssignedWorkPage() {
           <p className="text-sm text-muted-foreground">{projectName}</p>
         </div>
       </div>
+
+      {showProjectSwitcher && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <label
+            htmlFor="assigned-work-project-switcher"
+            className="mb-2 block text-sm font-medium text-foreground"
+          >
+            Project
+          </label>
+          <select
+            id="assigned-work-project-switcher"
+            value={company?.projectId || ''}
+            onChange={(event) => handleProjectChange(event.target.value)}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
+          >
+            {projectOptions.map((option) => (
+              <option key={option.projectId} value={option.projectId}>
+                {option.projectName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">

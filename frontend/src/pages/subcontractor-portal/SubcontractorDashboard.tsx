@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   MapPin,
   Bell,
@@ -37,11 +37,21 @@ interface PortalAccess {
   documents: boolean;
 }
 
+interface PortalProjectOption {
+  id: string;
+  companyName: string;
+  projectId: string;
+  projectName: string;
+  status: string;
+  portalAccess?: PortalAccess;
+}
+
 interface Company {
   id: string;
   companyName: string;
   projectId: string;
   projectName: string;
+  availableProjects?: PortalProjectOption[];
   employees: Array<{
     id: string;
     name: string;
@@ -159,12 +169,17 @@ function getDocketStatusBadge(status: string) {
 export function SubcontractorDashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies(user?.id),
+    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
     queryFn: async () => {
-      const res = await apiFetch<{ company: Company }>('/api/subcontractors/my-company');
+      const query = requestedProjectId
+        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+        : '';
+      const res = await apiFetch<{ company: Company }>(`/api/subcontractors/my-company${query}`);
       return res.company;
     },
     enabled: !!user?.id,
@@ -208,8 +223,16 @@ export function SubcontractorDashboard() {
 
   const notifications = notifData?.notifications || [];
   const unreadCount = notifData?.unreadCount || 0;
+  const projectOptions = company?.availableProjects || [];
+  const showProjectSwitcher = projectOptions.length > 1;
 
   const loading = companyLoading;
+
+  const handleProjectChange = (projectId: string) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('projectId', projectId);
+    setSearchParams(nextParams);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -309,6 +332,29 @@ export function SubcontractorDashboard() {
           </Link>
         </div>
       </div>
+
+      {showProjectSwitcher && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <label
+            htmlFor="portal-project-switcher"
+            className="mb-2 block text-sm font-medium text-foreground"
+          >
+            Project
+          </label>
+          <select
+            id="portal-project-switcher"
+            value={company?.projectId || ''}
+            onChange={(event) => handleProjectChange(event.target.value)}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
+          >
+            {projectOptions.map((option) => (
+              <option key={option.projectId} value={option.projectId}>
+                {option.projectName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Today's Docket Card */}
       <div className="border-2 border-border rounded-lg bg-card">
