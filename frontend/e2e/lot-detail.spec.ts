@@ -598,11 +598,8 @@ test.describe('Lot detail ITP workflow', () => {
     await expect(panel.getByRole('heading', { name: 'Evidence Readiness' })).toBeVisible();
     await panel.getByRole('button', { name: 'Assign ITP' }).click();
 
-    await expect(page.getByText('No ITP template assigned to this lot yet')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create ITP Template First' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Assign ITP Template' }).click();
-
     await expect(page.getByRole('heading', { name: 'Assign ITP Template' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create ITP Template First' })).toHaveCount(0);
     await page.getByRole('button', { name: /E2E Earthworks ITP/ }).click();
 
     await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
@@ -623,11 +620,8 @@ test.describe('Lot detail ITP workflow', () => {
     await expect(panel.getByRole('heading', { name: 'Evidence Readiness' })).toBeVisible();
     await panel.getByRole('button', { name: 'Assign ITP' }).click();
 
-    const assignTemplateButton = page.getByRole('button', { name: 'Assign ITP Template' });
-    await expect(assignTemplateButton).toBeVisible();
-
-    const buttonBox = await assignTemplateButton.boundingBox();
-    expect(buttonBox?.y).toBeLessThan(520);
+    await expect(page.getByRole('heading', { name: 'Assign ITP Template' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /E2E Earthworks ITP/ })).toBeVisible();
   });
 
   test('describes activity-matching ITP templates as suggestions when other templates remain available', async ({

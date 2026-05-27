@@ -11,7 +11,7 @@ interface LotReadinessPanelProps {
   loading: boolean;
   error: string | null;
   onRetry: () => void;
-  onTabChange: (tab: LotTab) => void;
+  onTabChange: (tab: LotTab, actionCode?: string) => void;
 }
 
 const TAB_IDS: LotTab[] = ['itp', 'tests', 'ncrs', 'photos', 'documents', 'comments', 'history'];
@@ -79,7 +79,7 @@ function ItemList({
   onTabChange,
 }: {
   items: EvidenceReadinessItem[];
-  onTabChange: (tab: LotTab) => void;
+  onTabChange: (tab: LotTab, actionCode?: string) => void;
 }) {
   if (items.length === 0) {
     return (
@@ -103,7 +103,7 @@ function ItemList({
                 <button
                   type="button"
                   className="ml-2 font-medium text-primary underline-offset-4 hover:underline"
-                  onClick={() => onTabChange(tab)}
+                  onClick={() => onTabChange(tab, item.code)}
                 >
                   {item.actionLabel}
                 </button>
@@ -123,7 +123,7 @@ function ReadinessBucketView({
 }: {
   bucket: ReadinessBucket;
   kind: 'conformance' | 'claim';
-  onTabChange: (tab: LotTab) => void;
+  onTabChange: (tab: LotTab, actionCode?: string) => void;
 }) {
   const items = [...bucket.blockers, ...bucket.warnings, ...bucket.support];
 
