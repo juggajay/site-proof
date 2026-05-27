@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   MapPin,
-  Bell,
   Clock,
   CheckCircle,
   AlertTriangle,
@@ -222,7 +221,6 @@ export function SubcontractorDashboard() {
   });
 
   const notifications = notifData?.notifications || [];
-  const unreadCount = notifData?.unreadCount || 0;
   const projectOptions = company?.availableProjects || [];
   const showProjectSwitcher = projectOptions.length > 1;
   const currentProjectQuery = company?.projectId
@@ -322,19 +320,17 @@ export function SubcontractorDashboard() {
           <p className="text-sm text-muted-foreground">{company?.projectName || 'Project'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={handleRefresh} disabled={refreshing}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            aria-label="Refresh subcontractor portal"
+          >
             <RefreshCw
               className={cn('h-5 w-5 text-muted-foreground', refreshing && 'animate-spin')}
             />
           </Button>
-          <Link to="/settings" className="relative p-2 rounded-lg hover:bg-muted transition-colors">
-            <Bell className="h-5 w-5 text-muted-foreground" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-white text-xs flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </Link>
         </div>
       </div>
 

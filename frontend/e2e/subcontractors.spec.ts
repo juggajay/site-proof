@@ -1252,6 +1252,28 @@ test.describe('Subcontractor portal module access', () => {
     await expect(page.getByRole('link', { name: /Read counter proposal/ })).toHaveCount(0);
   });
 
+  test('uses the global notifications link and does not render a duplicate settings bell', async ({
+    page,
+  }) => {
+    await mockSubcontractorDashboardApi(page, [
+      {
+        id: 'unread-rate-counter',
+        type: 'rate_counter',
+        title: 'Unread counter proposal',
+        message: 'Please review this counter proposal',
+        isRead: false,
+        createdAt: '2026-05-01T00:00:00.000Z',
+      },
+    ]);
+
+    await page.goto('/subcontractor-portal');
+
+    await expect(page.getByRole('link', { name: 'Notifications' })).toBeVisible();
+    await expect(page.locator('a[href="/notifications"]')).toHaveCount(1);
+    await expect(page.locator('a[href="/settings"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Refresh subcontractor portal' })).toBeVisible();
+  });
+
   test('blocks direct portal module routes when access is disabled', async ({ page }) => {
     const api = await mockPortalModuleAccessApi(page, {
       lots: true,
