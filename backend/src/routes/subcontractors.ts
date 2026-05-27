@@ -243,6 +243,53 @@ function normalizeIdParam(value: unknown, field = 'id'): string {
   return normalizeRequiredText(value, field, ID_MAX_LENGTH);
 }
 
+function getRequestedProjectScope(req: Request): string | null {
+  const queryProjectId =
+    req.query.projectId === undefined ? null : normalizeIdParam(req.query.projectId, 'projectId');
+  const bodyProjectId =
+    req.body && Object.prototype.hasOwnProperty.call(req.body, 'projectId')
+      ? normalizeIdParam(req.body.projectId, 'projectId')
+      : null;
+
+  if (queryProjectId && bodyProjectId && queryProjectId !== bodyProjectId) {
+    throw AppError.badRequest('projectId in query and body must match');
+  }
+
+  return bodyProjectId || queryProjectId;
+}
+
+async function getScopedSubcontractorUserLink(req: Request, user: AuthenticatedUser) {
+  const requestedProjectId = getRequestedProjectScope(req);
+  const baseWhere: Prisma.SubcontractorUserWhereInput = {
+    userId: user.id,
+    subcontractorCompany: requestedProjectId ? { projectId: requestedProjectId } : {},
+  };
+  const subcontractorUser =
+    (await prisma.subcontractorUser.findFirst({
+      where: {
+        userId: user.id,
+        subcontractorCompany: activeSubcontractorCompanyWhere(
+          requestedProjectId ? { projectId: requestedProjectId } : {},
+        ),
+      },
+      include: { subcontractorCompany: true },
+      orderBy: { createdAt: 'desc' },
+    })) ||
+    (await prisma.subcontractorUser.findFirst({
+      where: baseWhere,
+      include: { subcontractorCompany: true },
+      orderBy: { createdAt: 'desc' },
+    }));
+
+  if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
+    throw requestedProjectId
+      ? AppError.forbidden('You do not have subcontractor portal access to this project')
+      : AppError.notFound('Subcontractor company');
+  }
+
+  return subcontractorUser;
+}
+
 function parseOptionalBooleanQuery(value: unknown, field: string): boolean | undefined {
   if (value === undefined) {
     return undefined;
@@ -934,16 +981,7 @@ subcontractorsRouter.post(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     assertStandaloneSubcontractorPortalUser(user);
-
-    // Get the user's subcontractor company
-    const subcontractorUser = await prisma.subcontractorUser.findFirst({
-      where: { userId: user.id },
-      include: { subcontractorCompany: true },
-    });
-
-    if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      throw AppError.notFound('Subcontractor company');
-    }
+    const subcontractorUser = await getScopedSubcontractorUserLink(req, user);
 
     if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
       throw AppError.forbidden('Only subcontractor admins can add employees');
@@ -988,16 +1026,7 @@ subcontractorsRouter.post(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     assertStandaloneSubcontractorPortalUser(user);
-
-    // Get the user's subcontractor company
-    const subcontractorUser = await prisma.subcontractorUser.findFirst({
-      where: { userId: user.id },
-      include: { subcontractorCompany: true },
-    });
-
-    if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      throw AppError.notFound('Subcontractor company');
-    }
+    const subcontractorUser = await getScopedSubcontractorUserLink(req, user);
 
     if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
       throw AppError.forbidden('Only subcontractor admins can add plant');
@@ -1053,16 +1082,7 @@ subcontractorsRouter.delete(
     const user = req.user!;
     const id = normalizeIdParam(req.params.id, 'Employee ID');
     assertStandaloneSubcontractorPortalUser(user);
-
-    // Get the user's subcontractor company
-    const subcontractorUser = await prisma.subcontractorUser.findFirst({
-      where: { userId: user.id },
-      include: { subcontractorCompany: { select: { status: true } } },
-    });
-
-    if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      throw AppError.notFound('Subcontractor company');
-    }
+    const subcontractorUser = await getScopedSubcontractorUserLink(req, user);
 
     if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
       throw AppError.forbidden('Only subcontractor admins can delete employees');
@@ -1094,16 +1114,7 @@ subcontractorsRouter.delete(
     const user = req.user!;
     const id = normalizeIdParam(req.params.id, 'Plant ID');
     assertStandaloneSubcontractorPortalUser(user);
-
-    // Get the user's subcontractor company
-    const subcontractorUser = await prisma.subcontractorUser.findFirst({
-      where: { userId: user.id },
-      include: { subcontractorCompany: { select: { status: true } } },
-    });
-
-    if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      throw AppError.notFound('Subcontractor company');
-    }
+    const subcontractorUser = await getScopedSubcontractorUserLink(req, user);
 
     if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
       throw AppError.forbidden('Only subcontractor admins can delete plant');

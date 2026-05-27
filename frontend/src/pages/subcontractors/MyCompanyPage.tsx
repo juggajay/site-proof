@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { Plus, Users, Truck, CheckCircle, Clock, X, Trash2 } from 'lucide-react';
 import { logError } from '@/lib/logger';
 import { parseRateInput } from './rateValidation';
+import { useSearchParams } from 'react-router-dom';
 
 interface Employee {
   id: string;
@@ -28,16 +29,26 @@ interface CompanyData {
   id: string;
   companyName: string;
   abn: string;
+  projectId: string;
+  projectName: string;
   primaryContactName: string;
   primaryContactEmail: string;
   primaryContactPhone: string;
   status: string;
+  availableProjects?: Array<{
+    projectId: string;
+    projectName: string;
+    companyName: string;
+    status: string;
+  }>;
   employees: Employee[];
   plant: Plant[];
 }
 
 export function MyCompanyPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const [companyData, setCompanyData] = useState<CompanyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
@@ -63,16 +74,17 @@ export function MyCompanyPage() {
   // Note: user.role is used (from auth context) not roleInCompany
   const canManageRoster = user?.role === 'subcontractor_admin';
 
-  useEffect(() => {
-    fetchCompanyData();
-  }, []);
-
-  const fetchCompanyData = async () => {
+  const fetchCompanyData = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
 
     try {
-      const data = await apiFetch<{ company: CompanyData }>(`/api/subcontractors/my-company`);
+      const query = requestedProjectId
+        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+        : '';
+      const data = await apiFetch<{ company: CompanyData }>(
+        `/api/subcontractors/my-company${query}`,
+      );
       setCompanyData(data.company);
     } catch (error) {
       logError('Error fetching company data:', error);
@@ -81,7 +93,11 @@ export function MyCompanyPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [requestedProjectId]);
+
+  useEffect(() => {
+    void fetchCompanyData();
+  }, [fetchCompanyData]);
 
   const addEmployee = async () => {
     const name = employeeForm.name.trim();
@@ -100,9 +116,11 @@ export function MyCompanyPage() {
     setActionError(null);
 
     try {
+      const projectId = companyData?.projectId;
       await apiFetch(`/api/subcontractors/my-company/employees`, {
         method: 'POST',
         body: JSON.stringify({
+          projectId,
           name,
           phone,
           role,
@@ -139,9 +157,11 @@ export function MyCompanyPage() {
     setActionError(null);
 
     try {
+      const projectId = companyData?.projectId;
       await apiFetch(`/api/subcontractors/my-company/plant`, {
         method: 'POST',
         body: JSON.stringify({
+          projectId,
           type,
           description,
           idRego,
@@ -166,9 +186,15 @@ export function MyCompanyPage() {
     setActionError(null);
 
     try {
-      await apiFetch(`/api/subcontractors/my-company/employees/${encodeURIComponent(empId)}`, {
-        method: 'DELETE',
-      });
+      const query = companyData?.projectId
+        ? `?projectId=${encodeURIComponent(companyData.projectId)}`
+        : '';
+      await apiFetch(
+        `/api/subcontractors/my-company/employees/${encodeURIComponent(empId)}${query}`,
+        {
+          method: 'DELETE',
+        },
+      );
       await fetchCompanyData();
     } catch (error) {
       logError('Error deleting employee:', error);
@@ -183,9 +209,15 @@ export function MyCompanyPage() {
     setActionError(null);
 
     try {
-      await apiFetch(`/api/subcontractors/my-company/plant/${encodeURIComponent(plantId)}`, {
-        method: 'DELETE',
-      });
+      const query = companyData?.projectId
+        ? `?projectId=${encodeURIComponent(companyData.projectId)}`
+        : '';
+      await apiFetch(
+        `/api/subcontractors/my-company/plant/${encodeURIComponent(plantId)}${query}`,
+        {
+          method: 'DELETE',
+        },
+      );
       await fetchCompanyData();
     } catch (error) {
       logError('Error deleting plant:', error);
@@ -274,6 +306,8 @@ export function MyCompanyPage() {
 
   const pendingEmployees = companyData.employees.filter((e) => e.status === 'pending').length;
   const pendingPlant = companyData.plant.filter((p) => p.status === 'pending').length;
+  const availableProjects = companyData.availableProjects || [];
+  const showProjectSwitcher = availableProjects.length > 1;
 
   return (
     <div className="space-y-6">
@@ -286,6 +320,33 @@ export function MyCompanyPage() {
             : "View your company's employee roster and plant register"}
         </p>
       </div>
+
+      {showProjectSwitcher && (
+        <div className="rounded-lg border bg-card p-4">
+          <label htmlFor="my-company-project" className="block text-sm font-medium mb-2">
+            Project
+          </label>
+          <select
+            id="my-company-project"
+            value={companyData.projectId}
+            onChange={(event) => {
+              const nextParams = new URLSearchParams(searchParams);
+              nextParams.set('projectId', event.target.value);
+              setSearchParams(nextParams);
+            }}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            {availableProjects.map((project) => (
+              <option key={project.projectId} value={project.projectId}>
+                {project.projectName || project.companyName}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Roster and plant rates are approved per head-contractor project.
+          </p>
+        </div>
+      )}
 
       {actionError && (
         <div
@@ -301,6 +362,11 @@ export function MyCompanyPage() {
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-xl font-semibold">{companyData.companyName}</h2>
+            {companyData.projectName && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Project: {companyData.projectName}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground mt-1">ABN: {companyData.abn}</p>
           </div>
           {getStatusBadge(companyData.status)}
