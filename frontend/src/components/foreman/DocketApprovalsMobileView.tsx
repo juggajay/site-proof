@@ -1,7 +1,7 @@
 import { useRef, useCallback, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { AlertCircle, Check, X, CheckSquare } from 'lucide-react';
+import { AlertCircle, Check, CheckSquare, MessageSquare, X } from 'lucide-react';
 import { SwipeableCard } from './SwipeableCard';
 import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
@@ -12,7 +12,7 @@ interface Docket {
   subcontractor: string;
   subcontractorId: string;
   date: string;
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
+  status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'queried';
   notes: string | null;
   labourHours: number;
   plantHours: number;
@@ -38,6 +38,7 @@ interface DocketApprovalsMobileViewProps {
   canApprove: boolean;
   subcontractorSetupHref: string;
   onApprove: (docket: Docket) => void;
+  onQuery: (docket: Docket) => void;
   onReject: (docket: Docket) => void;
   onTapDocket: (docket: Docket) => void;
   onRefresh: () => Promise<void>;
@@ -48,6 +49,7 @@ const statusColors: Record<string, string> = {
   pending_approval: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
   approved: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
   rejected: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200',
+  queried: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
 };
 
 const statusLabels: Record<string, string> = {
@@ -55,6 +57,7 @@ const statusLabels: Record<string, string> = {
   pending_approval: 'Pending',
   approved: 'Approved',
   rejected: 'Rejected',
+  queried: 'Queried',
 };
 
 const filters = [
@@ -163,6 +166,7 @@ export function DocketApprovalsMobileView({
   canApprove,
   subcontractorSetupHref,
   onApprove,
+  onQuery,
   onReject,
   onTapDocket,
   onRefresh,
@@ -338,6 +342,14 @@ export function DocketApprovalsMobileView({
                           >
                             <Check className="h-4 w-4" />
                             Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700"
+                            onClick={() => onQuery(docket)}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                            Query
                           </button>
                           <button
                             type="button"
