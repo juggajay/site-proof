@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Users,
@@ -172,6 +172,8 @@ const TIME_PRESETS = [
 export function DocketEditPage() {
   const navigate = useNavigate();
   const { docketId } = useParams();
+  const [searchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const isNewDocket = !docketId || docketId === 'new';
 
   const [loading, setLoading] = useState(true);
@@ -207,7 +209,12 @@ export function DocketEditPage() {
     async function fetchData() {
       try {
         // Fetch company data
-        const companyData = await apiFetch<{ company: Company }>(`/api/subcontractors/my-company`);
+        const companyQuery = requestedProjectId
+          ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+          : '';
+        const companyData = await apiFetch<{ company: Company }>(
+          `/api/subcontractors/my-company${companyQuery}`,
+        );
         setCompany(companyData.company);
 
         // Fetch assigned lots
@@ -242,7 +249,12 @@ export function DocketEditPage() {
             const todayDocket = existingData.dockets.find((d: Docket) => d.date === today);
             if (todayDocket) {
               // Redirect to existing docket
-              navigate(`/subcontractor-portal/docket/${todayDocket.id}`, { replace: true });
+              const projectQuery = companyData.company.projectId
+                ? `?projectId=${encodeURIComponent(companyData.company.projectId)}`
+                : '';
+              navigate(`/subcontractor-portal/docket/${todayDocket.id}${projectQuery}`, {
+                replace: true,
+              });
               return;
             }
           } catch {
@@ -257,7 +269,7 @@ export function DocketEditPage() {
     }
 
     fetchData();
-  }, [docketId, isNewDocket, navigate, today]);
+  }, [docketId, isNewDocket, navigate, requestedProjectId, today]);
 
   // Create docket if new
   const ensureDocket = useCallback(async () => {
@@ -282,7 +294,10 @@ export function DocketEditPage() {
       };
       setDocket(newDocket);
       // Update URL to show docket ID
-      navigate(`/subcontractor-portal/docket/${newDocket.id}`, { replace: true });
+      const projectQuery = company?.projectId
+        ? `?projectId=${encodeURIComponent(company.projectId)}`
+        : '';
+      navigate(`/subcontractor-portal/docket/${newDocket.id}${projectQuery}`, { replace: true });
       return newDocket;
     } catch (err) {
       logError('Error creating docket:', err);
@@ -575,6 +590,9 @@ export function DocketEditPage() {
   // Get approved employees/plant only
   const approvedEmployees = company?.employees.filter((e) => e.status === 'approved') || [];
   const approvedPlant = company?.plant.filter((p) => p.status === 'approved') || [];
+  const myCompanyLink = company?.projectId
+    ? `/my-company?projectId=${encodeURIComponent(company.projectId)}`
+    : '/my-company';
   const plantHoursError = sheetType === 'plant' ? getPlantHoursError(hoursOperated) : null;
 
   // Calculate sheet preview
@@ -831,7 +849,7 @@ export function DocketEditPage() {
                 <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <p className="text-primary">
                   No approved employees yet. Add employees in{' '}
-                  <Link to="/my-company" className="underline">
+                  <Link to={myCompanyLink} className="underline">
                     My Company
                   </Link>{' '}
                   and wait for rate approval.
@@ -926,7 +944,7 @@ export function DocketEditPage() {
                 <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <p className="text-primary">
                   No approved plant yet. Add plant in{' '}
-                  <Link to="/my-company" className="underline">
+                  <Link to={myCompanyLink} className="underline">
                     My Company
                   </Link>{' '}
                   and wait for rate approval.

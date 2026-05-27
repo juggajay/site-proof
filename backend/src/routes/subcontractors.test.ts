@@ -1858,6 +1858,80 @@ describe('Subcontractors API', () => {
       }
     });
 
+    it('should add employee rates to the requested project-scoped subcontractor company', async () => {
+      const suffix = Date.now();
+      const otherProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Portal Rate Other Project ${suffix}`,
+          projectNumber: `PORTAL-RATE-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const otherSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: otherProject.id,
+          companyName: `Portal Rate Other Co ${suffix}`,
+          primaryContactEmail: `portal-rate-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: portalUserId,
+          subcontractorCompanyId: otherSub.id,
+          role: 'admin',
+        },
+      });
+
+      const employeeName = `Portal Scoped Employee ${suffix}`;
+
+      try {
+        const createRes = await request(app)
+          .post('/api/subcontractors/my-company/employees')
+          .set('Authorization', `Bearer ${portalToken}`)
+          .send({
+            projectId,
+            name: employeeName,
+            role: 'Operator',
+            hourlyRate: 67,
+          });
+
+        expect(createRes.status).toBe(201);
+
+        const employee = await prisma.employeeRoster.findUnique({
+          where: { id: createRes.body.employee.id },
+          select: { subcontractorCompanyId: true },
+        });
+        expect(employee?.subcontractorCompanyId).toBe(portalSubId);
+
+        const requestedProjectRes = await request(app)
+          .get(`/api/subcontractors/my-company?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${portalToken}`);
+        const requestedEmployeeNames = requestedProjectRes.body.company.employees.map(
+          (employee: { name: string }) => employee.name,
+        );
+        expect(requestedEmployeeNames).toContain(employeeName);
+
+        const otherProjectRes = await request(app)
+          .get(`/api/subcontractors/my-company?projectId=${otherProject.id}`)
+          .set('Authorization', `Bearer ${portalToken}`);
+        const otherEmployeeNames = otherProjectRes.body.company.employees.map(
+          (employee: { name: string }) => employee.name,
+        );
+        expect(otherEmployeeNames).not.toContain(employeeName);
+      } finally {
+        await prisma.employeeRoster.deleteMany({ where: { name: employeeName } });
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: otherSub.id },
+        });
+        await prisma.subcontractorCompany.delete({ where: { id: otherSub.id } }).catch(() => {});
+        await prisma.project.delete({ where: { id: otherProject.id } }).catch(() => {});
+      }
+    });
+
     it('should reject stale head-contractor accounts with subcontractor links from my-company endpoints', async () => {
       const staleUser = await registerTestUser('stale-hc-portal-link', 'Stale HC Portal Link User');
 

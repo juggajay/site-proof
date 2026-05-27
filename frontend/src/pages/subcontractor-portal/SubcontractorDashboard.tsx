@@ -225,6 +225,11 @@ export function SubcontractorDashboard() {
   const unreadCount = notifData?.unreadCount || 0;
   const projectOptions = company?.availableProjects || [];
   const showProjectSwitcher = projectOptions.length > 1;
+  const currentProjectQuery = company?.projectId
+    ? `?projectId=${encodeURIComponent(company.projectId)}`
+    : '';
+  const myCompanyLink = `/my-company${currentProjectQuery}`;
+  const newDocketLink = `/subcontractor-portal/docket/new${currentProjectQuery}`;
 
   const loading = companyLoading;
 
@@ -280,7 +285,7 @@ export function SubcontractorDashboard() {
         title: n.title,
         message: n.message,
         date: n.createdAt,
-        link: '/my-company',
+        link: myCompanyLink,
       })),
   ];
 
@@ -405,7 +410,7 @@ export function SubcontractorDashboard() {
             <div className="text-center py-4">
               <p className="text-muted-foreground mb-4">No docket started for today</p>
               <Link
-                to="/subcontractor-portal/docket/new"
+                to={newDocketLink}
                 className="inline-flex items-center gap-2 py-2.5 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-colors"
               >
                 <Plus className="h-4 w-4" />
@@ -540,7 +545,7 @@ export function SubcontractorDashboard() {
       {/* Quick Links */}
       <div className="grid grid-cols-2 gap-3">
         <Link
-          to="/my-company"
+          to={myCompanyLink}
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
