@@ -10,3 +10,7 @@ export function isSubcontractorInvitationExpired(
 ): boolean {
   return Boolean(invitation.invitationExpiresAt && invitation.invitationExpiresAt <= now);
 }
+
+export function isSubcontractorInvitationAcceptableStatus(status: string): boolean {
+  return status === 'pending_approval' || status === 'approved';
+}

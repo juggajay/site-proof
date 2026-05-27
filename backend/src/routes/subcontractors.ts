@@ -10,6 +10,7 @@ import { buildFrontendUrl } from '../lib/runtimeConfig.js';
 import { logError } from '../lib/serverLogger.js';
 import {
   getSubcontractorInvitationExpiresAt,
+  isSubcontractorInvitationAcceptableStatus,
   isSubcontractorInvitationExpired,
 } from '../lib/subcontractorInvitations.js';
 
@@ -253,8 +254,8 @@ function parseOptionalBooleanQuery(value: unknown, field: string): boolean | und
   throw AppError.badRequest(`${field} must be true or false`);
 }
 
-function assertInvitationPending(status: string): void {
-  if (status !== 'pending_approval') {
+function assertInvitationAcceptable(status: string): void {
+  if (!isSubcontractorInvitationAcceptableStatus(status)) {
     throw AppError.forbidden('This invitation is no longer active');
   }
 }
@@ -327,6 +328,7 @@ subcontractorsRouter.get(
       where: { id },
       include: {
         project: { select: { id: true, name: true, companyId: true } },
+        _count: { select: { users: true } },
       },
     });
 
@@ -358,6 +360,9 @@ subcontractorsRouter.get(
         primaryContactName: subcontractor.primaryContactName,
         status: subcontractor.status,
         expiresAt: subcontractor.invitationExpiresAt?.toISOString() ?? null,
+        canAccept:
+          isSubcontractorInvitationAcceptableStatus(subcontractor.status) &&
+          subcontractor._count.users === 0,
       },
     });
   }),
@@ -380,9 +385,10 @@ subcontractorsRouter.get(
 
     const invitation = await prisma.subcontractorCompany.findFirst({
       where: {
-        status: 'pending_approval',
+        status: { in: ['pending_approval', 'approved'] },
         primaryContactEmail: { equals: email, mode: 'insensitive' },
         OR: [{ invitationExpiresAt: null }, { invitationExpiresAt: { gt: now } }],
+        users: { none: {} },
       },
       include: {
         project: {
@@ -412,6 +418,7 @@ subcontractorsRouter.get(
         primaryContactName: invitation.primaryContactName,
         status: invitation.status,
         expiresAt: invitation.invitationExpiresAt?.toISOString() ?? null,
+        canAccept: true,
       },
     });
   }),
@@ -766,15 +773,17 @@ subcontractorsRouter.post(
         throw AppError.badRequest('This invitation has already been accepted by another user');
       }
 
-      assertInvitationPending(subcontractor.status);
+      assertInvitationAcceptable(subcontractor.status);
 
-      const statusUpdate = await tx.subcontractorCompany.updateMany({
-        where: { id: subcontractor.id, status: 'pending_approval' },
-        data: { status: 'approved' },
-      });
+      if (subcontractor.status === 'pending_approval') {
+        const statusUpdate = await tx.subcontractorCompany.updateMany({
+          where: { id: subcontractor.id, status: 'pending_approval' },
+          data: { status: 'approved' },
+        });
 
-      if (statusUpdate.count !== 1) {
-        throw AppError.badRequest('This invitation has already been accepted by another user');
+        if (statusUpdate.count !== 1) {
+          throw AppError.badRequest('This invitation has already been accepted by another user');
+        }
       }
 
       await tx.subcontractorUser.create({

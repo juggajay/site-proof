@@ -43,6 +43,7 @@ interface Invitation {
   primaryContactEmail: string;
   primaryContactName?: string;
   status: string;
+  canAccept?: boolean;
 }
 
 export function AcceptInvitePage() {
@@ -277,8 +278,10 @@ export function AcceptInvitePage() {
     );
   }
 
-  // Already accepted
-  if (invitation.status === 'approved' || invitation.status === 'active') {
+  // Already accepted. A head contractor can approve the row before any portal user
+  // accepts it, so only treat approved invites as closed when the API says they
+  // are not acceptable.
+  if (invitation.status === 'active' || invitation.canAccept === false) {
     return (
       <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-card rounded-lg shadow-md p-6">

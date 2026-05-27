@@ -400,7 +400,13 @@ async function mockSeededSubcontractorsApi(
   };
 }
 
-async function mockInviteAcceptanceApi(page: Page) {
+async function mockInviteAcceptanceApi(
+  page: Page,
+  invitationOverrides: Partial<{
+    status: string;
+    canAccept: boolean;
+  }> = {},
+) {
   let registerRequest: unknown = null;
   let acceptRequestCount = 0;
   let accepted = false;
@@ -413,6 +419,8 @@ async function mockInviteAcceptanceApi(page: Page) {
     primaryContactEmail: invitedSubcontractorUser.email,
     primaryContactName: invitedSubcontractorUser.fullName,
     status: 'pending_approval',
+    canAccept: true,
+    ...invitationOverrides,
   };
 
   await page.route('**/api/**', async (route) => {
@@ -1171,6 +1179,32 @@ test.describe('Subcontractor invite acceptance', () => {
     await expect(
       page.getByRole('heading', { name: /Good (morning|afternoon|evening), Sally/ }),
     ).toBeVisible();
+  });
+
+  test('lets an authenticated invited user accept after head contractor approval', async ({
+    page,
+  }) => {
+    const api = await mockInviteAcceptanceApi(page, {
+      status: 'approved',
+      canAccept: true,
+    });
+    await mockAuthenticatedUserState(page, {
+      ...invitedSubcontractorUser,
+      role: 'viewer',
+      roleInCompany: 'viewer',
+    });
+
+    await page.goto('/invitations');
+
+    await expect(page.getByRole('heading', { name: "You've been invited!" })).toBeVisible();
+    await expect(page.getByText('E2E Subbie Pty Ltd')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Accept Invitation' })).toBeVisible();
+    await expect(page.getByText('Invitation Already Accepted')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Accept Invitation' }).click();
+
+    await expect.poll(() => api.getAcceptRequestCount()).toBe(1);
+    await expect(page).toHaveURL(/\/subcontractor-portal$/);
   });
 });
 

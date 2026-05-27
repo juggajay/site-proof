@@ -41,7 +41,10 @@ import {
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../lib/supabase.js';
-import { isSubcontractorInvitationExpired } from '../lib/subcontractorInvitations.js';
+import {
+  isSubcontractorInvitationAcceptableStatus,
+  isSubcontractorInvitationExpired,
+} from '../lib/subcontractorInvitations.js';
 import { hasActiveSubcontractorPortalIdentity } from '../lib/projectAccess.js';
 
 const AVATAR_STORAGE_PREFIX = 'avatars';
@@ -2245,7 +2248,7 @@ authRouter.post(
         throw AppError.notFound('Invitation');
       }
 
-      if (invitedSubcontractor.status !== 'pending_approval') {
+      if (!isSubcontractorInvitationAcceptableStatus(invitedSubcontractor.status)) {
         throw AppError.forbidden('This invitation is no longer active');
       }
 
@@ -2271,13 +2274,15 @@ authRouter.post(
         throw AppError.badRequest('This invitation has already been accepted by another user');
       }
 
-      const statusUpdate = await tx.subcontractorCompany.updateMany({
-        where: { id: invitedSubcontractor.id, status: 'pending_approval' },
-        data: { status: 'approved' },
-      });
+      if (invitedSubcontractor.status === 'pending_approval') {
+        const statusUpdate = await tx.subcontractorCompany.updateMany({
+          where: { id: invitedSubcontractor.id, status: 'pending_approval' },
+          data: { status: 'approved' },
+        });
 
-      if (statusUpdate.count !== 1) {
-        throw AppError.badRequest('This invitation has already been accepted by another user');
+        if (statusUpdate.count !== 1) {
+          throw AppError.badRequest('This invitation has already been accepted by another user');
+        }
       }
 
       const createdUser = await tx.user.create({
