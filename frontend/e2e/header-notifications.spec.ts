@@ -168,7 +168,7 @@ test.describe('Header notifications', () => {
       )
       .toEqual({ hasNotificationMenuText: false, hasUserMenuText: false });
 
-    await page.getByRole('button', { name: 'Notifications' }).click();
+    await page.getByRole('link', { name: 'Notifications' }).click();
     await expect(page).toHaveURL('/notifications');
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
 
@@ -180,7 +180,7 @@ test.describe('Header notifications', () => {
     await mockHeaderApis(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.getByRole('button', { name: 'Notifications' }).click();
+    await page.getByRole('link', { name: 'Notifications' }).click();
 
     await page.getByRole('button', { name: 'Alerts' }).click();
     await expect(page.getByRole('button', { name: /Overdue NCR/ })).toBeVisible();
@@ -205,7 +205,7 @@ test.describe('Header notifications', () => {
     await mockHeaderApis(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.getByRole('button', { name: 'Notifications' }).click();
+    await page.getByRole('link', { name: 'Notifications' }).click();
     await page.getByRole('button', { name: /External destination/ }).click();
 
     await expect(page).toHaveURL('/notifications');

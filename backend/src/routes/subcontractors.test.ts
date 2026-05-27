@@ -1794,6 +1794,51 @@ describe('Subcontractors API', () => {
       expect(res.body.company.companyName).toContain('Portal Test Co');
     });
 
+    it('should resolve my-company for a requested linked project', async () => {
+      const suffix = Date.now();
+      const otherProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Portal Other Project ${suffix}`,
+          projectNumber: `PORTAL-OTHER-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const otherSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: otherProject.id,
+          companyName: `Portal Requested Project Co ${suffix}`,
+          primaryContactEmail: `portal-requested-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: portalUserId,
+          subcontractorCompanyId: otherSub.id,
+          role: 'admin',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/subcontractors/my-company?projectId=${otherProject.id}`)
+          .set('Authorization', `Bearer ${portalToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.projectId).toBe(otherProject.id);
+        expect(res.body.company.companyName).toBe(otherSub.companyName);
+      } finally {
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: otherSub.id },
+        });
+        await prisma.subcontractorCompany.delete({ where: { id: otherSub.id } }).catch(() => {});
+        await prisma.project.delete({ where: { id: otherProject.id } }).catch(() => {});
+      }
+    });
+
     it('should reject stale head-contractor accounts with subcontractor links from my-company endpoints', async () => {
       const staleUser = await registerTestUser('stale-hc-portal-link', 'Stale HC Portal Link User');
 

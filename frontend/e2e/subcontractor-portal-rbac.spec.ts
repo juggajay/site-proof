@@ -228,4 +228,19 @@ test.describe('Subcontractor portal RBAC', () => {
     await expect(page.getByRole('button', { name: 'New Project' })).toHaveCount(0);
     await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
   });
+
+  test('redirects linked portal identities from project detail to assigned work', async ({
+    page,
+  }) => {
+    await mockSubcontractorPortalApi(page, subcontractorPortalUser);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}`);
+
+    await page.waitForURL(`**/subcontractor-portal/work?projectId=${E2E_PROJECT_ID}`, {
+      timeout: 15000,
+    });
+    await expect(page.getByText('Access Denied')).toHaveCount(0);
+    await expect(page.getByText('Assigned Work')).toBeVisible();
+    await expect(page.getByText('SUB-LOT-001')).toBeVisible();
+  });
 });

@@ -13,6 +13,7 @@ import {
   isSubcontractorInvitationAcceptableStatus,
   isSubcontractorInvitationExpired,
 } from '../lib/subcontractorInvitations.js';
+import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
 
 // Feature #483: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
@@ -831,10 +832,17 @@ subcontractorsRouter.get(
   asyncHandler(async (req, res) => {
     const user = req.user!;
     assertStandaloneSubcontractorPortalUser(user);
+    const requestedProjectId =
+      req.query.projectId === undefined ? null : normalizeIdParam(req.query.projectId, 'projectId');
 
     // Get the user's subcontractor company via SubcontractorUser
     const subcontractorUser = await prisma.subcontractorUser.findFirst({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        subcontractorCompany: activeSubcontractorCompanyWhere(
+          requestedProjectId ? { projectId: requestedProjectId } : {},
+        ),
+      },
       include: {
         subcontractorCompany: {
           include: {
@@ -852,7 +860,11 @@ subcontractorsRouter.get(
     });
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      throw AppError.forbidden('Only subcontractors can access this endpoint');
+      throw AppError.forbidden(
+        requestedProjectId
+          ? 'You do not have subcontractor portal access to this project'
+          : 'Only subcontractors can access this endpoint',
+      );
     }
 
     const company = subcontractorUser.subcontractorCompany;
