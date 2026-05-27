@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `cea9d98 fix: apply dev role override to route guards (#217)`
+  `ce9e3e1 fix: expose docket query action in approvals (#226)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -291,7 +291,7 @@ Recent verification pattern:
 
 ### Evidence Readiness And Activation QA
 
-Status: core activation and dogfood findings are closed through PR #217. No
+Status: core activation and dogfood findings are closed through PR #226. No
 known activation/RBAC blocker remains from the May 2026 dogfood queue; use fresh
 live QA before treating any older `.gstack` report item as active.
 
@@ -376,6 +376,21 @@ Production dogfood and activation follow-up PRs:
   placeholder.
 - PR #217 made the dev role override apply to both `role` and `roleInCompany`,
   so route guards, navigation, and pages use the same effective role in QA.
+- PR #218 refreshed this tracked handoff after the first activation-fix batch.
+- PR #219 polished dogfood navigation and mobile UI: auth redirects, dashboard
+  labels, reset-password copy, cookie banner behaviour, and notification
+  navigation guardrails.
+- PR #220 made Evidence Readiness actions scroll to the relevant lot tabs.
+- PR #221 allowed approved subcontractor invites to be accepted and covered the
+  accepted-before-acceptance flow with regression tests.
+- PR #222 routed the notification bell to the authenticated notifications page.
+- PR #223 routed subcontractor project links to portal work surfaces instead of
+  head-contractor project workspaces.
+- PR #224 opened the ITP assignment surface from the readiness action.
+- PR #225 made the subcontractor portal show all active linked projects and
+  assigned work across those projects.
+- PR #226 exposed the existing backend docket query action in desktop and
+  mobile docket approvals, and taught docket PDFs the `queried` status.
 
 Historical `.gstack/dev-browser` reports remain useful as evidence trails, but
 their issue lists are not live backlogs. In particular, these are stale unless a
@@ -422,6 +437,17 @@ fresh production recheck proves otherwise:
   PR #216.
 - "Dev role switcher says one role while route guards use another", closed by
   PR #217.
+- "Readiness actions only scroll near the right area", closed by PR #220 and
+  PR #224.
+- "Approved subcontractor invite cannot be accepted", closed by PR #221.
+- "Notification bell opens a panel instead of the full notifications surface",
+  closed by PR #222.
+- "Subcontractor project links hit Access Denied / HC workspace routes", closed
+  by PR #223.
+- "Subcontractor portal only shows the first linked project", closed by
+  PR #225.
+- "Head contractor can approve or reject dockets but cannot query them from the
+  approvals UI", closed by PR #226.
 
 Open product-decision items:
 
@@ -450,7 +476,7 @@ Open low-risk polish candidates:
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
    Many findings from the 2026-05-19 through 2026-05-25 reports have been
-   closed by PRs #99-#217.
+   closed by PRs #99-#226.
 
 ## Handoff Checklist For The Next Agent
 
