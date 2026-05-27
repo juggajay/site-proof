@@ -1792,9 +1792,15 @@ describe('Subcontractors API', () => {
       expect(res.status).toBe(200);
       expect(res.body.company).toBeDefined();
       expect(res.body.company.companyName).toContain('Portal Test Co');
+      expect(res.body.company.availableProjects).toEqual([
+        expect.objectContaining({
+          projectId,
+          companyName: expect.stringContaining('Portal Test Co'),
+        }),
+      ]);
     });
 
-    it('should resolve my-company for a requested linked project', async () => {
+    it('should resolve my-company for requested and newest linked projects', async () => {
       const suffix = Date.now();
       const otherProject = await prisma.project.create({
         data: {
@@ -1830,6 +1836,19 @@ describe('Subcontractors API', () => {
         expect(res.status).toBe(200);
         expect(res.body.company.projectId).toBe(otherProject.id);
         expect(res.body.company.companyName).toBe(otherSub.companyName);
+        expect(res.body.company.availableProjects).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ projectId }),
+            expect.objectContaining({ projectId: otherProject.id }),
+          ]),
+        );
+
+        const defaultRes = await request(app)
+          .get('/api/subcontractors/my-company')
+          .set('Authorization', `Bearer ${portalToken}`);
+
+        expect(defaultRes.status).toBe(200);
+        expect(defaultRes.body.company.projectId).toBe(otherProject.id);
       } finally {
         await prisma.subcontractorUser.deleteMany({
           where: { subcontractorCompanyId: otherSub.id },

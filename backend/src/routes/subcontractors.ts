@@ -78,6 +78,15 @@ const PHONE_MAX_LENGTH = 40;
 const ROLE_MAX_LENGTH = 80;
 const EQUIPMENT_TEXT_MAX_LENGTH = 160;
 const ABN_MAX_LENGTH = 32;
+
+const DEFAULT_PORTAL_ACCESS = {
+  lots: true,
+  itps: true,
+  holdPoints: true,
+  testResults: true,
+  ncrs: false,
+  documents: true,
+};
 const RATE_MAX_VALUE = 100000;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[0-9+().\-\s]{3,40}$/;
@@ -835,13 +844,13 @@ subcontractorsRouter.get(
     const requestedProjectId =
       req.query.projectId === undefined ? null : normalizeIdParam(req.query.projectId, 'projectId');
 
-    // Get the user's subcontractor company via SubcontractorUser
-    const subcontractorUser = await prisma.subcontractorUser.findFirst({
+    // Get every active project link for this subcontractor portal user. A single subcontractor
+    // identity can work across multiple head-contractor projects, so the portal must not silently
+    // pin them to whichever link Postgres happens to return first.
+    const subcontractorUsers = await prisma.subcontractorUser.findMany({
       where: {
         userId: user.id,
-        subcontractorCompany: activeSubcontractorCompanyWhere(
-          requestedProjectId ? { projectId: requestedProjectId } : {},
-        ),
+        subcontractorCompany: activeSubcontractorCompanyWhere(),
       },
       include: {
         subcontractorCompany: {
@@ -857,7 +866,14 @@ subcontractorsRouter.get(
           },
         },
       },
+      orderBy: { createdAt: 'desc' },
     });
+
+    const subcontractorUser = requestedProjectId
+      ? subcontractorUsers.find(
+          (link) => link.subcontractorCompany.projectId === requestedProjectId,
+        )
+      : subcontractorUsers[0];
 
     if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
       throw AppError.forbidden(
@@ -881,6 +897,14 @@ subcontractorsRouter.get(
         primaryContactEmail: company.primaryContactEmail || user.email,
         primaryContactPhone: company.primaryContactPhone || '',
         status: company.status,
+        availableProjects: subcontractorUsers.map((link) => ({
+          id: link.subcontractorCompany.id,
+          companyName: link.subcontractorCompany.companyName,
+          projectId: link.subcontractorCompany.projectId,
+          projectName: link.subcontractorCompany.project?.name || '',
+          status: link.subcontractorCompany.status,
+          portalAccess: link.subcontractorCompany.portalAccess || DEFAULT_PORTAL_ACCESS,
+        })),
         employees: company.employeeRoster.map((e) => ({
           id: e.id,
           name: e.name,
@@ -898,14 +922,7 @@ subcontractorsRouter.get(
           wetRate: p.wetRate?.toNumber() || 0,
           status: p.status === 'approved' ? 'approved' : 'pending',
         })),
-        portalAccess: company.portalAccess || {
-          lots: true,
-          itps: true,
-          holdPoints: true,
-          testResults: true,
-          ncrs: false,
-          documents: true,
-        },
+        portalAccess: company.portalAccess || DEFAULT_PORTAL_ACCESS,
       },
     });
   }),
@@ -1238,16 +1255,6 @@ subcontractorsRouter.delete(
     });
   }),
 );
-
-// Default portal access settings
-const DEFAULT_PORTAL_ACCESS = {
-  lots: true,
-  itps: true,
-  holdPoints: true,
-  testResults: true,
-  ncrs: false,
-  documents: true,
-};
 
 // PATCH /api/subcontractors/:id/portal-access - Update portal access settings
 subcontractorsRouter.patch(
