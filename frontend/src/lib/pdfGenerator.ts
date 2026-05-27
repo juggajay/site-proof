@@ -2913,7 +2913,7 @@ export interface DocketDetailPDFData {
     id: string;
     docketNumber: string;
     date: string;
-    status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
+    status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'queried';
     notes: string | null;
     labourHours: number;
     plantHours: number;
@@ -3008,6 +3008,7 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
     pending_approval: [234, 179, 8], // Amber
     approved: [34, 197, 94], // Green
     rejected: [239, 68, 68], // Red
+    queried: [245, 158, 11], // Amber
   };
   const headerColor = statusColors[data.docket.status] || [100, 100, 100];
 
@@ -3029,6 +3030,7 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
     pending_approval: 'PENDING APPROVAL',
     approved: 'APPROVED',
     rejected: 'REJECTED',
+    queried: 'QUERIED',
   };
   const statusText = statusLabels[data.docket.status] || data.docket.status.toUpperCase();
   const badgeX = pageWidth - margin - doc.getTextWidth(statusText);

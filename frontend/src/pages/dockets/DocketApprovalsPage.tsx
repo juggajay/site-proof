@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
-import { X, Printer } from 'lucide-react';
+import { MessageSquare, Printer, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { DocketDetailPDFData } from '@/lib/pdfGenerator';
@@ -20,7 +20,7 @@ interface Docket {
   subcontractor: string;
   subcontractorId: string;
   date: string;
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
+  status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'queried';
   notes: string | null;
   labourHours: number;
   plantHours: number;
@@ -79,6 +79,7 @@ const statusColors: Record<string, string> = {
   pending_approval: 'bg-yellow-100 text-yellow-800',
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
+  queried: 'bg-amber-100 text-amber-800',
 };
 
 const statusLabels: Record<string, string> = {
@@ -86,6 +87,7 @@ const statusLabels: Record<string, string> = {
   pending_approval: 'Pending Approval',
   approved: 'Approved',
   rejected: 'Rejected',
+  queried: 'Queried',
 };
 
 const HOURS_INPUT_ERROR = 'Hours must be a non-negative decimal number.';
@@ -133,7 +135,7 @@ export function DocketApprovalsPage() {
 
   // State for approve/reject/view modal
   const [actionModalOpen, setActionModalOpen] = useState(false);
-  const [actionType, setActionType] = useState<'approve' | 'reject' | 'view'>('approve');
+  const [actionType, setActionType] = useState<'approve' | 'reject' | 'query' | 'view'>('approve');
   const [selectedDocket, setSelectedDocket] = useState<Docket | null>(null);
   const [actionNotes, setActionNotes] = useState('');
   const [actionInProgress, setActionInProgress] = useState(false);
@@ -320,7 +322,7 @@ export function DocketApprovalsPage() {
   };
 
   // Open the approve/reject/view modal and fetch detail entries
-  const openActionModal = async (docket: Docket, type: 'approve' | 'reject' | 'view') => {
+  const openActionModal = async (docket: Docket, type: 'approve' | 'reject' | 'query' | 'view') => {
     setSelectedDocket(docket);
     setActionType(type);
     setActionNotes('');
@@ -364,9 +366,15 @@ export function DocketApprovalsPage() {
       adjustedPlantHoursValue = parsedAdjustedPlantHours;
     }
 
+    if (actionType === 'query' && !actionNotes.trim()) {
+      toast({ variant: 'warning', description: 'Please enter the query details.' });
+      return;
+    }
+
     actionInProgressRef.current = true;
     setActionInProgress(true);
-    const endpoint = actionType === 'approve' ? 'approve' : 'reject';
+    const endpoint =
+      actionType === 'approve' ? 'approve' : actionType === 'reject' ? 'reject' : 'query';
 
     try {
       await apiFetch(`/api/dockets/${encodeURIComponent(selectedDocket.id)}/${endpoint}`, {
@@ -379,15 +387,21 @@ export function DocketApprovalsPage() {
                 adjustedPlantHours: adjustedPlantHoursValue,
                 adjustmentReason: adjustmentReason.trim() || null,
               }
-            : {
-                reason: actionNotes.trim() || null,
-              },
+            : actionType === 'query'
+              ? {
+                  questions: actionNotes.trim(),
+                }
+              : {
+                  reason: actionNotes.trim() || null,
+                },
         ),
       });
 
+      const actionPastTense =
+        actionType === 'approve' ? 'approved' : actionType === 'reject' ? 'rejected' : 'queried';
       toast({
         variant: 'success',
-        description: `Docket ${actionType === 'approve' ? 'approved' : 'rejected'} successfully`,
+        description: `Docket ${actionPastTense} successfully`,
       });
       setActionModalOpen(false);
       setSelectedDocket(null);
@@ -604,6 +618,7 @@ export function DocketApprovalsPage() {
           canApprove={canApprove}
           subcontractorSetupHref={subcontractorSetupHref}
           onApprove={(d) => openActionModal(d, 'approve')}
+          onQuery={(d) => openActionModal(d, 'query')}
           onReject={(d) => openActionModal(d, 'reject')}
           onTapDocket={handleTapDocket}
           onRefresh={fetchDockets}
@@ -798,6 +813,15 @@ export function DocketApprovalsPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  className="border-amber-500 text-amber-700 hover:bg-amber-50"
+                                  onClick={() => openActionModal(docket, 'query')}
+                                >
+                                  <MessageSquare className="mr-1 h-4 w-4" />
+                                  Query
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   className="text-red-600 border-red-600 hover:bg-red-50"
                                   onClick={() => openActionModal(docket, 'reject')}
                                 >
@@ -983,7 +1007,9 @@ export function DocketApprovalsPage() {
                   ? 'Approve Docket'
                   : actionType === 'reject'
                     ? 'Reject Docket'
-                    : 'Docket Details'}
+                    : actionType === 'query'
+                      ? 'Query Docket'
+                      : 'Docket Details'}
               </h2>
               <Button
                 variant="ghost"
@@ -1188,6 +1214,14 @@ export function DocketApprovalsPage() {
                       Approve
                     </Button>
                     <Button
+                      variant="outline"
+                      className="flex-1 border-amber-500 text-amber-700 hover:bg-amber-50"
+                      onClick={() => setActionType('query')}
+                    >
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Query
+                    </Button>
+                    <Button
                       variant="destructive"
                       className="flex-1"
                       onClick={() => setActionType('reject')}
@@ -1303,8 +1337,12 @@ export function DocketApprovalsPage() {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label htmlFor="docket-action-notes" className="block text-sm font-medium">
-                    {actionType === 'approve' ? 'Approval Notes' : 'Rejection Reason'}
-                    {actionType === 'reject' && ' *'}
+                    {actionType === 'approve'
+                      ? 'Approval Notes'
+                      : actionType === 'query'
+                        ? 'Query Details'
+                        : 'Rejection Reason'}
+                    {(actionType === 'reject' || actionType === 'query') && ' *'}
                   </label>
                   {/* Feature #289: Voice-to-text for approval/rejection notes */}
                   <VoiceInputButton
@@ -1323,7 +1361,9 @@ export function DocketApprovalsPage() {
                   placeholder={
                     actionType === 'approve'
                       ? 'Add any notes (optional)...'
-                      : 'Please provide a reason for rejection...'
+                      : actionType === 'query'
+                        ? 'Ask what needs to be clarified before approval...'
+                        : 'Please provide a reason for rejection...'
                   }
                 />
               </div>
@@ -1335,17 +1375,30 @@ export function DocketApprovalsPage() {
               </Button>
               {actionType !== 'view' && (
                 <Button
-                  variant={actionType === 'approve' ? 'success' : 'destructive'}
+                  variant={
+                    actionType === 'approve'
+                      ? 'success'
+                      : actionType === 'reject'
+                        ? 'destructive'
+                        : 'default'
+                  }
                   onClick={handleAction}
-                  disabled={actionInProgress || (actionType === 'reject' && !actionNotes.trim())}
+                  disabled={
+                    actionInProgress ||
+                    ((actionType === 'reject' || actionType === 'query') && !actionNotes.trim())
+                  }
                 >
                   {actionInProgress
                     ? actionType === 'approve'
                       ? 'Approving...'
-                      : 'Rejecting...'
+                      : actionType === 'reject'
+                        ? 'Rejecting...'
+                        : 'Querying...'
                     : actionType === 'approve'
                       ? 'Approve'
-                      : 'Reject'}
+                      : actionType === 'reject'
+                        ? 'Reject'
+                        : 'Send Query'}
                 </Button>
               )}
             </div>
