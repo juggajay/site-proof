@@ -246,18 +246,36 @@ export function LotDetailPage() {
 
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp';
+  const shouldOpenAssignItp = searchParams.get('action') === 'assign-itp';
 
   // Handle tab change
   const handleTabChange = (tabId: LotTab) => {
-    setSearchParams({ tab: tabId });
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', tabId);
+    params.delete('action');
+    setSearchParams(params);
   };
 
-  const handleReadinessTabChange = (tabId: LotTab) => {
-    setSearchParams({ tab: tabId });
+  const handleReadinessTabChange = (tabId: LotTab, actionCode?: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', tabId);
+    if (tabId === 'itp' && (actionCode === 'no_itp_assigned' || actionCode === 'no_itp')) {
+      params.set('action', 'assign-itp');
+    } else {
+      params.delete('action');
+    }
+    setSearchParams(params);
     window.requestAnimationFrame(() => {
       tabSectionRef.current?.scrollIntoView({ block: 'start', inline: 'nearest' });
     });
   };
+
+  const handleAssignItpActionHandled = useCallback(() => {
+    if (searchParams.get('action') !== 'assign-itp') return;
+    const params = new URLSearchParams(searchParams);
+    params.delete('action');
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const {
     data: readinessData,
@@ -1933,6 +1951,8 @@ export function LotDetailPage() {
               onAssignTemplate={handleAssignTemplate}
               onRetryItp={() => void fetchItpInstance()}
               assigningTemplate={assigningTemplate}
+              autoOpenAssignTemplate={shouldOpenAssignItp}
+              onAutoOpenAssignTemplateHandled={handleAssignItpActionHandled}
               onOpenNaModal={(data) => setNaModal(data)}
               onOpenFailedModal={(data) => setFailedModal(data)}
             />

@@ -4,7 +4,7 @@
  * Extracted from LotDetailPage.tsx for better maintainability.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   RefreshCw,
@@ -612,6 +612,8 @@ export interface ITPChecklistTabProps {
   onAssignTemplate: (templateId: string) => Promise<boolean>;
   onRetryItp: () => void;
   assigningTemplate: boolean;
+  autoOpenAssignTemplate?: boolean;
+  onAutoOpenAssignTemplateHandled?: () => void;
   // Modal state setters
   onOpenNaModal: (data: { checklistItemId: string; itemDescription: string }) => void;
   onOpenFailedModal: (data: { checklistItemId: string; itemDescription: string }) => void;
@@ -640,10 +642,13 @@ export function ITPChecklistTab({
   onAssignTemplate,
   onRetryItp,
   assigningTemplate,
+  autoOpenAssignTemplate = false,
+  onAutoOpenAssignTemplateHandled,
   onOpenNaModal,
   onOpenFailedModal,
 }: ITPChecklistTabProps) {
   const navigate = useNavigate();
+  const assignTemplateCardRef = useRef<HTMLDivElement>(null);
 
   // Local state for ITP tab
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
@@ -654,6 +659,26 @@ export function ITPChecklistTab({
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null);
   const [photoZoom, setPhotoZoom] = useState(1);
+
+  useEffect(() => {
+    if (!autoOpenAssignTemplate || itpInstance || loadingItp) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      assignTemplateCardRef.current?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      if (templates.length > 0) {
+        setShowAssignModal(true);
+      }
+      onAutoOpenAssignTemplateHandled?.();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    autoOpenAssignTemplate,
+    itpInstance,
+    loadingItp,
+    onAutoOpenAssignTemplateHandled,
+    templates.length,
+  ]);
 
   // Photo navigation handlers
   const getAllPhotos = (): ITPAttachment[] => {
@@ -995,7 +1020,7 @@ export function ITPChecklistTab({
   // No ITP assigned - show assignment UI
   return (
     <>
-      <div className="rounded-lg border p-6 text-center">
+      <div ref={assignTemplateCardRef} className="rounded-lg border p-6 text-center">
         <div className="text-4xl mb-2">ITP</div>
         <h3 className="text-lg font-semibold mb-2">ITP Checklist</h3>
         <p className="text-muted-foreground mb-4">
