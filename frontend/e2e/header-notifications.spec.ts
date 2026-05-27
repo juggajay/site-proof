@@ -153,7 +153,7 @@ async function mockHeaderApis(page: Page) {
 }
 
 test.describe('Header notifications', () => {
-  test('keeps closed header menus out of the accessibility tree', async ({ page }) => {
+  test('routes the notification bell to the full notifications page', async ({ page }) => {
     await mockHeaderApis(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
@@ -169,15 +169,14 @@ test.describe('Header notifications', () => {
       .toEqual({ hasNotificationMenuText: false, hasUserMenuText: false });
 
     await page.getByRole('button', { name: 'Notifications' }).click();
-    await expect(page.getByRole('button', { name: 'Mark all as read' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'View all notifications' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Notification settings' })).toBeVisible();
+    await expect(page).toHaveURL('/notifications');
+    await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
 
     await page.getByRole('button', { name: 'User menu' }).click();
     await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
   });
 
-  test('filters alert notifications and routes footer to settings', async ({ page }) => {
+  test('filters alert notifications and routes the page action to settings', async ({ page }) => {
     await mockHeaderApis(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
@@ -186,21 +185,9 @@ test.describe('Header notifications', () => {
     await page.getByRole('button', { name: 'Alerts' }).click();
     await expect(page.getByRole('button', { name: /Overdue NCR/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Mentioned in a comment/ })).toBeHidden();
-    await expect(page.getByRole('button', { name: 'View all notifications' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Notification settings' }).click();
+    await page.getByRole('button', { name: 'Settings' }).click();
     await expect(page).toHaveURL(/\/settings$/);
-  });
-
-  test('routes the bell dropdown to the full notifications page', async ({ page }) => {
-    await mockHeaderApis(page);
-
-    await page.goto(`/projects/${E2E_PROJECT_ID}`);
-    await page.getByRole('button', { name: 'Notifications' }).click();
-    await page.getByRole('button', { name: 'View all notifications' }).click();
-
-    await expect(page).toHaveURL('/notifications');
-    await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
   });
 
   test('renders the notifications route instead of a 404', async ({ page }) => {
@@ -221,6 +208,6 @@ test.describe('Header notifications', () => {
     await page.getByRole('button', { name: 'Notifications' }).click();
     await page.getByRole('button', { name: /External destination/ }).click();
 
-    await expect(page).toHaveURL(new RegExp(`/projects/${E2E_PROJECT_ID}$`));
+    await expect(page).toHaveURL('/notifications');
   });
 });
