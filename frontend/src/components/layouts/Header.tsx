@@ -11,7 +11,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -154,10 +154,6 @@ export function Header() {
     navigate(targetPath);
   };
 
-  const openAllNotifications = () => {
-    navigate('/notifications');
-  };
-
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-6">
       <div className="flex items-center gap-4">
@@ -270,8 +266,8 @@ export function Header() {
 
         {/* Notification Bell */}
         <div className="relative">
-          <button
-            onClick={openAllNotifications}
+          <Link
+            to="/notifications"
             className="relative rounded-full p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground touch-manipulation"
             aria-label="Notifications"
           >
@@ -289,7 +285,7 @@ export function Header() {
                 </span>
               </>
             )}
-          </button>
+          </Link>
         </div>
         {/* User Profile Menu */}
         <div ref={userMenuRef} className="relative">

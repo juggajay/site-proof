@@ -1,12 +1,13 @@
 import { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
-import { AuthProvider } from '@/lib/auth';
+import { AuthProvider, useAuth } from '@/lib/auth';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { PageSkeleton } from '@/components/ui/Skeleton';
+import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 
 const ENABLE_DEV_TOOLS = import.meta.env.DEV;
 const ENABLE_MOCK_OAUTH_ROUTE =
@@ -266,6 +267,24 @@ const INTERNAL_ROLES = [
 const REPORT_ROLES = [...INTERNAL_ROLES, 'viewer'];
 const PROJECT_WORKSPACE_ROLES = [...INTERNAL_ROLES, 'viewer'];
 
+function ProjectDetailRoute() {
+  const { user, loading } = useAuth();
+  const { projectId } = useParams();
+
+  if (!loading && hasSubcontractorPortalIdentity(user)) {
+    const target = projectId
+      ? `/subcontractor-portal/work?projectId=${encodeURIComponent(projectId)}`
+      : '/subcontractor-portal/work';
+    return <Navigate to={target} replace />;
+  }
+
+  return (
+    <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+      <ProjectDetailPage />
+    </RoleProtectedRoute>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -320,14 +339,7 @@ function App() {
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/reports" element={<Navigate to="/projects" replace />} />
               <Route path="/subcontractors" element={<Navigate to="/projects" replace />} />
-              <Route
-                path="/projects/:projectId"
-                element={
-                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
-                    <ProjectDetailPage />
-                  </RoleProtectedRoute>
-                }
-              />
+              <Route path="/projects/:projectId" element={<ProjectDetailRoute />} />
 
               {/* Foreman Mobile Views - nested under ForemanMobileShell for 5-tab nav */}
               <Route

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, MapPin, AlertCircle, Clock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -45,12 +45,17 @@ function getStatusBadge(status: string) {
 
 export function AssignedWorkPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies(user?.id),
+    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
     queryFn: async () => {
+      const query = requestedProjectId
+        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+        : '';
       const res = await apiFetch<{
         company: { projectName: string; projectId: string; portalAccess?: PortalAccess };
-      }>('/api/subcontractors/my-company');
+      }>(`/api/subcontractors/my-company${query}`);
       return res.company;
     },
     enabled: !!user?.id,
