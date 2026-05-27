@@ -70,14 +70,39 @@ const seededLogs: AuditLog[] = [
     },
   },
   {
-    id: 'e2e-audit-log-system',
+    id: 'e2e-audit-log-force-conform',
     action: 'lot_force_conformed',
+    entityType: 'Lot',
+    entityId: 'e2e-force-lot',
+    changes: {
+      previousStatus: 'in_progress',
+      newStatus: 'conformed',
+      force: true,
+      reason: 'QA force conform reason visible in audit log',
+    },
+    ipAddress: null,
+    userAgent: null,
+    createdAt: '2026-05-01T00:00:00.000Z',
+    user: {
+      id: E2E_ADMIN_USER.id,
+      email: E2E_ADMIN_USER.email,
+      fullName: 'E2E Admin',
+    },
+    project: {
+      id: E2E_PROJECT_ID,
+      name: 'E2E Highway Upgrade',
+      projectNumber: 'E2E-001',
+    },
+  },
+  {
+    id: 'e2e-audit-log-system',
+    action: 'magic_link_requested',
     entityType: 'System',
     entityId: 'system-retention',
     changes: { retainedDays: 365 },
     ipAddress: null,
     userAgent: null,
-    createdAt: '2026-05-01T00:00:00.000Z',
+    createdAt: '2026-04-30T00:00:00.000Z',
     user: null,
     project: null,
   },
@@ -98,6 +123,7 @@ function filterLogs(url: URL, sourceLogs = seededLogs) {
         log.action.toLowerCase().includes(search) ||
         log.entityType.toLowerCase().includes(search) ||
         log.entityId.toLowerCase().includes(search) ||
+        JSON.stringify(log.changes).toLowerCase().includes(search) ||
         log.user?.email.toLowerCase().includes(search) ||
         log.user?.fullName?.toLowerCase().includes(search) ||
         log.project?.name.toLowerCase().includes(search) ||
@@ -187,7 +213,9 @@ async function mockAuditLogApi(
         await json({ message: 'Filter options unavailable' }, 500);
         return;
       }
-      await json({ actions: ['lot_created', 'project_updated', 'lot_force_conformed'] });
+      await json({
+        actions: ['lot_created', 'project_updated', 'lot_force_conformed', 'magic_link_requested'],
+      });
       return;
     }
 
@@ -321,12 +349,15 @@ test.describe('Audit log seeded admin contract', () => {
     await page.goto('/audit-log');
 
     await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
-    await expect(page.getByText('Showing 3 of 3 audit log entries')).toBeVisible();
+    await expect(page.getByText('Showing 4 of 4 audit log entries')).toBeVisible();
     await expect(page.getByText('Lot created')).toBeVisible();
     await expect(page.getByText('Project updated')).toBeVisible();
     await expect(page.getByText('Lot force conformed')).toBeVisible();
+    await expect(
+      page.getByText('Reason: QA force conform reason visible in audit log'),
+    ).toBeVisible();
     await expect(page.getByText('lot_created')).toBeHidden();
-    const systemRow = page.getByRole('row').filter({ hasText: 'Lot force conformed' });
+    const systemRow = page.getByRole('row').filter({ hasText: 'Magic link requested' });
     await expect(systemRow.getByText('System').first()).toBeVisible();
 
     const downloadPromise = page.waitForEvent('download');
@@ -352,14 +383,32 @@ test.describe('Audit log seeded admin contract', () => {
     await detailDialog.getByRole('button', { name: 'Close' }).first().click();
 
     await page.getByLabel('Search audit logs').fill('E2E Admin');
-    await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
+    await expect(page.getByText('Showing 2 of 2 audit log entries')).toBeVisible();
     await expect(page.getByText('Lot created')).toBeVisible();
+    await expect(page.getByText('Lot force conformed')).toBeVisible();
     await expect(page.getByText('Project updated')).toBeHidden();
 
     await page.getByLabel('Search audit logs').fill('E2E-001');
-    await expect(page.getByText('Showing 2 of 2 audit log entries')).toBeVisible();
+    await expect(page.getByText('Showing 3 of 3 audit log entries')).toBeVisible();
     await expect(page.getByText('Lot created')).toBeVisible();
     await expect(page.getByText('Project updated')).toBeVisible();
+    await expect(page.getByText('Lot force conformed')).toBeVisible();
+
+    await page.getByLabel('Search audit logs').fill('QA force conform reason visible');
+    await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
+    await expect(page.getByText('Lot force conformed')).toBeVisible();
+    await expect(
+      page.getByText('Reason: QA force conform reason visible in audit log'),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: /View details for Lot force conformed Lot e2e-forc/ })
+      .click();
+    const forceDialog = page.getByRole('dialog').filter({ hasText: 'Audit Log Details' });
+    await expect(forceDialog.getByText('Audit Summary')).toBeVisible();
+    await expect(
+      forceDialog.getByText('Reason: QA force conform reason visible in audit log'),
+    ).toBeVisible();
+    await forceDialog.getByRole('button', { name: 'Close' }).first().click();
 
     await page.getByLabel('Search audit logs').fill('project');
     await expect(page.getByText('Showing 1 of 1 audit log entries')).toBeVisible();
@@ -370,7 +419,7 @@ test.describe('Audit log seeded admin contract', () => {
     await page.getByLabel('Entity Type').selectOption('Lot');
     await expect(page.getByText('No Audit Logs Found')).toBeVisible();
     await page.getByRole('button', { name: 'Clear all filters' }).click();
-    await expect(page.getByText('Showing 3 of 3 audit log entries')).toBeVisible();
+    await expect(page.getByText('Showing 4 of 4 audit log entries')).toBeVisible();
 
     await page.getByLabel('Entity Type').selectOption('Lot');
     await page.getByLabel('Action').selectOption({ label: 'Lot created' });
@@ -423,7 +472,7 @@ test.describe('Audit log seeded admin contract', () => {
 
     await page.goto('/audit-log');
 
-    await expect(page.getByText('Showing 3 of 3 audit log entries')).toBeVisible();
+    await expect(page.getByText('Showing 4 of 4 audit log entries')).toBeVisible();
     await expect(
       page.getByText(
         'Some audit log filter options could not be loaded. Existing filters and search still work.',

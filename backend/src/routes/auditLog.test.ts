@@ -488,6 +488,36 @@ describe('Audit Log API', () => {
       ).toBe(true);
     });
 
+    it('should search non-sensitive audit change details', async () => {
+      const reason = `Force conform audit reason ${Date.now()}`;
+      const auditLog = await prisma.auditLog.create({
+        data: {
+          action: 'lot_force_conformed',
+          entityType: 'Lot',
+          entityId: 'force-conform-lot-id',
+          userId,
+          projectId,
+          changes: JSON.stringify({
+            previousStatus: 'in_progress',
+            newStatus: 'conformed',
+            force: true,
+            reason,
+          }),
+        },
+      });
+      auditLogIds.push(auditLog.id);
+
+      const res = await request(app)
+        .get('/api/audit-logs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ search: reason });
+
+      expect(res.status).toBe(200);
+      expect(res.body.logs.length).toBeGreaterThan(0);
+      expect(res.body.logs.some((log: any) => log.action === 'lot_force_conformed')).toBe(true);
+      expect(res.body.logs[0].changes.reason).toBe(reason);
+    });
+
     it('should filter by date range (startDate)', async () => {
       const startDate = '2024-01-01';
       const res = await request(app)
