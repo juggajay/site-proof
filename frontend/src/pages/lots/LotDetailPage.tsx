@@ -247,9 +247,17 @@ export function LotDetailPage() {
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp';
   const shouldOpenAssignItp = searchParams.get('action') === 'assign-itp';
+  const currentTabLabel = tabs.find((tab) => tab.id === currentTab)?.label ?? 'Lot detail';
+  const [readinessFocusTarget, setReadinessFocusTarget] = useState<{
+    tab: LotTab;
+    requestedAt: number;
+  } | null>(null);
+  const [highlightedReadinessTab, setHighlightedReadinessTab] = useState<LotTab | null>(null);
 
   // Handle tab change
   const handleTabChange = (tabId: LotTab) => {
+    setReadinessFocusTarget(null);
+    setHighlightedReadinessTab(null);
     const params = new URLSearchParams(searchParams);
     params.set('tab', tabId);
     params.delete('action');
@@ -264,10 +272,9 @@ export function LotDetailPage() {
     } else {
       params.delete('action');
     }
+    setReadinessFocusTarget({ tab: tabId, requestedAt: Date.now() });
+    setHighlightedReadinessTab(tabId);
     setSearchParams(params);
-    window.requestAnimationFrame(() => {
-      tabSectionRef.current?.scrollIntoView({ block: 'start', inline: 'nearest' });
-    });
   };
 
   const handleAssignItpActionHandled = useCallback(() => {
@@ -276,6 +283,31 @@ export function LotDetailPage() {
     params.delete('action');
     setSearchParams(params, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!readinessFocusTarget || readinessFocusTarget.tab !== currentTab) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const target = tabSectionRef.current;
+      if (!target) return;
+
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({
+        block: 'start',
+        inline: 'nearest',
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      });
+      target.focus({ preventScroll: true });
+    });
+    const highlightTimeout = window.setTimeout(() => {
+      setHighlightedReadinessTab((tab) => (tab === readinessFocusTarget.tab ? null : tab));
+    }, 3000);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(highlightTimeout);
+    };
+  }, [currentTab, readinessFocusTarget]);
 
   const {
     data: readinessData,
@@ -1924,7 +1956,19 @@ export function LotDetailPage() {
       />
 
       {/* Tab Content */}
-      <div ref={tabSectionRef} className="min-h-[300px]" role="tabpanel">
+      <div
+        ref={tabSectionRef}
+        className={`min-h-[300px] rounded-lg outline-none transition-shadow duration-200 ${
+          highlightedReadinessTab === currentTab
+            ? 'ring-2 ring-primary/50 ring-offset-2 ring-offset-background'
+            : ''
+        }`}
+        role="tabpanel"
+        tabIndex={-1}
+        aria-label={`${currentTabLabel} section`}
+        data-testid="lot-tab-panel"
+        data-readiness-highlighted={highlightedReadinessTab === currentTab ? 'true' : 'false'}
+      >
         {/* ITP Checklist Tab */}
         {currentTab === 'itp' && lot && (
           <div className="space-y-4 animate-in fade-in duration-200">
