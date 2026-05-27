@@ -465,24 +465,22 @@ projectsRouter.get(
     let subcontractorSuspended = false;
 
     if (isSubcontractor) {
-      const subcontractorUser = await prisma.subcontractorUser.findFirst({
-        where: { userId: user.id },
-        include: {
+      const subcontractorProjectLinks = await prisma.subcontractorUser.findMany({
+        where: {
+          userId: user.id,
+          subcontractorCompany: { projectId: id },
+        },
+        select: {
           subcontractorCompany: {
-            select: { projectId: true, status: true },
+            select: { status: true },
           },
         },
       });
 
-      // Check if subcontractor has access to this project
-      const companyProjectMatch = subcontractorUser?.subcontractorCompany?.projectId === id;
-
-      // Check if subcontractor is suspended or removed
-      const companyStatus = subcontractorUser?.subcontractorCompany?.status;
-      subcontractorSuspended = isBlockedSubcontractorStatus(companyStatus);
-
-      // Only grant access if project matches AND company is not suspended/removed
-      hasSubcontractorAccess = companyProjectMatch && !subcontractorSuspended;
+      hasSubcontractorAccess = subcontractorProjectLinks.some(
+        (link) => !isBlockedSubcontractorStatus(link.subcontractorCompany.status),
+      );
+      subcontractorSuspended = subcontractorProjectLinks.length > 0 && !hasSubcontractorAccess;
     }
 
     // Also allow company admins/owners to access company projects

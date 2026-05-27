@@ -881,6 +881,101 @@ describe('Projects API', () => {
       }
     });
 
+    it('allows subcontractors to open any project they are linked to, not just their first link', async () => {
+      const suffix = Date.now();
+      const firstProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `First Linked Project ${suffix}`,
+          projectNumber: `FIRST-LINK-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const secondProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Second Linked Project ${suffix}`,
+          projectNumber: `SECOND-LINK-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const firstSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: firstProject.id,
+          companyName: `First Linked Sub ${suffix}`,
+          status: 'approved',
+        },
+      });
+      const secondSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: secondProject.id,
+          companyName: `Second Linked Sub ${suffix}`,
+          status: 'approved',
+        },
+      });
+      const email = `projects-multi-sub-${suffix}@example.com`;
+      const regRes = await request(app).post('/api/auth/register').send({
+        email,
+        password: 'SecureP@ssword123!',
+        fullName: 'Projects Multi Subcontractor',
+        tosAccepted: true,
+      });
+      const subcontractorToken = regRes.body.token;
+      const subcontractorUserId = regRes.body.user.id;
+
+      await prisma.user.update({
+        where: { id: subcontractorUserId },
+        data: { companyId: null, roleInCompany: 'subcontractor_admin' },
+      });
+      await prisma.subcontractorUser.createMany({
+        data: [
+          {
+            userId: subcontractorUserId,
+            subcontractorCompanyId: firstSub.id,
+            role: 'admin',
+          },
+          {
+            userId: subcontractorUserId,
+            subcontractorCompanyId: secondSub.id,
+            role: 'admin',
+          },
+        ],
+      });
+
+      try {
+        const listRes = await request(app)
+          .get('/api/projects')
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(listRes.status).toBe(200);
+        expect(
+          (listRes.body.projects as Array<{ id: string }>).map((project) => project.id),
+        ).toEqual(expect.arrayContaining([firstProject.id, secondProject.id]));
+
+        const secondDetailRes = await request(app)
+          .get(`/api/projects/${secondProject.id}`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(secondDetailRes.status).toBe(200);
+        expect(secondDetailRes.body.project.id).toBe(secondProject.id);
+        expect(secondDetailRes.body.project.contractValue).toBeNull();
+      } finally {
+        await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractorUserId } });
+        await prisma.subcontractorCompany.deleteMany({
+          where: { id: { in: [firstSub.id, secondSub.id] } },
+        });
+        await prisma.project.deleteMany({
+          where: { id: { in: [firstProject.id, secondProject.id] } },
+        });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorUserId } });
+        await prisma.user.delete({ where: { id: subcontractorUserId } }).catch(() => {});
+      }
+    });
+
     it('should not grant suspended subcontractors project internals through project team memberships', async () => {
       const suffix = Date.now();
       const guardedProject = await prisma.project.create({

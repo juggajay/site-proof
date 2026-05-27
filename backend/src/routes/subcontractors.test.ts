@@ -1372,6 +1372,45 @@ describe('Subcontractors API', () => {
       expect(res.body.invitation.headContractorName).toBeDefined();
     });
 
+    it('should return head-contractor-approved invitations that still need user acceptance', async () => {
+      const approvedEmail = `approved-pending-user-${Date.now()}@example.com`;
+      const approvedSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Approved Waiting User ${Date.now()}`,
+          primaryContactName: 'Approved Waiting User',
+          primaryContactEmail: approvedEmail,
+          status: 'approved',
+          approvedById: userId,
+          approvedAt: new Date(),
+        },
+      });
+      const userRes = await request(app).post('/api/auth/register').send({
+        email: approvedEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Approved Waiting User',
+        tosAccepted: true,
+      });
+      const tempUserId = userRes.body.user.id as string;
+
+      try {
+        const res = await request(app)
+          .get('/api/subcontractors/my-pending-invitation')
+          .set('Authorization', `Bearer ${userRes.body.token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.invitation).toMatchObject({
+          id: approvedSub.id,
+          companyName: expect.stringContaining('Approved Waiting User'),
+          primaryContactEmail: approvedEmail,
+          status: 'approved',
+        });
+      } finally {
+        await cleanupTestUser(tempUserId);
+        await prisma.subcontractorCompany.delete({ where: { id: approvedSub.id } }).catch(() => {});
+      }
+    });
+
     it('should not leak another subcontractor pending invitation to the wrong user', async () => {
       const wrongUser = await registerTestUser('sub-pending-invite-outsider', 'Pending Outsider');
 
@@ -1450,7 +1489,7 @@ describe('Subcontractors API', () => {
       }
     });
 
-    it('should reject already-approved invitations without linking or creating users', async () => {
+    it('should accept already-approved invitations when no portal user is linked yet', async () => {
       const approvedEmail = `approved-invite-${Date.now()}@example.com`;
       const approvedNewAccountEmail = `approved-new-invite-${Date.now()}@example.com`;
       const approvedSub = await prisma.subcontractorCompany.create({
@@ -1479,17 +1518,13 @@ describe('Subcontractors API', () => {
       });
       const existingUserId = existingUserRes.body.user.id as string;
 
-      await prisma.user.update({
-        where: { id: existingUserId },
-        data: { companyId, roleInCompany: 'viewer' },
-      });
-
       try {
         const loggedInRes = await request(app)
           .post(`/api/subcontractors/invitation/${approvedSub.id}/accept`)
           .set('Authorization', `Bearer ${existingUserRes.body.token}`);
 
-        expect(loggedInRes.status).toBe(403);
+        expect(loggedInRes.status).toBe(200);
+        expect(loggedInRes.body.subcontractor.status).toBe('approved');
 
         const registerRes = await request(app)
           .post('/api/auth/register-and-accept-invitation')
@@ -1501,12 +1536,12 @@ describe('Subcontractors API', () => {
             tosAccepted: true,
           });
 
-        expect(registerRes.status).toBe(403);
+        expect(registerRes.status).toBe(201);
 
         const links = await prisma.subcontractorUser.findMany({
-          where: { subcontractorCompanyId: approvedSub.id },
+          where: { subcontractorCompanyId: { in: [approvedSub.id, approvedNewAccountSub.id] } },
         });
-        expect(links).toHaveLength(0);
+        expect(links).toHaveLength(2);
       } finally {
         await cleanupTestUser(existingUserId);
         await prisma.user.deleteMany({ where: { email: approvedNewAccountEmail } });
@@ -1514,6 +1549,51 @@ describe('Subcontractors API', () => {
         await prisma.subcontractorCompany
           .delete({ where: { id: approvedNewAccountSub.id } })
           .catch(() => {});
+      }
+    });
+
+    it('should reject already-approved invitations that are linked to another portal user', async () => {
+      const linkedEmail = `approved-linked-invite-${Date.now()}@example.com`;
+      const linkedSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Approved Linked Invite ${Date.now()}`,
+          primaryContactName: 'Approved Linked Invite User',
+          primaryContactEmail: linkedEmail,
+          status: 'approved',
+        },
+      });
+      const linkedUser = await registerTestUser('approved-linked-existing', 'Approved Linked User');
+      const invitedUser = await request(app).post('/api/auth/register').send({
+        email: linkedEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Approved Linked Invite User',
+        tosAccepted: true,
+      });
+      const invitedUserId = invitedUser.body.user.id as string;
+
+      await prisma.subcontractorUser.create({
+        data: {
+          subcontractorCompanyId: linkedSub.id,
+          userId: linkedUser.userId,
+          role: 'admin',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/subcontractors/invitation/${linkedSub.id}/accept`)
+          .set('Authorization', `Bearer ${invitedUser.body.token}`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('already been accepted');
+      } finally {
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: linkedSub.id },
+        });
+        await cleanupTestUser(invitedUserId);
+        await cleanupTestUser(linkedUser.userId);
+        await prisma.subcontractorCompany.delete({ where: { id: linkedSub.id } }).catch(() => {});
       }
     });
 
