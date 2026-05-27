@@ -624,6 +624,24 @@ test.describe('Lot detail ITP workflow', () => {
     await expect(page.getByRole('button', { name: /E2E Earthworks ITP/ })).toBeVisible();
   });
 
+  test('focuses and highlights the target tab after a readiness action', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockLotDetailApi(page, { noItpAssigned: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
+
+    const panel = page.getByLabel('Evidence Readiness');
+    await expect(panel.getByRole('heading', { name: 'Evidence Readiness' })).toBeVisible();
+    await panel.getByRole('button', { name: 'Add test' }).click();
+
+    const tabPanel = page.getByTestId('lot-tab-panel');
+    await expect(page).toHaveURL(/tab=tests/);
+    await expect(page.getByRole('heading', { name: 'Test Results', exact: true })).toBeVisible();
+    await expect(tabPanel).toBeInViewport();
+    await expect(tabPanel).toBeFocused();
+    await expect(tabPanel).toHaveAttribute('data-readiness-highlighted', 'true');
+  });
+
   test('describes activity-matching ITP templates as suggestions when other templates remain available', async ({
     page,
   }) => {
