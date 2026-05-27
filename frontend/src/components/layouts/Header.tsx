@@ -10,6 +10,7 @@ import {
   Search,
   Sun,
   Moon,
+  BookOpen,
 } from 'lucide-react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
@@ -331,6 +332,17 @@ export function Header() {
                 >
                   <UserCircle className="h-4 w-4" aria-hidden="true" />
                   Profile
+                </button>
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    navigate('/docs');
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                  role="menuitem"
+                >
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
+                  Documentation
                 </button>
                 <button
                   onClick={() => {

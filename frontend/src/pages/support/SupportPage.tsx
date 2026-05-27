@@ -13,7 +13,6 @@ import {
   Loader2,
   FileText,
   Book,
-  ExternalLink,
   Clock,
   HeadphonesIcon,
 } from 'lucide-react';
@@ -220,22 +219,17 @@ export function SupportPage() {
           </div>
         </Link>
 
-        <a
-          href="https://docs.siteproof.com.au"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded-lg border bg-card p-4 hover:bg-muted transition-colors"
-        >
+        <Link to="/docs" className="rounded-lg border bg-card p-4 hover:bg-muted transition-colors">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-primary/10">
-              <ExternalLink className="h-5 w-5 text-primary" />
+              <Book className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h3 className="font-medium">Documentation</h3>
               <p className="text-sm text-muted-foreground">User guides and tutorials</p>
             </div>
           </div>
-        </a>
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

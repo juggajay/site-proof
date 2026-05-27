@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `ce9e3e1 fix: expose docket query action in approvals (#226)`
+  `60d2157 fix: remove duplicate subbie notification bell (#232)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -291,7 +291,7 @@ Recent verification pattern:
 
 ### Evidence Readiness And Activation QA
 
-Status: core activation and dogfood findings are closed through PR #226. No
+Status: core activation and dogfood findings are closed through PR #232. No
 known activation/RBAC blocker remains from the May 2026 dogfood queue; use fresh
 live QA before treating any older `.gstack` report item as active.
 
@@ -391,6 +391,16 @@ Production dogfood and activation follow-up PRs:
   assigned work across those projects.
 - PR #226 exposed the existing backend docket query action in desktop and
   mobile docket approvals, and taught docket PDFs the `queried` status.
+- PR #227 refreshed this tracked handoff after the first dogfood fix sequence.
+- PR #228 scoped subcontractor roster rates by project so fresh subbie
+  employee/rate creation is visible to the right project and docket flow.
+- PR #229 showed a clear Access Denied state for unrelated subcontractor
+  project links instead of redirecting with misleading project context.
+- PR #230 focused Evidence Readiness action targets so users land on the
+  specific lot tab or panel needed to resolve the blocker.
+- PR #231 surfaced Force Conform reasons in audit search, details, and exports.
+- PR #232 removed the duplicate subcontractor dashboard notification bell so
+  the global header bell is the single notifications entry point.
 
 Historical `.gstack/dev-browser` reports remain useful as evidence trails, but
 their issue lists are not live backlogs. In particular, these are stale unless a
@@ -448,6 +458,31 @@ fresh production recheck proves otherwise:
   PR #225.
 - "Head contractor can approve or reject dockets but cannot query them from the
   approvals UI", closed by PR #226.
+- "Fresh subbie employee/rate appears created but is invisible for docket
+  submission", closed by PR #228.
+- "Subbie link to unrelated head-contractor project gives unclear routing",
+  closed by PR #229.
+- "Readiness actions need clearer focus/scroll targets", closed by PR #230.
+- "Force Conform reason is buried in raw audit JSON", closed by PR #231.
+- "Subbie portal shows two notification bells, one of which opens settings",
+  closed by PR #232.
+
+### In-App And Tracked Documentation
+
+Status: current as of this handoff refresh.
+
+- The app now has first-party authenticated documentation at `/docs`.
+- `/documentation` redirects to `/docs`.
+- Help & Support links Documentation to the in-app guide instead of the unused
+  external docs domain.
+- Sidebar navigation includes Documentation for internal and subcontractor
+  users.
+- The tracked user-facing guide is `docs/user-guide.md`.
+- The docs folder index is `docs/README.md`.
+
+When user-facing workflow guidance changes, update both the app documentation
+content under `frontend/src/pages/docs/` and `docs/user-guide.md` in the same
+PR.
 
 Open product-decision items:
 
@@ -475,8 +510,8 @@ Open low-risk polish candidates:
 3. If new DeepSec findings appear, work them one by one. Root cause first,
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
-   Many findings from the 2026-05-19 through 2026-05-25 reports have been
-   closed by PRs #99-#226.
+   Many findings from the 2026-05-19 through 2026-05-28 reports have been
+   closed by PRs #99-#232.
 
 ## Handoff Checklist For The Next Agent
 

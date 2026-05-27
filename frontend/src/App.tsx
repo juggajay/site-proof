@@ -182,6 +182,9 @@ const TermsOfServicePage = lazy(() =>
 const SupportPage = lazy(() =>
   import('@/pages/support/SupportPage').then((m) => ({ default: m.SupportPage })),
 );
+const DocumentationPage = lazy(() =>
+  import('@/pages/docs/DocumentationPage').then((m) => ({ default: m.DocumentationPage })),
+);
 
 // Lazy load Admin Pages
 const AuditLogPage = lazy(() =>
@@ -601,6 +604,8 @@ function App() {
               <Route path="/invitations" element={<AcceptInvitePage />} />
 
               {/* Support */}
+              <Route path="/docs" element={<DocumentationPage />} />
+              <Route path="/documentation" element={<Navigate to="/docs" replace />} />
               <Route path="/support" element={<SupportPage />} />
 
               {/* Audit Log - Admin Only */}
