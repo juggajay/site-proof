@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 const E2E_SECOND_PROJECT_ID = 'e2e-second-project';
+const E2E_UNRELATED_PROJECT_ID = 'e2e-unrelated-project';
 
 const linkedHeadContractorPortalUser = {
   ...E2E_ADMIN_USER,
@@ -121,7 +122,21 @@ async function mockSubcontractorPortalApi(
     }
 
     if (url.pathname === '/api/subcontractors/my-company') {
-      await json({ company: portalCompany(url.searchParams.get('projectId') || undefined) });
+      const projectId = url.searchParams.get('projectId') || undefined;
+      if (projectId && !portalProjectOptions.some((project) => project.projectId === projectId)) {
+        await json(
+          {
+            error: {
+              message: 'You do not have subcontractor portal access to this project',
+              code: 'FORBIDDEN',
+            },
+          },
+          403,
+        );
+        return;
+      }
+
+      await json({ company: portalCompany(projectId) });
       return;
     }
 
@@ -283,6 +298,18 @@ test.describe('Subcontractor portal RBAC', () => {
     await expect(page.getByText('Access Denied')).toHaveCount(0);
     await expect(page.getByText('Assigned Work')).toBeVisible();
     await expect(page.getByText('SUB-LOT-001')).toBeVisible();
+  });
+
+  test('shows access denied for unrelated head-contractor project URLs', async ({ page }) => {
+    await mockSubcontractorPortalApi(page, subcontractorPortalUser);
+
+    await page.goto(`/projects/${E2E_UNRELATED_PROJECT_ID}`);
+
+    await expect(page).toHaveURL(new RegExp(`/projects/${E2E_UNRELATED_PROJECT_ID}$`));
+    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+    await expect(
+      page.getByText('You do not have subcontractor portal access to this project'),
+    ).toBeVisible();
   });
 
   test('lets portal users switch assigned work between linked projects', async ({ page }) => {

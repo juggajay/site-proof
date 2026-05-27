@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
@@ -8,6 +9,9 @@ import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator'
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import { AccessDeniedState } from '@/components/AccessDeniedState';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
 
 const ENABLE_DEV_TOOLS = import.meta.env.DEV;
 const ENABLE_MOCK_OAUTH_ROUTE =
@@ -267,15 +271,55 @@ const INTERNAL_ROLES = [
 const REPORT_ROLES = [...INTERNAL_ROLES, 'viewer'];
 const PROJECT_WORKSPACE_ROLES = [...INTERNAL_ROLES, 'viewer'];
 
+function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) {
+  const { user } = useAuth();
+  const { isLoading, error } = useQuery({
+    queryKey: ['subcontractor-project-route-access', user?.id, projectId],
+    queryFn: async () => {
+      await apiFetch(
+        `/api/subcontractors/my-company?projectId=${encodeURIComponent(projectId || '')}`,
+      );
+      return true;
+    },
+    enabled: !!user?.id && !!projectId,
+    retry: false,
+  });
+
+  if (!projectId) {
+    return <Navigate to="/subcontractor-portal/work" replace />;
+  }
+
+  if (isLoading) {
+    return <PageSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <AccessDeniedState
+        message={extractErrorMessage(
+          error,
+          'You do not have subcontractor portal access to this project.',
+        )}
+        backTo="/subcontractor-portal/work"
+        backLabel="Back to Assigned Work"
+      />
+    );
+  }
+
+  return (
+    <Navigate
+      to={`/subcontractor-portal/work?projectId=${encodeURIComponent(projectId)}`}
+      replace
+    />
+  );
+}
+
 function ProjectDetailRoute() {
   const { user, loading } = useAuth();
   const { projectId } = useParams();
 
   if (!loading && hasSubcontractorPortalIdentity(user)) {
-    const target = projectId
-      ? `/subcontractor-portal/work?projectId=${encodeURIComponent(projectId)}`
-      : '/subcontractor-portal/work';
-    return <Navigate to={target} replace />;
+    return <SubcontractorProjectAccessRoute projectId={projectId} />;
   }
 
   return (
