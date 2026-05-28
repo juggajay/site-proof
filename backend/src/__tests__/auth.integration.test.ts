@@ -109,9 +109,13 @@ describe('Password Hashing', () => {
 });
 
 describe('Rate Limiting', () => {
-  // Use unique IP addresses for each test to avoid interference
-  const getUniqueIp = () =>
-    `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+  // Use deterministic unique IP addresses for each test to avoid lockout-store collisions.
+  let ipCounter = 1;
+  const getUniqueIp = () => {
+    const nextIp = `192.168.240.${ipCounter}`;
+    ipCounter += 1;
+    return nextIp;
+  };
 
   describe('isLockedOut', () => {
     it('should return false initially for a new IP', async () => {
