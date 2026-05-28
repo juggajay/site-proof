@@ -479,6 +479,11 @@ Status: current as of this handoff refresh.
   users.
 - The tracked user-facing guide is `docs/user-guide.md`.
 - The docs folder index is `docs/README.md`.
+- The curated product/persona source of truth is
+  `docs/product/user-stories.md`. Use it before planning UX, onboarding, QA, or
+  feature work that depends on target users, pain points, or role-based jobs.
+- Raw market and sales research remains under `docs/research/`; keep it for
+  traceability rather than replacing it with curated summaries.
 
 When user-facing workflow guidance changes, update both the app documentation
 content under `frontend/src/pages/docs/` and `docs/user-guide.md` in the same
