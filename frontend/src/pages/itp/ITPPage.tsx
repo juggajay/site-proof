@@ -51,6 +51,26 @@ interface ProjectWithTemplates {
   templates: CrossProjectTemplate[];
 }
 
+const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  asphalt_prep: 'Asphalt prep',
+  pavement_bound: 'Pavement (bound)',
+  pavement_concrete: 'Pavement (concrete)',
+  pavement_unbound: 'Pavement (unbound)',
+};
+
+function formatActivityTypeLabel(activityType: string): string {
+  const trimmed = activityType.trim();
+  if (!trimmed) return 'Unspecified';
+  if (ACTIVITY_TYPE_LABELS[trimmed]) return ACTIVITY_TYPE_LABELS[trimmed];
+  if (!/[_-]/.test(trimmed)) return trimmed;
+
+  return trimmed
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export function ITPPage() {
   const { projectId } = useParams();
   const [templates, setTemplates] = useState<ITPTemplate[]>([]);
@@ -268,9 +288,9 @@ export function ITPPage() {
         <div>
           <h1 className="text-3xl font-bold">Inspection & Test Plans</h1>
           <p className="text-muted-foreground mt-1">
-            Manage ITP templates for quality checkpoints
+            Manage ITP templates for quality checkpoints{' '}
             {projectSpecificationSet && (
-              <span className="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+              <span className="inline-flex text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
                 {projectSpecificationSet}
               </span>
             )}
@@ -319,7 +339,7 @@ export function ITPPage() {
             <option value="">All Activities</option>
             {[...new Set(templates.map((t) => t.activityType))].sort().map((type) => (
               <option key={type} value={type}>
-                {type}
+                {formatActivityTypeLabel(type)}
               </option>
             ))}
           </select>
@@ -406,7 +426,7 @@ export function ITPPage() {
                     </div>
                   </div>
                   <span className="text-xs bg-muted px-2 py-1 rounded">
-                    {template.activityType}
+                    {formatActivityTypeLabel(template.activityType)}
                   </span>
                 </div>
                 {template.description && (
@@ -923,7 +943,9 @@ function ImportFromProjectModal({
                   <div>
                     <h4 className="font-medium">{template.name}</h4>
                     <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                      <span className="bg-muted px-2 py-0.5 rounded">{template.activityType}</span>
+                      <span className="bg-muted px-2 py-0.5 rounded">
+                        {formatActivityTypeLabel(template.activityType)}
+                      </span>
                       <span>{template.checklistItemCount} checklist items</span>
                       <span>{template.holdPointCount} hold points</span>
                     </div>

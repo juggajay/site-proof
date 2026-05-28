@@ -200,6 +200,15 @@ describe('evidence readiness helpers', () => {
         }),
       ]),
     );
+    expect(readiness.conformance.support).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'lot_already_claimed',
+          title: 'Conformance complete',
+          blocksAction: false,
+        }),
+      ]),
+    );
   });
 
   it('builds post-claim evidence review with readiness vocabulary', () => {

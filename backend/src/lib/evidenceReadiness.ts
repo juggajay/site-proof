@@ -237,8 +237,8 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
         code: 'lot_already_claimed',
         severity: 'support',
         area: 'conformance',
-        title: 'Lot already claimed',
-        detail: 'This lot has already moved past conformance into a progress claim.',
+        title: 'Conformance complete',
+        detail: 'This lot passed conformance before being included in a progress claim.',
         blocksAction: false,
       }),
     ];

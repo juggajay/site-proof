@@ -170,14 +170,54 @@ const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = [
 const WIDGET_STORAGE_KEY = 'siteproof_dashboard_widgets';
 const VALID_WIDGET_IDS = new Set<WidgetId>(WIDGET_CONFIG.map((widget) => widget.id));
 const LOT_STATUS_OVERVIEW_ITEMS = [
-  { key: 'not_started', label: 'Not Started', dotClassName: 'bg-slate-400' },
-  { key: 'in_progress', label: 'In Progress', dotClassName: 'bg-blue-500' },
-  { key: 'awaiting_test', label: 'Awaiting Test', dotClassName: 'bg-purple-500' },
-  { key: 'hold_point', label: 'Hold Point', dotClassName: 'bg-amber-500' },
-  { key: 'ncr_raised', label: 'NCR Raised', dotClassName: 'bg-red-500' },
-  { key: 'completed', label: 'Completed', dotClassName: 'bg-green-500' },
-  { key: 'conformed', label: 'Conformed', dotClassName: 'bg-emerald-600' },
-  { key: 'claimed', label: 'Claimed', dotClassName: 'bg-teal-500' },
+  {
+    key: 'not_started',
+    label: 'Not Started',
+    description: 'Work has not begun on site.',
+    dotClassName: 'bg-slate-400',
+  },
+  {
+    key: 'in_progress',
+    label: 'In Progress',
+    description: 'Work is underway but not ready for evidence review.',
+    dotClassName: 'bg-blue-500',
+  },
+  {
+    key: 'awaiting_test',
+    label: 'Awaiting Test',
+    description: 'The lot needs test evidence before conformance.',
+    dotClassName: 'bg-purple-500',
+  },
+  {
+    key: 'hold_point',
+    label: 'Hold Point',
+    description: 'Inspection or release is required before work continues.',
+    dotClassName: 'bg-amber-500',
+  },
+  {
+    key: 'ncr_raised',
+    label: 'NCR Raised',
+    description: 'An open non-conformance must be resolved.',
+    dotClassName: 'bg-red-500',
+  },
+  {
+    key: 'completed',
+    label: 'Completed',
+    description: 'Field work is complete but not yet conformed.',
+    dotClassName: 'bg-green-500',
+  },
+  {
+    key: 'conformed',
+    label: 'Conformed',
+    description: 'Quality evidence is approved and the lot can be claimed.',
+    dotClassName: 'bg-emerald-600',
+  },
+  {
+    key: 'claimed',
+    label: 'Claimed',
+    description: 'The lot is included in a progress claim.',
+    dotClassName: 'bg-teal-500',
+  },
 ] as const;
 
 type LotStatusKey = (typeof LOT_STATUS_OVERVIEW_ITEMS)[number]['key'];
@@ -830,22 +870,42 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
             {/* Lot Status Widget */}
             {isWidgetVisible('lotStatus') && (
               <div className="bg-card rounded-lg border">
-                <div className="p-4 border-b flex items-center gap-2">
-                  <ListChecks className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">Lot Status Overview</h2>
+                <div className="p-4 border-b">
+                  <div className="flex items-center gap-2">
+                    <ListChecks className="h-5 w-5 text-muted-foreground" />
+                    <h2 className="text-lg font-semibold">Lot Status Overview</h2>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Completed means the work is done. Conformed means quality evidence is approved.
+                    Claimed means it is in a progress claim.
+                  </p>
                 </div>
                 <div className="p-4 space-y-1">
                   {LOT_STATUS_OVERVIEW_ITEMS.map((item) => (
                     <button
                       key={item.key}
                       onClick={() => navigate(`/projects?lotStatus=${item.key}`)}
-                      className="w-full flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
+                      className="w-full rounded p-2 text-left hover:bg-muted transition-colors"
+                      title={item.description}
                     >
-                      <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${item.dotClassName}`} />
-                        <span className="text-sm">{item.label}</span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-2">
+                          <div
+                            className={`mt-1.5 h-3 w-3 flex-shrink-0 rounded-full ${item.dotClassName}`}
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{item.label}</span>
+                              <span className="font-medium">
+                                {getLotStatusCount(stats, item.key)}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {item.description}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <span className="font-medium">{getLotStatusCount(stats, item.key)}</span>
                     </button>
                   ))}
                 </div>

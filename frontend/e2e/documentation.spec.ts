@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
-async function mockDocumentationApi(page: Page) {
+async function mockDocumentationApi(page: Page, user: Record<string, unknown> = E2E_ADMIN_USER) {
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
     const json = (body: unknown, status = 200) =>
@@ -12,7 +12,7 @@ async function mockDocumentationApi(page: Page) {
       });
 
     if (url.pathname === '/api/auth/me') {
-      await json({ user: E2E_ADMIN_USER });
+      await json({ user });
       return;
     }
 
@@ -86,6 +86,49 @@ test.describe('Documentation', () => {
       page.getByRole('heading', { name: 'Subcontractor portal and dockets' }),
     ).toBeVisible();
     await expect(page.getByText('Blockers stop the action.')).toBeVisible();
+
+    const quickReferenceCard = page
+      .getByRole('heading', { name: 'Quick reference' })
+      .locator('xpath=ancestor::div[contains(@class, "rounded")][1]');
+
+    await expect(quickReferenceCard.getByRole('link', { name: 'Subbie flow' })).toHaveAttribute(
+      'href',
+      '/docs#subbie-dockets',
+    );
+    await expect(quickReferenceCard.getByRole('link', { name: 'Portal', exact: true })).toHaveCount(
+      0,
+    );
+    const subbieDocketsCard = page
+      .getByRole('heading', { name: 'Subcontractor portal and dockets' })
+      .locator('xpath=ancestor::div[contains(@class, "rounded")][1]');
+    await expect(subbieDocketsCard.getByRole('link', { name: 'Open projects' })).toHaveAttribute(
+      'href',
+      '/projects',
+    );
+  });
+
+  test('routes subcontractor users from documentation into the portal', async ({ page }) => {
+    await mockDocumentationApi(page, {
+      ...E2E_ADMIN_USER,
+      role: 'subcontractor',
+      roleInCompany: null,
+      companyId: null,
+      hasSubcontractorPortalAccess: true,
+    });
+
+    await page.goto('/docs');
+
+    const quickReferenceCard = page
+      .getByRole('heading', { name: 'Quick reference' })
+      .locator('xpath=ancestor::div[contains(@class, "rounded")][1]');
+
+    await expect(
+      quickReferenceCard.getByRole('link', { name: 'Portal', exact: true }),
+    ).toHaveAttribute('href', '/subcontractor-portal');
+    await expect(page.getByRole('link', { name: 'Open portal' })).toHaveAttribute(
+      'href',
+      '/subcontractor-portal',
+    );
   });
 
   test('links support documentation card to the in-app docs route', async ({ page }) => {

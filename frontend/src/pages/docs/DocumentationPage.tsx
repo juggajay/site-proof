@@ -2,9 +2,14 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, BookOpen, CheckCircle2, CircleDot, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import { useAuth } from '@/lib/auth';
+import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { documentationSections, quickReference, workflowSteps } from './documentationContent';
 
 export function DocumentationPage() {
+  const { user } = useAuth();
+  const isSubcontractor = hasSubcontractorPortalIdentity(user);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -117,10 +122,18 @@ export function DocumentationPage() {
                   </ul>
                 </div>
 
-                {section.route && (
+                {(section.route || section.subcontractorRoute) && (
                   <Button asChild variant="outline" size="sm">
-                    <Link to={section.route}>
-                      Open {section.title}
+                    <Link
+                      to={
+                        isSubcontractor && section.subcontractorRoute
+                          ? section.subcontractorRoute
+                          : section.route || section.subcontractorRoute || '/docs'
+                      }
+                    >
+                      {isSubcontractor && section.subcontractorRouteLabel
+                        ? section.subcontractorRouteLabel
+                        : section.routeLabel || `Open ${section.title}`}
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -140,16 +153,22 @@ export function DocumentationPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {quickReference.map((item) => (
-              <Link
-                key={item.label}
-                to={item.href}
-                className="flex items-center gap-3 rounded-lg border bg-background p-3 text-sm font-medium hover:bg-muted"
-              >
-                <item.icon className="h-4 w-4 text-primary" />
-                {item.label}
-              </Link>
-            ))}
+            {quickReference.map((item) => {
+              const label = isSubcontractor ? item.label : item.headContractorLabel || item.label;
+              const href =
+                isSubcontractor && item.subcontractorHref ? item.subcontractorHref : item.href;
+
+              return (
+                <Link
+                  key={item.label}
+                  to={href}
+                  className="flex items-center gap-3 rounded-lg border bg-background p-3 text-sm font-medium hover:bg-muted"
+                >
+                  <item.icon className="h-4 w-4 text-primary" />
+                  {label}
+                </Link>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

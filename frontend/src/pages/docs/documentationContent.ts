@@ -27,8 +27,19 @@ export interface DocumentationSection {
   summary: string;
   icon: LucideIcon;
   route?: string;
+  routeLabel?: string;
+  subcontractorRoute?: string;
+  subcontractorRouteLabel?: string;
   steps: DocumentationStep[];
   tips: string[];
+}
+
+export interface QuickReferenceItem {
+  label: string;
+  headContractorLabel?: string;
+  icon: LucideIcon;
+  href: string;
+  subcontractorHref?: string;
 }
 
 export const workflowSteps: DocumentationStep[] = [
@@ -152,7 +163,10 @@ export const documentationSections: DocumentationSection[] = [
     title: 'Subcontractor portal and dockets',
     summary: 'Invite subcontractors, assign lots, collect dockets, query them, and approve them.',
     icon: Briefcase,
-    route: '/subcontractor-portal',
+    route: '/projects',
+    routeLabel: 'Open projects',
+    subcontractorRoute: '/subcontractor-portal',
+    subcontractorRouteLabel: 'Open portal',
     steps: [
       {
         title: 'Invite and approve the subcontractor',
@@ -293,7 +307,7 @@ export const documentationSections: DocumentationSection[] = [
   },
 ];
 
-export const quickReference = [
+export const quickReference: QuickReferenceItem[] = [
   { label: 'Projects', icon: FolderKanban, href: '/projects' },
   { label: 'Lots', icon: MapPin, href: '/projects' },
   { label: 'ITPs', icon: ClipboardCheck, href: '/projects' },
@@ -302,6 +316,12 @@ export const quickReference = [
   { label: 'Claims', icon: DollarSign, href: '/projects' },
   { label: 'Reports', icon: BarChart3, href: '/projects' },
   { label: 'Documents', icon: FileText, href: '/projects' },
-  { label: 'Portal', icon: Briefcase, href: '/subcontractor-portal' },
+  {
+    label: 'Portal',
+    headContractorLabel: 'Subbie flow',
+    icon: Briefcase,
+    href: '/docs#subbie-dockets',
+    subcontractorHref: '/subcontractor-portal',
+  },
   { label: 'Support', icon: BookOpen, href: '/support' },
 ];

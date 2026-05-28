@@ -73,9 +73,9 @@ const DEFAULT_SUPPORT_CONTACT: SupportContactInfo = {
   address: null,
   hours: 'Mon-Fri, 8am-6pm AEST',
   responseTime: {
-    critical: 'Within 2 hours',
-    standard: 'Within 24 hours',
-    general: 'Within 48 hours',
+    critical: 'Prioritised same day',
+    standard: 'Typically within 1 business day',
+    general: 'Typically within 2 business days',
   },
 };
 
@@ -341,7 +341,7 @@ export function SupportPage() {
                   Request submitted successfully!
                 </p>
                 <p className="text-sm text-green-700 dark:text-green-300">
-                  We'll respond to your request within 24-48 hours.
+                  We'll respond as soon as we can, usually within 1-2 business days.
                 </p>
                 {submittedTicketId && (
                   <p className="text-sm text-green-700 dark:text-green-300">
@@ -470,15 +470,15 @@ export function SupportPage() {
           <div className="p-4 rounded-lg bg-muted/50">
             <h3 className="font-medium mb-1">How do I approve a hold point?</h3>
             <p className="text-sm text-muted-foreground">
-              Find the lot with a pending hold point, click on it, and use the "Approve Hold Point"
-              button. You may need appropriate permissions.
+              Find the lot with a pending hold point, open it, and use "Record Release" after the
+              inspection or approval is complete. You may need appropriate permissions.
             </p>
           </div>
           <div className="p-4 rounded-lg bg-muted/50">
             <h3 className="font-medium mb-1">How do I invite team members?</h3>
             <p className="text-sm text-muted-foreground">
-              Go to Project Settings → Users and click "Invite User". Enter their email and select
-              their role. They'll receive an invitation email.
+              Go to Project Settings → Team and click "Invite Team Member". Enter their email and
+              select their role. They'll receive an invitation email.
             </p>
           </div>
         </div>
