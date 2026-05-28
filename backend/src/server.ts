@@ -8,7 +8,6 @@ import { requireAuth, requireRole } from './middleware/authMiddleware.js';
 import { authRouter } from './routes/auth.js';
 import { projectsRouter } from './routes/projects.js';
 import { lotsRouter } from './routes/lots.js';
-import { lotAssignmentsRouter } from './routes/lotAssignments.js';
 import { ncrsRouter } from './routes/ncrs/index.js';
 import { subcontractorsRouter } from './routes/subcontractors.js';
 import { reportsRouter } from './routes/reports.js';
@@ -131,7 +130,6 @@ export async function startServer(): Promise<void> {
   app.use('/api/api-keys', apiKeysRouter); // Feature #747: API key management
   app.use('/api/projects', projectsRouter);
   app.use('/api/lots', lotsRouter);
-  app.use('/api/lots', lotAssignmentsRouter);
   app.use('/api/ncrs', ncrsRouter);
   app.use('/api/subcontractors', subcontractorsRouter);
   app.use('/api/reports', reportsRouter);
