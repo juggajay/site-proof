@@ -1552,13 +1552,20 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/lib/pdfGenerator.ts', import.meta.url),
       'utf8',
     );
+    const dashboardPdfSource = await readFile(
+      new URL('../src/lib/pdf/dashboardPdf.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(dashboardPage).toContain("await import('@/lib/pdfGenerator')");
     expect(dashboardPage).toContain('generateDashboardPDF');
     expect(dashboardPage).not.toContain('window.print');
     expect(dashboardPage).not.toContain('dashboard-print-styles');
-    expect(pdfGeneratorSource).toContain('export async function generateDashboardPDF');
-    expect(pdfGeneratorSource).toContain('siteproof-dashboard-');
+    expect(pdfGeneratorSource).toContain(
+      "export { generateDashboardPDF } from './pdf/dashboardPdf'",
+    );
+    expect(dashboardPdfSource).toContain('export async function generateDashboardPDF');
+    expect(dashboardPdfSource).toContain('siteproof-dashboard-');
   });
 
   test('project report generated timestamps use date and timezone preferences', async () => {
