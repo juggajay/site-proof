@@ -185,6 +185,181 @@ describe('Full Workflow Integration', () => {
     expect(auditLog).toBeTruthy();
   });
 
+  it('scopes subcontractor lot lists with ITP data to assigned lots and enabled portal access', async () => {
+    const suffix = Date.now();
+    const lotRes = await request(app)
+      .post('/api/lots')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        projectId,
+        lotNumber: `ITP-PORTAL-LIST-${suffix}`,
+        description: 'Subcontractor ITP list test',
+        activityType: 'Earthworks',
+        budgetAmount: 125000,
+      });
+
+    expect(lotRes.status).toBe(201);
+    const lotId = lotRes.body.lot.id;
+
+    const hiddenLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `ITP-PORTAL-HIDDEN-${suffix}`,
+        description: 'Unassigned lot must stay hidden from subcontractor list',
+        activityType: 'Earthworks',
+        lotType: 'chainage',
+        status: 'not_started',
+        budgetAmount: 75000,
+      },
+    });
+
+    const template = await prisma.iTPTemplate.create({
+      data: {
+        projectId,
+        name: `ITP Portal Template ${suffix}`,
+        activityType: 'Earthworks',
+      },
+    });
+
+    await prisma.iTPInstance.create({
+      data: {
+        lotId,
+        templateId: template.id,
+        status: 'in_progress',
+      },
+    });
+
+    await prisma.iTPInstance.create({
+      data: {
+        lotId: hiddenLot.id,
+        templateId: template.id,
+        status: 'in_progress',
+      },
+    });
+
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `ITP Portal Subcontractor ${suffix}`,
+        primaryContactName: 'ITP Portal Contact',
+        primaryContactEmail: `itp-portal-sub-${suffix}@example.com`,
+        status: 'approved',
+        portalAccess: {
+          lots: true,
+          itps: true,
+          holdPoints: false,
+          testResults: false,
+          ncrs: false,
+          documents: false,
+        },
+      },
+    });
+
+    const subcontractorRes = await request(app)
+      .post('/api/auth/register')
+      .send({
+        email: `itp-portal-sub-user-${suffix}@example.com`,
+        password: 'SecureP@ssword123!',
+        fullName: 'ITP Portal Subcontractor User',
+        tosAccepted: true,
+      });
+
+    expect(subcontractorRes.status).toBe(201);
+    const subcontractorToken = subcontractorRes.body.token;
+    const subcontractorUserId = subcontractorRes.body.user.id;
+
+    await prisma.user.update({
+      where: { id: subcontractorUserId },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
+    });
+
+    await prisma.subcontractorUser.create({
+      data: {
+        userId: subcontractorUserId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        role: 'user',
+      },
+    });
+
+    await prisma.lotSubcontractorAssignment.create({
+      data: {
+        projectId,
+        lotId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        canCompleteITP: true,
+        itpRequiresVerification: true,
+        status: 'active',
+        assignedById: adminId,
+      },
+    });
+
+    try {
+      const allowedRes = await request(app)
+        .get('/api/lots')
+        .query({ projectId, includeITP: 'true', portalModule: 'itps' })
+        .set('Authorization', `Bearer ${subcontractorToken}`);
+
+      expect(allowedRes.status).toBe(200);
+      expect(allowedRes.body.lots).toHaveLength(1);
+      expect(allowedRes.body.data).toHaveLength(1);
+      expect(allowedRes.body.lots[0].id).toBe(lotId);
+      expect(allowedRes.body.lots[0].budgetAmount).toBeNull();
+      expect(allowedRes.body.lots[0].subcontractorAssignments).toHaveLength(1);
+      expect(allowedRes.body.lots[0].subcontractorAssignments[0]).toMatchObject({
+        subcontractorCompanyId: subcontractorCompany.id,
+        canCompleteITP: true,
+        itpRequiresVerification: true,
+      });
+      expect(allowedRes.body.lots[0].itpInstances).toHaveLength(1);
+      expect(allowedRes.body.lots[0].itpInstances[0]).toMatchObject({
+        templateId: template.id,
+        status: 'in_progress',
+      });
+      expect(allowedRes.body.lots[0].itpInstances[0].template).toMatchObject({
+        id: template.id,
+        name: template.name,
+        activityType: 'Earthworks',
+      });
+      expect(allowedRes.body.lots.map((lot: any) => lot.id)).not.toContain(hiddenLot.id);
+
+      await prisma.subcontractorCompany.update({
+        where: { id: subcontractorCompany.id },
+        data: {
+          portalAccess: {
+            lots: true,
+            itps: false,
+            holdPoints: false,
+            testResults: false,
+            ncrs: false,
+            documents: false,
+          },
+        },
+      });
+
+      const deniedRes = await request(app)
+        .get('/api/lots')
+        .query({ projectId, includeITP: 'true', portalModule: 'itps' })
+        .set('Authorization', `Bearer ${subcontractorToken}`);
+
+      expect(deniedRes.status).toBe(403);
+      expect(deniedRes.body.error.message).toContain(
+        'ITPs portal access is not enabled for this subcontractor',
+      );
+    } finally {
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: subcontractorCompany.id },
+      });
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractorUserId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorUserId } });
+      await prisma.user.delete({ where: { id: subcontractorUserId } }).catch(() => {});
+      await prisma.lot.deleteMany({ where: { id: { in: [lotId, hiddenLot.id] } } });
+      await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+    }
+  });
+
   it('should complete full NCR workflow', async () => {
     // 1. Create lot for NCR
     const lotRes = await request(app)
