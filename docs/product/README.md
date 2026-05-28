@@ -9,6 +9,7 @@ or briefing a new agent on who SiteProof is for.
 | Document | Use it for |
 | --- | --- |
 | [user-stories.md](user-stories.md) | Target users, jobs-to-be-done, pain points, product principles, and role-based user stories. |
+| [pilot-journeys.md](pilot-journeys.md) | Four core pilot journeys: owner, PM/QM, foreman, and subcontractor. Use this to plan role-aware UX, QA scripts, and polish PRs. |
 
 The raw research remains in `docs/research/` for traceability. Do not delete it
 when creating curated product docs.

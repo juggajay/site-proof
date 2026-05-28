@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `60d2157 fix: remove duplicate subbie notification bell (#232)`
+  `75b8cd5 fix: polish pilot onboarding guidance (#234)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -291,7 +291,7 @@ Recent verification pattern:
 
 ### Evidence Readiness And Activation QA
 
-Status: core activation and dogfood findings are closed through PR #232. No
+Status: core activation and dogfood findings are closed through PR #234. No
 known activation/RBAC blocker remains from the May 2026 dogfood queue; use fresh
 live QA before treating any older `.gstack` report item as active.
 
@@ -466,6 +466,9 @@ fresh production recheck proves otherwise:
 - "Force Conform reason is buried in raw audit JSON", closed by PR #231.
 - "Subbie portal shows two notification bells, one of which opens settings",
   closed by PR #232.
+- "In-app documentation route and missing docs tab", closed by PR #233.
+- "Pilot onboarding guidance polish and HC docs portal link confusion", closed
+  by PR #234.
 
 ### In-App And Tracked Documentation
 
@@ -482,6 +485,10 @@ Status: current as of this handoff refresh.
 - The curated product/persona source of truth is
   `docs/product/user-stories.md`. Use it before planning UX, onboarding, QA, or
   feature work that depends on target users, pain points, or role-based jobs.
+- The pilot journey source of truth is `docs/product/pilot-journeys.md`. Use it
+  before planning role-aware dashboards, onboarding, dogfood scripts, or UI
+  simplification PRs for the four core pilot users: owner/director, PM/QM,
+  foreman/site supervisor, and subcontractor.
 - Raw market and sales research remains under `docs/research/`; keep it for
   traceability rather than replacing it with curated summaries.
 

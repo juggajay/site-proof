@@ -12,6 +12,7 @@ agent scratch work belong under ignored local folders such as `.gstack/` or
 | [agent-handoff.md](agent-handoff.md)                           | Current workstream state, production warnings, recently merged PRs, and handoff rules for a fresh agent.  |
 | [user-guide.md](user-guide.md)                                 | Product workflow guide mirrored by the in-app `/docs` page. Use this for user-facing documentation edits. |
 | [product/user-stories.md](product/user-stories.md)             | Curated target users, pain points, role-based stories, and UX decision checks extracted from research.     |
+| [product/pilot-journeys.md](product/pilot-journeys.md)         | Four core pilot journeys for owner, PM/QM, foreman, and subcontractor UX and QA planning.                 |
 | [supabase-storage-setup.md](supabase-storage-setup.md)         | Production storage configuration, bucket policy, and upload surface notes.                                |
 | [design-system.md](design-system.md)                           | Visual language, UI patterns, and product tone.                                                           |
 | [production-readiness-audit.md](production-readiness-audit.md) | Historical readiness audit. Recheck current `master` before treating a finding as active.                 |
