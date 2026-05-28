@@ -3,6 +3,7 @@ import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
 import { lotsRouter } from './lots.js';
+import { lotAssignmentsRouter } from './lotAssignments.js';
 import { ncrsRouter } from './ncrs/index.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
@@ -11,6 +12,7 @@ const app = express();
 app.use(express.json());
 app.use('/api/auth', authRouter);
 app.use('/api/lots', lotsRouter);
+app.use('/api/lots', lotAssignmentsRouter);
 app.use('/api/ncrs', ncrsRouter);
 app.use(errorHandler);
 
@@ -70,6 +72,9 @@ describe('Full Workflow Integration', () => {
 
   afterAll(async () => {
     await prisma.notification.deleteMany({ where: { projectId } });
+    await prisma.auditLog.deleteMany({ where: { projectId } });
+    await prisma.lotSubcontractorAssignment.deleteMany({ where: { projectId } });
+    await prisma.subcontractorCompany.deleteMany({ where: { projectId } });
     await prisma.nCREvidence.deleteMany({ where: { ncr: { projectId } } });
     await prisma.nCRLot.deleteMany({ where: { ncr: { projectId } } });
     await prisma.nCR.deleteMany({ where: { projectId } });
@@ -131,6 +136,55 @@ describe('Full Workflow Integration', () => {
     const found = listRes.body.lots.find((l: any) => l.id === lotId);
     expect(found).toBeDefined();
     expect(found.status).toBe('completed');
+  });
+
+  it('serves lot subcontractor assignment routes from the production-mounted lots router', async () => {
+    const lotRes = await request(app)
+      .post('/api/lots')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        projectId,
+        lotNumber: `MOUNT-ASSIGN-${Date.now()}`,
+        description: 'Production mount assignment test',
+        activityType: 'Earthworks',
+      });
+
+    expect(lotRes.status).toBe(201);
+    const lotId = lotRes.body.lot.id;
+
+    const pendingSubcontractor = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `Pending Mount Subcontractor ${Date.now()}`,
+        primaryContactName: 'Pending Contact',
+        primaryContactEmail: `pending-mount-${Date.now()}@example.com`,
+        status: 'pending',
+      },
+    });
+
+    const assignRes = await request(app)
+      .post(`/api/lots/${lotId}/subcontractors`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        subcontractorCompanyId: pendingSubcontractor.id,
+        canCompleteITP: true,
+        itpRequiresVerification: false,
+      });
+
+    expect(assignRes.status).toBe(201);
+    expect(assignRes.body.lotId).toBe(lotId);
+    expect(assignRes.body.subcontractorCompanyId).toBe(pendingSubcontractor.id);
+    expect(assignRes.body.canCompleteITP).toBe(true);
+    expect(assignRes.body.itpRequiresVerification).toBe(false);
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        action: 'lot_subcontractor_assigned',
+        entityId: assignRes.body.id,
+      },
+    });
+    expect(auditLog).toBeTruthy();
   });
 
   it('should complete full NCR workflow', async () => {
