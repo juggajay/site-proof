@@ -1,15 +1,7 @@
 // Lazy load jsPDF for better bundle size
 import { devLog } from './logger';
 import { formatDateKey } from './localDate';
-
-let jsPDFModule: typeof import('jspdf') | null = null;
-
-async function getJsPDF(): Promise<typeof import('jspdf').jsPDF> {
-  if (!jsPDFModule) {
-    jsPDFModule = await import('jspdf');
-  }
-  return jsPDFModule.jsPDF;
-}
+import { getJsPDF } from './pdf/jsPdfRuntime';
 
 // Conformance package format types for Australian road authorities
 export type ConformanceFormat = 'standard' | 'tmr' | 'tfnsw' | 'vicroads' | 'dit';
