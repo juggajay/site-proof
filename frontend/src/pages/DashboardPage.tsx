@@ -305,6 +305,7 @@ function getLotStatusCount(stats: DashboardStats, status: LotStatusKey): number 
 type DashboardUser = ReturnType<typeof useAuth>['user'];
 type DashboardRoleUser = NonNullable<DashboardUser> & {
   roleInCompany?: string | null;
+  dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
 };
 
 interface PendingInvitation {
@@ -324,10 +325,11 @@ export function DashboardPage() {
   // Feature #292, #293, #294: Check user role for role-specific dashboards
   const roleUser = user as DashboardRoleUser | null;
   const userRole = roleUser?.roleInCompany || roleUser?.role;
+  const dashboardRole = roleUser?.dashboardRole || userRole;
   const isSubcontractor = hasSubcontractorPortalIdentity(roleUser);
-  const isForeman = userRole === 'foreman';
-  const isQualityManager = userRole === 'quality_manager';
-  const isProjectManager = userRole === 'project_manager';
+  const isForeman = dashboardRole === 'foreman';
+  const isQualityManager = dashboardRole === 'quality_manager';
+  const isProjectManager = dashboardRole === 'project_manager';
 
   if (isSubcontractor) {
     return <SubcontractorDashboard />;

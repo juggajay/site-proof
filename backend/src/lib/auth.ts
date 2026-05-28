@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma.js';
 import { logInfo, logWarn } from './serverLogger.js';
+import { resolveDashboardRoleForUser, type DashboardRole } from './dashboardRole.js';
 
 // JWT_SECRET is required - no fallback for security
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -43,6 +44,7 @@ export interface AuthUser {
   avatarUrl?: string | null;
   hasPassword?: boolean;
   hasSubcontractorPortalAccess?: boolean;
+  dashboardRole?: DashboardRole | null;
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
@@ -119,6 +121,10 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       avatarUrl: user.avatar_url,
       hasPassword: Boolean(user.has_password),
       hasSubcontractorPortalAccess: Boolean(user.has_subcontractor_portal_access),
+      dashboardRole: await resolveDashboardRoleForUser({
+        userId: user.id,
+        roleInCompany: user.role_in_company,
+      }),
     };
   } catch {
     return null;

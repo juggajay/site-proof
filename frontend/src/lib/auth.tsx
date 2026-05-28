@@ -34,6 +34,7 @@ interface User {
   phone?: string;
   role?: string;
   roleInCompany?: string;
+  dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
   companyId?: string | null;
   companyName?: string | null;
   hasSubcontractorPortalAccess?: boolean;
@@ -254,7 +255,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const roleOverride = getRoleOverride();
     // Only allow override if actual user is admin/owner
     if (roleOverride && ['admin', 'owner'].includes(actualUser.role || '')) {
-      return { ...actualUser, role: roleOverride, roleInCompany: roleOverride };
+      return {
+        ...actualUser,
+        role: roleOverride,
+        roleInCompany: roleOverride,
+        dashboardRole: null,
+      };
     }
     return actualUser;
   }, [actualUser]);

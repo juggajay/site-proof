@@ -12,6 +12,7 @@ declare global {
         role: string;
         companyId: string | null;
         hasSubcontractorPortalAccess?: boolean;
+        dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
       };
       apiKey?: {
         id: string;
