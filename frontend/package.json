@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20 <23",
+    "npm": ">=10 <11"
+  },
   "scripts": {
     "copy:pdf-assets": "node scripts/copy-pdf-assets.mjs",
     "dev": "npm run copy:pdf-assets && vite",

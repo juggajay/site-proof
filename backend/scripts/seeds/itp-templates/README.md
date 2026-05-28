@@ -18,28 +18,28 @@ List all seeders without opening a database connection:
 
 ```bash
 cd backend
-pnpm seed:itp -- --list
+npm run seed:itp -- --list
 ```
 
 Preview a filtered run:
 
 ```bash
 cd backend
-pnpm seed:itp -- --state=qld --activity=structures
+npm run seed:itp -- --state=qld --activity=structures
 ```
 
 Execute a filtered run:
 
 ```bash
 cd backend
-pnpm seed:itp -- --state=qld --activity=structures --execute
+npm run seed:itp -- --state=qld --activity=structures --execute
 ```
 
 Execute all seeders:
 
 ```bash
 cd backend
-pnpm seed:itp -- --execute
+npm run seed:itp -- --execute
 ```
 
 The orchestrator loads `backend/.env` only in `--execute` mode. Dry-run and `--list` mode do not load env, import Prisma, or open a database connection.
