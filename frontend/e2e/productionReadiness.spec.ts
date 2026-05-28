@@ -1272,15 +1272,18 @@ test.describe('production readiness guardrails', () => {
       await readFile(new URL('../package.json', import.meta.url), 'utf8'),
     ) as { scripts: Record<string, string> };
 
-    expect(frontendPackage.scripts.lint).toBe(
-      'eslint src/ e2e/ "scripts/**/*.{js,mjs}" playwright.config.ts vite.config.ts',
-    );
+    expect(frontendPackage.scripts.lint).toContain('eslint src/ e2e/ "scripts/**/*.{js,mjs}"');
+    expect(frontendPackage.scripts.lint).toContain('vite.config.ts');
+    expect(frontendPackage.scripts.lint).toContain('vitest.config.ts');
     expect(frontendPackage.scripts.format).toContain('"e2e/**/*.{ts,tsx}"');
     expect(frontendPackage.scripts.format).toContain('"scripts/**/*.{js,mjs}"');
     expect(frontendPackage.scripts.format).toContain('vite.config.ts');
+    expect(frontendPackage.scripts.format).toContain('vitest.config.ts');
     expect(frontendPackage.scripts['format:check']).toContain('"e2e/**/*.{ts,tsx}"');
     expect(frontendPackage.scripts['format:check']).toContain('"scripts/**/*.{js,mjs}"');
     expect(frontendPackage.scripts['format:check']).toContain('vite.config.ts');
+    expect(frontendPackage.scripts['format:check']).toContain('vitest.config.ts');
+    expect(frontendPackage.scripts['test:unit']).toBe('vitest run');
 
     expect(ciWorkflow).toContain('run: npm audit --audit-level=moderate');
     expect(ciWorkflow).toContain('run: npm run format:check');
@@ -1288,6 +1291,7 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).toContain('Verify database migration status');
     expect(ciWorkflow).toContain('run: npm run lint');
     expect(ciWorkflow).toContain('run: npm run type-check');
+    expect(ciWorkflow).toContain('run: npm run test:unit');
     expect(ciWorkflow).toContain('run: npm run build');
     expect(ciWorkflow).toContain('run: docker build -t siteproof-backend-ci .');
     expect(ciWorkflow).toContain('DOCKER_BUILDKIT: "1"');
@@ -1305,6 +1309,7 @@ test.describe('production readiness guardrails', () => {
     expect(testWorkflow).toContain('run: cd backend && npm run test:coverage');
     expect(testWorkflow).toContain('run: cd frontend && npm audit --audit-level=moderate');
     expect(testWorkflow).toContain('run: cd frontend && npm run format:check');
+    expect(testWorkflow).toContain('run: cd frontend && npm run test:unit');
     expect(testWorkflow).not.toContain('run: cd backend && npm test');
 
     expect(ciWorkflow).not.toContain('run: npm run preflight:integrations');

@@ -125,6 +125,9 @@ jobs:
       - name: Lint
         run: cd frontend && npm run lint
 
+      - name: Unit tests
+        run: cd frontend && npm run test:unit
+
       - name: Production readiness guardrails
         run: cd frontend && npm run test:readiness
 
