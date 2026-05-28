@@ -14,6 +14,7 @@ import {
   MAX_SCHEDULED_REPORTS_PER_PROJECT,
   calculateNextScheduledReportRunAt,
 } from '../lib/scheduledReports.js';
+import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 
 export const reportsRouter = Router();
 
@@ -62,30 +63,6 @@ type ParsedDateQuery = {
 };
 
 type AuthUser = NonNullable<Express.Request['user']>;
-
-async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
-  if (user.roleInCompany === 'owner' || user.roleInCompany === 'admin') {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { companyId: true },
-    });
-
-    if (project?.companyId === user.companyId) {
-      return user.roleInCompany;
-    }
-  }
-
-  const projectUser = await prisma.projectUser.findFirst({
-    where: {
-      projectId,
-      userId: user.id,
-      status: 'active',
-    },
-    select: { role: true },
-  });
-
-  return projectUser?.role ?? null;
-}
 
 async function requireReportProjectAccess(
   user: AuthUser | undefined,

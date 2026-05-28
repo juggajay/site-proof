@@ -14,6 +14,7 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
+  getEffectiveProjectRole as resolveEffectiveProjectRole,
   requireSubcontractorPortalModuleAccess,
 } from '../lib/projectAccess.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
@@ -625,33 +626,10 @@ async function getEffectiveProjectRole(
   projectId: string,
   user: AuthenticatedUser,
 ): Promise<string | null> {
-  const isSubcontractor = isSubcontractorUser(user);
-  const [project, projectUser] = await Promise.all([
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, companyId: true },
-    }),
-    isSubcontractor
-      ? null
-      : prisma.projectUser.findFirst({
-          where: { projectId, userId: user.id, status: 'active' },
-          select: { role: true },
-        }),
-  ]);
-
-  if (!project) {
-    throw AppError.notFound('Project');
-  }
-
-  if (!isSubcontractor && isCompanyAdmin(user) && project.companyId === user.companyId) {
-    return user.roleInCompany;
-  }
-
-  if (projectUser) {
-    return projectUser.role;
-  }
-
-  return null;
+  return resolveEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
 }
 
 async function requireProjectReadAccess(

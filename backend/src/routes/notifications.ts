@@ -20,6 +20,7 @@ import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { logError } from '../lib/serverLogger.js';
 import {
+  getEffectiveProjectRole,
   hasSubcontractorPortalModuleAccess,
   type SubcontractorPortalAccessKey,
 } from '../lib/projectAccess.js';
@@ -298,30 +299,6 @@ function buildProjectEntityLink(
     default:
       return appendQueryParams(`/projects/${encodedProjectId}`, params);
   }
-}
-
-async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
-  if (user.roleInCompany === 'owner' || user.roleInCompany === 'admin') {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { companyId: true },
-    });
-
-    if (project?.companyId === user.companyId) {
-      return user.roleInCompany;
-    }
-  }
-
-  const projectUser = await prisma.projectUser.findFirst({
-    where: {
-      projectId,
-      userId: user.id,
-      status: 'active',
-    },
-    select: { role: true },
-  });
-
-  return projectUser?.role ?? null;
 }
 
 async function requireProjectReadAccess(user: AuthUser, projectId: string): Promise<string> {

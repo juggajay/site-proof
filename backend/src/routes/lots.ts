@@ -8,6 +8,7 @@ import { buildLotReadinessFromInputs } from '../lib/evidenceReadiness.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
+  getEffectiveProjectRole as resolveEffectiveProjectRole,
   requireSubcontractorPortalModuleAccess,
   type SubcontractorPortalAccessKey,
 } from '../lib/projectAccess.js';
@@ -296,10 +297,6 @@ const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
-function isCompanyAdmin(user: AuthenticatedUser): boolean {
-  return user.roleInCompany === 'admin' || user.roleInCompany === 'owner';
-}
-
 function isSubcontractorUser(user: AuthenticatedUser): boolean {
   return SUBCONTRACTOR_ROLES.includes(user.roleInCompany || '');
 }
@@ -329,33 +326,10 @@ async function getEffectiveProjectRole(
   projectId: string,
   user: AuthenticatedUser,
 ): Promise<string | null> {
-  const isSubcontractor = isSubcontractorUser(user);
-  const [project, projectUser] = await Promise.all([
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: { id: true, companyId: true },
-    }),
-    isSubcontractor
-      ? null
-      : prisma.projectUser.findFirst({
-          where: { projectId, userId: user.id, status: 'active' },
-          select: { role: true },
-        }),
-  ]);
-
-  if (!project) {
-    throw AppError.notFound('Project');
-  }
-
-  if (!isSubcontractor && isCompanyAdmin(user) && project.companyId === user.companyId) {
-    return user.roleInCompany;
-  }
-
-  if (projectUser) {
-    return projectUser.role;
-  }
-
-  return null;
+  return resolveEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
 }
 
 async function requireProjectRole(

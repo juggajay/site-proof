@@ -14,6 +14,7 @@ import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
 import { getPaginationMeta, getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
+import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
@@ -349,36 +350,6 @@ function zodValidationMessage(error: z.ZodError): string {
   const firstIssue = error.issues[0];
   const fieldName = firstIssue?.path.join('.');
   return fieldName ? `${fieldName}: ${firstIssue.message}` : 'Validation failed';
-}
-
-async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
-  const [project, projectUser] = await Promise.all([
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: { companyId: true },
-    }),
-    prisma.projectUser.findFirst({
-      where: {
-        projectId,
-        userId: user.id,
-        status: 'active',
-      },
-      select: { role: true },
-    }),
-  ]);
-
-  if (
-    (user.roleInCompany === 'owner' || user.roleInCompany === 'admin') &&
-    project?.companyId === user.companyId
-  ) {
-    return user.roleInCompany;
-  }
-
-  if (projectUser) {
-    return projectUser.role;
-  }
-
-  return null;
 }
 
 async function requireDrawingReadAccess(user: AuthUser, projectId: string): Promise<string> {
