@@ -360,6 +360,119 @@ describe('Full Workflow Integration', () => {
     }
   });
 
+  it('clones a lot with adjacent chainage and synced subcontractor assignment state', async () => {
+    const suffix = Date.now();
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `Clone Subcontractor ${suffix}`,
+        primaryContactName: 'Clone Contact',
+        primaryContactEmail: `clone-sub-${suffix}@example.com`,
+        status: 'approved',
+      },
+    });
+
+    const sourceLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `CLONE-${suffix}-001`,
+        description: 'Clone source lot',
+        activityType: 'Earthworks',
+        lotType: 'chainage',
+        chainageStart: 10,
+        chainageEnd: 25,
+        offset: 'left',
+        offsetCustom: 'left shoulder',
+        layer: 'Subgrade',
+        areaZone: 'Zone A',
+        assignedSubcontractorId: subcontractorCompany.id,
+      },
+    });
+
+    await prisma.lotSubcontractorAssignment.create({
+      data: {
+        projectId,
+        lotId: sourceLot.id,
+        subcontractorCompanyId: subcontractorCompany.id,
+        status: 'active',
+        canCompleteITP: true,
+        itpRequiresVerification: true,
+        assignedById: adminId,
+      },
+    });
+
+    let clonedLotId: string | undefined;
+
+    try {
+      const cloneRes = await request(app)
+        .post(`/api/lots/${sourceLot.id}/clone`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({});
+
+      expect(cloneRes.status).toBe(201);
+      expect(cloneRes.body.sourceLotId).toBe(sourceLot.id);
+      expect(cloneRes.body.message).toBe(`Lot cloned from ${sourceLot.lotNumber}`);
+      expect(cloneRes.body.lot).toMatchObject({
+        lotNumber: `CLONE-${suffix}-002`,
+        description: 'Clone source lot',
+        activityType: 'Earthworks',
+        offset: 'left',
+        layer: 'Subgrade',
+        areaZone: 'Zone A',
+        assignedSubcontractorId: subcontractorCompany.id,
+      });
+      expect(Number(cloneRes.body.lot.chainageStart)).toBe(25);
+      expect(Number(cloneRes.body.lot.chainageEnd)).toBe(40);
+
+      const createdCloneId = cloneRes.body.lot.id as string;
+      clonedLotId = createdCloneId;
+      const clonedLot = await prisma.lot.findUniqueOrThrow({
+        where: { id: createdCloneId },
+        select: {
+          lotNumber: true,
+          lotType: true,
+          offsetCustom: true,
+          assignedSubcontractorId: true,
+        },
+      });
+
+      expect(clonedLot).toMatchObject({
+        lotNumber: `CLONE-${suffix}-002`,
+        lotType: 'chainage',
+        offsetCustom: 'left shoulder',
+        assignedSubcontractorId: subcontractorCompany.id,
+      });
+
+      const clonedAssignment = await prisma.lotSubcontractorAssignment.findUnique({
+        where: {
+          lotId_subcontractorCompanyId: {
+            lotId: createdCloneId,
+            subcontractorCompanyId: subcontractorCompany.id,
+          },
+        },
+      });
+
+      expect(clonedAssignment).toMatchObject({
+        projectId,
+        lotId: createdCloneId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        status: 'active',
+      });
+    } finally {
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: {
+          lotId: { in: [sourceLot.id, clonedLotId].filter(Boolean) as string[] },
+        },
+      });
+      await prisma.lot.deleteMany({
+        where: { id: { in: [sourceLot.id, clonedLotId].filter(Boolean) as string[] } },
+      });
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+    }
+  });
+
   it('should complete full NCR workflow', async () => {
     // 1. Create lot for NCR
     const lotRes = await request(app)
