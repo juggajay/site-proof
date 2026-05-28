@@ -685,6 +685,65 @@ test.describe('Dashboard seeded account contract', () => {
     );
   });
 
+  test('uses derived project dashboard role when company role is generic', async ({ page }) => {
+    await mockDashboardShell(page, {
+      ...E2E_ADMIN_USER,
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'quality_manager',
+    });
+
+    await page.route('**/api/dashboard/quality-manager', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          project: defaultProject,
+          lotConformance: {
+            totalLots: 3,
+            conformingLots: 2,
+            nonConformingLots: 1,
+            rate: 66.7,
+          },
+          ncrsByCategory: { major: 0, minor: 1, observation: 0, total: 1 },
+          openNCRs: [],
+          pendingVerifications: { count: 0, items: [] },
+          holdPointMetrics: {
+            totalReleased: 1,
+            totalPending: 1,
+            releaseRate: 50,
+            avgTimeToRelease: 8,
+          },
+          itpTrends: {
+            completedThisWeek: 2,
+            completedLastWeek: 1,
+            trend: 'up',
+            completionRate: 67,
+          },
+          auditReadiness: {
+            score: 75,
+            status: 'needs_attention',
+            issues: ['One lot is missing evidence'],
+          },
+        }),
+      });
+    });
+
+    await page.route('**/api/dashboard/stats**', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Generic dashboard should not load' }),
+      });
+    });
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('heading', { name: 'Quality Dashboard' })).toBeVisible();
+    await expect(page.getByText('One lot is missing evidence')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toHaveCount(0);
+  });
+
   test('quality manager dashboard avoids false zero metrics on load failure', async ({ page }) => {
     await mockQualityManagerDashboardApi(page, { failUntil: 100 });
 

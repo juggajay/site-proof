@@ -744,6 +744,69 @@ describe('POST /api/auth/login', () => {
     expect(res.body.token).toBeDefined();
   });
 
+  it('returns a dashboard role from active project membership when company role is generic', async () => {
+    const suffix = Date.now();
+    const email = `dashboard-role-${suffix}@example.com`;
+    const password = 'SecureP@ssword123!';
+    const company = await prisma.company.create({
+      data: { name: `Auth Dashboard Role Company ${suffix}` },
+    });
+    const project = await prisma.project.create({
+      data: {
+        name: `Auth Dashboard Role Project ${suffix}`,
+        projectNumber: `AUTH-DR-${suffix}`,
+        companyId: company.id,
+        status: 'active',
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      },
+    });
+    const userRes = await request(app).post('/api/auth/register').send({
+      email,
+      password,
+      fullName: 'Dashboard Role User',
+      tosAccepted: true,
+    });
+    const userId = userRes.body.user.id as string;
+
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { companyId: company.id, roleInCompany: 'member' },
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId: project.id,
+          userId,
+          role: 'quality_manager',
+          status: 'active',
+          acceptedAt: new Date(),
+        },
+      });
+
+      const loginRes = await request(app).post('/api/auth/login').send({ email, password });
+
+      expect(loginRes.status).toBe(200);
+      expect(loginRes.body.user.role).toBe('member');
+      expect(loginRes.body.user.dashboardRole).toBe('quality_manager');
+
+      const meRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${loginRes.body.token}`);
+
+      expect(meRes.status).toBe(200);
+      expect(meRes.body.user.role).toBe('member');
+      expect(meRes.body.user.dashboardRole).toBe('quality_manager');
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { userId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
   it('does not expose subcontractor portal access for head-contractor users with stale links', async () => {
     const suffix = Date.now();
     const company = await prisma.company.create({

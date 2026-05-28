@@ -46,6 +46,7 @@ import {
   isSubcontractorInvitationExpired,
 } from '../lib/subcontractorInvitations.js';
 import { hasActiveSubcontractorPortalIdentity } from '../lib/projectAccess.js';
+import { resolveDashboardRoleForUser } from '../lib/dashboardRole.js';
 
 const AVATAR_STORAGE_PREFIX = 'avatars';
 const GENERIC_RESEND_VERIFICATION_MESSAGE =
@@ -130,6 +131,7 @@ async function requireJwtAuth(req: Request, _res: Response, next: NextFunction) 
       role: userData.role,
       companyId: userData.companyId || null,
       hasSubcontractorPortalAccess: userData.hasSubcontractorPortalAccess,
+      dashboardRole: userData.dashboardRole,
     };
 
     next();
@@ -807,6 +809,10 @@ authRouter.post(
         companyName,
         hasPassword: true,
         hasSubcontractorPortalAccess: await hasActiveSubcontractorPortalIdentity(user.id),
+        dashboardRole: await resolveDashboardRoleForUser({
+          userId: user.id,
+          roleInCompany: user.role_in_company,
+        }),
       },
       token,
     });
