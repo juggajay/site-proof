@@ -177,9 +177,11 @@ function getSupportContactInfo() {
     address: configuredSupportValue('SUPPORT_ADDRESS'),
     hours: configuredSupportValue('SUPPORT_HOURS') || 'Mon-Fri, 8am-6pm AEST',
     responseTime: {
-      critical: configuredSupportValue('SUPPORT_RESPONSE_CRITICAL') || 'Within 2 hours',
-      standard: configuredSupportValue('SUPPORT_RESPONSE_STANDARD') || 'Within 24 hours',
-      general: configuredSupportValue('SUPPORT_RESPONSE_GENERAL') || 'Within 48 hours',
+      critical: configuredSupportValue('SUPPORT_RESPONSE_CRITICAL') || 'Prioritised same day',
+      standard:
+        configuredSupportValue('SUPPORT_RESPONSE_STANDARD') || 'Typically within 1 business day',
+      general:
+        configuredSupportValue('SUPPORT_RESPONSE_GENERAL') || 'Typically within 2 business days',
     },
   };
 }

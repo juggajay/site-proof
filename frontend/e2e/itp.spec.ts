@@ -54,7 +54,7 @@ const E2E_GLOBAL_TEMPLATE = {
   id: E2E_GLOBAL_TEMPLATE_ID,
   name: 'TfNSW Pavement ITP',
   description: 'Library pavement controls',
-  activityType: 'Pavement',
+  activityType: 'pavement_bound',
   createdAt: '2026-01-15T00:00:00.000Z',
   isGlobalTemplate: true,
   stateSpec: 'TfNSW',
@@ -295,6 +295,7 @@ test.describe('ITP seeded UI contract', () => {
       .filter({ hasText: 'TfNSW Pavement ITP' });
     await expect(globalTemplateCard).toBeVisible();
     await expect(globalTemplateCard.getByText('TfNSW Template')).toBeVisible();
+    await expect(globalTemplateCard.getByText('Pavement (bound)')).toBeVisible();
     await expect(globalTemplateCard.getByText('Library pavement controls')).toBeVisible();
     await expect(globalTemplateCard.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 

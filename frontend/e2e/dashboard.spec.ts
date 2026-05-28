@@ -312,7 +312,7 @@ test.describe('Dashboard seeded account contract', () => {
     await expect(page.getByText('Total Lots').locator('..')).toContainText('14');
     const lotStatusOverview = page
       .getByRole('heading', { name: 'Lot Status Overview' })
-      .locator('../..');
+      .locator('xpath=ancestor::div[contains(@class, "bg-card")][1]');
     await expect(lotStatusOverview.getByRole('button', { name: /Not Started\s+2/ })).toBeVisible();
     await expect(lotStatusOverview.getByRole('button', { name: /In Progress\s+3/ })).toBeVisible();
     await expect(
@@ -323,6 +323,13 @@ test.describe('Dashboard seeded account contract', () => {
     await expect(lotStatusOverview.getByRole('button', { name: /Completed\s+0/ })).toBeVisible();
     await expect(lotStatusOverview.getByRole('button', { name: /Conformed\s+4/ })).toBeVisible();
     await expect(lotStatusOverview.getByRole('button', { name: /Claimed\s+1/ })).toBeVisible();
+    await expect(lotStatusOverview.getByText('Completed means the work is done.')).toBeVisible();
+    await expect(
+      lotStatusOverview.getByText('Quality evidence is approved and the lot can be claimed.'),
+    ).toBeVisible();
+    await expect(
+      lotStatusOverview.getByText('The lot is included in a progress claim.'),
+    ).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Items Requiring Attention' })).toBeVisible();
     await expect(page.getByText('NCR-9001')).toBeVisible();
     await expect(page.getByText('HP-42')).toBeVisible();
