@@ -10,10 +10,10 @@ instructions for a fresh agent, read
 
 ```bash
 # Backend (runs on :3001)
-cd backend && pnpm install && pnpm dev
+cd backend && npm install && npm run dev
 
 # Frontend (runs on :5174)
-cd frontend && pnpm install && pnpm dev
+cd frontend && npm install && npm run dev
 ```
 
 ## Architecture
@@ -161,14 +161,14 @@ Core models (see `backend/prisma/schema.prisma`):
 
 ```bash
 # Backend unit tests (252 tests)
-cd backend && pnpm test
+cd backend && npm test
 
 # Frontend E2E tests
-cd frontend && pnpm test:e2e
+cd frontend && npm run test:e2e
 
 # Type checking
-cd backend && pnpm tsc --noEmit
-cd frontend && pnpm tsc --noEmit
+cd backend && npm run type-check
+cd frontend && npm run type-check
 ```
 
 ## User Roles
@@ -235,16 +235,16 @@ VITE_API_URL=http://localhost:3001
 
 ### Add a database model
 1. Update `backend/prisma/schema.prisma`
-2. Run `cd backend && pnpm prisma migrate dev --name description`
-3. Run `pnpm prisma generate`
+2. Run `cd backend && npm run db:migrate -- --name description`
+3. Run `npm run db:generate`
 
 ### Seed global ITP templates
 1. Review the seeder list without loading env or opening a DB connection:
-   `cd backend && pnpm seed:itp -- --list`
+   `cd backend && npm run seed:itp -- --list`
 2. Preview a filtered run, for example:
-   `cd backend && pnpm seed:itp -- --state=qld --activity=structures`
+   `cd backend && npm run seed:itp -- --state=qld --activity=structures`
 3. Execute only with an approved target database:
-   `cd backend && pnpm seed:itp -- --state=qld --activity=structures --execute`
+   `cd backend && npm run seed:itp -- --state=qld --activity=structures --execute`
 
 The seeders are additive and idempotent, but production runs still require an operator-approved plan and a recent backup.
 
