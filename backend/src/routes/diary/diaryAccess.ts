@@ -2,6 +2,7 @@ import type { Request } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
+import { getEffectiveProjectRole as resolveEffectiveProjectRole } from '../../lib/projectAccess.js';
 
 type AuthUser = NonNullable<Request['user']>;
 type DiaryMutationClient = typeof prisma | Prisma.TransactionClient;
@@ -46,33 +47,11 @@ async function getEffectiveProjectRole(
   projectId: string,
   client: DiaryMutationClient = prisma,
 ): Promise<string | null> {
-  const isSubcontractor = DIARY_SUBCONTRACTOR_ROLES.has(user.roleInCompany);
-  const [project, projectUser] = await Promise.all([
-    client.project.findUnique({
-      where: { id: projectId },
-      select: { companyId: true },
-    }),
-    isSubcontractor
-      ? null
-      : client.projectUser.findFirst({
-          where: { projectId, userId: user.id, status: 'active' },
-          select: { role: true },
-        }),
-  ]);
-
-  if (!project) {
-    throw AppError.notFound('Project');
-  }
-
-  if (
-    !isSubcontractor &&
-    (user.roleInCompany === 'owner' || user.roleInCompany === 'admin') &&
-    project.companyId === user.companyId
-  ) {
-    return user.roleInCompany;
-  }
-
-  return projectUser?.role ?? null;
+  return resolveEffectiveProjectRole(user, projectId, {
+    client,
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
 }
 
 export async function requireDiaryWriteAccess(

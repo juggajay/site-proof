@@ -16,6 +16,7 @@ import {
   buildLotReadinessFromInputs,
 } from '../lib/evidenceReadiness.js';
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js';
+import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 
 interface PaymentHistoryEntry {
   amount: number;
@@ -459,30 +460,6 @@ async function getProjectCertificationDocumentId(
   }
 
   return document.id;
-}
-
-async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
-  if (user.roleInCompany === 'owner' || user.roleInCompany === 'admin') {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      select: { companyId: true },
-    });
-
-    if (project?.companyId === user.companyId) {
-      return user.roleInCompany;
-    }
-  }
-
-  const projectUser = await prisma.projectUser.findFirst({
-    where: {
-      projectId,
-      userId: user.id,
-      status: 'active',
-    },
-    select: { role: true },
-  });
-
-  return projectUser?.role ?? null;
 }
 
 async function requireCommercialProjectAccess(user: AuthUser, projectId: string): Promise<void> {

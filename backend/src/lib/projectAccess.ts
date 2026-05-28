@@ -72,11 +72,74 @@ export function isSubcontractorPortalRole(role: string | null | undefined): bool
   return SUBCONTRACTOR_PORTAL_ROLES.has(role || '');
 }
 
+export function isCompanyAdminRole(role: string | null | undefined): boolean {
+  return role === 'admin' || role === 'owner';
+}
+
 export function isStandaloneSubcontractorPortalIdentity(user: {
   companyId?: string | null;
   roleInCompany?: string | null;
 }): boolean {
   return !user.companyId && isSubcontractorPortalRole(user.roleInCompany);
+}
+
+type EffectiveProjectRoleUser = {
+  id: string;
+  companyId?: string | null;
+  roleInCompany?: string | null;
+};
+
+type EffectiveProjectRoleClient = Pick<typeof prisma, 'project' | 'projectUser'>;
+
+export async function getEffectiveProjectRole(
+  user: EffectiveProjectRoleUser,
+  projectId: string,
+  {
+    client = prisma,
+    excludeSubcontractorProjectMemberships = false,
+    throwIfProjectMissing = false,
+  }: {
+    client?: EffectiveProjectRoleClient;
+    excludeSubcontractorProjectMemberships?: boolean;
+    throwIfProjectMissing?: boolean;
+  } = {},
+): Promise<string | null> {
+  const isSubcontractor = isSubcontractorPortalRole(user.roleInCompany);
+  const canUseProjectMembership = !(excludeSubcontractorProjectMemberships && isSubcontractor);
+  const [project, projectUser] = await Promise.all([
+    client.project.findUnique({
+      where: { id: projectId },
+      select: { companyId: true },
+    }),
+    canUseProjectMembership
+      ? client.projectUser.findFirst({
+          where: {
+            projectId,
+            userId: user.id,
+            status: 'active',
+          },
+          select: { role: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  if (!project) {
+    if (throwIfProjectMissing) {
+      throw AppError.notFound('Project');
+    }
+
+    return projectUser?.role ?? null;
+  }
+
+  if (
+    canUseProjectMembership &&
+    isCompanyAdminRole(user.roleInCompany) &&
+    project.companyId === user.companyId
+  ) {
+    return user.roleInCompany ?? null;
+  }
+
+  return projectUser?.role ?? null;
 }
 
 export async function hasActiveSubcontractorPortalIdentity(userId: string): Promise<boolean> {

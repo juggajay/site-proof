@@ -7,7 +7,11 @@ import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pa
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
-import { activeSubcontractorCompanyWhere, checkProjectAccess } from '../lib/projectAccess.js';
+import {
+  activeSubcontractorCompanyWhere,
+  checkProjectAccess,
+  getEffectiveProjectRole as resolveEffectiveProjectRole,
+} from '../lib/projectAccess.js';
 import { requireEditableDiaryForWrite } from './diary/diaryAccess.js';
 import type { Prisma } from '@prisma/client';
 
@@ -339,29 +343,10 @@ async function requireProjectReadAccess(
 }
 
 async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
-  const isSubcontractor = isSubcontractorUser(user);
-  const [project, projectUser] = await Promise.all([
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: { companyId: true },
-    }),
-    isSubcontractor
-      ? null
-      : prisma.projectUser.findFirst({
-          where: { projectId, userId: user.id, status: 'active' },
-          select: { role: true },
-        }),
-  ]);
-
-  if (!project) {
-    throw AppError.notFound('Project');
-  }
-
-  if (!isSubcontractor && isCompanyAdmin(user) && project.companyId === user.companyId) {
-    return user.roleInCompany;
-  }
-
-  return projectUser?.role ?? null;
+  return resolveEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
 }
 
 async function requireDocketApproverAccess(user: AuthUser, projectId: string): Promise<void> {

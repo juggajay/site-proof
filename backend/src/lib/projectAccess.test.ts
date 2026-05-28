@@ -2,12 +2,123 @@ import { describe, expect, it } from 'vitest';
 import { prisma } from './prisma.js';
 import {
   checkProjectAccess,
+  getEffectiveProjectRole,
   hasPortalModuleEnabled,
   hasSubcontractorPortalModuleAccess,
+  isCompanyAdminRole,
   requireSubcontractorPortalModuleAccess,
 } from './projectAccess.js';
 
 describe('checkProjectAccess', () => {
+  it('resolves company admin and active project membership roles', async () => {
+    const suffix = Date.now();
+    const company = await prisma.company.create({
+      data: { name: `Effective Role Company ${suffix}` },
+    });
+    const project = await prisma.project.create({
+      data: {
+        companyId: company.id,
+        name: `Effective Role Project ${suffix}`,
+        projectNumber: `ERP-${suffix}`,
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      },
+    });
+    const owner = await prisma.user.create({
+      data: {
+        email: `effective-role-owner-${suffix}@example.com`,
+        fullName: 'Effective Role Owner',
+        roleInCompany: 'owner',
+        companyId: company.id,
+      },
+    });
+    const projectUser = await prisma.user.create({
+      data: {
+        email: `effective-role-pm-${suffix}@example.com`,
+        fullName: 'Effective Role Project Manager',
+        roleInCompany: 'member',
+        companyId: company.id,
+      },
+    });
+
+    try {
+      await prisma.projectUser.create({
+        data: {
+          projectId: project.id,
+          userId: projectUser.id,
+          role: 'project_manager',
+          status: 'active',
+        },
+      });
+
+      expect(isCompanyAdminRole(owner.roleInCompany)).toBe(true);
+      await expect(getEffectiveProjectRole(owner, project.id)).resolves.toBe('owner');
+      await expect(getEffectiveProjectRole(projectUser, project.id)).resolves.toBe(
+        'project_manager',
+      );
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { projectId: project.id } });
+      await prisma.user.delete({ where: { id: projectUser.id } }).catch(() => {});
+      await prisma.user.delete({ where: { id: owner.id } }).catch(() => {});
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
+  it('can exclude subcontractor project memberships and throw on missing projects', async () => {
+    const suffix = Date.now();
+    const company = await prisma.company.create({
+      data: { name: `Effective Role Subcontractor Company ${suffix}` },
+    });
+    const project = await prisma.project.create({
+      data: {
+        companyId: company.id,
+        name: `Effective Role Subcontractor Project ${suffix}`,
+        projectNumber: `ERSP-${suffix}`,
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      },
+    });
+    const subcontractor = await prisma.user.create({
+      data: {
+        email: `effective-role-sub-${suffix}@example.com`,
+        fullName: 'Effective Role Subcontractor',
+        roleInCompany: 'subcontractor_admin',
+        companyId: null,
+      },
+    });
+
+    try {
+      await prisma.projectUser.create({
+        data: {
+          projectId: project.id,
+          userId: subcontractor.id,
+          role: 'project_manager',
+          status: 'active',
+        },
+      });
+
+      await expect(getEffectiveProjectRole(subcontractor, project.id)).resolves.toBe(
+        'project_manager',
+      );
+      await expect(
+        getEffectiveProjectRole(subcontractor, project.id, {
+          excludeSubcontractorProjectMemberships: true,
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        getEffectiveProjectRole(subcontractor, `missing-${suffix}`, {
+          throwIfProjectMissing: true,
+        }),
+      ).rejects.toThrow('Project not found');
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { projectId: project.id } });
+      await prisma.user.delete({ where: { id: subcontractor.id } }).catch(() => {});
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
   it('does not grant subcontractor roles project access through project memberships', async () => {
     const suffix = Date.now();
     const company = await prisma.company.create({

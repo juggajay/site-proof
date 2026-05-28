@@ -6,7 +6,7 @@ import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import {
   activeSubcontractorCompanyWhere,
-  isSubcontractorPortalRole,
+  getEffectiveProjectRole as resolveEffectiveProjectRole,
 } from '../lib/projectAccess.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 
@@ -47,41 +47,14 @@ function parseLotAssignmentRouteParam(value: unknown, field: string): string {
   return normalized;
 }
 
-function isCompanyAdmin(user: AuthenticatedUser): boolean {
-  return user.roleInCompany === 'admin' || user.roleInCompany === 'owner';
-}
-
 async function getEffectiveProjectRole(
   projectId: string,
   user: AuthenticatedUser,
 ): Promise<string | null> {
-  const isSubcontractor = isSubcontractorPortalRole(user.roleInCompany);
-  const [project, projectUser] = await Promise.all([
-    prisma.project.findUnique({
-      where: { id: projectId },
-      select: { companyId: true },
-    }),
-    isSubcontractor
-      ? null
-      : prisma.projectUser.findFirst({
-          where: { projectId, userId: user.id, status: 'active' },
-          select: { role: true },
-        }),
-  ]);
-
-  if (!project) {
-    throw AppError.notFound('Project');
-  }
-
-  if (!isSubcontractor && isCompanyAdmin(user) && project.companyId === user.companyId) {
-    return user.roleInCompany;
-  }
-
-  if (projectUser) {
-    return projectUser.role;
-  }
-
-  return null;
+  return resolveEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
 }
 
 async function requireAssignmentManagerAccess(
