@@ -4,10 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import {
-  activeSubcontractorCompanyWhere,
-  getEffectiveProjectRole as resolveEffectiveProjectRole,
-} from '../lib/projectAccess.js';
+import { activeSubcontractorCompanyWhere, getEffectiveProjectRole } from '../lib/projectAccess.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 
 export const lotAssignmentsRouter = Router();
@@ -47,21 +44,14 @@ function parseLotAssignmentRouteParam(value: unknown, field: string): string {
   return normalized;
 }
 
-async function getEffectiveProjectRole(
-  projectId: string,
-  user: AuthenticatedUser,
-): Promise<string | null> {
-  return resolveEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-}
-
 async function requireAssignmentManagerAccess(
   projectId: string,
   user: AuthenticatedUser,
 ): Promise<void> {
-  const role = await getEffectiveProjectRole(projectId, user);
+  const role = await getEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
   if (!role || !ASSIGNMENT_MANAGERS.includes(role)) {
     throw AppError.forbidden('You do not have permission to manage subcontractor assignments');
   }

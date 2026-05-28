@@ -17,7 +17,8 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
-  getEffectiveProjectRole as resolveEffectiveProjectRole,
+  getEffectiveProjectRole,
+  isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
 } from '../lib/projectAccess.js';
 import { buildFrontendUrl } from '../lib/runtimeConfig.js';
@@ -415,8 +416,6 @@ const HP_ESCALATION_ROLES = [
   'quality_manager',
   'superintendent',
 ];
-const HP_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
-
 type HoldPointNotificationRecipient = {
   email: string;
   fullName: string | null;
@@ -518,17 +517,7 @@ function parseHoldPointRouteParam(
 }
 
 function isSubcontractorUser(user: AuthenticatedUser): boolean {
-  return HP_SUBCONTRACTOR_ROLES.has(user.roleInCompany);
-}
-
-async function getEffectiveProjectRole(
-  projectId: string,
-  user: AuthenticatedUser,
-): Promise<string | null> {
-  return resolveEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
+  return isSubcontractorPortalRole(user.roleInCompany);
 }
 
 async function requireProjectReadAccess(
@@ -560,8 +549,11 @@ async function requireInternalProjectReadAccess(
     throw AppError.forbidden(message);
   }
 
-  const role = await getEffectiveProjectRole(projectId, user);
-  if (!role || HP_SUBCONTRACTOR_ROLES.has(role)) {
+  const role = await getEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
+  if (!role || isSubcontractorPortalRole(role)) {
     throw AppError.forbidden(message);
   }
 }
@@ -574,7 +566,10 @@ async function canRequestHoldPointRelease(
     return false;
   }
 
-  const role = await getEffectiveProjectRole(projectId, user);
+  const role = await getEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
   return Boolean(role && HP_REQUEST_ROLES.includes(role));
 }
 
@@ -649,7 +644,10 @@ async function requireProjectRole(
   allowedRoles: string[],
   message: string,
 ): Promise<string> {
-  const role = await getEffectiveProjectRole(projectId, user);
+  const role = await getEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
   if (!role || !allowedRoles.includes(role)) {
     throw AppError.forbidden(message);
   }

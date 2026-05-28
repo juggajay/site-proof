@@ -10,7 +10,9 @@ import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
-  getEffectiveProjectRole as resolveEffectiveProjectRole,
+  getEffectiveProjectRole,
+  isCompanyAdminRole,
+  isSubcontractorPortalRole,
 } from '../lib/projectAccess.js';
 import { requireEditableDiaryForWrite } from './diary/diaryAccess.js';
 import type { Prisma } from '@prisma/client';
@@ -237,7 +239,6 @@ docketsRouter.use(requireAuth);
 
 // Roles that can approve dockets
 const DOCKET_APPROVERS = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'];
-const SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const DOCKET_ENTRY_EDIT_STATUSES = new Set(['draft', 'queried', 'rejected']);
 
 type AuthUser = NonNullable<Express.Request['user']>;
@@ -250,11 +251,7 @@ type DocketProjectReadScope = {
 };
 
 function isSubcontractorUser(user: AuthUser): boolean {
-  return SUBCONTRACTOR_ROLES.has(user.roleInCompany);
-}
-
-function isCompanyAdmin(user: AuthUser): boolean {
-  return user.roleInCompany === 'admin' || user.roleInCompany === 'owner';
+  return isSubcontractorPortalRole(user.roleInCompany);
 }
 
 function isDocketEntryEditable(status: string): boolean {
@@ -308,7 +305,11 @@ async function requireProjectReadAccess(
     throw AppError.forbidden('Access denied');
   }
 
-  if (!isSubcontractorUser(user) && isCompanyAdmin(user) && project.companyId === user.companyId) {
+  if (
+    !isSubcontractorUser(user) &&
+    isCompanyAdminRole(user.roleInCompany) &&
+    project.companyId === user.companyId
+  ) {
     return {};
   }
 
@@ -342,15 +343,11 @@ async function requireProjectReadAccess(
   return {};
 }
 
-async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
-  return resolveEffectiveProjectRole(user, projectId, {
+async function requireDocketApproverAccess(user: AuthUser, projectId: string): Promise<void> {
+  const role = await getEffectiveProjectRole(user, projectId, {
     excludeSubcontractorProjectMemberships: true,
     throwIfProjectMissing: true,
   });
-}
-
-async function requireDocketApproverAccess(user: AuthUser, projectId: string): Promise<void> {
-  const role = await getEffectiveProjectRole(user, projectId);
   if (!role || !DOCKET_APPROVERS.includes(role)) {
     throw AppError.forbidden('You do not have permission to perform this action.');
   }

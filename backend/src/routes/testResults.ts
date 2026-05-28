@@ -14,7 +14,9 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
-  getEffectiveProjectRole as resolveEffectiveProjectRole,
+  getEffectiveProjectRole,
+  isCompanyAdminRole,
+  isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
 } from '../lib/projectAccess.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
@@ -425,11 +427,11 @@ type BatchConfirmResult =
   | { success: false; testResultId: string; error: string };
 
 function isCompanyAdmin(user: AuthenticatedUser): boolean {
-  return user.roleInCompany === 'admin' || user.roleInCompany === 'owner';
+  return isCompanyAdminRole(user.roleInCompany);
 }
 
 function isSubcontractorUser(user: AuthenticatedUser): boolean {
-  return user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin';
+  return isSubcontractorPortalRole(user.roleInCompany);
 }
 
 function normalizeOptionalString(
@@ -622,16 +624,6 @@ async function getReadableProjectIds(user: AuthenticatedUser): Promise<string[]>
   ];
 }
 
-async function getEffectiveProjectRole(
-  projectId: string,
-  user: AuthenticatedUser,
-): Promise<string | null> {
-  return resolveEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-}
-
 async function requireProjectReadAccess(
   projectId: string,
   user: AuthenticatedUser,
@@ -730,7 +722,10 @@ async function requireTestProjectRole(
   allowedRoles: string[],
   message: string,
 ): Promise<string> {
-  const role = await getEffectiveProjectRole(projectId, user);
+  const role = await getEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
 
   if (!role || !allowedRoles.includes(role)) {
     throw AppError.forbidden(message);
@@ -1871,7 +1866,10 @@ testResultsRouter.get(
     }
 
     await requireTestResultReadAccess(testResult, user);
-    const userProjectRole = await getEffectiveProjectRole(testResult.projectId, user);
+    const userProjectRole = await getEffectiveProjectRole(user, testResult.projectId, {
+      excludeSubcontractorProjectMemberships: true,
+      throwIfProjectMissing: true,
+    });
 
     // Determine if result passes or fails specification
     let specificationStatus = 'unknown';
@@ -2246,7 +2244,10 @@ testResultsRouter.post(
       throw AppError.notFound('Test result');
     }
 
-    const userProjectRole = await getEffectiveProjectRole(testResult.projectId, user);
+    const userProjectRole = await getEffectiveProjectRole(user, testResult.projectId, {
+      excludeSubcontractorProjectMemberships: true,
+      throwIfProjectMissing: true,
+    });
 
     // Verification requires higher permission
     if (status === 'verified' && (!userProjectRole || !TEST_VERIFIERS.includes(userProjectRole))) {
@@ -2442,7 +2443,10 @@ testResultsRouter.get(
     }
 
     await requireTestResultReadAccess(testResult, user);
-    const userProjectRole = await getEffectiveProjectRole(testResult.projectId, user);
+    const userProjectRole = await getEffectiveProjectRole(user, testResult.projectId, {
+      excludeSubcontractorProjectMemberships: true,
+      throwIfProjectMissing: true,
+    });
 
     // Build workflow steps with status
     const workflowSteps = [
@@ -3394,7 +3398,10 @@ testResultsRouter.post(
           continue;
         }
 
-        const userProjectRole = await getEffectiveProjectRole(testResult.projectId, user);
+        const userProjectRole = await getEffectiveProjectRole(user, testResult.projectId, {
+          excludeSubcontractorProjectMemberships: true,
+          throwIfProjectMissing: true,
+        });
 
         if (!userProjectRole || !TEST_CREATORS.includes(userProjectRole)) {
           results.push({

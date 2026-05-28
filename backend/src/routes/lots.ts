@@ -8,7 +8,8 @@ import { buildLotReadinessFromInputs } from '../lib/evidenceReadiness.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
-  getEffectiveProjectRole as resolveEffectiveProjectRole,
+  getEffectiveProjectRole,
+  isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
   type SubcontractorPortalAccessKey,
 } from '../lib/projectAccess.js';
@@ -293,12 +294,11 @@ const LOT_DELETERS = ['owner', 'admin', 'project_manager'];
 // Roles that can conform lots (quality management)
 const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager'];
 const LOT_FORCE_CONFORMERS = ['owner', 'admin'];
-const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
 function isSubcontractorUser(user: AuthenticatedUser): boolean {
-  return SUBCONTRACTOR_ROLES.includes(user.roleInCompany || '');
+  return isSubcontractorPortalRole(user.roleInCompany);
 }
 
 function canViewLotBudget(role: string | null): boolean {
@@ -322,23 +322,16 @@ async function requireSubcontractorLotPortalModules(
   }
 }
 
-async function getEffectiveProjectRole(
-  projectId: string,
-  user: AuthenticatedUser,
-): Promise<string | null> {
-  return resolveEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-}
-
 async function requireProjectRole(
   projectId: string,
   user: AuthenticatedUser,
   allowedRoles: string[],
   message: string,
 ): Promise<string> {
-  const role = await getEffectiveProjectRole(projectId, user);
+  const role = await getEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
 
   if (!role || !allowedRoles.includes(role)) {
     throw AppError.forbidden(message);
@@ -411,7 +404,10 @@ async function requireLotReadAccess(
     return;
   }
 
-  const role = await getEffectiveProjectRole(lot.projectId, user);
+  const role = await getEffectiveProjectRole(user, lot.projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
   if (!role) {
     throw AppError.forbidden(message);
   }
@@ -689,7 +685,10 @@ lotsRouter.get(
 
     const effectiveProjectRole = isSubcontractorUser(user)
       ? null
-      : await getEffectiveProjectRole(projectId, user);
+      : await getEffectiveProjectRole(user, projectId, {
+          excludeSubcontractorProjectMemberships: true,
+          throwIfProjectMissing: true,
+        });
     const canViewBudgetAmount = canViewLotBudget(effectiveProjectRole);
 
     await requireSubcontractorLotPortalModules(
@@ -2185,7 +2184,10 @@ lotsRouter.get(
     const projectId = parseLotRouteParam(req.params.projectId, 'projectId');
     const user = req.user!;
 
-    const role = await getEffectiveProjectRole(projectId, user);
+    const role = await getEffectiveProjectRole(user, projectId, {
+      excludeSubcontractorProjectMemberships: true,
+      throwIfProjectMissing: true,
+    });
     if (!role) {
       throw AppError.forbidden('You do not have access to this project');
     }
@@ -2255,7 +2257,10 @@ lotsRouter.get(
 
     const effectiveProjectRole = isSubcontractorUser(user)
       ? null
-      : await getEffectiveProjectRole(lot.projectId, user);
+      : await getEffectiveProjectRole(user, lot.projectId, {
+          excludeSubcontractorProjectMemberships: true,
+          throwIfProjectMissing: true,
+        });
     const canViewCommercial = !isSubcontractorUser(user) && canViewLotBudget(effectiveProjectRole);
     const conformStatus = await checkConformancePrerequisites(id);
 

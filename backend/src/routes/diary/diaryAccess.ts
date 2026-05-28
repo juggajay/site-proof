@@ -2,7 +2,7 @@ import type { Request } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
-import { getEffectiveProjectRole as resolveEffectiveProjectRole } from '../../lib/projectAccess.js';
+import { getEffectiveProjectRole, isSubcontractorPortalRole } from '../../lib/projectAccess.js';
 
 type AuthUser = NonNullable<Request['user']>;
 type DiaryMutationClient = typeof prisma | Prisma.TransactionClient;
@@ -21,7 +21,6 @@ const DIARY_WRITE_ROLES = new Set([
   'foreman',
   'site_engineer',
 ]);
-const DIARY_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DIARY_QUERY_TEXT_MAX_LENGTH = 120;
 export const DIARY_ROUTE_PARAM_MAX_LENGTH = 128;
@@ -32,26 +31,17 @@ export async function requireDiaryReadAccess(
   projectId: string,
   message = 'Access denied to this project',
 ) {
-  if (DIARY_SUBCONTRACTOR_ROLES.has(user.roleInCompany)) {
+  if (isSubcontractorPortalRole(user.roleInCompany)) {
     throw AppError.forbidden(message);
   }
 
-  const role = await getEffectiveProjectRole(user, projectId);
-  if (!role || DIARY_SUBCONTRACTOR_ROLES.has(role)) {
-    throw AppError.forbidden(message);
-  }
-}
-
-async function getEffectiveProjectRole(
-  user: AuthUser,
-  projectId: string,
-  client: DiaryMutationClient = prisma,
-): Promise<string | null> {
-  return resolveEffectiveProjectRole(user, projectId, {
-    client,
+  const role = await getEffectiveProjectRole(user, projectId, {
     excludeSubcontractorProjectMemberships: true,
     throwIfProjectMissing: true,
   });
+  if (!role || isSubcontractorPortalRole(role)) {
+    throw AppError.forbidden(message);
+  }
 }
 
 export async function requireDiaryWriteAccess(
@@ -60,7 +50,11 @@ export async function requireDiaryWriteAccess(
   message = 'You do not have permission to modify diaries for this project',
   client: DiaryMutationClient = prisma,
 ) {
-  const role = await getEffectiveProjectRole(user, projectId, client);
+  const role = await getEffectiveProjectRole(user, projectId, {
+    client,
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
   if (!role || !DIARY_WRITE_ROLES.has(role)) {
     throw AppError.forbidden(message);
   }
