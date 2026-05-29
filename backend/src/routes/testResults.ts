@@ -35,23 +35,28 @@ import {
   getLowConfidenceFields,
 } from './testResults/certificateExtraction.js';
 import { buildTestResultData, suggestLotsFromLocation } from './testResults/testResultMapping.js';
+import {
+  MAX_REJECTION_REASON_LENGTH,
+  MAX_RESULT_UNIT_LENGTH,
+  MAX_SAMPLE_LOCATION_LENGTH,
+  MAX_SEARCH_LENGTH,
+  MAX_TEST_ID_LENGTH,
+  MAX_TEST_REQUEST_NUMBER_LENGTH,
+  MAX_TEST_TEXT_LENGTH,
+  MAX_TEST_TYPE_LENGTH,
+  MAX_UPLOAD_PROJECT_ID_LENGTH,
+  normalizeOptionalQueryString,
+  normalizeOptionalString,
+  normalizePassFail,
+  normalizeRequiredString,
+  parseRequestFormFormat,
+  parseTestResultRouteParam,
+  toNullableDate,
+  toNullableFloat,
+  toNullableString,
+} from './testResults/validation.js';
 
 export const testResultsRouter = Router();
-
-const MAX_UPLOAD_PROJECT_ID_LENGTH = 120;
-const MAX_TEST_ID_LENGTH = 120;
-const MAX_TEST_TYPE_LENGTH = 160;
-const MAX_TEST_REQUEST_NUMBER_LENGTH = 120;
-const MAX_TEST_TEXT_LENGTH = 240;
-const MAX_SAMPLE_LOCATION_LENGTH = 500;
-const MAX_RESULT_UNIT_LENGTH = 80;
-const MAX_REJECTION_REASON_LENGTH = 3000;
-const MAX_DATE_INPUT_LENGTH = 32;
-const MAX_SEARCH_LENGTH = 200;
-const DATE_ONLY_INPUT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-const DECIMAL_NUMBER_PATTERN = /^[+-]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:[eE][+-]?\d+)?$/;
-const PASS_FAIL_VALUES = ['pass', 'fail', 'pending'] as const;
-const REQUEST_FORM_FORMATS = ['html', 'json'] as const;
 
 function cleanupUploadedCertificateFiles(files: Express.Multer.File[]): void {
   for (const file of files) {
@@ -290,164 +295,6 @@ function isCompanyAdmin(user: AuthenticatedUser): boolean {
 
 function isSubcontractorUser(user: AuthenticatedUser): boolean {
   return isSubcontractorPortalRole(user.roleInCompany);
-}
-
-function normalizeOptionalString(
-  value: unknown,
-  fieldName: string,
-  maxLength = MAX_TEST_TEXT_LENGTH,
-): string | null | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value === null) {
-    return null;
-  }
-
-  if (typeof value !== 'string') {
-    throw AppError.badRequest(`${fieldName} must be a string`);
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  if (trimmed.length > maxLength) {
-    throw AppError.badRequest(`${fieldName} is too long`);
-  }
-
-  return trimmed;
-}
-
-function normalizeRequiredString(
-  value: unknown,
-  fieldName: string,
-  maxLength = MAX_TEST_TEXT_LENGTH,
-): string {
-  const normalized = normalizeOptionalString(value, fieldName, maxLength);
-  if (!normalized) {
-    throw AppError.badRequest(`${fieldName} is required`);
-  }
-
-  return normalized;
-}
-
-function parseTestResultRouteParam(
-  value: unknown,
-  fieldName: string,
-  maxLength = MAX_TEST_ID_LENGTH,
-): string {
-  return normalizeRequiredString(value, fieldName, maxLength);
-}
-
-function toNullableString(
-  value: unknown,
-  fieldName = 'value',
-  maxLength = MAX_TEST_TEXT_LENGTH,
-): string | null {
-  return normalizeOptionalString(value, fieldName, maxLength) ?? null;
-}
-
-function normalizeOptionalQueryString(
-  value: unknown,
-  fieldName: string,
-  maxLength: number,
-): string | undefined {
-  const normalized = normalizeOptionalString(value, fieldName, maxLength);
-  if (normalized === null) {
-    throw AppError.badRequest(`${fieldName} query parameter must not be empty`);
-  }
-  return normalized;
-}
-
-function parseRequestFormFormat(value: unknown): (typeof REQUEST_FORM_FORMATS)[number] {
-  if (value === undefined) {
-    return 'html';
-  }
-
-  if (typeof value !== 'string') {
-    throw AppError.badRequest('format query parameter must be a single value');
-  }
-
-  const normalized = value.trim();
-  if (!REQUEST_FORM_FORMATS.includes(normalized as (typeof REQUEST_FORM_FORMATS)[number])) {
-    throw AppError.badRequest(`format must be one of: ${REQUEST_FORM_FORMATS.join(', ')}`);
-  }
-
-  return normalized as (typeof REQUEST_FORM_FORMATS)[number];
-}
-
-function parseStrictDateOnlyMatch(dateOnly: RegExpExecArray): Date | null {
-  const year = Number(dateOnly[1]);
-  const month = Number(dateOnly[2]);
-  const day = Number(dateOnly[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    return null;
-  }
-
-  return date;
-}
-
-function toNullableDate(value: unknown, fieldName = 'date'): Date | null {
-  const normalized = normalizeOptionalString(value, fieldName, MAX_DATE_INPUT_LENGTH);
-  if (!normalized) {
-    return null;
-  }
-
-  const dateOnly = DATE_ONLY_INPUT_PATTERN.exec(normalized);
-  if (!dateOnly) {
-    throw AppError.badRequest(`${fieldName} must be a date in YYYY-MM-DD format`);
-  }
-
-  const date = parseStrictDateOnlyMatch(dateOnly);
-  if (!date) {
-    throw AppError.badRequest(`${fieldName} must be a valid date`);
-  }
-
-  return date;
-}
-
-function toNullableFloat(value: unknown, fieldName = 'value'): number | null {
-  const normalized = normalizeOptionalString(value, fieldName, MAX_RESULT_UNIT_LENGTH);
-  if (!normalized) {
-    return null;
-  }
-
-  if (!DECIMAL_NUMBER_PATTERN.test(normalized)) {
-    throw AppError.badRequest(`${fieldName} must be a valid number`);
-  }
-
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed)) {
-    throw AppError.badRequest(`${fieldName} must be a valid number`);
-  }
-
-  return parsed;
-}
-
-function normalizePassFail(
-  value: unknown,
-  defaultValue?: (typeof PASS_FAIL_VALUES)[number],
-): (typeof PASS_FAIL_VALUES)[number] | undefined {
-  const normalized = normalizeOptionalString(value, 'passFail', 20);
-  if (!normalized) {
-    return defaultValue;
-  }
-
-  const candidate = normalized.toLowerCase();
-  if (!PASS_FAIL_VALUES.includes(candidate as (typeof PASS_FAIL_VALUES)[number])) {
-    throw AppError.badRequest('passFail must be pass, fail, or pending');
-  }
-
-  return candidate as (typeof PASS_FAIL_VALUES)[number];
 }
 
 async function getReadableProjectIds(user: AuthenticatedUser): Promise<string[]> {
