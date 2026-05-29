@@ -18,6 +18,7 @@ import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard';
 import { ForemanMobileDashboard } from '@/components/foreman/ForemanMobileDashboard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useDashboardWidgets } from '@/hooks/useDashboardWidgets';
+import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
 import { DashboardKpiTiles } from '@/components/dashboard/DashboardKpiTiles';
 import { LotStatusOverview } from '@/components/dashboard/LotStatusOverview';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
@@ -38,7 +39,6 @@ import {
   AlertCircle,
   ChevronRight,
   Calendar,
-  ChevronDown,
   RefreshCw,
   Camera,
   Plus,
@@ -326,49 +326,14 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
         {/* Action Buttons */}
         <div className="grid w-full grid-cols-2 gap-2 no-print sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end lg:flex-nowrap">
           {/* Date Range Filter */}
-          <div className="relative min-w-0">
-            <Button
-              variant="outline"
-              onClick={() => setShowDateRangeDropdown(!showDateRangeDropdown)}
-              title="Filter by date range"
-              className="w-full justify-between sm:w-auto sm:justify-center"
-            >
-              <Calendar className="h-4 w-4" />
-              <span>{currentDateRange.label}</span>
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-
-            {showDateRangeDropdown && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowDateRangeDropdown(false)}
-                />
-                <div className="absolute right-0 top-full mt-2 w-48 bg-card border rounded-lg shadow-lg z-20 p-1">
-                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground border-b mb-1">
-                    Select Date Range
-                  </div>
-                  {DATE_RANGE_PRESETS.map((preset) => (
-                    <button
-                      key={preset.value}
-                      onClick={() => {
-                        setDateRangePreset(preset.value);
-                        setShowDateRangeDropdown(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-2 py-1.5 text-sm hover:bg-muted rounded ${
-                        dateRangePreset === preset.value ? 'bg-muted font-medium' : ''
-                      }`}
-                    >
-                      <span>{preset.label}</span>
-                      {dateRangePreset === preset.value && (
-                        <Check className="h-4 w-4 text-primary" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <DashboardDateRangePicker
+            selectedPreset={dateRangePreset}
+            label={currentDateRange.label}
+            isOpen={showDateRangeDropdown}
+            onToggle={() => setShowDateRangeDropdown((isOpen) => !isOpen)}
+            onClose={() => setShowDateRangeDropdown(false)}
+            onSelectPreset={setDateRangePreset}
+          />
 
           {/* Refresh Button */}
           <Button
