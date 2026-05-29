@@ -11,7 +11,6 @@ import { formatDateTime } from '@/lib/utils';
 import { toast } from '@/components/ui/toaster';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal';
-import { AlertTriangle, SearchX, ShieldAlert } from 'lucide-react';
 import type {
   ConformanceReportData,
   ConformanceFormat,
@@ -66,6 +65,12 @@ import { LotReadinessPanel } from './components/LotReadinessPanel';
 import { PhotosTab } from './components/PhotosTab';
 import { ITPChecklistTab } from './components/ITPChecklistTab';
 import { ConformLotDialogs } from './components/ConformLotDialogs';
+import {
+  LotDetailEmptyState,
+  LotDetailErrorState,
+  LotDetailLoadingState,
+  type LotDetailPageError,
+} from './components/LotDetailPageStates';
 import type { LotEvidenceReadiness } from '@/types/evidenceReadiness';
 
 interface ProjectResponse {
@@ -113,10 +118,7 @@ export function LotDetailPage() {
   const tabSectionRef = useRef<HTMLDivElement>(null);
   const [lot, setLot] = useState<Lot | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<{
-    type: 'not_found' | 'forbidden' | 'error';
-    message: string;
-  } | null>(null);
+  const [error, setError] = useState<LotDetailPageError | null>(null);
   const [conforming, setConforming] = useState(false);
   const [showConformConfirm, setShowConformConfirm] = useState(false);
   const [showForceConformConfirm, setShowForceConformConfirm] = useState(false);
@@ -763,59 +765,21 @@ export function LotDetailPage() {
   });
 
   if (loading) {
-    return (
-      <div
-        className="flex h-full items-center justify-center p-6"
-        role="status"
-        aria-label="Loading lot details"
-      >
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <LotDetailLoadingState />;
   }
 
   if (error) {
-    const ErrorIcon =
-      error.type === 'forbidden'
-        ? ShieldAlert
-        : error.type === 'not_found'
-          ? SearchX
-          : AlertTriangle;
-
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <ErrorIcon className="h-8 w-8" aria-hidden="true" />
-        </div>
-        <h1 className="text-2xl font-bold text-destructive">
-          {error.type === 'forbidden'
-            ? 'Access Denied'
-            : error.type === 'not_found'
-              ? 'Lot Not Found'
-              : 'Error'}
-        </h1>
-        <p className="text-muted-foreground text-center max-w-md">{error.message}</p>
-        {error.type === 'error' && (
-          <button
-            type="button"
-            onClick={() => void fetchLot()}
-            className="rounded-lg border px-4 py-2 hover:bg-muted"
-          >
-            Try again
-          </button>
-        )}
-        <button
-          onClick={navigateToLotRegister}
-          className="mt-4 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-        >
-          Go Back
-        </button>
-      </div>
+      <LotDetailErrorState
+        error={error}
+        onRetry={() => void fetchLot()}
+        onGoBack={navigateToLotRegister}
+      />
     );
   }
 
   if (!lot) {
-    return null;
+    return <LotDetailEmptyState />;
   }
 
   // Conformed lots keep QA fields locked, but commercial users can still add a budget before claiming.
