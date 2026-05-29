@@ -65,7 +65,7 @@ import { LotTabNavigation } from './components/LotTabNavigation';
 import { LotReadinessPanel } from './components/LotReadinessPanel';
 import { PhotosTab } from './components/PhotosTab';
 import { ITPChecklistTab } from './components/ITPChecklistTab';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ConformLotDialogs } from './components/ConformLotDialogs';
 import type { LotEvidenceReadiness } from '@/types/evidenceReadiness';
 
 interface ProjectResponse {
@@ -2150,57 +2150,20 @@ export function LotDetailPage() {
         isSaving={savingClassification}
       />
 
-      <ConfirmDialog
-        open={showConformConfirm}
-        title="Conform Lot"
-        description={
-          <>
-            <p>Mark {lot?.lotNumber || 'this lot'} as quality-approved?</p>
-            <p>This changes the lot status to conformed.</p>
-          </>
-        }
-        confirmLabel="Conform Lot"
-        onCancel={() => setShowConformConfirm(false)}
-        onConfirm={() => void handleConformLot(false)}
-      />
-
-      <ConfirmDialog
-        open={showForceConformConfirm}
-        title="Force Conform Lot"
-        description={
-          <>
-            <p>Force conform {lot?.lotNumber || 'this lot'}?</p>
-            <p>
-              This bypasses incomplete prerequisites and records the override in the audit trail.
-            </p>
-            <label
-              htmlFor="force-conform-reason"
-              className="block pt-2 text-sm font-medium text-foreground"
-            >
-              Reason for force conforming
-            </label>
-            <p className="text-xs text-muted-foreground">
-              Explain why this lot is being quality-approved before all blockers are cleared.
-            </p>
-            <textarea
-              id="force-conform-reason"
-              value={forceConformReason}
-              onChange={(event) => setForceConformReason(event.target.value)}
-              rows={3}
-              maxLength={1000}
-              className="mt-2 min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Example: QA manager reviewed field evidence and approved the exception."
-            />
-          </>
-        }
-        confirmLabel="Force Conform Lot"
-        variant="destructive"
-        confirmDisabled={forceConformReason.trim().length < 5 || conforming}
-        onCancel={() => {
+      <ConformLotDialogs
+        lotNumber={lot?.lotNumber}
+        showConformConfirm={showConformConfirm}
+        onConformCancel={() => setShowConformConfirm(false)}
+        onConformConfirm={() => void handleConformLot(false)}
+        showForceConformConfirm={showForceConformConfirm}
+        forceConformReason={forceConformReason}
+        onForceConformReasonChange={setForceConformReason}
+        onForceConformCancel={() => {
           setShowForceConformConfirm(false);
           setForceConformReason('');
         }}
-        onConfirm={() => void handleConformLot(true, forceConformReason)}
+        onForceConformConfirm={() => void handleConformLot(true, forceConformReason)}
+        isConforming={conforming}
       />
     </div>
   );
