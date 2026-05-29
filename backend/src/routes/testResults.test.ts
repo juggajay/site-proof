@@ -1450,6 +1450,197 @@ describe('Test Results API', () => {
     });
   });
 
+  describe('GET /api/test-results/:id/verification-view', () => {
+    async function createVerificationViewCertificate(filenamePrefix: string) {
+      const filename = `${filenamePrefix}-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`;
+
+      return prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename,
+          fileUrl: `/uploads/certificates/${filename}`,
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+    }
+
+    it('returns certificate-backed data needed by the verification UI', async () => {
+      const certificate = await createVerificationViewCertificate('verification-view-cert');
+      const sampleDate = new Date('2026-05-01T00:00:00.000Z');
+      const testDate = new Date('2026-05-02T00:00:00.000Z');
+      const resultDate = new Date('2026-05-03T00:00:00.000Z');
+      const enteredAt = new Date('2026-05-04T05:06:07.000Z');
+      const aiConfidence = {
+        testType: 0.97,
+        resultValue: 0.74,
+        sampleLocation: 0.88,
+      };
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'compaction',
+          testRequestNumber: 'TR-VIEW-001',
+          laboratoryName: 'QA Lab & Partners',
+          laboratoryReportNumber: 'LAB-7788',
+          sampleDate,
+          sampleLocation: 'CH 100-120 left shoulder',
+          testDate,
+          resultDate,
+          resultValue: 98.5,
+          resultUnit: '% MDD',
+          specificationMin: 95,
+          specificationMax: 100,
+          passFail: 'pass',
+          certificateDocId: certificate.id,
+          status: 'entered',
+          enteredById: userId,
+          enteredAt,
+          aiExtracted: true,
+          aiConfidence: JSON.stringify(aiConfidence),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/test-results/${testResult.id}/verification-view`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toContain('application/json');
+
+        const view = res.body.verificationView;
+        expect(view.document).toMatchObject({
+          id: certificate.id,
+          filename: certificate.filename,
+          fileUrl: certificate.fileUrl,
+          mimeType: 'application/pdf',
+          isPdf: true,
+        });
+        expect(view.extractedData).toMatchObject({
+          testType: 'compaction',
+          testRequestNumber: 'TR-VIEW-001',
+          laboratoryName: 'QA Lab & Partners',
+          laboratoryReportNumber: 'LAB-7788',
+          sampleLocation: 'CH 100-120 left shoulder',
+          resultUnit: '% MDD',
+          aiExtracted: true,
+          aiConfidence,
+        });
+        expect(view.extractedData.sampleDate).toBe(sampleDate.toISOString());
+        expect(view.extractedData.testDate).toBe(testDate.toISOString());
+        expect(view.extractedData.resultDate).toBe(resultDate.toISOString());
+        expect(Number(view.extractedData.resultValue)).toBe(98.5);
+
+        expect(view.confidenceHighlights).toMatchObject({
+          hasLowConfidence: true,
+          lowConfidenceFields: ['resultValue'],
+          thresholds: { low: 0.8, medium: 0.9 },
+        });
+        expect(view.confidenceHighlights.fieldStatus).toMatchObject({
+          testType: { confidence: 0.97, status: 'high', needsReview: false },
+          resultValue: { confidence: 0.74, status: 'low', needsReview: true },
+          sampleLocation: { confidence: 0.88, status: 'medium', needsReview: false },
+        });
+
+        expect(Number(view.specification.min)).toBe(95);
+        expect(Number(view.specification.max)).toBe(100);
+        expect(view.specification).toMatchObject({
+          unit: '% MDD',
+          currentStatus: 'pass',
+          calculatedStatus: 'pass',
+          standardReference: 'TMR MRTS04 / AS 1289.5.4.1',
+        });
+        expect(view.metadata).toMatchObject({
+          id: testResult.id,
+          status: 'entered',
+          project: {
+            id: projectId,
+            name: expect.any(String),
+            projectNumber: expect.any(String),
+            specificationSet: 'TfNSW',
+          },
+          lot: {
+            id: lotId,
+            lotNumber: expect.any(String),
+            activityType: 'Earthworks',
+          },
+          enteredBy: {
+            id: userId,
+            fullName: 'Test Results User',
+          },
+        });
+        expect(view.metadata.enteredAt).toBe(enteredAt.toISOString());
+        expect(view.canVerify).toBe(true);
+        expect(view.needsVerification).toBe(true);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
+      }
+    });
+
+    it('represents user-provided markup as JSON data instead of rendered HTML', async () => {
+      const certificate = await createVerificationViewCertificate('verification-view-xss-cert');
+      const unsafeTestResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: '<script>Test Type XSS</script>',
+          testRequestNumber: '<script>REQ-XSS</script>',
+          laboratoryName: '<svg onload=alert(1)>',
+          sampleLocation: '<img src=x onerror=alert(2)>',
+          certificateDocId: certificate.id,
+          status: 'entered',
+          enteredById: userId,
+          enteredAt: new Date('2026-05-05T06:07:08.000Z'),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/test-results/${unsafeTestResult.id}/verification-view`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toContain('application/json');
+        expect(res.text.trim()).toMatch(/^\{/);
+        expect(res.text).not.toContain('<!DOCTYPE html>');
+        expect(res.text).not.toContain('<html');
+        expect(res.body.verificationView.extractedData).toMatchObject({
+          testType: '<script>Test Type XSS</script>',
+          testRequestNumber: '<script>REQ-XSS</script>',
+          laboratoryName: '<svg onload=alert(1)>',
+          sampleLocation: '<img src=x onerror=alert(2)>',
+        });
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: unsafeTestResult.id } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
+      }
+    });
+
+    it('rejects verification-view reads without test-result access', async () => {
+      const outsider = await registerTestUser('Test Results View Outsider', 'viewer', null);
+      const testResult = await createEnteredTestResult();
+
+      try {
+        const res = await request(app)
+          .get(`/api/test-results/${testResult.id}/verification-view`)
+          .set('Authorization', `Bearer ${outsider.token}`);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('access to this test result');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(outsider.userId);
+      }
+    });
+  });
+
   describe('PATCH /api/test-results/:id', () => {
     it('should update a test result', async () => {
       const res = await request(app)
