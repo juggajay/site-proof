@@ -6,7 +6,6 @@ import { queryKeys } from '@/lib/queryKeys';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
-import { formatDateTime } from '@/lib/utils';
 import {
   DATE_RANGE_PRESETS,
   type DateRangePreset,
@@ -21,6 +20,10 @@ import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRa
 import { DashboardKpiTiles } from '@/components/dashboard/DashboardKpiTiles';
 import { DashboardWidgetCustomizer } from '@/components/dashboard/DashboardWidgetCustomizer';
 import { LotStatusOverview } from '@/components/dashboard/LotStatusOverview';
+import {
+  RecentActivityWidget,
+  type DashboardRecentActivity,
+} from '@/components/dashboard/RecentActivityWidget';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
 import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard';
@@ -33,7 +36,6 @@ import {
   FileText,
   ClipboardCheck,
   Settings2,
-  Activity,
   Download,
   AlertCircle,
   ChevronRight,
@@ -50,14 +52,6 @@ function getSafeInternalLink(link: string | undefined, fallback: string): string
     return link;
   }
   return fallback;
-}
-
-function formatActivityTimestamp(timestamp: string): string {
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown time';
-  }
-  return formatDateTime(date);
 }
 
 interface AttentionItem {
@@ -89,13 +83,7 @@ interface DashboardStats {
     staleHoldPoints: AttentionItem[];
     total: number;
   };
-  recentActivities: Array<{
-    id: string;
-    type: string;
-    description: string;
-    timestamp: string;
-    link?: string;
-  }>;
+  recentActivities: DashboardRecentActivity[];
 }
 
 interface DashboardProject {
@@ -510,26 +498,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Recent Activity Widget */}
             {isWidgetVisible('recentActivity') && (
-              <div className="bg-card rounded-lg border">
-                <div className="p-4 border-b flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">Recent Activity</h2>
-                </div>
-                <div className="divide-y">
-                  {stats.recentActivities.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">No recent activity</div>
-                  ) : (
-                    stats.recentActivities.map((activity) => (
-                      <div key={activity.id} className="p-4">
-                        <p className="text-sm">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatActivityTimestamp(activity.timestamp)}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <RecentActivityWidget activities={stats.recentActivities} />
             )}
 
             {/* Lot Status Widget */}
