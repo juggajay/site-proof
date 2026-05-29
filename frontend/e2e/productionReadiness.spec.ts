@@ -650,7 +650,7 @@ test.describe('production readiness guardrails', () => {
     expect(roleProtectedRoute).toContain("import { ShieldAlert } from 'lucide-react'");
     expect(roleProtectedRoute).toContain('<ShieldAlert className="h-8 w-8" aria-hidden="true" />');
     expect(lotDetailPage).toContain(
-      "import { AlertTriangle, SearchX, ShieldAlert, Users } from 'lucide-react'",
+      "import { AlertTriangle, SearchX, ShieldAlert } from 'lucide-react'",
     );
     expect(lotDetailPage).toContain('<ErrorIcon className="h-8 w-8" aria-hidden="true" />');
     expect(roleProtectedRoute).not.toContain('className="text-6xl"');

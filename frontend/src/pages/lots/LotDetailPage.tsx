@@ -11,7 +11,7 @@ import { formatDateTime } from '@/lib/utils';
 import { toast } from '@/components/ui/toaster';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal';
-import { AlertTriangle, SearchX, ShieldAlert, Users } from 'lucide-react';
+import { AlertTriangle, SearchX, ShieldAlert } from 'lucide-react';
 import type {
   ConformanceReportData,
   ConformanceFormat,
@@ -58,6 +58,7 @@ import { EvidenceWarningModal } from './components/EvidenceWarningModal';
 import { WitnessPointModal } from './components/WitnessPointModal';
 import { AIClassificationModal, ClassificationModalData } from './components/AIClassificationModal';
 import { StatusOverrideModal } from './components/StatusOverrideModal';
+import { LegacyAssignSubcontractorModal } from './components/LegacyAssignSubcontractorModal';
 import { QualityManagementSection } from './components/QualityManagementSection';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
@@ -2064,104 +2065,19 @@ export function LotDetailPage() {
       />
 
       {/* Assign Subcontractor Modal */}
-      {showSubcontractorModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 text-primary">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold">Assign Subcontractor</h2>
-                <p className="text-sm text-muted-foreground">
-                  Assign this lot to a subcontractor company
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Lot</label>
-                <div className="px-3 py-2 rounded border bg-muted/50">
-                  <span className="font-medium">{lot.lotNumber}</span>
-                  {lot.description && (
-                    <span className="text-muted-foreground"> - {lot.description}</span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="subcontractor-select" className="block text-sm font-medium mb-1">
-                  Subcontractor Company
-                </label>
-                <select
-                  id="subcontractor-select"
-                  value={selectedSubcontractor}
-                  onChange={(e) => setSelectedSubcontractor(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg bg-background"
-                >
-                  <option value="">No subcontractor assigned</option>
-                  {subcontractors
-                    .filter((sub) => sub.status === 'approved')
-                    .map((sub) => (
-                      <option key={sub.id} value={sub.id}>
-                        {sub.companyName}
-                      </option>
-                    ))}
-                </select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Only approved subcontractors are shown. The subcontractor users will be notified.
-                </p>
-              </div>
-
-              {lot.assignedSubcontractorId &&
-                selectedSubcontractor !== lot.assignedSubcontractorId && (
-                  <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                    <strong>Note:</strong> This will change the assigned subcontractor from{' '}
-                    <span className="font-medium">
-                      {lot.assignedSubcontractor?.companyName || 'current'}
-                    </span>{' '}
-                    to{' '}
-                    <span className="font-medium">
-                      {selectedSubcontractor
-                        ? subcontractors.find((s) => s.id === selectedSubcontractor)?.companyName
-                        : 'none'}
-                    </span>
-                    .
-                  </div>
-                )}
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowSubcontractorModal(false);
-                  setSelectedSubcontractor('');
-                }}
-                className="px-4 py-2 border rounded-lg hover:bg-muted"
-                disabled={assigningSubcontractor}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAssignSubcontractor}
-                disabled={
-                  assigningSubcontractor || (!selectedSubcontractor && !lot.assignedSubcontractorId)
-                }
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {assigningSubcontractor
-                  ? 'Assigning...'
-                  : selectedSubcontractor
-                    ? 'Assign Subcontractor'
-                    : lot.assignedSubcontractorId
-                      ? 'Remove Assignment'
-                      : 'Select subcontractor'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LegacyAssignSubcontractorModal
+        isOpen={showSubcontractorModal}
+        lot={lot}
+        subcontractors={subcontractors}
+        selectedSubcontractor={selectedSubcontractor}
+        isAssigning={assigningSubcontractor}
+        onSelectedChange={setSelectedSubcontractor}
+        onClose={() => {
+          setShowSubcontractorModal(false);
+          setSelectedSubcontractor('');
+        }}
+        onSubmit={handleAssignSubcontractor}
+      />
 
       {/* Assign Subcontractor Modal (new permission system) */}
       {showAssignSubcontractorModal && (
