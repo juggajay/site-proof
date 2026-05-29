@@ -25,15 +25,9 @@ import {
   Mail,
   Bell,
   Send,
-  Lock,
-  Smartphone,
-  Key,
-  Eye,
-  EyeOff,
-  Copy,
-  CheckCircle2,
 } from 'lucide-react';
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
+import { MfaSecuritySection } from './components/MfaSecuritySection';
 import { downloadBlob } from '@/lib/downloads';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,10 +35,7 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import {
   Modal,
-  ModalHeader,
-  ModalDescription,
   ModalBody,
-  ModalFooter,
   AlertModalHeader,
   AlertModalDescription,
   AlertModalFooter,
@@ -531,6 +522,32 @@ export function SettingsPage() {
       setMfaMessage({ type: 'error', text: 'Clipboard is not available in this browser' });
     }
   };
+
+  const closeMfaSetup = useCallback(() => {
+    if (!isMfaLoading) {
+      setShowMfaSetup(false);
+      setMfaSetupData(null);
+      setMfaVerifyCode('');
+      setMfaMessage(null);
+    }
+  }, [isMfaLoading]);
+
+  const closeBackupCodes = useCallback(() => {
+    setShowBackupCodes(false);
+    setBackupCodes([]);
+  }, []);
+
+  const copyBackupCodes = useCallback(() => {
+    void navigator.clipboard.writeText(backupCodes.join('\n'));
+  }, [backupCodes]);
+
+  const closeDisableMfa = useCallback(() => {
+    if (!isMfaLoading) {
+      setShowDisableMfa(false);
+      setDisableMfaPassword('');
+      setMfaMessage(null);
+    }
+  }, [isMfaLoading]);
 
   // Save email notification preferences with optimistic update
   const saveEmailPreferences = async (
@@ -1041,396 +1058,35 @@ export function SettingsPage() {
       {/* Push Notification Settings (Feature #657) */}
       <PushNotificationSettings />
 
-      {/* Security Section - Two-Factor Authentication (Feature #22, #420, #421) */}
-      <div className="rounded-lg border bg-card p-6 space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Lock className="h-5 w-5" />
-            Security
-          </h2>
-          <p className="text-sm text-muted-foreground">Manage your account security settings.</p>
-        </div>
-
-        {/* MFA Status Message */}
-        {mfaMessage && (
-          <div
-            role={mfaMessage.type === 'success' ? 'status' : 'alert'}
-            className={`flex items-center gap-2 text-sm px-4 py-2 rounded-md ${
-              mfaMessage.type === 'success'
-                ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400'
-                : 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400'
-            }`}
-          >
-            {mfaMessage.type === 'success' ? (
-              <CheckCircle2 className="h-4 w-4" />
-            ) : (
-              <AlertTriangle className="h-4 w-4" />
-            )}
-            {mfaMessage.text}
-          </div>
-        )}
-
-        {/* Two-Factor Authentication */}
-        <div className="border-t pt-4">
-          <h3 className="text-lg font-medium mb-2 flex items-center gap-2">
-            <Smartphone className="h-5 w-5" />
-            Two-Factor Authentication (2FA)
-          </h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Add an extra layer of security to your account. When enabled, you'll need to enter a
-            code from your authenticator app when signing in.
-          </p>
-
-          {isLoadingMfa ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading security settings...
-            </div>
-          ) : mfaLoadError ? (
-            <div
-              role="alert"
-              className="rounded-lg bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
-            >
-              <p>{mfaLoadError}</p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => void loadMfaStatus()}
-              >
-                Try again
-              </Button>
-            </div>
-          ) : mfaEnabled ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-green-100 dark:bg-green-900">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-green-700 dark:text-green-300">
-                      Two-Factor Authentication Enabled
-                    </p>
-                    <p className="text-sm text-green-600 dark:text-green-400">
-                      Your account is protected with 2FA
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                onClick={() => setShowDisableMfa(true)}
-                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
-                disabled={isMfaLoading}
-              >
-                <Lock className="h-4 w-4" />
-                Disable 2FA
-              </Button>
-            </div>
-          ) : (
-            <Button onClick={handleMfaSetup} disabled={isMfaLoading}>
-              {isMfaLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Key className="h-4 w-4" />
-              )}
-              Enable Two-Factor Authentication
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* MFA Setup Modal */}
-      {showMfaSetup && mfaSetupData && (
-        <Modal
-          onClose={() => {
-            if (!isMfaLoading) {
-              setShowMfaSetup(false);
-              setMfaSetupData(null);
-              setMfaVerifyCode('');
-              setMfaMessage(null);
-            }
-          }}
-        >
-          <ModalHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Smartphone className="h-6 w-6 text-primary" />
-              </div>
-              Set Up Two-Factor Authentication
-            </div>
-          </ModalHeader>
-          <ModalDescription>
-            Scan the QR code with an authenticator app, then verify the six-digit code to enable
-            2FA.
-          </ModalDescription>
-          <ModalBody>
-            <div className="space-y-4">
-              <div className="text-sm text-muted-foreground">
-                <p className="mb-2">
-                  1. Install an authenticator app like Google Authenticator, Authy, or Microsoft
-                  Authenticator.
-                </p>
-                <p>2. Scan the QR code below with your authenticator app:</p>
-              </div>
-
-              {/* QR Code */}
-              <div className="flex justify-center p-4 bg-white rounded-lg">
-                <img
-                  src={mfaSetupData.qrCode}
-                  alt="QR code for two-factor authentication setup"
-                  className="w-48 h-48"
-                />
-              </div>
-
-              {/* Manual Entry */}
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground mb-2">
-                  Can't scan? Enter this code manually:
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 font-mono text-sm bg-background px-2 py-1 rounded break-all">
-                    {showSecret ? mfaSetupData.secret : '••••••••••••••••••••••••••••••••'}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowSecret(!showSecret)}
-                    title={showSecret ? 'Hide secret' : 'Show secret'}
-                    aria-label={showSecret ? 'Hide setup secret' : 'Show setup secret'}
-                  >
-                    {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={copySecret}
-                    title="Copy to clipboard"
-                    aria-label="Copy setup secret"
-                  >
-                    {copiedSecret ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Verification Code Input */}
-              <div>
-                <Label htmlFor="mfa-verification-code" className="block mb-2">
-                  3. Enter the 6-digit code from your authenticator:
-                </Label>
-                <Input
-                  id="mfa-verification-code"
-                  type="text"
-                  value={mfaVerifyCode}
-                  onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  className="text-center text-2xl font-mono tracking-widest"
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  disabled={isMfaLoading}
-                />
-              </div>
-
-              {/* Error message */}
-              {mfaMessage?.type === 'error' && (
-                <div
-                  role="alert"
-                  className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded"
-                >
-                  {mfaMessage.text}
-                </div>
-              )}
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!isMfaLoading) {
-                  setShowMfaSetup(false);
-                  setMfaSetupData(null);
-                  setMfaVerifyCode('');
-                  setMfaMessage(null);
-                }
-              }}
-              disabled={isMfaLoading}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleMfaVerify} disabled={isMfaLoading || mfaVerifyCode.length !== 6}>
-              {isMfaLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                'Verify & Enable'
-              )}
-            </Button>
-          </ModalFooter>
-        </Modal>
-      )}
-
-      {/* Backup Codes Modal */}
-      {showBackupCodes && backupCodes.length > 0 && (
-        <Modal
-          alert
-          onClose={() => {
-            setShowBackupCodes(false);
-            setBackupCodes([]);
-          }}
-        >
-          <AlertModalHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-100 dark:bg-green-900">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
-              </div>
-              2FA Enabled Successfully!
-            </div>
-          </AlertModalHeader>
-          <AlertModalDescription>
-            Save these backup codes before closing this dialog.
-          </AlertModalDescription>
-          <ModalBody>
-            <div className="space-y-4">
-              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-2">
-                  Important: Save your backup codes!
-                </p>
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  If you lose access to your authenticator app, you can use these codes to regain
-                  access to your account. Each code can only be used once.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 p-4 bg-muted rounded-lg">
-                {backupCodes.map((code, index) => (
-                  <code key={index} className="font-mono text-sm text-center py-1">
-                    {code}
-                  </code>
-                ))}
-              </div>
-
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  void navigator.clipboard.writeText(backupCodes.join('\n'));
-                }}
-              >
-                <Copy className="h-4 w-4" />
-                Copy All Codes
-              </Button>
-            </div>
-          </ModalBody>
-          <AlertModalFooter>
-            <Button
-              className="w-full"
-              onClick={() => {
-                setShowBackupCodes(false);
-                setBackupCodes([]);
-              }}
-            >
-              I've Saved My Codes
-            </Button>
-          </AlertModalFooter>
-        </Modal>
-      )}
-
-      {/* Disable MFA Modal */}
-      {showDisableMfa && (
-        <Modal
-          alert
-          onClose={() => {
-            if (!isMfaLoading) {
-              setShowDisableMfa(false);
-              setDisableMfaPassword('');
-              setMfaMessage(null);
-            }
-          }}
-        >
-          <AlertModalHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
-              </div>
-              Disable Two-Factor Authentication
-            </div>
-          </AlertModalHeader>
-          <AlertModalDescription>
-            Confirm your password before removing two-factor protection from this account.
-          </AlertModalDescription>
-          <ModalBody>
-            <div className="space-y-4">
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-800 dark:text-red-200">
-                  <strong>Warning:</strong> Disabling 2FA will make your account less secure. Are
-                  you sure you want to continue?
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="disable-mfa-password" className="block mb-1">
-                  Enter your password to confirm:
-                </Label>
-                <Input
-                  id="disable-mfa-password"
-                  type="password"
-                  value={disableMfaPassword}
-                  onChange={(e) => setDisableMfaPassword(e.target.value)}
-                  placeholder="Your password"
-                  disabled={isMfaLoading}
-                />
-              </div>
-
-              {mfaMessage?.type === 'error' && (
-                <div
-                  role="alert"
-                  className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded"
-                >
-                  {mfaMessage.text}
-                </div>
-              )}
-            </div>
-          </ModalBody>
-          <AlertModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!isMfaLoading) {
-                  setShowDisableMfa(false);
-                  setDisableMfaPassword('');
-                  setMfaMessage(null);
-                }
-              }}
-              disabled={isMfaLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleMfaDisable}
-              disabled={isMfaLoading || !disableMfaPassword}
-            >
-              {isMfaLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Disabling...
-                </>
-              ) : (
-                'Disable 2FA'
-              )}
-            </Button>
-          </AlertModalFooter>
-        </Modal>
-      )}
+      <MfaSecuritySection
+        mfaEnabled={mfaEnabled}
+        isLoadingMfa={isLoadingMfa}
+        mfaLoadError={mfaLoadError}
+        mfaMessage={mfaMessage}
+        showMfaSetup={showMfaSetup}
+        mfaSetupData={mfaSetupData}
+        mfaVerifyCode={mfaVerifyCode}
+        isMfaLoading={isMfaLoading}
+        backupCodes={backupCodes}
+        showBackupCodes={showBackupCodes}
+        showDisableMfa={showDisableMfa}
+        disableMfaPassword={disableMfaPassword}
+        showSecret={showSecret}
+        copiedSecret={copiedSecret}
+        onLoadMfaStatus={() => void loadMfaStatus()}
+        onMfaSetup={handleMfaSetup}
+        onMfaVerify={handleMfaVerify}
+        onMfaSetupClose={closeMfaSetup}
+        onMfaVerifyCodeChange={setMfaVerifyCode}
+        onMfaDisable={handleMfaDisable}
+        onDisableMfaOpen={() => setShowDisableMfa(true)}
+        onDisableMfaClose={closeDisableMfa}
+        onDisableMfaPasswordChange={setDisableMfaPassword}
+        onBackupCodesClose={closeBackupCodes}
+        onBackupCodesCopy={copyBackupCodes}
+        onShowSecretToggle={() => setShowSecret(!showSecret)}
+        onCopySecret={() => void copySecret()}
+      />
 
       <div className="rounded-lg border bg-card p-6 space-y-4">
         <div>
