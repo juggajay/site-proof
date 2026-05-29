@@ -1867,6 +1867,211 @@ describe('Lots API', () => {
       await prisma.user.delete({ where: { id: outsiderUserId } }).catch(() => {});
     });
   });
+
+  // Characterization tests (refactor map 2026-05-29, PR 1). These freeze the
+  // exact wire contract of the lot deletion-blocker seam BEFORE the planned
+  // deletion-guard extraction moves this logic into a helper.
+  //
+  // CONTRACT QUIRK: the route passes `{ code: '...' }` as the SECOND argument
+  // to AppError.badRequest, but that argument is `details` — not a code
+  // override. So the wire `error.code` is always 'VALIDATION_ERROR' and the
+  // intended marker lives at `error.details.code`. We freeze the ACTUAL
+  // behavior so a refactor cannot silently change the response shape.
+  describe('DELETE /api/lots/:id - deletion blockers (characterization)', () => {
+    let subCompanyId: string;
+    let employeeId: string;
+    let plantId: string;
+
+    beforeAll(async () => {
+      const subCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Delete Blocker Sub ${Date.now()}`,
+          primaryContactName: 'Delete Blocker Sub',
+          primaryContactEmail: `delete-blocker-sub-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+      subCompanyId = subCompany.id;
+
+      const employee = await prisma.employeeRoster.create({
+        data: {
+          subcontractorCompanyId: subCompanyId,
+          name: 'Delete Blocker Worker',
+          role: 'Operator',
+          hourlyRate: 45.5,
+          status: 'approved',
+        },
+      });
+      employeeId = employee.id;
+
+      const plant = await prisma.plantRegister.create({
+        data: {
+          subcontractorCompanyId: subCompanyId,
+          type: 'Excavator',
+          description: 'CAT 320',
+          idRego: `EX-DEL-${Date.now()}`,
+          dryRate: 150,
+          wetRate: 180,
+          status: 'approved',
+        },
+      });
+      plantId = plant.id;
+    });
+
+    afterAll(async () => {
+      // DocketLabour/DocketPlant hold onDelete:Restrict FKs to the employee
+      // roster / plant register, so they must be removed before the company
+      // cascade can delete those rows. Deleting them also cascades to their
+      // lot allocations. The lots themselves are cleaned by the outer
+      // `Lots API` afterAll (deleteMany by projectId).
+      await prisma.docketLabour.deleteMany({
+        where: { docket: { subcontractorCompanyId: subCompanyId } },
+      });
+      await prisma.docketPlant.deleteMany({
+        where: { docket: { subcontractorCompanyId: subCompanyId } },
+      });
+      await prisma.subcontractorCompany.delete({ where: { id: subCompanyId } }).catch(() => {});
+    });
+
+    it('rejects deleting a conformed lot and preserves the lot', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-DEL-CONFORMED-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'conformed',
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/lots/${lot.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        'Cannot delete a conformed lot. Conformed lots have been quality-approved.',
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.details).toEqual({ code: 'LOT_CONFORMED' });
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+
+    it('rejects deleting a claimed lot and preserves the lot', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-DEL-CLAIMED-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'claimed',
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/lots/${lot.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        'Cannot delete a claimed lot. This lot is part of a progress claim.',
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.details).toEqual({ code: 'LOT_CLAIMED' });
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+
+    it('rejects deleting a lot that has a labour docket allocation', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-DEL-LABOUR-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'in_progress',
+        },
+      });
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: subCompanyId,
+          date: new Date(),
+          status: 'draft',
+        },
+      });
+      const labour = await prisma.docketLabour.create({
+        data: { docketId: docket.id, employeeId, submittedHours: 8, hourlyRate: 45.5 },
+      });
+      await prisma.docketLabourLot.create({
+        data: { docketLabourId: labour.id, lotId: lot.id, hours: 8 },
+      });
+
+      const res = await request(app)
+        .delete(`/api/lots/${lot.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        'This lot has 1 docket allocation(s) (1 labour, 0 plant). Remove docket allocations before deleting the lot.',
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.details).toEqual({
+        code: 'HAS_DOCKET_ALLOCATIONS',
+        docketAllocations: { labour: 1, plant: 0, total: 1 },
+      });
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+
+    it('rejects deleting a lot that has a plant docket allocation', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-DEL-PLANT-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'in_progress',
+        },
+      });
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: subCompanyId,
+          date: new Date(),
+          status: 'draft',
+        },
+      });
+      const plantEntry = await prisma.docketPlant.create({
+        data: { docketId: docket.id, plantId, hoursOperated: 6, hourlyRate: 150 },
+      });
+      await prisma.docketPlantLot.create({
+        data: { docketPlantId: plantEntry.id, lotId: lot.id, hours: 6 },
+      });
+
+      const res = await request(app)
+        .delete(`/api/lots/${lot.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        'This lot has 1 docket allocation(s) (0 labour, 1 plant). Remove docket allocations before deleting the lot.',
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.details).toEqual({
+        code: 'HAS_DOCKET_ALLOCATIONS',
+        docketAllocations: { labour: 0, plant: 1, total: 1 },
+      });
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+  });
 });
 
 describe('Lot Status Workflows', () => {
