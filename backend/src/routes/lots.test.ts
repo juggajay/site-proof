@@ -1202,6 +1202,232 @@ describe('Lots API', () => {
     }, 60000);
   });
 
+  describe('PATCH/DELETE /api/lots/:id/subcontractors/:assignmentId', () => {
+    let assignmentLotId: string;
+    let subCompanyId: string;
+    let subUserToken: string;
+    let subUserId: string;
+
+    beforeAll(async () => {
+      const suffix = Date.now();
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-ASSIGN-CHAR-${suffix}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      assignmentLotId = lot.id;
+
+      const company = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Assignment Char Subcontractor ${suffix}`,
+          primaryContactName: 'Assignment Char Subcontractor',
+          primaryContactEmail: `assignment-char-sub-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: {
+            lots: true,
+            itps: true,
+            holdPoints: false,
+            testResults: false,
+            ncrs: false,
+            documents: false,
+          },
+        },
+      });
+      subCompanyId = company.id;
+
+      // A subcontractor user with no project management role, used for the
+      // permission-boundary assertions below.
+      const subRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `assignment-char-sub-user-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Assignment Char Subcontractor User',
+          tosAccepted: true,
+        });
+      subUserToken = subRes.body.token;
+      subUserId = subRes.body.user.id;
+
+      await prisma.user.update({
+        where: { id: subUserId },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
+      });
+
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subUserId,
+          subcontractorCompanyId: subCompanyId,
+          role: 'user',
+        },
+      });
+    }, 30000);
+
+    afterAll(async () => {
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: subCompanyId },
+      });
+      await prisma.subcontractorUser.deleteMany({
+        where: { subcontractorCompanyId: subCompanyId },
+      });
+      await prisma.subcontractorCompany.delete({ where: { id: subCompanyId } }).catch(() => {});
+      await prisma.lot.delete({ where: { id: assignmentLotId } }).catch(() => {});
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: subUserId } });
+      await prisma.user.delete({ where: { id: subUserId } }).catch(() => {});
+    }, 30000);
+
+    it('updates assignment permissions through the route and returns the updated row', async () => {
+      const assignment = await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: assignmentLotId,
+          subcontractorCompanyId: subCompanyId,
+          canCompleteITP: false,
+          itpRequiresVerification: false,
+          status: 'active',
+          assignedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/lots/${assignmentLotId}/subcontractors/${assignment.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ canCompleteITP: true, itpRequiresVerification: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.id).toBe(assignment.id);
+        expect(res.body.subcontractorCompanyId).toBe(subCompanyId);
+        expect(res.body.canCompleteITP).toBe(true);
+        expect(res.body.itpRequiresVerification).toBe(true);
+        expect(res.body.status).toBe('active');
+        expect(res.body.subcontractorCompany).toMatchObject({ id: subCompanyId });
+        expect(typeof res.body.subcontractorCompany.companyName).toBe('string');
+
+        const persisted = await prisma.lotSubcontractorAssignment.findUnique({
+          where: { id: assignment.id },
+        });
+        expect(persisted?.canCompleteITP).toBe(true);
+        expect(persisted?.itpRequiresVerification).toBe(true);
+      } finally {
+        await prisma.lotSubcontractorAssignment
+          .delete({ where: { id: assignment.id } })
+          .catch(() => {});
+      }
+    }, 30000);
+
+    it('applies a partial permission update without clearing the omitted field', async () => {
+      const assignment = await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: assignmentLotId,
+          subcontractorCompanyId: subCompanyId,
+          canCompleteITP: false,
+          itpRequiresVerification: true,
+          status: 'active',
+          assignedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/lots/${assignmentLotId}/subcontractors/${assignment.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ canCompleteITP: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.canCompleteITP).toBe(true);
+        // itpRequiresVerification was not sent, so the route must preserve it.
+        expect(res.body.itpRequiresVerification).toBe(true);
+
+        const persisted = await prisma.lotSubcontractorAssignment.findUnique({
+          where: { id: assignment.id },
+        });
+        expect(persisted?.itpRequiresVerification).toBe(true);
+      } finally {
+        await prisma.lotSubcontractorAssignment
+          .delete({ where: { id: assignment.id } })
+          .catch(() => {});
+      }
+    }, 30000);
+
+    it('removes an assignment through the route as a soft delete (status: removed)', async () => {
+      const assignment = await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: assignmentLotId,
+          subcontractorCompanyId: subCompanyId,
+          canCompleteITP: true,
+          itpRequiresVerification: false,
+          status: 'active',
+          assignedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/lots/${assignmentLotId}/subcontractors/${assignment.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ message: 'Assignment removed successfully' });
+
+        // Soft delete: the row is retained with status 'removed', not hard-deleted.
+        const persisted = await prisma.lotSubcontractorAssignment.findUnique({
+          where: { id: assignment.id },
+        });
+        expect(persisted).not.toBeNull();
+        expect(persisted?.status).toBe('removed');
+      } finally {
+        await prisma.lotSubcontractorAssignment
+          .delete({ where: { id: assignment.id } })
+          .catch(() => {});
+      }
+    }, 30000);
+
+    it('forbids a subcontractor user from updating or removing an assignment', async () => {
+      const assignment = await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: assignmentLotId,
+          subcontractorCompanyId: subCompanyId,
+          canCompleteITP: false,
+          itpRequiresVerification: false,
+          status: 'active',
+          assignedById: userId,
+        },
+      });
+
+      try {
+        const patchRes = await request(app)
+          .patch(`/api/lots/${assignmentLotId}/subcontractors/${assignment.id}`)
+          .set('Authorization', `Bearer ${subUserToken}`)
+          .send({ canCompleteITP: true });
+        expect(patchRes.status).toBe(403);
+
+        const deleteRes = await request(app)
+          .delete(`/api/lots/${assignmentLotId}/subcontractors/${assignment.id}`)
+          .set('Authorization', `Bearer ${subUserToken}`);
+        expect(deleteRes.status).toBe(403);
+
+        // The forbidden calls must not have mutated the assignment.
+        const persisted = await prisma.lotSubcontractorAssignment.findUnique({
+          where: { id: assignment.id },
+        });
+        expect(persisted?.canCompleteITP).toBe(false);
+        expect(persisted?.status).toBe('active');
+      } finally {
+        await prisma.lotSubcontractorAssignment
+          .delete({ where: { id: assignment.id } })
+          .catch(() => {});
+      }
+    }, 30000);
+  });
+
   describe('GET /api/lots/:id/readiness', () => {
     it('should return deterministic readiness for an internal project user without writing audit logs', async () => {
       const readinessLot = await prisma.lot.create({
