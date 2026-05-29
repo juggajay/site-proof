@@ -1,8 +1,5 @@
 import { Router, type Request } from 'express';
-import multer from 'multer';
-import path from 'path';
 import fs from 'fs';
-import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
@@ -20,24 +17,22 @@ import {
   requireSubcontractorPortalModuleAccess,
 } from '../lib/projectAccess.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
-import { logError, logWarn } from '../lib/serverLogger.js';
-import { ensureUploadSubdirectory } from '../lib/uploadPaths.js';
+import { logWarn } from '../lib/serverLogger.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import {
-  DOCUMENTS_BUCKET,
-  getSupabaseClient,
-  getSupabasePublicUrl,
-  getSupabaseStoragePath,
-  isSupabaseConfigured,
-} from '../lib/supabase.js';
-
-const CERTIFICATES_STORAGE_PREFIX = 'certificates';
+  certificateUpload,
+  cleanupStoredCertificateUpload,
+  cleanupUploadedCertificateFile,
+  deleteCertificateFromSupabase,
+  isOwnedSupabaseCertificateUrl,
+  sanitizeUploadFilename,
+  shouldUploadCertificateToSupabase,
+  uploadCertificateToSupabase,
+} from './testResults/certificateStorage.js';
 
 export const testResultsRouter = Router();
 
-// Configure multer for file uploads
 const MAX_UPLOAD_PROJECT_ID_LENGTH = 120;
-const MAX_CERTIFICATE_FILENAME_LENGTH = 180;
 const MAX_TEST_ID_LENGTH = 120;
 const MAX_TEST_TYPE_LENGTH = 160;
 const MAX_TEST_REQUEST_NUMBER_LENGTH = 120;
@@ -52,140 +47,10 @@ const DECIMAL_NUMBER_PATTERN = /^[+-]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:[eE][+-]?\d+
 const PASS_FAIL_VALUES = ['pass', 'fail', 'pending'] as const;
 const REQUEST_FORM_FORMATS = ['html', 'json'] as const;
 
-// When Supabase Storage is configured we keep certificate uploads in memory
-// and stream them to the `documents` bucket under a `certificates/<projectId>/...`
-// prefix. Otherwise we fall back to the local filesystem (dev only —
-// Railway's filesystem is ephemeral, so production must always have Supabase).
-const diskStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    try {
-      cb(null, ensureUploadSubdirectory('certificates'));
-    } catch (error) {
-      cb(
-        error instanceof Error
-          ? error
-          : new Error('Failed to prepare certificate upload directory'),
-        '',
-      );
-    }
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${crypto.randomUUID()}`;
-    cb(null, `cert-${uniqueSuffix}${getSafeCertificateExtension(file.originalname)}`);
-  },
-});
-
-const memoryStorage = multer.memoryStorage();
-
-const upload = multer({
-  storage: isSupabaseConfigured() ? memoryStorage : diskStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: (_req, file, cb) => {
-    // Accept only PDFs and images
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF and image files are allowed'));
-    }
-  },
-});
-
-function buildStoredCertificateFilename(originalName: string): string {
-  const uniqueSuffix = `${Date.now()}-${crypto.randomUUID()}`;
-  return `cert-${uniqueSuffix}${getSafeCertificateExtension(originalName)}`;
-}
-
-async function uploadCertificateToSupabase(
-  file: Express.Multer.File,
-  projectId: string,
-): Promise<{ url: string; storagePath: string }> {
-  const storagePath = `${CERTIFICATES_STORAGE_PREFIX}/${projectId}/${buildStoredCertificateFilename(file.originalname)}`;
-
-  const { error } = await getSupabaseClient()
-    .storage.from(DOCUMENTS_BUCKET)
-    .upload(storagePath, file.buffer, {
-      contentType: file.mimetype,
-      upsert: false,
-    });
-
-  if (error) {
-    logError('Supabase certificate upload failed:', error);
-    throw AppError.internal('Failed to upload certificate');
-  }
-
-  return {
-    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
-    storagePath,
-  };
-}
-
-function getCertificateStoragePrefix(projectId: string): string {
-  return `${CERTIFICATES_STORAGE_PREFIX}/${projectId}/`;
-}
-
-function getOwnedCertificateStoragePath(fileUrl: string, projectId: string): string | null {
-  return getSupabaseStoragePath(fileUrl, {
-    bucket: DOCUMENTS_BUCKET,
-    expectedPrefix: getCertificateStoragePrefix(projectId),
-  });
-}
-
-async function deleteCertificateFromSupabase(fileUrl: string, projectId: string): Promise<void> {
-  const storagePath = getOwnedCertificateStoragePath(fileUrl, projectId);
-  if (!storagePath) {
-    return;
-  }
-
-  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
-
-  if (error) {
-    logError('Supabase certificate delete failed:', error);
-  }
-}
-
-// Best-effort cleanup after a failed certificate upload. Removes either the
-// Supabase object (if we already uploaded) or the local temp file.
-async function cleanupStoredCertificateUpload(
-  fileUrl: string | null,
-  file: Express.Multer.File,
-  projectId: string,
-): Promise<void> {
-  if (fileUrl && isSupabaseConfigured() && getOwnedCertificateStoragePath(fileUrl, projectId)) {
-    await deleteCertificateFromSupabase(fileUrl, projectId);
-    return;
-  }
-  cleanupUploadedCertificateFile(file);
-}
-
-function cleanupUploadedCertificateFile(file?: Express.Multer.File): void {
-  if (file?.path && fs.existsSync(file.path)) {
-    fs.unlinkSync(file.path);
-  }
-}
-
 function cleanupUploadedCertificateFiles(files: Express.Multer.File[]): void {
   for (const file of files) {
     cleanupUploadedCertificateFile(file);
   }
-}
-
-function sanitizeUploadFilename(filename: string): string {
-  const basename = path.basename(filename.replace(/\\/g, '/'));
-  const sanitized = basename
-    .split('')
-    .map((char) => (char.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(char) ? '_' : char))
-    .join('')
-    .replace(/^\.+/, '')
-    .trim()
-    .slice(0, MAX_CERTIFICATE_FILENAME_LENGTH);
-
-  return sanitized || 'certificate';
-}
-
-function getSafeCertificateExtension(originalName: string): string {
-  const ext = path.extname(sanitizeUploadFilename(originalName)).toLowerCase();
-  return ['.pdf', '.jpg', '.jpeg', '.png'].includes(ext) ? ext : '';
 }
 
 function getRequiredUploadProjectId(body: Record<string, unknown>): string {
@@ -1384,9 +1249,8 @@ testResultsRouter.delete(
     // the linked Document and Supabase object after the DB transaction.
     const certificateDoc = testResult.certificateDoc;
     const isSupabaseStored =
-      isSupabaseConfigured() &&
       !!certificateDoc?.fileUrl &&
-      getOwnedCertificateStoragePath(certificateDoc.fileUrl, testResult.projectId) !== null;
+      isOwnedSupabaseCertificateUrl(certificateDoc.fileUrl, testResult.projectId);
 
     // Atomic DB delete: testResult plus the linked Document row when present.
     // The relation is `onDelete: SetNull`, so document deletion alone wouldn't
@@ -2930,7 +2794,7 @@ async function suggestLotsFromLocation(
 // POST /api/test-results/upload-certificate - Upload a test certificate PDF for AI extraction
 testResultsRouter.post(
   '/upload-certificate',
-  upload.single('certificate'),
+  certificateUpload.single('certificate'),
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const file = req.file;
@@ -2973,7 +2837,7 @@ testResultsRouter.post(
 
     let fileUrl: string | null = null;
     try {
-      if (isSupabaseConfigured() && file.buffer) {
+      if (shouldUploadCertificateToSupabase(file)) {
         const uploaded = await uploadCertificateToSupabase(file, projectId);
         fileUrl = uploaded.url;
       } else {
@@ -3224,7 +3088,7 @@ testResultsRouter.patch(
 // POST /api/test-results/batch-upload - Batch upload multiple test certificates (Feature #202)
 testResultsRouter.post(
   '/batch-upload',
-  upload.array('certificates', 10),
+  certificateUpload.array('certificates', 10),
   asyncHandler(async (req, res) => {
     const user = req.user!;
     const files = req.files as Express.Multer.File[];
@@ -3273,7 +3137,7 @@ testResultsRouter.post(
         const confidenceObj = buildConfidenceObject(extractedData);
         const displayFilename = sanitizeUploadFilename(file.originalname);
 
-        if (isSupabaseConfigured() && file.buffer) {
+        if (shouldUploadCertificateToSupabase(file)) {
           const uploaded = await uploadCertificateToSupabase(file, projectId);
           fileUrl = uploaded.url;
         } else {

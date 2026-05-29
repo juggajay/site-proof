@@ -1515,32 +1515,33 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/lib/uploadPaths.ts', import.meta.url),
       'utf8',
     );
-    const uploadRouteFiles = [
+    const uploadSourceFiles = [
       '../../backend/src/routes/auth.ts',
       '../../backend/src/routes/company.ts',
       '../../backend/src/routes/comments.ts',
       '../../backend/src/routes/documents.ts',
       '../../backend/src/routes/drawings.ts',
       '../../backend/src/routes/testResults.ts',
+      '../../backend/src/routes/testResults/certificateStorage.ts',
     ];
-    const routeSources = await Promise.all(
-      uploadRouteFiles.map((relativePath) =>
+    const uploadSources = await Promise.all(
+      uploadSourceFiles.map((relativePath) =>
         readFile(new URL(relativePath, import.meta.url), 'utf8'),
       ),
     );
-    const joinedRoutes = routeSources.join('\n');
+    const joinedUploadSources = uploadSources.join('\n');
 
     expect(uploadPaths).toContain('export function getUploadSubdirectoryPath');
     expect(uploadPaths).toContain('export function ensureUploadSubdirectory');
     expect(uploadPaths).toContain('export async function ensureUploadSubdirectoryAsync');
-    expect(joinedRoutes).not.toContain('fs.mkdirSync');
-    expect(joinedRoutes).toContain("ensureUploadSubdirectory('avatars')");
-    expect(joinedRoutes).toContain("ensureUploadSubdirectory('company-logos')");
-    expect(joinedRoutes).toContain("ensureUploadSubdirectoryAsync('comments')");
-    expect(joinedRoutes).toContain("ensureUploadSubdirectory('documents')");
-    expect(joinedRoutes).toContain("ensureUploadSubdirectory('drawings')");
-    expect(joinedRoutes).toContain("ensureUploadSubdirectory('certificates')");
-    expect(joinedRoutes).toContain('Failed to delete old company logo');
+    expect(joinedUploadSources).not.toContain('fs.mkdirSync');
+    expect(joinedUploadSources).toContain("ensureUploadSubdirectory('avatars')");
+    expect(joinedUploadSources).toContain("ensureUploadSubdirectory('company-logos')");
+    expect(joinedUploadSources).toContain("ensureUploadSubdirectoryAsync('comments')");
+    expect(joinedUploadSources).toContain("ensureUploadSubdirectory('documents')");
+    expect(joinedUploadSources).toContain("ensureUploadSubdirectory('drawings')");
+    expect(joinedUploadSources).toContain("ensureUploadSubdirectory('certificates')");
+    expect(joinedUploadSources).toContain('Failed to delete old company logo');
   });
 
   test('dashboard export creates a real PDF instead of opening the print dialog', async () => {
