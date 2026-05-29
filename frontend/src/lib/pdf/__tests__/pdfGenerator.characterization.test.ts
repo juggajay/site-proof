@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  approvedDocketDetailFixture,
   dashboardPdfFixture,
   majorNcrDetailFixture,
   passingTestCertificateFixture,
 } from './fixtures';
 import {
   generateDashboardPDF,
+  generateDocketDetailPDF,
   generateNCRDetailPDF,
   generateTestCertificatePDF,
 } from '../../pdfGenerator';
@@ -276,6 +278,61 @@ describe('pdfGenerator characterization', () => {
         'Pending',
         'Activity Timeline',
         '1. NCR raised',
+        'Civil Execution and Conformance Platform',
+      ]),
+    );
+    expect(textContent).not.toContain('SiteProof v2');
+  });
+
+  it('preserves docket detail PDF headings, totals, approval fields, and filename', async () => {
+    await generateDocketDetailPDF(approvedDocketDetailFixture);
+
+    const doc = latestPdf();
+    const text = renderedText(doc);
+    const textContent = text.join('\n');
+
+    expect(doc.constructorArgs).toEqual([]);
+    expect(doc.savedFilename).toBe('Docket-SD-0042-approved.pdf');
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'SUBCONTRACTOR DOCKET',
+        'SD-0042',
+        'APPROVED',
+        'Docket Details',
+        'Docket Number:',
+        'Status:',
+        'Project & Subcontractor',
+        'Project:',
+        'Pacific Highway Upgrade',
+        'Project Number:',
+        'PHU-001',
+        'Subcontractor:',
+        'Precision Drainage Pty Ltd',
+        'ABN:',
+        '12 345 678 901',
+        'Hours Summary',
+        'Category',
+        'Submitted',
+        'Approved',
+        'Variance',
+        'Labour Hours',
+        '42 hrs',
+        '40 hrs',
+        '-2 hrs',
+        'Plant Hours',
+        '12 hrs',
+        '13 hrs',
+        '+1 hrs',
+        'Docket Notes',
+        'Completed drainage trenching and bedding placement for eastern run.',
+        'Foreman Notes',
+        'Reduced labour by two hours after duplicate spotter entry was removed.',
+        'Adjustment Reason',
+        'Plant time increased for excavator standby during services potholing.',
+        'APPROVAL CERTIFICATION',
+        'I certify that the hours claimed in this docket have been verified and approved.',
+        'Approved By:',
+        'Signature',
         'Civil Execution and Conformance Platform',
       ]),
     );
