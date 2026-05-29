@@ -13,6 +13,13 @@ import {
   formatDateForApi,
 } from '@/lib/dashboardDateRanges';
 import {
+  DEFAULT_VISIBLE_WIDGETS,
+  VALID_WIDGET_IDS,
+  WIDGET_CONFIG,
+  WIDGET_STORAGE_KEY,
+  type WidgetId,
+} from '@/lib/dashboardWidgets';
+import {
   parseJsonPreference,
   readLocalStorageItem,
   writeLocalStorageItem,
@@ -49,31 +56,6 @@ import {
   MailCheck,
 } from 'lucide-react';
 
-// Widget configuration
-const WIDGET_CONFIG = [
-  { id: 'attentionItems', label: 'Items Requiring Attention', required: false },
-  { id: 'projectSummary', label: 'Project Summary', required: false },
-  { id: 'recentActivity', label: 'Recent Activity', required: false },
-  { id: 'lotStatus', label: 'Lot Status', required: false },
-  { id: 'holdPoints', label: 'Hold Points', required: false },
-  { id: 'ncrs', label: 'NCRs', required: false },
-  { id: 'quickLinks', label: 'Quick Links', required: false },
-] as const;
-
-type WidgetId = (typeof WIDGET_CONFIG)[number]['id'];
-
-const DEFAULT_VISIBLE_WIDGETS: WidgetId[] = [
-  'attentionItems',
-  'projectSummary',
-  'recentActivity',
-  'lotStatus',
-  'holdPoints',
-  'ncrs',
-  'quickLinks',
-];
-
-const WIDGET_STORAGE_KEY = 'siteproof_dashboard_widgets';
-const VALID_WIDGET_IDS = new Set<WidgetId>(WIDGET_CONFIG.map((widget) => widget.id));
 const LOT_STATUS_OVERVIEW_ITEMS = [
   {
     key: 'not_started',
