@@ -646,15 +646,21 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/lots/LotDetailPage.tsx', import.meta.url),
       'utf8',
     );
+    const lotDetailPageStates = await readFile(
+      new URL('../src/pages/lots/components/LotDetailPageStates.tsx', import.meta.url),
+      'utf8',
+    );
 
     expect(roleProtectedRoute).toContain("import { ShieldAlert } from 'lucide-react'");
     expect(roleProtectedRoute).toContain('<ShieldAlert className="h-8 w-8" aria-hidden="true" />');
-    expect(lotDetailPage).toContain(
+    expect(lotDetailPage).toContain("from './components/LotDetailPageStates'");
+    expect(lotDetailPageStates).toContain(
       "import { AlertTriangle, SearchX, ShieldAlert } from 'lucide-react'",
     );
-    expect(lotDetailPage).toContain('<ErrorIcon className="h-8 w-8" aria-hidden="true" />');
+    expect(lotDetailPageStates).toContain('<ErrorIcon className="h-8 w-8" aria-hidden="true" />');
     expect(roleProtectedRoute).not.toContain('className="text-6xl"');
     expect(lotDetailPage).not.toContain('className="text-6xl"');
+    expect(lotDetailPageStates).not.toContain('className="text-6xl"');
   });
 
   test('backend diagnostic endpoints are gated out of production', async () => {
