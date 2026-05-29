@@ -19,6 +19,10 @@ import { useDashboardWidgets } from '@/hooks/useDashboardWidgets';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
 import { DashboardKpiTiles } from '@/components/dashboard/DashboardKpiTiles';
 import { DashboardWidgetCustomizer } from '@/components/dashboard/DashboardWidgetCustomizer';
+import {
+  HoldPointsSummaryWidget,
+  NcrSummaryWidget,
+} from '@/components/dashboard/DashboardIssueSummaryWidgets';
 import { LotStatusOverview } from '@/components/dashboard/LotStatusOverview';
 import {
   RecentActivityWidget,
@@ -34,7 +38,6 @@ import {
   AlertTriangle,
   Clock,
   FileText,
-  ClipboardCheck,
   Settings2,
   Download,
   AlertCircle,
@@ -511,55 +514,15 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
 
             {/* Hold Points Widget */}
             {isWidgetVisible('holdPoints') && (
-              <div className="bg-card rounded-lg border">
-                <div className="p-4 border-b flex items-center gap-2">
-                  <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">Hold Points</h2>
-                </div>
-                <div className="p-4">
-                  <button
-                    onClick={() => navigate('/projects?view=holdpoints')}
-                    className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-5 w-5 text-amber-500" />
-                      <span>Open Hold Points</span>
-                    </div>
-                    <span className="text-2xl font-bold">{stats.openHoldPoints}</span>
-                  </button>
-                  <Link
-                    to="/projects?view=holdpoints"
-                    className="text-sm text-primary hover:underline"
-                  >
-                    View all hold points →
-                  </Link>
-                </div>
-              </div>
+              <HoldPointsSummaryWidget
+                openHoldPoints={stats.openHoldPoints}
+                onNavigate={navigate}
+              />
             )}
 
             {/* NCRs Widget */}
             {isWidgetVisible('ncrs') && (
-              <div className="bg-card rounded-lg border">
-                <div className="p-4 border-b flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-                  <h2 className="text-lg font-semibold">Non-Conformance Reports</h2>
-                </div>
-                <div className="p-4">
-                  <button
-                    onClick={() => navigate('/projects?view=ncrs')}
-                    className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-red-500" />
-                      <span>Open NCRs</span>
-                    </div>
-                    <span className="text-2xl font-bold">{stats.openNCRs}</span>
-                  </button>
-                  <Link to="/projects?view=ncrs" className="text-sm text-primary hover:underline">
-                    View all NCRs →
-                  </Link>
-                </div>
-              </div>
+              <NcrSummaryWidget openNCRs={stats.openNCRs} onNavigate={navigate} />
             )}
           </div>
 
