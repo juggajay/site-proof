@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `75b8cd5 fix: polish pilot onboarding guidance (#234)`
+  `8c7ce06 test: characterize lot delete blockers (#278)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -470,6 +470,75 @@ fresh production recheck proves otherwise:
 - "Pilot onboarding guidance polish and HC docs portal link confusion", closed
   by PR #234.
 
+### Product Strategy Docs And Codebase Health
+
+Status: active, with the first code-health wave merged through PR #278.
+
+Product context docs:
+
+- PR #235 added the curated product user-stories source of truth.
+- PR #236 added the four-role pilot journey map.
+- Use `docs/product/user-stories.md` and
+  `docs/product/pilot-journeys.md` before planning role-aware UX, onboarding,
+  dogfood, or workflow simplification work.
+
+Local guardrails and test harness:
+
+- PR #238 added dependency-free local dev guardrails: Node/npm pinning,
+  generated Git hooks, and the root `npm run precommit` path.
+- PR #239 updated pinned GitHub Actions runtime pins for Node 24 compatibility.
+- PR #241 added the frontend Vitest/React Testing Library unit-test harness.
+
+Backend refactor safety:
+
+- PR #240 consolidated effective project role lookup through a shared helper.
+- PR #254 reused the shared project-role access helper in the backend route
+  layer.
+- PR #255 covered production lot-assignment mount order.
+- PR #256 removed the dead lot-assignments router.
+- PRs #257-#261 added focused backend characterization coverage around
+  subcontractor ITP lot access, lot clone round trips, test-result workflow
+  statuses, test-result notifications, and Supabase certificate uploads.
+- PR #278 characterized `DELETE /api/lots/:id` blocker responses for
+  conformed, claimed, labour-docket, and plant-docket lots. The current wire
+  contract is `error.code === 'VALIDATION_ERROR'` with domain markers under
+  `error.details.code`.
+
+PDF refactor and characterization:
+
+- PR #242 added the first PDF output characterization tests.
+- PRs #243-#253 split PDF runtime/types and the dashboard, test certificate,
+  NCR, daily diary, docket detail, hold point, claim evidence, and conformance
+  report generators into `frontend/src/lib/pdf/*`.
+- `frontend/src/lib/pdfGenerator.ts` is now a barrel file; extend
+  `frontend/src/lib/pdf/__tests__/pdfGenerator.characterization.test.ts` rather
+  than creating duplicate PDF mocks.
+- PRs #275 and #276 added dashboard and NCR detail PDF characterization.
+
+Dashboard and lot-detail frontend refactors:
+
+- PRs #265-#274 split dashboard date ranges, widget constants, widget hook,
+  lot-status overview, KPI tiles, date-range picker, widget customizer, recent
+  activity, and issue summary widgets.
+- PR #277 started the `LotDetailPage` low-risk extraction sequence by moving
+  pure ITP evidence helpers and override status constants out of the page.
+
+Current large-file pressure after this wave:
+
+- `backend/src/routes/lots.ts` is still ~2,926 lines.
+- `backend/src/routes/testResults.ts` is still ~2,903 lines.
+- `frontend/src/pages/lots/LotDetailPage.tsx` is still ~2,291 lines.
+- Former targets `frontend/src/lib/pdfGenerator.ts`,
+  `frontend/src/pages/lots/LotsPage.tsx`, and
+  `frontend/src/pages/diary/DailyDiaryPage.tsx` are no longer primary
+  oversized files.
+
+Current merge discipline:
+
+- Keep extracting in small PRs from fresh `origin/master` worktrees.
+- Characterize first when moving backend route logic or PDF output.
+- Land one PR at a time and wait for GitHub checks before merging the next.
+
 ### In-App And Tracked Documentation
 
 Status: current as of this handoff refresh.
@@ -523,7 +592,7 @@ Open low-risk polish candidates:
    focused regression test, PR, wait for checks, merge, sync `master`.
 4. If using historical `.gstack/dev-browser` reports, treat them as leads only.
    Many findings from the 2026-05-19 through 2026-05-28 reports have been
-   closed by PRs #99-#232.
+   closed by PRs #99-#278.
 
 ## Handoff Checklist For The Next Agent
 

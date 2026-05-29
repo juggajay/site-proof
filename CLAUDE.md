@@ -290,11 +290,20 @@ Keep files under 500 lines. Large files should be split:
 
 ## Known Large Files (Refactoring Targets)
 
-These files need component extraction:
-- `LotDetailPage.tsx` (4,516 lines)
-- `LotsPage.tsx` (3,363 lines)
-- `pdfGenerator.ts` (2,915 lines)
-- `DailyDiaryPage.tsx` (2,669 lines)
+Current large-file pressure is concentrated in a few routes/pages. Keep
+splitting them through small, characterized PRs rather than broad rewrites:
+
+- `backend/src/routes/lots.ts` (~2,926 lines)
+- `backend/src/routes/testResults.ts` (~2,903 lines)
+- `frontend/src/pages/lots/LotDetailPage.tsx` (~2,291 lines)
+
+Recently reduced former targets:
+
+- `frontend/src/lib/pdfGenerator.ts` is now a 24-line barrel over
+  `frontend/src/lib/pdf/*`.
+- `frontend/src/pages/lots/LotsPage.tsx` is ~570 lines.
+- `frontend/src/pages/diary/DailyDiaryPage.tsx` is ~260 lines after the diary
+  folder split.
 
 ---
 
