@@ -18,6 +18,7 @@ import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard';
 import { ForemanMobileDashboard } from '@/components/foreman/ForemanMobileDashboard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useDashboardWidgets } from '@/hooks/useDashboardWidgets';
+import { DashboardKpiTiles } from '@/components/dashboard/DashboardKpiTiles';
 import { LotStatusOverview } from '@/components/dashboard/LotStatusOverview';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
@@ -27,15 +28,12 @@ import { Button } from '@/components/ui/button';
 import {
   FolderKanban,
   AlertTriangle,
-  CheckCircle2,
   Clock,
   FileText,
   ClipboardCheck,
   Settings2,
   Check,
   Activity,
-  ListChecks,
-  Users,
   Download,
   AlertCircle,
   ChevronRight,
@@ -565,69 +563,12 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
 
           {/* Project Summary Widget */}
           {isWidgetVisible('projectSummary') && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <button
-                onClick={() => navigate('/projects')}
-                className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <FolderKanban className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Projects</p>
-                    <p className="text-2xl font-bold">{stats.totalProjects}</p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => navigate('/projects?status=active')}
-                className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Active Projects</p>
-                    <p className="text-2xl font-bold">{stats.activeProjects}</p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => navigate('/projects')}
-                className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-                title="View all lots in projects"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <ListChecks className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Lots</p>
-                    <p className="text-2xl font-bold">{stats.totalLots}</p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => navigate('/company-settings')}
-                className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-                title="Manage company settings"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-100 rounded-lg">
-                    <Users className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Team Members</p>
-                    <p className="text-2xl font-bold">—</p>
-                  </div>
-                </div>
-              </button>
-            </div>
+            <DashboardKpiTiles
+              totalProjects={stats.totalProjects}
+              activeProjects={stats.activeProjects}
+              totalLots={stats.totalLots}
+              onNavigate={navigate}
+            />
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
