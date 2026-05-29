@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { dashboardPdfFixture, passingTestCertificateFixture } from './fixtures';
-import { generateDashboardPDF, generateTestCertificatePDF } from '../../pdfGenerator';
+import {
+  dashboardPdfFixture,
+  majorNcrDetailFixture,
+  passingTestCertificateFixture,
+} from './fixtures';
+import {
+  generateDashboardPDF,
+  generateNCRDetailPDF,
+  generateTestCertificatePDF,
+} from '../../pdfGenerator';
 import type { DashboardPDFData } from '../../pdfGenerator';
 
 type PdfOperation = {
@@ -215,5 +223,62 @@ describe('pdfGenerator characterization', () => {
         'Civil Execution and Conformance Platform',
       ]),
     );
+  });
+
+  it('preserves major NCR detail PDF sections, resolution fields, and filename', async () => {
+    await generateNCRDetailPDF(majorNcrDetailFixture);
+
+    const doc = latestPdf();
+    const text = renderedText(doc);
+    const textContent = text.join('\n');
+
+    expect(doc.constructorArgs).toEqual([]);
+    expect(doc.savedFilename).toBe('NCR-NCR-0009-2026-05-28.pdf');
+    expect(textContent).toContain('STR-042 - Headwall concrete repair');
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'NON-CONFORMANCE REPORT',
+        'NCR-0009',
+        '[MAJOR]',
+        'NCR Identification',
+        'NCR Number:',
+        'Status:',
+        'PENDING REVIEW',
+        'Category:',
+        'workmanship',
+        'Severity:',
+        'MAJOR',
+        'Raised By:',
+        'Quinn Manager',
+        'Responsible:',
+        'Sam Supervisor',
+        'Project & Affected Lots',
+        'Project:',
+        'Pacific Highway Upgrade (PHU-001)',
+        'Affected Lots:',
+        'Non-Conformance Description',
+        'Honeycombing identified on headwall concrete face after formwork strip.',
+        'Investigation & Resolution',
+        'Root Cause:',
+        'Insufficient vibration around congested reinforcement.',
+        'Proposed Action:',
+        'Break out defective concrete and reinstate with approved repair mortar.',
+        'Action Taken:',
+        'Repair methodology submitted for superintendent review.',
+        'Preventative Measures:',
+        'Brief crew on vibration pattern and add pre-pour checklist hold point.',
+        'Lessons Learned:',
+        'Increase inspection frequency when reinforcement congestion is high.',
+        'Quality Manager Approval',
+        'QM Approval Required:',
+        'Yes',
+        'QM Approval Status:',
+        'Pending',
+        'Activity Timeline',
+        '1. NCR raised',
+        'Civil Execution and Conformance Platform',
+      ]),
+    );
+    expect(textContent).not.toContain('SiteProof v2');
   });
 });
