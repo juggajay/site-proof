@@ -7,6 +7,18 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 
+const mockSendNotificationIfEnabled = vi.hoisted(() =>
+  vi.fn(async () => ({ sent: false, queued: false })),
+);
+
+vi.mock('./notifications.js', async () => {
+  const actual = await vi.importActual<typeof import('./notifications.js')>('./notifications.js');
+  return {
+    ...actual,
+    sendNotificationIfEnabled: mockSendNotificationIfEnabled,
+  };
+});
+
 // Mock the supabase helpers so we can drive the testResult DELETE handler
 // through both "local" (default) and "Supabase-stored" code paths. The real
 // `isSupabaseConfigured()` returns false in tests (SUPABASE_URL is blanked
@@ -172,6 +184,8 @@ describe('Test Results API', () => {
     restoreOptionalEnv('ANTHROPIC_MODEL', ORIGINAL_ANTHROPIC_MODEL);
     restoreOptionalEnv('ANTHROPIC_TEST_CERT_MODEL', ORIGINAL_ANTHROPIC_TEST_CERT_MODEL);
     vi.restoreAllMocks();
+    mockSendNotificationIfEnabled.mockReset();
+    mockSendNotificationIfEnabled.mockResolvedValue({ sent: false, queued: false });
   });
 
   async function createEnteredTestResult() {
@@ -1707,6 +1721,74 @@ describe('Test Results API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.testResult.status).toBe('at_lab');
+    });
+
+    it('notifies active site engineers when test results are received', async () => {
+      const siteEngineer = await registerTestUser(
+        'Test Result Notification Engineer',
+        'site_engineer',
+        companyId,
+      );
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'Compaction Test',
+          testRequestNumber: 'TRN-1001',
+          laboratoryName: 'Geo Lab',
+          status: 'at_lab',
+        },
+      });
+
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: siteEngineer.userId,
+          role: 'site_engineer',
+          status: 'active',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            status: 'results_received',
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.testResult.status).toBe('results_received');
+
+        const notification = await prisma.notification.findFirst({
+          where: {
+            userId: siteEngineer.userId,
+            projectId,
+            type: 'test_result_received',
+          },
+        });
+
+        expect(notification).toMatchObject({
+          title: 'Test Result Received',
+          linkUrl: `/projects/${projectId}/tests`,
+        });
+        expect(notification?.message).toContain('Compaction Test');
+        expect(notification?.message).toContain('TRN-1001');
+        expect(notification?.message).toContain('Geo Lab');
+
+        expect(mockSendNotificationIfEnabled).toHaveBeenCalledOnce();
+        expect(mockSendNotificationIfEnabled).toHaveBeenCalledWith(siteEngineer.userId, 'enabled', {
+          title: 'Test Result Received',
+          message:
+            'Test result for Compaction Test (TRN-1001) from Geo Lab is pending verification.',
+          linkUrl: `/projects/${projectId}/tests`,
+          projectName: expect.any(String),
+        });
+      } finally {
+        await prisma.notification.deleteMany({ where: { userId: siteEngineer.userId } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(siteEngineer.userId);
+      }
     });
 
     it('should reject invalid status transition', async () => {
