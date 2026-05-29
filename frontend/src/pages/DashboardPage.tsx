@@ -12,7 +12,6 @@ import {
   type DateRangePreset,
   formatDateForApi,
 } from '@/lib/dashboardDateRanges';
-import { WIDGET_CONFIG } from '@/lib/dashboardWidgets';
 import { EMPTY_LOT_STATUS_COUNTS, type LotStatusCounts } from '@/lib/lotStatusOverview';
 import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard';
 import { ForemanMobileDashboard } from '@/components/foreman/ForemanMobileDashboard';
@@ -20,6 +19,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useDashboardWidgets } from '@/hooks/useDashboardWidgets';
 import { DashboardDateRangePicker } from '@/components/dashboard/DashboardDateRangePicker';
 import { DashboardKpiTiles } from '@/components/dashboard/DashboardKpiTiles';
+import { DashboardWidgetCustomizer } from '@/components/dashboard/DashboardWidgetCustomizer';
 import { LotStatusOverview } from '@/components/dashboard/LotStatusOverview';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
@@ -33,7 +33,6 @@ import {
   FileText,
   ClipboardCheck,
   Settings2,
-  Check,
   Activity,
   Download,
   AlertCircle,
@@ -360,41 +359,13 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
           </Button>
 
           {/* Widget Settings Dropdown */}
-          <div className="relative">
-            <Button
-              variant="outline"
-              onClick={() => setShowWidgetSettings(!showWidgetSettings)}
-              title="Customize widgets"
-              className="w-full sm:w-auto"
-            >
-              <Settings2 className="h-4 w-4" />
-              Customize
-            </Button>
-
-            {showWidgetSettings && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowWidgetSettings(false)} />
-                <div className="absolute right-0 top-full mt-2 w-64 bg-card border rounded-lg shadow-lg z-20 p-2">
-                  <div className="px-2 py-1.5 text-sm font-medium border-b mb-2">
-                    Dashboard Widgets
-                  </div>
-                  {WIDGET_CONFIG.map((widget) => (
-                    <button
-                      key={widget.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleWidget(widget.id);
-                      }}
-                      className="w-full flex items-center justify-between px-2 py-1.5 text-sm hover:bg-muted rounded"
-                    >
-                      <span>{widget.label}</span>
-                      {isWidgetVisible(widget.id) && <Check className="h-4 w-4 text-primary" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <DashboardWidgetCustomizer
+            isOpen={showWidgetSettings}
+            isWidgetVisible={isWidgetVisible}
+            onToggle={() => setShowWidgetSettings((isOpen) => !isOpen)}
+            onClose={() => setShowWidgetSettings(false)}
+            onToggleWidget={toggleWidget}
+          />
         </div>
       </div>
 
