@@ -2542,4 +2542,163 @@ describe('Lot Bulk Operations', () => {
     expect(remainingActiveAssignments).toBe(0);
     expect(unassignedLots.every((lot) => lot.assignedSubcontractorId === null)).toBe(true);
   });
+
+  describe('POST /api/lots/bulk-delete - deletion blockers (characterization)', () => {
+    let subCompanyId: string;
+    let employeeId: string;
+
+    beforeAll(async () => {
+      const subCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Bulk Delete Blocker Sub ${Date.now()}`,
+          primaryContactName: 'Bulk Delete Blocker Sub',
+          primaryContactEmail: `bulk-delete-blocker-sub-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+      subCompanyId = subCompany.id;
+
+      const employee = await prisma.employeeRoster.create({
+        data: {
+          subcontractorCompanyId: subCompanyId,
+          name: 'Bulk Delete Blocker Worker',
+          role: 'Operator',
+          hourlyRate: 45.5,
+          status: 'approved',
+        },
+      });
+      employeeId = employee.id;
+    });
+
+    afterAll(async () => {
+      // DocketLabour/DocketPlant hold onDelete:Restrict FKs to the employee
+      // roster / plant register, so they must be removed before the company
+      // cascade can delete those rows. Deleting them also cascades to their
+      // lot allocations. The lots themselves are cleaned by the `Lot Bulk
+      // Operations` afterAll (deleteMany by projectId).
+      await prisma.docketLabour.deleteMany({
+        where: { docket: { subcontractorCompanyId: subCompanyId } },
+      });
+      await prisma.docketPlant.deleteMany({
+        where: { docket: { subcontractorCompanyId: subCompanyId } },
+      });
+      await prisma.subcontractorCompany.delete({ where: { id: subCompanyId } }).catch(() => {});
+    });
+
+    it('rejects a bulk delete that includes a conformed lot and preserves it', async () => {
+      const conformedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `BULK-DEL-CONFORMED-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'conformed',
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/lots/bulk-delete')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotIds: [conformedLot.id] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        `Cannot delete 1 lot(s) that are conformed or claimed: ${conformedLot.lotNumber}`,
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      // The conformed/claimed branch passes no details object, so the wire
+      // response omits error.details entirely (the single-lot DELETE handler,
+      // by contrast, returns details.code === 'LOT_CONFORMED').
+      expect(res.body.error.details).toBeUndefined();
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: conformedLot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+
+    it('rejects a bulk delete that includes a docket-linked lot and preserves it', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `BULK-DEL-DOCKET-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'in_progress',
+        },
+      });
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: subCompanyId,
+          date: new Date(),
+          status: 'draft',
+        },
+      });
+      const labour = await prisma.docketLabour.create({
+        data: { docketId: docket.id, employeeId, submittedHours: 8, hourlyRate: 45.5 },
+      });
+      await prisma.docketLabourLot.create({
+        data: { docketLabourId: labour.id, lotId: lot.id, hours: 8 },
+      });
+
+      const res = await request(app)
+        .post('/api/lots/bulk-delete')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotIds: [lot.id] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        `Cannot delete 1 lot(s) with docket allocations: ${lot.lotNumber}`,
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      // The bulk docket branch carries only the marker code in details, with no
+      // per-lot { labour, plant, total } breakdown (unlike the single-lot path).
+      expect(res.body.error.details).toEqual({ code: 'HAS_DOCKET_ALLOCATIONS' });
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+
+    it('deletes none of the selected lots when one is blocked (all-or-nothing)', async () => {
+      const deletableLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `BULK-DEL-OK-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'in_progress',
+        },
+      });
+      const conformedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `BULK-DEL-BLOCKED-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'conformed',
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/lots/bulk-delete')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotIds: [deletableLot.id, conformedLot.id] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        `Cannot delete 1 lot(s) that are conformed or claimed: ${conformedLot.lotNumber}`,
+      );
+
+      // Every blocker check runs before the single deleteMany, so one blocked
+      // lot aborts the whole request — the otherwise-deletable lot survives too.
+      const deletableStillExists = await prisma.lot.findUnique({
+        where: { id: deletableLot.id },
+      });
+      const conformedStillExists = await prisma.lot.findUnique({
+        where: { id: conformedLot.id },
+      });
+      expect(deletableStillExists).not.toBeNull();
+      expect(conformedStillExists).not.toBeNull();
+    });
+  });
 });
