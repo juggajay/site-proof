@@ -1703,8 +1703,8 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/documents.ts', import.meta.url),
       'utf8',
     );
-    const testResultsSource = await readFile(
-      new URL('../../backend/src/routes/testResults.ts', import.meta.url),
+    const testCertificateExtractionSource = await readFile(
+      new URL('../../backend/src/routes/testResults/certificateExtraction.ts', import.meta.url),
       'utf8',
     );
 
@@ -1726,7 +1726,9 @@ test.describe('production readiness guardrails', () => {
       /fetchWithTimeout\(\s*`https:\/\/oauth2\.googleapis\.com\/tokeninfo/,
     );
     expect(documentsSource).toContain("fetchWithTimeout('https://api.anthropic.com/v1/messages'");
-    expect(testResultsSource).toContain("fetchWithTimeout('https://api.anthropic.com/v1/messages'");
+    expect(testCertificateExtractionSource).toContain(
+      "fetchWithTimeout('https://api.anthropic.com/v1/messages'",
+    );
 
     const frontendSourceFiles = await collectSourceFiles(new URL('../src/', import.meta.url));
     const backendSourceFiles = await collectSourceFiles(
