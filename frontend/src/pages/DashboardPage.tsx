@@ -12,27 +12,17 @@ import {
   type DateRangePreset,
   formatDateForApi,
 } from '@/lib/dashboardDateRanges';
-import {
-  DEFAULT_VISIBLE_WIDGETS,
-  VALID_WIDGET_IDS,
-  WIDGET_CONFIG,
-  WIDGET_STORAGE_KEY,
-  type WidgetId,
-} from '@/lib/dashboardWidgets';
+import { WIDGET_CONFIG } from '@/lib/dashboardWidgets';
 import {
   EMPTY_LOT_STATUS_COUNTS,
   LOT_STATUS_OVERVIEW_ITEMS,
   type LotStatusCounts,
   type LotStatusKey,
 } from '@/lib/lotStatusOverview';
-import {
-  parseJsonPreference,
-  readLocalStorageItem,
-  writeLocalStorageItem,
-} from '@/lib/storagePreferences';
 import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard';
 import { ForemanMobileDashboard } from '@/components/foreman/ForemanMobileDashboard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useDashboardWidgets } from '@/hooks/useDashboardWidgets';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
 import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard';
@@ -75,19 +65,6 @@ function formatActivityTimestamp(timestamp: string): string {
     return 'Unknown time';
   }
   return formatDateTime(date);
-}
-
-function parseVisibleWidgetsPreference(raw: string | null): WidgetId[] {
-  return parseJsonPreference(raw, DEFAULT_VISIBLE_WIDGETS, (value) => {
-    if (!Array.isArray(value)) return null;
-
-    const widgets = value.filter(
-      (item): item is WidgetId =>
-        typeof item === 'string' && VALID_WIDGET_IDS.has(item as WidgetId),
-    );
-
-    return Array.from(new Set(widgets));
-  });
 }
 
 interface AttentionItem {
@@ -247,10 +224,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     recentActivities: [],
   };
 
-  // Widget visibility state with local storage persistence
-  const [visibleWidgets, setVisibleWidgets] = useState<WidgetId[]>(() => {
-    return parseVisibleWidgetsPreference(readLocalStorageItem(WIDGET_STORAGE_KEY));
-  });
+  const { visibleWidgets, isWidgetVisible, toggleWidget } = useDashboardWidgets();
 
   const [showWidgetSettings, setShowWidgetSettings] = useState(false);
 
@@ -303,21 +277,6 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
       setIsRefreshing(false);
     });
   }, [refetchStats]);
-
-  const isWidgetVisible = (widgetId: WidgetId) => visibleWidgets.includes(widgetId);
-
-  const toggleWidget = (widgetId: WidgetId) => {
-    setVisibleWidgets((prev) => {
-      let newWidgets: WidgetId[];
-      if (prev.includes(widgetId)) {
-        newWidgets = prev.filter((w) => w !== widgetId);
-      } else {
-        newWidgets = [...prev, widgetId];
-      }
-      writeLocalStorageItem(WIDGET_STORAGE_KEY, JSON.stringify(newWidgets));
-      return newWidgets;
-    });
-  };
 
   const handleExportPDF = useCallback(async () => {
     setPdfError(null);

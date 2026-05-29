@@ -1964,6 +1964,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/DashboardPage.tsx', import.meta.url),
       'utf8',
     );
+    const dashboardWidgetsHook = await readFile(
+      new URL('../src/hooks/useDashboardWidgets.ts', import.meta.url),
+      'utf8',
+    );
     const lotsPage = await readFile(
       new URL('../src/pages/lots/LotsPage.tsx', import.meta.url),
       'utf8',
@@ -1988,12 +1992,15 @@ test.describe('production readiness guardrails', () => {
 
     expect(storagePreferences).toContain('validator(parsed) ?? fallback');
     expect(storagePreferences).toContain('safeLocalStateStorage');
-    expect(dashboardPage).toContain('readLocalStorageItem(WIDGET_STORAGE_KEY)');
-    expect(dashboardPage).toContain('writeLocalStorageItem(WIDGET_STORAGE_KEY');
-    expect(dashboardPage).toContain('parseVisibleWidgetsPreference');
-    expect(dashboardPage).not.toContain('return JSON.parse(stored) as WidgetId[]');
+    expect(dashboardPage).toContain('useDashboardWidgets()');
+    expect(dashboardWidgetsHook).toContain('readLocalStorageItem(WIDGET_STORAGE_KEY)');
+    expect(dashboardWidgetsHook).toContain('writeLocalStorageItem(WIDGET_STORAGE_KEY');
+    expect(dashboardWidgetsHook).toContain('parseVisibleWidgetsPreference');
+    expect(dashboardWidgetsHook).not.toContain('return JSON.parse(stored) as WidgetId[]');
     expect(dashboardPage).not.toContain('localStorage.getItem(WIDGET_STORAGE_KEY)');
     expect(dashboardPage).not.toContain('localStorage.setItem(WIDGET_STORAGE_KEY');
+    expect(dashboardWidgetsHook).not.toContain('localStorage.getItem(WIDGET_STORAGE_KEY)');
+    expect(dashboardWidgetsHook).not.toContain('localStorage.setItem(WIDGET_STORAGE_KEY');
     expect(lotsPage).toContain('readLocalStorageItem(LOT_VIEW_MODE_STORAGE_KEY)');
     expect(lotsPage).toContain('readLocalStorageItem(COLUMN_STORAGE_KEY)');
     expect(lotsPage).toContain('readLocalStorageItem(COLUMN_ORDER_STORAGE_KEY)');
