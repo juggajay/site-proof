@@ -396,7 +396,7 @@ test.describe('Dockets seeded approval contract', () => {
     await modal.getByLabel('Adjusted Labour Hours').fill('1e2');
     await modal.getByRole('button', { name: 'Approve' }).click();
 
-    await expect(page.getByText('Hours must be a non-negative decimal number.')).toBeVisible();
+    await expect(modal.getByText('Hours must be a non-negative decimal number.')).toBeVisible();
     expect(api.getApproveRequestCount()).toBe(0);
 
     await modal.getByLabel('Adjusted Labour Hours').fill('7.5');
