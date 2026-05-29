@@ -2440,4 +2440,376 @@ describe('Test Results API', () => {
       }
     });
   });
+
+  // Characterization of the CURRENT behavior of the extraction-confirmation
+  // routes (PATCH /:id/confirm-extraction and POST /batch-confirm) ahead of a
+  // planned handler extraction. These pin the exact response shapes, status
+  // codes, AppError messages, and the per-item error swallowing in
+  // batch-confirm so the refactor can be proven behavior-preserving. The two
+  // handlers share applyTestResultCorrections, so the validation paths are
+  // intentionally exercised on both. See
+  // .gstack/dev-browser/test-results-big-refactor-plan-2026-05-30.md (PR-D).
+  async function createPendingExtractionTestResult() {
+    return prisma.testResult.create({
+      data: {
+        projectId,
+        lotId,
+        testType: `Pending Extraction ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        status: 'pending_extraction',
+        aiExtracted: true,
+      },
+    });
+  }
+
+  describe('PATCH /api/test-results/:id/confirm-extraction', () => {
+    it('confirms an extraction, applies corrections, and moves status to entered', async () => {
+      const testResult = await createPendingExtractionTestResult();
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            corrections: {
+              testType: 'Compaction Test',
+              laboratoryName: 'ABC Testing Labs',
+              resultValue: '97.5',
+              resultUnit: '% MDD',
+              specificationMin: '95',
+              specificationMax: '100',
+              sampleDate: '2026-02-10',
+              passFail: 'pass',
+            },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.message).toBe('Extraction confirmed and test result saved');
+        expect(res.body.nextStep).toEqual({
+          status: 'entered',
+          message: 'Test result is now entered and ready for verification',
+        });
+        // Corrections are applied to the persisted record via the response shape.
+        expect(res.body.testResult).toMatchObject({
+          id: testResult.id,
+          testType: 'Compaction Test',
+          laboratoryName: 'ABC Testing Labs',
+          resultUnit: '% MDD',
+          passFail: 'pass',
+          status: 'entered',
+          aiExtracted: true,
+        });
+        // resultValue/specificationMin/specificationMax are returned as numbers.
+        expect(Number(res.body.testResult.resultValue)).toBe(97.5);
+        expect(Number(res.body.testResult.specificationMin)).toBe(95);
+        expect(Number(res.body.testResult.specificationMax)).toBe(100);
+        // enteredBy is stamped from the confirming user, enteredAt is set.
+        expect(res.body.testResult.enteredBy).toEqual({ fullName: 'Test Results User' });
+        expect(res.body.testResult.enteredAt).not.toBeNull();
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, enteredById: true, enteredAt: true, testType: true },
+        });
+        expect(persisted.status).toBe('entered');
+        expect(persisted.enteredById).toBe(userId);
+        expect(persisted.enteredAt).not.toBeNull();
+        expect(persisted.testType).toBe('Compaction Test');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('confirms with no corrections payload and still moves status to entered', async () => {
+      const testResult = await createPendingExtractionTestResult();
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({});
+
+        expect(res.status).toBe(200);
+        expect(res.body.testResult.status).toBe('entered');
+        expect(res.body.nextStep.status).toBe('entered');
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, enteredById: true },
+        });
+        expect(persisted.status).toBe('entered');
+        expect(persisted.enteredById).toBe(userId);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('rejects invalid correction values with a 400 before persisting', async () => {
+      const testResult = await createPendingExtractionTestResult();
+
+      try {
+        const invalidNumberRes = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ corrections: { resultValue: '95abc' } });
+
+        const invalidDateRes = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ corrections: { sampleDate: '2026-02-31' } });
+
+        const invalidPassFailRes = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ corrections: { passFail: 'maybe' } });
+
+        expect(invalidNumberRes.status).toBe(400);
+        expect(invalidNumberRes.body.error.code).toBe('VALIDATION_ERROR');
+        expect(invalidNumberRes.body.error.message).toContain('resultValue');
+
+        expect(invalidDateRes.status).toBe(400);
+        expect(invalidDateRes.body.error.message).toContain('sampleDate');
+
+        expect(invalidPassFailRes.status).toBe(400);
+        expect(invalidPassFailRes.body.error.message).toContain('passFail');
+
+        // The record stays in its pre-confirmation state on validation failure.
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, enteredById: true },
+        });
+        expect(persisted.status).toBe('pending_extraction');
+        expect(persisted.enteredById).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('returns 404 when the test result does not exist', async () => {
+      const res = await request(app)
+        .patch('/api/test-results/non-existent-id/confirm-extraction')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ corrections: {} });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('NOT_FOUND');
+      expect(res.body.error.message).toBe('Test result not found');
+    });
+
+    it('returns 403 for project members without creator rights', async () => {
+      const viewer = await registerTestUser('Confirm Extraction Viewer', 'foreman', companyId);
+      const testResult = await createPendingExtractionTestResult();
+
+      try {
+        await prisma.projectUser.create({
+          data: { projectId, userId: viewer.userId, role: 'viewer', status: 'active' },
+        });
+
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${viewer.token}`)
+          .send({ corrections: { testType: 'Compaction Test' } });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('FORBIDDEN');
+        expect(res.body.error.message).toBe('You do not have permission to confirm test results');
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true },
+        });
+        expect(persisted.status).toBe('pending_extraction');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(viewer.userId);
+      }
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app)
+        .patch('/api/test-results/some-id/confirm-extraction')
+        .send({ corrections: {} });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('POST /api/test-results/batch-confirm', () => {
+    it('confirms multiple extractions and reports a success summary', async () => {
+      const first = await createPendingExtractionTestResult();
+      const second = await createPendingExtractionTestResult();
+
+      try {
+        const res = await request(app)
+          .post('/api/test-results/batch-confirm')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            confirmations: [
+              { testResultId: first.id, corrections: { resultValue: '98.1' } },
+              { testResultId: second.id, corrections: { passFail: 'pass' } },
+            ],
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.message).toBe('Confirmed 2 of 2 test results');
+        expect(res.body.summary).toEqual({ total: 2, success: 2, failed: 0 });
+        expect(res.body.results).toHaveLength(2);
+        expect(res.body.results[0]).toEqual({
+          success: true,
+          testResultId: first.id,
+          testResult: { id: first.id, testType: first.testType, status: 'entered' },
+        });
+        expect(res.body.results[1].success).toBe(true);
+        expect(res.body.results[1].testResult.status).toBe('entered');
+
+        const persisted = await prisma.testResult.findMany({
+          where: { id: { in: [first.id, second.id] } },
+          select: { id: true, status: true, enteredById: true },
+        });
+        expect(persisted.every((row) => row.status === 'entered')).toBe(true);
+        expect(persisted.every((row) => row.enteredById === userId)).toBe(true);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: { in: [first.id, second.id] } } });
+      }
+    });
+
+    it('reports per-item failures without aborting the whole batch', async () => {
+      const ok = await createPendingExtractionTestResult();
+
+      try {
+        const res = await request(app)
+          .post('/api/test-results/batch-confirm')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            confirmations: [
+              { testResultId: ok.id, corrections: {} },
+              { testResultId: 'missing-test-result', corrections: {} },
+              { corrections: {} },
+            ],
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.message).toBe('Confirmed 1 of 3 test results');
+        expect(res.body.summary).toEqual({ total: 3, success: 1, failed: 2 });
+
+        expect(res.body.results[0]).toMatchObject({ success: true, testResultId: ok.id });
+        // Unknown id: caught and reported, not thrown.
+        expect(res.body.results[1]).toEqual({
+          success: false,
+          testResultId: 'missing-test-result',
+          error: 'Test result not found',
+        });
+        // Missing/invalid testResultId: reported with an empty id.
+        expect(res.body.results[2]).toEqual({
+          success: false,
+          testResultId: '',
+          error: 'Invalid test result id',
+        });
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: ok.id },
+          select: { status: true },
+        });
+        expect(persisted.status).toBe('entered');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: ok.id } });
+      }
+    });
+
+    it('swallows correction validation errors into a per-item failure', async () => {
+      const target = await createPendingExtractionTestResult();
+
+      try {
+        const res = await request(app)
+          .post('/api/test-results/batch-confirm')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            confirmations: [{ testResultId: target.id, corrections: { resultValue: '95abc' } }],
+          });
+
+        // Unlike confirm-extraction (which returns 400), batch-confirm catches
+        // the AppError thrown by applyTestResultCorrections and records a
+        // generic per-item failure instead of failing the request.
+        expect(res.status).toBe(200);
+        expect(res.body.summary).toEqual({ total: 1, success: 0, failed: 1 });
+        expect(res.body.results[0]).toEqual({
+          success: false,
+          testResultId: target.id,
+          error: 'Failed to confirm',
+        });
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: target.id },
+          select: { status: true, enteredById: true },
+        });
+        expect(persisted.status).toBe('pending_extraction');
+        expect(persisted.enteredById).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: target.id } });
+      }
+    });
+
+    it('records a permission failure per item for non-creator roles', async () => {
+      const viewer = await registerTestUser('Batch Confirm Viewer', 'foreman', companyId);
+      const target = await createPendingExtractionTestResult();
+
+      try {
+        await prisma.projectUser.create({
+          data: { projectId, userId: viewer.userId, role: 'viewer', status: 'active' },
+        });
+
+        const res = await request(app)
+          .post('/api/test-results/batch-confirm')
+          .set('Authorization', `Bearer ${viewer.token}`)
+          .send({ confirmations: [{ testResultId: target.id, corrections: {} }] });
+
+        expect(res.status).toBe(200);
+        expect(res.body.summary).toEqual({ total: 1, success: 0, failed: 1 });
+        expect(res.body.results[0]).toEqual({
+          success: false,
+          testResultId: target.id,
+          error: 'No permission',
+        });
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: target.id },
+          select: { status: true },
+        });
+        expect(persisted.status).toBe('pending_extraction');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: target.id } });
+        await cleanupTestUser(viewer.userId);
+      }
+    });
+
+    it('rejects a request with a missing or empty confirmations array', async () => {
+      const missingRes = await request(app)
+        .post('/api/test-results/batch-confirm')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({});
+
+      const emptyRes = await request(app)
+        .post('/api/test-results/batch-confirm')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ confirmations: [] });
+
+      const nonArrayRes = await request(app)
+        .post('/api/test-results/batch-confirm')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ confirmations: 'nope' });
+
+      for (const res of [missingRes, emptyRes, nonArrayRes]) {
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_ERROR');
+        expect(res.body.error.message).toBe('confirmations array is required');
+      }
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app)
+        .post('/api/test-results/batch-confirm')
+        .send({ confirmations: [{ testResultId: 'x', corrections: {} }] });
+
+      expect(res.status).toBe(401);
+    });
+  });
 });
