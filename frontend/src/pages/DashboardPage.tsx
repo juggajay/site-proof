@@ -20,6 +20,12 @@ import {
   type WidgetId,
 } from '@/lib/dashboardWidgets';
 import {
+  EMPTY_LOT_STATUS_COUNTS,
+  LOT_STATUS_OVERVIEW_ITEMS,
+  type LotStatusCounts,
+  type LotStatusKey,
+} from '@/lib/lotStatusOverview';
+import {
   parseJsonPreference,
   readLocalStorageItem,
   writeLocalStorageItem,
@@ -55,64 +61,6 @@ import {
   FlaskConical,
   MailCheck,
 } from 'lucide-react';
-
-const LOT_STATUS_OVERVIEW_ITEMS = [
-  {
-    key: 'not_started',
-    label: 'Not Started',
-    description: 'Work has not begun on site.',
-    dotClassName: 'bg-slate-400',
-  },
-  {
-    key: 'in_progress',
-    label: 'In Progress',
-    description: 'Work is underway but not ready for evidence review.',
-    dotClassName: 'bg-blue-500',
-  },
-  {
-    key: 'awaiting_test',
-    label: 'Awaiting Test',
-    description: 'The lot needs test evidence before conformance.',
-    dotClassName: 'bg-purple-500',
-  },
-  {
-    key: 'hold_point',
-    label: 'Hold Point',
-    description: 'Inspection or release is required before work continues.',
-    dotClassName: 'bg-amber-500',
-  },
-  {
-    key: 'ncr_raised',
-    label: 'NCR Raised',
-    description: 'An open non-conformance must be resolved.',
-    dotClassName: 'bg-red-500',
-  },
-  {
-    key: 'completed',
-    label: 'Completed',
-    description: 'Field work is complete but not yet conformed.',
-    dotClassName: 'bg-green-500',
-  },
-  {
-    key: 'conformed',
-    label: 'Conformed',
-    description: 'Quality evidence is approved and the lot can be claimed.',
-    dotClassName: 'bg-emerald-600',
-  },
-  {
-    key: 'claimed',
-    label: 'Claimed',
-    description: 'The lot is included in a progress claim.',
-    dotClassName: 'bg-teal-500',
-  },
-] as const;
-
-type LotStatusKey = (typeof LOT_STATUS_OVERVIEW_ITEMS)[number]['key'];
-type LotStatusCounts = Record<LotStatusKey, number>;
-
-const EMPTY_LOT_STATUS_COUNTS: LotStatusCounts = Object.fromEntries(
-  LOT_STATUS_OVERVIEW_ITEMS.map((item) => [item.key, 0]),
-) as LotStatusCounts;
 
 function getSafeInternalLink(link: string | undefined, fallback: string): string {
   if (link?.startsWith('/') && !link.startsWith('//')) {
