@@ -36,6 +36,7 @@ import {
 } from './testResults/certificateExtraction.js';
 import { buildTestResultData, suggestLotsFromLocation } from './testResults/testResultMapping.js';
 import { testTypeSpecifications } from './testResults/specifications.js';
+import { STATUS_LABELS, VALID_STATUS_TRANSITIONS } from './testResults/statusWorkflow.js';
 import {
   MAX_REJECTION_REASON_LENGTH,
   MAX_RESULT_UNIT_LENGTH,
@@ -1790,25 +1791,6 @@ testResultsRouter.post(
     });
   }),
 );
-
-// Valid status workflow transitions (Feature #196)
-// requested -> at_lab -> results_received -> entered -> verified
-const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
-  requested: ['at_lab'],
-  at_lab: ['results_received'],
-  results_received: ['entered'],
-  entered: ['verified'],
-  verified: [], // Terminal state
-};
-
-// Status labels for display
-const STATUS_LABELS: Record<string, string> = {
-  requested: 'Requested',
-  at_lab: 'At Lab',
-  results_received: 'Results Received',
-  entered: 'Entered',
-  verified: 'Verified',
-};
 
 // POST /api/test-results/:id/status - Update test result status (Feature #196)
 testResultsRouter.post(
