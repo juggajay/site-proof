@@ -13,16 +13,12 @@ import {
   formatDateForApi,
 } from '@/lib/dashboardDateRanges';
 import { WIDGET_CONFIG } from '@/lib/dashboardWidgets';
-import {
-  EMPTY_LOT_STATUS_COUNTS,
-  LOT_STATUS_OVERVIEW_ITEMS,
-  type LotStatusCounts,
-  type LotStatusKey,
-} from '@/lib/lotStatusOverview';
+import { EMPTY_LOT_STATUS_COUNTS, type LotStatusCounts } from '@/lib/lotStatusOverview';
 import { ForemanDashboard } from '@/components/dashboard/ForemanDashboard';
 import { ForemanMobileDashboard } from '@/components/foreman/ForemanMobileDashboard';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useDashboardWidgets } from '@/hooks/useDashboardWidgets';
+import { LotStatusOverview } from '@/components/dashboard/LotStatusOverview';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
 import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard';
@@ -108,10 +104,6 @@ interface DashboardStats {
 interface DashboardProject {
   id: string;
   status?: string | null;
-}
-
-function getLotStatusCount(stats: DashboardStats, status: LotStatusKey): number {
-  return stats.lotStatusCounts?.[status] ?? EMPTY_LOT_STATUS_COUNTS[status];
 }
 
 type DashboardUser = ReturnType<typeof useAuth>['user'];
@@ -665,47 +657,10 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
 
             {/* Lot Status Widget */}
             {isWidgetVisible('lotStatus') && (
-              <div className="bg-card rounded-lg border">
-                <div className="p-4 border-b">
-                  <div className="flex items-center gap-2">
-                    <ListChecks className="h-5 w-5 text-muted-foreground" />
-                    <h2 className="text-lg font-semibold">Lot Status Overview</h2>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Completed means the work is done. Conformed means quality evidence is approved.
-                    Claimed means it is in a progress claim.
-                  </p>
-                </div>
-                <div className="p-4 space-y-1">
-                  {LOT_STATUS_OVERVIEW_ITEMS.map((item) => (
-                    <button
-                      key={item.key}
-                      onClick={() => navigate(`/projects?lotStatus=${item.key}`)}
-                      className="w-full rounded p-2 text-left hover:bg-muted transition-colors"
-                      title={item.description}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-2">
-                          <div
-                            className={`mt-1.5 h-3 w-3 flex-shrink-0 rounded-full ${item.dotClassName}`}
-                          />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{item.label}</span>
-                              <span className="font-medium">
-                                {getLotStatusCount(stats, item.key)}
-                              </span>
-                            </div>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {item.description}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <LotStatusOverview
+                counts={stats.lotStatusCounts}
+                onStatusClick={(status) => navigate(`/projects?lotStatus=${status}`)}
+              />
             )}
 
             {/* Hold Points Widget */}
