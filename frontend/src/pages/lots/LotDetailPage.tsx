@@ -50,6 +50,7 @@ import {
   getItpPhotoValidationError,
   normalizeResponsibleParty,
 } from './lib/itpEvidence';
+import { buildConformanceReportData } from './lib/buildConformanceReportData';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { MarkAsNAModal } from './components/MarkAsNAModal';
 import { MarkAsFailedModal } from './components/MarkAsFailedModal';
@@ -1683,68 +1684,13 @@ export function LotDetailPage() {
       if (!project?.name) {
         throw new Error('Project details are required before generating a conformance report.');
       }
-      const reportItpInstance = itpData.instance;
-
-      // Count photos from ITP completions
-      let photoCount = 0;
-      if (reportItpInstance?.completions) {
-        reportItpInstance.completions.forEach((completion) => {
-          if (completion.attachments) {
-            photoCount += completion.attachments.length;
-          }
-        });
-      }
-
-      // Extract hold point releases (completions of hold_point items that are verified)
-      const holdPointReleases: ConformanceReportData['holdPointReleases'] = [];
-      if (reportItpInstance?.template?.checklistItems && reportItpInstance.completions) {
-        const holdPointItems = reportItpInstance.template.checklistItems.filter(
-          (item) => item.pointType === 'hold_point',
-        );
-        holdPointItems.forEach((item) => {
-          const completion = reportItpInstance.completions.find(
-            (c) => c.checklistItemId === item.id && c.isVerified,
-          );
-          if (completion) {
-            holdPointReleases.push({
-              checklistItemDescription: item.description,
-              releasedAt: completion.verifiedAt || completion.completedAt || '',
-              releasedBy: completion.verifiedBy || completion.completedBy,
-            });
-          }
-        });
-      }
-
-      // Prepare data for PDF
-      const reportData: ConformanceReportData = {
-        lot: {
-          lotNumber: lot.lotNumber,
-          description: lot.description,
-          status: lot.status,
-          activityType: lot.activityType,
-          chainageStart: lot.chainageStart,
-          chainageEnd: lot.chainageEnd,
-          layer: lot.layer,
-          areaZone: lot.areaZone,
-          conformedAt: lot.conformedAt,
-          conformedBy: lot.conformedBy,
-        },
-        project: {
-          name: project.name,
-          projectNumber: project.projectNumber || null,
-        },
-        itp: reportItpInstance
-          ? {
-              templateName: reportItpInstance.template?.name || 'Unknown Template',
-              checklistItems: reportItpInstance.template?.checklistItems || [],
-              completions: reportItpInstance.completions || [],
-            }
-          : null,
-        testResults: testsData.testResults || [],
-        ncrs: ncrsData.ncrs || [],
-        holdPointReleases,
-        photoCount,
-      };
+      const reportData = buildConformanceReportData({
+        lot,
+        project: { name: project.name, projectNumber: project.projectNumber },
+        itpInstance: itpData.instance,
+        testResults: testsData.testResults,
+        ncrs: ncrsData.ncrs,
+      });
 
       // Generate PDF with selected format
       const { defaultConformanceOptions, generateConformanceReportPDF } =
