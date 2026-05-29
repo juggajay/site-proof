@@ -6,6 +6,7 @@ import express from 'express';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction } from '../lib/auditLog.js';
 
 const mockSendNotificationIfEnabled = vi.hoisted(() =>
   vi.fn(async () => ({ sent: false, queued: false })),
@@ -1693,7 +1694,158 @@ describe('Test Results API', () => {
     });
   });
 
-  describe('POST /api/test-results/:id/reject', () => {
+  describe('POST /api/test-results/:id/verify', () => {
+    async function createTestCertificate(filenamePrefix: string) {
+      const filename = `${filenamePrefix}-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`;
+
+      return prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename,
+          fileUrl: `/uploads/certificates/${filename}`,
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+    }
+
+    it('rejects non-verifier direct verification without mutating the test result', async () => {
+      const foreman = await registerTestUser('Test Result Verify Foreman', 'foreman', companyId);
+      const certificate = await createTestCertificate('non-verifier-verify-cert');
+      const enteredAt = new Date('2026-04-05T06:07:08.000Z');
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Non Verifier Verify Test ${Date.now()}`,
+          status: 'entered',
+          certificateDocId: certificate.id,
+          enteredById: userId,
+          enteredAt,
+        },
+      });
+
+      try {
+        await prisma.projectUser.create({
+          data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+        });
+
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/verify`)
+          .set('Authorization', `Bearer ${foreman.token}`);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('permission to verify test results');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, verifiedAt: true, verifiedById: true, enteredAt: true },
+        });
+        expect(unchanged.status).toBe('entered');
+        expect(unchanged.verifiedAt).toBeNull();
+        expect(unchanged.verifiedById).toBeNull();
+        expect(unchanged.enteredAt?.toISOString()).toBe(enteredAt.toISOString());
+
+        const auditCount = await prisma.auditLog.count({
+          where: {
+            entityId: testResult.id,
+            action: AuditAction.TEST_RESULT_VERIFIED,
+          },
+        });
+        expect(auditCount).toBe(0);
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
+        await cleanupTestUser(foreman.userId);
+      }
+    });
+
+    it('requires a certificate before direct verification without mutating the test result', async () => {
+      const testResult = await createEnteredTestResult();
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('CERTIFICATE_REQUIRED');
+        expect(res.body.error.message).toContain('certificate must be uploaded');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, verifiedAt: true, verifiedById: true, certificateDocId: true },
+        });
+        expect(unchanged.status).toBe('entered');
+        expect(unchanged.verifiedAt).toBeNull();
+        expect(unchanged.verifiedById).toBeNull();
+        expect(unchanged.certificateDocId).toBeNull();
+
+        const auditCount = await prisma.auditLog.count({
+          where: {
+            entityId: testResult.id,
+            action: AuditAction.TEST_RESULT_VERIFIED,
+          },
+        });
+        expect(auditCount).toBe(0);
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('verifies entered test results with a certificate and writes an audit log', async () => {
+      const certificate = await createTestCertificate('direct-verify-cert');
+      const testResult = await createEnteredTestResult();
+
+      try {
+        await prisma.testResult.update({
+          where: { id: testResult.id },
+          data: { certificateDocId: certificate.id },
+        });
+
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.testResult.status).toBe('verified');
+        expect(res.body.testResult.verifiedBy.fullName).toBe('Test Results User');
+
+        const updated = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, verifiedAt: true, verifiedById: true },
+        });
+        expect(updated.status).toBe('verified');
+        expect(updated.verifiedAt).not.toBeNull();
+        expect(updated.verifiedById).toBe(userId);
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            entityId: testResult.id,
+            action: AuditAction.TEST_RESULT_VERIFIED,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(auditLog).toMatchObject({
+          projectId,
+          userId,
+          entityType: 'test_result',
+          entityId: testResult.id,
+          action: AuditAction.TEST_RESULT_VERIFIED,
+        });
+        expect(JSON.parse(auditLog?.changes ?? '{}')).toEqual({ status: 'verified' });
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
+      }
+    });
+
     it('should keep repeat direct verification idempotent for already verified test results', async () => {
       const certificate = await prisma.document.create({
         data: {
@@ -1741,7 +1893,9 @@ describe('Test Results API', () => {
         await prisma.document.deleteMany({ where: { id: certificate.id } });
       }
     });
+  });
 
+  describe('POST /api/test-results/:id/reject', () => {
     it('should reject invalid rejection reasons without mutating the test result', async () => {
       const testResult = await createEnteredTestResult();
       const cases = [
