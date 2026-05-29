@@ -55,4 +55,15 @@ export const severityColors: Record<string, string> = {
   major: 'bg-red-500 text-white',
 };
 
+// Workflow statuses only. Conformance and claim terminal states are controlled
+// through Evidence Readiness, Force Conform, and progress claims.
+export const LOT_OVERRIDE_STATUSES = [
+  { value: 'not_started', label: 'Not Started' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'awaiting_test', label: 'Awaiting Test' },
+  { value: 'hold_point', label: 'Hold Point' },
+  { value: 'ncr_raised', label: 'NCR Raised' },
+  { value: 'completed', label: 'Completed' },
+];
+
 export { API_URL };

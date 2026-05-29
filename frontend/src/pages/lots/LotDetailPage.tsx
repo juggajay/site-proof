@@ -45,7 +45,12 @@ import type {
   LocationState,
   LotSubcontractorAssignment,
 } from './types';
-import { LOT_TABS as tabs } from './constants';
+import { LOT_TABS as tabs, LOT_OVERRIDE_STATUSES } from './constants';
+import {
+  getGPSLocation,
+  getItpPhotoValidationError,
+  normalizeResponsibleParty,
+} from './lib/itpEvidence';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { MarkAsNAModal } from './components/MarkAsNAModal';
 import { MarkAsFailedModal } from './components/MarkAsFailedModal';
@@ -81,33 +86,6 @@ interface TestResultsResponse {
 interface NcrsResponse {
   ncrs?: ConformanceReportData['ncrs'];
 }
-
-const normalizeResponsibleParty = (value: string): ITPChecklistItem['responsibleParty'] => {
-  if (
-    value === 'contractor' ||
-    value === 'subcontractor' ||
-    value === 'superintendent' ||
-    value === 'general'
-  ) {
-    return value;
-  }
-  return 'general';
-};
-
-const MAX_ITP_PHOTO_SIZE = 10 * 1024 * 1024;
-const ALLOWED_ITP_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-const getItpPhotoValidationError = (file: File): string | null => {
-  if (file.size > MAX_ITP_PHOTO_SIZE) {
-    return `The file "${file.name}" exceeds the 10MB limit. Please select a smaller file.`;
-  }
-
-  if (!ALLOWED_ITP_PHOTO_TYPES.includes(file.type)) {
-    return `The file "${file.name}" is not a supported image format. Please use JPEG, PNG, GIF, or WebP.`;
-  }
-
-  return null;
-};
 
 export function LotDetailPage() {
   const { projectId, lotId } = useParams();
@@ -1297,28 +1275,6 @@ export function LotDetailPage() {
     }
   };
 
-  const getGPSLocation = (): Promise<{ latitude: number; longitude: number } | null> => {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        resolve(null);
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        () => {
-          resolve(null);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-      );
-    });
-  };
-
   const uploadItpEvidencePhoto = async (
     completionId: string,
     file: File,
@@ -1895,17 +1851,6 @@ export function LotDetailPage() {
     }
   };
 
-  // Workflow statuses only. Conformance and claim terminal states are controlled
-  // through Evidence Readiness, Force Conform, and progress claims.
-  const validStatuses = [
-    { value: 'not_started', label: 'Not Started' },
-    { value: 'in_progress', label: 'In Progress' },
-    { value: 'awaiting_test', label: 'Awaiting Test' },
-    { value: 'hold_point', label: 'Hold Point' },
-    { value: 'ncr_raised', label: 'NCR Raised' },
-    { value: 'completed', label: 'Completed' },
-  ];
-
   return (
     <div className="space-y-6 p-6">
       <LotHeader
@@ -2112,7 +2057,7 @@ export function LotDetailPage() {
       <StatusOverrideModal
         isOpen={showOverrideModal}
         currentStatus={lot.status}
-        validStatuses={validStatuses}
+        validStatuses={LOT_OVERRIDE_STATUSES}
         onClose={() => setShowOverrideModal(false)}
         onSubmit={handleOverrideStatus}
         isSubmitting={overriding}
