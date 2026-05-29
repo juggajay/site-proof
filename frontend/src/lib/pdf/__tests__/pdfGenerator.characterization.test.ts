@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { dashboardPdfFixture, passingTestCertificateFixture } from './fixtures';
 import { generateDashboardPDF, generateTestCertificatePDF } from '../../pdfGenerator';
+import type { DashboardPDFData } from '../../pdfGenerator';
 
 type PdfOperation = {
   name: string;
@@ -124,11 +125,20 @@ describe('pdfGenerator characterization', () => {
         'Report Details',
         'Date range',
         'Last 30 days',
+        'Exported by',
+        'Pat Owner',
         'Key Metrics',
         'Total projects',
         '3',
+        'Active projects',
+        '2',
+        'Total lots',
+        '18',
         'Open hold points',
         '4',
+        'Open NCRs',
+        '1',
+        'Attention items',
         'Overdue NCRs',
         '1. NCR-0007 pavement thickness (PHU-001 - Pacific Highway Upgrade)',
         '5 days overdue. Corrective action overdue for pavement lot.',
@@ -137,6 +147,34 @@ describe('pdfGenerator characterization', () => {
         '3 days waiting. Awaiting client release before pour.',
         'Recent Activity',
         '1. Lot EW-001 changed to conformed',
+      ]),
+    );
+    expect(text.join('\n')).not.toContain('SiteProof v2');
+  });
+
+  it('renders dashboard fallback copy when attention and activity sections are empty', async () => {
+    const dashboardFixtureWithEmptySections: DashboardPDFData = {
+      ...dashboardPdfFixture,
+      stats: {
+        ...dashboardPdfFixture.stats,
+        attentionItems: { total: 0, overdueNCRs: [], staleHoldPoints: [] },
+        recentActivities: [],
+      },
+    };
+
+    await generateDashboardPDF(dashboardFixtureWithEmptySections);
+
+    const doc = latestPdf();
+    const text = renderedText(doc);
+
+    expect(doc.constructorArgs).toEqual(['portrait', 'mm', 'a4']);
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'Overdue NCRs',
+        'Stale Hold Points',
+        'Recent Activity',
+        'None',
+        'No recent activity in this period.',
       ]),
     );
   });
