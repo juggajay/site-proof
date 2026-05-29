@@ -1583,6 +1583,114 @@ describe('Test Results API', () => {
       expect(res.body.workflow.currentStatus).toBeDefined();
       expect(res.body.workflow.steps).toBeDefined();
     });
+
+    it.each([
+      {
+        status: 'requested',
+        label: 'Requested',
+        completed: ['requested'],
+        next: ['at_lab'],
+        isComplete: false,
+      },
+      {
+        status: 'at_lab',
+        label: 'At Lab',
+        completed: ['requested', 'at_lab'],
+        next: ['results_received'],
+        isComplete: false,
+      },
+      {
+        status: 'results_received',
+        label: 'Results Received',
+        completed: ['requested', 'at_lab', 'results_received'],
+        next: ['entered'],
+        isComplete: false,
+      },
+      {
+        status: 'entered',
+        label: 'Entered',
+        completed: ['requested', 'at_lab', 'results_received', 'entered'],
+        next: ['verified'],
+        isComplete: false,
+      },
+      {
+        status: 'verified',
+        label: 'Verified',
+        completed: ['requested', 'at_lab', 'results_received', 'entered', 'verified'],
+        next: [],
+        isComplete: true,
+      },
+    ])('should return workflow details for $status status', async (workflowCase) => {
+      const enteredAt = new Date('2026-03-04T05:06:07.000Z');
+      const verifiedAt = new Date('2026-03-05T06:07:08.000Z');
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Workflow ${workflowCase.status} ${Date.now()}`,
+          status: workflowCase.status,
+          enteredAt: ['entered', 'verified'].includes(workflowCase.status) ? enteredAt : null,
+          enteredById: ['entered', 'verified'].includes(workflowCase.status) ? userId : null,
+          verifiedAt: workflowCase.status === 'verified' ? verifiedAt : null,
+          verifiedById: workflowCase.status === 'verified' ? userId : null,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/test-results/${testResult.id}/workflow`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.workflow.currentStatus).toBe(workflowCase.status);
+        expect(res.body.workflow.currentStatusLabel).toBe(workflowCase.label);
+        expect(res.body.workflow.canAdvance).toBe(workflowCase.next.length > 0);
+        expect(res.body.workflow.isComplete).toBe(workflowCase.isComplete);
+        expect(
+          res.body.workflow.nextTransitions.map(
+            (transition: { status: string }) => transition.status,
+          ),
+        ).toEqual(workflowCase.next);
+        expect(
+          res.body.workflow.nextTransitions.every(
+            (transition: { canPerform: boolean }) => transition.canPerform,
+          ),
+        ).toBe(true);
+
+        const steps = res.body.workflow.steps as Array<{
+          status: string;
+          completed: boolean;
+          completedBy: string | null;
+        }>;
+        expect(steps.map((step) => step.status)).toEqual([
+          'requested',
+          'at_lab',
+          'results_received',
+          'entered',
+          'verified',
+        ]);
+        expect(steps.filter((step) => step.completed).map((step) => step.status)).toEqual(
+          workflowCase.completed,
+        );
+
+        const enteredStep = steps.find((step) => step.status === 'entered');
+        const verifiedStep = steps.find((step) => step.status === 'verified');
+
+        if (['entered', 'verified'].includes(workflowCase.status)) {
+          expect(enteredStep?.completedBy).toBe('Test Results User');
+        } else {
+          expect(enteredStep?.completedBy).toBeNull();
+        }
+
+        if (workflowCase.status === 'verified') {
+          expect(verifiedStep?.completedBy).toBe('Test Results User');
+        } else {
+          expect(verifiedStep?.completedBy).toBeNull();
+        }
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
   });
 
   describe('POST /api/test-results/:id/reject', () => {
