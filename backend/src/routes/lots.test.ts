@@ -2772,6 +2772,7 @@ describe('Lot Bulk Operations', () => {
   describe('POST /api/lots/bulk-delete - deletion blockers (characterization)', () => {
     let subCompanyId: string;
     let employeeId: string;
+    let plantId: string;
 
     beforeAll(async () => {
       const subCompany = await prisma.subcontractorCompany.create({
@@ -2795,6 +2796,19 @@ describe('Lot Bulk Operations', () => {
         },
       });
       employeeId = employee.id;
+
+      const plant = await prisma.plantRegister.create({
+        data: {
+          subcontractorCompanyId: subCompanyId,
+          type: 'Excavator',
+          description: 'CAT 320',
+          idRego: `EX-BULK-DEL-${Date.now()}`,
+          dryRate: 150,
+          wetRate: 180,
+          status: 'approved',
+        },
+      });
+      plantId = plant.id;
     });
 
     afterAll(async () => {
@@ -2842,6 +2856,39 @@ describe('Lot Bulk Operations', () => {
       expect(stillExists).not.toBeNull();
     });
 
+    it('rejects a bulk delete that includes a claimed lot and preserves it', async () => {
+      const claimedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `BULK-DEL-CLAIMED-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'claimed',
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/lots/bulk-delete')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotIds: [claimedLot.id] });
+
+      expect(res.status).toBe(400);
+      // Conformed and claimed lots share the bulk handler's first blocker
+      // branch, so the message reads "conformed or claimed" regardless of which
+      // status triggered it.
+      expect(res.body.error.message).toBe(
+        `Cannot delete 1 lot(s) that are conformed or claimed: ${claimedLot.lotNumber}`,
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      // As with the conformed case, this branch passes no details object, so the
+      // wire response omits error.details entirely (the single-lot DELETE
+      // handler, by contrast, returns details.code === 'LOT_CLAIMED').
+      expect(res.body.error.details).toBeUndefined();
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: claimedLot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+
     it('rejects a bulk delete that includes a docket-linked lot and preserves it', async () => {
       const lot = await prisma.lot.create({
         data: {
@@ -2879,6 +2926,50 @@ describe('Lot Bulk Operations', () => {
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
       // The bulk docket branch carries only the marker code in details, with no
       // per-lot { labour, plant, total } breakdown (unlike the single-lot path).
+      expect(res.body.error.details).toEqual({ code: 'HAS_DOCKET_ALLOCATIONS' });
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+
+    it('rejects a bulk delete that includes a plant docket-linked lot and preserves it', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `BULK-DEL-PLANT-${Date.now()}`,
+          lotType: 'roadworks',
+          activityType: 'Earthworks',
+          status: 'in_progress',
+        },
+      });
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: subCompanyId,
+          date: new Date(),
+          status: 'draft',
+        },
+      });
+      const plantEntry = await prisma.docketPlant.create({
+        data: { docketId: docket.id, plantId, hoursOperated: 6, hourlyRate: 150 },
+      });
+      await prisma.docketPlantLot.create({
+        data: { docketPlantId: plantEntry.id, lotId: lot.id, hours: 6 },
+      });
+
+      const res = await request(app)
+        .post('/api/lots/bulk-delete')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotIds: [lot.id] });
+
+      expect(res.status).toBe(400);
+      // Plant allocations are pooled with labour in the bulk handler's single
+      // docket-allocation filter, so the message and code match the labour case
+      // exactly — the bulk path never distinguishes labour from plant.
+      expect(res.body.error.message).toBe(
+        `Cannot delete 1 lot(s) with docket allocations: ${lot.lotNumber}`,
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
       expect(res.body.error.details).toEqual({ code: 'HAS_DOCKET_ALLOCATIONS' });
 
       const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
