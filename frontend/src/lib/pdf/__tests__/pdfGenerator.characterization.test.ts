@@ -5,9 +5,11 @@ import {
   dashboardPdfFixture,
   majorNcrDetailFixture,
   passingTestCertificateFixture,
+  submittedClaimEvidencePackageFixture,
   submittedDailyDiaryFixture,
 } from './fixtures';
 import {
+  generateClaimEvidencePackagePDF,
   generateDashboardPDF,
   generateDailyDiaryPDF,
   generateDocketDetailPDF,
@@ -425,6 +427,122 @@ describe('pdfGenerator characterization', () => {
         'Activities: 1',
         'Delays: 1 (0.8 hrs)',
         'Civil Execution and Conformance Platform',
+      ]),
+    );
+    expect(textContent).not.toContain('SiteProof v2');
+  });
+
+  it('preserves claim evidence package PDF cover, lot summary, detail sections, declaration, and filename', async () => {
+    await generateClaimEvidencePackagePDF(submittedClaimEvidencePackageFixture);
+
+    const doc = latestPdf();
+    const text = renderedText(doc);
+    const textContent = text.join('\n');
+
+    expect(doc.constructorArgs).toEqual([]);
+    expect(doc.savedFilename).toBe('Claim-7-Evidence-Package-2026-05-28.pdf');
+
+    // Cover page: titles, claim summary box, SOPA note, prepared-by
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'PROGRESS CLAIM',
+        'EVIDENCE PACKAGE',
+        'Claim #7',
+        'Pacific Highway Upgrade',
+        'Project #: PHU-001',
+        'Claim Summary',
+        'Total Lots: 2',
+        'Claimed Amount: $248,500',
+        'Test Results: 5 (4 passed)',
+        'NCRs: 1 (1 open)',
+        'Photos: 9',
+        'Conformed Lots: 1',
+        'Status: SUBMITTED',
+        'Prepared by: Morgan Estimator',
+        'This evidence package is prepared for Security of Payment Act compliance.',
+        'State: NSW',
+      ]),
+    );
+    // Claim period label renders (locale-formatted dates intentionally not asserted)
+    expect(textContent).toContain('Claim Period:');
+
+    // Lot summary table: headers, per-lot rows, and totals
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'LOT SUMMARY',
+        'Lot #',
+        'Activity',
+        'Status',
+        'ITP %',
+        'Tests',
+        'NCRs',
+        'Claim Amount',
+        'EW-001',
+        'Earthworks',
+        'conformed',
+        '100%',
+        '3/3',
+        '$185,000',
+        'DR-014',
+        'Drainage',
+        'in_progres', // status.slice(0, 10) truncates 'in_progress'
+        '75%',
+        '1/2',
+        'TOTAL',
+        '2 lots',
+      ]),
+    );
+
+    // Individual lot detail sections (conformed lot + in-progress lot)
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'LOT: EW-001',
+        'Bulk earthworks to subgrade level',
+        'Activity: Earthworks',
+        'Chainage: 100 - 350',
+        'Layer: Subgrade',
+        'Status: conformed | Claim Amount: $185,000',
+        'ITP Checklist',
+        'Template: Earthworks ITP - Subgrade',
+        'Completion: 4/4 items (100%)',
+        'Hold Points: 2/2 released',
+        'Test Results',
+        'Total: 3 | Passed: 3 | Failed: 0',
+        'Conformance',
+        'By: Jordan Surveyor',
+        'Photos: 6 attached to lot',
+        'LOT: DR-014',
+        'Stormwater drainage line and pits',
+        'Activity: Drainage',
+        'Status: in_progress | Claim Amount: $63,500',
+        'Template: Drainage ITP - Pipe Laying',
+        'Completion: 3/4 items (75%)',
+        'Hold Points: 1/2 released',
+        'Total: 2 | Passed: 1 | Failed: 1',
+        'Non-Conformance Reports',
+        'Total: 1 | Open: 1 | Closed: 0',
+        'Photos: 3 attached to lot',
+      ]),
+    );
+
+    // Test-result and NCR detail lines (assert stable tails; pass/fail glyphs are a prefix)
+    expect(textContent).toContain('Compaction: 98 %');
+    expect(textContent).toContain('Moisture: 12 %');
+    expect(textContent).toContain('CBR: 45 %');
+    expect(textContent).toContain('Concrete Slump: 80 mm');
+    expect(textContent).toContain('Pipe Joint: pending');
+    expect(textContent).toContain('NCR-0021 (minor): open');
+
+    // Declaration page
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'DECLARATION',
+        'This evidence package contains the supporting documentation for Progress Claim',
+        '#7 in the amount of $248,500.',
+        'Signature',
+        'Name',
+        'Date',
+        'SiteProof - Civil Execution and Conformance Platform',
       ]),
     );
     expect(textContent).not.toContain('SiteProof v2');
