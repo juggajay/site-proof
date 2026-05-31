@@ -1258,6 +1258,183 @@ describe('Test Results API', () => {
     });
   });
 
+  // PR-I: Characterize the test-result access-control trust boundary before it is
+  // extracted into its own module. These freeze the CURRENT wire behavior of the
+  // per-result, per-role, and per-lot guards (requireTestResultReadAccess,
+  // requireTestProjectRole, hasAssignedSubcontractorLotAccess). Behavior only --
+  // production access code is intentionally unchanged.
+  describe('Access control characterization', () => {
+    it('rejects cross-company users from reading or listing test results by id', async () => {
+      const otherCompany = await prisma.company.create({
+        data: { name: `Test Results Cross Company ${Date.now()}` },
+      });
+      const outsider = await registerTestUser(
+        'Test Results Cross Company Admin',
+        'admin',
+        otherCompany.id,
+      );
+      const guardedTestResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Cross Company Guard ${Date.now()}`,
+          status: 'requested',
+        },
+      });
+
+      try {
+        const readRes = await request(app)
+          .get(`/api/test-results/${guardedTestResult.id}`)
+          .set('Authorization', `Bearer ${outsider.token}`);
+
+        expect(readRes.status).toBe(403);
+        expect(readRes.body.error.code).toBe('FORBIDDEN');
+        expect(readRes.body.error.message).toBe('You do not have access to this test result');
+
+        // The list endpoint must not leak another company's project either.
+        const listRes = await request(app)
+          .get(`/api/test-results?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${outsider.token}`);
+
+        expect(listRes.status).toBe(403);
+        expect(listRes.body.error.code).toBe('FORBIDDEN');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: guardedTestResult.id } });
+        await cleanupTestUser(outsider.userId);
+        await prisma.company.delete({ where: { id: otherCompany.id } }).catch(() => {});
+      }
+    });
+
+    it('rejects active members with creator-only roles from deleting test results', async () => {
+      // foreman is a TEST_CREATOR but not a TEST_DELETER. An *active* membership
+      // resolves to a concrete role, so this exercises the allowedRoles denial
+      // branch of requireTestProjectRole (distinct from the no-membership case the
+      // "Access hardening" suite already covers).
+      const foreman = await registerTestUser('Test Results Delete Foreman', 'foreman', companyId);
+      const guardedTestResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Delete Role Guard ${Date.now()}`,
+          status: 'requested',
+        },
+      });
+
+      try {
+        await prisma.projectUser.create({
+          data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+        });
+
+        const deleteRes = await request(app)
+          .delete(`/api/test-results/${guardedTestResult.id}`)
+          .set('Authorization', `Bearer ${foreman.token}`);
+
+        expect(deleteRes.status).toBe(403);
+        expect(deleteRes.body.error.code).toBe('FORBIDDEN');
+        expect(deleteRes.body.error.message).toBe(
+          'You do not have permission to delete test results',
+        );
+
+        // The denied delete must not remove the row.
+        await expect(
+          prisma.testResult.findUnique({ where: { id: guardedTestResult.id } }),
+        ).resolves.not.toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: guardedTestResult.id } });
+        await cleanupTestUser(foreman.userId);
+      }
+    });
+
+    it('scopes subcontractor direct reads to assigned lots within an authorized project', async () => {
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Test Results Assigned Read Sub ${Date.now()}`,
+          status: 'approved',
+          portalAccess: { testResults: true },
+        },
+      });
+      const subcontractor = await registerTestUser(
+        'Test Results Assigned Read Sub',
+        'subcontractor',
+        null,
+      );
+      const unassignedLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `TR-UNASSIGNED-READ-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      const [assignedTestResult, unassignedTestResult] = await Promise.all([
+        prisma.testResult.create({
+          data: {
+            projectId,
+            lotId,
+            testType: `Assigned Lot Read ${Date.now()}`,
+            status: 'requested',
+          },
+        }),
+        prisma.testResult.create({
+          data: {
+            projectId,
+            lotId: unassignedLot.id,
+            testType: `Unassigned Lot Read ${Date.now()}`,
+            status: 'requested',
+          },
+        }),
+      ]);
+
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractor.userId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          role: 'user',
+        },
+      });
+      await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          status: 'active',
+        },
+      });
+
+      try {
+        const unassignedReadRes = await request(app)
+          .get(`/api/test-results/${unassignedTestResult.id}`)
+          .set('Authorization', `Bearer ${subcontractor.token}`);
+        expect(unassignedReadRes.status).toBe(403);
+        expect(unassignedReadRes.body.error.code).toBe('FORBIDDEN');
+        expect(unassignedReadRes.body.error.message).toBe(
+          'You do not have access to this test result',
+        );
+
+        const assignedReadRes = await request(app)
+          .get(`/api/test-results/${assignedTestResult.id}`)
+          .set('Authorization', `Bearer ${subcontractor.token}`);
+        expect(assignedReadRes.status).toBe(200);
+        expect(assignedReadRes.body.testResult.id).toBe(assignedTestResult.id);
+      } finally {
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: subcontractorCompany.id },
+        });
+        await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+        await prisma.testResult.deleteMany({
+          where: { id: { in: [assignedTestResult.id, unassignedTestResult.id] } },
+        });
+        await prisma.lot.delete({ where: { id: unassignedLot.id } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await cleanupTestUser(subcontractor.userId);
+      }
+    });
+  });
+
   describe('GET /api/test-results/:id', () => {
     it('should get a single test result', async () => {
       const res = await request(app)
