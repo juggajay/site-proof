@@ -34,6 +34,10 @@ import {
   extractCertificateFields,
   getLowConfidenceFields,
 } from './testResults/certificateExtraction.js';
+import {
+  applyTestResultCorrections,
+  type TestResultCorrections,
+} from './testResults/corrections.js';
 import { buildTestResultData, suggestLotsFromLocation } from './testResults/testResultMapping.js';
 import { testTypeSpecifications } from './testResults/specifications.js';
 import { STATUS_LABELS, VALID_STATUS_TRANSITIONS } from './testResults/statusWorkflow.js';
@@ -119,21 +123,6 @@ type AuthenticatedUser = NonNullable<Request['user']>;
 type TestResultAccessTarget = { projectId: string; lotId?: string | null };
 type TestFieldValue = string | number | Date | Prisma.Decimal | null;
 type TestFieldStatus = { value: TestFieldValue; confidence: number; status: string };
-type TestResultCorrections = {
-  testType?: unknown;
-  testRequestNumber?: unknown;
-  laboratoryName?: unknown;
-  laboratoryReportNumber?: unknown;
-  sampleDate?: unknown;
-  sampleLocation?: unknown;
-  testDate?: unknown;
-  resultDate?: unknown;
-  resultValue?: unknown;
-  resultUnit?: unknown;
-  specificationMin?: unknown;
-  specificationMax?: unknown;
-  passFail?: unknown;
-};
 
 type BatchUploadResult =
   | {
@@ -331,66 +320,6 @@ async function requireLotInProject(lotId: string, projectId: string) {
   if (!lot) {
     throw AppError.badRequest('Lot not found or does not belong to this project');
   }
-}
-
-function applyTestResultCorrections(
-  updateData: Prisma.TestResultUncheckedUpdateInput,
-  corrections: TestResultCorrections | undefined,
-) {
-  if (!corrections) {
-    return;
-  }
-
-  if (corrections.testType !== undefined)
-    updateData.testType = normalizeRequiredString(
-      corrections.testType,
-      'testType',
-      MAX_TEST_TYPE_LENGTH,
-    );
-  if (corrections.testRequestNumber !== undefined)
-    updateData.testRequestNumber = toNullableString(
-      corrections.testRequestNumber,
-      'testRequestNumber',
-      MAX_TEST_REQUEST_NUMBER_LENGTH,
-    );
-  if (corrections.laboratoryName !== undefined)
-    updateData.laboratoryName = toNullableString(
-      corrections.laboratoryName,
-      'laboratoryName',
-      MAX_TEST_TEXT_LENGTH,
-    );
-  if (corrections.laboratoryReportNumber !== undefined)
-    updateData.laboratoryReportNumber = toNullableString(
-      corrections.laboratoryReportNumber,
-      'laboratoryReportNumber',
-      MAX_TEST_TEXT_LENGTH,
-    );
-  if (corrections.sampleDate !== undefined)
-    updateData.sampleDate = toNullableDate(corrections.sampleDate, 'sampleDate');
-  if (corrections.sampleLocation !== undefined)
-    updateData.sampleLocation = toNullableString(
-      corrections.sampleLocation,
-      'sampleLocation',
-      MAX_SAMPLE_LOCATION_LENGTH,
-    );
-  if (corrections.testDate !== undefined)
-    updateData.testDate = toNullableDate(corrections.testDate, 'testDate');
-  if (corrections.resultDate !== undefined)
-    updateData.resultDate = toNullableDate(corrections.resultDate, 'resultDate');
-  if (corrections.resultValue !== undefined)
-    updateData.resultValue = toNullableFloat(corrections.resultValue, 'resultValue');
-  if (corrections.resultUnit !== undefined)
-    updateData.resultUnit = toNullableString(
-      corrections.resultUnit,
-      'resultUnit',
-      MAX_RESULT_UNIT_LENGTH,
-    );
-  if (corrections.specificationMin !== undefined)
-    updateData.specificationMin = toNullableFloat(corrections.specificationMin, 'specificationMin');
-  if (corrections.specificationMax !== undefined)
-    updateData.specificationMax = toNullableFloat(corrections.specificationMax, 'specificationMax');
-  if (corrections.passFail !== undefined)
-    updateData.passFail = normalizePassFail(corrections.passFail, 'pending');
 }
 
 // GET /api/test-results/specifications - Get all test type specifications
