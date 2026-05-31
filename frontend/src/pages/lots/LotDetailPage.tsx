@@ -17,7 +17,6 @@ import type {
   ConformanceFormatOptions,
 } from '@/lib/pdfGenerator';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
-import { updateChecklistItemOffline, getPendingSyncCount } from '@/lib/offlineDb';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
 // Types and constants extracted to separate files
@@ -123,8 +122,6 @@ export function LotDetailPage() {
   const [ncrsCount, setNcrsCount] = useState<number | null>(null);
   // Offline state
   const { isOnline, pendingSyncCount: _pendingSyncCount } = useOfflineStatus();
-  const [updatingCompletion, setUpdatingCompletion] = useState<string | null>(null);
-  const updatingCompletionRef = useRef<string | null>(null);
   const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null);
   const [loadingConformStatus, setLoadingConformStatus] = useState(false);
   const [_uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
@@ -438,6 +435,30 @@ export function LotDetailPage() {
     fetchNcrs();
   }, [projectId, lotId, currentTab]);
 
+  // Lightweight page-owned refreshers run after an ITP item is marked failed.
+  // Each swallows its own errors (matching the original inline refreshes) so the
+  // failed-item toast still fires even if a refresh fails.
+  const refreshLotAfterFailure = useCallback(async () => {
+    try {
+      const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${encodeURIComponent(lotId || '')}`);
+      setLot(lotData.lot);
+    } catch {
+      /* ignore */
+    }
+  }, [lotId]);
+
+  const refreshNcrsAfterFailure = useCallback(async () => {
+    try {
+      const ncrsData = await apiFetch<{ ncrs: NCR[] }>(
+        `/api/ncrs?projectId=${encodeURIComponent(projectId || '')}&lotId=${encodeURIComponent(lotId || '')}`,
+      );
+      setNcrs(ncrsData.ncrs || []);
+      setNcrsCount(ncrsData.ncrs?.length || 0);
+    } catch {
+      /* ignore */
+    }
+  }, [projectId, lotId]);
+
   const {
     itpInstance,
     setItpInstance,
@@ -446,10 +467,19 @@ export function LotDetailPage() {
     templates,
     isOfflineData,
     offlinePendingCount,
-    setOfflinePendingCount,
     assigningTemplate,
+    updatingCompletion,
+    setUpdatingCompletion,
+    updatingCompletionRef,
     refetchItp,
     assignTemplate,
+    toggleCompletion,
+    updateNotes,
+    markAsNA,
+    markAsFailed,
+    mobileMarkNA,
+    mobileMarkFailed,
+    completeWitnessPoint,
   } = useItpInstance({
     projectId,
     lotId,
@@ -457,6 +487,11 @@ export function LotDetailPage() {
     isOnline,
     refetchReadiness,
     refetchConformStatus: fetchConformStatus,
+    onRequestWitness: setWitnessModal,
+    onRequestEvidenceWarning: setEvidenceWarning,
+    onToggleSettled: () => setEvidenceWarning(null),
+    refreshLotAfterFailure,
+    refreshNcrsAfterFailure,
   });
 
   // Fetch activity history when History tab is selected
@@ -578,428 +613,55 @@ export function LotDetailPage() {
   const isEditable =
     lot.status !== 'claimed' && (lot.status !== 'conformed' || Boolean(canViewBudgets));
 
-  const handleToggleCompletion = async (
-    checklistItemId: string,
-    currentlyCompleted: boolean,
-    existingNotes: string | null,
-    forceComplete = false,
-    witnessData?: { witnessPresent: boolean; witnessName?: string; witnessCompany?: string },
-  ) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
-
-    const item = itpInstance.template.checklistItems.find((i) => i.id === checklistItemId);
-    const completion = itpInstance.completions.find((c) => c.checklistItemId === checklistItemId);
-
-    // Check if this is a witness point and we're completing (not uncompleting)
-    if (!currentlyCompleted && !forceComplete && item?.pointType === 'witness' && !witnessData) {
-      // Show witness modal to collect witness details
-      setWitnessModal({
-        checklistItemId,
-        itemDescription: item.description,
-        existingNotes,
-      });
-      return;
-    }
-
-    // Check if this item requires evidence and doesn't have any yet
-    if (!currentlyCompleted && !forceComplete) {
-      const hasAttachments = completion?.attachments && completion.attachments.length > 0;
-
-      if (item && item.evidenceRequired !== 'none' && !hasAttachments) {
-        // Show evidence warning modal
-        const evidenceTypeLabel =
-          item.evidenceRequired === 'photo'
-            ? 'Photo'
-            : item.evidenceRequired === 'test'
-              ? 'Test Result'
-              : item.evidenceRequired === 'document'
-                ? 'Document'
-                : 'Evidence';
-        setEvidenceWarning({
-          checklistItemId,
-          itemDescription: item.description,
-          evidenceType: evidenceTypeLabel,
-          currentNotes: existingNotes,
-        });
-        return;
-      }
-    }
-
-    updatingCompletionRef.current = checklistItemId;
-    setUpdatingCompletion(checklistItemId);
-
-    try {
-      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          isCompleted: !currentlyCompleted,
-          notes: existingNotes,
-          // Include witness data if provided
-          ...(witnessData && {
-            witnessPresent: witnessData.witnessPresent,
-            witnessName: witnessData.witnessName || null,
-            witnessCompany: witnessData.witnessCompany || null,
-          }),
-        }),
-      });
-
-      // Update the completions in state
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
-
-      // Update offline cache with the new completion status
-      if (lotId) {
-        const newStatus = !currentlyCompleted ? 'completed' : 'pending';
-        await updateChecklistItemOffline(
-          lotId,
-          checklistItemId,
-          newStatus,
-          existingNotes || undefined,
-          'Current User',
-        );
-      }
-    } catch (err) {
-      logError('Failed to update completion:', err);
-
-      // If offline, save to IndexedDB and update local state
-      if (!navigator.onLine && lotId) {
-        const newStatus = !currentlyCompleted ? 'completed' : 'pending';
-        await updateChecklistItemOffline(
-          lotId,
-          checklistItemId,
-          newStatus,
-          existingNotes || undefined,
-          'Current User (Offline)',
-        );
-
-        // Update local state optimistically
-        setItpInstance((prev) => {
-          if (!prev) return prev;
-          const existingIndex = prev.completions.findIndex(
-            (c) => c.checklistItemId === checklistItemId,
-          );
-          const newCompletions = [...prev.completions];
-          const newCompletion: ITPCompletion = {
-            id: `offline-${checklistItemId}-${Date.now()}`,
-            checklistItemId,
-            isCompleted: !currentlyCompleted,
-            isNotApplicable: false,
-            isFailed: false,
-            notes: existingNotes,
-            completedAt: !currentlyCompleted ? new Date().toISOString() : null,
-            completedBy: !currentlyCompleted
-              ? { id: 'offline', fullName: 'You (Offline)', email: '' }
-              : null,
-            isVerified: false,
-            verifiedAt: null,
-            verifiedBy: null,
-            attachments: [],
-          };
-          if (existingIndex >= 0) {
-            newCompletions[existingIndex] = newCompletion;
-          } else {
-            newCompletions.push(newCompletion);
-          }
-          return { ...prev, completions: newCompletions };
-        });
-
-        // Update offline pending count
-        const pendingCount = await getPendingSyncCount();
-        setOfflinePendingCount(pendingCount);
-
-        toast({
-          title: 'Saved Offline',
-          description: "Your change will sync when you're back online.",
-          variant: 'default',
-        });
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to update checklist item. Please try again.',
-          variant: 'error',
-        });
-      }
-    } finally {
-      updatingCompletionRef.current = null;
-      setUpdatingCompletion(null);
-      setEvidenceWarning(null);
-    }
-  };
-
-  const handleUpdateNotes = async (checklistItemId: string, notes: string) => {
-    if (!itpInstance) return;
-
-    const existingCompletion = itpInstance.completions.find(
-      (c) => c.checklistItemId === checklistItemId,
-    );
-
-    try {
-      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          isCompleted: existingCompletion?.isCompleted || false,
-          notes,
-        }),
-      });
-
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
-    } catch (err) {
-      logError('Failed to update notes:', err);
-    }
-  };
-
-  // Handle marking an ITP item as Not Applicable
-  const handleMarkAsNA = async (reason: string) => {
-    if (!naModal || !itpInstance || !reason.trim()) {
-      toast({
-        title: 'Reason required',
-        description: 'Please provide a reason for marking this item as N/A.',
-        variant: 'error',
-      });
-      return;
-    }
-
+  // Thin modal-confirm wrappers: the hook owns the mutation + toasts; the page
+  // keeps the modal open/close state and the submitting flags.
+  const handleSubmitNA = async (reason: string) => {
+    if (!naModal) return;
     setSubmittingNa(true);
-
     try {
-      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId: naModal.checklistItemId,
-          status: 'not_applicable',
-          notes: reason.trim(),
-        }),
-      });
-
-      // Update the completions in state
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === naModal.checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
-      toast({
-        title: 'Item marked as N/A',
-        description: 'The checklist item has been marked as not applicable.',
-      });
-      setNaModal(null);
-    } catch (err) {
-      handleApiError(err, 'Failed to mark as N/A');
+      const ok = await markAsNA(naModal.checklistItemId, reason);
+      if (ok) setNaModal(null);
     } finally {
       setSubmittingNa(false);
     }
   };
 
-  // Handle marking an ITP item as Failed (triggers NCR creation)
-  const handleMarkAsFailed = async (description: string, category: string, severity: string) => {
-    if (!failedModal || !itpInstance) {
-      return;
-    }
-
+  const handleSubmitFailed = async (description: string, category: string, severity: string) => {
+    if (!failedModal) return;
     setSubmittingFailed(true);
-
     try {
-      const data = await apiFetch<{ completion: ITPCompletion; ncr?: { ncrNumber: string } }>(
-        '/api/itp/completions',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            itpInstanceId: itpInstance.id,
-            checklistItemId: failedModal.checklistItemId,
-            status: 'failed',
-            notes: `Failed: ${description}`,
-            ncrDescription: description,
-            ncrCategory: category,
-            ncrSeverity: severity,
-          }),
-        },
-      );
-
-      // Update the completions in state
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === failedModal.checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
+      const ok = await markAsFailed({
+        checklistItemId: failedModal.checklistItemId,
+        description,
+        category,
+        severity,
       });
-
-      // Refresh the lot data to reflect status change
-      try {
-        const lotData = await apiFetch<{ lot: Lot }>(
-          `/api/lots/${encodeURIComponent(lotId || '')}`,
-        );
-        setLot(lotData.lot);
-      } catch {
-        /* ignore */
-      }
-
-      // Refresh NCRs list
-      try {
-        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(
-          `/api/ncrs?projectId=${encodeURIComponent(projectId || '')}&lotId=${encodeURIComponent(lotId || '')}`,
-        );
-        setNcrs(ncrsData.ncrs || []);
-        setNcrsCount(ncrsData.ncrs?.length || 0);
-      } catch {
-        /* ignore */
-      }
-
-      toast({
-        title: 'Item marked as Failed - NCR created',
-        description: data.ncr
-          ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
-          : 'The item has been marked as failed.',
-      });
-      setFailedModal(null);
-    } catch (err) {
-      handleApiError(err, 'Failed to mark item');
+      if (ok) setFailedModal(null);
     } finally {
       setSubmittingFailed(false);
     }
   };
 
-  // Mobile-specific handlers for MobileITPChecklist
-  const handleMobileMarkNA = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
-
+  const handleSubmitWitness = async (
+    witnessPresent: boolean,
+    witnessName?: string,
+    witnessCompany?: string,
+  ) => {
+    if (!witnessModal) return;
+    setSubmittingWitness(true);
     try {
-      updatingCompletionRef.current = checklistItemId;
-      setUpdatingCompletion(checklistItemId);
-      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          status: 'not_applicable',
-          notes: reason.trim() || 'Marked as N/A',
-        }),
+      await completeWitnessPoint({
+        checklistItemId: witnessModal.checklistItemId,
+        existingNotes: witnessModal.existingNotes,
+        witnessPresent,
+        witnessName,
+        witnessCompany,
       });
-
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
-      toast({
-        title: 'Item marked as N/A',
-        description: 'The checklist item has been marked as not applicable.',
-      });
+      setWitnessModal(null);
     } catch (err) {
-      handleApiError(err, 'Failed to mark as N/A');
+      handleApiError(err, 'Failed to complete witness point');
     } finally {
-      updatingCompletionRef.current = null;
-      setUpdatingCompletion(null);
-    }
-  };
-
-  const handleMobileMarkFailed = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
-
-    try {
-      updatingCompletionRef.current = checklistItemId;
-      setUpdatingCompletion(checklistItemId);
-      const data = await apiFetch<{ completion: ITPCompletion; ncr?: { ncrNumber: string } }>(
-        '/api/itp/completions',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            itpInstanceId: itpInstance.id,
-            checklistItemId,
-            status: 'failed',
-            notes: `Failed: ${reason.trim() || 'Item failed inspection'}`,
-            ncrDescription: reason.trim() || 'Item failed ITP inspection',
-            ncrCategory: 'workmanship',
-            ncrSeverity: 'minor',
-          }),
-        },
-      );
-
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
-
-      // Refresh NCRs list
-      try {
-        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(
-          `/api/ncrs?projectId=${encodeURIComponent(projectId || '')}&lotId=${encodeURIComponent(lotId || '')}`,
-        );
-        setNcrs(ncrsData.ncrs || []);
-        setNcrsCount(ncrsData.ncrs?.length || 0);
-      } catch {
-        /* ignore */
-      }
-
-      toast({
-        title: 'Item marked as Failed',
-        description: data.ncr
-          ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
-          : 'The item has been marked as failed.',
-      });
-    } catch (err) {
-      handleApiError(err, 'Failed to mark item');
-    } finally {
-      updatingCompletionRef.current = null;
-      setUpdatingCompletion(null);
+      setSubmittingWitness(false);
     }
   };
 
@@ -1127,47 +789,6 @@ export function LotDetailPage() {
     } finally {
       updatingCompletionRef.current = null;
       setUpdatingCompletion(null);
-    }
-  };
-
-  // Handle completing a witness point with witness details
-  const handleCompleteWitnessPoint = async (
-    witnessPresent: boolean,
-    witnessName?: string,
-    witnessCompany?: string,
-  ) => {
-    if (!witnessModal || !itpInstance) {
-      return;
-    }
-
-    setSubmittingWitness(true);
-
-    try {
-      // Call handleToggleCompletion with witness data
-      await handleToggleCompletion(
-        witnessModal.checklistItemId,
-        false, // currentlyCompleted - we're completing it
-        witnessModal.existingNotes,
-        true, // forceComplete to skip the modal check
-        {
-          witnessPresent,
-          witnessName,
-          witnessCompany,
-        },
-      );
-
-      toast({
-        title: 'Witness point completed',
-        description: witnessPresent
-          ? `Witness details recorded: ${witnessName}${witnessCompany ? ` (${witnessCompany})` : ''}`
-          : 'Noted that notification was given but witness not present.',
-      });
-
-      setWitnessModal(null);
-    } catch (err) {
-      handleApiError(err, 'Failed to complete witness point');
-    } finally {
-      setSubmittingWitness(false);
     }
   };
 
@@ -1604,10 +1225,10 @@ export function LotDetailPage() {
               isMobile={isMobile}
               updatingCompletion={updatingCompletion}
               canCompleteITPItems={canCompleteITPItems}
-              onToggleCompletion={handleToggleCompletion}
-              onUpdateNotes={handleUpdateNotes}
-              onMarkAsNA={handleMobileMarkNA}
-              onMarkAsFailed={handleMobileMarkFailed}
+              onToggleCompletion={toggleCompletion}
+              onUpdateNotes={updateNotes}
+              onMarkAsNA={mobileMarkNA}
+              onMarkAsFailed={mobileMarkFailed}
               onAddPhoto={handleMobileAddPhoto}
               onAddPhotoDesktop={handleAddPhoto}
               onAssignTemplate={assignTemplate}
@@ -1775,7 +1396,7 @@ export function LotDetailPage() {
         onClose={() => setEvidenceWarning(null)}
         onConfirm={() => {
           if (evidenceWarning) {
-            handleToggleCompletion(
+            toggleCompletion(
               evidenceWarning.checklistItemId,
               false, // Currently not completed
               evidenceWarning.currentNotes,
@@ -1791,7 +1412,7 @@ export function LotDetailPage() {
         isOpen={!!naModal}
         itemDescription={naModal?.itemDescription || ''}
         onClose={() => setNaModal(null)}
-        onSubmit={handleMarkAsNA}
+        onSubmit={handleSubmitNA}
         isSubmitting={submittingNa}
       />
 
@@ -1800,7 +1421,7 @@ export function LotDetailPage() {
         isOpen={!!failedModal}
         itemDescription={failedModal?.itemDescription || ''}
         onClose={() => setFailedModal(null)}
-        onSubmit={handleMarkAsFailed}
+        onSubmit={handleSubmitFailed}
         isSubmitting={submittingFailed}
       />
 
@@ -1809,7 +1430,7 @@ export function LotDetailPage() {
         isOpen={!!witnessModal}
         itemDescription={witnessModal?.itemDescription || ''}
         onClose={() => setWitnessModal(null)}
-        onSubmit={handleCompleteWitnessPoint}
+        onSubmit={handleSubmitWitness}
         isSubmitting={submittingWitness}
       />
 

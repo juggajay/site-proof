@@ -13,15 +13,21 @@ vi.mock('@/lib/offlineDb', () => ({
   cacheITPChecklist: vi.fn(),
   getCachedITPChecklist: vi.fn(),
   getPendingSyncCount: vi.fn(),
+  updateChecklistItemOffline: vi.fn(),
 }));
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ devLog: vi.fn(), devWarn: vi.fn(), logError: vi.fn() }));
 
 import { apiFetch, ApiError } from '@/lib/api';
-import { cacheITPChecklist, getCachedITPChecklist, getPendingSyncCount } from '@/lib/offlineDb';
+import {
+  cacheITPChecklist,
+  getCachedITPChecklist,
+  getPendingSyncCount,
+  updateChecklistItemOffline,
+} from '@/lib/offlineDb';
 import { toast } from '@/components/ui/toaster';
 import { useItpInstance } from './useItpInstance';
-import type { ITPInstance, ITPTemplate, LotTab } from '../types';
+import type { ITPCompletion, ITPInstance, ITPTemplate, LotTab } from '../types';
 import type { OfflineITPChecklist } from '@/lib/offlineDb';
 
 const instanceFixture: ITPInstance = {
@@ -93,6 +99,11 @@ const baseParams = {
   isOnline: true,
   refetchReadiness: vi.fn(),
   refetchConformStatus: vi.fn(),
+  onRequestWitness: vi.fn(),
+  onRequestEvidenceWarning: vi.fn(),
+  onToggleSettled: vi.fn(),
+  refreshLotAfterFailure: vi.fn(async () => {}),
+  refreshNcrsAfterFailure: vi.fn(async () => {}),
 };
 
 // Route apiFetch by URL + method so a single render can satisfy the mount fetch
@@ -101,11 +112,18 @@ interface ApiHandlers {
   getInstance?: () => unknown;
   getTemplates?: () => unknown;
   postInstance?: () => unknown;
+  postCompletion?: (body: Record<string, unknown>) => unknown;
 }
 function routeApiFetch(handlers: ApiHandlers) {
   vi.mocked(apiFetch).mockImplementation(
-    async (url: string, options?: { method?: string }): Promise<unknown> => {
+    async (url: string, options?: RequestInit): Promise<unknown> => {
       const method = options?.method ?? 'GET';
+      if (url.includes('/api/itp/completions') && method === 'POST') {
+        const body = options?.body
+          ? (JSON.parse(options.body as string) as Record<string, unknown>)
+          : {};
+        return handlers.postCompletion ? handlers.postCompletion(body) : { completion: null };
+      }
       if (url.includes('/api/itp/instances/lot/')) {
         return handlers.getInstance ? handlers.getInstance() : { instance: null };
       }
@@ -118,6 +136,111 @@ function routeApiFetch(handlers: ApiHandlers) {
       throw new Error(`Unexpected apiFetch URL: ${url}`);
     },
   );
+}
+
+// A richer instance for the mutation tests: a standard item (item-1), a witness
+// point (item-w), and a photo-evidence item (item-e, no attachments yet).
+const mutationInstanceFixture: ITPInstance = {
+  id: 'instance-1',
+  template: {
+    id: 'template-1',
+    name: 'Earthworks ITP',
+    checklistItems: [
+      {
+        id: 'item-1',
+        description: 'Compaction',
+        category: 'General',
+        responsibleParty: 'contractor',
+        isHoldPoint: false,
+        pointType: 'standard',
+        evidenceRequired: 'none',
+        order: 0,
+        testType: null,
+        acceptanceCriteria: '95% MDD',
+      },
+      {
+        id: 'item-w',
+        description: 'Subgrade witness point',
+        category: 'General',
+        responsibleParty: 'contractor',
+        isHoldPoint: true,
+        pointType: 'witness',
+        evidenceRequired: 'none',
+        order: 1,
+        testType: null,
+        acceptanceCriteria: null,
+      },
+      {
+        id: 'item-e',
+        description: 'Surface level',
+        category: 'General',
+        responsibleParty: 'contractor',
+        isHoldPoint: false,
+        pointType: 'standard',
+        evidenceRequired: 'photo',
+        order: 2,
+        testType: null,
+        acceptanceCriteria: null,
+      },
+    ],
+  },
+  completions: [
+    {
+      id: 'completion-1',
+      checklistItemId: 'item-1',
+      isCompleted: false,
+      isNotApplicable: false,
+      isFailed: false,
+      notes: null,
+      completedAt: null,
+      completedBy: null,
+      isVerified: false,
+      verifiedAt: null,
+      verifiedBy: null,
+      attachments: [],
+    },
+  ],
+};
+
+function completionResponse(overrides: Partial<ITPCompletion> = {}): ITPCompletion {
+  return {
+    id: 'completion-new',
+    checklistItemId: 'item-1',
+    isCompleted: true,
+    isNotApplicable: false,
+    isFailed: false,
+    notes: null,
+    completedAt: '2026-05-31T10:00:00.000Z',
+    completedBy: { id: 'u1', fullName: 'Jane Foreman', email: 'jane@example.com' },
+    isVerified: false,
+    verifiedAt: null,
+    verifiedBy: null,
+    attachments: [],
+    ...overrides,
+  };
+}
+
+// Mounts the hook on the mutation fixture and waits until the instance is loaded.
+async function mountMutationHook(
+  handlers: ApiHandlers,
+  overrides: Partial<typeof baseParams> = {},
+) {
+  routeApiFetch({ getInstance: () => ({ instance: mutationInstanceFixture }), ...handlers });
+  const utils = renderHook(() => useItpInstance({ ...baseParams, ...overrides }));
+  await waitFor(() => expect(utils.result.current.itpInstance?.id).toBe('instance-1'));
+  return utils;
+}
+
+// Count only the completion POSTs (the mount GET is separate).
+function completionPostCount() {
+  return vi
+    .mocked(apiFetch)
+    .mock.calls.filter(
+      ([url, options]) =>
+        typeof url === 'string' &&
+        url.includes('/api/itp/completions') &&
+        (options as { method?: string })?.method === 'POST',
+    ).length;
 }
 
 beforeEach(() => {
@@ -268,6 +391,368 @@ describe('useItpInstance — assignTemplate', () => {
     expect(returned).toBe(false);
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Failed to assign ITP template' }),
+    );
+  });
+});
+
+describe('useItpInstance — completion mutations', () => {
+  it('toggleCompletion posts, merges optimistically, and writes through to the offline cache', async () => {
+    let body: Record<string, unknown> | undefined;
+    const merged = completionResponse({ id: 'completion-1', checklistItemId: 'item-1' });
+    const { result } = await mountMutationHook({
+      postCompletion: (b) => {
+        body = b;
+        return { completion: merged };
+      },
+    });
+
+    await act(async () => {
+      await result.current.toggleCompletion('item-1', false, null);
+    });
+
+    expect(completionPostCount()).toBe(1);
+    expect(body).toMatchObject({
+      itpInstanceId: 'instance-1',
+      checklistItemId: 'item-1',
+      isCompleted: true,
+      notes: null,
+    });
+    expect(result.current.itpInstance?.completions[0]).toEqual(merged);
+    expect(updateChecklistItemOffline).toHaveBeenCalledWith(
+      'lot-1',
+      'item-1',
+      'completed',
+      undefined,
+      'Current User',
+    );
+    expect(result.current.updatingCompletion).toBeNull();
+  });
+
+  it('toggleCompletion falls back to an offline write + "Saved Offline" toast when the POST fails offline', async () => {
+    const originalOnLine = navigator.onLine;
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    // Mount reads 0 pending; the offline write re-reads and sees 5.
+    vi.mocked(getPendingSyncCount).mockResolvedValueOnce(0).mockResolvedValue(5);
+    try {
+      const { result } = await mountMutationHook({
+        postCompletion: () => {
+          throw new Error('network down');
+        },
+      });
+
+      await act(async () => {
+        await result.current.toggleCompletion('item-1', false, null);
+      });
+
+      expect(updateChecklistItemOffline).toHaveBeenCalledWith(
+        'lot-1',
+        'item-1',
+        'completed',
+        undefined,
+        'Current User (Offline)',
+      );
+      const offline = result.current.itpInstance?.completions.find(
+        (c) => c.checklistItemId === 'item-1',
+      );
+      expect(offline?.id).toMatch(/^offline-item-1-/);
+      expect(offline?.isCompleted).toBe(true);
+      expect(result.current.offlinePendingCount).toBe(5);
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Saved Offline' }));
+    } finally {
+      Object.defineProperty(navigator, 'onLine', { value: originalOnLine, configurable: true });
+    }
+  });
+
+  it('toggleCompletion on a witness point requests the witness modal and does not POST', async () => {
+    const onRequestWitness = vi.fn();
+    const { result } = await mountMutationHook(
+      { postCompletion: () => ({ completion: completionResponse() }) },
+      { onRequestWitness },
+    );
+
+    await act(async () => {
+      await result.current.toggleCompletion('item-w', false, 'prior notes');
+    });
+
+    expect(onRequestWitness).toHaveBeenCalledWith({
+      checklistItemId: 'item-w',
+      itemDescription: 'Subgrade witness point',
+      existingNotes: 'prior notes',
+    });
+    expect(completionPostCount()).toBe(0);
+  });
+
+  it('toggleCompletion on an evidence-required item requests the evidence warning and does not POST', async () => {
+    const onRequestEvidenceWarning = vi.fn();
+    const { result } = await mountMutationHook(
+      { postCompletion: () => ({ completion: completionResponse() }) },
+      { onRequestEvidenceWarning },
+    );
+
+    await act(async () => {
+      await result.current.toggleCompletion('item-e', false, null);
+    });
+
+    expect(onRequestEvidenceWarning).toHaveBeenCalledWith({
+      checklistItemId: 'item-e',
+      itemDescription: 'Surface level',
+      evidenceType: 'Photo',
+      currentNotes: null,
+    });
+    expect(completionPostCount()).toBe(0);
+  });
+
+  it('toggleCompletion ignores a second call for the same item while one is in flight (double-submit guard)', async () => {
+    let resolvePost: (value: unknown) => void = () => {};
+    const { result } = await mountMutationHook({
+      postCompletion: () =>
+        new Promise((resolve) => {
+          resolvePost = resolve;
+        }),
+    });
+
+    await act(async () => {
+      void result.current.toggleCompletion('item-1', false, null);
+      void result.current.toggleCompletion('item-1', false, null);
+      await Promise.resolve();
+    });
+
+    expect(completionPostCount()).toBe(1);
+
+    // Settle the in-flight POST so no pending state leaks into the next test.
+    await act(async () => {
+      resolvePost({ completion: completionResponse({ id: 'completion-1' }) });
+      await Promise.resolve();
+    });
+  });
+
+  it('toggleCompletion always notifies onToggleSettled so the page can dismiss the evidence prompt', async () => {
+    const onToggleSettled = vi.fn();
+    const { result } = await mountMutationHook(
+      { postCompletion: () => ({ completion: completionResponse({ id: 'completion-1' }) }) },
+      { onToggleSettled },
+    );
+
+    await act(async () => {
+      await result.current.toggleCompletion('item-1', false, null);
+    });
+
+    expect(onToggleSettled).toHaveBeenCalledTimes(1);
+  });
+
+  it('updateNotes posts the note against the current completion state and merges the result', async () => {
+    let body: Record<string, unknown> | undefined;
+    const updated = completionResponse({
+      id: 'completion-1',
+      checklistItemId: 'item-1',
+      isCompleted: false,
+      notes: 'rechecked',
+    });
+    const { result } = await mountMutationHook({
+      postCompletion: (b) => {
+        body = b;
+        return { completion: updated };
+      },
+    });
+
+    await act(async () => {
+      await result.current.updateNotes('item-1', 'rechecked');
+    });
+
+    expect(body).toMatchObject({
+      itpInstanceId: 'instance-1',
+      checklistItemId: 'item-1',
+      isCompleted: false,
+      notes: 'rechecked',
+    });
+    expect(result.current.itpInstance?.completions[0]).toEqual(updated);
+  });
+
+  it('markAsNA trims the reason, posts not_applicable, toasts, and returns true', async () => {
+    let body: Record<string, unknown> | undefined;
+    const na = completionResponse({
+      id: 'completion-1',
+      checklistItemId: 'item-1',
+      isNotApplicable: true,
+      isCompleted: false,
+    });
+    const { result } = await mountMutationHook({
+      postCompletion: (b) => {
+        body = b;
+        return { completion: na };
+      },
+    });
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.markAsNA('item-1', '  not in scope  ');
+    });
+
+    expect(returned).toBe(true);
+    expect(body).toMatchObject({
+      itpInstanceId: 'instance-1',
+      checklistItemId: 'item-1',
+      status: 'not_applicable',
+      notes: 'not in scope',
+    });
+    expect(result.current.itpInstance?.completions[0]).toEqual(na);
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as N/A' }));
+  });
+
+  it('markAsNA rejects a blank reason without posting', async () => {
+    const { result } = await mountMutationHook({
+      postCompletion: () => ({ completion: completionResponse() }),
+    });
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.markAsNA('item-1', '   ');
+    });
+
+    expect(returned).toBe(false);
+    expect(completionPostCount()).toBe(0);
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Reason required' }));
+  });
+
+  it('markAsFailed posts failed, refreshes lot + NCRs, toasts the NCR number, and returns true', async () => {
+    const refreshLotAfterFailure = vi.fn(async () => {});
+    const refreshNcrsAfterFailure = vi.fn(async () => {});
+    let body: Record<string, unknown> | undefined;
+    const failed = completionResponse({
+      id: 'completion-1',
+      checklistItemId: 'item-1',
+      isFailed: true,
+      isCompleted: false,
+    });
+    const { result } = await mountMutationHook(
+      {
+        postCompletion: (b) => {
+          body = b;
+          return { completion: failed, ncr: { ncrNumber: 'NCR-042' } };
+        },
+      },
+      { refreshLotAfterFailure, refreshNcrsAfterFailure },
+    );
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.markAsFailed({
+        checklistItemId: 'item-1',
+        description: 'cracking',
+        category: 'workmanship',
+        severity: 'major',
+      });
+    });
+
+    expect(returned).toBe(true);
+    expect(body).toMatchObject({
+      itpInstanceId: 'instance-1',
+      checklistItemId: 'item-1',
+      status: 'failed',
+      notes: 'Failed: cracking',
+      ncrDescription: 'cracking',
+      ncrCategory: 'workmanship',
+      ncrSeverity: 'major',
+    });
+    expect(refreshLotAfterFailure).toHaveBeenCalledTimes(1);
+    expect(refreshNcrsAfterFailure).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Item marked as Failed - NCR created',
+        description: 'NCR NCR-042 has been raised for this item.',
+      }),
+    );
+  });
+
+  it('mobileMarkNA posts not_applicable with the default note and toasts', async () => {
+    let body: Record<string, unknown> | undefined;
+    const na = completionResponse({
+      id: 'completion-1',
+      checklistItemId: 'item-1',
+      isNotApplicable: true,
+    });
+    const { result } = await mountMutationHook({
+      postCompletion: (b) => {
+        body = b;
+        return { completion: na };
+      },
+    });
+
+    await act(async () => {
+      await result.current.mobileMarkNA('item-1', '');
+    });
+
+    expect(body).toMatchObject({ status: 'not_applicable', notes: 'Marked as N/A' });
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as N/A' }));
+  });
+
+  it('mobileMarkFailed posts failed, refreshes only NCRs, and toasts without the NCR-created title', async () => {
+    const refreshLotAfterFailure = vi.fn(async () => {});
+    const refreshNcrsAfterFailure = vi.fn(async () => {});
+    let body: Record<string, unknown> | undefined;
+    const failed = completionResponse({
+      id: 'completion-1',
+      checklistItemId: 'item-1',
+      isFailed: true,
+    });
+    const { result } = await mountMutationHook(
+      {
+        postCompletion: (b) => {
+          body = b;
+          return { completion: failed, ncr: { ncrNumber: 'NCR-9' } };
+        },
+      },
+      { refreshLotAfterFailure, refreshNcrsAfterFailure },
+    );
+
+    await act(async () => {
+      await result.current.mobileMarkFailed('item-1', 'bad joint');
+    });
+
+    expect(body).toMatchObject({
+      status: 'failed',
+      notes: 'Failed: bad joint',
+      ncrDescription: 'bad joint',
+      ncrCategory: 'workmanship',
+      ncrSeverity: 'minor',
+    });
+    expect(refreshNcrsAfterFailure).toHaveBeenCalledTimes(1);
+    expect(refreshLotAfterFailure).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as Failed' }));
+  });
+
+  it('completeWitnessPoint force-completes the toggle and toasts the recorded witness details', async () => {
+    let body: Record<string, unknown> | undefined;
+    const done = completionResponse({ id: 'completion-w', checklistItemId: 'item-w' });
+    const { result } = await mountMutationHook({
+      postCompletion: (b) => {
+        body = b;
+        return { completion: done };
+      },
+    });
+
+    await act(async () => {
+      await result.current.completeWitnessPoint({
+        checklistItemId: 'item-w',
+        existingNotes: null,
+        witnessPresent: true,
+        witnessName: 'Bob',
+        witnessCompany: 'ClientCo',
+      });
+    });
+
+    expect(body).toMatchObject({
+      checklistItemId: 'item-w',
+      isCompleted: true,
+      witnessPresent: true,
+      witnessName: 'Bob',
+      witnessCompany: 'ClientCo',
+    });
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Witness point completed',
+        description: 'Witness details recorded: Bob (ClientCo)',
+      }),
     );
   });
 });

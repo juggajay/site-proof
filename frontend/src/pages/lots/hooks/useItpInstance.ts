@@ -1,25 +1,62 @@
 /**
- * ITP instance data hook, extracted verbatim from LotDetailPage.tsx.
+ * ITP instance data + completion-mutation hook, extracted from LotDetailPage.tsx.
  *
  * Owns the ITP instance fetch, the offline write-through / cache-fallback, the
- * 20s hold-point-release polling, and template assignment. Mutation handlers
- * (toggle/notes/NA/failed/photos) remain in the page for now and consume the
- * raw `setItpInstance` / `setOfflinePendingCount` setters this hook exposes —
- * those move into the hook in a later slice (PR-C/PR-D).
+ * 20s hold-point-release polling, template assignment, AND (since PR-C) the
+ * completion mutations: toggle, notes, mark N/A, mark failed, the mobile mark
+ * actions, witness-point completion, and the `updatingCompletion` double-submit
+ * guard.
  *
- * Behavior is intentionally unchanged: same API paths, same offline-cache
- * decision tree, same "Offline Mode" toast, same polling semantics. The page
- * passes `refetchReadiness` / `refetchConformStatus` (page-owned queries) which
- * are refreshed after a successful assignment.
+ * The UI trust boundary stays in the page: modal open/close state and the
+ * "after failed" lot/NCR refresh live in LotDetailPage. The hook reaches back
+ * through callbacks — `onRequestWitness` / `onRequestEvidenceWarning` open the
+ * page's gate modals, `onToggleSettled` dismisses the evidence prompt once a
+ * toggle settles, and `refreshLotAfterFailure` / `refreshNcrsAfterFailure`
+ * re-fetch the page-owned lot/NCR state after a failure is recorded.
+ *
+ * Behavior is intentionally unchanged: same API paths, payloads, optimistic
+ * merge, offline decision tree, toast wording, and polling semantics. The photo
+ * / evidence upload + AI-classification handlers still live in the page (PR-D)
+ * and reuse the `setUpdatingCompletion` / `updatingCompletionRef` guard this
+ * hook exposes.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch, ApiError } from '@/lib/api';
 import { devLog, logError } from '@/lib/logger';
-import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
-import { cacheITPChecklist, getCachedITPChecklist, getPendingSyncCount } from '@/lib/offlineDb';
+import {
+  cacheITPChecklist,
+  getCachedITPChecklist,
+  getPendingSyncCount,
+  updateChecklistItemOffline,
+} from '@/lib/offlineDb';
 import type { ITPCompletion, ITPInstance, ITPTemplate, LotTab } from '../types';
 import { mapCachedToItpInstance, mapInstanceToOfflineItems } from '../lib/itpOfflineMapping';
+
+/** Prompt payload for the page's witness-point modal (gate before completing). */
+export interface WitnessPrompt {
+  checklistItemId: string;
+  itemDescription: string;
+  existingNotes: string | null;
+}
+
+/** Prompt payload for the page's evidence-warning modal (gate before completing). */
+export interface EvidenceWarningPrompt {
+  checklistItemId: string;
+  itemDescription: string;
+  evidenceType: string;
+  currentNotes: string | null;
+}
+
+/** Witness details collected by the page modal, passed back to complete the point. */
+export interface CompleteWitnessPointInput {
+  checklistItemId: string;
+  existingNotes: string | null;
+  witnessPresent: boolean;
+  witnessName?: string;
+  witnessCompany?: string;
+}
 
 interface UseItpInstanceParams {
   projectId: string | undefined;
@@ -31,6 +68,16 @@ interface UseItpInstanceParams {
   refetchReadiness: () => void;
   /** Page-owned conform-status fetch, run after a successful assignment. */
   refetchConformStatus: () => void;
+  /** Open the page's witness-point modal when a witness item is being completed. */
+  onRequestWitness: (prompt: WitnessPrompt) => void;
+  /** Open the page's evidence-warning modal when required evidence is missing. */
+  onRequestEvidenceWarning: (prompt: EvidenceWarningPrompt) => void;
+  /** Called when a toggle settles; the page uses it to dismiss the evidence prompt. */
+  onToggleSettled: () => void;
+  /** Re-fetch page-owned lot state after a failure is recorded (desktop "mark failed"). */
+  refreshLotAfterFailure: () => Promise<void>;
+  /** Re-fetch page-owned NCR state after a failure is recorded. */
+  refreshNcrsAfterFailure: () => Promise<void>;
 }
 
 export function useItpInstance({
@@ -40,6 +87,11 @@ export function useItpInstance({
   isOnline,
   refetchReadiness,
   refetchConformStatus,
+  onRequestWitness,
+  onRequestEvidenceWarning,
+  onToggleSettled,
+  refreshLotAfterFailure,
+  refreshNcrsAfterFailure,
 }: UseItpInstanceParams) {
   const [itpInstance, setItpInstance] = useState<ITPInstance | null>(null);
   const [loadingItp, setLoadingItp] = useState(false);
@@ -48,6 +100,9 @@ export function useItpInstance({
   const [isOfflineData, setIsOfflineData] = useState(false);
   const [offlinePendingCount, setOfflinePendingCount] = useState(0);
   const [assigningTemplate, setAssigningTemplate] = useState(false);
+  // Per-item in-flight id (disables the row) + a synchronous double-submit guard.
+  const [updatingCompletion, setUpdatingCompletion] = useState<string | null>(null);
+  const updatingCompletionRef = useRef<string | null>(null);
 
   const fetchItpInstance = useCallback(async () => {
     if (!projectId || !lotId || currentTab !== 'itp') return;
@@ -231,6 +286,429 @@ export function useItpInstance({
     }
   };
 
+  const toggleCompletion = async (
+    checklistItemId: string,
+    currentlyCompleted: boolean,
+    existingNotes: string | null,
+    forceComplete = false,
+    witnessData?: { witnessPresent: boolean; witnessName?: string; witnessCompany?: string },
+  ) => {
+    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
+
+    const item = itpInstance.template.checklistItems.find((i) => i.id === checklistItemId);
+    const completion = itpInstance.completions.find((c) => c.checklistItemId === checklistItemId);
+
+    // Check if this is a witness point and we're completing (not uncompleting)
+    if (!currentlyCompleted && !forceComplete && item?.pointType === 'witness' && !witnessData) {
+      // Show witness modal to collect witness details
+      onRequestWitness({
+        checklistItemId,
+        itemDescription: item.description,
+        existingNotes,
+      });
+      return;
+    }
+
+    // Check if this item requires evidence and doesn't have any yet
+    if (!currentlyCompleted && !forceComplete) {
+      const hasAttachments = completion?.attachments && completion.attachments.length > 0;
+
+      if (item && item.evidenceRequired !== 'none' && !hasAttachments) {
+        // Show evidence warning modal
+        const evidenceTypeLabel =
+          item.evidenceRequired === 'photo'
+            ? 'Photo'
+            : item.evidenceRequired === 'test'
+              ? 'Test Result'
+              : item.evidenceRequired === 'document'
+                ? 'Document'
+                : 'Evidence';
+        onRequestEvidenceWarning({
+          checklistItemId,
+          itemDescription: item.description,
+          evidenceType: evidenceTypeLabel,
+          currentNotes: existingNotes,
+        });
+        return;
+      }
+    }
+
+    updatingCompletionRef.current = checklistItemId;
+    setUpdatingCompletion(checklistItemId);
+
+    try {
+      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          isCompleted: !currentlyCompleted,
+          notes: existingNotes,
+          // Include witness data if provided
+          ...(witnessData && {
+            witnessPresent: witnessData.witnessPresent,
+            witnessName: witnessData.witnessName || null,
+            witnessCompany: witnessData.witnessCompany || null,
+          }),
+        }),
+      });
+
+      // Update the completions in state
+      setItpInstance((prev) => {
+        if (!prev) return prev;
+        const existingIndex = prev.completions.findIndex(
+          (c) => c.checklistItemId === checklistItemId,
+        );
+        const newCompletions = [...prev.completions];
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion;
+        } else {
+          newCompletions.push(data.completion);
+        }
+        return { ...prev, completions: newCompletions };
+      });
+
+      // Update offline cache with the new completion status
+      if (lotId) {
+        const newStatus = !currentlyCompleted ? 'completed' : 'pending';
+        await updateChecklistItemOffline(
+          lotId,
+          checklistItemId,
+          newStatus,
+          existingNotes || undefined,
+          'Current User',
+        );
+      }
+    } catch (err) {
+      logError('Failed to update completion:', err);
+
+      // If offline, save to IndexedDB and update local state
+      if (!navigator.onLine && lotId) {
+        const newStatus = !currentlyCompleted ? 'completed' : 'pending';
+        await updateChecklistItemOffline(
+          lotId,
+          checklistItemId,
+          newStatus,
+          existingNotes || undefined,
+          'Current User (Offline)',
+        );
+
+        // Update local state optimistically
+        setItpInstance((prev) => {
+          if (!prev) return prev;
+          const existingIndex = prev.completions.findIndex(
+            (c) => c.checklistItemId === checklistItemId,
+          );
+          const newCompletions = [...prev.completions];
+          const newCompletion: ITPCompletion = {
+            id: `offline-${checklistItemId}-${Date.now()}`,
+            checklistItemId,
+            isCompleted: !currentlyCompleted,
+            isNotApplicable: false,
+            isFailed: false,
+            notes: existingNotes,
+            completedAt: !currentlyCompleted ? new Date().toISOString() : null,
+            completedBy: !currentlyCompleted
+              ? { id: 'offline', fullName: 'You (Offline)', email: '' }
+              : null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          };
+          if (existingIndex >= 0) {
+            newCompletions[existingIndex] = newCompletion;
+          } else {
+            newCompletions.push(newCompletion);
+          }
+          return { ...prev, completions: newCompletions };
+        });
+
+        // Update offline pending count
+        const pendingCount = await getPendingSyncCount();
+        setOfflinePendingCount(pendingCount);
+
+        toast({
+          title: 'Saved Offline',
+          description: "Your change will sync when you're back online.",
+          variant: 'default',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to update checklist item. Please try again.',
+          variant: 'error',
+        });
+      }
+    } finally {
+      updatingCompletionRef.current = null;
+      setUpdatingCompletion(null);
+      onToggleSettled();
+    }
+  };
+
+  const updateNotes = async (checklistItemId: string, notes: string) => {
+    if (!itpInstance) return;
+
+    const existingCompletion = itpInstance.completions.find(
+      (c) => c.checklistItemId === checklistItemId,
+    );
+
+    try {
+      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          isCompleted: existingCompletion?.isCompleted || false,
+          notes,
+        }),
+      });
+
+      setItpInstance((prev) => {
+        if (!prev) return prev;
+        const existingIndex = prev.completions.findIndex(
+          (c) => c.checklistItemId === checklistItemId,
+        );
+        const newCompletions = [...prev.completions];
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion;
+        } else {
+          newCompletions.push(data.completion);
+        }
+        return { ...prev, completions: newCompletions };
+      });
+    } catch (err) {
+      logError('Failed to update notes:', err);
+    }
+  };
+
+  // Mark an ITP item as Not Applicable. Returns true on success so the page can
+  // close its modal; the page owns the modal state and submitting flag.
+  const markAsNA = async (checklistItemId: string, reason: string): Promise<boolean> => {
+    if (!itpInstance || !reason.trim()) {
+      toast({
+        title: 'Reason required',
+        description: 'Please provide a reason for marking this item as N/A.',
+        variant: 'error',
+      });
+      return false;
+    }
+
+    try {
+      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          status: 'not_applicable',
+          notes: reason.trim(),
+        }),
+      });
+
+      // Update the completions in state
+      setItpInstance((prev) => {
+        if (!prev) return prev;
+        const existingIndex = prev.completions.findIndex(
+          (c) => c.checklistItemId === checklistItemId,
+        );
+        const newCompletions = [...prev.completions];
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion;
+        } else {
+          newCompletions.push(data.completion);
+        }
+        return { ...prev, completions: newCompletions };
+      });
+      toast({
+        title: 'Item marked as N/A',
+        description: 'The checklist item has been marked as not applicable.',
+      });
+      return true;
+    } catch (err) {
+      handleApiError(err, 'Failed to mark as N/A');
+      return false;
+    }
+  };
+
+  // Mark an ITP item as Failed (triggers NCR creation). Returns true on success.
+  const markAsFailed = async (input: {
+    checklistItemId: string;
+    description: string;
+    category: string;
+    severity: string;
+  }): Promise<boolean> => {
+    if (!itpInstance) {
+      return false;
+    }
+
+    try {
+      const data = await apiFetch<{ completion: ITPCompletion; ncr?: { ncrNumber: string } }>(
+        '/api/itp/completions',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            itpInstanceId: itpInstance.id,
+            checklistItemId: input.checklistItemId,
+            status: 'failed',
+            notes: `Failed: ${input.description}`,
+            ncrDescription: input.description,
+            ncrCategory: input.category,
+            ncrSeverity: input.severity,
+          }),
+        },
+      );
+
+      // Update the completions in state
+      setItpInstance((prev) => {
+        if (!prev) return prev;
+        const existingIndex = prev.completions.findIndex(
+          (c) => c.checklistItemId === input.checklistItemId,
+        );
+        const newCompletions = [...prev.completions];
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion;
+        } else {
+          newCompletions.push(data.completion);
+        }
+        return { ...prev, completions: newCompletions };
+      });
+
+      // Refresh page-owned lot + NCR state to reflect the status change.
+      await refreshLotAfterFailure();
+      await refreshNcrsAfterFailure();
+
+      toast({
+        title: 'Item marked as Failed - NCR created',
+        description: data.ncr
+          ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
+          : 'The item has been marked as failed.',
+      });
+      return true;
+    } catch (err) {
+      handleApiError(err, 'Failed to mark item');
+      return false;
+    }
+  };
+
+  // Mobile-specific handlers for MobileITPChecklist
+  const mobileMarkNA = async (checklistItemId: string, reason: string) => {
+    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
+
+    try {
+      updatingCompletionRef.current = checklistItemId;
+      setUpdatingCompletion(checklistItemId);
+      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          status: 'not_applicable',
+          notes: reason.trim() || 'Marked as N/A',
+        }),
+      });
+
+      setItpInstance((prev) => {
+        if (!prev) return prev;
+        const existingIndex = prev.completions.findIndex(
+          (c) => c.checklistItemId === checklistItemId,
+        );
+        const newCompletions = [...prev.completions];
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion;
+        } else {
+          newCompletions.push(data.completion);
+        }
+        return { ...prev, completions: newCompletions };
+      });
+      toast({
+        title: 'Item marked as N/A',
+        description: 'The checklist item has been marked as not applicable.',
+      });
+    } catch (err) {
+      handleApiError(err, 'Failed to mark as N/A');
+    } finally {
+      updatingCompletionRef.current = null;
+      setUpdatingCompletion(null);
+    }
+  };
+
+  const mobileMarkFailed = async (checklistItemId: string, reason: string) => {
+    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
+
+    try {
+      updatingCompletionRef.current = checklistItemId;
+      setUpdatingCompletion(checklistItemId);
+      const data = await apiFetch<{ completion: ITPCompletion; ncr?: { ncrNumber: string } }>(
+        '/api/itp/completions',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            itpInstanceId: itpInstance.id,
+            checklistItemId,
+            status: 'failed',
+            notes: `Failed: ${reason.trim() || 'Item failed inspection'}`,
+            ncrDescription: reason.trim() || 'Item failed ITP inspection',
+            ncrCategory: 'workmanship',
+            ncrSeverity: 'minor',
+          }),
+        },
+      );
+
+      setItpInstance((prev) => {
+        if (!prev) return prev;
+        const existingIndex = prev.completions.findIndex(
+          (c) => c.checklistItemId === checklistItemId,
+        );
+        const newCompletions = [...prev.completions];
+        if (existingIndex >= 0) {
+          newCompletions[existingIndex] = data.completion;
+        } else {
+          newCompletions.push(data.completion);
+        }
+        return { ...prev, completions: newCompletions };
+      });
+
+      // Refresh page-owned NCR state
+      await refreshNcrsAfterFailure();
+
+      toast({
+        title: 'Item marked as Failed',
+        description: data.ncr
+          ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
+          : 'The item has been marked as failed.',
+      });
+    } catch (err) {
+      handleApiError(err, 'Failed to mark item');
+    } finally {
+      updatingCompletionRef.current = null;
+      setUpdatingCompletion(null);
+    }
+  };
+
+  // Complete a witness point: force-complete the toggle with witness details,
+  // then toast. The page owns the witness modal state / submitting flag and the
+  // (effectively unreachable) error path, since toggleCompletion never throws.
+  const completeWitnessPoint = async (input: CompleteWitnessPointInput) => {
+    if (!itpInstance) {
+      return;
+    }
+
+    // Call toggleCompletion with witness data, forceComplete to skip the gate.
+    await toggleCompletion(input.checklistItemId, false, input.existingNotes, true, {
+      witnessPresent: input.witnessPresent,
+      witnessName: input.witnessName,
+      witnessCompany: input.witnessCompany,
+    });
+
+    toast({
+      title: 'Witness point completed',
+      description: input.witnessPresent
+        ? `Witness details recorded: ${input.witnessName}${input.witnessCompany ? ` (${input.witnessCompany})` : ''}`
+        : 'Noted that notification was given but witness not present.',
+    });
+  };
+
   return {
     itpInstance,
     setItpInstance,
@@ -239,9 +717,20 @@ export function useItpInstance({
     templates,
     isOfflineData,
     offlinePendingCount,
-    setOfflinePendingCount,
     assigningTemplate,
+    updatingCompletion,
+    // Exposed for the still-in-page photo/evidence handlers (PR-D); they share
+    // this double-submit guard until they too move into the hook.
+    setUpdatingCompletion,
+    updatingCompletionRef,
     refetchItp: fetchItpInstance,
     assignTemplate,
+    toggleCompletion,
+    updateNotes,
+    markAsNA,
+    markAsFailed,
+    mobileMarkNA,
+    mobileMarkFailed,
+    completeWitnessPoint,
   };
 }
