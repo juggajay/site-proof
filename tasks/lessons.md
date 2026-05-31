@@ -15,16 +15,28 @@
 ## PDF generation & characterization tests
 
 - PDF characterization: `pdfGenerator.ts` is now a barrel over `frontend/src/lib/pdf/*`. Extend `frontend/src/lib/pdf/__tests__/pdfGenerator.characterization.test.ts` and reuse its `JsPdfRecorder` mock (don't create a new test file or mock). In PDF tests assert only timezone-stable output (headers, labels, metric values, `formatDateKey` filenames); avoid locale-formatted date string assertions (they differ UTC vs Sydney). (PR #275)
+- When characterizing a PDF, also freeze environment-sensitive rendering quirks instead of asserting idealized strings — run the generator and lock what it actually emits. Examples found while covering the claim evidence package: `Intl.NumberFormat('en-AU', { currency: 'AUD' })` renders `$` (not `A$`) in this Node/ICU build, and the lot-summary status column truncates via `slice(0, 10)` (`in_progress` → `in_progres`). Freezing these means a later "cleanup" can't silently change the output without a failing test. (PR #308)
 
 ## Backend error contracts
 
 - `AppError.badRequest(message, details)` takes `details` as its second argument, not an error-code override. Route code like `AppError.badRequest('...', { code: 'LOT_CONFORMED' })` returns wire `error.code === 'VALIDATION_ERROR'` and stores the domain marker at `error.details.code`. Tests and clients should assert/read `error.details.code` unless the route deliberately changes the AppError contract. (PR #278)
 
+## Backend extraction patterns
+
+- When extracting orchestration out of an access-sensitive route, keep the role/permission **policy** in the route module and pass the check into the extracted service as an `authorize(projectId)` callback. Invoke it at the same point the inline code did (inside the same try/catch as any file-cleanup), so the multi-tenant trust boundary stays in one reviewable place while the orchestration moves out. This was used for test-result certificate intake (`requireTestProjectRole(...)` passed as `authorize`); reuse it for extraction-confirmation and other access-sensitive refactors. (PR #310)
+
 ## Refactoring & shared maps
 
 - Refactor maps and candidate lists (e.g. in `.gstack` or planning docs) go stale fast during a multi-agent wave. Before coding a flagged item, verify it against `origin/master` and recently merged PRs; if it is already resolved, stop and report instead of duplicating the work.
+
+## Worktrees & local test setup
+
+- After `npm install` in a fresh worktree, run `git status` before staging. The install can pollute `backend/package.json` **and** `package-lock.json` with a bogus `"siteproof": "file:../../<sibling-worktree>"` dependency (a `file:` ref to a neighbouring worktree). Revert it with `git checkout HEAD -- backend/package.json backend/package-lock.json` — never let install pollution into a PR. (PR #310)
+- Backend worktrees may need a generated Prisma client. `prisma generate` can fail in a worktree here, and a fresh `npm install` can leave a *stub* `.prisma/client` that looks generated (`index.d.ts` present) but throws `@prisma/client did not initialize yet` at load. Don't trust file presence — run one test. If you copy the generated client from another checkout, first confirm `prisma/schema.prisma` is byte-identical and the Prisma package version matches, and state that in the PR. (PR #310)
+- **Never point tests at the production `DATABASE_URL`.** `backend/.env` here targets the Railway production database, and `assertSafeTestDatabaseUrl()` (`src/test/databaseSafety.ts`) refuses non-local hosts / DB names without a `test`/`e2e`/`shadow`/`ci` marker. For DB-backed suites use a disposable **local** Postgres passed via the shell env (vitest does not load `.env`); for pure unit tests leave `DATABASE_URL` unset; otherwise rely on CI. (PR #310)
 
 ## Frontend tests
 
 - Playwright suites can false-fail when `reuseExistingServer` latches onto a dev server left running on `:5174` by an earlier suite (`frontend/playwright.config.ts`). If a whole set of otherwise-unrelated tests fails, restart the server and rerun cleanly before assuming a regression.
 - Source-text readiness guards (`frontend/e2e/productionReadiness.spec.ts`, run via `npm run test:readiness`) pin exact import lines and markup patterns in large files like `LotDetailPage.tsx`. After moving icons or components, check those guards and update them deliberately in the same PR.
+- ITP offline cache (`frontend/src/pages/lots/lib/itpOfflineMapping.ts`) persists only `isHoldPoint` (boolean), not the full `pointType` union — so a **witness point round-trips through the offline cache as a standard point** unless the cache schema changes. `itpOfflineMapping.test.ts` freezes this current behavior; the upcoming `useItpInstance` hook PRs will catch it if it ever changes. (PR #309)
