@@ -1357,7 +1357,7 @@ describe('Test Results API', () => {
       const subcontractor = await registerTestUser(
         'Test Results Assigned Read Sub',
         'subcontractor',
-        companyId,
+        null,
       );
       const unassignedLot = await prisma.lot.create({
         data: {
