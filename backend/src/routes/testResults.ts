@@ -22,14 +22,12 @@ import {
   isOwnedSupabaseCertificateUrl,
 } from './testResults/certificateStorage.js';
 import { LOW_CONFIDENCE_THRESHOLD } from './testResults/certificateExtraction.js';
-import {
-  applyTestResultCorrections,
-  type TestResultCorrections,
-} from './testResults/corrections.js';
+import { applyTestResultCorrections } from './testResults/corrections.js';
 import {
   processBatchCertificateUpload,
   processCertificateUpload,
 } from './testResults/certificateIntake.js';
+import { confirmExtraction, processBatchConfirm } from './testResults/extractionConfirmation.js';
 import { testTypeSpecifications } from './testResults/specifications.js';
 import {
   buildTestRequestFormMetadata,
@@ -81,18 +79,6 @@ type AuthenticatedUser = NonNullable<Request['user']>;
 type TestResultAccessTarget = { projectId: string; lotId?: string | null };
 type TestFieldValue = string | number | Date | Prisma.Decimal | null;
 type TestFieldStatus = { value: TestFieldValue; confidence: number; status: string };
-
-type BatchConfirmResult =
-  | {
-      success: true;
-      testResultId: string;
-      testResult: {
-        id: string;
-        testType: string;
-        status: string;
-      };
-    }
-  | { success: false; testResultId: string; error: string };
 
 function isCompanyAdmin(user: AuthenticatedUser): boolean {
   return isCompanyAdminRole(user.roleInCompany);
@@ -1612,65 +1598,21 @@ testResultsRouter.patch(
     const user = req.user!;
     const { corrections } = req.body;
 
-    const testResult = await prisma.testResult.findUnique({
-      where: { id },
-    });
-
-    if (!testResult) {
-      throw AppError.notFound('Test result');
-    }
-
-    await requireTestProjectRole(
-      testResult.projectId,
-      user,
-      TEST_CREATORS,
-      'You do not have permission to confirm test results',
-    );
-
-    // Build update data from corrections
-    const updateData: Prisma.TestResultUncheckedUpdateInput = {};
-    applyTestResultCorrections(updateData, corrections as TestResultCorrections | undefined);
-
-    // Move to 'entered' status after confirmation
-    updateData.status = 'entered';
-    updateData.enteredById = user.id;
-    updateData.enteredAt = new Date();
-
-    const updatedTestResult = await prisma.testResult.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        testType: true,
-        laboratoryName: true,
-        laboratoryReportNumber: true,
-        sampleDate: true,
-        testDate: true,
-        sampleLocation: true,
-        resultValue: true,
-        resultUnit: true,
-        specificationMin: true,
-        specificationMax: true,
-        passFail: true,
-        status: true,
-        aiExtracted: true,
-        enteredAt: true,
-        enteredBy: {
-          select: {
-            fullName: true,
-          },
-        },
+    const result = await confirmExtraction({
+      id,
+      corrections,
+      userId: user.id,
+      authorize: async (projectId) => {
+        await requireTestProjectRole(
+          projectId,
+          user,
+          TEST_CREATORS,
+          'You do not have permission to confirm test results',
+        );
       },
     });
 
-    res.json({
-      message: 'Extraction confirmed and test result saved',
-      testResult: updatedTestResult,
-      nextStep: {
-        status: 'entered',
-        message: 'Test result is now entered and ready for verification',
-      },
-    });
+    res.json(result);
   }),
 );
 
@@ -1705,98 +1647,18 @@ testResultsRouter.post(
     const user = req.user!;
     const { confirmations } = req.body;
 
-    if (!confirmations || !Array.isArray(confirmations) || confirmations.length === 0) {
-      throw AppError.badRequest('confirmations array is required');
-    }
-
-    const results: BatchConfirmResult[] = [];
-
-    for (const confirmation of confirmations) {
-      const { testResultId, corrections } = confirmation as {
-        testResultId?: unknown;
-        corrections?: TestResultCorrections;
-      };
-
-      if (typeof testResultId !== 'string' || !testResultId) {
-        results.push({
-          success: false,
-          testResultId: '',
-          error: 'Invalid test result id',
-        });
-        continue;
-      }
-
-      try {
-        const testResult = await prisma.testResult.findUnique({
-          where: { id: testResultId },
-        });
-
-        if (!testResult) {
-          results.push({
-            success: false,
-            testResultId,
-            error: 'Test result not found',
-          });
-          continue;
-        }
-
-        const userProjectRole = await getEffectiveProjectRole(user, testResult.projectId, {
+    const result = await processBatchConfirm({
+      confirmations,
+      userId: user.id,
+      authorize: async (projectId) => {
+        const userProjectRole = await getEffectiveProjectRole(user, projectId, {
           excludeSubcontractorProjectMemberships: true,
           throwIfProjectMissing: true,
         });
-
-        if (!userProjectRole || !TEST_CREATORS.includes(userProjectRole)) {
-          results.push({
-            success: false,
-            testResultId,
-            error: 'No permission',
-          });
-          continue;
-        }
-
-        // Build update data from corrections
-        const updateData: Prisma.TestResultUncheckedUpdateInput = {};
-        applyTestResultCorrections(updateData, corrections);
-
-        // Move to 'entered' status after confirmation
-        updateData.status = 'entered';
-        updateData.enteredById = user.id;
-        updateData.enteredAt = new Date();
-
-        const updatedTestResult = await prisma.testResult.update({
-          where: { id: testResultId },
-          data: updateData,
-          select: {
-            id: true,
-            testType: true,
-            status: true,
-          },
-        });
-
-        results.push({
-          success: true,
-          testResultId,
-          testResult: updatedTestResult,
-        });
-      } catch {
-        results.push({
-          success: false,
-          testResultId,
-          error: 'Failed to confirm',
-        });
-      }
-    }
-
-    const successCount = results.filter((r) => r.success).length;
-
-    res.json({
-      message: `Confirmed ${successCount} of ${confirmations.length} test results`,
-      summary: {
-        total: confirmations.length,
-        success: successCount,
-        failed: confirmations.length - successCount,
+        return !!userProjectRole && TEST_CREATORS.includes(userProjectRole);
       },
-      results,
     });
+
+    res.json(result);
   }),
 );
