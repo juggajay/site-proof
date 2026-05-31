@@ -6,7 +6,7 @@ import { useViewerAccess } from '@/hooks/useViewerAccess';
 import { apiFetch, ApiError, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/errorHandling';
-import { devLog, devWarn, logError } from '@/lib/logger';
+import { devWarn, logError } from '@/lib/logger';
 import { formatDateTime } from '@/lib/utils';
 import { toast } from '@/components/ui/toaster';
 import { CommentsSection } from '@/components/comments/CommentsSection';
@@ -17,12 +17,7 @@ import type {
   ConformanceFormatOptions,
 } from '@/lib/pdfGenerator';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
-import {
-  cacheITPChecklist,
-  getCachedITPChecklist,
-  updateChecklistItemOffline,
-  getPendingSyncCount,
-} from '@/lib/offlineDb';
+import { updateChecklistItemOffline, getPendingSyncCount } from '@/lib/offlineDb';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
 // Types and constants extracted to separate files
@@ -36,7 +31,6 @@ import type {
   ITPAttachment,
   ITPCompletion,
   ITPInstance,
-  ITPTemplate,
   ConformStatus,
   ActivityLog,
   LocationState,
@@ -45,7 +39,7 @@ import type {
 import { LOT_TABS as tabs, LOT_OVERRIDE_STATUSES } from './constants';
 import { getGPSLocation, getItpPhotoValidationError } from './lib/itpEvidence';
 import { buildConformanceReportData } from './lib/buildConformanceReportData';
-import { mapCachedToItpInstance, mapInstanceToOfflineItems } from './lib/itpOfflineMapping';
+import { useItpInstance } from './hooks/useItpInstance';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { MarkAsNAModal } from './components/MarkAsNAModal';
 import { MarkAsFailedModal } from './components/MarkAsFailedModal';
@@ -127,15 +121,8 @@ export function LotDetailPage() {
   // Tab counts for badges
   const [testsCount, setTestsCount] = useState<number | null>(null);
   const [ncrsCount, setNcrsCount] = useState<number | null>(null);
-  const [itpInstance, setItpInstance] = useState<ITPInstance | null>(null);
-  const [loadingItp, setLoadingItp] = useState(false);
-  const [itpLoadError, setItpLoadError] = useState<string | null>(null);
-  const [templates, setTemplates] = useState<ITPTemplate[]>([]);
   // Offline state
   const { isOnline, pendingSyncCount: _pendingSyncCount } = useOfflineStatus();
-  const [isOfflineData, setIsOfflineData] = useState(false);
-  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
-  const [assigningTemplate, setAssigningTemplate] = useState(false);
   const [updatingCompletion, setUpdatingCompletion] = useState<string | null>(null);
   const updatingCompletionRef = useRef<string | null>(null);
   const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null);
@@ -451,158 +438,26 @@ export function LotDetailPage() {
     fetchNcrs();
   }, [projectId, lotId, currentTab]);
 
-  const fetchItpInstance = useCallback(async () => {
-    if (!projectId || !lotId || currentTab !== 'itp') return;
-
-    setLoadingItp(true);
-    setItpLoadError(null);
-    setIsOfflineData(false);
-
-    const encodedProjectId = encodeURIComponent(projectId);
-    const encodedLotId = encodeURIComponent(lotId);
-
-    // Check offline pending count
-    const pendingCount = await getPendingSyncCount();
-    setOfflinePendingCount(pendingCount);
-
-    const loadAvailableTemplates = async () => {
-      setItpInstance(null);
-      try {
-        const templatesData = await apiFetch<{ templates: ITPTemplate[] }>(
-          `/api/itp/templates?projectId=${encodedProjectId}&includeGlobal=true`,
-        );
-        setTemplates(templatesData.templates || []);
-      } catch (templateErr) {
-        logError('Failed to fetch ITP templates for lot:', templateErr);
-        setTemplates([]);
-        setItpLoadError(
-          extractErrorMessage(
-            templateErr,
-            'No ITP is assigned, and available templates could not be loaded.',
-          ),
-        );
-      }
-    };
-
-    try {
-      // Try to fetch from server first
-      const data = await apiFetch<{ instance: ITPInstance | null }>(
-        `/api/itp/instances/lot/${encodedLotId}`,
-      );
-      if (!data.instance) {
-        await loadAvailableTemplates();
-        return;
-      }
-
-      const instance = data.instance;
-      setItpInstance(instance);
-      setIsOfflineData(false);
-
-      // Cache the ITP data for offline use
-      if (instance.template) {
-        const items = mapInstanceToOfflineItems(instance);
-        await cacheITPChecklist(lotId, instance.template.id, instance.template.name, items);
-      }
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 404) {
-        // Backwards-compatible handling for older deployments that still used 404 for no ITP.
-        await loadAvailableTemplates();
-      } else {
-        logError('Failed to fetch ITP instance, trying offline cache:', err);
-
-        // Try to load from offline cache
-        const cachedData = await getCachedITPChecklist(lotId);
-        if (cachedData) {
-          // Convert cached data to ITPInstance format
-          const offlineInstance = mapCachedToItpInstance(cachedData);
-          setItpInstance(offlineInstance);
-          setIsOfflineData(true);
-          toast({
-            title: 'Offline Mode',
-            description: `Showing cached data from ${new Date(cachedData.cachedAt).toLocaleDateString('en-AU')}`,
-            variant: 'default',
-          });
-        } else {
-          setItpInstance(null);
-          setItpLoadError(extractErrorMessage(err, 'Failed to load ITP checklist.'));
-        }
-      }
-    } finally {
-      setLoadingItp(false);
-    }
-  }, [projectId, lotId, currentTab]);
-
-  // Fetch ITP instance when ITP tab is selected (with offline support)
-  useEffect(() => {
-    void fetchItpInstance();
-  }, [fetchItpInstance, isOnline]);
-
-  // Feature #734: Real-time HP release notification polling
-  // Poll for ITP updates every 20 seconds to catch holdpoint releases quickly
-  useEffect(() => {
-    if (!lotId || currentTab !== 'itp' || !isOnline) return;
-
-    let pollInterval: NodeJS.Timeout | null = null;
-
-    const silentFetchItpUpdates = async () => {
-      try {
-        const data = await apiFetch<{ instance: ITPInstance | null }>(
-          `/api/itp/instances/lot/${encodeURIComponent(lotId)}`,
-        );
-        // Only update if there are actual changes in completions
-        setItpInstance((prevInstance) => {
-          if (!data.instance) return null;
-          if (!prevInstance) return data.instance;
-
-          const prevCompletions = prevInstance.completions || [];
-          const newCompletions = data.instance.completions || [];
-
-          // Check if completions have changed
-          const hasChanges =
-            newCompletions.length !== prevCompletions.length ||
-            newCompletions.some((newComp: ITPCompletion) => {
-              const prevComp = prevCompletions.find(
-                (p) => p.checklistItemId === newComp.checklistItemId,
-              );
-              return (
-                !prevComp ||
-                prevComp.isCompleted !== newComp.isCompleted ||
-                prevComp.isVerified !== newComp.isVerified ||
-                prevComp.completedAt !== newComp.completedAt
-              );
-            });
-
-          return hasChanges ? data.instance : prevInstance;
-        });
-      } catch (err) {
-        // Silent fail for background polling
-        devLog('Background ITP fetch failed:', err);
-      }
-    };
-
-    const startPolling = () => {
-      // Poll every 20 seconds for ITP (more frequent for HP releases)
-      pollInterval = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          silentFetchItpUpdates();
-        }
-      }, 20000);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        silentFetchItpUpdates();
-      }
-    };
-
-    startPolling();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [lotId, currentTab, isOnline]);
+  const {
+    itpInstance,
+    setItpInstance,
+    loadingItp,
+    itpLoadError,
+    templates,
+    isOfflineData,
+    offlinePendingCount,
+    setOfflinePendingCount,
+    assigningTemplate,
+    refetchItp,
+    assignTemplate,
+  } = useItpInstance({
+    projectId,
+    lotId,
+    currentTab,
+    isOnline,
+    refetchReadiness,
+    refetchConformStatus: fetchConformStatus,
+  });
 
   // Fetch activity history when History tab is selected
   useEffect(() => {
@@ -722,35 +577,6 @@ export function LotDetailPage() {
   // Conformed lots keep QA fields locked, but commercial users can still add a budget before claiming.
   const isEditable =
     lot.status !== 'claimed' && (lot.status !== 'conformed' || Boolean(canViewBudgets));
-
-  const handleAssignTemplate = async (templateId: string) => {
-    if (!lotId || assigningTemplate) return false;
-
-    setAssigningTemplate(true);
-    setItpLoadError(null);
-
-    try {
-      const data = await apiFetch<{ instance: ITPInstance }>('/api/itp/instances', {
-        method: 'POST',
-        body: JSON.stringify({ lotId, templateId }),
-      });
-      setItpInstance(data.instance);
-      void refetchReadiness();
-      void fetchConformStatus();
-      // Modal closing is handled by the ITPChecklistTab component
-      return true;
-    } catch (err) {
-      logError('Failed to assign template:', err);
-      toast({
-        title: 'Failed to assign ITP template',
-        description: extractErrorMessage(err, 'Please try again.'),
-        variant: 'error',
-      });
-      return false;
-    } finally {
-      setAssigningTemplate(false);
-    }
-  };
 
   const handleToggleCompletion = async (
     checklistItemId: string,
@@ -1784,8 +1610,8 @@ export function LotDetailPage() {
               onMarkAsFailed={handleMobileMarkFailed}
               onAddPhoto={handleMobileAddPhoto}
               onAddPhotoDesktop={handleAddPhoto}
-              onAssignTemplate={handleAssignTemplate}
-              onRetryItp={() => void fetchItpInstance()}
+              onAssignTemplate={assignTemplate}
+              onRetryItp={() => void refetchItp()}
               assigningTemplate={assigningTemplate}
               autoOpenAssignTemplate={shouldOpenAssignItp}
               onAutoOpenAssignTemplateHandled={handleAssignItpActionHandled}
