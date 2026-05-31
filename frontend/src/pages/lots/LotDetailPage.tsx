@@ -22,7 +22,6 @@ import {
   getCachedITPChecklist,
   updateChecklistItemOffline,
   getPendingSyncCount,
-  OfflineChecklistItem,
 } from '@/lib/offlineDb';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
@@ -34,7 +33,6 @@ import type {
   SubcontractorCompany,
   TestResult,
   NCR,
-  ITPChecklistItem,
   ITPAttachment,
   ITPCompletion,
   ITPInstance,
@@ -45,12 +43,9 @@ import type {
   LotSubcontractorAssignment,
 } from './types';
 import { LOT_TABS as tabs, LOT_OVERRIDE_STATUSES } from './constants';
-import {
-  getGPSLocation,
-  getItpPhotoValidationError,
-  normalizeResponsibleParty,
-} from './lib/itpEvidence';
+import { getGPSLocation, getItpPhotoValidationError } from './lib/itpEvidence';
 import { buildConformanceReportData } from './lib/buildConformanceReportData';
+import { mapCachedToItpInstance, mapInstanceToOfflineItems } from './lib/itpOfflineMapping';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { MarkAsNAModal } from './components/MarkAsNAModal';
 import { MarkAsFailedModal } from './components/MarkAsFailedModal';
@@ -505,30 +500,7 @@ export function LotDetailPage() {
 
       // Cache the ITP data for offline use
       if (instance.template) {
-        const items: OfflineChecklistItem[] = instance.template.checklistItems.map(
-          (item: ITPChecklistItem) => {
-            const completion = instance.completions.find(
-              (c: ITPCompletion) => c.checklistItemId === item.id,
-            );
-            let status: 'pending' | 'completed' | 'na' | 'failed' = 'pending';
-            if (completion?.isCompleted) status = 'completed';
-            else if (completion?.isNotApplicable) status = 'na';
-            else if (completion?.isFailed) status = 'failed';
-
-            return {
-              id: item.id,
-              name: item.description,
-              description: item.acceptanceCriteria || undefined,
-              responsibleParty: item.responsibleParty,
-              isHoldPoint: item.isHoldPoint,
-              status,
-              notes: completion?.notes || undefined,
-              completedAt: completion?.completedAt || undefined,
-              completedBy: completion?.completedBy?.fullName || undefined,
-            };
-          },
-        );
-
+        const items = mapInstanceToOfflineItems(instance);
         await cacheITPChecklist(lotId, instance.template.id, instance.template.name, items);
       }
     } catch (err) {
@@ -542,43 +514,7 @@ export function LotDetailPage() {
         const cachedData = await getCachedITPChecklist(lotId);
         if (cachedData) {
           // Convert cached data to ITPInstance format
-          const offlineInstance: ITPInstance = {
-            id: `offline-${cachedData.id}`,
-            template: {
-              id: cachedData.templateId,
-              name: cachedData.templateName,
-              checklistItems: cachedData.items.map((item, index) => ({
-                id: item.id,
-                description: item.name,
-                category: 'General',
-                responsibleParty: normalizeResponsibleParty(item.responsibleParty),
-                isHoldPoint: item.isHoldPoint,
-                pointType: item.isHoldPoint ? 'hold_point' : 'standard',
-                evidenceRequired: 'none',
-                order: index,
-                acceptanceCriteria: item.description || null,
-                testType: null,
-              })),
-            },
-            completions: cachedData.items
-              .filter((item) => item.status !== 'pending')
-              .map((item) => ({
-                id: `offline-${item.id}`,
-                checklistItemId: item.id,
-                isCompleted: item.status === 'completed',
-                isNotApplicable: item.status === 'na',
-                isFailed: item.status === 'failed',
-                notes: item.notes || null,
-                completedAt: item.completedAt || null,
-                completedBy: item.completedBy
-                  ? { id: 'offline', fullName: item.completedBy, email: '' }
-                  : null,
-                isVerified: false,
-                verifiedAt: null,
-                verifiedBy: null,
-                attachments: [],
-              })),
-          };
+          const offlineInstance = mapCachedToItpInstance(cachedData);
           setItpInstance(offlineInstance);
           setIsOfflineData(true);
           toast({
