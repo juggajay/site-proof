@@ -15,30 +15,21 @@ import {
   isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
 } from '../lib/projectAccess.js';
-import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
 import { logWarn } from '../lib/serverLogger.js';
 import {
   certificateUpload,
-  cleanupStoredCertificateUpload,
-  cleanupUploadedCertificateFile,
   deleteCertificateFromSupabase,
   isOwnedSupabaseCertificateUrl,
-  sanitizeUploadFilename,
-  shouldUploadCertificateToSupabase,
-  uploadCertificateToSupabase,
 } from './testResults/certificateStorage.js';
-import {
-  LOW_CONFIDENCE_THRESHOLD,
-  type ExtractedCertificateFields,
-  buildConfidenceObject,
-  extractCertificateFields,
-  getLowConfidenceFields,
-} from './testResults/certificateExtraction.js';
+import { LOW_CONFIDENCE_THRESHOLD } from './testResults/certificateExtraction.js';
 import {
   applyTestResultCorrections,
   type TestResultCorrections,
 } from './testResults/corrections.js';
-import { buildTestResultData, suggestLotsFromLocation } from './testResults/testResultMapping.js';
+import {
+  processBatchCertificateUpload,
+  processCertificateUpload,
+} from './testResults/certificateIntake.js';
 import { testTypeSpecifications } from './testResults/specifications.js';
 import {
   buildTestRequestFormMetadata,
@@ -69,31 +60,6 @@ import {
 
 export const testResultsRouter = Router();
 
-function cleanupUploadedCertificateFiles(files: Express.Multer.File[]): void {
-  for (const file of files) {
-    cleanupUploadedCertificateFile(file);
-  }
-}
-
-function getRequiredUploadProjectId(body: Record<string, unknown>): string {
-  const projectId = body.projectId;
-
-  if (typeof projectId !== 'string') {
-    throw AppError.badRequest('projectId is required');
-  }
-
-  const trimmed = projectId.trim();
-  if (!trimmed) {
-    throw AppError.badRequest('projectId is required');
-  }
-
-  if (trimmed.length > MAX_UPLOAD_PROJECT_ID_LENGTH) {
-    throw AppError.badRequest('projectId is too long');
-  }
-
-  return trimmed;
-}
-
 // Apply authentication middleware to all test result routes
 testResultsRouter.use(requireAuth);
 
@@ -115,31 +81,6 @@ type AuthenticatedUser = NonNullable<Request['user']>;
 type TestResultAccessTarget = { projectId: string; lotId?: string | null };
 type TestFieldValue = string | number | Date | Prisma.Decimal | null;
 type TestFieldStatus = { value: TestFieldValue; confidence: number; status: string };
-
-type BatchUploadResult =
-  | {
-      success: true;
-      filename: string;
-      testResult: {
-        id: string;
-        testType: string;
-        status: string;
-        aiExtracted: boolean;
-        certificateDoc: {
-          id: string;
-          filename: string;
-          fileUrl: string;
-          mimeType: string | null;
-        } | null;
-      };
-      extraction: {
-        extractedFields: ExtractedCertificateFields;
-        confidence: Record<string, number>;
-        lowConfidenceFields: Array<{ field: string; confidence: number }>;
-        needsReview: boolean;
-      };
-    }
-  | { success: false; filename: string; error: string };
 
 type BatchConfirmResult =
   | {
@@ -1557,133 +1498,21 @@ testResultsRouter.post(
   certificateUpload.single('certificate'),
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const file = req.file;
-
-    if (!file) {
-      throw AppError.badRequest('No file uploaded');
-    }
-
-    let projectId: string;
-    try {
-      projectId = getRequiredUploadProjectId(req.body);
-    } catch (error) {
-      cleanupUploadedCertificateFile(file);
-      throw error;
-    }
-
-    try {
-      await requireTestProjectRole(
-        projectId,
-        user,
-        TEST_CREATORS,
-        'You do not have permission to upload test certificates',
-      );
-    } catch (error) {
-      // Delete uploaded file if permission denied
-      cleanupUploadedCertificateFile(file);
-      throw error;
-    }
-
-    try {
-      assertUploadedFileMatchesDeclaredType(file);
-    } catch (error) {
-      cleanupUploadedCertificateFile(file);
-      throw error;
-    }
-
-    const extractedData = await extractCertificateFields(file);
-    const confidenceObj = buildConfidenceObject(extractedData);
-    const displayFilename = sanitizeUploadFilename(file.originalname);
-
-    let fileUrl: string | null = null;
-    try {
-      if (shouldUploadCertificateToSupabase(file)) {
-        const uploaded = await uploadCertificateToSupabase(file, projectId);
-        fileUrl = uploaded.url;
-      } else {
-        fileUrl = `/uploads/certificates/${file.filename}`;
-      }
-    } catch (error) {
-      cleanupUploadedCertificateFile(file);
-      throw error;
-    }
-
-    let testResult;
-    try {
-      testResult = await prisma.$transaction(async (tx) => {
-        const document = await tx.document.create({
-          data: {
-            projectId,
-            documentType: 'test_certificate',
-            category: 'test_results',
-            filename: displayFilename,
-            fileUrl: fileUrl!,
-            fileSize: file.size,
-            mimeType: file.mimetype,
-            uploadedById: user.id,
-          },
-        });
-
-        return tx.testResult.create({
-          data: buildTestResultData(projectId, document.id, extractedData),
-          include: {
-            certificateDoc: {
-              select: {
-                id: true,
-                filename: true,
-                fileUrl: true,
-                mimeType: true,
-              },
-            },
-          },
-        });
-      });
-    } catch (error) {
-      await cleanupStoredCertificateUpload(fileUrl, file, projectId);
-      throw error;
-    }
-
-    // Identify low confidence fields that need review
-    const lowConfidenceFields = getLowConfidenceFields(confidenceObj);
-
-    // Feature #727: Suggest lots based on extracted location
-    const locationSuggestion = await suggestLotsFromLocation(
-      projectId,
-      extractedData.sampleLocation.value,
-    );
-
-    res.status(201).json({
-      message: 'Certificate uploaded and processed successfully',
-      testResult: {
-        id: testResult.id,
-        testType: testResult.testType,
-        status: testResult.status,
-        aiExtracted: testResult.aiExtracted,
-        certificateDoc: testResult.certificateDoc,
-      },
-      extraction: {
-        success: true,
-        extractedFields: extractedData,
-        confidence: confidenceObj,
-        lowConfidenceFields,
-        needsReview: lowConfidenceFields.length > 0,
-        reviewMessage:
-          lowConfidenceFields.length > 0
-            ? `${lowConfidenceFields.length} field(s) need manual verification due to low AI confidence`
-            : 'All fields extracted with high confidence',
-      },
-      // Feature #727: Lot suggestion based on extracted location
-      lotSuggestion: {
-        extractedLocation: extractedData.sampleLocation.value,
-        extractedChainage: locationSuggestion.extractedChainage,
-        suggestedLots: locationSuggestion.suggestedLots,
-        hasSuggestion: locationSuggestion.suggestedLots.length > 0,
-        message:
-          locationSuggestion.suggestedLots.length > 0
-            ? `Found ${locationSuggestion.suggestedLots.length} lot(s) matching the extracted location`
-            : 'No matching lots found for the extracted location',
+    const result = await processCertificateUpload({
+      file: req.file,
+      body: req.body,
+      userId: user.id,
+      authorize: async (projectId) => {
+        await requireTestProjectRole(
+          projectId,
+          user,
+          TEST_CREATORS,
+          'You do not have permission to upload test certificates',
+        );
       },
     });
+
+    res.status(201).json(result);
   }),
 );
 
@@ -1851,132 +1680,21 @@ testResultsRouter.post(
   certificateUpload.array('certificates', 10),
   asyncHandler(async (req, res) => {
     const user = req.user!;
-    const files = req.files as Express.Multer.File[];
-
-    if (!files || files.length === 0) {
-      throw AppError.badRequest('No files uploaded');
-    }
-
-    let projectId: string;
-    try {
-      projectId = getRequiredUploadProjectId(req.body);
-    } catch (error) {
-      cleanupUploadedCertificateFiles(files);
-      throw error;
-    }
-
-    try {
-      await requireTestProjectRole(
-        projectId,
-        user,
-        TEST_CREATORS,
-        'You do not have permission to upload test certificates',
-      );
-    } catch (error) {
-      // Delete uploaded files if permission denied
-      cleanupUploadedCertificateFiles(files);
-      throw error;
-    }
-
-    try {
-      for (const file of files) {
-        assertUploadedFileMatchesDeclaredType(file);
-      }
-    } catch (error) {
-      cleanupUploadedCertificateFiles(files);
-      throw error;
-    }
-
-    // Process each file
-    const results: BatchUploadResult[] = [];
-
-    for (const file of files) {
-      let fileUrl: string | null = null;
-      try {
-        const extractedData = await extractCertificateFields(file);
-        const confidenceObj = buildConfidenceObject(extractedData);
-        const displayFilename = sanitizeUploadFilename(file.originalname);
-
-        if (shouldUploadCertificateToSupabase(file)) {
-          const uploaded = await uploadCertificateToSupabase(file, projectId);
-          fileUrl = uploaded.url;
-        } else {
-          fileUrl = `/uploads/certificates/${file.filename}`;
-        }
-
-        const testResult = await prisma.$transaction(async (tx) => {
-          const document = await tx.document.create({
-            data: {
-              projectId,
-              documentType: 'test_certificate',
-              category: 'test_results',
-              filename: displayFilename,
-              fileUrl: fileUrl!,
-              fileSize: file.size,
-              mimeType: file.mimetype,
-              uploadedById: user.id,
-            },
-          });
-
-          return tx.testResult.create({
-            data: buildTestResultData(projectId, document.id, extractedData),
-            include: {
-              certificateDoc: {
-                select: {
-                  id: true,
-                  filename: true,
-                  fileUrl: true,
-                  mimeType: true,
-                },
-              },
-            },
-          });
-        });
-
-        // Identify low confidence fields
-        const lowConfidenceFields = getLowConfidenceFields(confidenceObj);
-
-        results.push({
-          success: true,
-          filename: displayFilename,
-          testResult: {
-            id: testResult.id,
-            testType: testResult.testType,
-            status: testResult.status,
-            aiExtracted: testResult.aiExtracted,
-            certificateDoc: testResult.certificateDoc,
-          },
-          extraction: {
-            extractedFields: extractedData,
-            confidence: confidenceObj,
-            lowConfidenceFields,
-            needsReview: lowConfidenceFields.length > 0,
-          },
-        });
-      } catch {
-        await cleanupStoredCertificateUpload(fileUrl, file, projectId);
-        results.push({
-          success: false,
-          filename: sanitizeUploadFilename(file.originalname),
-          error: 'Failed to process file',
-        });
-      }
-    }
-
-    const successCount = results.filter((r) => r.success).length;
-    const failCount = results.filter((r) => !r.success).length;
-    const needsReviewCount = results.filter((r) => r.success && r.extraction?.needsReview).length;
-
-    res.status(201).json({
-      message: `Processed ${successCount} of ${files.length} certificates`,
-      summary: {
-        total: files.length,
-        success: successCount,
-        failed: failCount,
-        needsReview: needsReviewCount,
+    const result = await processBatchCertificateUpload({
+      files: req.files as Express.Multer.File[],
+      body: req.body,
+      userId: user.id,
+      authorize: async (projectId) => {
+        await requireTestProjectRole(
+          projectId,
+          user,
+          TEST_CREATORS,
+          'You do not have permission to upload test certificates',
+        );
       },
-      results,
     });
+
+    res.status(201).json(result);
   }),
 );
 
