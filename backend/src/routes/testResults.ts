@@ -1,4 +1,4 @@
-import { Router, type Request } from 'express';
+import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
@@ -8,14 +8,23 @@ import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import {
-  activeSubcontractorCompanyWhere,
-  checkProjectAccess,
   getEffectiveProjectRole,
-  isCompanyAdminRole,
-  isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
 } from '../lib/projectAccess.js';
 import { logWarn } from '../lib/serverLogger.js';
+import {
+  TEST_CREATORS,
+  TEST_DELETERS,
+  TEST_VERIFIERS,
+  getAssignedSubcontractorLotIds,
+  getReadableProjectIds,
+  isSubcontractorUser,
+  requireLotInProject,
+  requireProjectReadAccess,
+  requireTestProjectRole,
+  requireTestResultReadAccess,
+  requireTestResultsPortalAccess,
+} from './testResults/accessControl.js';
 import {
   certificateUpload,
   deleteCertificateFromSupabase,
@@ -61,185 +70,8 @@ export const testResultsRouter = Router();
 // Apply authentication middleware to all test result routes
 testResultsRouter.use(requireAuth);
 
-// Roles that can create/edit test results
-const TEST_CREATORS = [
-  'owner',
-  'admin',
-  'project_manager',
-  'site_engineer',
-  'quality_manager',
-  'foreman',
-];
-// Roles that can verify test results
-const TEST_VERIFIERS = ['owner', 'admin', 'project_manager', 'quality_manager'];
-// Roles that can delete test results
-const TEST_DELETERS = ['owner', 'admin', 'project_manager', 'quality_manager'];
-
-type AuthenticatedUser = NonNullable<Request['user']>;
-type TestResultAccessTarget = { projectId: string; lotId?: string | null };
 type TestFieldValue = string | number | Date | Prisma.Decimal | null;
 type TestFieldStatus = { value: TestFieldValue; confidence: number; status: string };
-
-function isCompanyAdmin(user: AuthenticatedUser): boolean {
-  return isCompanyAdminRole(user.roleInCompany);
-}
-
-function isSubcontractorUser(user: AuthenticatedUser): boolean {
-  return isSubcontractorPortalRole(user.roleInCompany);
-}
-
-async function getReadableProjectIds(user: AuthenticatedUser): Promise<string[]> {
-  const isSubcontractor = isSubcontractorUser(user);
-  const [projectUsers, companyProjects, subcontractorCompanies] = await Promise.all([
-    isSubcontractor
-      ? Promise.resolve([])
-      : prisma.projectUser.findMany({
-          where: { userId: user.id, status: 'active' },
-          select: { projectId: true },
-        }),
-    !isSubcontractor && isCompanyAdmin(user) && user.companyId
-      ? prisma.project.findMany({
-          where: { companyId: user.companyId },
-          select: { id: true },
-        })
-      : Promise.resolve([]),
-    isSubcontractor
-      ? prisma.subcontractorCompany.findMany({
-          where: activeSubcontractorCompanyWhere({ users: { some: { userId: user.id } } }),
-          select: { projectId: true },
-        })
-      : Promise.resolve([]),
-  ]);
-
-  return [
-    ...new Set([
-      ...projectUsers.map((projectUser) => projectUser.projectId),
-      ...companyProjects.map((project) => project.id),
-      ...subcontractorCompanies.map((subcontractorCompany) => subcontractorCompany.projectId),
-    ]),
-  ];
-}
-
-async function requireProjectReadAccess(
-  projectId: string,
-  user: AuthenticatedUser,
-  message = 'You do not have access to this project',
-) {
-  const hasAccess = await checkProjectAccess(user.id, projectId);
-  if (!hasAccess) {
-    throw AppError.forbidden(message);
-  }
-}
-
-async function requireTestResultsPortalAccess(projectId: string, user: AuthenticatedUser) {
-  await requireSubcontractorPortalModuleAccess({
-    userId: user.id,
-    role: user.roleInCompany,
-    projectId,
-    module: 'testResults',
-  });
-}
-
-async function getAssignedSubcontractorLotIds(
-  projectId: string,
-  user: AuthenticatedUser,
-): Promise<string[] | null> {
-  if (!isSubcontractorUser(user)) {
-    return null;
-  }
-
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId: user.id,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-    },
-    select: { subcontractorCompanyId: true },
-  });
-
-  if (!subcontractorUser) {
-    return [];
-  }
-
-  const [assignments, legacyLots] = await Promise.all([
-    prisma.lotSubcontractorAssignment.findMany({
-      where: {
-        projectId,
-        subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
-        status: 'active',
-      },
-      select: { lotId: true },
-    }),
-    prisma.lot.findMany({
-      where: {
-        projectId,
-        assignedSubcontractorId: subcontractorUser.subcontractorCompanyId,
-      },
-      select: { id: true },
-    }),
-  ]);
-
-  return [
-    ...new Set([
-      ...assignments.map((assignment) => assignment.lotId),
-      ...legacyLots.map((lot) => lot.id),
-    ]),
-  ];
-}
-
-async function hasAssignedSubcontractorLotAccess(
-  projectId: string,
-  lotId: string | null | undefined,
-  user: AuthenticatedUser,
-): Promise<boolean> {
-  if (!lotId) {
-    return !isSubcontractorUser(user);
-  }
-
-  const assignedLotIds = await getAssignedSubcontractorLotIds(projectId, user);
-  return assignedLotIds === null || assignedLotIds.includes(lotId);
-}
-
-async function requireTestResultReadAccess(
-  testResult: TestResultAccessTarget,
-  user: AuthenticatedUser,
-  message = 'You do not have access to this test result',
-) {
-  await requireProjectReadAccess(testResult.projectId, user, message);
-  await requireTestResultsPortalAccess(testResult.projectId, user);
-
-  if (!(await hasAssignedSubcontractorLotAccess(testResult.projectId, testResult.lotId, user))) {
-    throw AppError.forbidden(message);
-  }
-}
-
-async function requireTestProjectRole(
-  projectId: string,
-  user: AuthenticatedUser,
-  allowedRoles: string[],
-  message: string,
-): Promise<string> {
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-
-  if (!role || !allowedRoles.includes(role)) {
-    throw AppError.forbidden(message);
-  }
-
-  return role;
-}
-
-async function requireLotInProject(lotId: string, projectId: string) {
-  const lot = await prisma.lot.findFirst({
-    where: { id: lotId, projectId },
-    select: { id: true },
-  });
-
-  if (!lot) {
-    throw AppError.badRequest('Lot not found or does not belong to this project');
-  }
-}
 
 // GET /api/test-results/specifications - Get all test type specifications
 testResultsRouter.get(
