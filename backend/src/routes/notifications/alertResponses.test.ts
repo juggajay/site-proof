@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAlertCreatedResponse,
   buildAlertEscalationCheckResponse,
+  buildAlertEscalationConfigResponse,
   buildAlertResolvedResponse,
   buildAlertsListResponse,
   buildAlertTestEscalatedResponse,
@@ -68,6 +69,18 @@ describe('notification alert response helpers', () => {
       escalatedAlerts,
       totalActiveAlerts: 5,
     });
+  });
+
+  it('wraps the escalation config without rewriting thresholds or recipients', () => {
+    const config = {
+      levels: [
+        { level: 1, afterHours: 4, roles: ['project_manager'] },
+        { level: 2, afterHours: 8, roles: ['owner', 'admin'] },
+      ],
+      enabled: true,
+    };
+
+    expect(buildAlertEscalationConfigResponse(config)).toEqual({ config });
   });
 
   it('builds the test-escalation response and redacts recipients to id/email/role', () => {

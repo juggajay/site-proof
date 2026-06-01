@@ -41,6 +41,12 @@ export function buildAlertEscalationCheckResponse(
   };
 }
 
+export function buildAlertEscalationConfigResponse<TConfig>(config: TConfig) {
+  return {
+    config,
+  };
+}
+
 export function buildAlertTestEscalatedResponse(
   alert: Alert,
   escalationUsers: EscalationRecipient[],

@@ -89,6 +89,7 @@ import {
 import {
   buildAlertCreatedResponse,
   buildAlertEscalationCheckResponse,
+  buildAlertEscalationConfigResponse,
   buildAlertResolvedResponse,
   buildAlertsListResponse,
   buildAlertTestEscalatedResponse,
@@ -878,9 +879,7 @@ notificationsRouter.get(
     }
     requireNotificationAdmin(user);
 
-    res.json({
-      config: ESCALATION_CONFIG,
-    });
+    res.json(buildAlertEscalationConfigResponse(ESCALATION_CONFIG));
   }),
 );
 
