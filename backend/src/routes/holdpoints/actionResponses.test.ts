@@ -5,6 +5,7 @@ import {
   buildHoldPointEscalationResolvedResponse,
   buildHoldPointReleasedResponse,
   buildHoldPointReleaseRequestedResponse,
+  buildPublicHoldPointReleasedResponse,
 } from './actionResponses.js';
 
 const holdPoint = { id: 'hp-1', status: 'requested' };
@@ -70,6 +71,43 @@ describe('hold point action response builders', () => {
       success: true,
       message: 'Escalation resolved',
       holdPoint,
+    });
+  });
+
+  it('preserves the public secure-link release response projection', () => {
+    const releasedAt = new Date('2026-06-01T01:02:03.000Z');
+    const publicHoldPoint = {
+      id: 'hp-2',
+      description: 'Witness compaction test',
+      status: 'released',
+      releasedAt,
+      releasedByName: 'Superintendent',
+      releasedByOrg: 'Client Org',
+      releaseMethod: 'secure_link',
+      releaseNotes: 'Released from email',
+      lot: {
+        id: 'lot-1',
+        lotNumber: 'EW-001',
+      },
+    };
+
+    expect(buildPublicHoldPointReleasedResponse(publicHoldPoint)).toEqual({
+      success: true,
+      message: 'Hold point released successfully via secure link',
+      holdPoint: {
+        id: 'hp-2',
+        description: 'Witness compaction test',
+        status: 'released',
+        releasedAt,
+        releasedByName: 'Superintendent',
+        releasedByOrg: 'Client Org',
+        releaseMethod: 'secure_link',
+        releaseNotes: 'Released from email',
+      },
+      lot: {
+        id: 'lot-1',
+        lotNumber: 'EW-001',
+      },
     });
   });
 });

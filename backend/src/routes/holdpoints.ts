@@ -101,6 +101,7 @@ import {
   buildHoldPointEscalationResolvedResponse,
   buildHoldPointReleasedResponse,
   buildHoldPointReleaseRequestedResponse,
+  buildPublicHoldPointReleasedResponse,
 } from './holdpoints/actionResponses.js';
 import {
   buildNotificationTimeResponse,
@@ -1873,24 +1874,7 @@ holdpointsRouter.post(
       req,
     });
 
-    res.json({
-      success: true,
-      message: 'Hold point released successfully via secure link',
-      holdPoint: {
-        id: holdPoint.id,
-        description: holdPoint.description,
-        status: holdPoint.status,
-        releasedAt: holdPoint.releasedAt,
-        releasedByName: holdPoint.releasedByName,
-        releasedByOrg: holdPoint.releasedByOrg,
-        releaseMethod: holdPoint.releaseMethod,
-        releaseNotes: holdPoint.releaseNotes,
-      },
-      lot: {
-        id: holdPoint.lot.id,
-        lotNumber: holdPoint.lot.lotNumber,
-      },
-    });
+    res.json(buildPublicHoldPointReleasedResponse(holdPoint));
   }),
 );
 
