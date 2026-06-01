@@ -68,6 +68,11 @@ import {
   buildDocketApprovedResponse,
   resolveDocketApprovedTotals,
 } from './dockets/approvalResponse.js';
+import {
+  buildDocketQueriedResponse,
+  buildDocketQueryResponseSubmittedResponse,
+  buildDocketRejectedResponse,
+} from './dockets/reviewResponses.js';
 import type { Prisma } from '@prisma/client';
 
 export const docketsRouter = Router();
@@ -848,17 +853,7 @@ docketsRouter.post(
       }
     }
 
-    res.json({
-      message: 'Docket rejected',
-      docket: {
-        id: updatedDocket.id,
-        status: updatedDocket.status,
-      },
-      notifiedUsers: subcontractorUsers.map((su) => ({
-        email: su.email,
-        fullName: su.fullName,
-      })),
-    });
+    res.json(buildDocketRejectedResponse(updatedDocket, subcontractorUsers));
   }),
 );
 
@@ -978,17 +973,7 @@ docketsRouter.post(
       }
     }
 
-    res.json({
-      message: 'Docket queried successfully',
-      docket: {
-        id: updatedDocket.id,
-        status: updatedDocket.status,
-      },
-      notifiedUsers: subcontractorUsers.map((su) => ({
-        email: su.email,
-        fullName: su.fullName,
-      })),
-    });
+    res.json(buildDocketQueriedResponse(updatedDocket, subcontractorUsers));
   }),
 );
 
@@ -1092,13 +1077,7 @@ docketsRouter.post(
       });
     }
 
-    res.json({
-      message: 'Query response submitted',
-      docket: {
-        id: updatedDocket.id,
-        status: updatedDocket.status,
-      },
-    });
+    res.json(buildDocketQueryResponseSubmittedResponse(updatedDocket));
   }),
 );
 
