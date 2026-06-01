@@ -44,6 +44,7 @@ import {
   renderTestRequestFormHtml,
 } from './testResults/presentation.js';
 import { STATUS_LABELS, VALID_STATUS_TRANSITIONS } from './testResults/statusWorkflow.js';
+import { buildTestResultWorkflowResponse } from './testResults/workflowResponse.js';
 import {
   MAX_REJECTION_REASON_LENGTH,
   MAX_RESULT_UNIT_LENGTH,
@@ -1245,64 +1246,12 @@ testResultsRouter.get(
       throwIfProjectMissing: true,
     });
 
-    // Build workflow steps with status
-    const workflowSteps = [
-      {
-        status: 'requested',
-        label: 'Requested',
-        completed: true, // Always completed (initial state)
-        completedAt: testResult.createdAt,
-        completedBy: null,
-      },
-      {
-        status: 'at_lab',
-        label: 'At Lab',
-        completed: ['at_lab', 'results_received', 'entered', 'verified'].includes(
-          testResult.status,
-        ),
-        completedAt: null,
-        completedBy: null,
-      },
-      {
-        status: 'results_received',
-        label: 'Results Received',
-        completed: ['results_received', 'entered', 'verified'].includes(testResult.status),
-        completedAt: null,
-        completedBy: null,
-      },
-      {
-        status: 'entered',
-        label: 'Entered',
-        completed: ['entered', 'verified'].includes(testResult.status),
-        completedAt: testResult.enteredAt,
-        completedBy: testResult.enteredBy?.fullName || null,
-      },
-      {
-        status: 'verified',
-        label: 'Verified',
-        completed: testResult.status === 'verified',
-        completedAt: testResult.verifiedAt,
-        completedBy: testResult.verifiedBy?.fullName || null,
-      },
-    ];
-
-    res.json({
-      workflow: {
-        currentStatus: testResult.status,
-        currentStatusLabel: STATUS_LABELS[testResult.status] || testResult.status,
-        steps: workflowSteps,
-        nextTransitions: (VALID_STATUS_TRANSITIONS[testResult.status] || []).map((s) => ({
-          status: s,
-          label: STATUS_LABELS[s] || s,
-          canPerform:
-            s === 'verified'
-              ? TEST_VERIFIERS.includes(userProjectRole || '')
-              : TEST_CREATORS.includes(userProjectRole || ''),
-        })),
-        canAdvance: (VALID_STATUS_TRANSITIONS[testResult.status] || []).length > 0,
-        isComplete: testResult.status === 'verified',
-      },
-    });
+    res.json(
+      buildTestResultWorkflowResponse(testResult, {
+        canCreateTest: TEST_CREATORS.includes(userProjectRole || ''),
+        canVerifyTest: TEST_VERIFIERS.includes(userProjectRole || ''),
+      }),
+    );
   }),
 );
 
