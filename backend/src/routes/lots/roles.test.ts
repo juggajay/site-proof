@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { LOT_CONFORMERS, LOT_CREATORS, LOT_DELETERS, LOT_FORCE_CONFORMERS } from './roles.js';
+import {
+  LOT_CONFORMERS,
+  LOT_CREATORS,
+  LOT_DELETERS,
+  LOT_FORCE_CONFORMERS,
+  STATUS_OVERRIDERS,
+} from './roles.js';
 
 // These are pure authorization role lists — freeze the exact arrays so an
 // accidental edit cannot silently widen or narrow who may act on lots.
@@ -19,6 +25,14 @@ describe('lots role constants (pure)', () => {
 
   it('LOT_FORCE_CONFORMERS is restricted to owner/admin', () => {
     expect(LOT_FORCE_CONFORMERS).toEqual(['owner', 'admin']);
+  });
+
+  it('STATUS_OVERRIDERS is exactly owner/admin/project_manager/quality_manager', () => {
+    expect(STATUS_OVERRIDERS).toEqual(['owner', 'admin', 'project_manager', 'quality_manager']);
+    // Same membership as LOT_CONFORMERS today, but a distinct authorization gate
+    // (status override vs conform) — kept as its own constant, not an alias.
+    expect(STATUS_OVERRIDERS).toEqual(LOT_CONFORMERS);
+    expect(STATUS_OVERRIDERS).not.toBe(LOT_CONFORMERS);
   });
 
   it('encodes the expected role relationships', () => {
