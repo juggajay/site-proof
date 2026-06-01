@@ -34,6 +34,16 @@ type ClaimCreateItem = {
   };
 };
 
+type ClaimReadinessLot = {
+  activityType: string;
+};
+
+type ClaimReadinessSummary = {
+  lotId: string;
+  lotNumber: string;
+  claim: unknown;
+};
+
 type ClaimCertificationItem = {
   id: string;
   claimNumber: number;
@@ -103,6 +113,15 @@ export function mapClaimCreateItem(claim: ClaimCreateItem) {
     paidAmount: null,
     submittedAt: null,
     lotCount: claim._count.claimedLots,
+  };
+}
+
+export function mapClaimReadinessItem(lot: ClaimReadinessLot, readiness: ClaimReadinessSummary) {
+  return {
+    lotId: readiness.lotId,
+    lotNumber: readiness.lotNumber,
+    activityType: lot.activityType,
+    claim: readiness.claim,
   };
 }
 

@@ -22,6 +22,7 @@ import {
   buildClaimPaymentRecordedResponse,
   mapClaimCreateItem,
   mapClaimListItem,
+  mapClaimReadinessItem,
   mapClaimableLot,
 } from './claims/presentation.js';
 
@@ -613,12 +614,7 @@ router.get(
           },
         });
 
-        return {
-          lotId: readiness.lotId,
-          lotNumber: readiness.lotNumber,
-          activityType: lot.activityType,
-          claim: readiness.claim,
-        };
+        return mapClaimReadinessItem(lot, readiness);
       }),
     );
 
