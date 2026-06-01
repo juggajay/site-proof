@@ -66,6 +66,12 @@ import {
   mapHoldPointEvidenceProject,
   mapHoldPointEvidenceTestResults,
 } from './holdpoints/evidencePackage.js';
+import {
+  buildHoldPointPrerequisites,
+  buildIncompletePrerequisiteDetails,
+  getIncompletePrerequisites,
+  getPrecedingChecklistItems,
+} from './holdpoints/prerequisites.js';
 
 // Type for hold point list item
 interface HoldPointListItem {
@@ -300,26 +306,16 @@ holdpointsRouter.get(
     }
 
     // Get all preceding items (items with lower sequence number)
-    const precedingItems = lot.itpInstance.template.checklistItems.filter(
-      (i) => i.sequenceNumber < holdPointItem.sequenceNumber,
+    const precedingItems = getPrecedingChecklistItems(
+      lot.itpInstance.template.checklistItems,
+      holdPointItem.sequenceNumber,
     );
 
     // Check completion status of each preceding item
-    const prerequisites = precedingItems.map((item) => {
-      const completion = lot.itpInstance!.completions.find((c) => c.checklistItemId === item.id);
-      return {
-        id: item.id,
-        description: item.description,
-        sequenceNumber: item.sequenceNumber,
-        isHoldPoint: item.pointType === 'hold_point',
-        isCompleted: completion?.status === 'completed',
-        isVerified: completion?.verificationStatus === 'verified',
-        completedAt: completion?.completedAt,
-      };
-    });
+    const prerequisites = buildHoldPointPrerequisites(precedingItems, lot.itpInstance.completions);
 
     // Check if all prerequisites are completed
-    const incompletePrerequisites = prerequisites.filter((p) => !p.isCompleted);
+    const incompletePrerequisites = getIncompletePrerequisites(prerequisites);
     const canRequestRelease = hasRequestPermission && incompletePrerequisites.length === 0;
 
     // Get existing hold point record
@@ -435,27 +431,24 @@ holdpointsRouter.post(
     }
 
     // Get all preceding items
-    const precedingItems = lot.itpInstance.template.checklistItems.filter(
-      (i) => i.sequenceNumber < holdPointItem.sequenceNumber,
+    const precedingItems = getPrecedingChecklistItems(
+      lot.itpInstance.template.checklistItems,
+      holdPointItem.sequenceNumber,
     );
 
     // Check completion status of preceding items
-    const incompleteItems = precedingItems.filter((item) => {
-      const completion = lot.itpInstance!.completions.find((c) => c.checklistItemId === item.id);
-      return !completion || completion.status !== 'completed';
-    });
+    const prerequisites = buildHoldPointPrerequisites(precedingItems, lot.itpInstance.completions);
+    const incompleteItems = getIncompletePrerequisites(prerequisites);
 
     // If there are incomplete prerequisites, return error with list
     if (incompleteItems.length > 0) {
       throw AppError.badRequest(
         'Cannot request hold point release until all preceding checklist items are completed.',
         {
-          incompleteItems: incompleteItems.map((item) => ({
-            id: item.id,
-            description: item.description,
-            sequenceNumber: item.sequenceNumber,
-            isHoldPoint: item.pointType === 'hold_point',
-          })) as unknown as Record<string, unknown>,
+          incompleteItems: buildIncompletePrerequisiteDetails(incompleteItems) as unknown as Record<
+            string,
+            unknown
+          >,
         },
       );
     }
