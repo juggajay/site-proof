@@ -11,6 +11,8 @@
 // position) without changing any other field.
 // =============================================================================
 
+import { formatDocketDate, formatDocketNumber } from './formatting.js';
+
 // Accepts a Prisma Decimal, number, string, or nullish value — anything the
 // route code coerces with `Number(x) || 0`.
 type NumericLike = number | string | { toString(): string } | null | undefined;
@@ -143,5 +145,58 @@ export function sumDocketPlantTotals(
     hours: entries.reduce((sum, e) => sum + e.hoursOperated, 0),
     submittedCost: entries.reduce((sum, e) => sum + e.submittedCost, 0),
     approvedCost: entries.reduce((sum, e) => sum + e.approvedCost, 0),
+  };
+}
+
+// =============================================================================
+// Docket list presentation: the pure per-row mapper for `GET /api/dockets`.
+// Extracted verbatim from the inline `dockets.map(...)` — same field names +
+// order, same `formatDocketNumber`/`formatDocketDate` formatting, same
+// `Number(x) || 0` coercion for the labour/plant hour reducers and the stored
+// submitted/approved totals, and the same pass-through of nullable
+// notes/foremanNotes/submittedAt/approvedAt.
+// =============================================================================
+
+export type DocketListItemSource = {
+  id: string;
+  subcontractorCompany: { id: string; companyName: string };
+  date: Date;
+  status: string;
+  notes: string | null;
+  labourEntries: Array<{ submittedHours: NumericLike }>;
+  plantEntries: Array<{ hoursOperated: NumericLike }>;
+  totalLabourSubmitted: NumericLike;
+  totalLabourApproved: NumericLike;
+  totalPlantSubmitted: NumericLike;
+  totalPlantApproved: NumericLike;
+  submittedAt: Date | null;
+  approvedAt: Date | null;
+  foremanNotes: string | null;
+};
+
+export function mapDocketListItem(docket: DocketListItemSource) {
+  return {
+    id: docket.id,
+    docketNumber: formatDocketNumber(docket.id),
+    subcontractor: docket.subcontractorCompany.companyName,
+    subcontractorId: docket.subcontractorCompany.id,
+    date: formatDocketDate(docket.date),
+    status: docket.status,
+    notes: docket.notes,
+    labourHours: docket.labourEntries.reduce(
+      (sum, entry) => sum + (Number(entry.submittedHours) || 0),
+      0,
+    ),
+    plantHours: docket.plantEntries.reduce(
+      (sum, entry) => sum + (Number(entry.hoursOperated) || 0),
+      0,
+    ),
+    totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
+    totalLabourApproved: Number(docket.totalLabourApproved) || 0,
+    totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
+    totalPlantApproved: Number(docket.totalPlantApproved) || 0,
+    submittedAt: docket.submittedAt,
+    approvedAt: docket.approvedAt,
+    foremanNotes: docket.foremanNotes,
   };
 }
