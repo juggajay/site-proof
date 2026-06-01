@@ -64,6 +64,7 @@ import {
   updateAlertEscalation,
 } from './notifications/alertPersistence.js';
 import { getNotificationTiming, sendNotificationIfEnabled } from './notifications/delivery.js';
+import { createMentionNotifications } from './notifications/mentions.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -78,6 +79,9 @@ export type { Alert, AlertSeverity, AlertType };
 // routes that import these delivery helpers from this route file keep working
 // after the delivery helper extraction.
 export { getNotificationTiming, sendNotificationIfEnabled };
+// Re-exported so the comments route that imports this mention helper from this
+// route file keeps working after the mention helper extraction.
+export { createMentionNotifications };
 
 export const notificationsRouter = Router();
 
@@ -234,85 +238,6 @@ notificationsRouter.put(
     res.json({ success: true });
   }),
 );
-
-// Helper function to create mention notifications
-export async function createMentionNotifications(
-  content: string,
-  authorId: string,
-  entityType: string,
-  entityId: string,
-  commentId: string,
-  projectId?: string,
-): Promise<void> {
-  // Extract @mentions from content (format: @email or @fullName)
-  const mentionPattern = /@([\w.+-]+@[\w.-]+|[\w\s]+?)(?=\s|$|@)/g;
-  const mentions = content.match(mentionPattern);
-
-  if (!mentions || mentions.length === 0) return;
-
-  // Get unique mention strings (remove @ prefix)
-  const uniqueMentions = [...new Set(mentions.map((m) => m.slice(1).trim()))];
-  const project = projectId
-    ? await prisma.project.findUnique({
-        where: { id: projectId },
-        select: { companyId: true },
-      })
-    : null;
-
-  // Find users by email or fullName (case-insensitive for SQLite)
-  for (const mention of uniqueMentions) {
-    const mentionLower = mention.toLowerCase();
-    const user = await prisma.user.findFirst({
-      where: {
-        AND: [
-          {
-            OR: [{ email: mentionLower }, { fullName: mentionLower }],
-          },
-          projectId && project
-            ? {
-                OR: [
-                  {
-                    projectUsers: {
-                      some: { projectId, status: 'active' },
-                    },
-                  },
-                  {
-                    companyId: project.companyId,
-                    roleInCompany: { in: ['owner', 'admin'] },
-                  },
-                ],
-              }
-            : {},
-        ],
-      },
-    });
-
-    if (user && user.id !== authorId) {
-      // Get author info for notification
-      const author = await prisma.user.findUnique({
-        where: { id: authorId },
-        select: { fullName: true, email: true },
-      });
-
-      const authorName = author?.fullName || author?.email || 'Someone';
-
-      // Create notification
-      await prisma.notification.create({
-        data: {
-          userId: user.id,
-          projectId: projectId || null,
-          type: 'mention',
-          title: `${authorName} mentioned you in a comment`,
-          message: content.length > 100 ? content.substring(0, 100) + '...' : content,
-          linkUrl: buildProjectEntityLink(entityType, entityId, projectId, {
-            tab: 'comments',
-            commentId,
-          }),
-        },
-      });
-    }
-  }
-}
 
 // GET /api/notifications/users - Get users that can be mentioned (for autocomplete)
 notificationsRouter.get(
