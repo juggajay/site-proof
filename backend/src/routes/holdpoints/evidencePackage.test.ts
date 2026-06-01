@@ -2,7 +2,9 @@ import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   buildHoldPointEvidenceChecklist,
+  buildHoldPointEvidencePackageResponse,
   buildHoldPointEvidenceSummary,
+  buildPublicHoldPointEvidencePackageResponse,
   mapHoldPointEvidenceItpTemplate,
   mapHoldPointEvidenceLot,
   mapHoldPointEvidencePhotos,
@@ -139,6 +141,25 @@ describe('buildHoldPointEvidenceChecklist', () => {
     expect(entry.completedBy).toBeNull();
     expect(entry.verifiedBy).toBeNull();
     expect(entry.attachments).toEqual([]);
+  });
+});
+
+describe('hold point evidence-package response helpers', () => {
+  it('wraps authenticated and preview evidence packages under the existing key', () => {
+    const evidencePackage = { holdPoint: { id: 'hp-1' }, generatedAt: '2026-06-01T00:00:00Z' };
+
+    expect(buildHoldPointEvidencePackageResponse(evidencePackage)).toEqual({ evidencePackage });
+  });
+
+  it('wraps public evidence packages with token info and the public marker', () => {
+    const evidencePackage = { holdPoint: { id: 'hp-2' } };
+    const tokenInfo = { recipientEmail: 'qa@example.com', canRelease: true };
+
+    expect(buildPublicHoldPointEvidencePackageResponse(evidencePackage, tokenInfo)).toEqual({
+      evidencePackage,
+      tokenInfo,
+      isPublicAccess: true,
+    });
   });
 });
 

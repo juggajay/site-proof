@@ -58,7 +58,9 @@ import {
 } from './holdpoints/superintendentRecipients.js';
 import {
   buildHoldPointEvidenceChecklist,
+  buildHoldPointEvidencePackageResponse,
   buildHoldPointEvidenceSummary,
+  buildPublicHoldPointEvidencePackageResponse,
   mapHoldPointEvidenceItpTemplate,
   mapHoldPointEvidenceLot,
   mapHoldPointEvidencePhotos,
@@ -1267,7 +1269,7 @@ holdpointsRouter.get(
       generatedAt: new Date().toISOString(),
     };
 
-    res.json({ evidencePackage });
+    res.json(buildHoldPointEvidencePackageResponse(evidencePackage));
   }),
 );
 
@@ -1462,7 +1464,7 @@ holdpointsRouter.post(
       generatedAt: new Date().toISOString(),
     };
 
-    res.json({ evidencePackage });
+    res.json(buildHoldPointEvidencePackageResponse(evidencePackage));
   }),
 );
 
@@ -1609,11 +1611,7 @@ holdpointsRouter.get(
       canRelease: holdPoint.status !== 'released',
     };
 
-    res.json({
-      evidencePackage,
-      tokenInfo,
-      isPublicAccess: true,
-    });
+    res.json(buildPublicHoldPointEvidencePackageResponse(evidencePackage, tokenInfo));
   }),
 );
 
