@@ -46,6 +46,12 @@ import {
   formatDocketNumber,
   formatDocketUserName,
 } from './dockets/formatting.js';
+import {
+  mapDocketLabourEntry,
+  mapDocketPlantEntry,
+  sumDocketLabourTotals,
+  sumDocketPlantTotals,
+} from './dockets/presentation.js';
 import type { Prisma } from '@prisma/client';
 
 export const docketsRouter = Router();
@@ -334,45 +340,10 @@ docketsRouter.get(
     }
 
     // Format labour entries
-    const labourEntries = docket.labourEntries.map((entry) => ({
-      id: entry.id,
-      employee: {
-        id: entry.employee.id,
-        name: entry.employee.name,
-        role: entry.employee.role,
-        hourlyRate: Number(entry.employee.hourlyRate) || 0,
-      },
-      startTime: entry.startTime,
-      finishTime: entry.finishTime,
-      submittedHours: Number(entry.submittedHours) || 0,
-      approvedHours: Number(entry.approvedHours) || 0,
-      hourlyRate: Number(entry.hourlyRate) || 0,
-      submittedCost: Number(entry.submittedCost) || 0,
-      approvedCost: Number(entry.approvedCost) || 0,
-      lotAllocations: entry.lotAllocations.map((a) => ({
-        lotId: a.lotId,
-        lotNumber: a.lot.lotNumber,
-        hours: Number(a.hours) || 0,
-      })),
-    }));
+    const labourEntries = docket.labourEntries.map((entry) => mapDocketLabourEntry(entry));
 
     // Format plant entries
-    const plantEntries = docket.plantEntries.map((entry) => ({
-      id: entry.id,
-      plant: {
-        id: entry.plant.id,
-        type: entry.plant.type,
-        description: entry.plant.description,
-        idRego: entry.plant.idRego,
-        dryRate: Number(entry.plant.dryRate) || 0,
-        wetRate: Number(entry.plant.wetRate) || 0,
-      },
-      hoursOperated: Number(entry.hoursOperated) || 0,
-      wetOrDry: entry.wetOrDry || 'dry',
-      hourlyRate: Number(entry.hourlyRate) || 0,
-      submittedCost: Number(entry.submittedCost) || 0,
-      approvedCost: Number(entry.approvedCost) || 0,
-    }));
+    const plantEntries = docket.plantEntries.map((entry) => mapDocketPlantEntry(entry));
 
     // Fetch project info separately since it's not a relation on DailyDocket
     const project = await prisma.project.findUnique({
@@ -1275,43 +1246,13 @@ docketsRouter.get(
     await requireDocketReadAccess(req.user!, docket);
 
     // Format labour entries
-    const labourEntries = docket.labourEntries.map((entry) => ({
-      id: entry.id,
-      employee: {
-        id: entry.employee.id,
-        name: entry.employee.name,
-        role: entry.employee.role,
-        hourlyRate: Number(entry.employee.hourlyRate) || 0,
-      },
-      startTime: entry.startTime,
-      finishTime: entry.finishTime,
-      submittedHours: Number(entry.submittedHours) || 0,
-      approvedHours: Number(entry.approvedHours) || 0,
-      hourlyRate: Number(entry.hourlyRate) || 0,
-      submittedCost: Number(entry.submittedCost) || 0,
-      approvedCost: Number(entry.approvedCost) || 0,
-      adjustmentReason: entry.adjustmentReason,
-      lotAllocations: entry.lotAllocations.map((alloc) => ({
-        lotId: alloc.lotId,
-        lotNumber: alloc.lot.lotNumber,
-        hours: Number(alloc.hours) || 0,
-      })),
-    }));
-
-    // Calculate totals
-    const totalSubmittedHours = labourEntries.reduce((sum, e) => sum + e.submittedHours, 0);
-    const totalSubmittedCost = labourEntries.reduce((sum, e) => sum + e.submittedCost, 0);
-    const totalApprovedHours = labourEntries.reduce((sum, e) => sum + e.approvedHours, 0);
-    const totalApprovedCost = labourEntries.reduce((sum, e) => sum + e.approvedCost, 0);
+    const labourEntries = docket.labourEntries.map((entry) =>
+      mapDocketLabourEntry(entry, { includeAdjustmentReason: true }),
+    );
 
     res.json({
       labourEntries,
-      totals: {
-        submittedHours: totalSubmittedHours,
-        submittedCost: totalSubmittedCost,
-        approvedHours: totalApprovedHours,
-        approvedCost: totalApprovedCost,
-      },
+      totals: sumDocketLabourTotals(labourEntries),
     });
   }),
 );
@@ -1643,36 +1584,13 @@ docketsRouter.get(
     await requireDocketReadAccess(req.user!, docket);
 
     // Format plant entries
-    const plantEntries = docket.plantEntries.map((entry) => ({
-      id: entry.id,
-      plant: {
-        id: entry.plant.id,
-        type: entry.plant.type,
-        description: entry.plant.description,
-        idRego: entry.plant.idRego,
-        dryRate: Number(entry.plant.dryRate) || 0,
-        wetRate: Number(entry.plant.wetRate) || 0,
-      },
-      hoursOperated: Number(entry.hoursOperated) || 0,
-      wetOrDry: entry.wetOrDry || 'dry',
-      hourlyRate: Number(entry.hourlyRate) || 0,
-      submittedCost: Number(entry.submittedCost) || 0,
-      approvedCost: Number(entry.approvedCost) || 0,
-      adjustmentReason: entry.adjustmentReason,
-    }));
-
-    // Calculate totals
-    const totalHours = plantEntries.reduce((sum, e) => sum + e.hoursOperated, 0);
-    const totalSubmittedCost = plantEntries.reduce((sum, e) => sum + e.submittedCost, 0);
-    const totalApprovedCost = plantEntries.reduce((sum, e) => sum + e.approvedCost, 0);
+    const plantEntries = docket.plantEntries.map((entry) =>
+      mapDocketPlantEntry(entry, { includeAdjustmentReason: true }),
+    );
 
     res.json({
       plantEntries,
-      totals: {
-        hours: totalHours,
-        submittedCost: totalSubmittedCost,
-        approvedCost: totalApprovedCost,
-      },
+      totals: sumDocketPlantTotals(plantEntries),
     });
   }),
 );
