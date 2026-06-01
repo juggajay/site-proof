@@ -77,6 +77,7 @@ import { presentLotList } from './lots/listPresentation.js';
 import { shapeLotDetailResponse } from './lots/detailPresentation.js';
 import { prepareClonedLot } from './lots/cloneHelpers.js';
 import { assertLotsBulkMutable } from './lots/bulkMutationGuards.js';
+import { buildLotListOrderBy, buildLotListSelect, buildLotListWhere } from './lots/listQuery.js';
 
 export const lotsRouter = Router();
 
@@ -194,80 +195,11 @@ lotsRouter.get(
       }
     }
 
-    const finalWhereClause: Prisma.LotWhereInput = search
-      ? {
-          AND: [
-            whereClause,
-            {
-              OR: [
-                { lotNumber: { contains: search, mode: 'insensitive' } },
-                { description: { contains: search, mode: 'insensitive' } },
-                { activityType: { contains: search, mode: 'insensitive' } },
-                { areaZone: { contains: search, mode: 'insensitive' } },
-                { structureId: { contains: search, mode: 'insensitive' } },
-                { structureElement: { contains: search, mode: 'insensitive' } },
-              ],
-            },
-          ],
-        }
-      : whereClause;
-
-    // Build select clause - conditionally include ITP data
-    const selectClause: Prisma.LotSelect = {
-      id: true,
-      lotNumber: true,
-      description: true,
-      status: true,
-      activityType: true,
-      chainageStart: true,
-      chainageEnd: true,
-      offset: true,
-      offsetCustom: true,
-      layer: true,
-      areaZone: true,
-      budgetAmount: true,
-      assignedSubcontractorId: true,
-      assignedSubcontractor: {
-        select: {
-          companyName: true,
-        },
-      },
-      // Include subcontractor assignments with ITP permissions
-      subcontractorAssignments: {
-        where: { status: 'active' },
-        select: {
-          id: true,
-          subcontractorCompanyId: true,
-          canCompleteITP: true,
-          itpRequiresVerification: true,
-          subcontractorCompany: {
-            select: { id: true, companyName: true },
-          },
-        },
-      },
-      createdAt: true,
-    };
-
-    // Include ITP instance data if requested
-    if (includeITP === 'true') {
-      selectClause.itpInstance = {
-        select: {
-          id: true,
-          templateId: true,
-          status: true,
-          template: {
-            select: {
-              id: true,
-              name: true,
-              activityType: true,
-            },
-          },
-        },
-      };
-    }
+    const finalWhereClause = buildLotListWhere(whereClause, search);
+    const selectClause = buildLotListSelect(includeITP === 'true');
 
     // Determine sort field - default to lotNumber for lots
-    const orderBy = sortBy ? { [sortBy]: sortOrder } : { lotNumber: 'asc' as const };
+    const orderBy = buildLotListOrderBy(sortBy, sortOrder);
 
     // Execute count and findMany in parallel for efficiency
     const [lots, total] = await Promise.all([
