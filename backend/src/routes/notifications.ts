@@ -33,7 +33,6 @@ import {
   canReceiveProjectAlert,
   getAccessibleActiveProjectIds,
   getManageableActiveProjectIds,
-  isSubcontractorRole,
   requireAlertAccess,
   requireAlertResolveAccess,
   requireNonProductionDiagnostics,
@@ -65,6 +64,10 @@ import {
 } from './notifications/alertPersistence.js';
 import { getNotificationTiming, sendNotificationIfEnabled } from './notifications/delivery.js';
 import { createMentionNotifications } from './notifications/mentions.js';
+import {
+  buildMentionableProjectFilter,
+  buildMentionableUserFilters,
+} from './notifications/mentionUsers.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -247,19 +250,7 @@ notificationsRouter.get(
     const search = parseOptionalString(req.query.search, 'search');
     const projectId = parseOptionalString(req.query.projectId, 'projectId');
 
-    const filters: Prisma.UserWhereInput[] = isSubcontractorRole(user.roleInCompany)
-      ? [{ id: user.id }]
-      : user.companyId
-        ? [{ companyId: user.companyId }]
-        : [{ id: user.id }];
-
-    // If search provided, filter by email or fullName (SQLite - case-sensitive contains)
-    if (search && search.length >= 2) {
-      const searchLower = search.toLowerCase();
-      filters.push({
-        OR: [{ email: { contains: searchLower } }, { fullName: { contains: searchLower } }],
-      });
-    }
+    const filters = buildMentionableUserFilters(user, search);
 
     // If projectId provided, filter by project membership
     if (projectId) {
@@ -273,19 +264,7 @@ notificationsRouter.get(
       }
 
       await requireProjectReadAccess(user, projectId);
-      filters.push({
-        OR: [
-          {
-            projectUsers: {
-              some: { projectId, status: 'active' },
-            },
-          },
-          {
-            companyId: project.companyId,
-            roleInCompany: { in: ['owner', 'admin'] },
-          },
-        ],
-      });
+      filters.push(buildMentionableProjectFilter(projectId, project.companyId));
     }
 
     const users = await prisma.user.findMany({
