@@ -9,6 +9,11 @@ import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
+import {
+  buildGoogleOAuthLoginResponse,
+  buildMockOAuthLoginResponse,
+  buildOAuthExchangeResponse,
+} from './oauth/responses.js';
 
 export const oauthRouter = Router();
 
@@ -545,18 +550,7 @@ oauthRouter.post(
 
     await auditOAuthLogin(req, user.id, 'google', 'google_identity');
 
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        companyId: user.companyId,
-        companyName: user.companyName,
-        avatarUrl: user.avatarUrl,
-      },
-      token,
-    });
+    res.json(buildGoogleOAuthLoginResponse(user, token));
   }),
 );
 
@@ -599,19 +593,7 @@ oauthRouter.post(
 
     await auditOAuthLogin(req, user.id, consumed.provider, 'oauth_callback');
 
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.roleInCompany,
-        companyId: user.companyId,
-        companyName: user.company?.name || null,
-        avatarUrl: user.avatarUrl,
-      },
-      token,
-      provider: consumed.provider,
-    });
+    res.json(buildOAuthExchangeResponse(user, token, consumed.provider));
   }),
 );
 
@@ -651,17 +633,7 @@ oauthRouter.post(
 
     await auditOAuthLogin(req, user.id, provider || 'google', 'mock_oauth');
 
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        companyId: user.companyId,
-        companyName: user.companyName,
-      },
-      token,
-    });
+    res.json(buildMockOAuthLoginResponse(user, token));
   }),
 );
 
