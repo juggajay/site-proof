@@ -4,6 +4,11 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import {
+  buildPortfolioCashFlowResponse,
+  buildPortfolioNcrsResponse,
+  buildProjectsAtRiskResponse,
+} from './dashboardResponses.js';
 
 // Type definitions for dashboard work items
 interface ForemanWorkItem {
@@ -566,12 +571,7 @@ dashboardRouter.get(
 
     // If no projects, return empty cash flow
     if (projectIds.length === 0) {
-      return res.json({
-        totalClaimed: 0,
-        totalCertified: 0,
-        totalPaid: 0,
-        outstanding: 0,
-      });
+      return res.json(buildPortfolioCashFlowResponse(0, 0, 0));
     }
 
     // Get all progress claims for accessible projects
@@ -596,15 +596,7 @@ dashboardRouter.get(
       totalPaid += claim.paidAmount ? Number(claim.paidAmount) : 0;
     }
 
-    // Outstanding = Certified - Paid (amount approved but not yet paid)
-    const outstanding = totalCertified - totalPaid;
-
-    res.json({
-      totalClaimed,
-      totalCertified,
-      totalPaid,
-      outstanding,
-    });
+    res.json(buildPortfolioCashFlowResponse(totalClaimed, totalCertified, totalPaid));
   }),
 );
 
@@ -625,7 +617,7 @@ dashboardRouter.get(
 
     // If no projects, return empty list
     if (projectIds.length === 0) {
-      return res.json({ ncrs: [] });
+      return res.json(buildPortfolioNcrsResponse([]));
     }
 
     // Get major NCRs (critical) that are not closed
@@ -675,7 +667,7 @@ dashboardRouter.get(
       link: `/projects/${ncr.project.id}/ncr?ncrId=${ncr.id}`,
     }));
 
-    res.json({ ncrs: formattedNCRs });
+    res.json(buildPortfolioNcrsResponse(formattedNCRs));
   }),
 );
 
@@ -695,7 +687,7 @@ dashboardRouter.get(
     const projectIds = projectAccess.map((pa) => pa.projectId);
 
     if (projectIds.length === 0) {
-      return res.json({ projectsAtRisk: [] });
+      return res.json(buildProjectsAtRiskResponse([]));
     }
 
     const today = new Date();
@@ -854,7 +846,7 @@ dashboardRouter.get(
       );
     });
 
-    res.json({ projectsAtRisk });
+    res.json(buildProjectsAtRiskResponse(projectsAtRisk));
   }),
 );
 
