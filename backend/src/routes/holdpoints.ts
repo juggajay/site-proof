@@ -57,6 +57,15 @@ import {
   HP_SUPERINTENDENT_RELEASE_ROLES,
   requireSuperintendentApprovalRecipients,
 } from './holdpoints/superintendentRecipients.js';
+import {
+  buildHoldPointEvidenceChecklist,
+  buildHoldPointEvidenceSummary,
+  mapHoldPointEvidenceItpTemplate,
+  mapHoldPointEvidenceLot,
+  mapHoldPointEvidencePhotos,
+  mapHoldPointEvidenceProject,
+  mapHoldPointEvidenceTestResults,
+} from './holdpoints/evidencePackage.js';
 
 // Type for hold point list item
 interface HoldPointListItem {
@@ -1316,58 +1325,15 @@ holdpointsRouter.get(
 
     // Get all checklist items up to and including the hold point
     const holdPointItem = holdPoint.itpChecklistItem;
-    const itemsUpToHP = itpInstance.template.checklistItems.filter(
-      (item) => item.sequenceNumber <= holdPointItem.sequenceNumber,
+    const checklistWithStatus = buildHoldPointEvidenceChecklist(
+      itpInstance.template.checklistItems,
+      itpInstance.completions,
+      holdPointItem.sequenceNumber,
     );
 
-    // Map completions to items
-    const checklistWithStatus = itemsUpToHP.map((item) => {
-      const completion = itpInstance.completions.find((c) => c.checklistItemId === item.id);
-      return {
-        sequenceNumber: item.sequenceNumber,
-        description: item.description,
-        pointType: item.pointType,
-        responsibleParty: item.responsibleParty,
-        isCompleted: completion?.status === 'completed',
-        completedAt: completion?.completedAt,
-        completedBy: completion?.completedBy?.fullName || null,
-        isVerified: completion?.verificationStatus === 'verified',
-        verifiedAt: completion?.verifiedAt,
-        verifiedBy: completion?.verifiedBy?.fullName || null,
-        notes: completion?.notes,
-        attachments:
-          completion?.attachments?.map((a) => ({
-            id: a.id,
-            filename: a.document.filename,
-            fileUrl: a.document.fileUrl,
-            caption: a.document.caption,
-          })) || [],
-      };
-    });
+    const testResults = mapHoldPointEvidenceTestResults(lot.testResults);
 
-    // Get test results
-    const testResults = lot.testResults.map((t) => ({
-      id: t.id,
-      testType: t.testType,
-      testRequestNumber: t.testRequestNumber,
-      laboratoryName: t.laboratoryName,
-      resultValue: t.resultValue,
-      resultUnit: t.resultUnit,
-      passFail: t.passFail,
-      status: t.status,
-      isVerified: t.status === 'verified',
-      verifiedBy: t.verifiedBy?.fullName || null,
-      createdAt: t.createdAt,
-    }));
-
-    // Get photos/evidence documents
-    const photos = lot.documents.map((d) => ({
-      id: d.id,
-      filename: d.filename,
-      fileUrl: d.fileUrl,
-      caption: d.caption,
-      uploadedAt: d.uploadedAt,
-    }));
+    const photos = mapHoldPointEvidencePhotos(lot.documents);
 
     // Build evidence package response
     const evidencePackage = {
@@ -1381,36 +1347,13 @@ holdpointsRouter.get(
         releasedByName: holdPoint.releasedByName,
         releaseNotes: holdPoint.releaseNotes,
       },
-      lot: {
-        id: lot.id,
-        lotNumber: lot.lotNumber,
-        description: lot.description,
-        activityType: lot.activityType,
-        chainageStart: lot.chainageStart,
-        chainageEnd: lot.chainageEnd,
-      },
-      project: {
-        id: lot.project.id,
-        name: lot.project.name,
-        projectNumber: lot.project.projectNumber,
-      },
-      itpTemplate: {
-        id: itpInstance.template.id,
-        name: itpInstance.template.name,
-        activityType: itpInstance.template.activityType,
-      },
+      lot: mapHoldPointEvidenceLot(lot),
+      project: mapHoldPointEvidenceProject(lot.project),
+      itpTemplate: mapHoldPointEvidenceItpTemplate(itpInstance.template),
       checklist: checklistWithStatus,
       testResults,
       photos,
-      summary: {
-        totalChecklistItems: checklistWithStatus.length,
-        completedItems: checklistWithStatus.filter((i) => i.isCompleted).length,
-        verifiedItems: checklistWithStatus.filter((i) => i.isVerified).length,
-        totalTestResults: testResults.length,
-        passingTests: testResults.filter((t) => t.passFail === 'pass').length,
-        totalPhotos: photos.length,
-        totalAttachments: checklistWithStatus.reduce((sum, i) => sum + i.attachments.length, 0),
-      },
+      summary: buildHoldPointEvidenceSummary(checklistWithStatus, testResults, photos),
       generatedAt: new Date().toISOString(),
     };
 
@@ -1600,58 +1543,15 @@ holdpointsRouter.post(
     }
 
     // Get all checklist items up to and including the hold point
-    const itemsUpToHP = itpInstance.template.checklistItems.filter(
-      (item) => item.sequenceNumber <= holdPointItem.sequenceNumber,
+    const checklistWithStatus = buildHoldPointEvidenceChecklist(
+      itpInstance.template.checklistItems,
+      itpInstance.completions,
+      holdPointItem.sequenceNumber,
     );
 
-    // Map completions to items
-    const checklistWithStatus = itemsUpToHP.map((item) => {
-      const completion = itpInstance.completions.find((c) => c.checklistItemId === item.id);
-      return {
-        sequenceNumber: item.sequenceNumber,
-        description: item.description,
-        pointType: item.pointType,
-        responsibleParty: item.responsibleParty,
-        isCompleted: completion?.status === 'completed',
-        completedAt: completion?.completedAt,
-        completedBy: completion?.completedBy?.fullName || null,
-        isVerified: completion?.verificationStatus === 'verified',
-        verifiedAt: completion?.verifiedAt,
-        verifiedBy: completion?.verifiedBy?.fullName || null,
-        notes: completion?.notes,
-        attachments:
-          completion?.attachments?.map((a) => ({
-            id: a.id,
-            filename: a.document.filename,
-            fileUrl: a.document.fileUrl,
-            caption: a.document.caption,
-          })) || [],
-      };
-    });
+    const testResults = mapHoldPointEvidenceTestResults(lot.testResults);
 
-    // Get test results
-    const testResults = lot.testResults.map((t) => ({
-      id: t.id,
-      testType: t.testType,
-      testRequestNumber: t.testRequestNumber,
-      laboratoryName: t.laboratoryName,
-      resultValue: t.resultValue,
-      resultUnit: t.resultUnit,
-      passFail: t.passFail,
-      status: t.status,
-      isVerified: t.status === 'verified',
-      verifiedBy: t.verifiedBy?.fullName || null,
-      createdAt: t.createdAt,
-    }));
-
-    // Get photos/evidence documents
-    const photos = lot.documents.map((d) => ({
-      id: d.id,
-      filename: d.filename,
-      fileUrl: d.fileUrl,
-      caption: d.caption,
-      uploadedAt: d.uploadedAt,
-    }));
+    const photos = mapHoldPointEvidencePhotos(lot.documents);
 
     // Build preview evidence package response
     const evidencePackage = {
@@ -1665,36 +1565,13 @@ holdpointsRouter.post(
         releasedByName: null,
         releaseNotes: null,
       },
-      lot: {
-        id: lot.id,
-        lotNumber: lot.lotNumber,
-        description: lot.description,
-        activityType: lot.activityType,
-        chainageStart: lot.chainageStart,
-        chainageEnd: lot.chainageEnd,
-      },
-      project: {
-        id: lot.project.id,
-        name: lot.project.name,
-        projectNumber: lot.project.projectNumber,
-      },
-      itpTemplate: {
-        id: itpInstance.template.id,
-        name: itpInstance.template.name,
-        activityType: itpInstance.template.activityType,
-      },
+      lot: mapHoldPointEvidenceLot(lot),
+      project: mapHoldPointEvidenceProject(lot.project),
+      itpTemplate: mapHoldPointEvidenceItpTemplate(itpInstance.template),
       checklist: checklistWithStatus,
       testResults,
       photos,
-      summary: {
-        totalChecklistItems: checklistWithStatus.length,
-        completedItems: checklistWithStatus.filter((i) => i.isCompleted).length,
-        verifiedItems: checklistWithStatus.filter((i) => i.isVerified).length,
-        totalTestResults: testResults.length,
-        passingTests: testResults.filter((t) => t.passFail === 'pass').length,
-        totalPhotos: photos.length,
-        totalAttachments: checklistWithStatus.reduce((sum, i) => sum + i.attachments.length, 0),
-      },
+      summary: buildHoldPointEvidenceSummary(checklistWithStatus, testResults, photos),
       isPreview: true,
       generatedAt: new Date().toISOString(),
     };
@@ -1805,58 +1682,15 @@ holdpointsRouter.get(
 
     // Get all checklist items up to and including the hold point
     const holdPointItem = holdPoint.itpChecklistItem;
-    const itemsUpToHP = itpInstance.template.checklistItems.filter(
-      (item) => item.sequenceNumber <= holdPointItem.sequenceNumber,
+    const checklistWithStatus = buildHoldPointEvidenceChecklist(
+      itpInstance.template.checklistItems,
+      itpInstance.completions,
+      holdPointItem.sequenceNumber,
     );
 
-    // Map completions to items
-    const checklistWithStatus = itemsUpToHP.map((item) => {
-      const completion = itpInstance.completions.find((c) => c.checklistItemId === item.id);
-      return {
-        sequenceNumber: item.sequenceNumber,
-        description: item.description,
-        pointType: item.pointType,
-        responsibleParty: item.responsibleParty,
-        isCompleted: completion?.status === 'completed',
-        completedAt: completion?.completedAt,
-        completedBy: completion?.completedBy?.fullName || null,
-        isVerified: completion?.verificationStatus === 'verified',
-        verifiedAt: completion?.verifiedAt,
-        verifiedBy: completion?.verifiedBy?.fullName || null,
-        notes: completion?.notes,
-        attachments:
-          completion?.attachments?.map((a) => ({
-            id: a.id,
-            filename: a.document.filename,
-            fileUrl: a.document.fileUrl,
-            caption: a.document.caption,
-          })) || [],
-      };
-    });
+    const testResults = mapHoldPointEvidenceTestResults(lot.testResults);
 
-    // Get test results
-    const testResults = lot.testResults.map((t) => ({
-      id: t.id,
-      testType: t.testType,
-      testRequestNumber: t.testRequestNumber,
-      laboratoryName: t.laboratoryName,
-      resultValue: t.resultValue,
-      resultUnit: t.resultUnit,
-      passFail: t.passFail,
-      status: t.status,
-      isVerified: t.status === 'verified',
-      verifiedBy: t.verifiedBy?.fullName || null,
-      createdAt: t.createdAt,
-    }));
-
-    // Get photos/evidence documents
-    const photos = lot.documents.map((d) => ({
-      id: d.id,
-      filename: d.filename,
-      fileUrl: d.fileUrl,
-      caption: d.caption,
-      uploadedAt: d.uploadedAt,
-    }));
+    const photos = mapHoldPointEvidencePhotos(lot.documents);
 
     // Build evidence package response
     const evidencePackage = {
@@ -1871,36 +1705,13 @@ holdpointsRouter.get(
         releasedByName: holdPoint.releasedByName,
         releaseNotes: holdPoint.releaseNotes,
       },
-      lot: {
-        id: lot.id,
-        lotNumber: lot.lotNumber,
-        description: lot.description,
-        activityType: lot.activityType,
-        chainageStart: lot.chainageStart,
-        chainageEnd: lot.chainageEnd,
-      },
-      project: {
-        id: lot.project.id,
-        name: lot.project.name,
-        projectNumber: lot.project.projectNumber,
-      },
-      itpTemplate: {
-        id: itpInstance.template.id,
-        name: itpInstance.template.name,
-        activityType: itpInstance.template.activityType,
-      },
+      lot: mapHoldPointEvidenceLot(lot),
+      project: mapHoldPointEvidenceProject(lot.project),
+      itpTemplate: mapHoldPointEvidenceItpTemplate(itpInstance.template),
       checklist: checklistWithStatus,
       testResults,
       photos,
-      summary: {
-        totalChecklistItems: checklistWithStatus.length,
-        completedItems: checklistWithStatus.filter((i) => i.isCompleted).length,
-        verifiedItems: checklistWithStatus.filter((i) => i.isVerified).length,
-        totalTestResults: testResults.length,
-        passingTests: testResults.filter((t) => t.passFail === 'pass').length,
-        totalPhotos: photos.length,
-        totalAttachments: checklistWithStatus.reduce((sum, i) => sum + i.attachments.length, 0),
-      },
+      summary: buildHoldPointEvidenceSummary(checklistWithStatus, testResults, photos),
       generatedAt: new Date().toISOString(),
     };
 
