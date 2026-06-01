@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import crypto from 'crypto';
-import type { NotificationAlert as NotificationAlertRecord, Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import {
@@ -49,6 +48,17 @@ import {
   getDigestItems,
   getUserDigestQueue,
 } from './notifications/digestQueue.js';
+import {
+  generateAlertId,
+  parseAlertSeverity,
+  parseAlertStatusFilter,
+  parseAlertType,
+  parseOptionalAlertType,
+  toAlert,
+  type Alert,
+  type AlertSeverity,
+  type AlertType,
+} from './notifications/alertMappers.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -56,6 +66,9 @@ export type { NotificationTiming };
 // Re-exported so external modules that import the digest-queue accessor from
 // this route file keep working after the digest-queue helper extraction.
 export { getUserDigestQueue };
+// Re-exported so external modules that import the alert value types from this
+// route file keep working after the alert-mapper helper extraction.
+export type { Alert, AlertSeverity, AlertType };
 
 export const notificationsRouter = Router();
 
@@ -767,30 +780,6 @@ notificationsRouter.delete(
 // ALERT ESCALATION SYSTEM
 // ============================================================================
 
-// Alert types that can be escalated
-export type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test';
-
-// Alert severity levels
-export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical';
-
-// Alert interface
-export interface Alert {
-  id: string;
-  type: AlertType;
-  severity: AlertSeverity;
-  title: string;
-  message: string;
-  entityId: string; // ID of the related entity (NCR, hold point, etc.)
-  entityType: string;
-  projectId?: string;
-  assignedTo: string; // User ID who should resolve this
-  createdAt: Date;
-  resolvedAt?: Date;
-  escalatedAt?: Date;
-  escalationLevel: number; // 0 = not escalated, 1 = first escalation, 2 = second, etc.
-  escalatedTo?: string[]; // User IDs of escalation recipients
-}
-
 // Escalation configuration (in hours)
 const ESCALATION_CONFIG = {
   overdue_ncr: {
@@ -814,83 +803,6 @@ const ESCALATION_CONFIG = {
     escalationRoles: ['quality_manager', 'project_manager'],
   },
 };
-
-const ALERT_TYPES: AlertType[] = [
-  'overdue_ncr',
-  'stale_hold_point',
-  'pending_approval',
-  'overdue_test',
-];
-const ALERT_SEVERITIES: AlertSeverity[] = ['low', 'medium', 'high', 'critical'];
-const ALERT_STATUS_FILTERS = ['active', 'resolved', 'escalated'] as const;
-type AlertStatusFilter = (typeof ALERT_STATUS_FILTERS)[number];
-
-function parseAlertType(value: unknown): AlertType {
-  if (typeof value === 'string' && ALERT_TYPES.includes(value as AlertType)) {
-    return value as AlertType;
-  }
-  throw AppError.badRequest('Invalid alert type');
-}
-
-function parseOptionalAlertType(value: unknown): AlertType | undefined {
-  const parsed = parseOptionalString(value, 'type', MAX_NOTIFICATION_FILTER_LENGTH);
-  if (!parsed) {
-    return undefined;
-  }
-
-  return parseAlertType(parsed);
-}
-
-function parseAlertStatusFilter(value: unknown): AlertStatusFilter | undefined {
-  const parsed = parseOptionalString(value, 'status', 20);
-  if (!parsed) {
-    return undefined;
-  }
-
-  if (!ALERT_STATUS_FILTERS.includes(parsed as AlertStatusFilter)) {
-    throw AppError.badRequest('Invalid alert status');
-  }
-
-  return parsed as AlertStatusFilter;
-}
-
-function parseAlertSeverity(value: unknown): AlertSeverity {
-  if (value === undefined || value === null || value === '') {
-    return 'medium';
-  }
-  if (typeof value === 'string' && ALERT_SEVERITIES.includes(value as AlertSeverity)) {
-    return value as AlertSeverity;
-  }
-  throw AppError.badRequest('Invalid alert severity');
-}
-
-function parseEscalatedTo(value: Prisma.JsonValue | null): string[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const userIds = value.filter((item): item is string => typeof item === 'string');
-  return userIds.length > 0 ? userIds : undefined;
-}
-
-function toAlert(record: NotificationAlertRecord): Alert {
-  return {
-    id: record.id,
-    type: parseAlertType(record.type),
-    severity: parseAlertSeverity(record.severity),
-    title: record.title,
-    message: record.message,
-    entityId: record.entityId,
-    entityType: record.entityType,
-    projectId: record.projectId ?? undefined,
-    assignedTo: record.assignedToId,
-    createdAt: record.createdAt,
-    resolvedAt: record.resolvedAt ?? undefined,
-    escalatedAt: record.escalatedAt ?? undefined,
-    escalationLevel: record.escalationLevel,
-    escalatedTo: parseEscalatedTo(record.escalatedTo),
-  };
-}
 
 async function createAlertRecord(alert: Alert): Promise<Alert> {
   const record = await prisma.notificationAlert.create({
@@ -931,11 +843,6 @@ async function updateAlertEscalation(
   });
 
   return toAlert(record);
-}
-
-// Generate unique alert ID
-function generateAlertId(): string {
-  return `alert-${crypto.randomUUID()}`;
 }
 
 // POST /api/notifications/alerts - Create a new alert
