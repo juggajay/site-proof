@@ -30,8 +30,8 @@ import {
   deleteCertificateFromSupabase,
   isOwnedSupabaseCertificateUrl,
 } from './testResults/certificateStorage.js';
-import { LOW_CONFIDENCE_THRESHOLD } from './testResults/certificateExtraction.js';
 import { applyTestResultCorrections } from './testResults/corrections.js';
+import { buildCertificateExtractionResponse } from './testResults/extractionResponse.js';
 import {
   processBatchCertificateUpload,
   processCertificateUpload,
@@ -99,9 +99,6 @@ export const testResultsRouter = Router();
 
 // Apply authentication middleware to all test result routes
 testResultsRouter.use(requireAuth);
-
-type TestFieldValue = string | number | Date | Prisma.Decimal | null;
-type TestFieldStatus = { value: TestFieldValue; confidence: number; status: string };
 
 // GET /api/test-results/specifications - Get all test type specifications
 testResultsRouter.get(
@@ -1304,63 +1301,7 @@ testResultsRouter.get(
 
     await requireTestResultReadAccess(testResult, user);
 
-    if (!testResult.aiExtracted) {
-      return res.json({
-        extraction: {
-          aiExtracted: false,
-          message: 'This test result was not AI-extracted',
-        },
-      });
-    }
-
-    const confidence = (
-      testResult.aiConfidence ? JSON.parse(testResult.aiConfidence) : {}
-    ) as Record<string, number>;
-    const lowConfidenceThreshold = LOW_CONFIDENCE_THRESHOLD;
-    const mediumConfidenceThreshold = 0.9;
-
-    // Build field status with confidence indicators
-    const fieldStatus: Record<string, TestFieldStatus> = {};
-
-    const fields = [
-      { key: 'testType', value: testResult.testType },
-      { key: 'laboratoryName', value: testResult.laboratoryName },
-      { key: 'laboratoryReportNumber', value: testResult.laboratoryReportNumber },
-      { key: 'sampleDate', value: testResult.sampleDate },
-      { key: 'testDate', value: testResult.testDate },
-      { key: 'sampleLocation', value: testResult.sampleLocation },
-      { key: 'resultValue', value: testResult.resultValue },
-      { key: 'resultUnit', value: testResult.resultUnit },
-      { key: 'specificationMin', value: testResult.specificationMin },
-      { key: 'specificationMax', value: testResult.specificationMax },
-    ];
-
-    for (const { key, value } of fields) {
-      const conf = confidence[key] || 1.0;
-      let status = 'high';
-      if (conf < lowConfidenceThreshold) status = 'low';
-      else if (conf < mediumConfidenceThreshold) status = 'medium';
-
-      fieldStatus[key] = { value, confidence: conf, status };
-    }
-
-    const lowConfidenceFields = Object.entries(fieldStatus)
-      .filter(([_, f]) => f.status === 'low')
-      .map(([key, f]) => ({ field: key, confidence: f.confidence }));
-
-    res.json({
-      extraction: {
-        aiExtracted: true,
-        certificateDoc: testResult.certificateDoc,
-        fields: fieldStatus,
-        lowConfidenceFields,
-        needsReview: lowConfidenceFields.length > 0,
-        thresholds: {
-          low: lowConfidenceThreshold,
-          medium: mediumConfidenceThreshold,
-        },
-      },
-    });
+    res.json(buildCertificateExtractionResponse(testResult));
   }),
 );
 
