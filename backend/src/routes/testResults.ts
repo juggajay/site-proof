@@ -50,7 +50,10 @@ import {
   buildTestResultRejectionNotification,
   buildTestResultVerifiedResponse,
 } from './testResults/verificationResponses.js';
-import { buildTestResultWorkflowResponse } from './testResults/workflowResponse.js';
+import {
+  buildTestResultStatusUpdatedResponse,
+  buildTestResultWorkflowResponse,
+} from './testResults/workflowResponse.js';
 import {
   MAX_REJECTION_REASON_LENGTH,
   MAX_RESULT_UNIT_LENGTH,
@@ -1183,14 +1186,7 @@ testResultsRouter.post(
       req,
     });
 
-    res.json({
-      message: `Test result status updated to '${STATUS_LABELS[status] || status}'`,
-      testResult: updatedTestResult,
-      nextTransitions: (VALID_STATUS_TRANSITIONS[status] || []).map((s) => ({
-        status: s,
-        label: STATUS_LABELS[s] || s,
-      })),
-    });
+    res.json(buildTestResultStatusUpdatedResponse(status, updatedTestResult));
   }),
 );
 

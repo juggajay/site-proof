@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildTestResultWorkflowResponse } from './workflowResponse.js';
+import {
+  buildTestResultStatusUpdatedResponse,
+  buildTestResultWorkflowResponse,
+} from './workflowResponse.js';
 
 describe('buildTestResultWorkflowResponse', () => {
   it('builds the requested-state workflow with creator transition permission', () => {
@@ -118,5 +121,27 @@ describe('buildTestResultWorkflowResponse', () => {
     expect(response.workflow.nextTransitions).toEqual([]);
     expect(response.workflow.canAdvance).toBe(false);
     expect(response.workflow.isComplete).toBe(true);
+  });
+});
+
+describe('buildTestResultStatusUpdatedResponse', () => {
+  it('returns the labelled status update response and next transition labels', () => {
+    const testResult = { id: 'test-1', status: 'results_received' };
+
+    expect(buildTestResultStatusUpdatedResponse('results_received', testResult)).toEqual({
+      message: "Test result status updated to 'Results Received'",
+      testResult,
+      nextTransitions: [{ status: 'entered', label: 'Entered' }],
+    });
+  });
+
+  it('preserves unknown statuses by echoing the raw label with no transitions', () => {
+    const testResult = { id: 'test-1', status: 'custom_status' };
+
+    expect(buildTestResultStatusUpdatedResponse('custom_status', testResult)).toEqual({
+      message: "Test result status updated to 'custom_status'",
+      testResult,
+      nextTransitions: [],
+    });
   });
 });
