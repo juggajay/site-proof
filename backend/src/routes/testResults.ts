@@ -54,7 +54,9 @@ import {
 } from './testResults/specificationResponses.js';
 import {
   buildTestRequestFormMetadata,
+  buildTestRequestFormResponse,
   buildVerificationViewData,
+  buildVerificationViewResponse,
   renderTestRequestFormHtml,
 } from './testResults/presentation.js';
 import { STATUS_LABELS, VALID_STATUS_TRANSITIONS } from './testResults/statusWorkflow.js';
@@ -754,7 +756,7 @@ testResultsRouter.get(
 
     if (format === 'json') {
       // Return JSON metadata for the request form
-      res.json({ testRequestForm: buildTestRequestFormMetadata(testResult) });
+      res.json(buildTestRequestFormResponse(buildTestRequestFormMetadata(testResult)));
     } else {
       // Return HTML for printing
       res.setHeader('Content-Type', 'text/html');
@@ -830,7 +832,7 @@ testResultsRouter.get(
 
     const canVerify = TEST_VERIFIERS.includes(userProjectRole || '');
 
-    res.json({ verificationView: buildVerificationViewData(testResult, { canVerify }) });
+    res.json(buildVerificationViewResponse(buildVerificationViewData(testResult, { canVerify })));
   }),
 );
 
