@@ -78,6 +78,10 @@ import { shapeLotDetailResponse } from './lots/detailPresentation.js';
 import { prepareClonedLot } from './lots/cloneHelpers.js';
 import { assertLotsBulkMutable } from './lots/bulkMutationGuards.js';
 import { buildLotListOrderBy, buildLotListSelect, buildLotListWhere } from './lots/listQuery.js';
+import {
+  buildLotConformedResponse,
+  buildLotStatusOverrideResponse,
+} from './lots/statusResponses.js';
 
 export const lotsRouter = Router();
 
@@ -1579,10 +1583,7 @@ lotsRouter.post(
       req,
     });
 
-    res.json({
-      message: 'Lot conformed successfully',
-      lot: updatedLot,
-    });
+    res.json(buildLotConformedResponse(updatedLot));
   }),
 );
 
@@ -1659,12 +1660,7 @@ lotsRouter.post(
       req,
     });
 
-    res.json({
-      message: 'Status overridden successfully',
-      lot: updatedLot,
-      previousStatus,
-      reason: reason.trim(),
-    });
+    res.json(buildLotStatusOverrideResponse(updatedLot, previousStatus, reason));
   }),
 );
 
