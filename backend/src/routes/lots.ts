@@ -61,19 +61,12 @@ import {
   CONFORMED_LOT_BUDGET_EDIT_FIELDS,
   getProvidedUpdateFields,
 } from './lots/updateFields.js';
+import { LOT_CREATORS, LOT_DELETERS, LOT_CONFORMERS, LOT_FORCE_CONFORMERS } from './lots/roles.js';
 
 export const lotsRouter = Router();
 
 // Apply authentication middleware to all lot routes
 lotsRouter.use(requireAuth);
-
-// Roles that can create lots
-const LOT_CREATORS = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'];
-// Roles that can delete lots
-const LOT_DELETERS = ['owner', 'admin', 'project_manager'];
-// Roles that can conform lots (quality management)
-const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager'];
-const LOT_FORCE_CONFORMERS = ['owner', 'admin'];
 
 // GET /api/lots - List all lots for a project (paginated)
 lotsRouter.get(
