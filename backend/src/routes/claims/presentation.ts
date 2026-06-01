@@ -47,6 +47,20 @@ type ClaimCertificationItem = {
   claimedLots: unknown[];
 };
 
+type ClaimPaymentItem = {
+  id: string;
+  claimNumber: number;
+  claimPeriodStart: Date;
+  claimPeriodEnd: Date;
+  status: string;
+  totalClaimedAmount: unknown;
+  certifiedAmount: unknown;
+  paidAmount: unknown;
+  paidAt: Date | null;
+  paymentReference: string | null;
+  claimedLots: unknown[];
+};
+
 function formatClaimDateKey(date: Date): string {
   return date.toISOString().split('T')[0];
 }
@@ -123,5 +137,52 @@ export function buildClaimCertifiedResponse(
     claim: mapClaimCertificationItem(claim, variationNotes, certificationDocumentId),
     previousStatus,
     message: 'Claim certified successfully',
+  };
+}
+
+export function mapClaimPaymentItem(claim: ClaimPaymentItem) {
+  return {
+    id: claim.id,
+    claimNumber: claim.claimNumber,
+    periodStart: formatClaimDateKey(claim.claimPeriodStart),
+    periodEnd: formatClaimDateKey(claim.claimPeriodEnd),
+    status: claim.status,
+    totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
+    certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
+    paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
+    paidAt: claim.paidAt?.toISOString() || null,
+    paymentReference: claim.paymentReference || null,
+    lotCount: claim.claimedLots.length,
+  };
+}
+
+export function buildClaimPaymentRecordedResponse(
+  claim: ClaimPaymentItem,
+  payment: {
+    amount: number;
+    date: string;
+    reference?: string;
+    notes?: string;
+  },
+  outstanding: number,
+  previousStatus: string,
+  paymentHistory: unknown[],
+) {
+  return {
+    claim: mapClaimPaymentItem(claim),
+    payment: {
+      amount: payment.amount,
+      date: payment.date,
+      reference: payment.reference || null,
+      notes: payment.notes || null,
+    },
+    outstanding: Math.max(0, outstanding),
+    isFullyPaid: outstanding <= 0,
+    previousStatus,
+    paymentHistory,
+    message:
+      outstanding <= 0
+        ? 'Claim fully paid'
+        : `Partial payment recorded. Outstanding: $${outstanding.toFixed(2)}`,
   };
 }

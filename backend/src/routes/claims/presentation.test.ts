@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildClaimCertifiedResponse,
+  buildClaimPaymentRecordedResponse,
   mapClaimCertificationItem,
   mapClaimCreateItem,
   mapClaimListItem,
+  mapClaimPaymentItem,
   mapClaimableLot,
 } from './presentation.js';
 
@@ -182,5 +184,85 @@ describe('claim certification presentation', () => {
         },
       },
     );
+  });
+});
+
+describe('claim payment presentation', () => {
+  const paidClaim = {
+    id: 'claim-5',
+    claimNumber: 12,
+    claimPeriodStart: new Date('2026-06-01T10:00:00.000Z'),
+    claimPeriodEnd: new Date('2026-06-30T10:00:00.000Z'),
+    status: 'partially_paid',
+    totalClaimedAmount: '48000.25',
+    certifiedAmount: '47000.10',
+    paidAmount: '12000',
+    paidAt: new Date('2026-07-05T04:05:06.000Z'),
+    paymentReference: 'EFT-123',
+    claimedLots: [{ id: 'lot-1' }, { id: 'lot-2' }],
+  };
+
+  it('preserves the paid-claim response item shape', () => {
+    expect(mapClaimPaymentItem(paidClaim)).toEqual({
+      id: 'claim-5',
+      claimNumber: 12,
+      periodStart: '2026-06-01',
+      periodEnd: '2026-06-30',
+      status: 'partially_paid',
+      totalClaimedAmount: 48000.25,
+      certifiedAmount: 47000.1,
+      paidAmount: 12000,
+      paidAt: '2026-07-05T04:05:06.000Z',
+      paymentReference: 'EFT-123',
+      lotCount: 2,
+    });
+  });
+
+  it('preserves partial-payment response wording and clamps displayed outstanding', () => {
+    const history = [{ amount: 12000, date: '2026-07-05' }];
+
+    expect(
+      buildClaimPaymentRecordedResponse(
+        paidClaim,
+        { amount: 12000, date: '2026-07-05', reference: 'EFT-123' },
+        35000.1,
+        'certified',
+        history,
+      ),
+    ).toMatchObject({
+      payment: {
+        amount: 12000,
+        date: '2026-07-05',
+        reference: 'EFT-123',
+        notes: null,
+      },
+      outstanding: 35000.1,
+      isFullyPaid: false,
+      previousStatus: 'certified',
+      paymentHistory: history,
+      message: 'Partial payment recorded. Outstanding: $35000.10',
+    });
+  });
+
+  it('preserves fully-paid response wording when outstanding is zero or below', () => {
+    expect(
+      buildClaimPaymentRecordedResponse(
+        { ...paidClaim, status: 'paid', paidAmount: '47000.10' },
+        { amount: 35000.1, date: '2026-07-06', notes: 'Final' },
+        -0.01,
+        'partially_paid',
+        [],
+      ),
+    ).toMatchObject({
+      payment: {
+        amount: 35000.1,
+        date: '2026-07-06',
+        reference: null,
+        notes: 'Final',
+      },
+      outstanding: 0,
+      isFullyPaid: true,
+      message: 'Claim fully paid',
+    });
   });
 });
