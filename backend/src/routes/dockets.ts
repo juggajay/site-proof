@@ -48,6 +48,7 @@ import {
 } from './dockets/formatting.js';
 import {
   mapDocketLabourEntry,
+  mapDocketListItem,
   mapDocketPlantEntry,
   sumDocketLabourTotals,
   sumDocketPlantTotals,
@@ -135,30 +136,7 @@ docketsRouter.get(
     ]);
 
     // Format dockets for response
-    const formattedDockets = dockets.map((docket) => ({
-      id: docket.id,
-      docketNumber: formatDocketNumber(docket.id),
-      subcontractor: docket.subcontractorCompany.companyName,
-      subcontractorId: docket.subcontractorCompany.id,
-      date: formatDocketDate(docket.date),
-      status: docket.status,
-      notes: docket.notes,
-      labourHours: docket.labourEntries.reduce(
-        (sum, entry) => sum + (Number(entry.submittedHours) || 0),
-        0,
-      ),
-      plantHours: docket.plantEntries.reduce(
-        (sum, entry) => sum + (Number(entry.hoursOperated) || 0),
-        0,
-      ),
-      totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
-      totalLabourApproved: Number(docket.totalLabourApproved) || 0,
-      totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
-      totalPlantApproved: Number(docket.totalPlantApproved) || 0,
-      submittedAt: docket.submittedAt,
-      approvedAt: docket.approvedAt,
-      foremanNotes: docket.foremanNotes,
-    }));
+    const formattedDockets = dockets.map((docket) => mapDocketListItem(docket));
 
     res.json({
       data: formattedDockets,

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   mapDocketLabourEntry,
+  mapDocketListItem,
   mapDocketPlantEntry,
   sumDocketLabourTotals,
   sumDocketPlantTotals,
   type DocketLabourEntrySource,
+  type DocketListItemSource,
   type DocketPlantEntrySource,
 } from './presentation.js';
 
@@ -41,6 +43,23 @@ const plantSource: DocketPlantEntrySource = {
   submittedCost: 900,
   approvedCost: 880,
   adjustmentReason: 'fuel adjusted',
+};
+
+const listSource: DocketListItemSource = {
+  id: 'abc123def456',
+  subcontractorCompany: { id: 'sc-1', companyName: 'Acme Concreting' },
+  date: new Date('2026-03-04T10:00:00.000Z'),
+  status: 'submitted',
+  notes: 'site notes',
+  labourEntries: [{ submittedHours: 8 }, { submittedHours: 4.5 }],
+  plantEntries: [{ hoursOperated: 6 }, { hoursOperated: 2 }],
+  totalLabourSubmitted: 600,
+  totalLabourApproved: 550,
+  totalPlantSubmitted: 800,
+  totalPlantApproved: 780,
+  submittedAt: new Date('2026-03-05T01:00:00.000Z'),
+  approvedAt: new Date('2026-03-06T02:00:00.000Z'),
+  foremanNotes: 'approved with notes',
 };
 
 describe('dockets presentation helpers (pure)', () => {
@@ -235,6 +254,96 @@ describe('dockets presentation helpers (pure)', () => {
 
     it('returns zeros for an empty list', () => {
       expect(sumDocketPlantTotals([])).toEqual({ hours: 0, submittedCost: 0, approvedCost: 0 });
+    });
+  });
+
+  describe('mapDocketListItem', () => {
+    it('maps a docket row into the GET /api/dockets list shape (fields + order)', () => {
+      const result = mapDocketListItem(listSource);
+      expect(result).toStrictEqual({
+        id: 'abc123def456',
+        docketNumber: 'DKT-ABC123', // DKT- + first 6 chars uppercased
+        subcontractor: 'Acme Concreting',
+        subcontractorId: 'sc-1',
+        date: '2026-03-04', // formatDocketDate -> ISO (UTC) date part
+        status: 'submitted',
+        notes: 'site notes',
+        labourHours: 12.5, // 8 + 4.5
+        plantHours: 8, // 6 + 2
+        totalLabourSubmitted: 600,
+        totalLabourApproved: 550,
+        totalPlantSubmitted: 800,
+        totalPlantApproved: 780,
+        submittedAt: listSource.submittedAt, // Date passed through unchanged
+        approvedAt: listSource.approvedAt,
+        foremanNotes: 'approved with notes',
+      });
+      // Lock the response key order to the route's original object literal.
+      expect(Object.keys(result)).toEqual([
+        'id',
+        'docketNumber',
+        'subcontractor',
+        'subcontractorId',
+        'date',
+        'status',
+        'notes',
+        'labourHours',
+        'plantHours',
+        'totalLabourSubmitted',
+        'totalLabourApproved',
+        'totalPlantSubmitted',
+        'totalPlantApproved',
+        'submittedAt',
+        'approvedAt',
+        'foremanNotes',
+      ]);
+    });
+
+    it('coerces labour/plant hours and stored totals numerically, defaulting missing/invalid to 0', () => {
+      const result = mapDocketListItem({
+        id: 'lower-id',
+        subcontractorCompany: { id: 'sc-2', companyName: 'Beta Earthworks' },
+        date: new Date('2026-01-01T00:00:00.000Z'),
+        status: 'draft',
+        notes: null,
+        labourEntries: [
+          { submittedHours: null },
+          { submittedHours: undefined },
+          { submittedHours: '3' }, // numeric strings convert
+          { submittedHours: 'abc' }, // invalid -> 0
+        ],
+        plantEntries: [{ hoursOperated: null }, { hoursOperated: '2.5' }],
+        totalLabourSubmitted: null,
+        totalLabourApproved: undefined,
+        totalPlantSubmitted: null,
+        totalPlantApproved: 'oops',
+        submittedAt: null,
+        approvedAt: null,
+        foremanNotes: null,
+      });
+      expect(result.labourHours).toBe(3); // 0 + 0 + 3 + 0
+      expect(result.plantHours).toBe(2.5); // 0 + 2.5
+      expect(result.totalLabourSubmitted).toBe(0);
+      expect(result.totalLabourApproved).toBe(0);
+      expect(result.totalPlantSubmitted).toBe(0);
+      expect(result.totalPlantApproved).toBe(0);
+      // Nullable optional fields pass through untouched.
+      expect(result.notes).toBeNull();
+      expect(result.foremanNotes).toBeNull();
+      expect(result.submittedAt).toBeNull();
+      expect(result.approvedAt).toBeNull();
+    });
+
+    it('preserves subcontractor id/name and applies docket-number + date formatting', () => {
+      const result = mapDocketListItem({
+        ...listSource,
+        id: 'ff00aa-extra',
+        date: new Date('2026-12-31T23:30:00.000Z'),
+      });
+      expect(result.subcontractor).toBe('Acme Concreting');
+      expect(result.subcontractorId).toBe('sc-1');
+      expect(result.docketNumber).toBe('DKT-FF00AA');
+      expect(result.date).toBe('2026-12-31'); // UTC-based, TZ-stable
     });
   });
 });
