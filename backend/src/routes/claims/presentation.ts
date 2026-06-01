@@ -146,6 +146,10 @@ export function buildClaimDetailResponse<TClaim>(claim: TClaim) {
   return { claim };
 }
 
+export function buildClaimCreatedResponse<TClaim>(claim: TClaim) {
+  return { claim };
+}
+
 export function buildClaimEvidencePackageResponse<TEvidencePackage>(
   evidencePackage: TEvidencePackage,
 ) {

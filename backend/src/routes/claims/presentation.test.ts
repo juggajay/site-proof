@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildClaimCertifiedResponse,
+  buildClaimCreatedResponse,
   buildClaimDeletedResponse,
   buildClaimDetailResponse,
   buildClaimEvidencePackageResponse,
@@ -208,6 +209,7 @@ describe('claim collection response helpers', () => {
     const claim = { id: 'claim-2', status: 'draft' };
 
     expect(buildClaimDetailResponse(claim)).toEqual({ claim });
+    expect(buildClaimCreatedResponse(claim)).toEqual({ claim });
     expect(buildClaimDeletedResponse()).toEqual({ success: true });
   });
 
