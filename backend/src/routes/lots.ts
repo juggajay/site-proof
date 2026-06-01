@@ -74,6 +74,7 @@ import {
   suggestLotNumber,
 } from './lots/suggestNumber.js';
 import { presentLotList } from './lots/listPresentation.js';
+import { shapeLotDetailResponse } from './lots/detailPresentation.js';
 
 export const lotsRouter = Router();
 
@@ -427,22 +428,14 @@ lotsRouter.get(
       portalModule === 'itps' ? ['itps'] : [],
     );
 
-    // Remove sensitive fields before sending response
-    const {
-      projectId: _projectId,
-      assignedSubcontractorId: _assignedSubcontractorId,
-      ...lotResponse
-    } = lot;
+    // Shape the response: strip internal fields and scope assignments for
+    // subcontractor users (route owns resolving their company id via the DB).
+    const isSubcontractor = isSubcontractorUser(user);
+    const subcontractorCompanyId = isSubcontractor
+      ? await getProjectSubcontractorCompanyId(user.id, lot.projectId)
+      : null;
 
-    if (isSubcontractorUser(user)) {
-      const subcontractorCompanyId = await getProjectSubcontractorCompanyId(user.id, lot.projectId);
-      lotResponse.subcontractorAssignments = lotResponse.subcontractorAssignments.filter(
-        (assignment) => assignment.subcontractorCompanyId === subcontractorCompanyId,
-      );
-      if (lot.assignedSubcontractorId !== subcontractorCompanyId) {
-        lotResponse.assignedSubcontractor = null;
-      }
-    }
+    const lotResponse = shapeLotDetailResponse(lot, { isSubcontractor, subcontractorCompanyId });
 
     res.json({ lot: lotResponse });
   }),
