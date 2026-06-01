@@ -73,6 +73,7 @@ import {
   resolveLotStartingNumber,
   suggestLotNumber,
 } from './lots/suggestNumber.js';
+import { presentLotList } from './lots/listPresentation.js';
 
 export const lotsRouter = Router();
 
@@ -278,24 +279,12 @@ lotsRouter.get(
     ]);
 
     // Transform response to match frontend expectations
-    // Frontend expects itpInstances array, but we have singular itpInstance
-    const visibleLots = lots.map((lot) => ({
-      ...lot,
-      budgetAmount: canViewBudgetAmount ? lot.budgetAmount : null,
-      subcontractorAssignments: subcontractorCompanyId
-        ? lot.subcontractorAssignments.filter(
-            (assignment) => assignment.subcontractorCompanyId === subcontractorCompanyId,
-          )
-        : lot.subcontractorAssignments,
-    }));
-
-    const transformedLots =
-      includeITP === 'true'
-        ? visibleLots.map((lot) => ({
-            ...lot,
-            itpInstances: lot.itpInstance ? [lot.itpInstance] : [],
-          }))
-        : visibleLots;
+    // (budget visibility, subcontractor-assignment filtering, itpInstances shape)
+    const transformedLots = presentLotList(lots, {
+      canViewBudgetAmount,
+      subcontractorCompanyId,
+      includeITP: includeITP === 'true',
+    });
 
     res.json({
       data: transformedLots,
