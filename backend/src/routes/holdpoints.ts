@@ -13,13 +13,7 @@ import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { parsePagination, getPaginationMeta } from '../lib/pagination.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import {
-  activeSubcontractorCompanyWhere,
-  checkProjectAccess,
-  getEffectiveProjectRole,
-  isSubcontractorPortalRole,
-  requireSubcontractorPortalModuleAccess,
-} from '../lib/projectAccess.js';
+import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
 import { buildFrontendUrl } from '../lib/runtimeConfig.js';
 import { logError } from '../lib/serverLogger.js';
 import {
@@ -43,6 +37,17 @@ import {
   parseReleaseDateTimeInput,
   parseRequiredDateTimeInput,
 } from './holdpoints/dateParsing.js';
+import {
+  HP_REQUEST_ROLES,
+  isSubcontractorUser,
+  requireProjectReadAccess,
+  requireHoldPointsPortalAccess,
+  requireInternalProjectReadAccess,
+  canRequestHoldPointRelease,
+  requireLotReadAccess,
+  requireHoldPointReadAccess,
+  requireProjectRole,
+} from './holdpoints/access.js';
 
 // Type for hold point list item
 interface HoldPointListItem {
@@ -95,18 +100,6 @@ function holdPointReleaseTokenLookup(rawToken: string): Prisma.HoldPointReleaseT
 
 const holdpointsRouter = Router();
 
-type AuthenticatedUser = NonNullable<Request['user']>;
-type LotAccessTarget = { id: string; projectId: string };
-type HoldPointAccessTarget = { lot: LotAccessTarget };
-
-const HP_REQUEST_ROLES = [
-  'owner',
-  'admin',
-  'project_manager',
-  'site_engineer',
-  'foreman',
-  'quality_manager',
-];
 const HP_RELEASE_ROLES = [...HP_REQUEST_ROLES, 'superintendent'];
 const HP_SUPERINTENDENT_RELEASE_ROLES = ['owner', 'admin', 'project_manager', 'superintendent'];
 const HP_ESCALATION_ROLES = [
@@ -214,145 +207,6 @@ function parseHoldPointRouteParam(
   }
 
   return trimmed;
-}
-
-function isSubcontractorUser(user: AuthenticatedUser): boolean {
-  return isSubcontractorPortalRole(user.roleInCompany);
-}
-
-async function requireProjectReadAccess(
-  projectId: string,
-  user: AuthenticatedUser,
-  message = 'You do not have access to this project',
-) {
-  const hasAccess = await checkProjectAccess(user.id, projectId);
-  if (!hasAccess) {
-    throw AppError.forbidden(message);
-  }
-}
-
-async function requireHoldPointsPortalAccess(projectId: string, user: AuthenticatedUser) {
-  await requireSubcontractorPortalModuleAccess({
-    userId: user.id,
-    role: user.roleInCompany,
-    projectId,
-    module: 'holdPoints',
-  });
-}
-
-async function requireInternalProjectReadAccess(
-  projectId: string,
-  user: AuthenticatedUser,
-  message = 'You do not have access to this project',
-) {
-  if (isSubcontractorUser(user)) {
-    throw AppError.forbidden(message);
-  }
-
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-  if (!role || isSubcontractorPortalRole(role)) {
-    throw AppError.forbidden(message);
-  }
-}
-
-async function canRequestHoldPointRelease(
-  projectId: string,
-  user: AuthenticatedUser,
-): Promise<boolean> {
-  if (isSubcontractorUser(user)) {
-    return false;
-  }
-
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-  return Boolean(role && HP_REQUEST_ROLES.includes(role));
-}
-
-async function hasAssignedSubcontractorLotAccess(
-  projectId: string,
-  lotId: string,
-  user: AuthenticatedUser,
-): Promise<boolean> {
-  if (!isSubcontractorUser(user)) {
-    return true;
-  }
-
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId: user.id,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-    },
-    select: { subcontractorCompanyId: true },
-  });
-
-  if (!subcontractorUser) {
-    return false;
-  }
-
-  const [assignment, legacyLot] = await Promise.all([
-    prisma.lotSubcontractorAssignment.findFirst({
-      where: {
-        projectId,
-        lotId,
-        subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
-        status: 'active',
-      },
-      select: { id: true },
-    }),
-    prisma.lot.findFirst({
-      where: {
-        id: lotId,
-        projectId,
-        assignedSubcontractorId: subcontractorUser.subcontractorCompanyId,
-      },
-      select: { id: true },
-    }),
-  ]);
-
-  return Boolean(assignment || legacyLot);
-}
-
-async function requireLotReadAccess(
-  lot: LotAccessTarget,
-  user: AuthenticatedUser,
-  message = 'You do not have access to this lot',
-) {
-  await requireProjectReadAccess(lot.projectId, user, message);
-  await requireHoldPointsPortalAccess(lot.projectId, user);
-
-  if (!(await hasAssignedSubcontractorLotAccess(lot.projectId, lot.id, user))) {
-    throw AppError.forbidden(message);
-  }
-}
-
-async function requireHoldPointReadAccess(
-  holdPoint: HoldPointAccessTarget,
-  user: AuthenticatedUser,
-  message = 'You do not have access to this hold point',
-) {
-  await requireLotReadAccess(holdPoint.lot, user, message);
-}
-
-async function requireProjectRole(
-  projectId: string,
-  user: AuthenticatedUser,
-  allowedRoles: string[],
-  message: string,
-): Promise<string> {
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-  if (!role || !allowedRoles.includes(role)) {
-    throw AppError.forbidden(message);
-  }
-
-  return role;
 }
 
 // Utility function to calculate appropriate notification time based on working hours
