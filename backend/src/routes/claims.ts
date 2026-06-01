@@ -11,16 +11,15 @@ import path from 'path';
 import { isStoredDocumentUploadPath } from '../lib/uploadPaths.js';
 import { DOCUMENTS_BUCKET, getSupabaseStoragePath } from '../lib/supabase.js';
 import { logError } from '../lib/serverLogger.js';
-import {
-  buildClaimEvidenceReviewFromInputs,
-  buildLotReadinessFromInputs,
-} from '../lib/evidenceReadiness.js';
+import { buildLotReadinessFromInputs } from '../lib/evidenceReadiness.js';
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js';
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import {
   buildClaimCertifiedResponse,
   buildClaimDeletedResponse,
   buildClaimDetailResponse,
+  buildClaimEvidencePackageResponse,
+  buildClaimEvidenceReviewResponse,
   buildClaimReadinessResponse,
   buildClaimableLotsResponse,
   buildClaimsListResponse,
@@ -1446,7 +1445,7 @@ router.get(
       generationTimeMs: Date.now() - startTime,
     };
 
-    res.json(evidencePackage);
+    res.json(buildClaimEvidencePackageResponse(evidencePackage));
   }),
 );
 
@@ -1495,7 +1494,7 @@ router.get(
       throw AppError.notFound('Claim');
     }
 
-    res.json(buildClaimEvidenceReviewFromInputs({ claim }));
+    res.json(buildClaimEvidenceReviewResponse(claim));
   }),
 );
 
