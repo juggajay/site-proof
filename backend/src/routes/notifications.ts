@@ -12,7 +12,6 @@ import {
 } from '../lib/email.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { logError } from '../lib/serverLogger.js';
 import {
   MAX_NOTIFICATION_FILTER_LENGTH,
   MAX_NOTIFICATION_MESSAGE_LENGTH,
@@ -64,6 +63,7 @@ import {
   createAlertRecord,
   updateAlertEscalation,
 } from './notifications/alertPersistence.js';
+import { getNotificationTiming, sendNotificationIfEnabled } from './notifications/delivery.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -74,6 +74,10 @@ export { getUserDigestQueue };
 // Re-exported so external modules that import the alert value types from this
 // route file keep working after the alert-mapper helper extraction.
 export type { Alert, AlertSeverity, AlertType };
+// Re-exported so the claims, dockets, holdpoints, projects and testResults
+// routes that import these delivery helpers from this route file keep working
+// after the delivery helper extraction.
+export { getNotificationTiming, sendNotificationIfEnabled };
 
 export const notificationsRouter = Router();
 
@@ -527,98 +531,6 @@ notificationsRouter.delete(
     res.json({ success: true, message: 'Email queue cleared' });
   }),
 );
-
-// Type for notification types that support timing
-type NotificationTypeWithTiming =
-  | 'mentions'
-  | 'ncrAssigned'
-  | 'ncrStatusChange'
-  | 'holdPointReminder'
-  | 'holdPointRelease'
-  | 'commentReply'
-  | 'scheduledReports'
-  | 'diaryReminder';
-
-// Helper function to send notification email if user preferences allow
-// Returns: { sent: boolean, queued: boolean } - sent means immediate, queued means added to digest
-export async function sendNotificationIfEnabled(
-  userId: string,
-  notificationType: NotificationTypeWithTiming | 'enabled',
-  data: {
-    title: string;
-    message: string;
-    linkUrl?: string;
-    projectName?: string;
-    userName?: string;
-  },
-): Promise<{ sent: boolean; queued: boolean }> {
-  const preferences = await getEmailPreferences(userId);
-
-  // Check if email notifications are enabled
-  if (!preferences.enabled) {
-    return { sent: false, queued: false };
-  }
-
-  // Check if specific notification type is enabled
-  if (notificationType !== 'enabled' && !preferences[notificationType]) {
-    return { sent: false, queued: false };
-  }
-
-  // Get user email
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { email: true },
-  });
-
-  if (!user) {
-    return { sent: false, queued: false };
-  }
-
-  // Check timing preference for this notification type
-  const timingKey = `${notificationType}Timing` as keyof typeof preferences;
-  const timing =
-    notificationType !== 'enabled' && timingKey in preferences
-      ? (preferences[timingKey] as NotificationTiming)
-      : 'immediate';
-
-  if (timing === 'digest' && preferences.dailyDigest) {
-    // Add to digest queue instead of sending immediately
-    const digestItem: DigestItem = {
-      type: notificationType,
-      title: data.title,
-      message: data.message,
-      projectName: data.projectName,
-      linkUrl: data.linkUrl,
-      timestamp: new Date(),
-    };
-
-    await addDigestItem(userId, digestItem);
-
-    return { sent: false, queued: true };
-  }
-
-  // Send the email immediately
-  const result = await sendNotificationEmail(user.email, notificationType, data);
-  if (!result.success) {
-    logError('[Notifications] Email delivery failed', {
-      userId,
-      notificationType,
-      error: result.error || 'Email delivery failed',
-      provider: result.provider,
-    });
-  }
-  return { sent: result.success, queued: false };
-}
-
-// Helper function to get notification timing for a specific type
-export async function getNotificationTiming(
-  userId: string,
-  notificationType: NotificationTypeWithTiming,
-): Promise<NotificationTiming> {
-  const preferences = await getEmailPreferences(userId);
-  const timingKey = `${notificationType}Timing` as keyof typeof preferences;
-  return timingKey in preferences ? (preferences[timingKey] as NotificationTiming) : 'immediate';
-}
 
 // POST /api/notifications/add-to-digest - Add item to digest queue
 notificationsRouter.post(
