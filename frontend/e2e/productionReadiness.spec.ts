@@ -947,8 +947,8 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/lib/notificationJobs.ts', import.meta.url),
       'utf8',
     );
-    const notificationsRoute = await readFile(
-      new URL('../../backend/src/routes/notifications.ts', import.meta.url),
+    const notificationsDelivery = await readFile(
+      new URL('../../backend/src/routes/notifications/delivery.ts', import.meta.url),
       'utf8',
     );
     const backendServer = await readFile(
@@ -960,7 +960,7 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(notificationsRoute).toContain("timing === 'digest' && preferences.dailyDigest");
+    expect(notificationsDelivery).toContain("timing === 'digest' && preferences.dailyDigest");
     expect(notificationJobs).toContain('processDueNotificationDigests');
     expect(notificationJobs).toContain('sendDailyDigestEmail');
     expect(notificationJobs).toContain('NOTIFICATION_DIGEST_TIME_OF_DAY');
