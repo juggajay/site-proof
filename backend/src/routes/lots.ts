@@ -51,6 +51,11 @@ import {
   getUniqueLotIds,
   assertAllRequestedLotsFound,
 } from './lots/requestParsing.js';
+import {
+  requireSubcontractorInProject,
+  requireItpTemplateForProject,
+  syncPrimaryLotSubcontractorAssignment,
+} from './lots/assignmentHelpers.js';
 
 export const lotsRouter = Router();
 
@@ -64,96 +69,6 @@ const LOT_DELETERS = ['owner', 'admin', 'project_manager'];
 // Roles that can conform lots (quality management)
 const LOT_CONFORMERS = ['owner', 'admin', 'project_manager', 'quality_manager'];
 const LOT_FORCE_CONFORMERS = ['owner', 'admin'];
-
-async function requireSubcontractorInProject(subcontractorId: string, projectId: string) {
-  const subcontractor = await prisma.subcontractorCompany.findFirst({
-    where: activeSubcontractorCompanyWhere({ id: subcontractorId, projectId }),
-    select: { id: true },
-  });
-
-  if (!subcontractor) {
-    throw AppError.notFound('Subcontractor company');
-  }
-}
-
-async function requireItpTemplateForProject(templateId: string, projectId: string) {
-  const template = await prisma.iTPTemplate.findUnique({
-    where: { id: templateId },
-    select: { id: true, projectId: true, isActive: true },
-  });
-
-  if (!template) {
-    throw AppError.notFound('ITP template');
-  }
-
-  if (!template.isActive) {
-    throw AppError.badRequest('ITP template is archived and cannot be assigned');
-  }
-
-  if (template.projectId && template.projectId !== projectId) {
-    throw AppError.badRequest('ITP template is not available for this project');
-  }
-}
-
-async function syncPrimaryLotSubcontractorAssignment(
-  tx: Prisma.TransactionClient,
-  options: {
-    lotId: string;
-    projectId: string;
-    subcontractorId: string | null | undefined;
-    assignedById: string;
-    canCompleteITP?: boolean;
-    itpRequiresVerification?: boolean;
-  },
-) {
-  const {
-    lotId,
-    projectId,
-    subcontractorId,
-    assignedById,
-    canCompleteITP,
-    itpRequiresVerification,
-  } = options;
-
-  await tx.lotSubcontractorAssignment.updateMany({
-    where: {
-      lotId,
-      status: 'active',
-      ...(subcontractorId ? { subcontractorCompanyId: { not: subcontractorId } } : {}),
-    },
-    data: { status: 'removed' },
-  });
-
-  if (!subcontractorId) {
-    return;
-  }
-
-  await tx.lotSubcontractorAssignment.upsert({
-    where: {
-      lotId_subcontractorCompanyId: {
-        lotId,
-        subcontractorCompanyId: subcontractorId,
-      },
-    },
-    update: {
-      projectId,
-      status: 'active',
-      assignedById,
-      assignedAt: new Date(),
-      ...(canCompleteITP !== undefined ? { canCompleteITP } : {}),
-      ...(itpRequiresVerification !== undefined ? { itpRequiresVerification } : {}),
-    },
-    create: {
-      lotId,
-      projectId,
-      subcontractorCompanyId: subcontractorId,
-      canCompleteITP: canCompleteITP ?? false,
-      itpRequiresVerification: itpRequiresVerification ?? true,
-      assignedById,
-      status: 'active',
-    },
-  });
-}
 
 // GET /api/lots - List all lots for a project (paginated)
 lotsRouter.get(
