@@ -160,7 +160,7 @@ Core models (see `backend/prisma/schema.prisma`):
 ## Testing
 
 ```bash
-# Backend unit tests (252 tests)
+# Backend unit tests (~1,800 tests across 68 files)
 cd backend && npm test
 
 # Frontend E2E tests
@@ -290,17 +290,38 @@ Keep files under 500 lines. Large files should be split:
 
 ## Known Large Files (Refactoring Targets)
 
-Current large-file pressure is concentrated in a few routes/pages. Keep
-splitting them through small, characterized PRs rather than broad rewrites:
+Current large-file pressure is concentrated in the still-monolithic backend
+route files. Keep splitting them through small, behavior-preserving,
+characterized PRs (one domain per PR) rather than broad rewrites — this is the
+top priority of the 2026-06-01 engineering-health roadmap (Workstream 1). Use
+the folder-split pattern already proven in `routes/ncrs/`, `routes/itp/`,
+`routes/diary/`, and `routes/testResults/`.
 
-- `backend/src/routes/lots.ts` (~2,926 lines)
-- `backend/src/routes/testResults.ts` (~2,903 lines)
-- `frontend/src/pages/lots/LotDetailPage.tsx` (~2,291 lines)
+Top remaining route-split targets (counts as of 2026-06-01, `master` @
+`7ddec84`; re-measure before picking one — they shift):
+
+- `backend/src/routes/holdpoints.ts` (~2,825 lines) — has public token-release
+  endpoints; preserve the signed/hashed-token logic and its position before
+  `requireAuth`.
+- `backend/src/routes/notifications.ts` (~2,807 lines) — keep the
+  `requireNonProductionDiagnostics()` guard on the diagnostics endpoints.
+- `backend/src/routes/lots.ts` (~2,802 lines) — extract Zod validators first.
+- `backend/src/routes/auth.ts` (~2,476 lines) — highest care: public auth,
+  rate limiters, MFA. Add characterization coverage first, and never widen the
+  public allow-list in `routeAuthCoverage.test.ts` to make a split pass.
+- `backend/src/routes/dockets.ts` (~2,364 lines).
+
+Also large (lib, not routes): `backend/src/lib/email.ts` (~1,640) and
+`backend/src/lib/notificationAutomation.ts` (~1,527).
 
 Recently reduced former targets:
 
+- `backend/src/routes/testResults.ts` was split into a `routes/testResults/`
+  folder (11 focused files); the main route is now ~1,500 lines.
+- `frontend/src/pages/lots/LotDetailPage.tsx` is down to ~1,463 lines after
+  extracting components and hooks (e.g. `useItpInstance`).
 - `frontend/src/lib/pdfGenerator.ts` is now a 24-line barrel over
-  `frontend/src/lib/pdf/*`.
+  `frontend/src/lib/pdf/*`, with characterization-test coverage.
 - `frontend/src/pages/lots/LotsPage.tsx` is ~570 lines.
 - `frontend/src/pages/diary/DailyDiaryPage.tsx` is ~260 lines after the diary
   folder split.
