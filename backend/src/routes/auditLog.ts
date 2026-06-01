@@ -6,6 +6,12 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { AppError } from '../lib/AppError.js';
 import { parseAuditLogChanges } from '../lib/auditLog.js';
+import {
+  buildAuditActionsResponse,
+  buildAuditEntityTypesResponse,
+  buildAuditLogListResponse,
+  buildAuditUsersResponse,
+} from './auditLog/responses.js';
 
 export const auditLogRouter = Router();
 const AUDIT_LOG_ROLES = ['owner', 'admin', 'project_manager'];
@@ -279,15 +285,7 @@ auditLogRouter.get(
       changes: parseAuditLogChanges(log.changes),
     }));
 
-    res.json({
-      logs: parsedLogs,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / limitNum)),
-      },
-    });
+    res.json(buildAuditLogListResponse(parsedLogs, total, pageNum, limitNum));
   }),
 );
 
@@ -303,9 +301,7 @@ auditLogRouter.get(
       orderBy: { action: 'asc' },
     });
 
-    res.json({
-      actions: actions.map((a) => a.action).sort(),
-    });
+    res.json(buildAuditActionsResponse(actions.map((a) => a.action).sort()));
   }),
 );
 
@@ -321,9 +317,7 @@ auditLogRouter.get(
       orderBy: { entityType: 'asc' },
     });
 
-    res.json({
-      entityTypes: entityTypes.map((e) => e.entityType).sort(),
-    });
+    res.json(buildAuditEntityTypesResponse(entityTypes.map((e) => e.entityType).sort()));
   }),
 );
 
@@ -356,6 +350,6 @@ auditLogRouter.get(
       }))
       .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 
-    res.json({ users });
+    res.json(buildAuditUsersResponse(users));
   }),
 );
