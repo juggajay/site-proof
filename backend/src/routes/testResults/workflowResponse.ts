@@ -73,3 +73,17 @@ export function buildTestResultWorkflowResponse(
     },
   };
 }
+
+export function buildTestResultStatusUpdatedResponse<TTestResult>(
+  status: string,
+  updatedTestResult: TTestResult,
+) {
+  return {
+    message: `Test result status updated to '${STATUS_LABELS[status] || status}'`,
+    testResult: updatedTestResult,
+    nextTransitions: (VALID_STATUS_TRANSITIONS[status] || []).map((nextStatus) => ({
+      status: nextStatus,
+      label: STATUS_LABELS[nextStatus] || nextStatus,
+    })),
+  };
+}
