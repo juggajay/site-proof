@@ -11,6 +11,11 @@ import {
   requireEditableDiaryForWrite,
   requireLotInProject,
 } from './diaryAccess.js';
+import {
+  buildActivitySuggestionsResponse,
+  buildDiaryItemRemovedResponse,
+  buildRecentPlantResponse,
+} from './diaryItemsResponses.js';
 
 const router = Router();
 
@@ -484,10 +489,7 @@ router.get(
       .sort((a, b) => b.usageCount - a.usageCount)
       .slice(0, 20); // Limit to top 20
 
-    res.json({
-      recentPlant,
-      count: recentPlant.length,
-    });
+    res.json(buildRecentPlantResponse(recentPlant));
   }),
 );
 
@@ -591,11 +593,7 @@ router.get(
     const unique = Array.from(new Map(filtered.map((s) => [s.description, s])).values());
     const limited = unique.slice(0, 20);
 
-    res.json({
-      suggestions: limited,
-      count: limited.length,
-      totalAvailable: unique.length,
-    });
+    res.json(buildActivitySuggestionsResponse(limited, unique.length));
   }),
 );
 
@@ -860,7 +858,7 @@ router.delete(
       }
     });
 
-    res.json({ message: 'Delivery removed' });
+    res.json(buildDiaryItemRemovedResponse('Delivery removed'));
   }),
 );
 
@@ -945,7 +943,7 @@ router.delete(
       }
     });
 
-    res.json({ message: 'Event removed' });
+    res.json(buildDiaryItemRemovedResponse('Event removed'));
   }),
 );
 
