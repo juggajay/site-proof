@@ -43,6 +43,7 @@ import {
   buildTestResultsListResponse,
 } from './testResults/listResponses.js';
 import {
+  buildTestResultCreatedResponse,
   buildTestResultDeletedResponse,
   buildTestResultDetailResponse,
   buildTestResultUpdatedResponse,
@@ -519,7 +520,7 @@ testResultsRouter.post(
       req,
     });
 
-    res.status(201).json({ testResult });
+    res.status(201).json(buildTestResultCreatedResponse(testResult));
   }),
 );
 
