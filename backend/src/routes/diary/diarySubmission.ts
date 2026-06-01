@@ -9,6 +9,12 @@ import {
   requireDiaryWriteAccess,
   requireEditableDiaryForWrite,
 } from './diaryAccess.js';
+import {
+  buildDiaryAddendumCreatedResponse,
+  buildDiaryAddendumsResponse,
+  buildDiarySubmitResponse,
+  buildDiaryValidationResponse,
+} from './diarySubmissionResponses.js';
 
 const router = Router();
 const DIARY_ADDENDUM_MAX_LENGTH = 5000;
@@ -107,21 +113,22 @@ router.get(
     const isValid = errors.length === 0;
     const hasWarnings = warnings.length > 0;
 
-    res.json({
-      isValid,
-      hasWarnings,
-      canSubmit: isValid,
-      errors,
-      warnings,
-      summary: {
-        personnel: diary.personnel.length,
-        activities: diary.activities.length,
-        plant: diary.plant.length,
-        delays: diary.delays.length,
-        visitors: diary.visitors.length,
-        hasWeather: diary.weatherConditions !== null || diary.temperatureMax !== null,
-      },
-    });
+    res.json(
+      buildDiaryValidationResponse({
+        isValid,
+        hasWarnings,
+        errors,
+        warnings,
+        summary: {
+          personnel: diary.personnel.length,
+          activities: diary.activities.length,
+          plant: diary.plant.length,
+          delays: diary.delays.length,
+          visitors: diary.visitors.length,
+          hasWeather: diary.weatherConditions !== null || diary.temperatureMax !== null,
+        },
+      }),
+    );
   }),
 );
 
@@ -232,10 +239,7 @@ router.post(
       req,
     });
 
-    res.json({
-      diary: updatedDiary,
-      warningsAcknowledged: warnings.length > 0,
-    });
+    res.json(buildDiarySubmitResponse(updatedDiary, warnings.length > 0));
   }),
 );
 
@@ -308,7 +312,7 @@ router.post(
       req,
     });
 
-    res.status(201).json(addendum);
+    res.status(201).json(buildDiaryAddendumCreatedResponse(addendum));
   }),
 );
 
@@ -343,7 +347,7 @@ router.get(
       orderBy: { addedAt: 'asc' },
     });
 
-    res.json(addendums);
+    res.json(buildDiaryAddendumsResponse(addendums));
   }),
 );
 
