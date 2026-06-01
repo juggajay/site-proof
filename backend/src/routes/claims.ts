@@ -17,7 +17,12 @@ import {
 } from '../lib/evidenceReadiness.js';
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js';
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
-import { mapClaimCreateItem, mapClaimListItem, mapClaimableLot } from './claims/presentation.js';
+import {
+  buildClaimCertifiedResponse,
+  mapClaimCreateItem,
+  mapClaimListItem,
+  mapClaimableLot,
+} from './claims/presentation.js';
 
 interface PaymentHistoryEntry {
   amount: number;
@@ -1651,27 +1656,12 @@ router.post(
       logError('Failed to send certification notifications:', notifError);
     }
 
-    // Transform response
-    const response = {
-      claim: {
-        id: updatedClaim.id,
-        claimNumber: updatedClaim.claimNumber,
-        periodStart: updatedClaim.claimPeriodStart.toISOString().split('T')[0],
-        periodEnd: updatedClaim.claimPeriodEnd.toISOString().split('T')[0],
-        status: updatedClaim.status,
-        totalClaimedAmount: updatedClaim.totalClaimedAmount
-          ? Number(updatedClaim.totalClaimedAmount)
-          : 0,
-        certifiedAmount: updatedClaim.certifiedAmount ? Number(updatedClaim.certifiedAmount) : null,
-        certifiedAt: updatedClaim.certifiedAt?.toISOString() || null,
-        paidAmount: updatedClaim.paidAmount ? Number(updatedClaim.paidAmount) : null,
-        lotCount: updatedClaim.claimedLots.length,
-        variationNotes: variationNotes || null,
-        certificationDocumentId: certDocId || null,
-      },
+    const response = buildClaimCertifiedResponse(
+      updatedClaim,
       previousStatus,
-      message: 'Claim certified successfully',
-    };
+      variationNotes,
+      certDocId || null,
+    );
 
     // Audit log for claim certification
     await createAuditLog({
