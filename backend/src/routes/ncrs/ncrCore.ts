@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { type AuthUser } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
-import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../../lib/pagination.js';
+import { parsePagination, getPrismaSkipTake } from '../../lib/pagination.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
@@ -20,6 +20,11 @@ import {
   requireActiveProjectUser,
 } from './ncrAccess.js';
 import { logError } from '../../lib/serverLogger.js';
+import {
+  buildNcrListResponse,
+  buildNcrResponse,
+  buildNcrUpdatedResponse,
+} from './ncrCoreResponses.js';
 
 const NCR_ID_MAX_LENGTH = 120;
 const NCR_DESCRIPTION_MAX_LENGTH = 5000;
@@ -502,11 +507,7 @@ ncrCoreRouter.get(
       prisma.nCR.count({ where: finalWhere }),
     ]);
 
-    res.json({
-      data: ncrs,
-      pagination: getPaginationMeta(total, page, limit),
-      ncrs, // Backward compatibility
-    });
+    res.json(buildNcrListResponse(ncrs, total, page, limit));
   }),
 );
 
@@ -548,7 +549,7 @@ ncrCoreRouter.get(
       throw AppError.forbidden('Access denied');
     }
 
-    res.json({ ncr });
+    res.json(buildNcrResponse(ncr));
   }),
 );
 
@@ -744,7 +745,7 @@ ncrCoreRouter.post(
       }
     }
 
-    res.status(201).json({ ncr });
+    res.status(201).json(buildNcrResponse(ncr));
   }),
 );
 
@@ -833,6 +834,6 @@ ncrCoreRouter.patch(
       },
     });
 
-    res.json({ ncr: updatedNcr, message: 'NCR updated' });
+    res.json(buildNcrUpdatedResponse(updatedNcr));
   }),
 );
