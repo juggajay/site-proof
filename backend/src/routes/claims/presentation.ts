@@ -22,6 +22,18 @@ type ClaimListItem = {
   };
 };
 
+type ClaimCreateItem = {
+  id: string;
+  claimNumber: number;
+  claimPeriodStart: Date;
+  claimPeriodEnd: Date;
+  status: string;
+  totalClaimedAmount: unknown;
+  _count: {
+    claimedLots: number;
+  };
+};
+
 function formatClaimDateKey(date: Date): string {
   return date.toISOString().split('T')[0];
 }
@@ -48,6 +60,21 @@ export function mapClaimListItem(claim: ClaimListItem) {
     submittedAt: claim.submittedAt ? formatClaimDateKey(claim.submittedAt) : null,
     disputeNotes: claim.disputeNotes || null,
     disputedAt: claim.disputedAt ? formatClaimDateKey(claim.disputedAt) : null,
+    lotCount: claim._count.claimedLots,
+  };
+}
+
+export function mapClaimCreateItem(claim: ClaimCreateItem) {
+  return {
+    id: claim.id,
+    claimNumber: claim.claimNumber,
+    periodStart: formatClaimDateKey(claim.claimPeriodStart),
+    periodEnd: formatClaimDateKey(claim.claimPeriodEnd),
+    status: claim.status,
+    totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
+    certifiedAmount: null,
+    paidAmount: null,
+    submittedAt: null,
     lotCount: claim._count.claimedLots,
   };
 }
