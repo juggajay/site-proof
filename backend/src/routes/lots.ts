@@ -68,6 +68,11 @@ import {
   LOT_FORCE_CONFORMERS,
   STATUS_OVERRIDERS,
 } from './lots/roles.js';
+import {
+  resolveLotPrefix,
+  resolveLotStartingNumber,
+  suggestLotNumber,
+} from './lots/suggestNumber.js';
 
 export const lotsRouter = Router();
 
@@ -328,8 +333,8 @@ lotsRouter.get(
       throw AppError.notFound('Project');
     }
 
-    const prefix = project.lotPrefix || 'LOT-';
-    const startingNumber = project.lotStartingNumber || 1;
+    const prefix = resolveLotPrefix(project.lotPrefix);
+    const startingNumber = resolveLotStartingNumber(project.lotStartingNumber);
 
     // Find the highest existing lot number with this prefix
     const existingLots = await prisma.lot.findMany({
@@ -341,27 +346,11 @@ lotsRouter.get(
       orderBy: { lotNumber: 'desc' },
     });
 
-    let nextNumber = startingNumber;
-
-    if (existingLots.length > 0) {
-      // Extract numbers from existing lot numbers and find the highest
-      const numbers = existingLots
-        .map((lot) => {
-          const match = lot.lotNumber.match(
-            new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)`),
-          );
-          return match ? parseInt(match[1], 10) : 0;
-        })
-        .filter((n) => !isNaN(n) && n > 0);
-
-      if (numbers.length > 0) {
-        nextNumber = Math.max(...numbers) + 1;
-      }
-    }
-
-    // Pad with zeros to match the starting number format
-    const paddingLength = Math.max(String(startingNumber).length, String(nextNumber).length, 3);
-    const suggestedNumber = `${prefix}${String(nextNumber).padStart(paddingLength, '0')}`;
+    const { suggestedNumber, nextNumber } = suggestLotNumber({
+      prefix,
+      startingNumber,
+      existingLotNumbers: existingLots.map((lot) => lot.lotNumber),
+    });
 
     res.json({
       suggestedNumber,
