@@ -19,6 +19,7 @@ import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.j
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import {
   buildClaimCertifiedResponse,
+  buildClaimPaymentRecordedResponse,
   mapClaimCreateItem,
   mapClaimListItem,
   mapClaimableLot,
@@ -1875,38 +1876,18 @@ router.post(
       logError('Failed to send payment notifications:', notifError);
     }
 
-    // Transform response
-    const response = {
-      claim: {
-        id: updatedClaim.id,
-        claimNumber: updatedClaim.claimNumber,
-        periodStart: updatedClaim.claimPeriodStart.toISOString().split('T')[0],
-        periodEnd: updatedClaim.claimPeriodEnd.toISOString().split('T')[0],
-        status: updatedClaim.status,
-        totalClaimedAmount: updatedClaim.totalClaimedAmount
-          ? Number(updatedClaim.totalClaimedAmount)
-          : 0,
-        certifiedAmount: updatedClaim.certifiedAmount ? Number(updatedClaim.certifiedAmount) : null,
-        paidAmount: updatedClaim.paidAmount ? Number(updatedClaim.paidAmount) : null,
-        paidAt: updatedClaim.paidAt?.toISOString() || null,
-        paymentReference: updatedClaim.paymentReference || null,
-        lotCount: updatedClaim.claimedLots.length,
-      },
-      payment: {
+    const response = buildClaimPaymentRecordedResponse(
+      updatedClaim,
+      {
         amount: paidAmount,
         date: paymentDateForHistory,
-        reference: paymentReference || null,
-        notes: paymentNotes || null,
+        reference: paymentReference,
+        notes: paymentNotes,
       },
-      outstanding: Math.max(0, outstanding),
-      isFullyPaid: outstanding <= 0,
+      outstanding,
       previousStatus,
       paymentHistory,
-      message:
-        outstanding <= 0
-          ? 'Claim fully paid'
-          : `Partial payment recorded. Outstanding: $${outstanding.toFixed(2)}`,
-    };
+    );
 
     // Audit log for claim payment
     await createAuditLog({
