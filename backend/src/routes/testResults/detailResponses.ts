@@ -2,6 +2,10 @@ export function buildTestResultDetailResponse<TTestResult>(testResult: TTestResu
   return { testResult };
 }
 
+export function buildTestResultCreatedResponse<TTestResult>(testResult: TTestResult) {
+  return { testResult };
+}
+
 export function buildTestResultUpdatedResponse<TTestResult>(testResult: TTestResult) {
   return { testResult };
 }
