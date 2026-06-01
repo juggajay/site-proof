@@ -7,7 +7,6 @@ import {
   sendDailyDigestEmail,
   getQueuedEmails,
   clearEmailQueue,
-  DigestItem,
   isResendConfigured,
 } from '../lib/email.js';
 import { AppError } from '../lib/AppError.js';
@@ -73,6 +72,12 @@ import {
   buildTestEmailPayload,
   buildTestEmailSuccessResponse,
 } from './notifications/emailDiagnostics.js';
+import {
+  buildDigestItemAddedResponse,
+  buildDigestItemFromBody,
+  buildDigestQueueResponse,
+  buildDigestSentResponse,
+} from './notifications/digestResponses.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -429,35 +434,10 @@ notificationsRouter.post(
     }
     requireNonProductionDiagnostics();
 
-    const { type, title, message, projectName, linkUrl } = req.body;
-
-    if (
-      typeof type !== 'string' ||
-      typeof title !== 'string' ||
-      typeof message !== 'string' ||
-      !type ||
-      !title ||
-      !message
-    ) {
-      throw AppError.badRequest('type, title, and message are required');
-    }
-
-    const digestItem: DigestItem = {
-      type,
-      title,
-      message,
-      projectName: typeof projectName === 'string' ? projectName : undefined,
-      linkUrl: typeof linkUrl === 'string' ? linkUrl : undefined,
-      timestamp: new Date(),
-    };
-
+    const digestItem = buildDigestItemFromBody(req.body);
     const queuedItems = await addDigestItem(userId, digestItem);
 
-    res.json({
-      success: true,
-      message: 'Item added to digest',
-      queuedItems,
-    });
+    res.json(buildDigestItemAddedResponse(queuedItems));
   }),
 );
 
@@ -500,13 +480,13 @@ notificationsRouter.post(
       // Clear the digest queue after sending
       await clearDigestItems(userId);
 
-      res.json({
-        success: true,
-        message: 'Daily digest sent successfully',
-        messageId: result.messageId,
-        sentTo: user.email,
-        itemCount: items.length,
-      });
+      res.json(
+        buildDigestSentResponse({
+          messageId: result.messageId,
+          sentTo: user.email,
+          itemCount: items.length,
+        }),
+      );
     } else {
       throw AppError.internal('Failed to send digest');
     }
@@ -525,10 +505,7 @@ notificationsRouter.get(
 
     const items = await getDigestItems(userId);
 
-    res.json({
-      items,
-      count: items.length,
-    });
+    res.json(buildDigestQueueResponse(items));
   }),
 );
 
