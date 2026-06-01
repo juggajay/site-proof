@@ -38,6 +38,10 @@ import {
 } from './testResults/certificateIntake.js';
 import { confirmExtraction, processBatchConfirm } from './testResults/extractionConfirmation.js';
 import { buildLaboratoriesResponse } from './testResults/laboratoryResponses.js';
+import {
+  buildEmptyTestResultsListResponse,
+  buildTestResultsListResponse,
+} from './testResults/listResponses.js';
 import { testTypeSpecifications } from './testResults/specifications.js';
 import {
   buildTestSpecificationsResponse,
@@ -266,12 +270,12 @@ testResultsRouter.get(
     if (assignedLotIds !== null) {
       // Subcontractors can only see test results on their assigned lots.
       if (assignedLotIds.length === 0) {
-        return res.json({ testResults: [] });
+        return res.json(buildEmptyTestResultsListResponse());
       }
 
       if (lotId) {
         if (!assignedLotIds.includes(lotId)) {
-          return res.json({ testResults: [] });
+          return res.json(buildEmptyTestResultsListResponse());
         }
         whereClause.lotId = lotId;
       } else {
@@ -344,10 +348,12 @@ testResultsRouter.get(
       prisma.testResult.count({ where: finalWhereClause }),
     ]);
 
-    res.json({
-      testResults,
-      pagination: getPaginationMeta(total, pagination.page, pagination.limit),
-    });
+    res.json(
+      buildTestResultsListResponse(
+        testResults,
+        getPaginationMeta(total, pagination.page, pagination.limit),
+      ),
+    );
   }),
 );
 
