@@ -109,6 +109,11 @@ import {
   buildNotificationsListResponse,
   buildUnreadCountResponse,
 } from './notifications/readResponses.js';
+import {
+  buildSystemAlertsCheckResponse,
+  buildSystemAlertsSummaryResponse,
+  type SystemAlertResult,
+} from './notifications/systemAlertResponses.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -131,15 +136,6 @@ export const notificationsRouter = Router();
 
 // Apply authentication middleware to all notification routes
 notificationsRouter.use(requireAuth);
-
-type SystemAlertResult = {
-  type: 'overdue_ncr' | 'stale_hold_point' | 'missing_diary';
-  alertId: string;
-  entityId?: string;
-  projectName: string;
-  severity: AlertSeverity;
-  message: string;
-};
 
 // GET /api/notifications - Get notifications for current user
 notificationsRouter.get(
@@ -1748,15 +1744,9 @@ notificationsRouter.post(
       },
     });
 
-    res.json({
-      success: true,
-      timestamp: now.toISOString(),
-      projectsChecked: projects.length,
-      alertsGenerated: alertsGenerated.length,
-      summary,
-      alerts: alertsGenerated,
-      activeAlerts,
-    });
+    res.json(
+      buildSystemAlertsCheckResponse(now, projects.length, alertsGenerated, summary, activeAlerts),
+    );
   }),
 );
 
@@ -1783,31 +1773,6 @@ notificationsRouter.get(
       })
     ).map(toAlert);
 
-    const bySeverity = {
-      critical: activeAlerts.filter((a) => a.severity === 'critical').length,
-      high: activeAlerts.filter((a) => a.severity === 'high').length,
-      medium: activeAlerts.filter((a) => a.severity === 'medium').length,
-      low: activeAlerts.filter((a) => a.severity === 'low').length,
-    };
-
-    const byType = {
-      overdue_ncr: activeAlerts.filter((a) => a.type === 'overdue_ncr').length,
-      stale_hold_point: activeAlerts.filter((a) => a.type === 'stale_hold_point').length,
-      pending_approval: activeAlerts.filter((a) => a.type === 'pending_approval').length,
-      overdue_test: activeAlerts.filter((a) => a.type === 'overdue_test').length,
-    };
-
-    const escalated = activeAlerts.filter((a) => a.escalationLevel > 0).length;
-
-    res.json({
-      totalActive: activeAlerts.length,
-      bySeverity,
-      byType,
-      escalated,
-      criticalItems: activeAlerts
-        .filter((a) => a.severity === 'critical')
-        .slice(0, 5)
-        .map((a) => ({ id: a.id, type: a.type, title: a.title, createdAt: a.createdAt })),
-    });
+    res.json(buildSystemAlertsSummaryResponse(activeAlerts));
   }),
 );
