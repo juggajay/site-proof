@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_EMAIL_PREFERENCES,
+  buildEmailPreferencesResponse,
+  buildEmailPreferencesUpdatedResponse,
   normalizeBoolean,
   normalizeEmailPreferences,
   toEmailPreferences,
@@ -161,5 +163,20 @@ describe('toEmailPreferences', () => {
     expect(result).not.toHaveProperty('extraneous');
     expect(result).not.toHaveProperty('createdAt');
     expect(Object.keys(result).sort()).toEqual(Object.keys(EXPECTED_DEFAULTS).sort());
+  });
+});
+
+describe('email preference response helpers', () => {
+  it('wraps fetched preferences under the existing response key', () => {
+    expect(buildEmailPreferencesResponse(DEFAULT_EMAIL_PREFERENCES)).toEqual({
+      preferences: DEFAULT_EMAIL_PREFERENCES,
+    });
+  });
+
+  it('wraps saved preferences with the existing update message', () => {
+    expect(buildEmailPreferencesUpdatedResponse(DEFAULT_EMAIL_PREFERENCES)).toEqual({
+      preferences: DEFAULT_EMAIL_PREFERENCES,
+      message: 'Email preferences updated',
+    });
   });
 });
